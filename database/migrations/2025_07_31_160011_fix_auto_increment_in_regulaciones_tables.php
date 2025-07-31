@@ -15,10 +15,7 @@ class FixAutoIncrementInRegulacionesTables extends Migration
     public function up()
     {
         // Corregir AUTO_INCREMENT en bd_entidades_reguladoras
-        DB::statement('ALTER TABLE bd_entidades_reguladoras MODIFY id int NOT NULL AUTO_INCREMENT');
-        
-        // Corregir AUTO_INCREMENT en bd_productos
-        DB::statement('ALTER TABLE bd_productos MODIFY id int NOT NULL AUTO_INCREMENT');
+     
     }
 
     /**
