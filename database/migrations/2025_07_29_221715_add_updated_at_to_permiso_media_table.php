@@ -23,5 +23,6 @@ class AddUpdatedAtToPermisoMediaTable extends Migration
      */
     public function down()
     {
-        
+        //
+    }
 }
