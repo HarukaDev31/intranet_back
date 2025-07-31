@@ -17,6 +17,7 @@ class Usuario extends Authenticatable implements JWTSubject
         'Nu_Estado',
         'ID_Empresa',
         'ID_Organizacion',
+        'ID_Grupo',
         'Fe_Creacion'
     ];
 
@@ -61,6 +62,14 @@ class Usuario extends Authenticatable implements JWTSubject
     }
 
     /**
+     * Relación directa con Grupo
+     */
+    public function grupo()
+    {
+        return $this->belongsTo(Grupo::class, 'ID_Grupo', 'ID_Grupo');
+    }
+
+    /**
      * Relación con GrupoUsuario
      */
     public function gruposUsuario()
@@ -80,5 +89,62 @@ class Usuario extends Authenticatable implements JWTSubject
             'ID_Organizacion',
             'ID_Organizacion'
         );
+    }
+
+    /**
+     * Obtener todos los grupos del usuario (incluyendo la relación many-to-many)
+     */
+    public function getAllGrupos()
+    {
+        $grupos = collect();
+        
+        // Agregar el grupo directo si existe
+        if ($this->grupo) {
+            $grupos->push($this->grupo);
+        }
+        
+        // Agregar grupos de la relación many-to-many
+        $gruposManyToMany = $this->gruposUsuario()->with('grupo')->get()->pluck('grupo');
+        $grupos = $grupos->merge($gruposManyToMany);
+        
+        return $grupos->unique('ID_Grupo');
+    }
+
+    /**
+     * Verificar si el usuario pertenece a un grupo específico
+     */
+    public function perteneceAGrupo($grupoId)
+    {
+        // Verificar grupo directo
+        if ($this->ID_Grupo == $grupoId) {
+            return true;
+        }
+        
+        // Verificar grupos many-to-many
+        return $this->gruposUsuario()->where('ID_Grupo', $grupoId)->exists();
+    }
+
+    /**
+     * Obtener el nombre del grupo principal del usuario
+     */
+    public function getNombreGrupoPrincipalAttribute()
+    {
+        return $this->grupo ? $this->grupo->No_Grupo : 'Sin grupo';
+    }
+
+    /**
+     * Obtener la descripción del grupo principal del usuario
+     */
+    public function getDescripcionGrupoPrincipalAttribute()
+    {
+        return $this->grupo ? $this->grupo->No_Grupo_Descripcion : 'Sin descripción';
+    }
+
+    /**
+     * Obtener el tipo de privilegio de acceso del grupo principal
+     */
+    public function getTipoPrivilegioAccesoAttribute()
+    {
+        return $this->grupo ? $this->grupo->Nu_Tipo_Privilegio_Acceso : null;
     }
 } 

@@ -11,6 +11,7 @@ use App\Http\Controllers\BaseDatos\Regulaciones\AntidumpingController;
 use App\Http\Controllers\BaseDatos\Regulaciones\PermisoController;
 use App\Http\Controllers\BaseDatos\Regulaciones\EtiquetadoController;
 use App\Http\Controllers\BaseDatos\Regulaciones\DocumentosEspecialesController;
+use App\Http\Controllers\UsuarioGrupoController;
 /*
 |--------------------------------------------------------------------------
 | API Routes
@@ -49,6 +50,7 @@ Route::group(['prefix' => 'base-datos', 'middleware' => 'jwt.auth'], function ()
         Route::get('filters/options', [ProductosController::class, 'filterOptions']);
         Route::get('export', [ProductosController::class, 'export']);
         Route::get('{id}', [ProductosController::class, 'show']);
+        Route::put('{id}', [ProductosController::class, 'update']);
     });
     
     // Rutas de regulaciones
@@ -95,5 +97,14 @@ Route::group(['prefix' => 'base-datos', 'middleware' => 'jwt.auth'], function ()
             Route::delete('/{id}', [DocumentosEspecialesController::class, 'destroy']);
             Route::delete('/{id}/documents/{documentId}', [DocumentosEspecialesController::class, 'deleteDocument']);
         });
+    });
+
+    // Rutas de usuarios y grupos
+    Route::group(['prefix' => 'usuarios-grupos'], function () {
+        Route::get('usuario/{id}', [UsuarioGrupoController::class, 'getUsuarioConGrupos']);
+        Route::get('grupo/{grupoId}', [UsuarioGrupoController::class, 'getUsuariosPorGrupo']);
+        Route::post('verificar-pertenencia', [UsuarioGrupoController::class, 'verificarPertenencia']);
+        Route::get('grupos-disponibles/{usuarioId}', [UsuarioGrupoController::class, 'getGruposDisponibles']);
+        Route::get('estadisticas', [UsuarioGrupoController::class, 'getEstadisticas']);
     });
 });

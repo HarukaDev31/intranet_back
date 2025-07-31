@@ -5,6 +5,8 @@ namespace App\Models\BaseDatos;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use App\Models\BaseDatos\EntidadReguladora;
+use App\Models\BaseDatos\ProductoRubro;
 
 class ProductoImportadoExcel extends Model
 {
@@ -20,6 +22,7 @@ class ProductoImportadoExcel extends Model
         'caracteristicas',
         'rubro',
         'tipo_producto',
+        'entidad_id',
         'precio_exw',
         'subpartida',
         'link',
@@ -27,15 +30,19 @@ class ProductoImportadoExcel extends Model
         'arancel_sunat',
         'arancel_tlc',
         'antidumping',
+        'antidumping_value',
         'correlativo',
         'etiquetado',
+        'tipo_etiquetado_id',
         'doc_especial',
-        'tipo',
-        'idContenedor'
+        'tiene_observaciones',
+        'observaciones',
+        'tipo'
     ];
 
     protected $casts = [
         'precio_exw' => 'decimal:2',
+        'tiene_observaciones' => 'boolean',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
         'deleted_at' => 'datetime'
@@ -277,6 +284,22 @@ class ProductoImportadoExcel extends Model
     public function contenedor()
     {
         return $this->belongsTo(CargaConsolidadaContenedor::class, 'idContenedor', 'id');
+    }
+
+    /**
+     * Relación con EntidadReguladora
+     */
+    public function entidad()
+    {
+        return $this->belongsTo(EntidadReguladora::class, 'entidad_id', 'id');
+    }
+
+    /**
+     * Relación con ProductoRubro (tipo de etiquetado)
+     */
+    public function tipoEtiquetado()
+    {
+        return $this->belongsTo(ProductoRubro::class, 'tipo_etiquetado_id', 'id');
     }
 
     /**

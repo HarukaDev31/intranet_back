@@ -62,8 +62,24 @@ class AuthController extends Controller
                 try {
                     $token = JWTAuth::fromUser($usuario);
                     
+                    // Cargar relaciones del usuario
+                    $usuario->load(['grupo', 'empresa', 'organizacion']);
+                    
                     // Obtener menús del usuario
                     $menus = $this->obtenerMenusUsuario($usuario);
+                    
+                    // Preparar información del grupo
+                    $grupoInfo = null;
+                    if ($usuario->grupo) {
+                        $grupoInfo = [
+                            'id' => $usuario->grupo->ID_Grupo,
+                            'nombre' => $usuario->grupo->No_Grupo,
+                            'descripcion' => $usuario->grupo->No_Grupo_Descripcion,
+                            'tipo_privilegio' => $usuario->grupo->Nu_Tipo_Privilegio_Acceso,
+                            'estado' => $usuario->grupo->Nu_Estado,
+                            'notificacion' => $usuario->grupo->Nu_Notificacion
+                        ];
+                    }
                     
                     return response()->json([
                         'status' => 'success',
@@ -71,7 +87,22 @@ class AuthController extends Controller
                         'token' => $token,
                         'token_type' => 'bearer',
                         'expires_in' => config('jwt.ttl') * 60,
-                        'user' => $usuario,
+                        'user' => [
+                            'id' => $usuario->ID_Usuario,
+                            'nombre' => $usuario->No_Usuario,
+                            'nombres_apellidos' => $usuario->No_Nombres_Apellidos,
+                            'email' => $usuario->Txt_Email,
+                            'estado' => $usuario->Nu_Estado,
+                            'empresa' => $usuario->empresa ? [
+                                'id' => $usuario->empresa->ID_Empresa,
+                                'nombre' => $usuario->empresa->No_Empresa
+                            ] : null,
+                            'organizacion' => $usuario->organizacion ? [
+                                'id' => $usuario->organizacion->ID_Organizacion,
+                                'nombre' => $usuario->organizacion->No_Organizacion
+                            ] : null,
+                            'grupo' => $grupoInfo
+                        ],
                         'iCantidadAcessoUsuario' => $result['iCantidadAcessoUsuario'] ?? null,
                         'iIdEmpresa' => $result['iIdEmpresa'] ?? null,
                         'menus' => $menus

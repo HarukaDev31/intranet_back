@@ -41,4 +41,12 @@ class Grupo extends Model
     {
         return $this->hasMany(GrupoUsuario::class, 'ID_Grupo', 'ID_Grupo');
     }
+
+    /**
+     * Relación directa con Usuarios (a través de ID_Grupo)
+     */
+    public function usuarios()
+    {
+        return $this->hasMany(Usuario::class, 'ID_Grupo', 'ID_Grupo');
+    }
 } 
