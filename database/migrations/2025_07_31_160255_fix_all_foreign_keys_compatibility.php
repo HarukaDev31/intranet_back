@@ -56,8 +56,6 @@ class FixAllForeignKeysCompatibility extends Migration
         DB::statement('ALTER TABLE bd_productos_regulaciones_documentos_especiales ADD CONSTRAINT fk_documentos_especiales_rubro FOREIGN KEY (id_rubro) REFERENCES bd_productos(id) ON DELETE CASCADE ON UPDATE CASCADE');
         
         // 5. Agregar foreign keys a productos_importados_excel
-        DB::statement('ALTER TABLE productos_importados_excel ADD CONSTRAINT fk_productos_entidad FOREIGN KEY (entidad_id) REFERENCES bd_entidades_reguladoras(id) ON DELETE SET NULL ON UPDATE CASCADE');
-        DB::statement('ALTER TABLE productos_importados_excel ADD CONSTRAINT fk_productos_tipo_etiquetado FOREIGN KEY (tipo_etiquetado_id) REFERENCES bd_productos(id) ON DELETE SET NULL ON UPDATE CASCADE');
     }
 
     /**
