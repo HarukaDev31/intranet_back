@@ -34,92 +34,86 @@ class AuthController extends Controller
      */
     public function login(Request $request)
     {
-        $validator = Validator::make($request->all(), [
-            'No_Usuario' => 'required|string',
-            'No_Password' => 'required|string',
-            'ID_Empresa' => 'nullable|integer',
-            'ID_Organizacion' => 'nullable|integer',
-        ]);
 
-        if ($validator->fails()) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Datos de entrada inválidos',
-                'errors' => $validator->errors()
-            ], 422);
-        }
+        try {
 
-        $data = $request->all();
-        $result = $this->verificarAccesoLogin($data);
+            $data = $request->all();
+            $result = $this->verificarAccesoLogin($data);
 
-        if ($result['sStatus'] === 'success') {
-            // Buscar el usuario para generar el token
-            $usuario = Usuario::where('No_Usuario', $data['No_Usuario'])
-                ->where('Nu_Estado', 1)
-                ->first();
+            if ($result['sStatus'] === 'success') {
+                // Buscar el usuario para generar el token
+                $usuario = Usuario::where('No_Usuario', $data['No_Usuario'])
+                    ->where('Nu_Estado', 1)
+                    ->first();
 
-            if ($usuario) {
-                try {
-                    $token = JWTAuth::fromUser($usuario);
-                    
-                    // Cargar relaciones del usuario
-                    $usuario->load(['grupo', 'empresa', 'organizacion']);
-                    
-                    // Obtener menús del usuario
-                    $menus = $this->obtenerMenusUsuario($usuario);
-                    
-                    // Preparar información del grupo
-                    $grupoInfo = null;
-                    if ($usuario->grupo) {
-                        $grupoInfo = [
-                            'id' => $usuario->grupo->ID_Grupo,
-                            'nombre' => $usuario->grupo->No_Grupo,
-                            'descripcion' => $usuario->grupo->No_Grupo_Descripcion,
-                            'tipo_privilegio' => $usuario->grupo->Nu_Tipo_Privilegio_Acceso,
-                            'estado' => $usuario->grupo->Nu_Estado,
-                            'notificacion' => $usuario->grupo->Nu_Notificacion
-                        ];
+                if ($usuario) {
+                    try {
+                        $token = JWTAuth::fromUser($usuario);
+
+                        // Cargar relaciones del usuario
+                        $usuario->load(['grupo', 'empresa', 'organizacion']);
+
+                        // Obtener menús del usuario
+                        $menus = $this->obtenerMenusUsuario($usuario);
+
+                        // Preparar información del grupo
+                        $grupoInfo = null;
+                        if ($usuario->grupo) {
+                            $grupoInfo = [
+                                'id' => $usuario->grupo->ID_Grupo,
+                                'nombre' => $usuario->grupo->No_Grupo,
+                                'descripcion' => $usuario->grupo->No_Grupo_Descripcion,
+                                'tipo_privilegio' => $usuario->grupo->Nu_Tipo_Privilegio_Acceso,
+                                'estado' => $usuario->grupo->Nu_Estado,
+                                'notificacion' => $usuario->grupo->Nu_Notificacion
+                            ];
+                        }
+
+                        return response()->json([
+                            'status' => 'success',
+                            'message' => $result['sMessage'],
+                            'token' => $token,
+                            'token_type' => 'bearer',
+                            'expires_in' => config('jwt.ttl') * 60,
+                            'user' => [
+                                'id' => $usuario->ID_Usuario,
+                                'nombre' => $usuario->No_Usuario,
+                                'nombres_apellidos' => $usuario->No_Nombres_Apellidos,
+                                'email' => $usuario->Txt_Email,
+                                'estado' => $usuario->Nu_Estado,
+                                'empresa' => $usuario->empresa ? [
+                                    'id' => $usuario->empresa->ID_Empresa,
+                                    'nombre' => $usuario->empresa->No_Empresa
+                                ] : null,
+                                'organizacion' => $usuario->organizacion ? [
+                                    'id' => $usuario->organizacion->ID_Organizacion,
+                                    'nombre' => $usuario->organizacion->No_Organizacion
+                                ] : null,
+                                'grupo' => $grupoInfo
+                            ],
+                            'iCantidadAcessoUsuario' => $result['iCantidadAcessoUsuario'] ?? null,
+                            'iIdEmpresa' => $result['iIdEmpresa'] ?? null,
+                            'menus' => $menus
+                        ]);
+                    } catch (JWTException $e) {
+                        return response()->json([
+                            'status' => 'error',
+                            'message' => 'No se pudo crear el token'
+                        ], 500);
                     }
-                    
-                    return response()->json([
-                        'status' => 'success',
-                        'message' => $result['sMessage'],
-                        'token' => $token,
-                        'token_type' => 'bearer',
-                        'expires_in' => config('jwt.ttl') * 60,
-                        'user' => [
-                            'id' => $usuario->ID_Usuario,
-                            'nombre' => $usuario->No_Usuario,
-                            'nombres_apellidos' => $usuario->No_Nombres_Apellidos,
-                            'email' => $usuario->Txt_Email,
-                            'estado' => $usuario->Nu_Estado,
-                            'empresa' => $usuario->empresa ? [
-                                'id' => $usuario->empresa->ID_Empresa,
-                                'nombre' => $usuario->empresa->No_Empresa
-                            ] : null,
-                            'organizacion' => $usuario->organizacion ? [
-                                'id' => $usuario->organizacion->ID_Organizacion,
-                                'nombre' => $usuario->organizacion->No_Organizacion
-                            ] : null,
-                            'grupo' => $grupoInfo
-                        ],
-                        'iCantidadAcessoUsuario' => $result['iCantidadAcessoUsuario'] ?? null,
-                        'iIdEmpresa' => $result['iIdEmpresa'] ?? null,
-                        'menus' => $menus
-                    ]);
-                } catch (JWTException $e) {
-                    return response()->json([
-                        'status' => 'error',
-                        'message' => 'No se pudo crear el token'
-                    ], 500);
                 }
             }
-        }
 
-        return response()->json([
-            'status' => $result['sStatus'],
-            'message' => $result['sMessage']
-        ], 401);
+            return response()->json([
+                'status' => $result['sStatus'],
+                'message' => $result['sMessage']
+            ], 401);
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Error al iniciar sesión'
+            ], 500);
+        }
     }
 
     /**
@@ -188,10 +182,10 @@ class AuthController extends Controller
     {
         $No_Password = trim($data['No_Password']);
         $No_Password = strip_tags($No_Password);
-        
+
         $No_Usuario = trim($data['No_Usuario']);
         $No_Usuario = strip_tags($No_Usuario);
-        
+
         // Buscar usuario
         $usuario = DB::table('usuario')
             ->where('No_Usuario', $No_Usuario)
@@ -415,10 +409,9 @@ class AuthController extends Controller
             }
 
             return $arrMenuPadre;
-
         } catch (\Exception $e) {
             // En caso de error, devolver array vacío
             return [];
         }
     }
-} 
+}
