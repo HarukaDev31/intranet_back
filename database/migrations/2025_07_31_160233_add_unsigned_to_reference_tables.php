@@ -15,10 +15,7 @@ class AddUnsignedToReferenceTables extends Migration
     public function up()
     {
         // Agregar unsigned a id en bd_entidades_reguladoras
-        DB::statement('ALTER TABLE bd_entidades_reguladoras MODIFY id int unsigned NOT NULL AUTO_INCREMENT');
-        
-        // Agregar unsigned a id en bd_productos
-        DB::statement('ALTER TABLE bd_productos MODIFY id int unsigned NOT NULL AUTO_INCREMENT');
+    
     }
 
     /**
