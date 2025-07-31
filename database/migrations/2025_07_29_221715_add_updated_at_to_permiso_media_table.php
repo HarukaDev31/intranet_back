@@ -13,11 +13,7 @@ class AddUpdatedAtToPermisoMediaTable extends Migration
      */
     public function up()
     {
-        Schema::table('bd_productos_regulaciones_permiso_media', function (Blueprint $table) {
-            if (!Schema::hasColumn('bd_productos_regulaciones_permiso_media', 'updated_at')) {
-                $table->timestamp('updated_at')->nullable()->comment('Fecha de actualización');
-            }
-        });
+       
     }
 
     /**
@@ -27,10 +23,5 @@ class AddUpdatedAtToPermisoMediaTable extends Migration
      */
     public function down()
     {
-        Schema::table('bd_productos_regulaciones_permiso_media', function (Blueprint $table) {
-            if (Schema::hasColumn('bd_productos_regulaciones_permiso_media', 'updated_at')) {
-                $table->dropColumn('updated_at');
-            }
-        });
-    }
+        
 }

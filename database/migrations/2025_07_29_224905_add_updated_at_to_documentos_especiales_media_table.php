@@ -13,11 +13,7 @@ class AddUpdatedAtToDocumentosEspecialesMediaTable extends Migration
      */
     public function up()
     {
-        Schema::table('bd_productos_regulaciones_documentos_especiales_media', function (Blueprint $table) {
-            if (!Schema::hasColumn('bd_productos_regulaciones_documentos_especiales_media', 'updated_at')) {
-                $table->timestamp('updated_at')->nullable()->comment('Fecha de actualización');
-            }
-        });
+       
     }
 
     /**

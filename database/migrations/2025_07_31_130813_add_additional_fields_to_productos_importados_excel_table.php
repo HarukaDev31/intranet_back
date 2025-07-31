@@ -13,25 +13,7 @@ class AddAdditionalFieldsToProductosImportadosExcelTable extends Migration
      */
     public function up()
     {
-        Schema::table('productos_importados_excel', function (Blueprint $table) {
-            // Campos para antidumping
-            $table->string('antidumping_value', 50)->nullable()->after('antidumping');
-            
-            // Campos para entidad reguladora
-            $table->unsignedBigInteger('entidad_id')->nullable()->after('tipo_producto');
-            
-            // Campos para etiquetado especial
-            $table->unsignedBigInteger('tipo_etiquetado_id')->nullable()->after('etiquetado');
-            
-            // Campos para observaciones
-            $table->boolean('tiene_observaciones')->default(false)->after('doc_especial');
-            $table->text('observaciones')->nullable()->after('tiene_observaciones');
-            
-            // Índices para mejorar rendimiento
-            $table->index('entidad_id');
-            $table->index('tipo_etiquetado_id');
-            $table->index('tiene_observaciones');
-        });
+        
     }
 
     /**
