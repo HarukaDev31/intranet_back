@@ -26,7 +26,16 @@ class AddForeignKeysSqlToProductosImportadosExcelTable extends Migration
     public function down()
     {
         // Eliminar foreign keys
-        DB::statement('ALTER TABLE productos_importados_excel DROP FOREIGN KEY IF EXISTS fk_productos_entidad');
-        DB::statement('ALTER TABLE productos_importados_excel DROP FOREIGN KEY IF EXISTS fk_productos_tipo_etiquetado');
+        try {
+            DB::statement('ALTER TABLE productos_importados_excel DROP FOREIGN KEY fk_productos_entidad');
+        } catch (\Exception $e) {
+            // Ignorar si no existe
+        }
+        
+        try {
+            DB::statement('ALTER TABLE productos_importados_excel DROP FOREIGN KEY fk_productos_tipo_etiquetado');
+        } catch (\Exception $e) {
+            // Ignorar si no existe
+        }
     }
 }

@@ -15,10 +15,29 @@ class FixAllForeignKeysCompatibility extends Migration
     public function up()
     {
         // 1. Eliminar todas las foreign keys existentes que puedan causar conflictos
-        DB::statement('ALTER TABLE bd_productos_regulaciones_permiso DROP FOREIGN KEY IF EXISTS fk_permiso_entidad');
-        DB::statement('ALTER TABLE bd_productos_regulaciones_antidumping DROP FOREIGN KEY IF EXISTS fk_antidumping_rubro');
-        DB::statement('ALTER TABLE bd_productos_regulaciones_etiquetado DROP FOREIGN KEY IF EXISTS fk_etiquetado_rubro');
-        DB::statement('ALTER TABLE bd_productos_regulaciones_documentos_especiales DROP FOREIGN KEY IF EXISTS fk_documentos_especiales_rubro');
+        try {
+            DB::statement('ALTER TABLE bd_productos_regulaciones_permiso DROP FOREIGN KEY fk_permiso_entidad');
+        } catch (\Exception $e) {
+            // Ignorar si no existe
+        }
+        
+        try {
+            DB::statement('ALTER TABLE bd_productos_regulaciones_antidumping DROP FOREIGN KEY fk_antidumping_rubro');
+        } catch (\Exception $e) {
+            // Ignorar si no existe
+        }
+        
+        try {
+            DB::statement('ALTER TABLE bd_productos_regulaciones_etiquetado DROP FOREIGN KEY fk_etiquetado_rubro');
+        } catch (\Exception $e) {
+            // Ignorar si no existe
+        }
+        
+        try {
+            DB::statement('ALTER TABLE bd_productos_regulaciones_documentos_especiales DROP FOREIGN KEY fk_documentos_especiales_rubro');
+        } catch (\Exception $e) {
+            // Ignorar si no existe
+        }
         
         // 2. Cambiar tipos de datos en las tablas de referencia
         DB::statement('ALTER TABLE bd_entidades_reguladoras MODIFY id int unsigned NOT NULL AUTO_INCREMENT');
@@ -49,14 +68,42 @@ class FixAllForeignKeysCompatibility extends Migration
     public function down()
     {
         // Eliminar foreign keys de productos_importados_excel
-        DB::statement('ALTER TABLE productos_importados_excel DROP FOREIGN KEY IF EXISTS fk_productos_entidad');
-        DB::statement('ALTER TABLE productos_importados_excel DROP FOREIGN KEY IF EXISTS fk_productos_tipo_etiquetado');
+        try {
+            DB::statement('ALTER TABLE productos_importados_excel DROP FOREIGN KEY fk_productos_entidad');
+        } catch (\Exception $e) {
+            // Ignorar si no existe
+        }
+        
+        try {
+            DB::statement('ALTER TABLE productos_importados_excel DROP FOREIGN KEY fk_productos_tipo_etiquetado');
+        } catch (\Exception $e) {
+            // Ignorar si no existe
+        }
         
         // Eliminar foreign keys recreadas
-        DB::statement('ALTER TABLE bd_productos_regulaciones_permiso DROP FOREIGN KEY IF EXISTS fk_permiso_entidad');
-        DB::statement('ALTER TABLE bd_productos_regulaciones_antidumping DROP FOREIGN KEY IF EXISTS fk_antidumping_rubro');
-        DB::statement('ALTER TABLE bd_productos_regulaciones_etiquetado DROP FOREIGN KEY IF EXISTS fk_etiquetado_rubro');
-        DB::statement('ALTER TABLE bd_productos_regulaciones_documentos_especiales DROP FOREIGN KEY IF EXISTS fk_documentos_especiales_rubro');
+        try {
+            DB::statement('ALTER TABLE bd_productos_regulaciones_permiso DROP FOREIGN KEY fk_permiso_entidad');
+        } catch (\Exception $e) {
+            // Ignorar si no existe
+        }
+        
+        try {
+            DB::statement('ALTER TABLE bd_productos_regulaciones_antidumping DROP FOREIGN KEY fk_antidumping_rubro');
+        } catch (\Exception $e) {
+            // Ignorar si no existe
+        }
+        
+        try {
+            DB::statement('ALTER TABLE bd_productos_regulaciones_etiquetado DROP FOREIGN KEY fk_etiquetado_rubro');
+        } catch (\Exception $e) {
+            // Ignorar si no existe
+        }
+        
+        try {
+            DB::statement('ALTER TABLE bd_productos_regulaciones_documentos_especiales DROP FOREIGN KEY fk_documentos_especiales_rubro');
+        } catch (\Exception $e) {
+            // Ignorar si no existe
+        }
         
         // Revertir tipos de datos
         DB::statement('ALTER TABLE bd_entidades_reguladoras MODIFY id int NOT NULL AUTO_INCREMENT');
