@@ -11,6 +11,10 @@ use App\Http\Controllers\BaseDatos\Regulaciones\AntidumpingController;
 use App\Http\Controllers\BaseDatos\Regulaciones\PermisoController;
 use App\Http\Controllers\BaseDatos\Regulaciones\EtiquetadoController;
 use App\Http\Controllers\BaseDatos\Regulaciones\DocumentosEspecialesController;
+use App\Http\Controllers\BaseDatos\ClientesController;
+use App\Http\Controllers\CargaConsolidada\ContenedorController;
+use App\Http\Controllers\CargaConsolidada\TipoClienteController;
+use App\Http\Controllers\CargaConsolidada\CotizacionController;
 use App\Http\Controllers\UsuarioGrupoController;
 /*
 |--------------------------------------------------------------------------
@@ -107,4 +111,21 @@ Route::group(['prefix' => 'base-datos', 'middleware' => 'jwt.auth'], function ()
         Route::get('grupos-disponibles/{usuarioId}', [UsuarioGrupoController::class, 'getGruposDisponibles']);
         Route::get('estadisticas', [UsuarioGrupoController::class, 'getEstadisticas']);
     });
+
+    // Rutas de clientes
+    Route::group(['prefix' => 'clientes'], function () {
+        Route::get('/', [ClientesController::class, 'index']);
+        Route::get('{id}', [ClientesController::class, 'show']);
+        Route::post('/', [ClientesController::class, 'store']);
+        Route::put('{id}', [ClientesController::class, 'update']);
+        Route::delete('{id}', [ClientesController::class, 'destroy']);
+        Route::get('buscar/estadisticas', [ClientesController::class, 'estadisticas']);
+        Route::get('por-servicio', [ClientesController::class, 'porServicio']);
+    });
+});
+
+// Rutas de carga consolidada
+Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], function () {
+    
+   
 });
