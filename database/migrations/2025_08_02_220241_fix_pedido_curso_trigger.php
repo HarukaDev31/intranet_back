@@ -17,10 +17,10 @@ class FixPedidoCursoTrigger extends Migration
         // Eliminar el trigger existente si existe
         DB::unprepared('DROP TRIGGER IF EXISTS after_pedido_curso_insert');
 
-        // Crear el trigger corregido
+        // Crear el trigger corregido - usamos AFTER INSERT en lugar de BEFORE INSERT
         DB::unprepared('
             CREATE TRIGGER after_pedido_curso_insert
-            BEFORE INSERT ON pedido_curso
+            AFTER INSERT ON pedido_curso
             FOR EACH ROW
             BEGIN
                 DECLARE cliente_id INT;
@@ -71,8 +71,10 @@ class FixPedidoCursoTrigger extends Migration
                         SET cliente_id = LAST_INSERT_ID();
                     END IF;
 
-                    -- Asignar el cliente_id al NEW record (no UPDATE, sino asignación directa)
-                    SET NEW.id_cliente = cliente_id;
+                    -- Actualizar el registro recién insertado con el cliente_id
+                    UPDATE pedido_curso 
+                    SET id_cliente = cliente_id 
+                    WHERE ID_Pedido_Curso = NEW.ID_Pedido_Curso;
                 END IF;
             END
         ');
