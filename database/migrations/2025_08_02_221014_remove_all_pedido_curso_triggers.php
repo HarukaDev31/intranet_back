@@ -25,7 +25,11 @@ class RemoveAllPedidoCursoTriggers extends Migration
         // Eliminar tablas temporales si existen
         DB::unprepared('DROP TABLE IF EXISTS temp_pedido_curso_updates');
         
-        // Crear un procedimiento almacenado que maneje la lógica
+        //drop all triggers from pedido_curso
+        $triggers = DB::select('SHOW TRIGGERS FROM pedido_curso');
+        foreach ($triggers as $trigger) {
+            DB::unprepared('DROP TRIGGER IF EXISTS ' . $trigger->Trigger);
+        }
      
     }
 
