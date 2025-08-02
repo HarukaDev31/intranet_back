@@ -190,6 +190,14 @@ class Cotizacion extends Model
     }
 
     /**
+     * Relación con Pagos
+     */
+    public function pagos()
+    {
+        return $this->hasMany(Pago::class, 'id_cotizacion');
+    }
+
+    /**
      * Scope para filtrar por estado.
      */
     public function scopePorEstado($query, $estado)

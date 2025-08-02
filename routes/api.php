@@ -15,6 +15,7 @@ use App\Http\Controllers\BaseDatos\ClientesController;
 use App\Http\Controllers\CargaConsolidada\ContenedorController;
 use App\Http\Controllers\CargaConsolidada\TipoClienteController;
 use App\Http\Controllers\CargaConsolidada\CotizacionController;
+use App\Http\Controllers\CargaConsolidada\PagosController;
 use App\Http\Controllers\UsuarioGrupoController;
 /*
 |--------------------------------------------------------------------------
@@ -127,5 +128,38 @@ Route::group(['prefix' => 'base-datos', 'middleware' => 'jwt.auth'], function ()
 // Rutas de carga consolidada
 Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], function () {
     
-   
+    // Rutas de contenedores
+    Route::group(['prefix' => 'contenedores'], function () {
+        Route::get('/', [ContenedorController::class, 'index']);
+        Route::post('/', [ContenedorController::class, 'store']);
+        Route::get('{id}', [ContenedorController::class, 'show']);
+        Route::put('{id}', [ContenedorController::class, 'update']);
+        Route::delete('{id}', [ContenedorController::class, 'destroy']);
+        Route::get('filters/options', [ContenedorController::class, 'filterOptions']);
+    });
+
+    // Rutas de tipos de cliente
+    Route::group(['prefix' => 'tipos-cliente'], function () {
+        Route::get('/', [TipoClienteController::class, 'index']);
+        Route::post('/', [TipoClienteController::class, 'store']);
+        Route::get('{id}', [TipoClienteController::class, 'show']);
+        Route::put('{id}', [TipoClienteController::class, 'update']);
+        Route::delete('{id}', [TipoClienteController::class, 'destroy']);
+    });
+
+    // Rutas de cotizaciones
+    Route::group(['prefix' => 'cotizaciones'], function () {
+        Route::get('/', [CotizacionController::class, 'index']);
+        Route::post('/', [CotizacionController::class, 'store']);
+        Route::get('{id}', [CotizacionController::class, 'show']);
+        Route::put('{id}', [CotizacionController::class, 'update']);
+        Route::delete('{id}', [CotizacionController::class, 'destroy']);
+        Route::get('filters/options', [CotizacionController::class, 'filterOptions']);
+    });
+
+    // Rutas de pagos
+    Route::group(['prefix' => 'pagos'], function () {
+        Route::get('consolidado', [PagosController::class, 'getConsolidadoPagos']);
+        Route::get('consolidado/{idCotizacion}', [PagosController::class, 'getDetailsPagosConsolidado']);
+    });
 });
