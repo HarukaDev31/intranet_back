@@ -16,6 +16,8 @@ class Contenedor extends Model
      * @var string
      */
     protected $table = 'carga_consolidada_contenedor';
+    protected $primaryKey = 'id';
+    public $timestamps = false;
 
     /**
      * Los atributos que son asignables masivamente.

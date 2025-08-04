@@ -16,6 +16,7 @@ class Cotizacion extends Model
      * @var string
      */
     protected $table = 'contenedor_consolidado_cotizacion';
+    public $timestamps = false;
 
     /**
      * Los atributos que son asignables masivamente.
@@ -64,7 +65,8 @@ class Cotizacion extends Model
         'note_administracion',
         'status_cliente_doc',
         'logistica_final',
-        'qty_item'
+        'qty_item',
+        'id_cliente_importacion'
     ];
 
     /**
@@ -355,5 +357,13 @@ class Cotizacion extends Model
     public function getEstadoClienteLegibleAttribute()
     {
         return self::ESTADOS_CLIENTE[$this->estado_cliente] ?? $this->estado_cliente;
+    }
+
+    /**
+     * Relación con ImportCliente
+     */
+    public function importCliente()
+    {
+        return $this->belongsTo(\App\Models\ImportCliente::class, 'id_cliente_importacion');
     }
 }

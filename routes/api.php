@@ -16,6 +16,7 @@ use App\Http\Controllers\CargaConsolidada\ContenedorController;
 use App\Http\Controllers\CargaConsolidada\TipoClienteController;
 use App\Http\Controllers\CargaConsolidada\CotizacionController;
 use App\Http\Controllers\CargaConsolidada\PagosController;
+use App\Http\Controllers\CargaConsolidada\ImportController;
 use App\Http\Controllers\UsuarioGrupoController;
 /*
 |--------------------------------------------------------------------------
@@ -116,12 +117,21 @@ Route::group(['prefix' => 'base-datos', 'middleware' => 'jwt.auth'], function ()
     // Rutas de clientes
     Route::group(['prefix' => 'clientes'], function () {
         Route::get('/', [ClientesController::class, 'index']);
-        Route::get('{id}', [ClientesController::class, 'show']);
         Route::post('/', [ClientesController::class, 'store']);
         Route::put('{id}', [ClientesController::class, 'update']);
-        Route::delete('{id}', [ClientesController::class, 'destroy']);
         Route::get('buscar/estadisticas', [ClientesController::class, 'estadisticas']);
         Route::get('por-servicio', [ClientesController::class, 'porServicio']);
+        
+        // Rutas de importación Excel
+        Route::post('import-excel', [ClientesController::class, 'importExcel']);
+        Route::post('descargar-plantilla', [ClientesController::class, 'descargarPlantilla']);
+        Route::get('list-excels', [ClientesController::class, 'obtenerListExcel']);
+        Route::delete('delete-excel/{id}', [ClientesController::class, 'deleteExcel']);
+        
+        // Rutas CRUD (deben ir después de las rutas específicas)
+        Route::get('{id}', [ClientesController::class, 'show']);
+        Route::delete('{id}', [ClientesController::class, 'destroy']);
+
     });
 });
 
@@ -161,5 +171,14 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
     Route::group(['prefix' => 'pagos'], function () {
         Route::get('consolidado', [PagosController::class, 'getConsolidadoPagos']);
         Route::get('consolidado/{idCotizacion}', [PagosController::class, 'getDetailsPagosConsolidado']);
+        Route::get('cursos', [PagosController::class, 'getCursosPagos']);
+        Route::get('cursos/{idPedidoCurso}', [PagosController::class, 'getDetailsPagosCurso']);
+    });
+
+    // Rutas de importación
+    Route::group(['prefix' => 'import'], function () {
+        Route::post('excel', [ImportController::class, 'importExcel']);
+        Route::get('template', [ImportController::class, 'downloadTemplate']);
+        Route::get('stats', [ImportController::class, 'getImportStats']);
     });
 });
