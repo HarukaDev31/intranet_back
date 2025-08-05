@@ -15,7 +15,8 @@ class Cliente extends Model
         'documento',
         'correo',
         'telefono',
-        'fecha'
+        'fecha',
+        'id_cliente_importacion'
     ];
 
     protected $casts = [

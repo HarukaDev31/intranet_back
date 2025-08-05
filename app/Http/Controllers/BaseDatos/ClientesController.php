@@ -489,7 +489,7 @@ class ClientesController extends Controller
     public function deleteExcel($id)
     {
         try {
-
+            Cliente::where('id_cliente_importacion', $id)->delete();
             Cotizacion::where('id_cliente_importacion', $id)->delete();
             PedidoCurso::where('id_cliente_importacion', $id)->delete();
             ImportCliente::where('id', $id)->delete();
@@ -578,8 +578,8 @@ class ClientesController extends Controller
      */
     private function procesarFilaCotizacion($data, $empresaId, &$stats, $row, $importId)
     {
-        // Crear o encontrar contenedor usando servicio_detalle como nombre del contenedor
-        $contenedor = $this->crearOEncontrarContenedor($data['servicio_detalle'], $empresaId);
+        try {
+            $contenedor = $this->crearOEncontrarContenedor($data['servicio_detalle'], $empresaId);
 
         // Usar RUC como documento si está disponible, sino DNI
         $documento = !empty($data['ruc']) ? $data['ruc'] : $data['dni'];
@@ -606,12 +606,27 @@ class ClientesController extends Controller
                 'id_cliente_importacion' => $importId,
                 'id_tipo_cliente' => 1, // Tipo cliente por defecto
             ]);
+            //crea cliente
+            $cliente = Cliente::create([
+                'nombre' => $data['razon_social'] ?: $data['cliente'],
+                'documento' => $documento,
+                'telefono' => $data['whatsapp'],
+                'correo' => $data['correo'],
+                'fecha' => $this->parsearFecha($data['fecha']),
 
+                'id_cliente_importacion' => $importId,
+              
+            ]);
             $stats['creados']++;
             $stats['detalles'][] = "Fila {$row}: Cotización creada para {$data['cliente']}";
         } else {
             $stats['actualizados']++;
             $stats['detalles'][] = "Fila {$row}: Cotización ya existe para {$data['cliente']}";
+        }
+        } catch (\Exception $e) {
+            Log::error('Error al crear cotización: ' . $e->getMessage());
+            $stats['errores']++;
+            $stats['detalles'][] = "Fila {$row}: Error al crear cotización: " . $e->getMessage();
         }
     }
 
