@@ -59,9 +59,14 @@ Route::group(['prefix' => 'base-datos', 'middleware' => 'jwt.auth'], function ()
     
     // Rutas de productos
     Route::group(['prefix' => 'productos'], function () {
+        Route::get('list-excels', [ProductosController::class, 'obtenerListExcel']);
+
         Route::get('/', [ProductosController::class, 'index']);
         Route::get('filters/options', [ProductosController::class, 'filterOptions']);
         Route::get('export', [ProductosController::class, 'export']);
+        Route::post('import-excel', [ProductosController::class, 'importExcel']);
+        Route::delete('delete-excel/{id}', [ProductosController::class, 'deleteExcel']);
+
         Route::get('{id}', [ProductosController::class, 'show']);
         Route::put('{id}', [ProductosController::class, 'update']);
     });

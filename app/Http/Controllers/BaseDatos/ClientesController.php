@@ -178,9 +178,9 @@ class ClientesController extends Controller
     {
         try {
             $request->validate([
-                'excel_file' => 'required|file|mimes:xlsx,xls,xlsm|max:10240', // 10MB max
+                'excel_file' => 'required|file|mimes:xlsx,xls,xlsm', // 10MB max
             ]);
-
+            Log::info('Importando clientes desde Excel');
             $result = $this->clienteImportService->importarClientes($request);
 
             return response()->json([
@@ -627,7 +627,6 @@ class ClientesController extends Controller
                 ['2', 'MARIA GONZALEZ', '12345678', 'maria@email.com', '999 888 777', 'CURSO', '15/01/2024', 'CURSO #2', '', 'MARIA ELENA GONZALEZ LOPEZ'],
             ];
         } else {
-            // Encabezados para cotizaciones
             $headers = [
                 'A1' => 'N',
                 'B1' => 'CLIENTE',

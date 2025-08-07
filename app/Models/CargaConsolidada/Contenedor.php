@@ -245,4 +245,18 @@ class Contenedor extends Model
                $this->estado_china === 'COMPLETADO' && 
                $this->estado_documentacion === 'COMPLETADO';
     }
+
+    /**
+     * Obtener todas las cargas únicas para filtros
+     */
+    public static function getCargasUnicas()
+    {
+        return self::select('carga')
+            ->whereNotNull('carga')
+            ->where('carga', '!=', '')
+            ->distinct()
+            ->orderByRaw('CAST(carga AS UNSIGNED)')
+            ->pluck('carga')
+            ->toArray();
+    }
 }

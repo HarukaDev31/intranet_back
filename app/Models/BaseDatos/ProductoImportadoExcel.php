@@ -16,6 +16,7 @@ class ProductoImportadoExcel extends Model
 
     protected $fillable = [
         'idContenedor',
+        'id_import_producto',
         'item',
         'nombre_comercial',
         'foto',
@@ -283,7 +284,7 @@ class ProductoImportadoExcel extends Model
      */
     public function contenedor()
     {
-        return $this->belongsTo(CargaConsolidadaContenedor::class, 'idContenedor', 'id');
+        return $this->belongsTo(Contenedor::class, 'idContenedor', 'id');
     }
 
     /**
@@ -300,6 +301,14 @@ class ProductoImportadoExcel extends Model
     public function tipoEtiquetado()
     {
         return $this->belongsTo(ProductoRubro::class, 'tipo_etiquetado_id', 'id');
+    }
+
+    /**
+     * Relación con ImportProducto
+     */
+    public function importProducto()
+    {
+        return $this->belongsTo(\App\Models\ImportProducto::class, 'id_import_producto');
     }
 
     /**
