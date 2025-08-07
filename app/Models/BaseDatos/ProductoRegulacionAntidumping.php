@@ -14,12 +14,12 @@ class ProductoRegulacionAntidumping extends Model
         'id_rubro',
         'descripcion_producto',
         'partida',
+        'precio_declarado',
         'antidumping',
         'observaciones'
     ];
 
     protected $casts = [
-        'antidumping' => 'decimal:2',
         'created_at' => 'datetime',
         'updated_at' => 'datetime'
     ];

@@ -177,7 +177,8 @@ class AntidumpingController extends Controller
                     'id_rubro' => $data['id_rubro'],
                     'descripcion_producto' => $data['descripcion'],
                     'partida' => $data['partida'],
-                    'antidumping' => $data['precio_declarado'],
+                    'precio_declarado' => $data['precio_declarado'],
+                    'antidumping' => $data['antidumping'],
                     'observaciones' => $data['observaciones'] ?? null,
                 ];
                 
@@ -292,7 +293,8 @@ class AntidumpingController extends Controller
                     'id_rubro' => $data['id_rubro'],
                     'descripcion_producto' => $data['descripcion'],
                     'partida' => $data['partida'],
-                    'antidumping' => $data['precio_declarado'],
+                    'precio_declarado' => $data['precio_declarado'],
+                    'antidumping' => $data['antidumping'],
                     'observaciones' => $data['observaciones'] ?? null,
                 ]);
 
