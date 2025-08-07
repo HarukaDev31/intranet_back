@@ -18,6 +18,7 @@ use App\Http\Controllers\CargaConsolidada\CotizacionController;
 use App\Http\Controllers\CargaConsolidada\PagosController;
 use App\Http\Controllers\CargaConsolidada\ImportController;
 use App\Http\Controllers\UsuarioGrupoController;
+use App\Http\Controllers\ClientesHistorialController;
 /*
 |--------------------------------------------------------------------------
 | API Routes
@@ -46,7 +47,13 @@ Route::group(['prefix' => 'menu', 'middleware' => 'jwt.auth'], function () {
     Route::get('listar', [MenuController::class, 'listarMenu']);
     Route::get('get', [MenuController::class, 'getMenus']);
 });
+    Route::group(['prefix' => 'consolidado', 'middleware' => 'jwt.auth'], function () {
+        Route::group(['prefix' => 'cotizacion'], function () {
+            
+            Route::get('clientes-documentacion/{id}', [CotizacionController::class, 'showClientesDocumentacion']);
+        });
 
+    });
 // Rutas de base de datos
 Route::group(['prefix' => 'base-datos', 'middleware' => 'jwt.auth'], function () {
     
@@ -116,12 +123,8 @@ Route::group(['prefix' => 'base-datos', 'middleware' => 'jwt.auth'], function ()
 
     // Rutas de clientes
     Route::group(['prefix' => 'clientes'], function () {
-        Route::get('/', [ClientesController::class, 'index']);
-        Route::post('/', [ClientesController::class, 'store']);
-        Route::put('{id}', [ClientesController::class, 'update']);
-        Route::get('buscar/estadisticas', [ClientesController::class, 'estadisticas']);
-        Route::get('por-servicio', [ClientesController::class, 'porServicio']);
-        
+  
+        Route::get('export', [ClientesController::class, 'export']);
         // Rutas de importación Excel
         Route::post('import-excel', [ClientesController::class, 'importExcel']);
         Route::post('descargar-plantilla', [ClientesController::class, 'descargarPlantilla']);
@@ -131,8 +134,11 @@ Route::group(['prefix' => 'base-datos', 'middleware' => 'jwt.auth'], function ()
         // Rutas CRUD (deben ir después de las rutas específicas)
         Route::get('{id}', [ClientesController::class, 'show']);
         Route::delete('{id}', [ClientesController::class, 'destroy']);
-
+        Route::put('{id}', [ClientesController::class, 'update']);
+        Route::get('/', [ClientesController::class, 'index']);
+        Route::post('/', [ClientesController::class, 'store']);
     });
+
 });
 
 // Rutas de carga consolidada

@@ -26,6 +26,7 @@ class Cotizacion extends Model
     protected $fillable = [
         'id_contenedor',
         'id_tipo_cliente',
+        'id_cliente',
         'fecha',
         'nombre',
         'documento',
@@ -365,5 +366,37 @@ class Cotizacion extends Model
     public function importCliente()
     {
         return $this->belongsTo(\App\Models\ImportCliente::class, 'id_cliente_importacion');
+    }
+
+    /**
+     * Relación con CotizacionDocumentacion
+     */
+    public function documentacion()
+    {
+        return $this->hasMany(CotizacionDocumentacion::class, 'id_cotizacion');
+    }
+
+    /**
+     * Relación con CotizacionProveedor
+     */
+    public function proveedores()
+    {
+        return $this->hasMany(CotizacionProveedor::class, 'id_cotizacion');
+    }
+
+    /**
+     * Relación con AlmacenDocumentacion
+     */
+    public function documentacionAlmacen()
+    {
+        return $this->hasMany(AlmacenDocumentacion::class, 'id_cotizacion');
+    }
+
+    /**
+     * Relación con AlmacenInspection
+     */
+    public function inspeccionAlmacen()
+    {
+        return $this->hasMany(AlmacenInspection::class, 'id_cotizacion');
     }
 }

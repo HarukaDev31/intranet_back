@@ -13,10 +13,13 @@ class Cliente extends Model
     protected $fillable = [
         'nombre',
         'documento',
+        'ruc',
+        'empresa',
         'correo',
         'telefono',
         'fecha',
-        'id_cliente_importacion'
+        'id_cliente_importacion',
+        'id'
     ];
 
     protected $casts = [
@@ -93,6 +96,9 @@ class Cliente extends Model
 
         foreach ($pedidosCurso as $pedido) {
             $servicios[] = [
+                'id' => $pedido->ID_Pedido_Curso,
+                'is_imported' => $pedido->id_cliente_importacion?1:0,
+                'monto' => $pedido->Ss_Total,
                 'servicio' => 'Curso',
                 'fecha' => $pedido->Fe_Registro,
                 'categoria' => $this->determinarCategoria($pedido->Fe_Registro)
@@ -114,6 +120,9 @@ class Cliente extends Model
 
         foreach ($cotizaciones as $cotizacion) {
             $servicios[] = [
+                'id' => $cotizacion->id,
+                'monto' => $cotizacion->monto,
+                'is_imported' => $cotizacion->id_cliente_importacion?1:0,
                 'servicio' => 'Consolidado',
                 'fecha' => $cotizacion->fecha,
                 'categoria' => $this->determinarCategoria($cotizacion->fecha)
@@ -235,31 +244,27 @@ class Cliente extends Model
     }
 
     /**
-     * Scope para filtrar por servicio
+     * Scope para filtrar por servicio (versión optimizada para paginación)
      */
     public function scopePorServicio($query, $servicio)
     {
-        return $query->where(function($q) use ($servicio) {
-            // Buscar en pedido_curso
-            $q->whereRaw('EXISTS (
-                SELECT 1 FROM pedido_curso pc 
-                JOIN entidad e ON pc.ID_Entidad = e.ID_Entidad 
-                WHERE pc.Nu_Estado = 2 
-                AND (e.Nu_Celular_Entidad = clientes.telefono 
-                     OR e.Nu_Documento_Identidad = clientes.documento 
-                     OR e.Txt_Email_Entidad = clientes.correo)
-                AND ? = "Curso"
-            )', [$servicio])
-            // Buscar en contenedor_consolidado_cotizacion
-            ->orWhereRaw('EXISTS (
-                SELECT 1 FROM contenedor_consolidado_cotizacion 
-                WHERE estado_cotizador = "CONFIRMADO" 
-                AND (telefono = clientes.telefono 
-                     OR documento = clientes.documento 
-                     OR correo = clientes.correo)
-                AND ? = "Consolidado"
-            )', [$servicio]);
-        });
+        if ($servicio === 'Curso') {
+            return $query->whereIn('id', function($subQuery) {
+                $subQuery->select('pc.id_cliente')
+                         ->from('pedido_curso as pc')
+                         ->where('pc.Nu_Estado', 2)
+                         ->whereNotNull('pc.id_cliente');
+            });
+        } elseif ($servicio === 'Consolidado') {
+            return $query->whereIn('id', function($subQuery) {
+                $subQuery->select('id_cliente')
+                         ->from('contenedor_consolidado_cotizacion')
+                         ->where('estado_cotizador', 'CONFIRMADO')
+                         ->whereNotNull('id_cliente');
+            });
+        }
+        
+        return $query;
     }
 
         /**
