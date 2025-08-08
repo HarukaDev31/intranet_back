@@ -5,14 +5,15 @@ namespace App\Http\Controllers\BaseDatos\Regulaciones;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\BaseDatos\Regulaciones\ProductoRubro;
-
+use Illuminate\Support\Facades\Log;
 class ProductoRubroController extends Controller
 {
     public function getDropdown(Request $request)
     {
         try {
             $search = $request->input('search');
-            $rubros = ProductoRubro::where('nombre', 'like', "%$search%")->get();
+            $tipo = $request->input('tipo');
+            $rubros = ProductoRubro::where('nombre', 'like', "%$search%")->where('tipo', $tipo)->get();
             return response()->json([
                 'success' => true,
                 'data' => $rubros
@@ -29,6 +30,7 @@ class ProductoRubroController extends Controller
     {
         try {
             $rubro = ProductoRubro::create($request->all());
+            Log::info($request->all());
             return response()->json([
                 'success' => true,
                 'data' => $rubro

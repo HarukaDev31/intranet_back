@@ -25,7 +25,7 @@ class DocumentosEspecialesController extends Controller
             // Query para rubros con sus regulaciones de documentos especiales
             $query = ProductoRubro::with([
                 'regulacionesDocumentosEspeciales.media'
-            ]);
+            ])->where('tipo', ProductoRubro::TIPO_DOCUMENTO_ESPECIAL);
             
             // Aplicar filtros si están presentes
             if ($request->has('search') && $request->search) {
@@ -44,7 +44,7 @@ class DocumentosEspecialesController extends Controller
                 foreach ($rubro->regulacionesDocumentosEspeciales as $documento) {
                     $documentos = [];
                     foreach ($documento->media as $media) {
-                        $documentos[] = '/storage/' . $media->ruta;
+                        $documentos[] = $this->generateImageUrl($media->ruta);
                     }
                     
                     $regulaciones[] = [
@@ -90,7 +90,20 @@ class DocumentosEspecialesController extends Controller
             ], 500);
         }
     }
-
+    private function generateImageUrl($ruta)
+    {
+        if (empty($ruta)) {
+            return null;
+        }
+        
+        // Si ya es una URL completa, devolverla tal como está
+        if (filter_var($ruta, FILTER_VALIDATE_URL)) {
+            return $ruta;
+        }
+        
+        // Generar URL completa desde storage
+        return Storage::disk('public')->url($ruta);
+    }
     /**
      * Crear nueva regulación de documentos especiales o actualizar existente
      */
@@ -328,6 +341,9 @@ class DocumentosEspecialesController extends Controller
                     'success' => false,
                     'message' => 'Regulación de documentos especiales no encontrada'
                 ], 404);
+            }
+            foreach ($documento->media as $media) {
+                $media->ruta = $this->generateImageUrl($media->ruta);
             }
 
             return response()->json([

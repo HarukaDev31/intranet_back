@@ -139,6 +139,7 @@ class ClienteService
                     return [
                         'is_imported' => $servicio['is_imported'],
                         'id' => $servicio['id'],
+                        'detalle' => $servicio['detalle'],
                         'servicio' => $servicio['servicio'],
                         'fecha' => Carbon::parse($servicio['fecha'])->format('d/m/Y'),
                         'categoria' => $servicio['categoria'],

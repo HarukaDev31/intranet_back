@@ -22,7 +22,7 @@ class AntidumpingController extends Controller
             $perPage = $request->get('limit', 10);
             $page = $request->get('page', 1);
 
-            $query = ProductoRubro::with(['regulacionesAntidumping.media']);
+            $query = ProductoRubro::with(['regulacionesAntidumping.media'])->where('tipo', ProductoRubro::TIPO_ANTIDUMPING);
 
             // Aplicar filtros si están presentes
             if ($request->has('search') && $request->search) {
@@ -47,7 +47,7 @@ class AntidumpingController extends Controller
                         'antidumping' => $antidumping->antidumping,
                         'observaciones' => $antidumping->observaciones,
                         'imagenes' => $antidumping->media->map(function ($media) {
-                            return url('/storage/' . $media->ruta);
+                            return $this->generateImageUrl($media->ruta);
                         })->toArray(),
                         'estado' => 'active',
                         'created_at' => $antidumping->created_at,
@@ -384,7 +384,7 @@ class AntidumpingController extends Controller
                     'extension' => $media->extension,
                     'peso' => $media->peso,
                     'nombre_original' => $media->nombre_original,
-                    'ruta' => $media->ruta,
+                    'ruta' => $this->generateImageUrl($media->ruta),
                     'url' => $this->generateImageUrl($media->ruta),
                     'created_at' => $media->created_at,
                     'updated_at' => $media->updated_at

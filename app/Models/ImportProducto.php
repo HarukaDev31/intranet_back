@@ -14,7 +14,8 @@ class ImportProducto extends Model
         'nombre_archivo',
         'ruta_archivo',
         'cantidad_rows',
-        'estadisticas'
+        'estadisticas',
+        'id_contenedor_consolidado_documentacion_files'
     ];
 
     protected $casts = [

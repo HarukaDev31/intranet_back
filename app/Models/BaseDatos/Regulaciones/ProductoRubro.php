@@ -9,7 +9,7 @@ class ProductoRubro extends Model
 {
     use HasFactory;
     protected $table = 'bd_productos';
-    protected $fillable = ['nombre', 'descripcion'];
+    protected $fillable = ['nombre', 'descripcion','tipo'];
     public $timestamps = false;
     
 }

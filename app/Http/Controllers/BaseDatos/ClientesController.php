@@ -204,7 +204,6 @@ class ClientesController extends Controller
     {
         try {
             $result = $this->clienteImportService->obtenerListaImportaciones();
-            Log::info($result);
             return response()->json([
                 'success' => true,
                 'data' => $result

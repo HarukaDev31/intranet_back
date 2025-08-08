@@ -13,6 +13,7 @@ use App\Models\CargaConsolidada\Contenedor;
 use App\Models\ImportProducto;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 class ProductosController extends Controller
 {
@@ -183,7 +184,7 @@ class ProductosController extends Controller
             Log::info("ImportProducto actualizado - Productos insertados: $importedCount");
 
             // Limpiar archivo temporal
-            \Storage::delete($tempPath);
+            Storage::delete($tempPath);
 
             if ($result['success']) {
                 return response()->json([
@@ -223,34 +224,33 @@ class ProductosController extends Controller
             $extractPath = storage_path('app/temp/excel_' . uniqid());
             $this->extractExcelImages($filePath, $extractPath);
 
-            // Cargar el archivo Excel usando PhpSpreadsheet con configuración específica para .xlsm
+            // Cargar el archivo Excel usando PhpSpreadsheet
             $reader = \PhpOffice\PhpSpreadsheet\IOFactory::createReaderForFile($filePath);
-            $reader->setReadDataOnly(false); // Cambiar a false para leer información de merge
-            $reader->setIncludeCharts(false); // No incluir gráficos
+            $reader->setReadDataOnly(false);
+            $reader->setIncludeCharts(false);
 
             $spreadsheet = $reader->load($filePath);
             $sheet = $spreadsheet->getActiveSheet();
             $highestRow = $sheet->getHighestRow();
 
-            // Obtener celdas combinadas (merge)
+            // Obtener celdas combinadas (merge) de la columna A
             $mergedCells = $sheet->getMergeCells();
             Log::info("Total de rangos mergeados encontrados: " . count($mergedCells));
 
-            // Debug: mostrar todos los rangos mergeados
+            // Filtrar solo los rangos de la columna A
+            $columnARanges = [];
             foreach ($mergedCells as $range) {
-                Log::info("Rango mergeado: $range");
+                if (strpos($range, 'A') !== false) {
+                    $columnARanges[] = $range;
+                    Log::info('Rango de columna A encontrado: ' . $range);
+                }
             }
+            
+            Log::info('Total de rangos de columna A: ' . count($columnARanges));
 
-            // Alternativa: intentar obtener merge cells de otra manera
-            if (count($mergedCells) == 0) {
-                Log::info("Intentando método alternativo para obtener merge cells...");
-                $mergedCells = $sheet->getMergeCells();
-                Log::info("Método alternativo - Total de rangos mergeados: " . count($mergedCells));
-            }
-
-            // Función para obtener rango mergeado (simplificada como en el código original)
-            $getMergeRange = function ($row) use ($mergedCells) {
-                foreach ($mergedCells as $range) {
+            // Función para obtener el rango mergeado de una fila específica
+            $getMergeRange = function ($row) use ($columnARanges) {
+                foreach ($columnARanges as $range) {
                     list($start, $end) = explode(':', $range);
                     $startRow = (int)preg_replace('/[A-Z]/', '', $start);
                     $endRow = (int)preg_replace('/[A-Z]/', '', $end);
@@ -261,135 +261,117 @@ class ProductosController extends Controller
                 return [$row, $row];
             };
 
-            $row = 3;
-            $processedItems = [];
-            $importedCount = 0;
-            $totalRowsProcessed = 0;
-            $errors = [];
-
-            // Obtener la colección de dibujos (imágenes) del Excel
-            $drawings = $sheet->getDrawingCollection();
-            Log::info("Total de dibujos encontrados: " . count($drawings));
-            Log::info("Procesando desde fila 3 hasta fila: $highestRow");
-
-            while ($row <= $highestRow) {
-                // Detectar rango mergeado en la columna 1 (A)
-                list($startRow, $endRow) = $getMergeRange($row);
-                Log::info('Procesando rango: ' . $startRow . ' - ' . $endRow);
-
-                // Verificar si hay contenido en la celda A (como en el código original)
-                $cellValue = $sheet->getCell("A$startRow")->getValue();
-                Log::info("Valor de celda A$startRow: '" . $cellValue . "'");
-                if ($cellValue == null || $cellValue == "" || $cellValue == "-") {
-                    Log::info("Celda A$startRow vacía o con '-', deteniendo procesamiento");
-                    break;
-                }
-
-                $item = trim($cellValue);
-                Log::info('Procesando Item: ' . $item . ' en rango ' . $startRow . '-' . $endRow);
-
-                // Evitar procesar el mismo item múltiples veces
-                if (in_array($item, $processedItems)) {
-                    Log::info('Item ya procesado, saltando: ' . $item);
-                    $row = $endRow + 1;
-                    continue;
-                }
-
-                $processedItems[] = $item;
-                $totalRowsProcessed++;
-
-                // Procesar solo una vez por rango mergeado
-                $nombre_comercial = trim($sheet->getCell("B$startRow")->getValue());
-
-                // Obtener imagen - buscar en todo el rango mergeado (como en el código original)
-                $foto = '';
-                Log::info("Buscando imagen en rango C$startRow a C$endRow. Total de dibujos: " . count($drawings));
-
-                $imageFound = false;
-                for ($searchRow = $startRow; $searchRow <= $endRow && !$imageFound; $searchRow++) {
-                    Log::info("Buscando imagen en celda C$searchRow");
-                    foreach ($drawings as $drawing) {
-                        $coordinates = $drawing->getCoordinates();
-
-                        if ($coordinates == "C$searchRow") {
-                            $drawingPath = $drawing->getPath();
-                            Log::info("Ruta del dibujo: " . $drawingPath);
-
-                            $hashPosition = strpos($drawingPath, '#');
-                            if ($hashPosition !== false) {
-                                $extractedPart = substr($drawingPath, $hashPosition + 1);
-                                Log::info("Parte extraída: " . $extractedPart);
-
-                                // Definir posibles ubicaciones de la imagen
-                                $possiblePaths = [
-                                    $extractPath . '/xl/media/' . $extractedPart,
-                                    $extractPath . '/' . $extractedPart,
-                                    $extractPath . '/media/' . $extractedPart
-                                ];
-
-                                foreach ($possiblePaths as $imagePath) {
-                                    if (file_exists($imagePath)) {
-                                        $imageData = file_get_contents($imagePath);
-                                        if ($imageData !== false) {
-                                            // Crear directorio si no existe
-                                            $path = storage_path('app/public/productos/');
-                                            if (!is_dir($path)) {
-                                                mkdir($path, 0777, true);
-                                            }
-
-                                            // Obtener extensión original o usar jpg por defecto
-                                            $extension = pathinfo($extractedPart, PATHINFO_EXTENSION);
-                                            $extension = $extension ? $extension : 'jpg';
-
-                                            $filename = 'productos/' . uniqid() . '.' . $extension;
-                                            $fullPath = storage_path('app/public/' . $filename);
-
-                                            if (file_put_contents($fullPath, $imageData)) {
-                                                $foto = $filename;
-                                                Log::info("Imagen guardada: " . $foto);
-                                                $imageFound = true;
-                                                break 2; // Salir de ambos foreach
-                                            }
-                                        }
-                                    }
-                                }
-                            }
+            // Función para obtener todos los rangos únicos de la columna A
+            $getUniqueRanges = function () use ($sheet, $highestRow, $columnARanges) {
+                $ranges = [];
+                $row = 3;
+                
+                while ($row <= $highestRow) {
+                    $cellValue = $sheet->getCell("A$row")->getValue();
+                    
+                    // Si la celda está vacía o es "-", terminar
+                    if ($cellValue === null || $cellValue === "" || $cellValue === "-") {
+                        Log::info("Celda A$row vacía o con '-', terminando procesamiento");
+                        break;
+                    }
+                    
+                    // Buscar el rango mergeado específico para esta fila
+                    $startRow = $row;
+                    $endRow = $row;
+                    
+                    foreach ($columnARanges as $range) {
+                        list($start, $end) = explode(':', $range);
+                        $rangeStartRow = (int)preg_replace('/[A-Z]/', '', $start);
+                        $rangeEndRow = (int)preg_replace('/[A-Z]/', '', $end);
+                        
+                        if ($row >= $rangeStartRow && $row <= $rangeEndRow) {
+                            $startRow = $rangeStartRow;
+                            $endRow = $rangeEndRow;
+                            break;
                         }
                     }
+                    
+                    // Solo agregar si no es un rango duplicado
+                    $rangeKey = $startRow . '-' . $endRow;
+                    if (!isset($ranges[$rangeKey])) {
+                        $ranges[$rangeKey] = [
+                            'start' => $startRow,
+                            'end' => $endRow,
+                            'item' => $cellValue
+                        ];
+                        Log::info('Rango encontrado: ' . $startRow . ' - ' . $endRow . ' Item: ' . $cellValue);
+                    }
+                    
+                    // Saltar al siguiente rango
+                    $row = $endRow + 1;
                 }
+                
+                return array_values($ranges);
+            };
 
-                // Si no se encontró imagen, intentar obtener valor de texto
-                if (empty($foto)) {
-                    $foto_valor = $sheet->getCell("C$startRow")->getValue();
-                    $foto = !empty($foto_valor) ? trim($foto_valor) : '';
-                    Log::info("No se encontró imagen, usando valor de texto: " . $foto_valor);
-                }
+            // Obtener todos los rangos únicos
+            $uniqueRanges = $getUniqueRanges();
+            $totalRows = count($uniqueRanges);
+            
+            Log::info('Total de rangos únicos encontrados: ' . $totalRows);
+            
+            $estadisticas = [
+                'total_productos' => $totalRows,
+                'productos_importados' => 0,
+                'errores' => 0
+            ];
 
-                // Obtener características combinando todas las celdas del rango mergeado
+            // Actualizar estadísticas en imports_productos
+            $importProducto = \App\Models\ImportProducto::find($idImportProducto);
+            if ($importProducto) {
+                $importProducto->update([
+                    'cantidad_rows' => $totalRows,
+                    'estadisticas' => $estadisticas
+                ]);
+            }
+
+            $importedCount = 0;
+            $errors = [];
+
+            // Procesar cada rango único
+            foreach ($uniqueRanges as $range) {
+                $startRow = $range['start'];
+                $endRow = $range['end'];
+                $item = $range['item'];
+                
+                Log::info('Procesando rango: ' . $startRow . ' - ' . $endRow . ' Item: ' . $item);
+                
+                // Procesar solo la primera fila del rango (evitar duplicados)
+                $i = $startRow;
+                
+                $nombre_comercial = $sheet->getCell("B$i")->getValue();
+                $foto = $sheet->getCell("C$i")->getValue();
+                
+                // Obtener características de todas las filas del rango
                 $caracteristicas = "";
-                for ($j = $startRow; $j <= $endRow; $j++) {
-                    $cellContent = trim($sheet->getCell("D$j")->getValue());
-                    if (!empty($cellContent)) {
-                        $caracteristicas .= $cellContent . " ";
+                for ($j2 = $startRow; $j2 <= $endRow; $j2++) {
+                    $caracteristica = $sheet->getCell("D$j2")->getValue();
+                    if ($caracteristica) {
+                        $caracteristicas .= $caracteristica . " ";
                     }
                 }
                 $caracteristicas = trim($caracteristicas);
-
-                // Obtener el resto de datos (usar la primera fila del rango)
-                $rubro = trim($sheet->getCell("E$startRow")->getValue());
-                $tipo_producto = trim($sheet->getCell("F$startRow")->getValue());
-                $precio_exw = $sheet->getCell("G$startRow")->getValue();
-                $subpartida = $sheet->getCell("H$startRow")->getValue();
-                $link = $sheet->getCell("I$startRow")->getValue();
-                $unidad_comercial = $sheet->getCell("J$startRow")->getValue();
-                $arancel_sunat = $sheet->getCell("K$startRow")->getValue();
-                $arancel_tlc = $sheet->getCell("L$startRow")->getValue();
-                $antidumping = $sheet->getCell("M$startRow")->getValue();
-                $correlativo = $sheet->getCell("N$startRow")->getValue();
-                $etiquetado = $sheet->getCell("O$startRow")->getValue();
-                $doc_especial = $sheet->getCell("P$startRow")->getValue();
-
-                $data = [
+                
+                $rubro = trim($sheet->getCell("E$i")->getValue());
+                $tipo_producto = trim($sheet->getCell("F$i")->getValue());
+                $precio_exw = $sheet->getCell("G$i")->getValue();
+                $subpartida = $sheet->getCell("H$i")->getValue();
+                $link = $sheet->getCell("I$i")->getValue();
+                $unidad_comercial = $sheet->getCell("J$i")->getValue();
+                $arancel_sunat = $sheet->getCell("K$i")->getValue();
+                $arancel_tlc = $sheet->getCell("L$i")->getValue();
+                $antidumping = $sheet->getCell("M$i")->getValue();
+                $correlativo = $sheet->getCell("N$i")->getValue();
+                $etiquetado = $sheet->getCell("O$i")->getValue();
+                $doc_especial = $sheet->getCell("P$i")->getValue();
+               
+                // Guardar en la base de datos usando el modelo
+                $productoData = [
                     'id_import_producto' => $idImportProducto,
                     'item' => $item,
                     'nombre_comercial' => $nombre_comercial,
@@ -409,32 +391,38 @@ class ProductosController extends Controller
                     'doc_especial' => $doc_especial
                 ];
 
-                // Guardar en la base de datos usando el modelo
                 try {
-                    ProductoImportadoExcel::create($data);
+                    ProductoImportadoExcel::create($productoData);
                     $importedCount++;
-                    Log::info('Producto insertado correctamente: ' . $item);
+                    $estadisticas['productos_importados']++;
+                    Log::info('Producto importado exitosamente: ' . $item);
                 } catch (\Exception $e) {
-                    $errors[] = 'Error al insertar producto ' . $item . ': ' . $e->getMessage();
-                    Log::error('Error al insertar producto: ' . $item . ' - ' . $e->getMessage());
+                    $estadisticas['errores']++;
+                    $errorMsg = 'Error al insertar producto ' . $item . ': ' . $e->getMessage();
+                    $errors[] = $errorMsg;
+                    Log::error($errorMsg);
                 }
+            }
 
-                // Avanzar al siguiente rango
-                $row = $endRow + 1;
-                Log::info("Avanzando a fila: $row");
+            // Actualizar estadísticas finales en imports_productos
+            if ($importProducto) {
+                $importProducto->update([
+                    'estadisticas' => $estadisticas
+                ]);
             }
 
             // Limpiar archivos temporales
             $this->deleteDirectory($extractPath);
 
-            Log::info("Importación completada. Total productos insertados: $importedCount, Filas procesadas: $totalRowsProcessed, Errores: " . count($errors));
+            Log::info("Importación completada. Total productos insertados: $importedCount, Total rangos: $totalRows, Errores: " . count($errors));
 
             return [
                 'success' => true,
                 'data' => [
                     'imported_count' => $importedCount,
-                    'total_rows_processed' => $totalRowsProcessed,
-                    'errors' => $errors
+                    'total_rows_processed' => $totalRows,
+                    'errors' => $errors,
+                    'estadisticas' => $estadisticas
                 ]
             ];
         } catch (\Exception $e) {
@@ -782,6 +770,7 @@ class ProductosController extends Controller
     {
         try {
             $importProducto = ImportProducto::find($id);
+            
             if (!$importProducto) {
                 return response()->json([
                     'success' => false,
