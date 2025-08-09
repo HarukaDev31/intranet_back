@@ -178,7 +178,7 @@ class ClientesController extends Controller
     {
         try {
             $request->validate([
-                'excel_file' => 'required|file|mimes:xlsx,xls,xlsm', // 10MB max
+                'excel_file' => 'required|file|mimes:xlsx,xls,xlsm|max:102400', // 100MB max (en KB)
             ]);
             Log::info('Importando clientes desde Excel');
             $result = $this->clienteImportService->importarClientes($request);

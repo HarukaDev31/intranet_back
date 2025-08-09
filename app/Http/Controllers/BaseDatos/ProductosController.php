@@ -138,6 +138,11 @@ class ProductosController extends Controller
                 ], 400);
             }
 
+            // Validar el archivo con Laravel
+            $request->validate([
+                'excel_file' => 'required|file|mimes:xlsx,xls,xlsm|max:102400', // 100MB max (en KB)
+            ]);
+
             // Validar tipo de archivo
             $extension = strtolower($file->getClientOriginalExtension());
             $allowedExtensions = ['xlsx', 'xls', 'xlsm'];
