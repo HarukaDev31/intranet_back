@@ -78,7 +78,6 @@ Route::group(['prefix' => 'base-datos', 'middleware' => 'jwt.auth'], function ()
         Route::post('/entidades', [EntidadesController::class, 'store']);
         Route::get('/rubros', [ProductoRubroController::class, 'getDropdown']);
         Route::post('/rubros', [ProductoRubroController::class, 'store']);
-        
         // Regulaciones antidumping
         Route::group(['prefix' => 'antidumping'], function () {
             Route::get('/', [AntidumpingController::class, 'index']);
@@ -115,6 +114,9 @@ Route::group(['prefix' => 'base-datos', 'middleware' => 'jwt.auth'], function ()
             Route::delete('/{id}', [DocumentosEspecialesController::class, 'destroy']);
             Route::delete('/{id}/documents/{documentId}', [DocumentosEspecialesController::class, 'deleteDocument']);
         });
+        Route::delete('/rubros/{id}', [ProductoRubroController::class, 'destroy']);
+        Route::delete('/entidades/{id}', [EntidadesController::class, 'destroy']);
+
     });
 
     // Rutas de usuarios y grupos

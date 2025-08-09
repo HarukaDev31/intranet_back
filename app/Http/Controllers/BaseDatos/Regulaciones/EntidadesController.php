@@ -40,4 +40,20 @@ class EntidadesController extends Controller
             ], 500);
         }
     }
+    public function destroy($id){
+        try {
+            $entidad = Entidad::find($id);
+            $entidad->delete();
+            return response()->json([
+                'success' => true,
+                'message' => 'Entidad eliminada correctamente'
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al eliminar la entidad',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
 }

@@ -5,6 +5,7 @@ namespace App\Models\BaseDatos;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use App\Models\BaseDatos\Regulaciones\ProductoRubro;
 
 class ProductoRegulacionDocumentoEspecial extends Model
 {

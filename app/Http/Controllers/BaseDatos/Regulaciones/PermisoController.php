@@ -10,7 +10,8 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use App\Models\BaseDatos\EntidadReguladora;
-use App\Models\BaseDatos\ProductoRubro;
+use App\Models\BaseDatos\Regulaciones\ProductoRubro;
+
 
 class PermisoController extends Controller
 {
@@ -492,7 +493,7 @@ class PermisoController extends Controller
             
             if (!$permiso) {
                 return response()->json([
-                    'status' => 'error',
+                    'success' => false,
                     'message' => 'Regulación de permiso no encontrada'
                 ], 404);
             }
@@ -511,14 +512,14 @@ class PermisoController extends Controller
             $permiso->delete();
 
             return response()->json([
-                'status' => 'success',
+                'success' => true,
                 'message' => 'Regulación de permiso eliminada exitosamente'
             ]);
 
         } catch (\Exception $e) {
             Log::error('Error al eliminar regulación de permiso: ' . $e->getMessage());
             return response()->json([
-                'status' => 'error',
+                'success' => false,
                 'message' => 'Error al eliminar regulación de permiso: ' . $e->getMessage()
             ], 500);
         }
@@ -550,14 +551,14 @@ class PermisoController extends Controller
             $media->delete();
 
             return response()->json([
-                'status' => 'success',
+                'success' => true,
                 'message' => 'Documento eliminado exitosamente'
             ]);
 
         } catch (\Exception $e) {
             Log::error('Error al eliminar documento: ' . $e->getMessage());
             return response()->json([
-                'status' => 'error',
+                'success' => false,
                 'message' => 'Error al eliminar documento: ' . $e->getMessage()
             ], 500);
         }

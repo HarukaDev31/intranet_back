@@ -9,8 +9,7 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Storage;
 use App\Models\BaseDatos\ProductoRegulacionAntidumping;
 use App\Models\BaseDatos\ProductoRegulacionAntidumpingMedia;
-use App\Models\BaseDatos\ProductoRubro;
-
+use App\Models\BaseDatos\Regulaciones\ProductoRubro;
 class AntidumpingController extends Controller
 {
     /**

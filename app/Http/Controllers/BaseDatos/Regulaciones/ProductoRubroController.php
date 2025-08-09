@@ -59,4 +59,21 @@ class ProductoRubroController extends Controller
             ], 500);
         }
     }
+    public function destroy($id){
+        try {
+            $rubro = ProductoRubro::find($id);
+            $rubro->delete();
+            return response()->json([
+                'success' => true,
+                'message' => 'Rubro eliminado correctamente'
+            ]);
+        } catch (\Exception $e) {
+            Log::error($e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al eliminar el rubro',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
 }

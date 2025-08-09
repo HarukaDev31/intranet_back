@@ -9,7 +9,7 @@ use App\Models\BaseDatos\ProductoRegulacionDocumentoEspecialMedia;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
-use App\Models\BaseDatos\ProductoRubro; // Added this import
+use App\Models\BaseDatos\Regulaciones\ProductoRubro;
 
 class DocumentosEspecialesController extends Controller
 {
@@ -456,7 +456,7 @@ class DocumentosEspecialesController extends Controller
             
             if (!$documento) {
                 return response()->json([
-                    'status' => 'error',
+                    'success' => false,
                     'message' => 'Regulación de documentos especiales no encontrada'
                 ], 404);
             }

@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Storage;
 use App\Models\BaseDatos\ProductoRegulacionEtiquetado;
 use App\Models\BaseDatos\ProductoRegulacionEtiquetadoMedia;
 use App\Models\BaseDatos\EntidadReguladora;
-use App\Models\BaseDatos\ProductoRubro;
+use App\Models\BaseDatos\Regulaciones\ProductoRubro;
 
 class EtiquetadoController extends Controller
 {
@@ -455,7 +455,7 @@ class EtiquetadoController extends Controller
 
             if (!$etiquetado) {
                 return response()->json([
-                    'status' => 'error',
+                    'success' => false,
                     'message' => 'Regulación de etiquetado no encontrada'
                 ], 404);
             }
@@ -474,13 +474,13 @@ class EtiquetadoController extends Controller
             $etiquetado->delete();
 
             return response()->json([
-                'status' => 'success',
+                'success' => true,
                 'message' => 'Regulación de etiquetado eliminada exitosamente'
             ]);
         } catch (\Exception $e) {
             Log::error('Error al eliminar regulación de etiquetado: ' . $e->getMessage());
             return response()->json([
-                'status' => 'error',
+                'success' => false,
                 'message' => 'Error al eliminar regulación de etiquetado: ' . $e->getMessage()
             ], 500);
         }

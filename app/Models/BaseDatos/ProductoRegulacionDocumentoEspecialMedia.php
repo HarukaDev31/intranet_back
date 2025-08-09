@@ -3,7 +3,7 @@
 namespace App\Models\BaseDatos;
 
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-
+use App\Models\BaseDatos\Regulaciones\ProductoRubro;
 class ProductoRegulacionDocumentoEspecialMedia extends BaseMediaModel
 {
     protected $table = 'bd_productos_regulaciones_documentos_especiales_media';

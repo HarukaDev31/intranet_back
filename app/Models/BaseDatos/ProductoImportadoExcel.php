@@ -6,7 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use App\Models\BaseDatos\EntidadReguladora;
-use App\Models\BaseDatos\ProductoRubro;
+use App\Models\BaseDatos\Regulaciones\ProductoRubro;
+
 use App\Models\BaseDatos\Contenedor;
 class ProductoImportadoExcel extends Model
 {
