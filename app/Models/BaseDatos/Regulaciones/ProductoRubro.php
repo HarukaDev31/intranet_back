@@ -13,7 +13,8 @@ class ProductoRubro extends Model
     protected $table = 'bd_productos';
     
     protected $fillable = [
-        'nombre'
+        'nombre',
+        'tipo'
     ];
 
     protected $casts = [

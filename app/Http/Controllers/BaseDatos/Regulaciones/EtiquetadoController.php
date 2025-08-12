@@ -93,6 +93,7 @@ class EtiquetadoController extends Controller
     }
     private function generateImageUrl($ruta)
     {
+        Log::info('Ruta recibida:', ['ruta' => $ruta]);
         if (empty($ruta)) {
             return null;
         }
@@ -102,8 +103,19 @@ class EtiquetadoController extends Controller
             return $ruta;
         }
         
-        // Generar URL completa desde storage
-        return Storage::disk('public')->url($ruta);
+        // Limpiar la ruta de barras iniciales para evitar doble slash
+        $ruta = ltrim($ruta, '/');
+        
+        // Construir URL manualmente para evitar problemas con Storage::url()
+        $baseUrl = config('app.url');
+        $storagePath = '/storage';
+        
+        // Asegurar que no haya doble slash
+        $baseUrl = rtrim($baseUrl, '/');
+        $storagePath = ltrim($storagePath, '/');
+        $ruta = ltrim($ruta, '/');
+        Log::info('Ruta generada:', ['ruta' => $baseUrl . '/' . $storagePath . '/' . $ruta]);
+        return $baseUrl . '/' . $storagePath . '/' . $ruta;
     }
     /**
      * Crear nueva regulación de etiquetado o actualizar existente
