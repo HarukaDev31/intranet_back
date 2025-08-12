@@ -92,10 +92,7 @@ class AntidumpingController extends Controller
     public function store(Request $request)
     {
         try {
-            // Debug: Ver qué datos llegan
-            Log::info('Datos recibidos en store:', $request->all());
-            
-            // Verificar si es una actualización (si viene un ID)
+       
             $isUpdate = $request->has('id_regulacion') && $request->id_regulacion;
             $antidumping = null;
             
@@ -107,7 +104,6 @@ class AntidumpingController extends Controller
                         'message' => 'Regulación antidumping no encontrada'
                     ], 404);
                 }
-                Log::info('Modo actualización detectado', ['id' => $request->id_regulacion]);
             }
             
             // Preparar datos para validación
@@ -122,21 +118,13 @@ class AntidumpingController extends Controller
                 $data['id_rubro'] = (int) $data['id_rubro'];
             }
             
-            if (isset($data['precio_declarado'])) {
-                $data['precio_declarado'] = (float) $data['precio_declarado'];
-            }
-            
-            if (isset($data['antidumping'])) {
-                $data['antidumping'] = filter_var($data['antidumping'], FILTER_VALIDATE_BOOLEAN);
-            }
+           
             
             // Validar datos de entrada
             $validator = Validator::make($data, [
                 'id_rubro' => 'required|integer|exists:bd_productos,id',
                 'descripcion' => 'required|string|max:500',
                 'partida' => 'required|string|max:50',
-                'precio_declarado' => 'required|numeric|min:0',
-                'antidumping' => 'required|boolean',
                 'observaciones' => 'nullable|string|max:1000',
                 'imagenes.*' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048' // 2MB máximo
             ], [
@@ -147,11 +135,7 @@ class AntidumpingController extends Controller
                 'descripcion.max' => 'La descripción no puede tener más de 500 caracteres',
                 'partida.required' => 'La partida arancelaria es obligatoria',
                 'partida.max' => 'La partida no puede tener más de 50 caracteres',
-                'precio_declarado.required' => 'El precio declarado es obligatorio',
-                'precio_declarado.numeric' => 'El precio declarado debe ser un número',
-                'precio_declarado.min' => 'El precio declarado debe ser mayor o igual a 0',
-                'antidumping.required' => 'El campo antidumping es obligatorio',
-                'antidumping.boolean' => 'El campo antidumping debe ser verdadero o falso',
+               
                 'observaciones.max' => 'Las observaciones no pueden tener más de 1000 caracteres',
                 'imagenes.*.image' => 'Los archivos deben ser imágenes',
                 'imagenes.*.mimes' => 'Solo se permiten archivos JPEG, PNG, JPG o GIF',
@@ -377,7 +361,7 @@ class AntidumpingController extends Controller
             }
             
             // Generar URLs completas para las imágenes
-            $mediaWithUrls = $antidumping->media->map(function ($media) {
+            $media = $antidumping->media->map(function ($media) {
                 return [
                     'id' => $media->id,
                     'extension' => $media->extension,
@@ -390,9 +374,9 @@ class AntidumpingController extends Controller
                 ];
             });
             
-            // Agregar las URLs al objeto principal
-            $antidumping->media_urls = $mediaWithUrls;
-            
+            // Reemplazar la relación media con los datos procesados
+            $antidumping->setRelation('media', $media);
+           
             return response()->json([
                 'success' => true,
                 'data' => $antidumping

@@ -56,10 +56,7 @@ Route::group(['prefix' => 'menu', 'middleware' => 'jwt.auth'], function () {
         });
 
     });
-// Rutas de base de datos
 Route::group(['prefix' => 'base-datos', 'middleware' => 'jwt.auth'], function () {
-    
-    // Rutas de productos
     Route::group(['prefix' => 'productos'], function () {
         Route::get('list-excels', [ProductosController::class, 'obtenerListExcel']);
 
@@ -73,7 +70,6 @@ Route::group(['prefix' => 'base-datos', 'middleware' => 'jwt.auth'], function ()
         Route::put('{id}', [ProductosController::class, 'update']);
     });
     
-    // Rutas de regulaciones
     Route::group(['prefix' => 'regulaciones'], function () {
         // Entidades y rubros
         Route::get('/entidades', [EntidadesController::class, 'getDropdown']);
@@ -121,7 +117,6 @@ Route::group(['prefix' => 'base-datos', 'middleware' => 'jwt.auth'], function ()
 
     });
 
-    // Rutas de usuarios y grupos
     Route::group(['prefix' => 'usuarios-grupos'], function () {
         Route::get('usuario/{id}', [UsuarioGrupoController::class, 'getUsuarioConGrupos']);
         Route::get('grupo/{grupoId}', [UsuarioGrupoController::class, 'getUsuariosPorGrupo']);
@@ -200,6 +195,7 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
         Route::post('proveedor/inspeccion/enviar', [CotizacionProveedorController::class, 'validateToSendInspectionMessage']);
         Route::get('proveedor/notas/{idProveedor}', [CotizacionProveedorController::class, 'getNotes']);
         Route::post('proveedor/notas', [CotizacionProveedorController::class, 'addNote']);
+        Route::get('proveedor/{idProveedor}', [CotizacionProveedorController::class, 'getCotizacionProveedor']);
     });
 
     // Rutas de pagos

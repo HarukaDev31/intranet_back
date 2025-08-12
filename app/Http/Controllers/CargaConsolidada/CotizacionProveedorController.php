@@ -34,12 +34,12 @@ class CotizacionProveedorController extends Controller
                 ], 401);
             }
 
-            // Parámetros de filtro
-            $filtroState = $request->get('Filtro_State', '0');
-            $filtroStatus = $request->get('Filtro_Status', '0');
-            $filtroEstado = $request->get('Filtro_Estado', '0');
-
-            // Construir la consulta principal
+            $rol=$user->getNombreGrupo();
+            
+            $estadoChina = $request->estado_china??'todos';
+            $search = $request->search??'';
+            $page = $request->currentPage??1;
+            $perPage = $request->itemsPerPage??10   ;
             $query = DB::table('contenedor_consolidado_cotizacion AS main')
                 ->select([
                     'main.*',
@@ -71,93 +71,52 @@ class CotizacionProveedorController extends Controller
                 ])
                 ->join('contenedor_consolidado_tipo_cliente AS TC', 'TC.id', '=', 'main.id_tipo_cliente')
                 ->leftJoin('usuario AS U', 'U.ID_Usuario', '=', 'main.id_usuario')
-                ->where('main.id_contenedor', $idContenedor)
-                ->orderBy('main.id', 'asc');
+                ->where('main.id_contenedor', $idContenedor);
+            
+            if (!empty($search)) {
+                $query->where('main.nombre', 'LIKE', '%' . $search . '%');
+            }
+            
+            $query->orderBy('main.id', 'asc');
 
-            // Aplicar filtros según el grupo del usuario
-            if ($user->No_Grupo != "Cotizador") {
+            if ($rol != Usuario::ROL_COTIZADOR) {
                 $query->where('estado_cotizador', 'CONFIRMADO');
 
-                if ($filtroEstado != "0") {
-                    $fieldToFilter = [
-                        'Coordinación' => 'estado',
-                        'ContenedorAlmacen' => 'estado_china',
-                        'CatalogoChina' => 'estado_china',
-                        'Documentacion' => 'estado',
-                    ];
-                    
-                    if (isset($fieldToFilter[$user->No_Grupo])) {
-                        $query->where("main." . $fieldToFilter[$user->No_Grupo], $filtroEstado);
-                    }
-                }
-
-                if ($filtroState != "0") {
-                    $state = $filtroState;
-                    $query->join(
-                        'contenedor_consolidado_cotizacion_proveedores AS ccp',
-                        'ccp.id_cotizacion',
-                        '=',
-                        'main.id'
-                    )->where('ccp.estados', $state);
-                }
-
-                if ($filtroStatus != "0") {
-                    $status = $filtroStatus;
-                    $query->whereRaw("EXISTS (
-                        SELECT 1 FROM contenedor_consolidado_cotizacion_proveedores p 
-                        WHERE p.id_cotizacion = main.id 
-                        AND p.estados_proveedor = ?
-                    )", [$status]);
-                }
-
-                // Condición combinada cuando ambos filtros están activos
-                if ($filtroState != "0" && $filtroStatus != "0") {
-                    $query->whereRaw("EXISTS (
-                        SELECT 1 FROM contenedor_consolidado_cotizacion_proveedores p 
-                        WHERE p.id_cotizacion = main.id 
-                        AND p.estados_proveedor = ?
-                        AND p.estados = ?
-                    )", [$filtroStatus, $filtroState]);
-                }
-            } else if ($user->No_Grupo == "Cotizador" && $user->ID_Usuario != 28791) {
+            } else if ($rol == Usuario::ROL_COTIZADOR && $user->ID_Usuario != 28791) {
                 $query->where('main.id_usuario', $user->ID_Usuario);
                 $query->orderBy('fecha_confirmacion', 'asc');
             } else {
-                if ($filtroEstado != "0") {
-                    $query->where('main.estado_cotizador', $filtroEstado);
-                }
+              
             }
 
-            if ($user->No_Grupo == "Cotizador") {
+            if ($rol == Usuario::ROL_COTIZADOR) {
                 $query->orderBy('main.fecha_confirmacion', 'asc');
             }
 
-            // Ejecutar consulta
-            $data = $query->get();
-
-            // Aplicar filtros al JSON de proveedores
-            if ($filtroStatus != "0" || $filtroState != "0") {
-                foreach ($data as $item) {
-                    $proveedores = json_decode($item->proveedores, true);
-                    if ($proveedores && is_array($proveedores)) {
-                        $proveedoresFiltrados = array_filter($proveedores, function ($prov) use ($filtroStatus, $filtroState) {
-                            $cumpleStatus = ($filtroStatus === "0" || $prov['estados_proveedor'] === $filtroStatus);
-                            $cumpleState = ($filtroState === "0" || $prov['estados'] === $filtroState);
-                            return $cumpleStatus && $cumpleState;
-                        });
-
-                        $item->proveedores = json_encode(array_values($proveedoresFiltrados), JSON_UNESCAPED_UNICODE);
-                    }
-                }
-            }
+     
+            // Ejecutar consulta con paginación
+            $data = $query->paginate($perPage, ['*'], 'page', $page);
+            $estadoChina = $request->estado_china;
+         
 
             // Procesar datos para el frontend
-            $dataProcessed = $data->map(function ($item) use ($user) {
+            $dataProcessed = collect($data->items())->map(function ($item) use ($user, $estadoChina, $rol, $search) {
                 $proveedores = json_decode($item->proveedores, true) ?: [];
                 
-                // Calcular totales
+                // Filtrar proveedores por estado_china si es necesario
+                if ($rol == Usuario::ROL_ALMACEN_CHINA && $estadoChina != "todos") {
+                    $proveedores = array_filter($proveedores, function ($proveedor) use ($estadoChina) {
+                        return ($proveedor['estados_proveedor'] ?? '') === $estadoChina;
+                    });
+                }
+                //if proveedores is empty not show the item
+                if (empty($proveedores)) {
+                    return null;
+                }
+                
                 $cbmTotalChina = 0;
                 $cbmTotalPeru = 0;
+                
                 foreach ($proveedores as $proveedor) {
                     if (is_numeric($proveedor['cbm_total_china'] ?? null)) {
                         $cbmTotalChina += $proveedor['cbm_total_china'];
@@ -177,25 +136,31 @@ class CotizacionProveedorController extends Controller
                     'estado_cotizador' => $item->estado_cotizador,
                     'fecha_confirmacion' => $item->fecha_confirmacion,
                     'No_Nombres_Apellidos' => $item->No_Nombres_Apellidos,
-                    'proveedores' => $proveedores,
+                    'proveedores' => $proveedores, // Proveedores ya filtrados
                     'totales' => [
                         'cbm_total_china' => $cbmTotalChina,
                         'cbm_total_peru' => $cbmTotalPeru
                     ],
-                    'puede_editar' => $this->puedeEditar($user, $item),
-                    'puede_eliminar' => $this->puedeEliminar($user, $item)
+                  
                 ];
-            });
+            })->filter()->values();
+            
+
 
             // Obtener opciones de filtro
-            $opcionesFiltro = $this->getOpcionesFiltro();
 
             return response()->json([
                 'success' => true,
                 'data' => $dataProcessed,
-                'filters' => $opcionesFiltro,
-                'user_group' => $user->No_Grupo,
-                'user_id' => $user->ID_Usuario
+                'pagination' => [
+                    'current_page' => $data->currentPage(),
+                    'last_page' => $data->lastPage(),
+                    'per_page' => $data->perPage(),
+                    'total' => $data->total(),
+                    'from' => $data->firstItem(),
+                    'to' => $data->lastItem(),
+                ],
+     
             ]);
 
         } catch (\Exception $e) {
@@ -207,82 +172,6 @@ class CotizacionProveedorController extends Controller
         }
     }
 
-    /**
-     * Obtener opciones de filtro disponibles
-     */
-    public function getOpcionesFiltro()
-    {
-        return [
-            'estados_almacen' => [
-                'key' => 'estado_almacen',
-                'label' => 'Estado Almacén',
-                'placeholder' => 'Selecciona estado de almacén',
-                'options' => collect(CotizacionProveedor::ESTADOS_ALMACEN)->map(function ($estado) {
-                    return ['value' => $estado, 'label' => $estado];
-                })
-            ],
-            'estados_china' => [
-                'key' => 'estado_china',
-                'label' => 'Estado China',
-                'placeholder' => 'Selecciona estado de China',
-                'options' => collect(CotizacionProveedor::ESTADOS_CHINA)->map(function ($estado) {
-                    return ['value' => $estado, 'label' => $estado];
-                })
-            ],
-            'estados' => [
-                'key' => 'estados',
-                'label' => 'Estados',
-                'placeholder' => 'Selecciona estado',
-                'options' => collect(CotizacionProveedor::ESTADOS)->map(function ($estado) {
-                    return ['value' => $estado, 'label' => $estado];
-                })
-            ],
-            'estados_proveedor' => [
-                'key' => 'estados_proveedor',
-                'label' => 'Estados Proveedor',
-                'placeholder' => 'Selecciona estado de proveedor',
-                'options' => collect(CotizacionProveedor::ESTADOS_PROVEEDOR)->map(function ($estado) {
-                    return ['value' => $estado, 'label' => $estado];
-                })
-            ],
-            'send_rotulado_status' => [
-                'key' => 'send_rotulado_status',
-                'label' => 'Estado Rotulado',
-                'placeholder' => 'Selecciona estado de rotulado',
-                'options' => collect(CotizacionProveedor::SEND_ROTULADO_STATUS)->map(function ($estado) {
-                    return ['value' => $estado, 'label' => $estado];
-                })
-            ]
-        ];
-    }
-
-    /**
-     * Verificar si el usuario puede editar la cotización
-     */
-    private function puedeEditar($user, $item)
-    {
-        if ($user->No_Grupo == "Cotizador") {
-            return $user->ID_Usuario == $item->id_usuario;
-        }
-        
-        if (in_array($user->No_Grupo, ['Coordinación', 'GERENCIA'])) {
-            return true;
-        }
-        
-        return false;
-    }
-
-    /**
-     * Verificar si el usuario puede eliminar la cotización
-     */
-    private function puedeEliminar($user, $item)
-    {
-        return $user->No_Grupo == "Coordinación";
-    }
-
-    /**
-     * Actualizar estado de proveedor
-     */
     public function updateEstadoProveedor(Request $request, $idCotizacion, $idProveedor)
     {
         try {
@@ -623,13 +512,7 @@ class CotizacionProveedorController extends Controller
     public function getFilesAlmacenInspection($idProveedor)
     {
         try {
-            $user = JWTAuth::parseToken()->authenticate();
-            if (!$user) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Usuario no autenticado'
-                ], 401);
-            }
+           
 
             $files = AlmacenInspection::where('id_proveedor', $idProveedor)
                 ->select([
@@ -885,6 +768,31 @@ class CotizacionProveedorController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Error al actualizar nota',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+    public function getCotizacionProveedor($idProveedor){
+        try {
+            $proveedor = CotizacionProveedor::with('contenedor')
+                ->where('id', $idProveedor)
+                ->first();
+
+            if (!$proveedor) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Proveedor no encontrado'
+                ], 404);
+            }
+
+            return response()->json([
+                'success' => true,
+                'data' => $proveedor
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al obtener cotización proveedor',
                 'error' => $e->getMessage()
             ], 500);
         }

@@ -93,7 +93,6 @@ class EtiquetadoController extends Controller
     }
     private function generateImageUrl($ruta)
     {
-        Log::info('Ruta recibida:', ['ruta' => $ruta]);
         if (empty($ruta)) {
             return null;
         }
@@ -114,7 +113,6 @@ class EtiquetadoController extends Controller
         $baseUrl = rtrim($baseUrl, '/');
         $storagePath = ltrim($storagePath, '/');
         $ruta = ltrim($ruta, '/');
-        Log::info('Ruta generada:', ['ruta' => $baseUrl . '/' . $storagePath . '/' . $ruta]);
         return $baseUrl . '/' . $storagePath . '/' . $ruta;
     }
     /**

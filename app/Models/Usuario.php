@@ -10,7 +10,10 @@ class Usuario extends Authenticatable implements JWTSubject
 {
     protected $table = 'usuario';
     protected $primaryKey = 'ID_Usuario';
-    
+    const ROL_COTIZADOR = 'Cotizador';
+    const ROL_COORDINACION = 'Coordinación';
+    const ROL_ALMACEN_CHINA = 'ContenedorAlmacen';
+    const ROL_ADMINISTRACION = 'Administracion';
     protected $fillable = [
         'No_Usuario',
         'No_Password',
@@ -127,7 +130,7 @@ class Usuario extends Authenticatable implements JWTSubject
     /**
      * Obtener el nombre del grupo principal del usuario
      */
-    public function getNombreGrupoPrincipalAttribute()
+    public function getNombreGrupo()
     {
         return $this->grupo ? $this->grupo->No_Grupo : 'Sin grupo';
     }
