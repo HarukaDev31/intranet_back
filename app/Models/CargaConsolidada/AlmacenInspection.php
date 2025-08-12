@@ -2,60 +2,52 @@
 
 namespace App\Models\CargaConsolidada;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class AlmacenInspection extends Model
 {
-    use HasFactory;
-
-    /**
-     * La tabla asociada al modelo.
-     *
-     * @var string
-     */
     protected $table = 'contenedor_consolidado_almacen_inspection';
+    protected $primaryKey = 'id';
     public $timestamps = false;
 
-    /**
-     * Los atributos que son asignables masivamente.
-     *
-     * @var array
-     */
     protected $fillable = [
-        'id_cotizacion',
         'id_proveedor',
-        'media_id',
         'file_name',
         'file_path',
         'file_type',
-        'last_modified',
         'file_size',
+        'last_modified',
+        'file_ext',
         'send_status'
     ];
 
-    /**
-     * Los atributos que deben ser convertidos a tipos nativos.
-     *
-     * @var array
-     */
     protected $casts = [
+        'file_size' => 'integer',
         'last_modified' => 'datetime'
     ];
 
-    /**
-     * Obtiene la cotización asociada a esta inspección.
-     */
-    public function cotizacion()
+    // Enums disponibles
+    const SEND_STATUS = ['PENDING', 'SENDED'];
+
+    public function proveedor(): BelongsTo
     {
-        return $this->belongsTo(Cotizacion::class, 'id_cotizacion');
+        return $this->belongsTo(CotizacionProveedor::class, 'id_proveedor', 'id');
     }
 
-    /**
-     * Obtiene el proveedor asociado a esta inspección.
-     */
-    public function proveedor()
+    public function scopePorEstadoEnvio($query, $estado)
     {
-        return $this->belongsTo(CotizacionProveedor::class, 'id_proveedor');
+        if ($estado && $estado !== '0') {
+            return $query->where('send_status', $estado);
+        }
+        return $query;
+    }
+
+    public function scopePorTipoArchivo($query, $tipo)
+    {
+        if ($tipo) {
+            return $query->where('file_type', $tipo);
+        }
+        return $query;
     }
 } 

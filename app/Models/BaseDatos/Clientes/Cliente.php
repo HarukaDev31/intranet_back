@@ -121,6 +121,7 @@ class Cliente extends Model
             })
             ->where('id_cliente', $this->id)
             ->orderBy('fecha', 'asc')
+            ->select('contenedor_consolidado_cotizacion.*', 'carga_consolidada_contenedor.carga', 'carga_consolidada_contenedor.id as id_contenedor')
             ->get();
 
         foreach ($cotizaciones as $cotizacion) {

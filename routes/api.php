@@ -17,8 +17,10 @@ use App\Http\Controllers\CargaConsolidada\TipoClienteController;
 use App\Http\Controllers\CargaConsolidada\CotizacionController;
 use App\Http\Controllers\CargaConsolidada\PagosController;
 use App\Http\Controllers\CargaConsolidada\ImportController;
+use App\Http\Controllers\CargaConsolidada\CotizacionProveedorController;
 use App\Http\Controllers\UsuarioGrupoController;
 use App\Http\Controllers\ClientesHistorialController;
+use App\Http\Controllers\Curso\CursoController;
 /*
 |--------------------------------------------------------------------------
 | API Routes
@@ -147,12 +149,16 @@ Route::group(['prefix' => 'base-datos', 'middleware' => 'jwt.auth'], function ()
     });
 
 });
-
 // Rutas de carga consolidada
+Route::group(['prefix'=>'cursos'], function(){
+    Route::get('filters/options', [CursoController::class, 'filterOptions']);
+    Route::get('/', [CursoController::class, 'index']);
+
+});
 Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], function () {
     
     // Rutas de contenedores
-    Route::group(['prefix' => 'contenedores'], function () {
+    Route::group(['prefix' => 'contenedor'], function () {
         Route::get('/', [ContenedorController::class, 'index']);
         Route::post('/', [ContenedorController::class, 'store']);
         Route::get('{id}', [ContenedorController::class, 'show']);
@@ -178,6 +184,22 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
         Route::put('{id}', [CotizacionController::class, 'update']);
         Route::delete('{id}', [CotizacionController::class, 'destroy']);
         Route::get('filters/options', [CotizacionController::class, 'filterOptions']);
+    });
+
+    // Rutas de cotizaciones con proveedores
+    Route::group(['prefix' => 'cotizaciones-proveedores'], function () {
+        Route::get('contenedor/{idContenedor}', [CotizacionProveedorController::class, 'getContenedorCotizacionProveedores']);
+      
+        Route::delete('{idCotizacion}/proveedor/{idProveedor}', [CotizacionProveedorController::class, 'deleteCotizacion']);
+        
+        // Rutas para archivos y notas
+        Route::delete('proveedor/documento/{idFile}', [CotizacionProveedorController::class, 'deleteFileDocumentation']);
+
+        Route::get('proveedor/documentos/{idProveedor}', [CotizacionProveedorController::class, 'getFilesAlmacenDocument']);
+        Route::get('proveedor/inspeccion/{idProveedor}', [CotizacionProveedorController::class, 'getFilesAlmacenInspection']);
+        Route::post('proveedor/inspeccion/enviar', [CotizacionProveedorController::class, 'validateToSendInspectionMessage']);
+        Route::get('proveedor/notas/{idProveedor}', [CotizacionProveedorController::class, 'getNotes']);
+        Route::post('proveedor/notas', [CotizacionProveedorController::class, 'addNote']);
     });
 
     // Rutas de pagos
