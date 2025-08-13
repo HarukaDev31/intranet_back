@@ -189,10 +189,14 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
         
         // Rutas para archivos y notas
         Route::delete('proveedor/documento/{idFile}', [CotizacionProveedorController::class, 'deleteFileDocumentation']);
-
+        Route::delete('proveedor/inspeccion/{idFile}', [CotizacionProveedorController::class, 'deleteFileInspection']);
+        Route::post('proveedor/documento', [CotizacionProveedorController::class, 'saveDocumentation']); 
+        Route::post('proveedor/inspeccion', [CotizacionProveedorController::class, 'saveInspection']);
+        
         Route::get('proveedor/documentos/{idProveedor}', [CotizacionProveedorController::class, 'getFilesAlmacenDocument']);
         Route::get('proveedor/inspeccion/{idProveedor}', [CotizacionProveedorController::class, 'getFilesAlmacenInspection']);
         Route::post('proveedor/inspeccion/enviar', [CotizacionProveedorController::class, 'validateToSendInspectionMessage']);
+        Route::post('proveedor/inspeccion/test', [CotizacionProveedorController::class, 'testSendMediaInspection']);
         Route::get('proveedor/notas/{idProveedor}', [CotizacionProveedorController::class, 'getNotes']);
         Route::post('proveedor/notas', [CotizacionProveedorController::class, 'addNote']);
         Route::get('proveedor/{idProveedor}', [CotizacionProveedorController::class, 'getCotizacionProveedor']);

@@ -13,6 +13,7 @@ class AlmacenInspection extends Model
 
     protected $fillable = [
         'id_proveedor',
+        'id_cotizacion',
         'file_name',
         'file_path',
         'file_type',

@@ -155,7 +155,6 @@ class ProductosController extends Controller
                 ], 400);
             }
 
-            Log::info('Archivo recibido: ' . $file->getClientOriginalName() . ' (tipo: ' . $extension . ')');
 
             // Crear registro de importación
             $importProducto = ImportProducto::create([

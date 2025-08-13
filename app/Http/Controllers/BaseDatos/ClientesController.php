@@ -243,7 +243,7 @@ class ClientesController extends Controller
             // Crear registro de importación
             $importCliente = ImportCliente::create([
                 'nombre_archivo' => $fileName,
-                'ruta_archivo' => self::EXCEL_IMPORTS_PATH . $fileName, // Ruta pública
+                'ruta_archivo' => $fileStoragePath,
                 'tipo_importacion' => $tipoImportacion,
                 'empresa_id' => $empresaId,
                 'usuario_id' => $usuarioId,
@@ -295,7 +295,31 @@ class ClientesController extends Controller
 
         return $stats;
     }
-
+    private function generateImageUrl($ruta)
+    {
+        if (empty($ruta)) {
+            return null;
+        }
+        
+        // Si ya es una URL completa, devolverla tal como está
+        if (filter_var($ruta, FILTER_VALIDATE_URL)) {
+            return $ruta;
+        }
+        
+        // Limpiar la ruta de barras iniciales para evitar doble slash
+        $ruta = ltrim($ruta, '/');
+        
+        // Construir URL manualmente para evitar problemas con Storage::url()
+        $baseUrl = config('app.url');
+        $storagePath = '/storage/';
+        
+        // Asegurar que no haya doble slash
+        $baseUrl = rtrim($baseUrl, '/');
+        $storagePath = ltrim($storagePath, '/');
+        $ruta = ltrim($ruta, '/');
+        
+        return $baseUrl . '/' . $storagePath . '/' . $ruta;
+    }
     public function deleteExcel($id)
     {
         try {

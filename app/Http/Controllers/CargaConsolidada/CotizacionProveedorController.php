@@ -16,9 +16,13 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
 use Tymon\JWTAuth\Facades\JWTAuth;
 use Carbon\Carbon;
+use App\Traits\WhatsappTrait;
 
 class CotizacionProveedorController extends Controller
 {
+    use WhatsappTrait;
+    const DOCUMENTATION_PATH = 'documentation';
+    const INSPECTION_PATH = 'inspection';
     /**
      * Obtener cotizaciones con proveedores por contenedor
      */
@@ -34,12 +38,12 @@ class CotizacionProveedorController extends Controller
                 ], 401);
             }
 
-            $rol=$user->getNombreGrupo();
-            
-            $estadoChina = $request->estado_china??'todos';
-            $search = $request->search??'';
-            $page = $request->currentPage??1;
-            $perPage = $request->itemsPerPage??10   ;
+            $rol = $user->getNombreGrupo();
+
+            $estadoChina = $request->estado_china ?? 'todos';
+            $search = $request->search ?? '';
+            $page = $request->currentPage ?? 1;
+            $perPage = $request->itemsPerPage ?? 10;
             $query = DB::table('contenedor_consolidado_cotizacion AS main')
                 ->select([
                     'main.*',
@@ -72,37 +76,35 @@ class CotizacionProveedorController extends Controller
                 ->join('contenedor_consolidado_tipo_cliente AS TC', 'TC.id', '=', 'main.id_tipo_cliente')
                 ->leftJoin('usuario AS U', 'U.ID_Usuario', '=', 'main.id_usuario')
                 ->where('main.id_contenedor', $idContenedor);
-            
+
             if (!empty($search)) {
                 $query->where('main.nombre', 'LIKE', '%' . $search . '%');
             }
-            
+
             $query->orderBy('main.id', 'asc');
 
             if ($rol != Usuario::ROL_COTIZADOR) {
                 $query->where('estado_cotizador', 'CONFIRMADO');
-
             } else if ($rol == Usuario::ROL_COTIZADOR && $user->ID_Usuario != 28791) {
                 $query->where('main.id_usuario', $user->ID_Usuario);
                 $query->orderBy('fecha_confirmacion', 'asc');
             } else {
-              
             }
 
             if ($rol == Usuario::ROL_COTIZADOR) {
                 $query->orderBy('main.fecha_confirmacion', 'asc');
             }
 
-     
+
             // Ejecutar consulta con paginación
             $data = $query->paginate($perPage, ['*'], 'page', $page);
             $estadoChina = $request->estado_china;
-         
+
 
             // Procesar datos para el frontend
             $dataProcessed = collect($data->items())->map(function ($item) use ($user, $estadoChina, $rol, $search) {
                 $proveedores = json_decode($item->proveedores, true) ?: [];
-                
+
                 // Filtrar proveedores por estado_china si es necesario
                 if ($rol == Usuario::ROL_ALMACEN_CHINA && $estadoChina != "todos") {
                     $proveedores = array_filter($proveedores, function ($proveedor) use ($estadoChina) {
@@ -113,10 +115,10 @@ class CotizacionProveedorController extends Controller
                 if (empty($proveedores)) {
                     return null;
                 }
-                
+
                 $cbmTotalChina = 0;
                 $cbmTotalPeru = 0;
-                
+
                 foreach ($proveedores as $proveedor) {
                     if (is_numeric($proveedor['cbm_total_china'] ?? null)) {
                         $cbmTotalChina += $proveedor['cbm_total_china'];
@@ -141,10 +143,10 @@ class CotizacionProveedorController extends Controller
                         'cbm_total_china' => $cbmTotalChina,
                         'cbm_total_peru' => $cbmTotalPeru
                     ],
-                  
+
                 ];
             })->filter()->values();
-            
+
 
 
             // Obtener opciones de filtro
@@ -160,9 +162,8 @@ class CotizacionProveedorController extends Controller
                     'from' => $data->firstItem(),
                     'to' => $data->lastItem(),
                 ],
-     
-            ]);
 
+            ]);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -206,7 +207,6 @@ class CotizacionProveedorController extends Controller
                 'message' => 'Estado actualizado correctamente',
                 'data' => $proveedor
             ]);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -253,7 +253,6 @@ class CotizacionProveedorController extends Controller
                 'message' => 'Estado actualizado correctamente',
                 'data' => $proveedor
             ]);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -299,8 +298,13 @@ class CotizacionProveedorController extends Controller
             }
 
             $proveedor->update($request->only([
-                'supplier', 'code_supplier', 'supplier_phone', 'products',
-                'qty_box_china', 'cbm_total_china', 'arrive_date_china'
+                'supplier',
+                'code_supplier',
+                'supplier_phone',
+                'products',
+                'qty_box_china',
+                'cbm_total_china',
+                'arrive_date_china'
             ]));
 
             return response()->json([
@@ -308,7 +312,6 @@ class CotizacionProveedorController extends Controller
                 'message' => 'Datos del proveedor actualizados correctamente',
                 'data' => $proveedor
             ]);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -360,7 +363,6 @@ class CotizacionProveedorController extends Controller
                 'message' => 'Estado de rotulado actualizado correctamente',
                 'data' => $proveedor
             ]);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -408,7 +410,6 @@ class CotizacionProveedorController extends Controller
                 'success' => true,
                 'message' => 'Cotización eliminada correctamente'
             ]);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -443,14 +444,16 @@ class CotizacionProveedorController extends Controller
                     'file_ext'
                 ])
                 ->get();
-
+            $files = $files->map(function ($file) {
+                $file->file_url = $this->generateImageUrl($file->file_url);
+                return $file;
+            });
             return response()->json([
                 'success' => true,
                 'status' => 'success',
                 'error' => false,
                 'data' => $files
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error en getFilesAlmacenDocument: ' . $e->getMessage());
             return response()->json([
@@ -495,7 +498,6 @@ class CotizacionProveedorController extends Controller
                 'success' => true,
                 'message' => 'Archivo eliminado correctamente'
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error en deleteFileDocumentation: ' . $e->getMessage());
             return response()->json([
@@ -505,14 +507,40 @@ class CotizacionProveedorController extends Controller
             ], 500);
         }
     }
-
+    public function deleteFileInspection($idFile)
+    {
+        try {
+            $file = AlmacenInspection::find($idFile);
+            if (!$file) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Archivo no encontrado'
+                ], 404);
+            }
+            if (Storage::exists($file->file_path)) {
+                Storage::delete($file->file_path);
+            }
+            $file->delete();
+            return response()->json([
+                'success' => true,
+                'message' => 'Archivo eliminado correctamente'
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error en deleteFileInspection: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'status' => 'error',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
     /**
      * Obtener archivos de inspección del almacén
      */
     public function getFilesAlmacenInspection($idProveedor)
     {
         try {
-           
+
 
             $files = AlmacenInspection::where('id_proveedor', $idProveedor)
                 ->select([
@@ -526,14 +554,16 @@ class CotizacionProveedorController extends Controller
                     'send_status'
                 ])
                 ->get();
-
+            $files = $files->map(function ($file) { 
+                $file->file_url = $this->generateImageUrl($file->file_url);
+                return $file;
+            });
             return response()->json([
                 'success' => true,
                 'status' => 'success',
                 'error' => false,
                 'data' => $files
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error en getFilesAlmacenInspection: ' . $e->getMessage());
             return response()->json([
@@ -597,17 +627,25 @@ class CotizacionProveedorController extends Controller
             }
 
             // Obtener fecha de cierre del contenedor
-            $contenedor = DB::table('contenedor_consolidado')->where('id', $cotizacion->id_contenedor)->first();
+            $contenedor = DB::table('carga_consolidada_contenedor')->where('id', $cotizacion->id_contenedor)->first();
             $fCierre = $contenedor ? $contenedor->f_cierre : null;
 
             // Formatear fecha de cierre
             if ($fCierre) {
                 $fCierre = Carbon::parse($fCierre)->format('d F');
                 $meses = [
-                    'January' => 'Enero', 'February' => 'Febrero', 'March' => 'Marzo',
-                    'April' => 'Abril', 'May' => 'Mayo', 'June' => 'Junio',
-                    'July' => 'Julio', 'August' => 'Agosto', 'September' => 'Septiembre',
-                    'October' => 'Octubre', 'November' => 'Noviembre', 'December' => 'Diciembre'
+                    'January' => 'Enero',
+                    'February' => 'Febrero',
+                    'March' => 'Marzo',
+                    'April' => 'Abril',
+                    'May' => 'Mayo',
+                    'June' => 'Junio',
+                    'July' => 'Julio',
+                    'August' => 'Agosto',
+                    'September' => 'Septiembre',
+                    'October' => 'Octubre',
+                    'November' => 'Noviembre',
+                    'December' => 'Diciembre'
                 ];
                 $fCierre = str_replace(array_keys($meses), array_values($meses), $fCierre);
             }
@@ -641,26 +679,43 @@ class CotizacionProveedorController extends Controller
 
             if ($sendStatus) {
                 $qtyBox = $proveedor->qty_box_china ?? $proveedor->qty_box;
-                $message = $cliente . '----' . $proveedor->code_supplier . '----' . $qtyBox . ' boxes. ' . "\n\n" . 
-                          '📦 Tu carga llegó a nuestro almacén de Yiwu, te comparto las fotos y videos. ' . "\n\n";
-                
+                $message = $cliente . '----' . $proveedor->code_supplier . '----' . $qtyBox . ' boxes. ' . "\n\n" .
+                    '📦 Tu carga llegó a nuestro almacén de Yiwu, te comparto las fotos y videos. ' . "\n\n";
+
                 // Aquí se simularía el envío del mensaje principal
-                Log::info('Enviando mensaje principal: Hola buen día 🙋🏻‍♀' . "\n\n" . 'Inspección: ' . "\n" . $message);
+                $this->sendMessage($message, $telefono);
             }
 
             // Filtrar archivos pendientes de envío
             $imagesPendientes = $imagesUrls->where('send_status', 'PENDING');
             $videosPendientes = $videosUrls->where('send_status', 'PENDING');
-
+            Log::info('Images pendientes: ' . $imagesPendientes->count());
+            Log::info('Videos pendientes: ' . $videosPendientes->count());
             // Simular envío de medios de inspección
             foreach ($imagesPendientes as $image) {
-                Log::info('Enviando imagen de inspección: ' . $image->file_path);
-                // Aquí se simularía el envío real del medio
+                // Usar la ruta del sistema de archivos, no la URL
+                $fileSystemPath = storage_path('app/public/' . $image->file_path);
+                Log::info('Enviando imagen de inspección. Ruta del sistema: ' . $fileSystemPath);
+                
+                // Verificar que el archivo existe
+                if (file_exists($fileSystemPath)) {
+                    $this->sendMediaInspection($fileSystemPath, $image->file_type, $message, $telefono, 0, $image->id);
+                } else {
+                    Log::error('Archivo no encontrado en el sistema: ' . $fileSystemPath);
+                }
             }
 
             foreach ($videosPendientes as $video) {
-                Log::info('Enviando video de inspección: ' . $video->file_path);
-                // Aquí se simularía el envío real del medio
+                // Usar la ruta del sistema de archivos, no la URL
+                $fileSystemPath = storage_path('app/public/' . $video->file_path);
+                Log::info('Enviando video de inspección. Ruta del sistema: ' . $fileSystemPath);
+                
+                // Verificar que el archivo existe
+                if (file_exists($fileSystemPath)) {
+                    $this->sendMediaInspection($fileSystemPath, $video->file_type, $message, $telefono, 0, $video->id);
+                } else {
+                    Log::error('Archivo no encontrado en el sistema: ' . $fileSystemPath);
+                }
             }
 
             return response()->json([
@@ -673,7 +728,6 @@ class CotizacionProveedorController extends Controller
                     'mensaje_enviado' => $sendStatus
                 ]
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error en validateToSendInspectionMessage: ' . $e->getMessage());
             return response()->json([
@@ -683,6 +737,108 @@ class CotizacionProveedorController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Validar y enviar mensaje de inspección (versión 2)
+     */
+    
+    /**
+     * Método de prueba para enviar medios de inspección
+     */
+    public function testSendMediaInspection(Request $request)
+    {
+        try {
+            $user = JWTAuth::parseToken()->authenticate();
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Usuario no autenticado'
+                ], 401);
+            }
+
+            $idProveedor = $request->idProveedor;
+            if (!$idProveedor) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'ID de proveedor requerido'
+                ], 400);
+            }
+
+            // Obtener archivos de inspección del proveedor
+            $inspecciones = AlmacenInspection::where('id_proveedor', $idProveedor)
+                ->whereIn('file_type', ['image/jpeg', 'image/png', 'image/jpg', 'video/mp4'])
+                ->select(['id', 'file_path', 'file_type', 'send_status'])
+                ->get();
+
+            if ($inspecciones->isEmpty()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No se encontraron archivos de inspección para este proveedor'
+                ], 404);
+            }
+
+            $resultados = [];
+            $telefono = '51912705923@c.us'; // Número de prueba
+
+            foreach ($inspecciones as $inspeccion) {
+                $fileSystemPath = storage_path('app/public/' . $inspeccion->file_path);
+                
+                Log::info('Probando envío de archivo', [
+                    'id' => $inspeccion->id,
+                    'file_path' => $inspeccion->file_path,
+                    'fileSystemPath' => $fileSystemPath,
+                    'exists' => file_exists($fileSystemPath),
+                    'readable' => is_readable($fileSystemPath),
+                    'size' => file_exists($fileSystemPath) ? filesize($fileSystemPath) : 'N/A'
+                ]);
+
+                if (file_exists($fileSystemPath) && is_readable($fileSystemPath)) {
+                    $resultado = $this->sendMediaInspection(
+                        $fileSystemPath, 
+                        $inspeccion->file_type, 
+                        'Mensaje de prueba', 
+                        $telefono, 
+                        0, 
+                        $inspeccion->id
+                    );
+                    
+                    $resultados[] = [
+                        'id' => $inspeccion->id,
+                        'file_name' => basename($inspeccion->file_path),
+                        'file_type' => $inspeccion->file_type,
+                        'file_size' => filesize($fileSystemPath),
+                        'resultado' => $resultado
+                    ];
+                } else {
+                    $resultados[] = [
+                        'id' => $inspeccion->id,
+                        'file_name' => basename($inspeccion->file_path),
+                        'file_type' => $inspeccion->file_type,
+                        'error' => 'Archivo no encontrado o no legible',
+                        'fileSystemPath' => $fileSystemPath
+                    ];
+                }
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Prueba de envío completada',
+                'data' => [
+                    'total_archivos' => $inspecciones->count(),
+                    'resultados' => $resultados
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error en testSendMediaInspection: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al probar envío de medios',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
 
     /**
      * Obtener notas del proveedor
@@ -715,7 +871,6 @@ class CotizacionProveedorController extends Controller
                     'nota' => $proveedor->nota
                 ]
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error en getNotes: ' . $e->getMessage());
             return response()->json([
@@ -724,6 +879,30 @@ class CotizacionProveedorController extends Controller
                 'error' => $e->getMessage()
             ], 500);
         }
+    }
+    private function generateImageUrl($ruta)
+    {
+        if (empty($ruta)) {
+            return null;
+        }
+
+        // Si ya es una URL completa, devolverla tal como está
+        if (filter_var($ruta, FILTER_VALIDATE_URL)) {
+            return $ruta;
+        }
+
+        // Limpiar la ruta de barras iniciales para evitar doble slash
+        $ruta = ltrim($ruta, '/');
+
+        // Construir URL manualmente para evitar problemas con Storage::url()
+        $baseUrl = config('app.url');
+        $storagePath = '/storage/';
+
+        // Asegurar que no haya doble slash
+        $baseUrl = rtrim($baseUrl, '/');
+        $storagePath = ltrim($storagePath, '/');
+        $ruta = ltrim($ruta, '/');
+        return $baseUrl . '/' . $storagePath . '/' . $ruta;
     }
 
     /**
@@ -762,7 +941,6 @@ class CotizacionProveedorController extends Controller
                     'nota' => $proveedor->nota
                 ]
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error en addNote: ' . $e->getMessage());
             return response()->json([
@@ -772,7 +950,181 @@ class CotizacionProveedorController extends Controller
             ], 500);
         }
     }
-    public function getCotizacionProveedor($idProveedor){
+    public function saveInspection(Request $request)
+    {
+        try {
+            $idProveedor = $request->idProveedor;
+            $idCotizacion = $request->idCotizacion;
+
+            // Verificar que se hayan enviado archivos
+            if (!$request->hasFile('files')) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No se han enviado archivos'
+                ], 400);
+            }
+
+            $files = $request->file('files');
+
+            // Si es un solo archivo, convertirlo en array
+            if (!is_array($files)) {
+                $files = [$files];
+            }
+
+            Log::info('Archivos de inspección recibidos:', ['cantidad' => count($files)]);
+
+            $archivosGuardados = [];
+
+            foreach ($files as $file) {
+                if ($file->isValid()) {
+                    // Generar nombre único para el archivo
+                    $filename = time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
+
+                    // Guardar archivo en storage
+                    $path = $file->storeAs(self::INSPECTION_PATH, $filename, 'public');
+
+                    // Crear registro en la base de datos
+                    $inspeccion = new AlmacenInspection();
+                    $inspeccion->file_name = $file->getClientOriginalName();
+                    $inspeccion->file_type = $file->getMimeType();
+                    $inspeccion->file_size = $file->getSize();
+                    $inspeccion->last_modified = now();
+                    $inspeccion->file_ext = $file->getClientOriginalExtension();
+                    $inspeccion->send_status = 'PENDING';
+                    $inspeccion->id_proveedor = $idProveedor;
+                    $inspeccion->file_path = $path;
+                    $inspeccion->id_cotizacion = $idCotizacion;
+                    $inspeccion->save();
+
+                    $archivosGuardados[] = [
+                        'id' => $inspeccion->id,
+                        'nombre' => $inspeccion->file_name,
+                        'ruta' => $path,
+                        'tamaño' => $inspeccion->file_size
+                    ];
+
+                    Log::info('Archivo de inspección guardado:', [
+                        'nombre_original' => $file->getClientOriginalName(),
+                        'ruta_storage' => $path,
+                        'tamaño' => $file->getSize()
+                    ]);
+                } else {
+                    Log::warning('Archivo de inspección inválido:', ['nombre' => $file->getClientOriginalName()]);
+                }
+            }
+
+            if (empty($archivosGuardados)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No se pudo guardar ningún archivo de inspección'
+                ], 400);
+            }
+            $this->validateToSendInspectionMessage($idProveedor);
+            return response()->json([
+                'success' => true,
+                'message' => 'Inspección guardada correctamente',
+                'data' => [
+                    'archivos_guardados' => $archivosGuardados,
+                    'total_archivos' => count($archivosGuardados)
+                ]
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error al guardar inspección: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al guardar inspección',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+    public function saveDocumentation(Request $request)
+    {
+        try {
+            $idProveedor = $request->idProveedor;
+            $idCotizacion = $request->idCotizacion;
+
+            // Verificar que se hayan enviado archivos
+            if (!$request->hasFile('files')) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No se han enviado archivos'
+                ], 400);
+            }
+
+            $files = $request->file('files');
+
+            // Si es un solo archivo, convertirlo en array
+            if (!is_array($files)) {
+                $files = [$files];
+            }
+
+            Log::info('Archivos recibidos:', ['cantidad' => count($files)]);
+
+            $archivosGuardados = [];
+
+            foreach ($files as $file) {
+                if ($file->isValid()) {
+                    // Generar nombre único para el archivo
+                    $filename = time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
+
+                    // Guardar archivo en storage
+                    $path = $file->storeAs(self::DOCUMENTATION_PATH, $filename, 'public');
+
+                    // Crear registro en la base de datos
+                    $documentacion = new AlmacenDocumentacion();
+                    $documentacion->file_name = $file->getClientOriginalName();
+                    $documentacion->file_type = $file->getMimeType();
+                    $documentacion->file_size = $file->getSize();
+                    $documentacion->last_modified = now();
+                    $documentacion->file_ext = $file->getClientOriginalExtension();
+                    $documentacion->file_path = $path;
+                    $documentacion->id_proveedor = $idProveedor;
+                    $documentacion->id_cotizacion = $idCotizacion;
+                    $documentacion->save();
+
+                    $archivosGuardados[] = [
+                        'id' => $documentacion->id,
+                        'nombre' => $documentacion->file_name,
+                        'ruta' => $path,
+                        'tamaño' => $documentacion->file_size
+                    ];
+
+                    Log::info('Archivo guardado:', [
+                        'nombre_original' => $file->getClientOriginalName(),
+                        'ruta_storage' => $path,
+                        'tamaño' => $file->getSize()
+                    ]);
+                } else {
+                    Log::warning('Archivo inválido:', ['nombre' => $file->getClientOriginalName()]);
+                }
+            }
+
+            if (empty($archivosGuardados)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No se pudo guardar ningún archivo'
+                ], 400);
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Documentación guardada correctamente',
+                'data' => [
+                    'archivos_guardados' => $archivosGuardados,
+                    'total_archivos' => count($archivosGuardados)
+                ]
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error al guardar documentación: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al guardar documentación',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+    public function getCotizacionProveedor($idProveedor)
+    {
         try {
             $proveedor = CotizacionProveedor::with('contenedor')
                 ->where('id', $idProveedor)

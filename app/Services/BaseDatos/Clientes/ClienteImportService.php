@@ -31,26 +31,18 @@ class ClienteImportService
             }
 
             $file = $request->file('excel_file');
-            $fileName = $file->getClientOriginalName();
-            $filePath = $file->getRealPath();
-
+           
             // Validar tipo de archivo
             $allowedTypes = ['xlsx', 'xls', 'xlsm'];
-            $fileExtension = strtolower($file->getClientOriginalExtension());
-
-            if (!in_array($fileExtension, $allowedTypes)) {
-                return [
-                    'success' => false,
-                    'message' => 'El archivo debe ser un Excel (.xlsx o .xls)'
-                ];
-            }
-            //guardar el archivo en el storage
-            $tempPath = $file->store('temp');
-            $fullTempPath = storage_path('app/' . $tempPath);
-            $importId = $this->crearRegistroImportacion($fileName, $fullTempPath);
-
-            // Procesar el archivo
-            $resultado = $this->procesarExcel($fullTempPath, $importId, $fileName);
+            $filePath = $file->storeAs('imports/clientes', time() . '_' . uniqid() . '_' . $file->getClientOriginalName(), 'public');
+            
+            // Crear registro de importación con la ruta relativa
+            $importId = $this->crearRegistroImportacion($file->getClientOriginalName(), $filePath);
+            
+            $fullPath = storage_path('app/public/' . $filePath);
+            
+            // Procesar el Excel usando la ruta del sistema de archivos
+            $resultado = $this->procesarExcel($fullPath, $importId, $file->getClientOriginalName());
 
             return [
                 'success' => true,
@@ -71,6 +63,7 @@ class ClienteImportService
      */
     private function crearRegistroImportacion($fileName, $path)
     {
+        Log::info('Ruta del archivo: ' . $path);
         return ImportCliente::create([
             'nombre_archivo' => $fileName,
             'cantidad_rows' => 0,
