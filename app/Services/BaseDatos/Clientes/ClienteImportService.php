@@ -261,7 +261,7 @@ class ClienteImportService
                     'fecha' => $this->convertirFechaExcel($data['fecha']),
                     'id_cliente_importacion' => $importId,
                 ]);
-    
+                Log::info('Cliente creado: ' . $cliente->id);
                 if (trim($data['servicio']) == 'CONSOLIDADO') {
                     $carga = $data['carga'];
                     $carga = explode('#', $carga)[1];
