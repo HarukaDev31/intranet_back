@@ -264,6 +264,7 @@ class ClienteImportService
                 if (trim($data['servicio']) == 'CONSOLIDADO') {
                     $carga = $data['carga'];
                     $carga = explode('#', $carga)[1];
+                    Log::info('Carga: ' . $carga);
                     $consolidado = Contenedor::where('carga', $carga)->first();
                     $cotizacion = Cotizacion::create([
                         'id_contenedor' => $consolidado->id,
