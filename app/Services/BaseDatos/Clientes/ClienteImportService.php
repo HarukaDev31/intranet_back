@@ -208,8 +208,7 @@ class ClienteImportService
             if (!$clienteExistente && !empty(trim($data['ruc']))) {
                 $clienteExistente = Cliente::where('ruc', $data['ruc'])->first();
             }
-            
-            Log::info($clienteExistente);
+            Log::info('Cliente existente: ' . $clienteExistente);
             if ($clienteExistente) {
                 // Actualizar cliente existente
                 $clienteExistente->update([
