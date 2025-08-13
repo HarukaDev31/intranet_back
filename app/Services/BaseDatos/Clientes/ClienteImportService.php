@@ -266,6 +266,13 @@ class ClienteImportService
                     $carga = explode('#', $carga)[1];
                     Log::info('Carga: ' . $carga);
                     $consolidado = Contenedor::where('carga', $carga)->first();
+                    if(!$consolidado){
+                        $consolidado=Contenedor::create([
+                            'carga' => $carga,
+                            'fecha' => $this->convertirFechaExcel($data['fecha']),
+                          
+                        ]);
+                    }
                     $cotizacion = Cotizacion::create([
                         'id_contenedor' => $consolidado->id,
                         'id_tipo_cliente' => 1,
