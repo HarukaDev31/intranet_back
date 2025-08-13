@@ -267,12 +267,17 @@ class ClienteImportService
                     Log::info('Carga: ' . $carga);
                     $consolidado = Contenedor::where('carga', $carga)->first();
                     if(!$consolidado){
-                        $consolidado=Contenedor::create([
+                        $contenedor = Contenedor::create([
                             'carga' => $carga,
-                            'fecha' => $this->convertirFechaExcel($data['fecha']),
-                          
+                            'empresa' => 1,
+                            'estado' => 'PENDIENTE',
+                            'mes' => 'ENERO',
+                            'id_pais' => 1, // Perú por defecto
+                            'tipo_carga' => 'CARGA CONSOLIDADA',
+                            'estado_china' => 'COMPLETADO',
                         ]);
                     }
+                    
                     $cotizacion = Cotizacion::create([
                         'id_contenedor' => $consolidado->id,
                         'id_tipo_cliente' => 1,
