@@ -267,7 +267,7 @@ class ClienteImportService
                     Log::info('Carga: ' . $carga);
                     $consolidado = Contenedor::where('carga', $carga)->first();
                     if(!$consolidado){
-                        $contenedor = Contenedor::create([
+                        $consolidado = Contenedor::create([
                             'carga' => $carga,
                             'empresa' => 1,
                             'estado' => 'PENDIENTE',
@@ -277,7 +277,7 @@ class ClienteImportService
                             'estado_china' => 'COMPLETADO',
                         ]);
                     }
-                    
+
                     $cotizacion = Cotizacion::create([
                         'id_contenedor' => $consolidado->id,
                         'id_tipo_cliente' => 1,
