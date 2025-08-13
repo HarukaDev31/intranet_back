@@ -277,7 +277,7 @@ class ClienteImportService
                             'estado_china' => 'COMPLETADO',
                         ]);
                     }
-
+                    Log::info('Contenedor: ' . $consolidado->id);
                     $cotizacion = Cotizacion::create([
                         'id_contenedor' => $consolidado->id,
                         'id_tipo_cliente' => 1,
