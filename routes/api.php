@@ -35,7 +35,7 @@ use App\Http\Controllers\Curso\CursoController;
 // Rutas de autenticación
 Route::group(['prefix' => 'auth'], function () {
     Route::post('login', [AuthController::class, 'login']);
-    
+
     // Rutas protegidas con JWT
     Route::group(['middleware' => 'jwt.auth'], function () {
         Route::post('logout', [AuthController::class, 'logout']);
@@ -49,13 +49,12 @@ Route::group(['prefix' => 'menu', 'middleware' => 'jwt.auth'], function () {
     Route::get('listar', [MenuController::class, 'listarMenu']);
     Route::get('get', [MenuController::class, 'getMenus']);
 });
-    Route::group(['prefix' => 'consolidado', 'middleware' => 'jwt.auth'], function () {
-        Route::group(['prefix' => 'cotizacion'], function () {
-            
-            Route::get('clientes-documentacion/{id}', [CotizacionController::class, 'showClientesDocumentacion']);
-        });
+Route::group(['prefix' => 'consolidado', 'middleware' => 'jwt.auth'], function () {
+    Route::group(['prefix' => 'cotizacion'], function () {
 
+        Route::get('clientes-documentacion/{id}', [CotizacionController::class, 'showClientesDocumentacion']);
     });
+});
 Route::group(['prefix' => 'base-datos', 'middleware' => 'jwt.auth'], function () {
     Route::group(['prefix' => 'productos'], function () {
         Route::get('list-excels', [ProductosController::class, 'obtenerListExcel']);
@@ -69,7 +68,7 @@ Route::group(['prefix' => 'base-datos', 'middleware' => 'jwt.auth'], function ()
         Route::get('{id}', [ProductosController::class, 'show']);
         Route::put('{id}', [ProductosController::class, 'update']);
     });
-    
+
     Route::group(['prefix' => 'regulaciones'], function () {
         // Entidades y rubros
         Route::get('/entidades', [EntidadesController::class, 'getDropdown']);
@@ -85,7 +84,7 @@ Route::group(['prefix' => 'base-datos', 'middleware' => 'jwt.auth'], function ()
             Route::delete('/{id}', [AntidumpingController::class, 'destroy']);
             Route::delete('/{id}/images/{imageId}', [AntidumpingController::class, 'deleteImage']);
         });
-        
+
         // Regulaciones de permisos (CRUD + deleteDocument)
         Route::group(['prefix' => 'permisos'], function () {
             Route::get('/', [PermisoController::class, 'index']);
@@ -114,7 +113,6 @@ Route::group(['prefix' => 'base-datos', 'middleware' => 'jwt.auth'], function ()
         });
         Route::delete('/rubros/{id}', [ProductoRubroController::class, 'destroy']);
         Route::delete('/entidades/{id}', [EntidadesController::class, 'destroy']);
-
     });
 
     Route::group(['prefix' => 'usuarios-grupos'], function () {
@@ -127,14 +125,14 @@ Route::group(['prefix' => 'base-datos', 'middleware' => 'jwt.auth'], function ()
 
     // Rutas de clientes
     Route::group(['prefix' => 'clientes'], function () {
-  
+
         Route::get('export', [ClientesController::class, 'export']);
         // Rutas de importación Excel
         Route::post('import-excel', [ClientesController::class, 'importExcel']);
         Route::post('descargar-plantilla', [ClientesController::class, 'descargarPlantilla']);
         Route::get('list-excels', [ClientesController::class, 'obtenerListExcel']);
         Route::delete('delete-excel/{id}', [ClientesController::class, 'deleteExcel']);
-        
+
         // Rutas CRUD (deben ir después de las rutas específicas)
         Route::get('{id}', [ClientesController::class, 'show']);
         Route::delete('{id}', [ClientesController::class, 'destroy']);
@@ -142,24 +140,31 @@ Route::group(['prefix' => 'base-datos', 'middleware' => 'jwt.auth'], function ()
         Route::get('/', [ClientesController::class, 'index']);
         Route::post('/', [ClientesController::class, 'store']);
     });
-
 });
 // Rutas de carga consolidada
-Route::group(['prefix'=>'cursos'], function(){
+Route::group(['prefix' => 'cursos'], function () {
     Route::get('filters/options', [CursoController::class, 'filterOptions']);
     Route::get('/', [CursoController::class, 'index']);
-
 });
 Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], function () {
-    
+
     // Rutas de contenedores
     Route::group(['prefix' => 'contenedor'], function () {
         Route::get('/', [ContenedorController::class, 'index']);
+        Route::get('pasos/{idContenedor}', [ContenedorController::class, 'getContenedorPasos']);
         Route::post('/', [ContenedorController::class, 'store']);
         Route::get('{id}', [ContenedorController::class, 'show']);
         Route::put('{id}', [ContenedorController::class, 'update']);
         Route::delete('{id}', [ContenedorController::class, 'destroy']);
         Route::get('filters/options', [ContenedorController::class, 'filterOptions']);
+        Route::group(['prefix' => 'cotizaciones'], function () {
+            Route::get('/', [CotizacionController::class, 'index']);
+            Route::post('/', [CotizacionController::class, 'store']);
+            Route::get('{id}', [CotizacionController::class, 'show']);
+            Route::put('{id}', [CotizacionController::class, 'update']);
+            Route::delete('{id}', [CotizacionController::class, 'destroy']);
+            Route::get('filters/options', [CotizacionController::class, 'filterOptions']);
+        });
     });
 
     // Rutas de tipos de cliente
@@ -171,28 +176,19 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
         Route::delete('{id}', [TipoClienteController::class, 'destroy']);
     });
 
-    // Rutas de cotizaciones
-    Route::group(['prefix' => 'cotizaciones'], function () {
-        Route::get('/', [CotizacionController::class, 'index']);
-        Route::post('/', [CotizacionController::class, 'store']);
-        Route::get('{id}', [CotizacionController::class, 'show']);
-        Route::put('{id}', [CotizacionController::class, 'update']);
-        Route::delete('{id}', [CotizacionController::class, 'destroy']);
-        Route::get('filters/options', [CotizacionController::class, 'filterOptions']);
-    });
 
     // Rutas de cotizaciones con proveedores
     Route::group(['prefix' => 'cotizaciones-proveedores'], function () {
         Route::get('contenedor/{idContenedor}', [CotizacionProveedorController::class, 'getContenedorCotizacionProveedores']);
-      
+
         Route::delete('{idCotizacion}/proveedor/{idProveedor}', [CotizacionProveedorController::class, 'deleteCotizacion']);
-        
+
         // Rutas para archivos y notas
         Route::delete('proveedor/documento/{idFile}', [CotizacionProveedorController::class, 'deleteFileDocumentation']);
         Route::delete('proveedor/inspeccion/{idFile}', [CotizacionProveedorController::class, 'deleteFileInspection']);
-        Route::post('proveedor/documento', [CotizacionProveedorController::class, 'saveDocumentation']); 
+        Route::post('proveedor/documento', [CotizacionProveedorController::class, 'saveDocumentation']);
         Route::post('proveedor/inspeccion', [CotizacionProveedorController::class, 'saveInspection']);
-        
+
         Route::get('proveedor/documentos/{idProveedor}', [CotizacionProveedorController::class, 'getFilesAlmacenDocument']);
         Route::get('proveedor/inspeccion/{idProveedor}', [CotizacionProveedorController::class, 'getFilesAlmacenInspection']);
         Route::post('proveedor/inspeccion/enviar', [CotizacionProveedorController::class, 'validateToSendInspectionMessage']);

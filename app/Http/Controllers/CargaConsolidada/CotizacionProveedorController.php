@@ -689,8 +689,7 @@ class CotizacionProveedorController extends Controller
             // Filtrar archivos pendientes de envío
             $imagesPendientes = $imagesUrls->where('send_status', 'PENDING');
             $videosPendientes = $videosUrls->where('send_status', 'PENDING');
-            Log::info('Images pendientes: ' . $imagesPendientes->count());
-            Log::info('Videos pendientes: ' . $videosPendientes->count());
+
             // Simular envío de medios de inspección
             foreach ($imagesPendientes as $image) {
                 // Usar la ruta del sistema de archivos, no la URL
@@ -908,10 +907,11 @@ class CotizacionProveedorController extends Controller
     /**
      * Agregar o actualizar nota del proveedor
      */
-    public function addNote(Request $request, $idProveedor)
+    public function addNote(Request $request)
     {
         try {
             $user = JWTAuth::parseToken()->authenticate();
+            $idProveedor = $request->id_proveedor;
             if (!$user) {
                 return response()->json([
                     'success' => false,
@@ -920,7 +920,7 @@ class CotizacionProveedorController extends Controller
             }
 
             $request->validate([
-                'nota' => 'required|string|max:1000'
+                'notas' => 'required|string|max:1000'
             ]);
 
             $proveedor = CotizacionProveedor::find($idProveedor);
@@ -931,7 +931,7 @@ class CotizacionProveedorController extends Controller
                 ], 404);
             }
 
-            $proveedor->nota = $request->nota;
+            $proveedor->nota = $request->notas;
             $proveedor->save();
 
             return response()->json([

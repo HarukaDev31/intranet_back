@@ -5,6 +5,8 @@ namespace App\Http\Controllers\CargaConsolidada;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\CargaConsolidada\Cotizacion;
+use App\Models\Usuario;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -12,8 +14,100 @@ class CotizacionController extends Controller
 {
     public function index(Request $request)
     {
-        // Implementación básica
-        return response()->json(['message' => 'Cotizacion index']);
+        try {
+            $user = Auth::user();
+            $query = Cotizacion::query();
+
+            // Aplicar filtros básicos
+            if ($request->has('search')) {
+                $search = $request->search;
+                $query->where(function($q) use ($search) {
+                    $q->where('nombre', 'LIKE', "%{$search}%")
+                      ->orWhere('documento', 'LIKE', "%{$search}%")
+                      ->orWhere('telefono', 'LIKE', "%{$search}%");
+                });
+            }
+
+            // Filtrar por estado si se proporciona
+            if ($request->has('estado') && !empty($request->estado)) {
+                $query->where('estado', $request->estado);
+            }
+
+            // Filtrar por fecha si se proporciona
+            if ($request->has('fecha_inicio')) {
+                $query->whereDate('fecha', '>=', $request->fecha_inicio);
+            }
+            if ($request->has('fecha_fin')) {
+                $query->whereDate('fecha', '<=', $request->fecha_fin);
+            }
+
+            // Aplicar filtros según el rol del usuario
+            switch ($user->rol) {
+                case Usuario::ROL_COTIZADOR:
+                    if ($user->id_usuario != 28791) { 
+                        $query->where('id_usuario', $user->id_usuario);
+                    }
+                    $query->where('estado_cotizador', 'CONFIRMADO');
+                    break;
+
+                case Usuario::ROL_DOCUMENTACION:
+                    $query->where('estado_cotizador', 'CONFIRMADO')
+                          ->whereNotNull('estado_cliente');
+                    break;
+
+                case Usuario::ROL_COORDINACION:
+                    $query->where('estado_cotizador', 'CONFIRMADO')
+                          ->whereNotNull('estado_cliente');
+                    break;
+            }
+
+            // Ordenamiento
+            $sortField = $request->input('sort_by', 'fecha');
+            $sortOrder = $request->input('sort_order', 'desc');
+            $query->orderBy($sortField, $sortOrder);
+
+            // Paginación
+            $perPage = $request->input('per_page', 10);
+            $page = $request->input('page', 1);
+            $results = $query->paginate($perPage, ['*'], 'page', $page);
+
+            // Transformar los datos para la respuesta
+            $data = $results->map(function ($cotizacion) {
+                return [
+                    'id' => $cotizacion->id,
+                    'nombre' => $cotizacion->nombre,
+                    'documento' => $cotizacion->documento,
+                    'telefono' => $cotizacion->telefono,
+                    'correo' => $cotizacion->correo,
+                    'fecha' => $cotizacion->fecha,
+                    'estado' => $cotizacion->estado,
+                    'estado_cliente' => $cotizacion->estado_cliente,
+                    'estado_cotizador' => $cotizacion->estado_cotizador,
+                    'monto' => $cotizacion->monto,
+                    'monto_final' => $cotizacion->monto_final,
+                    'volumen' => $cotizacion->volumen,
+                    'volumen_final' => $cotizacion->volumen_final
+                ];
+            });
+
+            return response()->json([
+                'success' => true,
+                'data' => $data,
+                'pagination' => [
+                    'current_page' => $results->currentPage(),
+                    'per_page' => $results->perPage(),
+                    'total' => $results->total(),
+                    'last_page' => $results->lastPage()
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error en index de cotizaciones: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al obtener cotizaciones: ' . $e->getMessage()
+            ], 500);
+        }
     }
 
     public function store(Request $request)

@@ -9,7 +9,8 @@ use App\Models\Pais;
 class Contenedor extends Model
 {
     use HasFactory;
-
+    const CONTEDOR_CERRADO="COMPLETADO";
+    const CONTEDOR_PENDIENTE="PENDIENTE";
     /**
      * La tabla asociada al modelo.
      *

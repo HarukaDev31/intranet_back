@@ -206,19 +206,16 @@ trait WhatsappTrait
         try {
             $phoneNumberId = $phoneNumberId ? $phoneNumberId : $this->phoneNumberId;
             
-            // Verificar que el archivo existe
             if (!file_exists($filePath)) {
                 Log::error('Error al enviar media de inspección: El archivo no existe: ' . $filePath);
                 return false;
             }
             
-            // Verificar que el archivo es legible
             if (!is_readable($filePath)) {
                 Log::error('Error al enviar media de inspección: El archivo no es legible: ' . $filePath);
                 return false;
             }
             
-            // Obtener el contenido del archivo
             $fileContent = file_get_contents($filePath);
             if ($fileContent === false) {
                 Log::error('Error al enviar media de inspección: No se pudo leer el archivo: ' . $filePath);
