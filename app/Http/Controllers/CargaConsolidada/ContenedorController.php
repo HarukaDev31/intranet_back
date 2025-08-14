@@ -8,6 +8,8 @@ use App\Models\CargaConsolidada\Contenedor;
 use App\Models\CargaConsolidada\ContenedorPasos;
 use App\Models\Usuario;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
+use Tymon\JWTAuth\Facades\JWTAuth;
 
 class ContenedorController extends Controller
 {
@@ -17,7 +19,7 @@ class ContenedorController extends Controller
 
             $query = Contenedor::with('pais');
             $currentUser = Auth::user();
-            $completado = $request->completado ?? false;
+            $completado = $request->completado ?? true;
             if ($currentUser->rol == Usuario::ROL_DOCUMENTACION) {
                 if ($completado) {
                     $query->where('estado_documentacion', '=', Contenedor::CONTEDOR_CERRADO);
@@ -86,22 +88,27 @@ class ContenedorController extends Controller
     public function getContenedorPasos($idContenedor)
     {
         try {
-            $user = Auth::user();
+            $user = JWTAuth::user();
+            $role=$user->getNombreGrupo();
+            Log::info('Rol: ' . $role);
+            Log::info('Cotizador: ' . $user->ID_Usuario);
             $query = ContenedorPasos::where('id_pedido', $idContenedor)->orderBy('id_order', 'asc');
-            switch ($user->rol) {
-                case Usuario::ROL_COORDINACION:
-                    $query->limit(5);
-                    break;
+          
+            switch ($role) {
+              
 
                 case Usuario::ROL_COTIZADOR:
-                    if ($user->id_usuario == 28791) {
+                    if ($user->ID_Usuario == 28791) {
+                        Log::info('jefe');
                         $query->limit(2);
+                        break;
                     }
                     $query->limit(1);
                     break;
                 default:
-                    $query->limit(1);
-                    break;
+                    $query->where('tipo', Usuario::ROL_COTIZADOR);
+                    break   ;
+                   
             }
             $data = $query->select('id', 'name', 'status', 'iconURL')->get();
             return response()->json(['data' => $data, 'success' => true]);

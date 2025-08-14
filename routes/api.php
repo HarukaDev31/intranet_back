@@ -21,6 +21,10 @@ use App\Http\Controllers\CargaConsolidada\CotizacionProveedorController;
 use App\Http\Controllers\UsuarioGrupoController;
 use App\Http\Controllers\ClientesHistorialController;
 use App\Http\Controllers\Curso\CursoController;
+use App\Http\Controllers\CargaConsolidada\Clientes\GeneralController;
+use App\Http\Controllers\CargaConsolidada\Clientes\VariacionController;
+use App\Http\Controllers\CargaConsolidada\Documentacion\DocumentacionController;
+use App\Http\Controllers\CargaConsolidada\CotizacionFinal\CotizacionFinalController;
 /*
 |--------------------------------------------------------------------------
 | API Routes
@@ -97,7 +101,7 @@ Route::group(['prefix' => 'base-datos', 'middleware' => 'jwt.auth'], function ()
         // Regulaciones de etiquetado (CRUD + deleteImage)
         Route::group(['prefix' => 'etiquetado'], function () {
             Route::get('/', [EtiquetadoController::class, 'index']);
-            Route::post('/', [EtiquetadoController::class, 'store']); // Crear o actualizar
+            Route::post('/', [EtiquetadoController::class, 'store']); 
             Route::get('/{id}', [EtiquetadoController::class, 'show']);
             Route::delete('/{id}', [EtiquetadoController::class, 'destroy']);
             Route::delete('/{id}/images/{imageId}', [EtiquetadoController::class, 'deleteImage']);
@@ -153,18 +157,30 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
         Route::get('/', [ContenedorController::class, 'index']);
         Route::get('pasos/{idContenedor}', [ContenedorController::class, 'getContenedorPasos']);
         Route::post('/', [ContenedorController::class, 'store']);
-        Route::get('{id}', [ContenedorController::class, 'show']);
-        Route::put('{id}', [ContenedorController::class, 'update']);
-        Route::delete('{id}', [ContenedorController::class, 'destroy']);
-        Route::get('filters/options', [ContenedorController::class, 'filterOptions']);
+   
         Route::group(['prefix' => 'cotizaciones'], function () {
-            Route::get('/', [CotizacionController::class, 'index']);
+            Route::get('/{idContenedor}', [CotizacionController::class, 'index']);
             Route::post('/', [CotizacionController::class, 'store']);
-            Route::get('{id}', [CotizacionController::class, 'show']);
             Route::put('{id}', [CotizacionController::class, 'update']);
             Route::delete('{id}', [CotizacionController::class, 'destroy']);
             Route::get('filters/options', [CotizacionController::class, 'filterOptions']);
         });
+        Route::group(['prefix' => 'clientes'], function () {
+            Route::get('/general/{idContenedor}', [GeneralController::class, 'index']);
+            Route::get('/variacion/{idContenedor}', [VariacionController::class, 'index']);
+            Route::get('/variacion/documentacion/{idCotizacion}', [VariacionController::class, 'showClientesDocumentacion']);
+        });
+        Route::group(['prefix' => 'documentacion'], function () {
+            Route::get('/{id}', [DocumentacionController::class, 'getDocumentationFolderFiles']);
+        });
+        Route::group(['prefix' => 'cotizacion-final'], function () {
+            Route::get('/general/{idContenedor}', [CotizacionFinalController::class, 'getContenedorCotizacionesFinales']);
+            Route::get('/pagos/{idCotizacion}', [CotizacionFinalController::class, 'getCotizacionFinalDocumentacionPagos']);
+        });
+        Route::get('{id}', [ContenedorController::class, 'show']);
+        Route::put('{id}', [ContenedorController::class, 'update']);
+        Route::delete('{id}', [ContenedorController::class, 'destroy']);
+        Route::get('filters/options', [ContenedorController::class, 'filterOptions']);
     });
 
     // Rutas de tipos de cliente
