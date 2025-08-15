@@ -25,6 +25,8 @@ use App\Http\Controllers\CargaConsolidada\Clientes\GeneralController;
 use App\Http\Controllers\CargaConsolidada\Clientes\VariacionController;
 use App\Http\Controllers\CargaConsolidada\Documentacion\DocumentacionController;
 use App\Http\Controllers\CargaConsolidada\CotizacionFinal\CotizacionFinalController;
+use App\Http\Controllers\CargaConsolidada\FacturaGuiaController;
+use App\Http\Controllers\Commons\PaisController;
 /*
 |--------------------------------------------------------------------------
 | API Routes
@@ -154,15 +156,20 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
 
     // Rutas de contenedores
     Route::group(['prefix' => 'contenedor'], function () {
+        Route::get('valid-containers', [ContenedorController::class, 'getValidContainers']);
         Route::get('/', [ContenedorController::class, 'index']);
         Route::get('pasos/{idContenedor}', [ContenedorController::class, 'getContenedorPasos']);
         Route::post('/', [ContenedorController::class, 'store']);
-   
+        
         Route::group(['prefix' => 'cotizaciones'], function () {
+            Route::post('/{id}/refresh', [CotizacionController::class, 'refreshCotizacionFile']);
+
             Route::get('/{idContenedor}', [CotizacionController::class, 'index']);
             Route::post('/', [CotizacionController::class, 'store']);
             Route::put('{id}', [CotizacionController::class, 'update']);
+            Route::delete('{id}/file', [CotizacionController::class, 'deleteCotizacionFile']);
             Route::delete('{id}', [CotizacionController::class, 'destroy']);
+
             Route::get('filters/options', [CotizacionController::class, 'filterOptions']);
         });
         Route::group(['prefix' => 'clientes'], function () {
@@ -176,6 +183,9 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
         Route::group(['prefix' => 'cotizacion-final'], function () {
             Route::get('/general/{idContenedor}', [CotizacionFinalController::class, 'getContenedorCotizacionesFinales']);
             Route::get('/pagos/{idCotizacion}', [CotizacionFinalController::class, 'getCotizacionFinalDocumentacionPagos']);
+        });
+        Route::group(['prefix' => 'factura-guia'], function () {
+            Route::get('/general/{idContenedor}', [FacturaGuiaController::class, 'getContenedorFacturaGuia']);
         });
         Route::get('{id}', [ContenedorController::class, 'show']);
         Route::put('{id}', [ContenedorController::class, 'update']);
@@ -228,4 +238,8 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
         Route::get('template', [ImportController::class, 'downloadTemplate']);
         Route::get('stats', [ImportController::class, 'getImportStats']);
     });
+});
+
+Route::group(['prefix' => 'options', 'middleware' => 'jwt.auth'], function () {
+    Route::get('paises', [PaisController::class, 'getPaisDropdown']);
 });

@@ -28,10 +28,10 @@ class CotizacionController extends Controller
             // Aplicar filtros básicos
             if ($request->has('search')) {
                 $search = $request->search;
-                $query->where(function($q) use ($search) {
+                $query->where(function ($q) use ($search) {
                     $q->where('nombre', 'LIKE', "%{$search}%")
-                      ->orWhere('documento', 'LIKE', "%{$search}%")
-                      ->orWhere('telefono', 'LIKE', "%{$search}%");
+                        ->orWhere('documento', 'LIKE', "%{$search}%")
+                        ->orWhere('telefono', 'LIKE', "%{$search}%");
                 });
             }
 
@@ -51,7 +51,7 @@ class CotizacionController extends Controller
             // Aplicar filtros según el rol del usuario
             switch ($user->rol) {
                 case Usuario::ROL_COTIZADOR:
-                    if ($user->id_usuario != 28791) { 
+                    if ($user->id_usuario != 28791) {
                         $query->where('id_usuario', $user->id_usuario);
                     }
                     $query->where('estado_cotizador', 'CONFIRMADO');
@@ -59,12 +59,12 @@ class CotizacionController extends Controller
 
                 case Usuario::ROL_DOCUMENTACION:
                     $query->where('estado_cotizador', 'CONFIRMADO')
-                          ->whereNotNull('estado_cliente');
+                        ->whereNotNull('estado_cliente');
                     break;
 
                 case Usuario::ROL_COORDINACION:
                     $query->where('estado_cotizador', 'CONFIRMADO')
-                          ->whereNotNull('estado_cliente');
+                        ->whereNotNull('estado_cliente');
                     break;
             }
 
@@ -99,7 +99,8 @@ class CotizacionController extends Controller
                     'fob' => $cotizacion->fob,
                     'cotizacion_file_url' => $cotizacion->cotizacion_file_url,
                     'impuestos' => $cotizacion->impuestos,
-                    
+                    'tipo_cliente' => $cotizacion->tipoCliente->name,
+
                 ];
             });
 
@@ -113,7 +114,6 @@ class CotizacionController extends Controller
                     'last_page' => $results->lastPage()
                 ]
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error en index de cotizaciones: ' . $e->getMessage());
             return response()->json([
@@ -143,8 +143,18 @@ class CotizacionController extends Controller
 
     public function destroy($id)
     {
-        // Implementación básica
-        return response()->json(['message' => 'Cotizacion destroy']);
+        try {
+            DB::statement('SET FOREIGN_KEY_CHECKS = 0');
+            $cotizacionProveedor = CotizacionProveedor::where('id_cotizacion', $id);
+            $cotizacionProveedor->delete();
+            //delete cotizacion
+            $cotizacion = Cotizacion::find($id);
+            $cotizacion->delete();
+            DB::statement('SET FOREIGN_KEY_CHECKS = 1');
+            return response()->json(['message' => 'Cotizacion borrada correctamente', 'success' => true]);
+        } catch (\Exception $e) {
+            return response()->json(['message' => 'Error al borrar cotizacion: ' . $e->getMessage()], 500);
+        }
     }
 
     public function filterOptions()
@@ -167,9 +177,9 @@ class CotizacionController extends Controller
                 'documentacionAlmacen',
                 'inspeccionAlmacen'
             ])
-            ->where('id', $id)
-            ->whereNotNull('estado')
-            ->first();
+                ->where('id', $id)
+                ->whereNotNull('estado')
+                ->first();
 
             if (!$cotizacion) {
                 return response()->json([
@@ -305,7 +315,6 @@ class CotizacionController extends Controller
                 'data' => $result,
                 'message' => 'Documentación de clientes obtenida exitosamente'
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error al obtener documentación de clientes: ' . $e->getMessage());
             return response()->json([
@@ -332,7 +341,7 @@ class CotizacionController extends Controller
             $telefono = $sheet->getCell('B11')->getValue();
             $volumen = $sheet->getCell('I11')->getCalculatedValue();
             $valorCot = $sheet->getCell('J14')->getCalculatedValue();
-            
+
             //get calculated value from cell e9
             $fecha = $sheet->getCell('E9')->getValue();
             if ($fecha == "=+TODAY()") {
@@ -340,21 +349,21 @@ class CotizacionController extends Controller
             } else {
                 $fecha = $this->convertDateFormat($fecha);
             }
-            
+
             $tipoCliente = $sheet->getCell('E11')->getValue();
-            
+
             //find if exists in table contenedor_consolidado_tipo_cliente with name = $tipoCliente else create new and get id
             $tipoClienteModel = TipoCliente::where('name', $tipoCliente)->first();
             if (!$tipoClienteModel) {
                 $tipoClienteModel = TipoCliente::create(['name' => $tipoCliente]);
             }
             $idTipoCliente = $tipoClienteModel->id;
-            
+
             if (trim($sheet->getCell('A23')->getValue()) == "ANTIDUMPING") {
                 $monto = $sheet->getCell('J31')->getOldCalculatedValue();
                 $fob = $sheet->getCell('J30')->getOldCalculatedValue();
                 $impuestos = $sheet->getCell('J32')->getOldCalculatedValue();
-                
+
                 //get j24 and j26
                 Log::error('20: ' . $sheet->getCell('J20')->getOldCalculatedValue());
                 Log::error('21: ' . $sheet->getCell('J21')->getOldCalculatedValue());
@@ -368,19 +377,19 @@ class CotizacionController extends Controller
                 $fob = $sheet->getCell('J29')->getOldCalculatedValue();
                 $impuestos = $sheet->getCell('J31')->getOldCalculatedValue();
             }
-            
+
             $tarifa = $monto / (($volumen <= 0 ? 1 : $volumen) < 1.00 ? 1 : ($volumen <= 0 ? 1 : $volumen));
             $peso = $sheet->getCell('I9')->getOldCalculatedValue();
             $highestRow = $sheet->getHighestRow();
             $qtyItem = 0;
-            
+
             for ($row = 36; $row <= $highestRow; $row++) {
                 $cellValue = $sheet->getCell('A' . $row)->getValue();
                 if (is_numeric($cellValue) && $cellValue > 0) {
                     $qtyItem++;
                 }
             }
-            
+
             return [
                 'nombre' => $nombre,
                 'documento' => $documento,
@@ -445,13 +454,13 @@ class CotizacionController extends Controller
             $timestamp = ($fecha - 25569) * 86400;
             return date('Y-m-d', $timestamp);
         }
-        
+
         // Si es una cadena, intentar parsearla
         $parsedDate = date_parse($fecha);
         if ($parsedDate['error_count'] === 0) {
             return date('Y-m-d', strtotime($fecha));
         }
-        
+
         // Si no se puede parsear, devolver la fecha actual
         return date('Y-m-d');
     }
@@ -480,45 +489,45 @@ class CotizacionController extends Controller
             $dataToInsert['id_usuario'] = Auth::id();
 
             $cotizacionModel = Cotizacion::create($dataToInsert);
-            
+
             if ($cotizacionModel) {
                 $idCotizacion = $cotizacionModel->id;
                 $dataToInsert['id_cotizacion'] = $idCotizacion;
-                
+
                 $dataEmbarque = $this->getEmbarqueData($cotizacion, $dataToInsert);
                 Log::error('Data embarque: ' . json_encode($dataEmbarque));
-                
+
                 // Insertar proveedores
                 foreach ($dataEmbarque as $proveedor) {
                     CotizacionProveedor::create($proveedor);
                 }
 
                 $nombre = $dataToInsert['nombre'];
-                
+
                 // Obtener fecha de cierre del contenedor
                 $contenedor = Contenedor::find($data['id_contenedor']);
                 $f_cierre = $contenedor ? $contenedor->f_cierre : 'fecha no disponible';
 
                 $message = 'Hola ' . $nombre . ' pudiste revisar la cotización enviada? 
         Te comento que cerramos nuestro consolidado este ' . $f_cierre . ' Por favor si cuentas con alguna duda me avisas y puedo llamarte para aclarar tus dudas.';
-                
+
                 $telefono = preg_replace('/\s+/', '', $dataToInsert['telefono']);
                 $telefono = $telefono ? $telefono . '@c.us' : '';
-                
+
                 $data_json = [
                     'message' => $message,
                     'phoneNumberId' => $telefono,
                 ];
-                
+
                 // Aquí podrías insertar en la tabla de crons si existe
                 // Por ahora solo retornamos éxito
-                
+
                 return [
                     'id' => $idCotizacion,
                     'status' => "success"
                 ];
             }
-            
+
             return false;
         } catch (Exception $e) {
             Log::error('Error en storeCotizacion: ' . $e->getMessage());
@@ -540,23 +549,7 @@ class CotizacionController extends Controller
     /**
      * Elimina el archivo de cotización
      */
-    public function deleteCotizacionFile($id)
-    {
-        try {
-            $cotizacion = Cotizacion::find($id);
-            if ($cotizacion && $cotizacion->cotizacion_file_url) {
-                if (file_exists($cotizacion->cotizacion_file_url)) {
-                    unlink($cotizacion->cotizacion_file_url);
-                }
-                $cotizacion->update(['cotizacion_file_url' => null]);
-                return "success";
-            }
-            return false;
-        } catch (Exception $e) {
-            Log::error('Error en deleteCotizacionFile: ' . $e->getMessage());
-            return false;
-        }
-    }
+  
 
     /**
      * Elimina una cotización completa
@@ -565,18 +558,18 @@ class CotizacionController extends Controller
     {
         try {
             DB::statement('SET FOREIGN_KEY_CHECKS = 0');
-            
+
             $cotizacion = Cotizacion::find($id);
             if ($cotizacion && $cotizacion->cotizacion_file_url) {
                 if (file_exists($cotizacion->cotizacion_file_url)) {
                     unlink($cotizacion->cotizacion_file_url);
                 }
             }
-            
+
             $deleted = Cotizacion::destroy($id);
-            
+
             DB::statement('SET FOREIGN_KEY_CHECKS = 1');
-            
+
             if ($deleted > 0) {
                 return "success";
             }
@@ -715,7 +708,7 @@ class CotizacionController extends Controller
                 }
 
                 DB::statement('SET FOREIGN_KEY_CHECKS = 1');
-                
+
                 return [
                     'status' => "success",
                     'message' => 'Cotización actualizada exitosamente.'
@@ -743,8 +736,8 @@ class CotizacionController extends Controller
     {
         $hoy = now()->format('Y-m-d');
         return Contenedor::where('f_cierre', '>=', $hoy)
-                        ->orderBy('carga', 'desc')
-                        ->get();
+            ->orderBy('carga', 'desc')
+            ->get();
     }
 
     /**
@@ -765,7 +758,7 @@ class CotizacionController extends Controller
             }
 
             CotizacionProveedor::where('id_cotizacion', $idCotizacion)
-                              ->update(['id_contenedor' => $idContenedorDestino]);
+                ->update(['id_contenedor' => $idContenedorDestino]);
 
             DB::commit();
             return true;
@@ -817,7 +810,7 @@ class CotizacionController extends Controller
         // 4. URL remota
         if (filter_var($fileUrl, FILTER_VALIDATE_URL)) {
             Log::error('Intentando leer archivo remoto: ' . $fileUrl);
-            
+
             $context = stream_context_create([
                 'http' => [
                     'timeout' => 60,
@@ -936,8 +929,8 @@ class CotizacionController extends Controller
 
                 // Obtener proveedores existentes
                 $existingProviders = CotizacionProveedor::where('id_cotizacion', $id)
-                                                      ->pluck('code_supplier')
-                                                      ->toArray();
+                    ->pluck('code_supplier')
+                    ->toArray();
 
                 // Obtener datos de embarque
                 $dataEmbarque = $this->getEmbarqueDataModified($file, $dataToInsert);
@@ -949,12 +942,12 @@ class CotizacionController extends Controller
                         $key = array_search($code, $newProviders);
                         $dataToUpdate = $dataEmbarque[$key];
                         CotizacionProveedor::where('code_supplier', $code)
-                                          ->where('id_cotizacion', $id)
-                                          ->update($dataToUpdate);
+                            ->where('id_cotizacion', $id)
+                            ->update($dataToUpdate);
                     } else {
                         CotizacionProveedor::where('code_supplier', $code)
-                                          ->where('id_cotizacion', $id)
-                                          ->delete();
+                            ->where('id_cotizacion', $id)
+                            ->delete();
                     }
                 }
 
@@ -1010,7 +1003,7 @@ class CotizacionController extends Controller
             ], 'assets/images/agentecompra/');
 
             $data['cotizacion_file_url'] = $fileUrl;
-            
+
             $updated = $cotizacionModel->update($data);
             return $updated ? "success" : false;
         } catch (Exception $e) {
@@ -1045,7 +1038,7 @@ class CotizacionController extends Controller
         try {
             $user = Auth::user();
             $contenedor = Contenedor::find($id);
-            
+
             if (!$contenedor) {
                 return false;
             }
@@ -1089,15 +1082,15 @@ class CotizacionController extends Controller
         try {
             $fileName = time() . '_' . $file['name'];
             $fullPath = public_path($path . $fileName);
-            
+
             if (!is_dir(dirname($fullPath))) {
                 mkdir(dirname($fullPath), 0755, true);
             }
-            
+
             if (move_uploaded_file($file['tmp_name'], $fullPath)) {
                 return $path . $fileName;
             }
-            
+
             return false;
         } catch (Exception $e) {
             Log::error('Error en uploadSingleFile: ' . $e->getMessage());
@@ -1122,4 +1115,24 @@ class CotizacionController extends Controller
         // Implementar según la lógica específica de tu aplicación
         return [];
     }
-} 
+    public function deleteCotizacionFile($id)
+    {
+        try {
+            $cotizacion = Cotizacion::find($id);
+            if (!$cotizacion) {
+                return false;
+            }
+
+            $oldFileUrl = $cotizacion->cotizacion_file_url;
+            if ($oldFileUrl && file_exists($oldFileUrl)) {
+                unlink($oldFileUrl);
+            }
+
+            $cotizacion->update(['cotizacion_file_url' => null]);
+            return response()->json(['message' => 'Cotizacion file deleted successfully', 'success' => true]);
+        } catch (Exception $e) {
+            Log::error('Error en deleteCotizacionFile: ' . $e->getMessage());
+            return false;
+        }
+    }
+}

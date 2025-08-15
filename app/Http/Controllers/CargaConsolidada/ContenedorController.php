@@ -10,9 +10,54 @@ use App\Models\Usuario;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Tymon\JWTAuth\Facades\JWTAuth;
+use App\Models\CargaConsolidada\Cotizacion;
+use Illuminate\Support\Facades\DB;
+
 
 class ContenedorController extends Controller
 {
+    private $defaultAgenteSteps = [];
+
+    private $defautlAgenteChinaSteps = [];
+    private $defaultJefeChina = [];
+    private $defaultCotizador = [];
+    private $defaultDocumentacion = [];
+    public function __construct()
+    {
+        $this->defaultAgenteSteps = array(
+            ["name" => "ORDEN DE COMPRA", "iconURL" => env('APP_URL') . "assets/icons/orden.png"],
+            ["name" => "PAGOS", "iconURL" => env('APP_URL') . "assets/icons/pagos.png"],
+            ["name" => "RECEPCION DE CARGA", "iconURL" => env('APP_URL') . "assets/icons/recepcion.png"],
+            ["name" => "BOOKING", "iconURL" => env('APP_URL') . "assets/icons/inspeccion.png"],
+            ["name" => "DOCUMENTACIÓN", "iconURL" => env('APP_URL') . "assets/icons/documentacion.png"]
+        );
+        $this->defautlAgenteChinaSteps = array(
+            ["name" => "ORDEN DE COMPRA", "iconURL" => env('APP_URL') . "assets/icons/orden.png"],
+            ["name" => "PAGOS Y COORDINACION", "iconURL" => env('APP_URL') . "assets/icons/coordinacion.png"],
+            ["name" => "RECEPCION DE CARGA", "iconURL" => env('APP_URL') . "assets/icons/recepcion.png"],
+            ["name" => "BOOKING", "iconURL" => env('APP_URL') . "assets/icons/inspeccion.png"],
+            ["name" => "DOCUMENTACIÓN", "iconURL" => env('APP_URL') . "assets/icons/documentacion.png"]
+        );
+        $this->defaultJefeChina = array(
+            ["name" => "ORDEN DE COMPRA", "iconURL" => env('APP_URL') . "assets/icons/orden.png"],
+            ["name" => "PAGOS Y COORDINACION", "iconURL" => env('APP_URL') . "assets/icons/coordinacion.png"],
+            ["name" => "RECEPCION E INSPECCION", "iconURL" => env('APP_URL') . "assets/icons/recepcion.png"],
+            ["name" => "BOOKING", "iconURL" => env('APP_URL') . "assets/icons/inspeccion.png"],
+            ["name" => "DOCUMENTACIÓN", "iconURL" => env('APP_URL') . "assets/icons/documentacion.png"]
+        );
+        $this->defaultCotizador = array(
+            ["name" => "COTIZACION", "iconURL" => env('APP_URL') . "assets/icons/cotizacion.png"],
+            ["name" => "CLIENTES", "iconURL" => env('APP_URL') . "assets/icons/clientes.png"],
+            ["name" => "DOCUMENTACION", "iconURL" => env('APP_URL') . "assets/icons/cdocumentacion.png"],
+            ["name" => "COTIZACION FINAL", "iconURL" => env('APP_URL') . "assets/icons/cotizacion_final.png"],
+            ["name" => "FACTURA Y GUIA", "iconURL" => env('APP_URL') . "assets/icons/factura.png"]
+        );
+        $this->defaultDocumentacion = array(
+            ["name" => "CLIENTES", "iconURL" => env('APP_URL') . "assets/icons/cotizacion.png"],
+            ["name" => "DOCUMENTACION", "iconURL" => env('APP_URL') . "assets/icons/cdocumentacion.png"],
+            ["name" => "ADUANA", "iconURL" => env('APP_URL') . "assets/icons/aduana.png"],
+        );
+    }
     public function index(Request $request)
     {
         try {
@@ -58,14 +103,92 @@ class ContenedorController extends Controller
 
 
     public function store(Request $request)
-    {
-        return response()->json(['message' => 'Contenedor store']);
-    }
 
+    {
+        try {
+            $data = $request->all();
+            if ($data['id']) {
+                $contenedor = Contenedor::find($data['id']);
+                $contenedor->update($data);
+            } else {
+                $contenedor = Contenedor::create($data);
+                $this->generateSteps($contenedor->id);
+            }
+
+
+            return response()->json([
+                "status"         => true,
+                'id'             => $contenedor->id,
+                "socketResponse" => true,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al crear contenedor: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+    public function generateSteps($idContenedor)
+    {
+        $cotizadorSteps = $this->getCotizacionSteps($idContenedor);
+        $documentacionSteps = $this->getDocumentacionSteps($idContenedor);
+        $this->insertSteps($cotizadorSteps, $documentacionSteps);
+    }
+    public function getCotizacionSteps($idContenedor)
+    {
+        $stepCotizador = [];
+        $idContenedor = intval($idContenedor);
+        $index = 1;
+        foreach ($this->defaultCotizador as $step) {
+            $stepCotizador[] = [
+                "id_pedido" => $idContenedor,
+                'id_order' => $index,
+                'name' => $step['name'],
+                'iconURL' => $step['iconURL'],
+                'tipo' => 'COTIZADOR',
+                'status' => 'PENDING'
+            ];
+            $index++;
+        }
+        return $stepCotizador;
+    }
+    public function getDocumentacionSteps($idContenedor)
+    {
+        $stepDocumentacion = [];
+        $idContenedor = intval($idContenedor);
+        $index = 1;
+        foreach ($this->defaultDocumentacion as $step) {
+            $stepDocumentacion[] = [
+                "id_pedido" => $idContenedor,
+                'id_order' => $index,
+                'tipo' => 'DOCUMENTACION',
+                'name' => $step['name'],
+                'iconURL' => $step['iconURL'],
+                'status' => 'PENDING'
+            ];
+            $index++;
+        }
+        return $stepDocumentacion;
+    }
+    public function insertSteps($steps, $stepsDocumentacion)
+    {
+        try {
+            ContenedorPasos::insert($steps);
+            ContenedorPasos::insert($stepsDocumentacion);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al insertar pasos: ' . $e->getMessage()
+            ], 500);
+        }
+    }
     public function show($id)
     {
         // Implementación básica
-        return response()->json(['message' => 'Contenedor show']);
+        $query = Contenedor::where('id', $id);
+        $data = $query->first();
+
+        return response()->json(['data' => $data, 'success' => true]);
     }
 
     public function update(Request $request, $id)
@@ -76,8 +199,22 @@ class ContenedorController extends Controller
 
     public function destroy($id)
     {
-        // Implementación básica
-        return response()->json(['message' => 'Contenedor destroy']);
+        try {
+            //set foreign key check to 0
+            DB::statement('SET FOREIGN_KEY_CHECKS = 0');
+
+            $steps = ContenedorPasos::where('id_pedido', $id);
+            $steps->delete();
+            $cotizaciones = Cotizacion::where('id_contenedor', $id);
+            $cotizaciones->delete();
+            $contenedor = Contenedor::find($id);
+            $contenedor->delete();
+            //set foreign key check to 1
+            DB::statement('SET FOREIGN_KEY_CHECKS = 1');
+            return response()->json(['message' => 'Contenedor borrado correctamente', 'success' => true]);
+        } catch (\Exception $e) {
+            return response()->json(['message' => 'Error al eliminar contenedor: ' . $e->getMessage()], 500);
+        }
     }
 
     public function filterOptions()
@@ -89,13 +226,13 @@ class ContenedorController extends Controller
     {
         try {
             $user = JWTAuth::user();
-            $role=$user->getNombreGrupo();
+            $role = $user->getNombreGrupo();
             Log::info('Rol: ' . $role);
             Log::info('Cotizador: ' . $user->ID_Usuario);
             $query = ContenedorPasos::where('id_pedido', $idContenedor)->orderBy('id_order', 'asc');
-          
+
             switch ($role) {
-              
+
 
                 case Usuario::ROL_COTIZADOR:
                     if ($user->ID_Usuario == 28791) {
@@ -107,13 +244,29 @@ class ContenedorController extends Controller
                     break;
                 default:
                     $query->where('tipo', Usuario::ROL_COTIZADOR);
-                    break   ;
-                   
+                    break;
             }
             $data = $query->select('id', 'name', 'status', 'iconURL')->get();
             return response()->json(['data' => $data, 'success' => true]);
         } catch (\Exception $e) {
             return response()->json(['data' => [], 'success' => false, 'message' => 'Error al obtener pasos del contenedor: ' . $e->getMessage()]);
         }
+    }
+    public function getValidContainers()
+    {
+        // Obtener los contenedores existentes
+        $existingContainers = Contenedor::pluck('carga')->toArray();
+
+        // Crear array con todos los contenedores (1-50) indicando cuáles están deshabilitados
+        $data = [];
+        for ($i = 1; $i <= 50; $i++) {
+            $data[] = [
+                'value' => $i,
+                'label' => "Contenedor #" . $i,
+                'disabled' => in_array($i, $existingContainers)
+            ];
+        }
+
+        return response()->json(['data' => $data, 'success' => true]);
     }
 }
