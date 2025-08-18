@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\CargaConsolidada;
 
 use App\Http\Controllers\Controller;
+use App\Traits\UserGroupsTrait;
 use Illuminate\Http\Request;
 use App\Models\CargaConsolidada\Cotizacion;
 use App\Models\CargaConsolidada\TipoCliente;
@@ -19,6 +20,7 @@ use Exception;
 
 class CotizacionController extends Controller
 {
+    use UserGroupsTrait;
     public function index(Request $request, $idContenedor)
     {
         try {
@@ -69,7 +71,7 @@ class CotizacionController extends Controller
             }
 
             // Ordenamiento
-            $sortField = $request->input('sort_by', 'fecha');
+            $sortField = $request->input('sort_by', 'id');
             $sortOrder = $request->input('sort_order', 'desc');
             $query->orderBy($sortField, $sortOrder);
 
@@ -77,6 +79,84 @@ class CotizacionController extends Controller
             $perPage = $request->input('per_page', 10);
             $page = $request->input('page', 1);
             $results = $query->paginate($perPage, ['*'], 'page', $page);
+
+            // Obtener los headers del contenedor
+            $userId = auth()->id();
+            $idContenedor = $request->idContenedor;
+
+            // Obtener datos usando Query Builder
+            $headers = DB::table('contenedor_consolidado_cotizacion_proveedores as cccp')
+                ->join('contenedor_consolidado_cotizacion as cc', 'cccp.id_cotizacion', '=', 'cc.id')
+                ->where('cccp.id_contenedor', $idContenedor)
+                ->select([
+                    DB::raw('COALESCE(SUM(IF(cc.estado_cotizador = "CONFIRMADO", cccp.cbm_total_china, 0)), 0) as cbm_total_china'),
+                    DB::raw('(
+                        SELECT COALESCE(SUM(volumen), 0)
+                        FROM contenedor_consolidado_cotizacion
+                        WHERE id IN (
+                            SELECT DISTINCT id_cotizacion
+                            FROM contenedor_consolidado_cotizacion_proveedores
+                            WHERE id_contenedor = ' . $idContenedor . '
+                        )
+                        AND estado_cotizador = "CONFIRMADO"
+                    ) as cbm_total_peru'),
+                    DB::raw('(
+                        SELECT COALESCE(SUM(volumen), 0)
+                        FROM contenedor_consolidado_cotizacion
+                        WHERE id_contenedor = ' . $idContenedor . '
+                        AND estado_cotizador = "CONFIRMADO"
+                        AND id_usuario = ' . $userId . '
+                    ) as cbm_vendido'),
+                    DB::raw('(
+                        SELECT COALESCE(SUM(volumen), 0)
+                        FROM contenedor_consolidado_cotizacion
+                        WHERE id_contenedor = ' . $idContenedor . '
+                        AND estado_cotizador != "CONFIRMADO"
+                        AND id_usuario = ' . $userId . '
+                    ) as cbm_pendiente'),
+                    DB::raw('(
+                        SELECT COALESCE(SUM(cccp.cbm_total_china), 0)
+                        FROM contenedor_consolidado_cotizacion_proveedores cccp
+                        JOIN contenedor_consolidado_cotizacion cc ON cccp.id_cotizacion = cc.id
+                        WHERE cccp.id_contenedor = ' . $idContenedor . '
+                        AND cccp.estados_proveedor = "LOADED"
+                        AND cc.id_usuario = ' . $userId . '
+                    ) as cbm_embarcado'),
+                    DB::raw('(
+                        SELECT COALESCE(SUM(monto), 0)
+                        FROM contenedor_consolidado_cotizacion
+                        WHERE id IN (
+                            SELECT DISTINCT id_cotizacion
+                            FROM contenedor_consolidado_cotizacion_proveedores
+                            WHERE id_contenedor = ' . $idContenedor . '
+                        )
+                        AND estado_cotizador = "CONFIRMADO"
+                    ) as total_logistica'),
+                    DB::raw('(
+                        SELECT COALESCE(SUM(qty_item), 0)
+                        FROM contenedor_consolidado_cotizacion
+                        WHERE id IN (
+                            SELECT DISTINCT id_cotizacion
+                            FROM contenedor_consolidado_cotizacion_proveedores
+                            WHERE id_contenedor = ' . $idContenedor . '
+                        )
+                        AND estado_cotizador = "CONFIRMADO"
+                    ) as total_qty_items'),
+                    DB::raw('(
+                        SELECT COALESCE(SUM(monto), 0)
+                        FROM contenedor_consolidado_cotizacion_coordinacion_pagos cccp
+                        JOIN cotizacion_coordinacion_pagos_concept pc ON cccp.id_concept = pc.id
+                        WHERE cccp.id_contenedor = ' . $idContenedor . '
+                        AND pc.name = "LOGISTICA"
+                    ) as total_logistica_pagado')
+                ])
+                ->first();
+
+            // Obtener datos del contenedor
+            $files = DB::table('carga_consolidada_contenedor')
+                ->where('id', $idContenedor)
+                ->select('bl_file_url', 'lista_embarque_url')
+                ->first();
 
             // Transformar los datos para la respuesta
             $data = $results->map(function ($cotizacion) {
@@ -100,13 +180,43 @@ class CotizacionController extends Controller
                     'cotizacion_file_url' => $cotizacion->cotizacion_file_url,
                     'impuestos' => $cotizacion->impuestos,
                     'tipo_cliente' => $cotizacion->tipoCliente->name,
-
                 ];
             });
+
+            // Preparar los headers
+            $headersData = [
+                'cbm_total_china' => [
+                    'value' => $headers ? $headers->cbm_total_china : 0,
+                    'label' => 'CBM Total China'
+                ],
+                'cbm_total_peru' => [
+                    'value' => $headers ? $headers->cbm_total_peru : 0,
+                    'label' => 'CBM Total Perú'
+                ],
+                'cbm_vendido' => [
+                    'value' => $headers ? $headers->cbm_vendido : 0,
+                    'label' => 'CBM Vendido'
+                ],
+                'cbm_pendiente' => [
+                    'value' => $headers ? $headers->cbm_pendiente : 0,
+                    'label' => 'CBM Pendiente'
+                ],
+                'cbm_embarcado' => [
+                    'value' => $headers ? $headers->cbm_embarcado : 0,
+                    'label' => 'CBM Embarcado'
+                ],
+                
+                'qty_items' => [
+                    'value' => $headers ? $headers->total_qty_items : 0,
+                    'label' => 'Cantidad de Items'
+                ],
+              
+            ];
 
             return response()->json([
                 'success' => true,
                 'data' => $data,
+                'headers' => $headersData,
                 'pagination' => [
                     'current_page' => $results->currentPage(),
                     'per_page' => $results->perPage(),
@@ -125,9 +235,173 @@ class CotizacionController extends Controller
 
     public function store(Request $request)
     {
-        // Implementación básica
-        return response()->json(['message' => 'Cotizacion store']);
+        try {
+            // Validar los datos requeridos
+            if (!$request->has('id_contenedor')) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'El ID del contenedor es requerido'
+                ], 400);
+            }
+
+            // Validar que el contenedor existe
+            $contenedor = Contenedor::find($request->id_contenedor);
+            if (!$contenedor) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'El contenedor especificado no existe'
+                ], 404);
+            }
+
+            // Validar el archivo subido
+            if (!$request->hasFile('cotizacion')) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'No se ha proporcionado ningún archivo'
+                ], 400);
+            }
+
+            $file = $request->file('cotizacion');
+
+            // Crear un directorio temporal si no existe
+            $tempPath = storage_path('app/temp');
+            if (!file_exists($tempPath)) {
+                mkdir($tempPath, 0755, true);
+            }
+
+            // Mover el archivo a nuestro directorio temporal
+            $tempFileName = uniqid('cotizacion_') . '.' . $file->getClientOriginalExtension();
+            $tempFilePath = $tempPath . '/' . $tempFileName;
+
+            // Copiar el archivo al directorio temporal
+            copy($file->getRealPath(), $tempFilePath);
+
+            Log::info('Archivo temporal creado:', [
+                'original_path' => $file->getRealPath(),
+                'temp_path' => $tempFilePath,
+                'exists' => file_exists($tempFilePath)
+            ]);
+
+            $cotizacion = [
+                'name' => $file->getClientOriginalName(),
+                'type' => $file->getMimeType(),
+                'tmp_name' => $tempFilePath,
+                'error' => 0,
+                'size' => $file->getSize()
+            ];
+
+            try {
+                // Subir archivo usando el sistema de almacenamiento de Laravel
+                $fileName = time() . '_' . $file->getClientOriginalName();
+                $fileUrl = $file->storeAs('public/agentecompra', $fileName);
+
+                if (!$fileUrl) {
+                    Log::error('Error al subir archivo usando Laravel Storage');
+                    return response()->json([
+                        'status' => 'error',
+                        'success' => false,
+                        'message' => 'Error al subir el archivo'
+                    ], 500);
+                }
+
+                // Convertir la ruta de storage a URL pública
+                $fileUrl = Storage::url($fileUrl);
+                Log::error('Cotizacion: ' . json_encode($cotizacion));
+                Log::error('Data: ' . $fileUrl);
+
+                $dataToInsert = $this->getCotizacionData($cotizacion);
+
+                // Verificar si getCotizacionData devolvió un error
+                if (!is_array($dataToInsert)) {
+                    Storage::delete($fileUrl); // Limpiar el archivo si hay error
+                    return response()->json([
+                        'status' => 'error',
+                        'success' => false,
+                        'message' => 'Error al procesar el archivo: ' . $dataToInsert
+                    ], 500);
+                }
+
+                $dataToInsert['cotizacion_file_url'] = $fileUrl;
+                $dataToInsert['id_contenedor'] = $request->id_contenedor;
+                $dataToInsert['id_usuario'] = Auth::id();
+
+                DB::beginTransaction();
+
+                $cotizacionModel = Cotizacion::create($dataToInsert);
+
+                if ($cotizacionModel) {
+                    $idCotizacion = $cotizacionModel->id;
+                    $dataToInsert['id_cotizacion'] = $idCotizacion;
+
+                    $dataEmbarque = $this->getEmbarqueData($cotizacion, $dataToInsert);
+                    Log::error('Data embarque: ' . json_encode($dataEmbarque));
+
+                    // Insertar proveedores en lote
+                    if (!empty($dataEmbarque)) {
+                        CotizacionProveedor::insert($dataEmbarque);
+                    }
+
+                    $nombre = $dataToInsert['nombre'];
+
+                    // Ya tenemos el contenedor validado desde el inicio
+                    $f_cierre = $contenedor->f_cierre;
+
+                    $message = 'Hola ' . $nombre . ' pudiste revisar la cotización enviada? 
+                    Te comento que cerramos nuestro consolidado este ' . $f_cierre . ' Por favor si cuentas con alguna duda me avisas y puedo llamarte para aclarar tus dudas.';
+
+                    $telefono = preg_replace('/\s+/', '', $dataToInsert['telefono']);
+                    $telefono = $telefono ? $telefono . '@c.us' : '';
+
+                    $data_json = [
+                        'message' => $message,
+                        'phoneNumberId' => $telefono,
+                    ];
+
+                    // Aquí podrías agregar la lógica para guardar en la tabla de crons si es necesario
+
+                    DB::commit();
+
+                    // Limpiar el archivo temporal
+                    if (file_exists($cotizacion['tmp_name'])) {
+                        unlink($cotizacion['tmp_name']);
+                    }
+
+                    return response()->json([
+                        'id' => $idCotizacion,
+                        'status' => 'success',
+                        'success' => true
+                    ]);
+                }
+
+                DB::rollBack();
+                Storage::delete($fileUrl); // Limpiar el archivo si hay error
+                return response()->json([
+                    'status' => 'error',
+                    'success' => false,
+                    'message' => 'No se pudo crear la cotización'
+                ], 500);
+            } catch (\Exception $e) {
+                if (isset($fileUrl)) {
+                    Storage::delete($fileUrl); // Limpiar el archivo en caso de error
+                }
+                DB::rollBack();
+                Log::error('Error en store de cotizaciones: ' . $e->getMessage());
+                return response()->json([
+                    'status' => 'error',
+                    'success' => false,
+                    'message' => $e->getMessage()
+                ], 500);
+            }
+        } catch (\Exception $e) {
+            Log::error('Error en store de cotizaciones: ' . $e->getMessage());
+            return response()->json([
+                'status' => 'error',
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 500);
+        }
     }
+
 
     public function show($id)
     {
@@ -188,14 +462,6 @@ class CotizacionController extends Controller
                 ], 404);
             }
 
-            // Debug: Verificar qué datos se obtienen
-            Log::info('Cotización encontrada:', ['id' => $cotizacion->id, 'estado' => $cotizacion->estado]);
-            Log::info('Documentación count:', ['count' => $cotizacion->documentacion->count()]);
-            Log::info('Proveedores count:', ['count' => $cotizacion->proveedores->count()]);
-            Log::info('Documentación almacén count:', ['count' => $cotizacion->documentacionAlmacen->count()]);
-            Log::info('Inspección almacén count:', ['count' => $cotizacion->inspeccionAlmacen->count()]);
-
-            // Debug: Verificar datos de proveedores
             if ($cotizacion->proveedores->count() > 0) {
                 $firstProvider = $cotizacion->proveedores->first();
                 Log::info('Primer proveedor:', [
@@ -332,7 +598,19 @@ class CotizacionController extends Controller
     public function getCotizacionData($cotizacion)
     {
         try {
-            $objPHPExcel = IOFactory::load($cotizacion['tmp_name']);
+            if (!file_exists($cotizacion['tmp_name'])) {
+                Log::error('Archivo no encontrado en: ' . $cotizacion['tmp_name']);
+                return 'Archivo no encontrado: ' . $cotizacion['tmp_name'];
+            }
+
+            Log::info('Intentando cargar archivo desde: ' . $cotizacion['tmp_name']);
+
+            try {
+                $objPHPExcel = IOFactory::load($cotizacion['tmp_name']);
+            } catch (\Exception $e) {
+                Log::error('Error al cargar archivo Excel: ' . $e->getMessage());
+                return 'Error al cargar archivo Excel: ' . $e->getMessage();
+            }
 
             $sheet = $objPHPExcel->getSheet(0);
             $nombre = $sheet->getCell('B8')->getValue();
@@ -390,7 +668,7 @@ class CotizacionController extends Controller
                 }
             }
 
-            return [
+            $data = [
                 'nombre' => $nombre,
                 'documento' => $documento,
                 'correo' => $correo,
@@ -406,6 +684,8 @@ class CotizacionController extends Controller
                 'impuestos' => $impuestos,
                 'qty_item' => $qtyItem
             ];
+            Log::error('Data: ' . json_encode($data));
+            return $data;
         } catch (Exception $e) {
             return $e->getMessage();
         }
@@ -466,7 +746,6 @@ class CotizacionController extends Controller
     }
 
     // Propiedades de la clase
-    protected $maxFileSize = 1000000;
     protected $defaultHoursContactado = 60; // 1 hora por defecto
 
     /**
@@ -549,7 +828,7 @@ class CotizacionController extends Controller
     /**
      * Elimina el archivo de cotización
      */
-  
+
 
     /**
      * Elimina una cotización completa
@@ -897,18 +1176,31 @@ class CotizacionController extends Controller
                 return false;
             }
 
-            $oldFileUrl = $cotizacion->cotizacion_file_url;
-            if ($oldFileUrl && file_exists($oldFileUrl)) {
-                unlink($oldFileUrl);
-            }
+            try {
+                // Eliminar archivo antiguo si existe
+                $oldFileUrl = $cotizacion->cotizacion_file_url;
+                if ($oldFileUrl) {
+                    // Convertir la URL pública a ruta de storage
+                    $oldStoragePath = str_replace('/storage/', 'public/', parse_url($oldFileUrl, PHP_URL_PATH));
+                    Storage::delete($oldStoragePath);
+                }
 
-            $fileUrl = $this->uploadSingleFile([
-                "name" => $file['name'],
-                "type" => $file['type'],
-                "tmp_name" => $file['tmp_name'],
-                "error" => $file['error'],
-                "size" => $file['size']
-            ], 'assets/images/agentecompra/');
+                // Subir nuevo archivo
+                $fileName = time() . '_' . $file['name'];
+                $fileUrl = Storage::putFileAs('public/agentecompra', $file['tmp_name'], $fileName);
+
+                if (!$fileUrl) {
+                    Log::error('Error al subir el nuevo archivo');
+                    return false;
+                }
+
+                // Convertir a URL pública
+                $fileUrl = Storage::url($fileUrl);
+                Log::info('Nuevo archivo subido exitosamente:', ['url' => $fileUrl]);
+            } catch (\Exception $e) {
+                Log::error('Error al procesar el archivo: ' . $e->getMessage());
+                return false;
+            }
 
             $dataToInsert = $this->getCotizacionData($file);
             $dataToInsert['cotizacion_file_url'] = $fileUrl;
@@ -981,6 +1273,71 @@ class CotizacionController extends Controller
     /**
      * Actualiza una cotización
      */
+    /**
+     * Actualiza el archivo de una cotización existente
+     * @param Request $request
+     * @param int $id ID de la cotización
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function updateCotizacionFile(Request $request, $id)
+    {
+        try {
+            // Validar que la cotización existe
+            $cotizacion = Cotizacion::find($id);
+            if (!$cotizacion) {
+                return response()->json([
+                    'status' => 'error',
+                    'success' => false,
+                    'message' => 'Cotización no encontrada'
+                ], 404);
+            }
+
+            // Validar el archivo
+            if (!$request->hasFile('cotizacion')) {
+                return response()->json([
+                    'status' => 'error',
+                    'success' => false,
+                    'message' => 'No se ha proporcionado ningún archivo'
+                ], 400);
+            }
+
+            $file = $request->file('cotizacion');
+
+            // Preparar el archivo para el método uploadCotizacionFile
+            $fileData = [
+                'name' => $file->getClientOriginalName(),
+                'type' => $file->getMimeType(),
+                'tmp_name' => $file->getPathname(),
+                'error' => 0,
+                'size' => $file->getSize()
+            ];
+
+            // Intentar actualizar el archivo
+            $result = $this->uploadCotizacionFile($id, $fileData);
+
+            if ($result === "success") {
+                return response()->json([
+                    'status' => 'success',
+                    'success' => true,
+                    'message' => 'Archivo actualizado correctamente'
+                ]);
+            }
+
+            return response()->json([
+                'status' => 'error',
+                'success' => false,
+                'message' => 'Error al actualizar el archivo'
+            ], 500);
+        } catch (\Exception $e) {
+            Log::error('Error al actualizar archivo de cotización: ' . $e->getMessage());
+            return response()->json([
+                'status' => 'error',
+                'success' => false,
+                'message' => 'Error al procesar la solicitud: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
     public function updateCotizacion($data, $cotizacion)
     {
         try {
@@ -1015,18 +1372,80 @@ class CotizacionController extends Controller
     /**
      * Actualiza el estado de una cotización
      */
-    public function updateEstadoCotizacion($id, $estado)
+    public function updateEstadoCotizacion($id, Request $request)
     {
         try {
-            $cotizacion = Cotizacion::find($id);
-            if ($cotizacion) {
-                $updated = $cotizacion->update(['estado' => $estado]);
-                return $updated ? "success" : false;
+            $estado = $request->estado;
+
+            // Verificar si hay proveedores sin productos
+            $proveedoresConProductos = CotizacionProveedor::where('id_cotizacion', $id)
+                ->whereNotNull('products')
+                ->where('products', '!=', '')
+                ->count();
+
+            $proveedoresSinProductos = CotizacionProveedor::where('id_cotizacion', $id)
+                ->where(function ($query) {
+                    $query->whereNull('products')
+                        ->orWhere('products', '');
+                })
+                ->exists();
+
+            if ($proveedoresConProductos > 0) {
+                return ['success' => false, 'message' => "No se puede cambiar el estado a {$estado} hasta que todos los proveedores tengan productos"];
             }
-            return false;
+
+            if ($proveedoresSinProductos && $estado == 'CONFIRMADO') {
+                return ['success' => false, 'message' => "No se puede cambiar el estado a {$estado} hasta que todos los proveedores tengan productos"];
+            }
+
+            $cotizacion = Cotizacion::findOrFail($id);
+            $cotizacion->update([
+                'estado_cotizador' => $estado,
+
+            ]);
+            if ($estado == 'INTERESADO') {
+                // Obtener datos necesarios
+                $contenedor = $cotizacion->contenedor;
+
+                // Preparar mensaje WhatsApp
+                $message = "Hola {$cotizacion->nombre}, sabemos que está interesad@ en el consolidado #{$contenedor->carga}, " .
+                    "y no queremos que te quedes sin espacio, deseas confirmar tu participación? \n\n";
+
+                $telefono = preg_replace('/\s+/', '', $cotizacion->telefono);
+                $telefono = $telefono ? $telefono . '@c.us' : '';
+
+                // Crear entrada en la tabla de crons
+                DB::table('contenedor_consolidado_cotizacion_crons')->insert([
+                    'id_contenedor' => $contenedor->id,
+                    'id_cotizacion' => $id,
+                    'created_at' => now(),
+                    'data_json' => json_encode([
+                        'message' => $message,
+                        'phoneNumberId' => $telefono,
+                    ]),
+                    'execution_at' => now()->addMinutes(config('app.default_hours_interesado', 60)),
+                    'time_between' => config('app.default_hours_interesado', 60),
+                    'status' => 'PENDING',
+                ]);
+            }
+
+            if ($estado == 'CONFIRMADO') {
+                $message = "El cliente {$cotizacion->nombre} ha pasado a confirmado, por favor contactar.";
+                event(new \App\Events\CotizacionStatusUpdated($cotizacion, $estado, $message));
+            }
+
+            return response()->json([
+                'status' => 'success',
+                'success' => true,
+                'message' => 'Estado actualizado correctamente'
+            ]);
         } catch (Exception $e) {
             Log::error('Error en updateEstadoCotizacion: ' . $e->getMessage());
-            return false;
+            return response()->json([
+                'status' => 'error',
+                'success' => false,
+                'message' => 'Error al actualizar el estado de la cotización'
+            ], 500);
         }
     }
 
@@ -1074,29 +1493,7 @@ class CotizacionController extends Controller
         }
     }
 
-    /**
-     * Sube un archivo único
-     */
-    private function uploadSingleFile($file, $path)
-    {
-        try {
-            $fileName = time() . '_' . $file['name'];
-            $fullPath = public_path($path . $fileName);
 
-            if (!is_dir(dirname($fullPath))) {
-                mkdir(dirname($fullPath), 0755, true);
-            }
-
-            if (move_uploaded_file($file['tmp_name'], $fullPath)) {
-                return $path . $fileName;
-            }
-
-            return false;
-        } catch (Exception $e) {
-            Log::error('Error en uploadSingleFile: ' . $e->getMessage());
-            return false;
-        }
-    }
 
     /**
      * Obtiene datos de embarque (placeholder - implementar según necesidades)
@@ -1124,8 +1521,10 @@ class CotizacionController extends Controller
             }
 
             $oldFileUrl = $cotizacion->cotizacion_file_url;
-            if ($oldFileUrl && file_exists($oldFileUrl)) {
-                unlink($oldFileUrl);
+            if ($oldFileUrl) {
+                // Convertir la URL pública a ruta de storage
+                $storagePath = str_replace('/storage/', 'public/', parse_url($oldFileUrl, PHP_URL_PATH));
+                Storage::delete($storagePath);
             }
 
             $cotizacion->update(['cotizacion_file_url' => null]);

@@ -1,6 +1,8 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\WebSocketController;
+use App\Http\Controllers\Broadcasting\BroadcastController;
 
 /*
 |--------------------------------------------------------------------------
@@ -16,3 +18,15 @@ use Illuminate\Support\Facades\Route;
 Route::get('/', function () {
     return view('welcome');
 });
+
+// WebSocket Dashboard Routes
+Route::group(['prefix' => 'laravel-websockets'], function () {
+    Route::get('/', [WebSocketController::class, 'showDashboard']);
+    Route::post('statistics', function () {
+        return app()->make('websockets.statistics')->store();
+    });
+});
+
+// Broadcasting Authentication Route
+Route::post('/broadcasting/auth', [BroadcastController::class, 'authenticate'])
+    ->middleware(['broadcasting.auth']);

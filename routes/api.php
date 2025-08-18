@@ -2,6 +2,8 @@
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use BeyondCode\LaravelWebSockets\Facades\WebSocketsRouter;
+use App\Http\Controllers\Broadcasting\BroadcastController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\MenuController;
 use App\Http\Controllers\BaseDatos\ProductosController;
@@ -48,6 +50,11 @@ Route::group(['prefix' => 'auth'], function () {
         Route::post('refresh', [AuthController::class, 'refresh']);
         Route::get('me', [AuthController::class, 'me']);
     });
+});
+
+// Rutas de Broadcasting
+Route::group(['middleware' => ['jwt.auth']], function () {
+    Route::post('/broadcasting/auth', [BroadcastController::class, 'authenticate']);
 });
 
 // Rutas de menús
@@ -157,6 +164,8 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
     // Rutas de contenedores
     Route::group(['prefix' => 'contenedor'], function () {
         Route::get('valid-containers', [ContenedorController::class, 'getValidContainers']);
+        Route::get('cargas-disponibles', [ContenedorController::class, 'getCargasDisponibles']);
+        Route::post('move-cotizacion', [ContenedorController::class, 'moveCotizacionToConsolidado']);
         Route::get('/', [ContenedorController::class, 'index']);
         Route::get('pasos/{idContenedor}', [ContenedorController::class, 'getContenedorPasos']);
         Route::post('/', [ContenedorController::class, 'store']);
@@ -165,10 +174,13 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
             Route::post('/{id}/refresh', [CotizacionController::class, 'refreshCotizacionFile']);
 
             Route::get('/{idContenedor}', [CotizacionController::class, 'index']);
-            Route::post('/', [CotizacionController::class, 'store']);
             Route::put('{id}', [CotizacionController::class, 'update']);
+            Route::post('{id}/estado-cotizador', [CotizacionController::class, 'updateEstadoCotizacion']);
+
+            Route::post('{id}/file', [CotizacionController::class, 'updateCotizacionFile']);
             Route::delete('{id}/file', [CotizacionController::class, 'deleteCotizacionFile']);
             Route::delete('{id}', [CotizacionController::class, 'destroy']);
+            Route::post('/', [CotizacionController::class, 'store']);
 
             Route::get('filters/options', [CotizacionController::class, 'filterOptions']);
         });

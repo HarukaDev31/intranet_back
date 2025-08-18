@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Tymon\JWTAuth\Facades\JWTAuth;
 use App\Models\CargaConsolidada\Cotizacion;
+use App\Models\CargaConsolidada\CotizacionProveedor;
 use Illuminate\Support\Facades\DB;
 
 
@@ -64,7 +65,7 @@ class ContenedorController extends Controller
 
             $query = Contenedor::with('pais');
             $currentUser = Auth::user();
-            $completado = $request->completado ?? true;
+            $completado = $request->completado ?? false;
             if ($currentUser->rol == Usuario::ROL_DOCUMENTACION) {
                 if ($completado) {
                     $query->where('estado_documentacion', '=', Contenedor::CONTEDOR_CERRADO);
@@ -268,5 +269,38 @@ class ContenedorController extends Controller
         }
 
         return response()->json(['data' => $data, 'success' => true]);
+    }
+    public function getCargasDisponibles()
+    {
+        $hoy = date('Y-m-d');
+        $query = Contenedor::where(DB::raw('DATE(f_cierre)'), '>=', $hoy)->orderBy('carga', 'desc');
+        return $query->get();
+    }
+    public function moveCotizacionToConsolidado(Request $request)
+    {
+        $data = $request->all();
+        $idCotizacion = $data['idCotizacion'];
+        $idContenedorDestino = $data['idContenedorDestino'];
+        // Actualiza la cotización principal
+        $cotizacion = Cotizacion::find($idCotizacion);
+        if (!$cotizacion) {
+            return response()->json(['message' => 'Cotización no encontrada', 'success' => false], 404);
+        }
+        $cotizacion->id_contenedor = $idContenedorDestino;
+        $cotizacion->estado_cotizador = 'CONFIRMADO';
+        $cotizacion->updated_at = date('Y-m-d H:i:s');
+        $cotizacion->save();
+
+        // Actualiza los proveedores asociados
+        $proveedores = CotizacionProveedor::where('id_cotizacion', $idCotizacion);
+        if (!$proveedores) {
+            return response()->json(['message' => 'Proveedores no encontrados', 'success' => false], 404);
+        }
+        foreach ($proveedores as $proveedor) {
+            $proveedor->id_contenedor = $idContenedorDestino;
+            $proveedor->save();
+        }
+
+        return response()->json(['message' => 'Cotización movida a consolidado correctamente', 'success' => true]);
     }
 }
