@@ -23,6 +23,63 @@ class CotizacionProveedorController extends Controller
     use WhatsappTrait;
     const DOCUMENTATION_PATH = 'documentation';
     const INSPECTION_PATH = 'inspection';
+    private $providerOrderStatus = [
+        "NC" => 0,
+        "C" => 1,
+        "R" => 2,
+        "NS" => 3,
+        "INSPECTION" => 4,
+        'LOADED' => 5,
+        'NO LOADED' => 6
+    ];
+    private $providerCoordinacionOrderStatus = [
+        "ROTULADO" => 0,
+        'DATOS PROVEEDOR' => 1,
+        'COBRANDO' => 2,
+        'INSPECCIONADO' => 3,
+        'RESERVADO' => 4,
+        'NO RESERVADO' => 5,
+        'EMBARCADO' => 6,
+        'NO EMBARCADO' => 7,
+    ];
+    private $STATUS_NOT_CONTACTED = "NC";
+    private $STATUS_CONTACTED = "C";
+    private $STATUS_RECIVED = "R";
+    private $STATUS_NOT_SELECTED = "NS";
+    private $STATUS_INSPECTION = "INSPECTION";
+    private $STATUS_LOADED = "LOADED";
+    private $STATUS_NO_LOADED = "NO LOADED";
+    private $STATUS_ROTULADO = "ROTULADO";
+    private $STATUS_DATOS_PROVEEDOR = "DATOS PROVEEDOR";
+    private $STATUS_COBRANDO = "COBRANDO";
+    private $STATUS_INSPECCIONADO = "INSPECCIONADO";
+    private $STATUS_RESERVADO = "RESERVADO";
+    private $STATUS_NO_RESERVADO = "NO RESERVADO";
+    private $STATUS_EMBARCADO = "EMBARCADO";
+    private $STATUS_NO_EMBARCADO = "NO EMBARCADO";
+    private $table_pais = "pais";
+    private $table_contenedor_steps = "contenedor_consolidado_order_steps";
+    private $table_contenedor_cotizacion = "contenedor_consolidado_cotizacion";
+    private $table_contenedor_cotizacion_crons = "contenedor_consolidado_cotizacion_crons";
+    private $table_contenedor_cotizacion_proveedores = "contenedor_consolidado_cotizacion_proveedores";
+    private $table_contenedor_documentacion_files = "contenedor_consolidado_documentacion_files";
+    private $table_contenedor_documentacion_folders = "contenedor_consolidado_documentacion_folders";
+    private $table_contenedor_tipo_cliente = "contenedor_consolidado_tipo_cliente";
+    private $table_contenedor_cotizacion_documentacion = "contenedor_consolidado_cotizacion_documentacion";
+    private $table_contenedor_almacen_documentacion = "contenedor_consolidado_almacen_documentacion";
+    private $table_contenedor_almacen_inspection = "contenedor_consolidado_almacen_inspection";
+    private $table_conteneodr_proveedor_estados_tracking = "contenedor_proveedor_estados_tracking";
+    private $roleCotizador = "Cotizador";
+    private $roleCoordinacion = "Coordinación";
+    private $roleContenedorAlmacen = "ContenedorAlmacen";
+    private $roleCatalogoChina = "CatalogoChina";
+    private $rolesChina = ["CatalogoChina", "ContenedorAlmacen"];
+    private $roleDocumentacion = "Documentacion";
+    private $aNewContainer = "new-container";
+    private $aNewConfirmado = "new-confirmado";
+    private $aNewCotizacion = "new-cotizacion";
+    private $cambioEstadoProveedor = "cambio-estado-proveedor";
+    private $table_contenedor_cotizacion_final = "contenedor_consolidado_cotizacion_final";
     /**
      * Obtener cotizaciones con proveedores por contenedor
      */
@@ -87,13 +144,14 @@ class CotizacionProveedorController extends Controller
                 $query->where('estado_cotizador', 'CONFIRMADO');
             } else if ($rol == Usuario::ROL_COTIZADOR && $user->ID_Usuario != 28791) {
                 $query->where('main.id_usuario', $user->ID_Usuario);
-                $query->orderBy('fecha_confirmacion', 'asc');
+                $query->orderBy('main.id', 'desc');
             } else {
             }
 
             if ($rol == Usuario::ROL_COTIZADOR) {
                 $query->orderBy('main.fecha_confirmacion', 'asc');
             }
+
 
 
             // Ejecutar consulta con paginación
@@ -219,41 +277,111 @@ class CotizacionProveedorController extends Controller
     /**
      * Actualizar estado de cotización proveedor
      */
-    public function updateEstadoCotizacionProveedor(Request $request, $idCotizacion, $idProveedor)
+    public function updateEstadoCotizacionProveedor(Request $request)
     {
         try {
-            $user = JWTAuth::parseToken()->authenticate();
-            if (!$user) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Usuario no autenticado'
-                ], 401);
+            $idProveedor = $request->id;
+            $idCotizacion = CotizacionProveedor::where('id', $idProveedor)->first()->id_cotizacion;
+            $idContenedor = Cotizacion::where('id', $idCotizacion)->first()->id_contenedor;
+            $estado = $request->estado;
+
+            if (in_array($estado, ["ROTULADO", "RESERVADO", 'COBRANDO'])) {
+                DB::table($this->table_contenedor_cotizacion_proveedores)
+                    ->where('id_cotizacion', $idCotizacion)
+                    ->where(function($query) {
+                        $query->whereNull('estados')
+                            ->orWhereIn('estados', [
+                                'RESERVADO',
+                                'ROTULADO',
+                                'COBRANDO',
+                                'DATOS PROVEEDOR',
+                                'INSPECCIONADO'
+                            ]);
+                    })
+                    ->update(['estados' => $estado]);
+
+                // Actualización específica para el proveedor
+                DB::table($this->table_contenedor_cotizacion_proveedores)
+                    ->where('id_cotizacion', $idCotizacion)
+                    ->where('id', $idProveedor)
+                    ->update(['estados' => $estado]);
+            }
+            // Manejo del estado LOADED
+            else if ($estado == "LOADED") {
+                // Verificar estado RESERVADO en tracking
+                $estadoReservado = DB::table($this->table_conteneodr_proveedor_estados_tracking)
+                    ->where('id_cotizacion', $idCotizacion)
+                    ->where('estado', 'RESERVADO')
+                    ->exists();
+                
+                $estadoCliente = $estadoReservado ? "RESERVADO" : "NO RESERVADO";
+
+                // Actualizar estado_cliente en cotización
+                DB::table($this->table_contenedor_cotizacion)
+                    ->where('id', $idCotizacion)
+                    ->update(['estado_cliente' => $estadoCliente]);
+
+                // Actualizar estado del proveedor
+                DB::table($this->table_contenedor_cotizacion_proveedores)
+                    ->where('id_cotizacion', $idCotizacion)
+                    ->where('id', $idProveedor)
+                    ->update(['estados_proveedor' => "LOADED"]);
+
+                // Calcular y actualizar volumen_china
+                $volumenChina = DB::table($this->table_contenedor_cotizacion_proveedores)
+                    ->where('id_cotizacion', $idCotizacion)
+                    ->where('estados_proveedor', "LOADED")
+                    ->sum(DB::raw('IFNULL(cbm_total_china, 0)'));
+
+                DB::table($this->table_contenedor_cotizacion)
+                    ->where('id', $idCotizacion)
+                    ->update(['volumen_china' => $volumenChina]);
+            }
+            // Manejo de estados específicos
+            else if (in_array($estado, ["NC", "C", "R", "NS", "NO LOADED", "INSPECTION"])) {
+                DB::table($this->table_contenedor_cotizacion_proveedores)
+                    ->where('id_cotizacion', $idCotizacion)
+                    ->where('id', $idProveedor)
+                    ->update(['estados_proveedor' => $estado]);
+            }
+            // Manejo de otros estados
+            else {
+                DB::table($this->table_contenedor_cotizacion_proveedores)
+                    ->where('id_cotizacion', $idCotizacion)
+                    ->where('id', $idProveedor)
+                    ->update(['estados' => $estado]);
             }
 
-            $request->validate([
-                'estado' => 'required|string'
-            ]);
+            // Actualizar timestamp en tracking
+            DB::table($this->table_conteneodr_proveedor_estados_tracking)
+                ->where('id_proveedor', $idProveedor)
+                ->update(['updated_at' => now()]);
 
-            $proveedor = CotizacionProveedor::where('id_cotizacion', $idCotizacion)
-                ->where('id', $idProveedor)
-                ->first();
+            
 
-            if (!$proveedor) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Proveedor no encontrado'
-                ], 404);
-            }
+            // Verificar estado RESERVADO y actualizar estado_cliente
+            $estadoReservado = DB::table($this->table_conteneodr_proveedor_estados_tracking)
+                ->where('id_cotizacion', $idCotizacion)
+                ->where('estado', 'RESERVADO')
+                ->exists();
 
-            $proveedor->estados = $request->estado;
-            $proveedor->save();
+            $estadoCliente = $estadoReservado ? "RESERVADO" : "NO RESERVADO";
+
+            DB::table($this->table_contenedor_cotizacion)
+                ->where('id', $idCotizacion)
+                ->update(['estado_cliente' => $estadoCliente]);
+
+            // Llamada al manejador de actualización de cotización
+            $data = $this->handlerUpdateCotizacionProveedor($estado, $idProveedor, $idCotizacion);
 
             return response()->json([
                 'success' => true,
                 'message' => 'Estado actualizado correctamente',
-                'data' => $proveedor
+                'data' => $data
             ]);
+
         } catch (\Exception $e) {
+            Log::error('Error en updateEstadoCotizacionProveedor: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
                 'message' => 'Error al actualizar estado',
@@ -261,33 +389,69 @@ class CotizacionProveedorController extends Controller
             ], 500);
         }
     }
+    public function handlerUpdateCotizacionProveedor($estado, $idProveedor, $idCotizacion)
+    {
+        try {
+            // Obtener información básica de la cotización
+            $cotizacionInfo = DB::table($this->table_contenedor_cotizacion)
+                ->where('id', $idCotizacion)
+                ->select('nombre', 'id_contenedor', 'telefono')
+                ->first();
 
+            if (!$cotizacionInfo) {
+                throw new \Exception("No se encontró la cotización especificada");
+            }
+
+            $cliente = $cotizacionInfo->nombre;
+            $idContenedor = $cotizacionInfo->id_contenedor;
+            $telefono = preg_replace('/\s+/', '', $cotizacionInfo->telefono);
+            $this->phoneNumberId = $telefono ? $telefono . '@c.us' : '';
+
+            // Obtener proveedores asociados a la cotización
+            $proveedores = DB::table($this->table_contenedor_cotizacion_proveedores)
+                ->where('id_cotizacion', $idCotizacion)
+                ->select('code_supplier', 'products', 'send_rotulado_status', 'id')
+                ->get()
+                ->toArray();
+
+            if (empty($proveedores)) {
+                throw new \Exception("No se encontraron proveedores para esta cotización");
+            }
+
+            // Obtener información del contenedor
+            $contenedorInfo = DB::table('carga_consolidada_contenedor')
+                ->where('id', $idContenedor)
+                ->select('carga')
+                ->first();
+
+            if (!$contenedorInfo) {
+                throw new \Exception("No se encontró información del contenedor");
+            }
+
+            $carga = $contenedorInfo->carga;
+
+            if ($estado == "ROTULADO") {
+                return $this->procesarEstadoRotulado($cliente, $carga, $proveedores, $idCotizacion);
+            } elseif ($estado == "COBRANDO") {
+                return $this->procesarEstadoCobrando($idProveedor, $idCotizacion, $carga);
+            }
+
+            return "success";
+        } catch (\Exception $e) {
+            Log::error("Error en handlerUpdateCotizacionProveedor: " . $e->getMessage());
+            return ['status' => "error", 'message' => $e->getMessage()];
+        }
+    }
     /**
      * Actualizar datos del proveedor
      */
-    public function updateProveedorData(Request $request, $idCotizacion, $idProveedor)
+    public function updateProveedorData(Request $request)
     {
         try {
-            $user = JWTAuth::parseToken()->authenticate();
-            if (!$user) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Usuario no autenticado'
-                ], 401);
-            }
-
-            $request->validate([
-                'supplier' => 'nullable|string',
-                'code_supplier' => 'nullable|string',
-                'supplier_phone' => 'nullable|string',
-                'products' => 'nullable|string',
-                'qty_box_china' => 'nullable|integer',
-                'cbm_total_china' => 'nullable|numeric',
-                'arrive_date_china' => 'nullable|date'
-            ]);
-
-            $proveedor = CotizacionProveedor::where('id_cotizacion', $idCotizacion)
-                ->where('id', $idProveedor)
+            $idProveedor = $request->id;
+            Log::info('idProveedor: ' . $idProveedor);
+            $data = $request->all();
+            $proveedor = CotizacionProveedor::where('id', $idProveedor)
                 ->first();
 
             if (!$proveedor) {
@@ -296,26 +460,142 @@ class CotizacionProveedorController extends Controller
                     'message' => 'Proveedor no encontrado'
                 ], 404);
             }
+            $user = JWTAuth::parseToken()->authenticate();
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Usuario no autenticado'
+                ], 401);
+            }
+            $estado = $proveedor->estados;
+            $estadoProveedor = $proveedor->estados_proveedor;
+            $idContenedor = $proveedor->id_contenedor;
+            $idCotizacion = $proveedor->id_cotizacion;
+            $supplierCode = $proveedor->code_supplier;
 
-            $proveedor->update($request->only([
-                'supplier',
-                'code_supplier',
-                'supplier_phone',
-                'products',
-                'qty_box_china',
-                'cbm_total_china',
-                'arrive_date_china'
-            ]));
+            if ((isset($data['supplier_phone']) || isset($data['supplier']))) {
+                $statusToUpdate = $this->providerCoordinacionOrderStatus[$this->STATUS_DATOS_PROVEEDOR] ?? 0;
+                $estadoProveedorOrder = $this->providerCoordinacionOrderStatus[$estadoProveedor] ?? 0;
+                if ($estadoProveedorOrder < $statusToUpdate) {
+                    $proveedor->estados = $this->STATUS_DATOS_PROVEEDOR;
+                    $proveedor->supplier_phone = $data['supplier_phone'] ?? null;
+                    $proveedor->supplier = $data['supplier'] ?? null;
+                    $proveedor->save();
+                }
 
+
+                $this->verifyContainerIsCompleted($idContenedor);
+            }
+
+            if (
+                isset($data['arrive_date_china']) &&
+                (!isset($data['qty_box_china']) && !isset($data['cbm_total_china']))
+            ) {
+                $data['arrive_date_china'] = date('Y-m-d', strtotime(str_replace('/', '-', $data['arrive_date_china'])));
+                $estadoProveedorOrder = $this->providerOrderStatus[$estadoProveedor] ?? 0;
+                $estadoProvedorToUpdate = $this->providerOrderStatus[$this->STATUS_CONTACTED] ?? 0;
+                if ($estadoProveedorOrder < $estadoProvedorToUpdate) {
+                    $proveedor->estados = $this->STATUS_CONTACTED;
+                    $proveedor->arrive_date_china = $data['arrive_date_china'];
+                    $proveedor->save();
+
+
+                    //INSERT INTO TABLE contenedor_proveedor_estados_tracking with estado CONTACTED and id_cotizacion and id_proveedor
+                    $proveedor->estados_proveedor = $this->STATUS_CONTACTED;
+                    $proveedor->save();
+
+                    //conver yyyy-mm-dd to dd de Mes
+                    $date = \DateTime::createFromFormat('Y-m-d', $data['arrive_date_china']);
+                    $month = $date->format('F');
+                    $day = $date->format('d');
+                    $months = [
+                        'January' => 'Enero',
+                        'February' => 'Febrero',
+                        'March' => 'Marzo',
+                        'April' => 'Abril',
+                        'May' => 'Mayo',
+                        'June' => 'Junio',
+                        'July' => 'Julio',
+                        'August' => 'Agosto',
+                        'September' => 'Septiembre',
+                        'October' => 'Octubre',
+                        'November' => 'Noviembre',
+                        'December' => 'Diciembre'
+                    ];
+                    $month = strtr($month, $months);
+                    $date = $day . ' de ' . $month;
+                    $message = 'Hola, hemos contactado a tu proveedor con código ' .
+                        $supplierCode . ' nos comunica que la carga será enviada el ' .
+                        $date . '.';
+                    $cotizacion = Cotizacion::find($idCotizacion);
+                    $telefono = $cotizacion->telefono;
+
+                    $telefono = preg_replace('/\s+/', '', $telefono);
+                    $this->phoneNumberId = $telefono ? $telefono . '@c.us' : '';
+                    $this->sendMessage($message);
+                }
+                $this->verifyContainerIsCompleted($idContenedor);
+            }
+            if (isset($data['qty_box_china']) && isset($data['cbm_total_china'])) {
+                $dateTime = \DateTime::createFromFormat('d/m/Y', $data['arrive_date_china']);
+                if ($dateTime) {
+                    $data['arrive_date_china'] = $dateTime->format('Y-m-d');
+                }
+                $estadoProveedorOrder = $this->providerOrderStatus[$estadoProveedor] ?? 0;
+                $estadoProvedorToUpdate = $this->providerOrderStatus[$this->STATUS_RECIVED] ?? 0;
+                if ($estadoProveedorOrder < $estadoProvedorToUpdate) {
+                    $proveedor->estados_proveedor = $this->STATUS_RECIVED;
+                    $proveedor->qty_box_china = $data['qty_box_china'];
+                    $proveedor->cbm_total_china = $data['cbm_total_china'];
+                    $proveedor->arrive_date_china = $data['arrive_date_china'];
+                    $proveedor->save();
+
+
+                    $proveedor->estados = $this->STATUS_RECIVED;
+                    $proveedor->save();
+
+
+                    //update estado column in table $this->table to estado RECIBIENDO where id = $idContenedor
+
+
+
+
+                    $usuariosAlmacen = $this->getUsersByGrupo(Usuario::ROL_COORDINACION);
+                    $ids = array_column($usuariosAlmacen, 'ID_Usuario');
+                    $message = "Se ha actualizado el proveedor con codigo de proveedor " . $supplierCode . " a estado RECIBIDO";
+                    $notifications = $this->createNotification($ids, $message, "CARGA CONSOLIDADA", $user->ID_Usuario);
+
+                    // ]);
+                } else {
+                    $message = "Se ha actualizado la cantidad de cajas y volumen total de china del proveedor con codigo de proveedor " . $supplierCode . " a " . $data['qty_box_china'] . " cajas y " . $data['cbm_total_china'] . " m3";
+                }
+                $contenedorEstado = Cotizacion::where('id', $idContenedor)->first()->estado_china;
+                if ($contenedorEstado == "PENDIENTE") {
+                    $cotizacion = Cotizacion::find($idContenedor);
+                    $cotizacion->estado_china = "RECIBIENDO";
+                    $cotizacion->estado = "RECIBIENDO";
+                    $cotizacion->save();
+                }
+            }
+            $proveedor->update($data);
+            $volumenChina = CotizacionProveedor::where('id_cotizacion', $idCotizacion)
+                ->where('estados_proveedor', "LOADED")
+                ->sum('cbm_total_china');
+
+            $cotizacion = Cotizacion::find($idCotizacion);
+            $cotizacion->volumen_china = $volumenChina;
+            $cotizacion->save();
+            $this->verifyContainerIsCompleted($idContenedor);
             return response()->json([
                 'success' => true,
-                'message' => 'Datos del proveedor actualizados correctamente',
+                'message' => 'Datos actualizados correctamente',
                 'data' => $proveedor
             ]);
         } catch (\Exception $e) {
+            Log::error('Error en updateProveedorData: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
-                'message' => 'Error al actualizar datos del proveedor',
+                'message' => 'Error al actualizar datos',
                 'error' => $e->getMessage()
             ], 500);
         }
@@ -554,7 +834,7 @@ class CotizacionProveedorController extends Controller
                     'send_status'
                 ])
                 ->get();
-            $files = $files->map(function ($file) { 
+            $files = $files->map(function ($file) {
                 $file->file_url = $this->generateImageUrl($file->file_url);
                 return $file;
             });
@@ -695,7 +975,7 @@ class CotizacionProveedorController extends Controller
                 // Usar la ruta del sistema de archivos, no la URL
                 $fileSystemPath = storage_path('app/public/' . $image->file_path);
                 Log::info('Enviando imagen de inspección. Ruta del sistema: ' . $fileSystemPath);
-                
+
                 // Verificar que el archivo existe
                 if (file_exists($fileSystemPath)) {
                     $this->sendMediaInspection($fileSystemPath, $image->file_type, $message, $telefono, 0, $image->id);
@@ -708,7 +988,7 @@ class CotizacionProveedorController extends Controller
                 // Usar la ruta del sistema de archivos, no la URL
                 $fileSystemPath = storage_path('app/public/' . $video->file_path);
                 Log::info('Enviando video de inspección. Ruta del sistema: ' . $fileSystemPath);
-                
+
                 // Verificar que el archivo existe
                 if (file_exists($fileSystemPath)) {
                     $this->sendMediaInspection($fileSystemPath, $video->file_type, $message, $telefono, 0, $video->id);
@@ -740,7 +1020,7 @@ class CotizacionProveedorController extends Controller
     /**
      * Validar y enviar mensaje de inspección (versión 2)
      */
-    
+
     /**
      * Método de prueba para enviar medios de inspección
      */
@@ -781,7 +1061,7 @@ class CotizacionProveedorController extends Controller
 
             foreach ($inspecciones as $inspeccion) {
                 $fileSystemPath = storage_path('app/public/' . $inspeccion->file_path);
-                
+
                 Log::info('Probando envío de archivo', [
                     'id' => $inspeccion->id,
                     'file_path' => $inspeccion->file_path,
@@ -793,14 +1073,14 @@ class CotizacionProveedorController extends Controller
 
                 if (file_exists($fileSystemPath) && is_readable($fileSystemPath)) {
                     $resultado = $this->sendMediaInspection(
-                        $fileSystemPath, 
-                        $inspeccion->file_type, 
-                        'Mensaje de prueba', 
-                        $telefono, 
-                        0, 
+                        $fileSystemPath,
+                        $inspeccion->file_type,
+                        'Mensaje de prueba',
+                        $telefono,
+                        0,
                         $inspeccion->id
                     );
-                    
+
                     $resultados[] = [
                         'id' => $inspeccion->id,
                         'file_name' => basename($inspeccion->file_path),
@@ -827,7 +1107,6 @@ class CotizacionProveedorController extends Controller
                     'resultados' => $resultados
                 ]
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error en testSendMediaInspection: ' . $e->getMessage());
             return response()->json([
@@ -1147,6 +1426,46 @@ class CotizacionProveedorController extends Controller
                 'message' => 'Error al obtener cotización proveedor',
                 'error' => $e->getMessage()
             ], 500);
+        }
+    }
+    public function verifyContainerIsCompleted($idcontenedor)
+    {
+        $user = JWTAuth::parseToken()->authenticate();
+        $cotizacion = Cotizacion::where('id_contenedor', $idcontenedor)->first();
+        $listaEmbarque = $cotizacion->lista_embarque_url;
+        $blFile = $cotizacion->bl_file_url;
+        
+        // Buscar si existe proveedor con estado DATOS PROVEEDOR
+        $estadoProveedores = CotizacionProveedor::where('id_cotizacion', $idcontenedor)
+            ->where('estados', 'DATOS PROVEEDOR')
+            ->get();
+            
+        $estado = null;
+        foreach ($estadoProveedores as $estadoProveedor) {
+            if ($estadoProveedor->estado == "DATOS PROVEEDOR") {
+                $estado = "DATOS PROVEEDOR";
+                break;
+            }
+        }
+
+        // Preparar los datos para actualizar
+        $updateData = [];
+
+        if ($listaEmbarque != null) {
+            $updateData['estado_china'] = 'COMPLETADO';
+        } else if ($estado == "DATOS PROVEEDOR") {
+            // No hacer nada
+        } else {
+            if ($user->No_Grupo == 'Coordinación') {
+                $updateData['estado'] = 'RECIBIENDO';
+            }
+        }
+
+        // Solo actualizar si hay datos para actualizar
+        if (!empty($updateData)) {
+            DB::table('carga_consolidada_contenedor')
+                ->where('id', $idcontenedor)
+                ->update($updateData);
         }
     }
 }

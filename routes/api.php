@@ -29,6 +29,7 @@ use App\Http\Controllers\CargaConsolidada\Documentacion\DocumentacionController;
 use App\Http\Controllers\CargaConsolidada\CotizacionFinal\CotizacionFinalController;
 use App\Http\Controllers\CargaConsolidada\FacturaGuiaController;
 use App\Http\Controllers\Commons\PaisController;
+use App\Http\Controllers\CargaConsolidada\CotizacionPagosController;
 /*
 |--------------------------------------------------------------------------
 | API Routes
@@ -145,7 +146,6 @@ Route::group(['prefix' => 'base-datos', 'middleware' => 'jwt.auth'], function ()
         Route::post('descargar-plantilla', [ClientesController::class, 'descargarPlantilla']);
         Route::get('list-excels', [ClientesController::class, 'obtenerListExcel']);
         Route::delete('delete-excel/{id}', [ClientesController::class, 'deleteExcel']);
-
         // Rutas CRUD (deben ir después de las rutas específicas)
         Route::get('{id}', [ClientesController::class, 'show']);
         Route::delete('{id}', [ClientesController::class, 'destroy']);
@@ -186,7 +186,10 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
         });
         Route::group(['prefix' => 'clientes'], function () {
             Route::get('/general/{idContenedor}', [GeneralController::class, 'index']);
+            Route::post('/general/estado-cliente', [GeneralController::class, 'updateEstadoCliente']);
             Route::get('/variacion/{idContenedor}', [VariacionController::class, 'index']);
+            Route::post('/variacion/vol-selected', [VariacionController::class, 'updateVolSelected']);
+
             Route::get('/variacion/documentacion/{idCotizacion}', [VariacionController::class, 'showClientesDocumentacion']);
         });
         Route::group(['prefix' => 'documentacion'], function () {
@@ -218,9 +221,9 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
     // Rutas de cotizaciones con proveedores
     Route::group(['prefix' => 'cotizaciones-proveedores'], function () {
         Route::get('contenedor/{idContenedor}', [CotizacionProveedorController::class, 'getContenedorCotizacionProveedores']);
-
+        Route::post('proveedor', [CotizacionProveedorController::class, 'updateProveedorData']);
         Route::delete('{idCotizacion}/proveedor/{idProveedor}', [CotizacionProveedorController::class, 'deleteCotizacion']);
-
+        Route::post('proveedor/estado', [CotizacionProveedorController::class, 'updateEstadoCotizacionProveedor']);
         // Rutas para archivos y notas
         Route::delete('proveedor/documento/{idFile}', [CotizacionProveedorController::class, 'deleteFileDocumentation']);
         Route::delete('proveedor/inspeccion/{idFile}', [CotizacionProveedorController::class, 'deleteFileInspection']);
@@ -235,7 +238,9 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
         Route::post('proveedor/notas', [CotizacionProveedorController::class, 'addNote']);
         Route::get('proveedor/{idProveedor}', [CotizacionProveedorController::class, 'getCotizacionProveedor']);
     });
-
+    Route::group(['prefix' => 'cotizaciones-pagos'], function () {
+        Route::get('{idContenedor}', [CotizacionPagosController::class, 'getClientesDocumentacionPagos']);
+    }); 
     // Rutas de pagos
     Route::group(['prefix' => 'pagos'], function () {
         Route::get('consolidado', [PagosController::class, 'getConsolidadoPagos']);

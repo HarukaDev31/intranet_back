@@ -8,8 +8,9 @@ use Illuminate\Support\Facades\DB;
 
 class VariacionController extends Controller
 {
-    public function index(Request $request, $idContenedor){
-    $query = DB::table('contenedor_consolidado_cotizacion as CC')
+    public function index(Request $request, $idContenedor)
+    {
+        $query = DB::table('contenedor_consolidado_cotizacion as CC')
             ->select([
                 'CC.*',
                 'C.*',
@@ -38,10 +39,10 @@ class VariacionController extends Controller
         // Aplicar filtros adicionales si se proporcionan
         if ($request->has('search')) {
             $search = $request->search;
-            $query->where(function($q) use ($search) {
+            $query->where(function ($q) use ($search) {
                 $q->where('CC.nombre', 'LIKE', "%{$search}%")
-                  ->orWhere('CC.documento', 'LIKE', "%{$search}%")
-                  ->orWhere('CC.correo', 'LIKE', "%{$search}%");
+                    ->orWhere('CC.documento', 'LIKE', "%{$search}%")
+                    ->orWhere('CC.correo', 'LIKE', "%{$search}%");
             });
         }
 
@@ -174,11 +175,35 @@ class VariacionController extends Controller
                 'data' => $cotizacion,
                 'message' => 'Documentación de cliente obtenida exitosamente'
             ]);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
                 'message' => 'Error al obtener documentación: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+    public function updateVolSelected(Request $request)
+    {
+        try {
+            $idCotizacion = $request->id_cotizacion;
+            $volSelected = $request->volumen;
+            $cotizacion = DB::table('contenedor_consolidado_cotizacion')
+                ->where('id', $idCotizacion)
+                ->update(['vol_selected' => $volSelected]);
+            if ($cotizacion) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Volumen seleccionado actualizado correctamente'
+                ]);
+            }
+            return response()->json([
+                'success' => false,
+                'message' => 'Cotización no encontrada'
+            ], 404);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al actualizar el volumen seleccionado: ' . $e->getMessage()
             ], 500);
         }
     }

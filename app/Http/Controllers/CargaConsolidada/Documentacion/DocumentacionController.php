@@ -6,7 +6,12 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\CargaConsolidada\DocumentacionFolder;
 use App\Models\CargaConsolidada\Contenedor;
+use App\Models\CargaConsolidada\CotizacionProveedor;
+use App\Models\CargaConsolidada\Cotizacion;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 use Tymon\JWTAuth\Facades\JWTAuth;
 class DocumentacionController extends Controller
 {
@@ -75,6 +80,132 @@ class DocumentacionController extends Controller
                 'success' => false,
                 'message' => 'Error al obtener carpetas de documentación: ' . $e->getMessage()
             ], 500);
+        }
+    }
+
+    /**
+     * Actualiza la documentación del cliente
+     */
+    public function updateClienteDocumentacion(Request $request)
+    {
+        try {
+            $user = JWTAuth::parseToken()->authenticate();
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Usuario no autenticado'
+                ], 401);
+            }
+
+            $data = $request->all();
+            $files = $request->file();
+            
+            // Validar datos requeridos
+            $request->validate([
+                'id' => 'required|integer',
+                'idProveedor' => 'required|integer'
+            ]);
+
+            $idCotizacion = $data['id'];
+            $idProveedor = $data['idProveedor'];
+
+            // Obtener el proveedor
+            $proveedor = CotizacionProveedor::find($idProveedor);
+            if (!$proveedor) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Proveedor no encontrado'
+                ], 404);
+            }
+
+            // Procesar archivo comercial
+            if ($request->hasFile('file_comercial')) {
+                $this->processFileUpload($proveedor, 'factura_comercial', $request->file('file_comercial'), $data);
+            }
+
+            // Procesar excel de confirmación
+            if ($request->hasFile('excel_confirmacion')) {
+                $this->processFileUpload($proveedor, 'excel_confirmacion', $request->file('excel_confirmacion'), $data);
+            }
+
+            // Procesar packing list
+            if ($request->hasFile('packing_list')) {
+                $this->processFileUpload($proveedor, 'packing_list', $request->file('packing_list'), $data);
+            }
+
+            // Remover campos que no se deben actualizar
+            unset($data['id'], $data['idProveedor'], $data['file_comercial'], $data['excel_confirmacion'], $data['packing_list']);
+
+            // Actualizar datos del proveedor
+            $proveedor->update($data);
+
+            // Calcular y actualizar totales en la cotización
+            $this->updateCotizacionTotals($idCotizacion);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Documentación actualizada correctamente',
+                'data' => $proveedor
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error en updateClienteDocumentacion: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al actualizar documentación: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Procesa la subida de un archivo
+     */
+    private function processFileUpload($proveedor, $fieldName, $file, &$data)
+    {
+        try {
+            // Eliminar archivo anterior si existe
+            if ($proveedor->$fieldName && Storage::exists($proveedor->$fieldName)) {
+                Storage::delete($proveedor->$fieldName);
+            }
+
+            // Generar nombre único para el archivo
+            $filename = time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
+            
+            // Ruta de almacenamiento
+            $path = 'assets/images/agentecompra/';
+            
+            // Guardar archivo
+            $filePath = $file->storeAs($path, $filename, 'public');
+            
+            // Actualizar campo en los datos
+            $data[$fieldName] = $filePath;
+
+        } catch (\Exception $e) {
+            Log::error("Error al procesar archivo {$fieldName}: " . $e->getMessage());
+            throw $e;
+        }
+    }
+
+    /**
+     * Actualiza los totales de valor y volumen en la cotización
+     */
+    private function updateCotizacionTotals($idCotizacion)
+    {
+        try {
+            // Calcular totales
+            $totales = CotizacionProveedor::where('id_cotizacion', $idCotizacion)
+                ->selectRaw('SUM(COALESCE(valor_doc, 0)) as total_valor_doc, SUM(COALESCE(volumen_doc, 0)) as total_volumen_doc')
+                ->first();
+
+            // Actualizar cotización
+            Cotizacion::where('id', $idCotizacion)->update([
+                'valor_doc' => $totales->total_valor_doc ?? 0,
+                'volumen_doc' => $totales->total_volumen_doc ?? 0
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error al actualizar totales de cotización: ' . $e->getMessage());
+            throw $e;
         }
     }
 }

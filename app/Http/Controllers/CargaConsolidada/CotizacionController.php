@@ -1376,7 +1376,8 @@ class CotizacionController extends Controller
     {
         try {
             $estado = $request->estado;
-
+            Log::info('estado: ' . $estado);
+            Log::info('id: ' . $id);
             // Verificar si hay proveedores sin productos
             $proveedoresConProductos = CotizacionProveedor::where('id_cotizacion', $id)
                 ->whereNotNull('products')
@@ -1387,15 +1388,17 @@ class CotizacionController extends Controller
                 ->where(function ($query) {
                     $query->whereNull('products')
                         ->orWhere('products', '');
-                })
-                ->exists();
+                })->count();
 
-            if ($proveedoresConProductos > 0) {
-                return ['success' => false, 'message' => "No se puede cambiar el estado a {$estado} hasta que todos los proveedores tengan productos"];
-            }
+ 
+         
 
-            if ($proveedoresSinProductos && $estado == 'CONFIRMADO') {
-                return ['success' => false, 'message' => "No se puede cambiar el estado a {$estado} hasta que todos los proveedores tengan productos"];
+            if ($proveedoresSinProductos > 0 && $estado == 'CONFIRMADO') {
+                return response()->json([
+                    'status' => 'error',
+                    'success' => false,
+                    'message' => 'No se puede cambiar el estado a CONFIRMADO hasta que todos los proveedores tengan productos'
+                ], 400);
             }
 
             $cotizacion = Cotizacion::findOrFail($id);

@@ -76,7 +76,7 @@ class ContenedorController extends Controller
                 if ($completado) {
                     $query->where('estado_china', '=', Contenedor::CONTEDOR_CERRADO);
                 } else {
-                    $query->where('estado_china', '!=', Contenedor::CONTEDOR_CERRADO);
+                    $query->where('estado_china', '=', Contenedor::CONTEDOR_CERRADO);
                 }
             }
             $data = $query->paginate(10);

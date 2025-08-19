@@ -9,9 +9,12 @@ use App\Models\CargaConsolidada\Cotizacion;
 use App\Models\CargaConsolidada\Contenedor;
 use App\Models\CargaConsolidada\TipoCliente;
 use App\Models\Usuario;
+use Illuminate\Support\Facades\Log;
 
 class GeneralController extends Controller
 {
+    private $table_contenedor_cotizacion = "contenedor_consolidado_cotizacion";
+
     public function index(Request $request, $idContenedor)
     {
         // Convertir la consulta SQL de CodeIgniter a Query Builder de Laravel
@@ -72,5 +75,25 @@ class GeneralController extends Controller
                 'to' => $data->lastItem()
             ]
         ]);
+    }
+    public function updateEstadoCliente(Request $request)
+    {
+        $id = $request->id_cotizacion;
+        $estado = $request->estado_cliente;
+        Log::info('id', ['id' => $id]);
+        Log::info('estado', ['estado' => $estado]);
+        $cotizacion = DB::table($this->table_contenedor_cotizacion)
+            ->where('id', $id)
+            ->update(['estado_cliente' => $estado]);
+        if ($cotizacion) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Estado del cliente actualizado correctamente'
+            ]);
+        }
+        return response()->json([
+            'success' => false,
+            'message' => 'Cotización no encontrada'
+        ], 404);
     }
 }
