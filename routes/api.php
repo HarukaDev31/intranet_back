@@ -196,15 +196,27 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
             Route::get('/variacion/documentacion/{idCotizacion}', [VariacionController::class, 'showClientesDocumentacion']);
         });
         Route::group(['prefix' => 'documentacion'], function () {
-            Route::get('/{id}', [DocumentacionController::class, 'getDocumentationFolderFiles']);
+            Route::get('/download-factura-comercial/{idContenedor}', [DocumentacionController::class, 'downloadFacturaComercial']);
+            Route::delete('/delete/{idFile}', [DocumentacionController::class, 'deleteFileDocumentation']);
             Route::post('/upload-file-documentation', [DocumentacionController::class, 'uploadFileDocumentation']);
+            Route::post('/create-folder', [DocumentacionController::class, 'createDocumentacionFolder']);
+            Route::get('/{id}', [DocumentacionController::class, 'getDocumentationFolderFiles']);
+            Route::get('/download-zip/{idContenedor}', [DocumentacionController::class, 'downloadDocumentacionZip']);
         });
         Route::group(['prefix' => 'cotizacion-final'], function () {
-            Route::get('/general/{idContenedor}', [CotizacionFinalController::class, 'getContenedorCotizacionesFinales']);
+            Route::put('/general/update-estado', [CotizacionFinalController::class, 'updateEstadoCotizacionFinal']);
+            Route::post('/general/upload-factura-comercial', [CotizacionFinalController::class, 'uploadFacturaComercial']);
+            Route::get('/general/download-plantilla-general/{idContenedor}', [CotizacionFinalController::class, 'downloadPlantillaGeneral']);
             Route::get('/pagos/{idCotizacion}', [CotizacionFinalController::class, 'getCotizacionFinalDocumentacionPagos']);
+            Route::get('/general/{idContenedor}', [CotizacionFinalController::class, 'getContenedorCotizacionesFinales']);
+
         });
         Route::group(['prefix' => 'factura-guia'], function () {
+            //get upload-guia-remision ,upload-factura-comercial
+            Route::post('/general/upload-guia-remision', [FacturaGuiaController::class, 'uploadGuiaRemision']);
+            Route::post('/general/upload-factura-comercial', [FacturaGuiaController::class, 'uploadFacturaComercial']);
             Route::get('/general/{idContenedor}', [FacturaGuiaController::class, 'getContenedorFacturaGuia']);
+
         });
         Route::get('{id}', [ContenedorController::class, 'show']);
         Route::put('{id}', [ContenedorController::class, 'update']);

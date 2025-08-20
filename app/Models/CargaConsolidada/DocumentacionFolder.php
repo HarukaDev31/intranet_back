@@ -12,7 +12,7 @@ class DocumentacionFolder extends Model
     
     protected $fillable = [
         'id_contenedor',
-        'name',
+        'folder_name',
         'description',
         'only_doc_profile',
         'created_at',

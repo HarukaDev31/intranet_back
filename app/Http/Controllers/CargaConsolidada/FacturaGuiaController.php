@@ -5,6 +5,7 @@ namespace App\Http\Controllers\CargaConsolidada;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\CargaConsolidada\Cotizacion;
+use App\Models\CargaConsolidada\Contenedor;
 
 class FacturaGuiaController extends Controller
 {
@@ -34,5 +35,49 @@ class FacturaGuiaController extends Controller
             ],
             'success' => true
         ]);
+    }
+    public function uploadGuiaRemision(Request $request)
+    {
+        try {
+        $idContenedor = $request->idCotizacion;
+        $file = $request->file('file');
+        $file->storeAs('cargaconsolidada/guiaremision/' . $idContenedor, $file->getClientOriginalName());
+        //update guia remision url
+        $cotizacion = Cotizacion::find($idContenedor);
+        $cotizacion->guia_remision_url = $file->getClientOriginalName();
+        $cotizacion->save();
+        return response()->json([
+            'success' => true,
+            'message' => 'Guia remision actualizada correctamente',
+            'path' => $file->getClientOriginalName()
+        ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al actualizar guia remision: ' . $e->getMessage()
+            ]);
+        }
+    }
+    public function uploadFacturaComercial(Request $request)
+    {
+        try {
+        $idContenedor = $request->idCotizacion;
+        $file = $request->file('file');
+        $file->storeAs('cargaconsolidada/facturacomercial/' . $idContenedor, $file->getClientOriginalName());
+        //update factura comercial 
+        $cotizacion = Cotizacion::find($idContenedor);
+        $cotizacion->factura_comercial = $file->getClientOriginalName();
+        $cotizacion->save();
+        return response()->json([
+            'success' => true,
+            'message' => 'Factura comercial actualizada correctamente',
+            'path' => $file->getClientOriginalName()
+        ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al actualizar factura comercial: ' . $e->getMessage()
+            ]);
+        }
     }
 }

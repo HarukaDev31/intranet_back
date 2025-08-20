@@ -13,7 +13,6 @@ class DocumentacionFile extends Model
         'id_folder',
         'id_contenedor',
         'file_url',
-
         'created_at',
     ];
 
