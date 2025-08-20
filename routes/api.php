@@ -30,6 +30,7 @@ use App\Http\Controllers\CargaConsolidada\CotizacionFinal\CotizacionFinalControl
 use App\Http\Controllers\CargaConsolidada\FacturaGuiaController;
 use App\Http\Controllers\Commons\PaisController;
 use App\Http\Controllers\CargaConsolidada\CotizacionPagosController;
+use App\Http\Controllers\CargaConsolidada\AduanaController;
 /*
 |--------------------------------------------------------------------------
 | API Routes
@@ -183,7 +184,7 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
             Route::post('/', [CotizacionController::class, 'store']);
 
             Route::get('filters/options', [CotizacionController::class, 'filterOptions']);
-        });
+        }); 
         Route::group(['prefix' => 'clientes'], function () {
             Route::get('/general/{idContenedor}', [GeneralController::class, 'index']);
             Route::post('/general/estado-cliente', [GeneralController::class, 'updateEstadoCliente']);
@@ -217,6 +218,10 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
             Route::post('/general/upload-factura-comercial', [FacturaGuiaController::class, 'uploadFacturaComercial']);
             Route::get('/general/{idContenedor}', [FacturaGuiaController::class, 'getContenedorFacturaGuia']);
 
+        });
+        Route::group(['prefix' => 'aduana'], function () {
+            Route::get('/{idContenedor}', [AduanaController::class, 'viewFormularioAduana']);
+            Route::post('/', [AduanaController::class, 'saveFormularioAduana']);
         });
         Route::get('{id}', [ContenedorController::class, 'show']);
         Route::put('{id}', [ContenedorController::class, 'update']);

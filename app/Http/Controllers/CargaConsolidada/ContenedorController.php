@@ -64,9 +64,9 @@ class ContenedorController extends Controller
         try {
 
             $query = Contenedor::with('pais');
-            $currentUser = Auth::user();
+            $user = JWTAuth::parseToken()->authenticate();
             $completado = $request->completado ?? false;
-            if ($currentUser->rol == Usuario::ROL_DOCUMENTACION) {
+            if ($user->getNombreGrupo() == Usuario::ROL_DOCUMENTACION) {
                 if ($completado) {
                     $query->where('estado_documentacion', '=', Contenedor::CONTEDOR_CERRADO);
                 } else {
@@ -228,13 +228,9 @@ class ContenedorController extends Controller
         try {
             $user = JWTAuth::user();
             $role = $user->getNombreGrupo();
-            Log::info('Rol: ' . $role);
-            Log::info('Cotizador: ' . $user->ID_Usuario);
             $query = ContenedorPasos::where('id_pedido', $idContenedor)->orderBy('id_order', 'asc');
 
             switch ($role) {
-
-
                 case Usuario::ROL_COTIZADOR:
                     if ($user->ID_Usuario == 28791) {
                         Log::info('jefe');
@@ -242,6 +238,9 @@ class ContenedorController extends Controller
                         break;
                     }
                     $query->limit(1);
+                    break;
+                case Usuario::ROL_DOCUMENTACION:
+                    $query->where('tipo', 'DOCUMENTACION');
                     break;
                 default:
                     $query->where('tipo', Usuario::ROL_COTIZADOR);
