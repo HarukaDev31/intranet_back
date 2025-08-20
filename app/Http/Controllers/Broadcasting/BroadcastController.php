@@ -88,7 +88,7 @@ class BroadcastController extends Controller
             ]);
             
             return response()->json([
-                'message' => 'Error de autenticación',
+                'message' => 'Error de autenticación: ' . $e->getMessage(),
                 'error' => $e->getMessage()
             ], 403);
         }
