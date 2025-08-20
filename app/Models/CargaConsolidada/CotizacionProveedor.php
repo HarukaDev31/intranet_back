@@ -12,7 +12,12 @@ class CotizacionProveedor extends Model
     protected $fillable = [
         'id_cotizacion',
         'products',
-        'estado'
+        'estado',
+        'volumen_doc',
+        'valor_doc',
+        'factura_comercial',
+        'excel_confirmacion',
+        'packing_list'
     ];
 
     /**

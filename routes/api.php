@@ -189,11 +189,15 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
             Route::post('/general/estado-cliente', [GeneralController::class, 'updateEstadoCliente']);
             Route::get('/variacion/{idContenedor}', [VariacionController::class, 'index']);
             Route::post('/variacion/vol-selected', [VariacionController::class, 'updateVolSelected']);
-
+            Route::post('/variacion/documentacion/proveedor/{idProveedor}', [DocumentacionController::class, 'updateClienteDocumentacion']);
+            Route::delete('/variacion/documentacion/proveedor/{idProveedor}/factura-comercial', [DocumentacionController::class, 'deleteProveedorFacturaComercial']);
+            Route::delete('/variacion/documentacion/proveedor/{idProveedor}/excel-confirmacion', [DocumentacionController::class, 'deleteProveedorExcelConfirmacion']);
+            Route::delete('/variacion/documentacion/proveedor/{idProveedor}/packing-list', [DocumentacionController::class, 'deleteProveedorPackingList']);
             Route::get('/variacion/documentacion/{idCotizacion}', [VariacionController::class, 'showClientesDocumentacion']);
         });
         Route::group(['prefix' => 'documentacion'], function () {
             Route::get('/{id}', [DocumentacionController::class, 'getDocumentationFolderFiles']);
+            Route::post('/upload-file-documentation', [DocumentacionController::class, 'uploadFileDocumentation']);
         });
         Route::group(['prefix' => 'cotizacion-final'], function () {
             Route::get('/general/{idContenedor}', [CotizacionFinalController::class, 'getContenedorCotizacionesFinales']);

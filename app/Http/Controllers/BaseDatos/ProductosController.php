@@ -129,7 +129,7 @@ class ProductosController extends Controller
             Log::info('Iniciando importación de productos');
 
             $file = $request->file('excel_file');
-
+            $idContenedor = $request->idContenedor;
             if (!$file) {
                 Log::error('No se proporcionó archivo');
                 return response()->json([
@@ -161,7 +161,8 @@ class ProductosController extends Controller
                 'nombre_archivo' => $file->getClientOriginalName(),
                 'ruta_archivo' => $file->store('imports/productos'),
                 'cantidad_rows' => 0,
-                'estadisticas' => []
+                'estadisticas' => [],
+                'id_contenedor_consolidado_documentacion_files' => $idContenedor
             ]);
 
             Log::info('ImportProducto creado con ID: ' . $importProducto->id);

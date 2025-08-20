@@ -13,17 +13,13 @@ class DocumentacionFile extends Model
         'id_folder',
         'id_contenedor',
         'file_url',
-        'file_name',
-        'file_size',
-        'file_type',
+
         'created_at',
-        'updated_at'
     ];
 
     protected $casts = [
-        'file_size' => 'integer',
         'created_at' => 'datetime',
-        'updated_at' => 'datetime'
+
     ];
 
     /**

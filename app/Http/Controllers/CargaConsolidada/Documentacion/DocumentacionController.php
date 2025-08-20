@@ -8,11 +8,14 @@ use App\Models\CargaConsolidada\DocumentacionFolder;
 use App\Models\CargaConsolidada\Contenedor;
 use App\Models\CargaConsolidada\CotizacionProveedor;
 use App\Models\CargaConsolidada\Cotizacion;
+use App\Models\CargaConsolidada\DocumentacionFile;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
 use Tymon\JWTAuth\Facades\JWTAuth;
+use Maatwebsite\Excel\Facades\Excel;
+use App\Http\Controllers\BaseDatos\ProductosController;
 class DocumentacionController extends Controller
 {
     /**
@@ -86,7 +89,7 @@ class DocumentacionController extends Controller
     /**
      * Actualiza la documentación del cliente
      */
-    public function updateClienteDocumentacion(Request $request)
+    public function updateClienteDocumentacion(Request $request, $idProveedor)
     {
         try {
             $user = JWTAuth::parseToken()->authenticate();
@@ -107,9 +110,7 @@ class DocumentacionController extends Controller
             ]);
 
             $idCotizacion = $data['id'];
-            $idProveedor = $data['idProveedor'];
-
-            // Obtener el proveedor
+            $idProveedor = $idProveedor;
             $proveedor = CotizacionProveedor::find($idProveedor);
             if (!$proveedor) {
                 return response()->json([
@@ -135,11 +136,7 @@ class DocumentacionController extends Controller
 
             // Remover campos que no se deben actualizar
             unset($data['id'], $data['idProveedor'], $data['file_comercial'], $data['excel_confirmacion'], $data['packing_list']);
-
-            // Actualizar datos del proveedor
             $proveedor->update($data);
-
-            // Calcular y actualizar totales en la cotización
             $this->updateCotizacionTotals($idCotizacion);
 
             return response()->json([
@@ -206,6 +203,155 @@ class DocumentacionController extends Controller
         } catch (\Exception $e) {
             Log::error('Error al actualizar totales de cotización: ' . $e->getMessage());
             throw $e;
+        }
+    }
+    public function deleteProveedorFacturaComercial(Request $request, $idProveedor)
+    {
+        $proveedor = CotizacionProveedor::find($idProveedor);
+        $proveedor->factura_comercial = null;
+        $proveedor->save();
+        return response()->json([
+            'success' => true,
+            'message' => 'Factura comercial eliminada correctamente'
+        ]);
+    }
+    
+    public function deleteProveedorExcelConfirmacion(Request $request, $idProveedor)
+    {
+        $proveedor = CotizacionProveedor::find($idProveedor);
+        $proveedor->excel_confirmacion = null;
+        $proveedor->save();
+        return response()->json([
+            'success' => true,
+            'message' => 'Excel de confirmación eliminada correctamente'
+        ]);
+    }
+    
+    
+    public function deleteProveedorPackingList(Request $request, $idProveedor)
+    {
+        $proveedor = CotizacionProveedor::find($idProveedor);
+        $proveedor->packing_list = null;
+        $proveedor->save();
+        return response()->json([
+            'success' => true,
+            'message' => 'Packing list eliminada correctamente'
+        ]);
+    }
+
+    /**
+     * Sube un archivo de documentación
+     */
+    public function uploadFileDocumentation(Request $request)
+    {
+        try {
+            $idFolder = $request->idFolder;
+            $idContenedor = $request->idContenedor;
+            $user = JWTAuth::parseToken()->authenticate();
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Usuario no autenticado'
+                ], 401);
+            }
+
+            // Validar que se haya enviado un archivo
+            if (!$request->hasFile('file')) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No se ha enviado ningún archivo'
+                ], 400);
+            }
+
+            $file = $request->file('file');
+            
+            $maxFileSize = 100*1024*1024;
+            if ($file->getSize() > $maxFileSize) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'El archivo excede el tamaño máximo permitido (100MB)'
+                ], 400);
+            }
+
+            // Validar extensión del archivo
+            $allowedExtensions = ['jpg', 'jpeg', 'png', 'gif', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'txt'];
+            $fileExtension = strtolower($file->getClientOriginalExtension());
+            
+            if (!in_array($fileExtension, $allowedExtensions)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Tipo de archivo no permitido'
+                ], 400);
+            }
+
+            // Generar nombre único para el archivo
+            $filename = time() . '_' . uniqid() . '.' . $fileExtension;
+            
+            // Ruta de almacenamiento
+            $path = 'agentecompra/documentacion/';
+            
+            // Guardar archivo
+            $fileUrl = $file->storeAs($path, $filename, 'public');
+
+            // Eliminar archivo anterior si existe
+            DocumentacionFile::where('id_folder', $idFolder)
+                ->where('id_contenedor', $idContenedor)
+                ->delete();
+
+            // Crear nuevo registro en la base de datos
+            $documentacionFile = new DocumentacionFile();
+            $documentacionFile->id_folder = $idFolder;
+            $documentacionFile->file_url = $fileUrl;
+            $documentacionFile->id_contenedor = $idContenedor;
+
+            $documentacionFile->save();
+
+            // Si es el folder 9 (productos), procesar Excel
+            if ($idFolder == 9 && $fileExtension == 'xlsx') {
+                //instance  ProductosController and call importExcel
+                $productosController = new ProductosController();
+                // Corregido: crear un nuevo Request correctamente y pasar los datos necesarios
+                $newRequest = new Request([
+                    'excel_file' => $file,
+                    'idContenedor' => $idContenedor
+                ]);
+                $productosController->importExcel($newRequest);
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Archivo subido correctamente',
+                'data' => [
+                    'file_url' => $fileUrl,
+                    'file_name' => $file->getClientOriginalName(),
+                    'file_size' => $file->getSize()
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error en uploadFileDocumentation: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al subir archivo: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Importa productos desde Excel (folder 9)
+     */
+    private function importarProductosDesdeExcel($file, $idContenedor)
+    {
+        try {
+            // Aquí implementarías la lógica de importación de Excel
+            // Por ahora solo registramos que se procesó
+            Log::info('Procesando Excel de productos para contenedor: ' . $idContenedor);
+            
+            // Ejemplo básico de procesamiento con Laravel Excel
+            // Excel::import(new ProductosImport($idContenedor), $file);
+            
+        } catch (\Exception $e) {
+            Log::error('Error al importar productos desde Excel: ' . $e->getMessage());
         }
     }
 }
