@@ -3,6 +3,7 @@
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\DB;
 
 class CreateCotizacionCoordinacionPagosConceptTable extends Migration
 {
@@ -13,7 +14,7 @@ class CreateCotizacionCoordinacionPagosConceptTable extends Migration
      */
     public function up()
     {
-        Schema::create('cotizacion_coordinacion_pagos_concept', function (Blueprint $table) {
+        Schema::create('contenedor_consolidado_pagos_concept', function (Blueprint $table) {
             $table->id();
             $table->string('name')->unique();
             $table->string('description')->nullable();
@@ -25,7 +26,7 @@ class CreateCotizacionCoordinacionPagosConceptTable extends Migration
         });
 
         // Insertar conceptos iniciales
-        DB::table('cotizacion_coordinacion_pagos_concept')->insert([
+        DB::table('contenedor_consolidado_pagos_concept')->insert([
             [
                 'name' => 'LOGISTICA',
                 'description' => 'Pago por servicios logísticos',
