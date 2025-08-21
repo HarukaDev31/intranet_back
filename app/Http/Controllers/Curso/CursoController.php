@@ -86,6 +86,17 @@ class CursoController extends Controller
                 ->where('PC.ID_Empresa', $user->ID_Empresa);
 
             // Aplicar filtros
+            if (!empty($search)) {
+                $query->where(function($q) use ($search) {
+                    $q->where('CLI.No_Entidad', 'like', "%$search%")
+                    ->orWhere('CLI.Nu_Documento_Identidad', 'like', "%$search%")
+                    ->orWhere('PC.ID_Pedido_Curso', 'like', "%$search%")
+                    // Agrega aquí más campos si quieres que el buscador sea más amplio
+                    ;
+                });
+            }
+
+
             if ($fechaInicio && $fechaFin) {
                 $query->whereBetween('PC.Fe_Registro', [$fechaInicio, $fechaFin]);
             }
@@ -135,6 +146,9 @@ class CursoController extends Controller
                         ELSE "pendiente"
                     END
                 ) = ?', [$estadoPago]);
+            }
+            if ($request->has('tipo_curso') && $request->get('tipo_curso') !== '') {
+                $query->where('PC.tipo_curso', $request->get('tipo_curso'));
             }
 
             // Ordenar por fecha de registro descendente
@@ -311,5 +325,273 @@ class CursoController extends Controller
                 'error' => $e->getMessage()
             ], 500);
         }
+    }
+
+    /**
+     * Eliminar pedido
+     */
+    public function eliminarPedido(Request $request, $idPedido)
+    {
+        try {
+            DB::statement('SET FOREIGN_KEY_CHECKS=0');
+            $deleted = PedidoCurso::where('ID_Pedido_Curso', $idPedido)->delete();
+            DB::statement('SET FOREIGN_KEY_CHECKS=1');
+            if ($deleted) {
+                return response()->json(['status' => 'success', 'message' => 'Pedido eliminado correctamente']);
+            }
+            return response()->json(['status' => 'error', 'message' => 'Error al eliminar el pedido']);
+        } catch (\Exception $e) {
+            Log::error('Error en eliminarPedido: ' . $e->getMessage());
+            return response()->json(['status' => 'error', 'message' => 'Error al eliminar el pedido: ' . $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Actualizar datos del cliente
+     */
+    public function actualizarDatosCliente(Request $request, $idEntidad)
+    {
+        $data = $request->only([
+            'No_Entidad', 'Nu_Tipo_Sexo', 'Nu_Documento_Identidad', 'Nu_Celular_Entidad',
+            'Txt_Email_Entidad', 'Fe_Nacimiento', 'Nu_Como_Entero_Empresa'
+        ]);
+        $updated = DB::table('entidad')->where('ID_Entidad', $idEntidad)->update($data);
+        if ($updated) {
+            return response()->json(['status' => 'success', 'message' => 'Datos del cliente actualizados']);
+        }
+        return response()->json(['status' => 'warning', 'message' => 'No se modificó ningún dato']);
+    }
+
+    /**
+     * Obtener datos del cliente por pedido
+     */
+    public function getDatosClientePorPedido($idPedido)
+    {
+        $data = DB::table('pedido_curso AS PC')
+            ->join('entidad AS CLI', 'CLI.ID_Entidad', '=', 'PC.ID_Entidad')
+            ->join('pais AS P', 'P.ID_Pais', '=', 'PC.ID_Pais')
+            ->leftJoin('usuario AS USR', 'USR.ID_Entidad', '=', 'CLI.ID_Entidad')
+            ->leftJoin('distrito AS DI', 'DI.ID_Distrito', '=', 'CLI.ID_Distrito')
+            ->leftJoin('provincia AS PR', 'PR.ID_Provincia', '=', 'CLI.ID_Provincia')
+            ->leftJoin('departamento AS D', 'D.ID_Departamento', '=', 'CLI.ID_Departamento')
+            ->leftJoin('campana_curso AS CC', 'CC.ID_Campana', '=', 'PC.ID_Campana')
+            ->where('PC.ID_Pedido_Curso', $idPedido)
+            ->selectRaw("
+                CLI.ID_Entidad as id_entidad,
+                CLI.No_Entidad as nombres,
+                CLI.Nu_Tipo_Sexo as sexo,
+                CLI.Nu_Documento_Identidad as dni,
+                CLI.Nu_Celular_Entidad as whatsapp,
+                CLI.Txt_Email_Entidad as correo,
+                CLI.Fe_Nacimiento as nacimiento,
+                CLI.Nu_Como_Entero_Empresa as red_social,
+                P.ID_Pais as id_pais,
+                D.ID_Departamento as id_departamento,
+                PR.ID_Provincia as id_provincia,
+                DI.ID_Distrito as id_distrito,
+                P.No_Pais as pais,
+                D.No_Departamento as departamento,
+                PR.No_Provincia as provincia,
+                DI.No_Distrito as distrito,
+                USR.ID_Usuario as id_usuario, 
+                IFNULL(USR.usuario_moodle,USR.No_Usuario) as usuario_moodle,
+                USR.No_Password as password_moodle,
+                PC.ID_Campana,
+                PC.tipo_curso as tipo_curso,
+                PC.Nu_Estado as Nu_Estado, 
+                PC.Nu_Estado_Usuario_Externo as Nu_Estado_Usuario_Externo,
+                PC.ID_Pedido_Curso as id_pedido_curso,
+                PC.url_constancia as url_constancia,
+                MONTH(CC.Fe_Inicio) as mes_numero
+            ")
+            ->first();
+
+        $meses_es = [
+            1 => 'Enero', 2 => 'Febrero', 3 => 'Marzo', 4 => 'Abril', 5 => 'Mayo', 6 => 'Junio',
+            7 => 'Julio', 8 => 'Agosto', 9 => 'Septiembre', 10 => 'Octubre', 11 => 'Noviembre', 12 => 'Diciembre'
+        ];
+        $data = (array)$data;
+        $data['mes_nombre'] = isset($data['mes_numero']) ? ($meses_es[(int)$data['mes_numero']] ?? '') : '';
+        return response()->json(['status' => 'success', 'data' => $data]);
+    }
+
+    
+
+    /**
+     * Actualizar usuario Moodle
+     */
+    public function setUsuarioMoodle(Request $request, $idUsuario)
+    {
+        $data = $request->only(['usuario_moodle', 'No_Password']);
+        $updated = DB::table('usuario')->where('ID_Usuario', $idUsuario)->update($data);
+        if ($updated) {
+            return response()->json(['status' => 'success', 'message' => 'Usuario actualizado correctamente']);
+        }
+        return response()->json(['status' => 'error', 'message' => 'Error al actualizar el usuario']);
+    }
+
+    /**
+     * Actualizar pedido
+     */
+    public function actualizarPedido(Request $request, $idPedido)
+    {
+        $data = $request->all();
+        $updated = DB::table('pedido_curso')->where('ID_Pedido_Curso', $idPedido)->update($data);
+        if ($updated) {
+            return response()->json(['status' => 'success', 'message' => 'Registro modificado']);
+        }
+        return response()->json(['status' => 'error', 'message' => 'Error al modificar']);
+    }
+
+    public function actualizarImportePedido(Request $request, $idPedido)
+    {
+        $importe = $request->input('importe');
+        $updated = DB::table('pedido_curso')->where('ID_Pedido_Curso', $idPedido)->update(['Ss_Total' => $importe]);
+        if ($updated) {
+            return response()->json(['status' => 'success', 'message' => 'Importe actualizado correctamente']);
+        }
+        return response()->json(['status' => 'warning', 'message' => 'No se modificó ningún dato']);
+    }
+
+
+    /**
+     * Eliminar pago de curso y borrar voucher
+     */
+    public function borrarPagoCurso($idPagoCurso)
+    {
+        try {
+            $pago = DB::table('pedido_curso_pagos')->where('id', $idPagoCurso)->first();
+            if ($pago && $pago->voucher_url) {
+                $path = storage_path('app/' . $pago->voucher_url);
+                if (file_exists($path)) {
+                    unlink($path);
+                }
+            }
+            $deleted = DB::table('pedido_curso_pagos')->where('id', $idPagoCurso)->delete();
+            if ($deleted) {
+                return response()->json(['status' => 'success', 'message' => 'Pago eliminado correctamente']);
+            }
+            return response()->json(['status' => 'error', 'message' => 'No se pudo eliminar el pago']);
+        } catch (\Exception $e) {
+            Log::error('Error en borrarPagoCurso: ' . $e->getMessage());
+            return response()->json(['status' => 'error', 'message' => 'Error al eliminar el pago: ' . $e->getMessage()]);
+        }
+    }
+    
+    /**
+     * Guardar pago de cliente (con voucher)
+     */
+    public function saveClientePagosCurso(Request $request)
+    {
+        try {
+            $request->validate([
+                'voucher' => 'required|file|max:10240',
+                'idPedido' => 'required|integer',
+                'amount' => 'required|numeric',
+                'fecha' => 'required|date',
+                'banco' => 'required|string'
+            ]);
+            $voucher = $request->file('voucher');
+            $voucherUrl = $voucher->store('public/vouchers');
+            $data = [
+                'voucher_url' => $voucherUrl,
+                'id_pedido_curso' => $request->idPedido,
+                'id_concept' => 1, // ADELANTO
+                'monto' => $request->amount,
+                'payment_date' => $request->fecha,
+                'banco' => $request->banco
+            ];
+            DB::table('pedido_curso_pagos')->insert($data);
+            return response()->json(['status' => 'success', 'message' => 'Pago guardado exitosamente', 'data' => $data]);
+        } catch (\Exception $e) {
+            Log::error('Error en saveClientePagosCurso: ' . $e->getMessage());
+            return response()->json(['status' => 'error', 'message' => 'Error al guardar el pago: ' . $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Obtener pagos detallados de un pedido
+     */
+    public function getPagosCursoPedido($idPedidoCurso)
+    {
+        try {
+            $pagos = DB::table('pedido_curso_pagos')
+                ->join('pedido_curso_pagos_concept', 'pedido_curso_pagos.id_concept', '=', 'pedido_curso_pagos_concept.id')
+                ->where('id_pedido_curso', $idPedidoCurso)
+                ->orderBy('payment_date', 'DESC')
+                ->select('pedido_curso_pagos.*', 'pedido_curso_pagos_concept.name as concepto')
+                ->get();
+            return response()->json(['status' => 'success', 'data' => $pagos]);
+        } catch (\Exception $e) {
+            Log::error('Error en getPagosCursoPedido: ' . $e->getMessage());
+            return response()->json(['status' => 'error', 'message' => 'Error al obtener los pagos del curso: ' . $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Métodos de campañas: crear, editar, borrar, obtener
+     */
+    public function crearCampana(Request $request)
+    {
+        $data = [
+            'Fe_Inicio' => $request->fe_inicio,
+            'Fe_Fin' => $request->fe_fin,
+            'Fe_Creacion' => now()
+        ];
+        DB::table('campana_curso')->insert($data);
+        $id = DB::getPdo()->lastInsertId();
+        // Insertar días
+        DB::table('campana_curso_dias')->where('id_campana', $id)->delete();
+        foreach ($request->dias as $dia) {
+            DB::table('campana_curso_dias')->insert(['id_campana' => $id, 'fecha' => $dia]);
+        }
+        return response()->json(['status' => 'success', 'message' => 'Campaña registrada correctamente', 'id' => $id]);
+    }
+
+    public function editarCampana(Request $request, $id)
+    {
+        $data = [
+            'Fe_Inicio' => $request->fe_inicio,
+            'Fe_Fin' => $request->fe_fin
+        ];
+        DB::table('campana_curso')->where('ID_Campana', $id)->update($data);
+        DB::table('campana_curso_dias')->where('id_campana', $id)->delete();
+        foreach ($request->dias as $dia) {
+            DB::table('campana_curso_dias')->insert(['id_campana' => $id, 'fecha' => $dia]);
+        }
+        return response()->json(['status' => 'success', 'message' => 'Campaña actualizada correctamente']);
+    }
+
+    public function borrarCampana($id)
+    {
+        DB::table('campana_curso')->where('ID_Campana', $id)->update(['Fe_Borrado' => now()]);
+        return response()->json(['status' => 'success', 'message' => 'Campaña eliminada correctamente']);
+    }
+
+    public function getCampanas()
+    {
+        $campanas = DB::table('campana_curso')
+            ->select('ID_Campana', 'Fe_Creacion', 'Fe_Inicio', 'Fe_Fin', DB::raw('MONTH(Fe_Inicio) as Mes_Numero'))
+            ->whereNull('Fe_Borrado')
+            ->get();
+        $meses_es = [
+            1 => 'Enero', 2 => 'Febrero', 3 => 'Marzo', 4 => 'Abril', 5 => 'Mayo', 6 => 'Junio',
+            7 => 'Julio', 8 => 'Agosto', 9 => 'Septiembre', 10 => 'Octubre', 11 => 'Noviembre', 12 => 'Diciembre'
+        ];
+        foreach ($campanas as &$row) {
+            $row->No_Campana = $meses_es[(int)$row->Mes_Numero] ?? '';
+        }
+        return response()->json(['status' => 'success', 'data' => $campanas]);
+    }
+
+    public function getCampanaById($id)
+    {
+        $campana = DB::table('campana_curso as c')
+            ->select('c.ID_Campana', 'c.Fe_Creacion', 'c.Fe_Inicio', 'c.Fe_Fin', DB::raw('MONTH(c.Fe_Inicio) as Mes_Numero'))
+            ->where('c.ID_Campana', $id)
+            ->first();
+        $dias = DB::table('campana_curso_dias')->where('id_campana', $id)->get();
+        $campana->dias = $dias;
+        return response()->json(['status' => 'success', 'data' => $campana]);
     }
 }

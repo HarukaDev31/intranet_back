@@ -159,6 +159,27 @@ Route::group(['prefix' => 'base-datos', 'middleware' => 'jwt.auth'], function ()
 Route::group(['prefix' => 'cursos'], function () {
     Route::get('filters/options', [CursoController::class, 'filterOptions']);
     Route::get('/', [CursoController::class, 'index']);
+    Route::put('cliente/{id}', [CursoController::class, 'actualizarDatosCliente']);
+    Route::put('usuario-moodle/{id}', [CursoController::class, 'setUsuarioMoodle']);
+    Route::put('pedido/{id}', [CursoController::class, 'actualizarPedido']);
+    Route::put('pedido/{id}/importe', [CursoController::class, 'actualizarImportePedido']);
+    Route::delete('pedido/{id}', [CursoController::class, 'eliminarPedido']);
+    Route::get('pedido/{id}/cliente', [CursoController::class, 'getDatosClientePorPedido']);
+    Route::put('cliente/{id}', [CursoController::class, 'actualizarDatosCliente']);
+
+    //Pagos curso
+    Route::get('pedido/{id}/pagos', [CursoController::class, 'getPagosCursoPedido']);
+    Route::post('pedido/pago', [CursoController::class, 'saveClientePagosCurso']);
+    Route::delete('pedido/pago/{id}', [CursoController::class, 'borrarPagoCurso']);
+
+     // Campañas
+    Route::post('campana', [CursoController::class, 'crearCampana']);
+    Route::put('campana/{id}', [CursoController::class, 'editarCampana']);
+    Route::delete('campana/{id}', [CursoController::class, 'borrarCampana']);
+    Route::get('campanas', [CursoController::class, 'getCampanas']);
+    Route::get('campana/{id}', [CursoController::class, 'getCampanaById']);
+    Route::get('campanas-activas', [CursoController::class, 'getCampanasActivas']);
+    Route::put('pedido/{id}/campana', [CursoController::class, 'asignarCampanaPedido']);
 });
 Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], function () {
 
