@@ -764,9 +764,8 @@ class ProductosController extends Controller
 
             if ($request->tiene_observaciones === true && $request->has('observaciones')) {
                 $data['observaciones'] = $request->observaciones;
-            } elseif ($request->tiene_observaciones === false) {
-                $data['observaciones'] = null;
             }
+            // Si el switch está en false, NO borres el campo observaciones
         }
 
         return $data;
