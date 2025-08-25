@@ -39,11 +39,8 @@ class GeneralController extends Controller
             ->where('CC.estado_cotizador', 'CONFIRMADO');
 
         // Aplicar filtro de estado si se proporciona
-        $estado = $request->input('estado', '0');
-        if ($estado !== '0') {
-            $query->where('CC.estado', $estado);
-        }
-
+        $page = $request->input('currentPage', 1);
+        $perPage = $request->input('itemsPerPage', 10);
         // Aplicar filtros adicionales si se proporcionan
         if ($request->has('search')) {
             $search = $request->search;
@@ -60,8 +57,7 @@ class GeneralController extends Controller
         $query->orderBy($sortField, $sortOrder);
 
         // Paginación
-        $perPage = $request->input('per_page', 10);
-        $data = $query->paginate($perPage);
+        $data = $query->paginate($perPage, ['*'], 'page', $page);
 
         return response()->json([
             'data' => $data->items(),

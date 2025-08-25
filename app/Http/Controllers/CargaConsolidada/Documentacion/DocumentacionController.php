@@ -26,7 +26,8 @@ use PhpOffice\PhpSpreadsheet\IOFactory;
 use Illuminate\Http\Response;
 
 class DocumentacionController extends Controller
-{ private $STATUS_NOT_CONTACTED = "NC";
+{
+    private $STATUS_NOT_CONTACTED = "NC";
     private $STATUS_CONTACTED = "C";
     private $STATUS_RECIVED = "R";
     private $STATUS_NOT_SELECTED = "NS";
@@ -80,9 +81,9 @@ class DocumentacionController extends Controller
             $listaEmbarqueUrl = $contenedor ? $contenedor->lista_embarque_url : null;
 
             // Obtener las carpetas con sus archivos usando Eloquent
-            $folders = DocumentacionFolder::with(['files' => function($query) use ($id) {
-                    $query->where('id_contenedor', $id);
-                }])
+            $folders = DocumentacionFolder::with(['files' => function ($query) use ($id) {
+                $query->where('id_contenedor', $id);
+            }])
                 ->forContenedor($id)
                 ->forUserGroup($userGrupo, $roleDocumentacion)
                 ->get();
@@ -91,10 +92,10 @@ class DocumentacionController extends Controller
             $result = [];
             foreach ($folders as $folder) {
                 $folderData = $folder->toArray();
-                
+
                 // Agregar la URL de lista de embarque
                 $folderData['lista_embarque_url'] = $listaEmbarqueUrl;
-                
+
                 // Procesar los archivos de la carpeta
                 if ($folder->files->count() > 0) {
                     foreach ($folder->files as $file) {
@@ -105,7 +106,7 @@ class DocumentacionController extends Controller
                             'type' => $file->file_type,
                             'lista_embarque_url' => $listaEmbarqueUrl
                         ];
-                        
+
                         // Combinar datos de la carpeta con datos del archivo
                         $result[] = array_merge($folderData, $fileData);
                     }
@@ -123,7 +124,6 @@ class DocumentacionController extends Controller
                 'data' => $result,
                 'message' => 'Carpetas de documentación obtenidas exitosamente'
             ]);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -148,7 +148,7 @@ class DocumentacionController extends Controller
 
             $data = $request->all();
             $files = $request->file();
-            
+
             // Validar datos requeridos
             $request->validate([
                 'id' => 'required|integer',
@@ -190,7 +190,6 @@ class DocumentacionController extends Controller
                 'message' => 'Documentación actualizada correctamente',
                 'data' => $proveedor
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error en updateClienteDocumentacion: ' . $e->getMessage());
             return response()->json([
@@ -213,16 +212,15 @@ class DocumentacionController extends Controller
 
             // Generar nombre único para el archivo
             $filename = time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
-            
+
             // Ruta de almacenamiento
             $path = 'assets/images/agentecompra/';
-            
+
             // Guardar archivo
             $filePath = $file->storeAs($path, $filename, 'public');
-            
+
             // Actualizar campo en los datos
             $data[$fieldName] = $filePath;
-
         } catch (\Exception $e) {
             Log::error("Error al procesar archivo {$fieldName}: " . $e->getMessage());
             throw $e;
@@ -245,7 +243,6 @@ class DocumentacionController extends Controller
                 'valor_doc' => $totales->total_valor_doc ?? 0,
                 'volumen_doc' => $totales->total_volumen_doc ?? 0
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error al actualizar totales de cotización: ' . $e->getMessage());
             throw $e;
@@ -261,7 +258,7 @@ class DocumentacionController extends Controller
             'message' => 'Factura comercial eliminada correctamente'
         ]);
     }
-    
+
     public function deleteProveedorExcelConfirmacion(Request $request, $idProveedor)
     {
         $proveedor = CotizacionProveedor::find($idProveedor);
@@ -272,8 +269,8 @@ class DocumentacionController extends Controller
             'message' => 'Excel de confirmación eliminada correctamente'
         ]);
     }
-    
-    
+
+
     public function deleteProveedorPackingList(Request $request, $idProveedor)
     {
         $proveedor = CotizacionProveedor::find($idProveedor);
@@ -310,8 +307,8 @@ class DocumentacionController extends Controller
             }
 
             $file = $request->file('file');
-            
-            $maxFileSize = 100*1024*1024;
+
+            $maxFileSize = 100 * 1024 * 1024;
             if ($file->getSize() > $maxFileSize) {
                 return response()->json([
                     'success' => false,
@@ -322,7 +319,7 @@ class DocumentacionController extends Controller
             // Validar extensión del archivo
             $allowedExtensions = ['jpg', 'jpeg', 'png', 'gif', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'txt'];
             $fileExtension = strtolower($file->getClientOriginalExtension());
-            
+
             if (!in_array($fileExtension, $allowedExtensions)) {
                 return response()->json([
                     'success' => false,
@@ -332,13 +329,13 @@ class DocumentacionController extends Controller
 
             // Generar nombre único para el archivo
             $filename = time() . '_' . uniqid() . '.' . $fileExtension;
-            
+
             // Ruta de almacenamiento
             $path = 'agentecompra/documentacion/';
-            
+
             // Guardar archivo
             $fileUrl = $file->storeAs($path, $filename, 'public');
-            
+
             // Log para debug
             Log::info('Archivo guardado:', [
                 'original_name' => $file->getClientOriginalName(),
@@ -381,7 +378,6 @@ class DocumentacionController extends Controller
                     'file_size' => $file->getSize()
                 ]
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error en uploadFileDocumentation: ' . $e->getMessage());
             return response()->json([
@@ -400,10 +396,10 @@ class DocumentacionController extends Controller
             // Aquí implementarías la lógica de importación de Excel
             // Por ahora solo registramos que se procesó
             Log::info('Procesando Excel de productos para contenedor: ' . $idContenedor);
-            
+
             // Ejemplo básico de procesamiento con Laravel Excel
             // Excel::import(new ProductosImport($idContenedor), $file);
-            
+
         } catch (\Exception $e) {
             Log::error('Error al importar productos desde Excel: ' . $e->getMessage());
         }
@@ -485,18 +481,17 @@ class DocumentacionController extends Controller
             // Generar archivo de salida
             $writer = new Xlsx($processedExcel);
             $outputPath = storage_path('app/public/temp/factura_procesada_' . $idContenedor . '.xlsx');
-            
+
             // Crear directorio si no existe
             if (!file_exists(dirname($outputPath))) {
                 mkdir(dirname($outputPath), 0755, true);
             }
-            
+
             $writer->save($outputPath);
 
-           
+
             return response()->download($outputPath, 'factura_procesada_' . $idContenedor . '.xlsx')
                 ->deleteFileAfterSend();
-
         } catch (\Exception $e) {
             Log::error('Error en downloadFacturaComercial: ' . $e->getMessage());
             return response()->json([
@@ -549,19 +544,18 @@ class DocumentacionController extends Controller
         try {
             // Crear mapeo de items a clientes desde packing list
             $itemToClientMap = $this->createItemToClientMap($packingExcel);
-            
+
             // Procesar primera hoja
             $sheet0 = $facturaExcel->getSheet(0);
             $this->processFirstSheet($sheet0, $itemToClientMap, $dataSystem, $listaPartidasExcel);
-            
+
             // Procesar hojas adicionales
             $this->processAdditionalSheets($facturaExcel, $itemToClientMap, $dataSystem, $listaPartidasExcel);
-            
+
             // Aplicar estilos finales
             $this->applyFinalStyles($sheet0);
-            
+
             return $facturaExcel;
-            
         } catch (\Exception $e) {
             Log::error('Error procesando Excel: ' . $e->getMessage());
             throw $e;
@@ -576,20 +570,20 @@ class DocumentacionController extends Controller
         $itemToClientMap = [];
         $sheet = $packingExcel->getSheet(0);
         $highestRow = $sheet->getHighestRow();
-        
+
         for ($row = 27; $row <= $highestRow; $row++) {
             $itemId = $sheet->getCell('B' . $row)->getValue();
             $client = $sheet->getCell('C' . $row)->getValue();
-            
+
             if (stripos(trim($itemId), "TOTAL") !== false || stripos(trim($client), "TOTAL") !== false) {
                 break;
             }
-            
+
             if (!empty($itemId) && !empty($client)) {
                 $itemToClientMap[trim($itemId)] = trim($client);
             }
         }
-        
+
         return $itemToClientMap;
     }
 
@@ -602,20 +596,20 @@ class DocumentacionController extends Controller
         $sheet->insertNewColumnBefore('C', 2);
         $sheet->setCellValue('D25', 'CLIENTE');
         $sheet->setCellValue('C25', 'TIPO DE CLIENTE');
-        
+
         try {
             $sheet->removeColumn('E');
         } catch (\Exception $e) {
             Log::warning('Error removiendo columna E: ' . $e->getMessage());
         }
-        
+
         $sheet->setCellValue('R25', 'ADVALOREM');
         $sheet->setCellValue('S25', 'ANTIDUMPING');
         $sheet->setCellValue('T25', 'VOL. SISTEMA');
-        
+
         // Aplicar estilos de encabezado
         $this->applyHeaderStyles($sheet);
-        
+
         // Procesar filas de datos
         $this->processDataRows($sheet, $itemToClientMap, $dataSystem, $listaPartidasExcel, 26);
     }
@@ -632,7 +626,7 @@ class DocumentacionController extends Controller
                 ]
             ]
         ];
-        
+
         $sheet->getStyle('A25:Z25')->getFont()->setBold(true);
         $sheet->getStyle('A25:Z25')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
         $sheet->getStyle('R25:V25')->applyFromArray($styleArray);
@@ -648,31 +642,31 @@ class DocumentacionController extends Controller
         $clientStartRow = 0;
         $clientEndRow = 0;
         $pendingMerge = [];
-        
+
         for ($row = $startRow; $row <= $highestRow; $row++) {
             $itemN = $sheet->getCell('B' . $row)->getValue();
-            
+
             if (stripos(trim($itemN), "TOTAL") !== false) {
                 $this->processTotalRow($sheet, $row);
                 break;
             }
-            
+
             // Obtener cliente
             $client = $itemToClientMap[trim($itemN)] ?? 'Cliente no encontrado';
-            
+
             // Procesar cliente y merge
             $this->processClientMerge($sheet, $row, $client, $currentClient, $clientStartRow, $clientEndRow, $pendingMerge);
-            
+
             // Buscar información aduanera
             $this->processCustomsInfo($sheet, $row, $itemN, $listaPartidasExcel);
-            
+
             // Buscar datos del sistema
             $this->processSystemData($sheet, $row, $client, $dataSystem);
-            
+
             // Aplicar estilos
             $this->applyRowStyles($sheet, $row);
         }
-        
+
         // Aplicar merges pendientes
         $this->applyPendingMerges($sheet, $pendingMerge, $currentClient, $clientStartRow, $clientEndRow);
     }
@@ -703,11 +697,11 @@ class DocumentacionController extends Controller
                     'end' => $clientEndRow
                 ];
             }
-            
+
             $currentClient = $client;
             $clientStartRow = $row;
         }
-        
+
         $clientEndRow = $row;
         $sheet->setCellValue('D' . $row, $client);
     }
@@ -719,7 +713,7 @@ class DocumentacionController extends Controller
     {
         $sheetListaPartidas = $listaPartidasExcel->getSheet(0);
         $mergedCells = $sheetListaPartidas->getMergeCells();
-        
+
         foreach ($mergedCells as $range) {
             [$startCell, $endCell] = explode(':', $range);
             if (preg_match('/^B\d+$/', $startCell)) {
@@ -729,13 +723,13 @@ class DocumentacionController extends Controller
                     preg_match('/\d+/', $endCell, $endMatches);
                     $startRow = (int)$startMatches[0];
                     $endRow = (int)$endMatches[0];
-                    
+
                     for ($r = $startRow; $r <= $endRow; $r++) {
                         $adValorem = $sheetListaPartidas->getCell('G' . $r)->getValue();
                         if (trim($adValorem) == "FTA") {
                             $adValorem = $sheetListaPartidas->getCell('H' . $r)->getValue();
                         }
-                        
+
                         $antiDumping = $sheetListaPartidas->getCell('I' . $r)->getValue();
                         $sheet->setCellValue('R' . $row, $adValorem);
                         $sheet->setCellValue('S' . $row, $antiDumping == 0 ? "-" : $antiDumping);
@@ -759,7 +753,7 @@ class DocumentacionController extends Controller
         $valor_doc = "-";
         $valor_cot = "-";
         $tipoCliente = "No existe en contenedor";
-        
+
         foreach ($dataSystem as $item) {
             if ($this->isNameMatch($client, $item->nombre)) {
                 $volumen_cotizacion = $item->volumen;
@@ -771,14 +765,14 @@ class DocumentacionController extends Controller
                 break;
             }
         }
-        
+
         // Seleccionar volumen apropiado
         if ($volumen_selected == 'volumen_doc') {
             $volumen_cotizacion = $volumen_doc;
         } elseif ($volumen_selected == 'volumen_china') {
             $volumen_cotizacion = $volumen_china;
         }
-        
+
         $sheet->setCellValue('T' . $row, $volumen_cotizacion);
         $sheet->setCellValue('C' . $row, $tipoCliente);
     }
@@ -795,7 +789,7 @@ class DocumentacionController extends Controller
                 ]
             ]
         ];
-        
+
         $sheet->getStyle('R' . $row . ':T' . $row)->applyFromArray($styleArray);
         $sheet->getStyle('R' . $row . ':T' . $row)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
         $sheet->getStyle('R' . $row . ':T' . $row)->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
@@ -814,7 +808,7 @@ class DocumentacionController extends Controller
                 'end' => $clientEndRow
             ];
         }
-        
+
         foreach ($pendingMerge as $merge) {
             if ($merge['start'] < $merge['end'] && $merge['start'] > 0 && $merge['end'] > 0) {
                 try {
@@ -835,10 +829,10 @@ class DocumentacionController extends Controller
     {
         $sheetCount = $facturaExcel->getSheetCount();
         if ($sheetCount <= 1) return;
-        
+
         $sheet0 = $facturaExcel->getSheet(0);
         $highestFirstSheetRow = $this->getHighestRowFirstSheet($facturaExcel);
-        
+
         for ($i = 1; $i < $sheetCount; $i++) {
             $sheet = $facturaExcel->getSheet($i);
             $this->processAdditionalSheet($sheet, $sheet0, $itemToClientMap, $dataSystem, $listaPartidasExcel, $highestFirstSheetRow);
@@ -852,14 +846,14 @@ class DocumentacionController extends Controller
     {
         $sheet0 = $facturaExcel->getSheet(0);
         $highestRow = $sheet0->getHighestRow();
-        
+
         for ($row = 26; $row <= $highestRow; $row++) {
             $itemN = $sheet0->getCell('B' . $row)->getValue();
             if (stripos(trim($itemN), "TOTAL") !== false) {
                 return $row - 1;
             }
         }
-        
+
         return $highestRow;
     }
 
@@ -870,30 +864,30 @@ class DocumentacionController extends Controller
     {
         $highestRow = $sheet->getHighestRow();
         $startIndex = 26;
-        
+
         for ($row = $startIndex; $row <= $highestRow; $row++) {
             $itemN = $sheet->getCell('B' . $row)->getValue();
-            
+
             if (stripos(trim($itemN), "TOTAL") !== false) {
                 break;
             }
-            
+
             // Insertar nueva fila
             $sheet0->insertNewRowBefore($highestFirstSheetRow, 1);
-            
+
             // Copiar datos del producto
             $this->copyProductData($sheet, $sheet0, $row, $highestFirstSheetRow);
-            
+
             // Procesar cliente y datos del sistema
             $client = $itemToClientMap[trim($itemN)] ?? 'Cliente no encontrado';
             $this->processSystemData($sheet0, $highestFirstSheetRow, $client, $dataSystem);
-            
+
             // Procesar información aduanera
             $this->processCustomsInfo($sheet0, $highestFirstSheetRow, $itemN, $listaPartidasExcel);
-            
+
             // Aplicar estilos
             $this->applyAdditionalRowStyles($sheet0, $highestFirstSheetRow);
-            
+
             $highestFirstSheetRow++;
         }
     }
@@ -910,7 +904,7 @@ class DocumentacionController extends Controller
         $targetSheet->setCellValue('O' . $targetRow, $sourceSheet->getCell('N' . $sourceRow)->getValue());
         $targetSheet->setCellValue('P' . $targetRow, $sourceSheet->getCell('O' . $sourceRow)->getValue());
         $targetSheet->setCellValue('Q' . $targetRow, '=M' . $targetRow . '*O' . $targetRow);
-        
+
         // Merge de celdas
         $targetSheet->mergeCells('E' . $targetRow . ':L' . $targetRow);
     }
@@ -927,7 +921,7 @@ class DocumentacionController extends Controller
                 ]
             ]
         ];
-        
+
         $sheet->getStyle('R' . $row . ':T' . $row)->applyFromArray($styleArray);
         $sheet->getStyle('R' . $row . ':T' . $row)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
         $sheet->getStyle('R' . $row . ':T' . $row)->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
@@ -942,17 +936,17 @@ class DocumentacionController extends Controller
     private function applyFinalStyles($sheet)
     {
         $highestRow = $sheet->getHighestRow();
-        
+
         // Configurar dimensiones de columnas
         $sheet->getColumnDimension('C')->setWidth(30);
         $sheet->getColumnDimension('D')->setWidth(60);
         $sheet->getColumnDimension('R')->setWidth(20);
         $sheet->getColumnDimension('S')->setWidth(25);
         $sheet->getColumnDimension('T')->setWidth(15);
-        
+
         // Aplicar colores de fondo
         $this->applyBackgroundColors($sheet, $highestRow);
-        
+
         // Configurar fórmulas de totales
         $this->setTotalFormulas($sheet, $highestRow);
     }
@@ -963,23 +957,23 @@ class DocumentacionController extends Controller
     private function applyBackgroundColors($sheet, $highestRow)
     {
         $startColumn = 26;
-        
+
         if ($highestRow > 1) {
             // Columna C - Rosa
             $sheet->getStyle('C' . $startColumn . ':C' . ($highestRow - 1))->getFill()
                 ->setFillType(Fill::FILL_SOLID)
                 ->getStartColor()->setRGB('f5b7b1');
-            
+
             // Columna D - Gris
             $sheet->getStyle('D' . $startColumn . ':D' . ($highestRow - 1))->getFill()
                 ->setFillType(Fill::FILL_SOLID)
                 ->getStartColor()->setRGB('dcdde1');
-            
+
             // Columnas R y S - Azul cielo
             $sheet->getStyle('R' . $startColumn . ':S' . ($highestRow - 1))->getFill()
                 ->setFillType(Fill::FILL_SOLID)
                 ->getStartColor()->setRGB('85c1e9');
-            
+
             // Columna T - Rosa
             $sheet->getStyle('T' . $startColumn . ':T' . ($highestRow - 1))->getFill()
                 ->setFillType(Fill::FILL_SOLID)
@@ -993,7 +987,7 @@ class DocumentacionController extends Controller
     private function setTotalFormulas($sheet, $highestRow)
     {
         $startColumn = 26;
-        
+
         if ($highestRow > 0 && ($highestRow - 1) > 0) {
             $sheet->setCellValue('Q' . $highestRow, '=SUM(Q' . $startColumn . ':Q' . ($highestRow - 1) . ')');
             $sheet->setCellValue('T' . $highestRow, '=SUM(T' . $startColumn . ':T' . ($highestRow - 1) . ')');
@@ -1040,7 +1034,7 @@ class DocumentacionController extends Controller
             // Crear nombre del archivo ZIP
             $zipName = 'contenedor_' . $id . '_' . time() . '.zip';
             $zipPath = storage_path('app/public/temp/' . $zipName);
-            
+
             // Crear directorio temporal si no existe
             $tempDir = dirname($zipPath);
             if (!file_exists($tempDir)) {
@@ -1063,14 +1057,14 @@ class DocumentacionController extends Controller
             }
 
             $zip = new \ZipArchive();
-            
+
             Log::info('Intentando crear ZIP en: ' . $zipPath);
             Log::info('Directorio temporal existe: ' . (is_dir($tempDir) ? 'SÍ' : 'NO'));
             Log::info('Directorio temporal es escribible: ' . (is_writable($tempDir) ? 'SÍ' : 'NO'));
 
             if ($zip->open($zipPath, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) === TRUE) {
                 $filesAdded = 0;
-                
+
                 // Agregar archivos al ZIP
                 foreach ($folders as $folder) {
                     if (empty($folder->file_url)) {
@@ -1112,13 +1106,13 @@ class DocumentacionController extends Controller
                     if ($fileFound && $finalFilePath) {
                         // Obtener nombre del archivo
                         $fileName = basename($folder->file_url);
-                        
+
                         // Normalizar nombre del archivo (remover caracteres especiales)
                         $fileName = $this->sanitizeFileName($fileName);
-                        
+
                         // Crear estructura de carpetas en el ZIP
                         $zipFilePath = $folder->folder_name . '/' . $fileName;
-                        
+
                         // Agregar archivo al ZIP
                         if ($zip->addFile($finalFilePath, $zipFilePath)) {
                             $filesAdded++;
@@ -1136,7 +1130,7 @@ class DocumentacionController extends Controller
 
                 $closeResult = $zip->close();
                 Log::info('ZIP cerrado - Resultado: ' . ($closeResult ? 'exitoso' : 'fallido'));
-                
+
                 if (!$closeResult) {
                     Log::error('Error al cerrar ZIP: ' . $zip->getStatusString());
                     return response()->json([
@@ -1156,13 +1150,13 @@ class DocumentacionController extends Controller
                 Log::info('Verificando archivo ZIP después de cerrarlo...');
                 Log::info('Ruta del ZIP: ' . $zipPath);
                 Log::info('Archivo existe: ' . (file_exists($zipPath) ? 'SÍ' : 'NO'));
-                
+
                 if (file_exists($zipPath)) {
                     Log::info('Tamaño del ZIP: ' . filesize($zipPath) . ' bytes');
                     Log::info('Permisos del ZIP: ' . substr(sprintf('%o', fileperms($zipPath)), -4));
                     Log::info('ZIP es legible: ' . (is_readable($zipPath) ? 'SÍ' : 'NO'));
                 }
-                
+
                 if (!file_exists($zipPath)) {
                     Log::error('Archivo ZIP no encontrado después de crearlo: ' . $zipPath);
                     return response()->json([
@@ -1176,7 +1170,6 @@ class DocumentacionController extends Controller
                 // Retornar archivo ZIP para descarga
                 return response()->download($zipPath, $zipName)
                     ->deleteFileAfterSend();
-
             } else {
                 Log::error('Error al crear archivo ZIP');
                 return response()->json([
@@ -1184,7 +1177,6 @@ class DocumentacionController extends Controller
                     'message' => 'Error al crear archivo ZIP'
                 ], 500);
             }
-
         } catch (\Exception $e) {
             Log::error('Error en downloadDocumentacionZip: ' . $e->getMessage());
             return response()->json([
@@ -1201,16 +1193,16 @@ class DocumentacionController extends Controller
     {
         // Remover caracteres especiales y espacios
         $fileName = preg_replace('/[\x00-\x1F\x7F<>:"\/\\|?*]/', '', $fileName);
-        
+
         // Normalizar espacios y guiones
         $fileName = str_replace([' ', '_'], '-', $fileName);
-        
+
         // Remover caracteres duplicados
         $fileName = preg_replace('/-+/', '-', $fileName);
-        
+
         // Limpiar al inicio y final
         $fileName = trim($fileName, '-');
-        
+
         return $fileName;
     }
 
@@ -1233,18 +1225,18 @@ class DocumentacionController extends Controller
 
                 // Generar nombre de archivo temporal
                 $tempFile = $tempDir . '/' . time() . '_' . basename($fileUrl);
-                
+
                 // Descargar archivo
                 $fileContent = file_get_contents($fileUrl);
                 if ($fileContent === false) {
                     throw new \Exception("No se pudo descargar el archivo: " . $fileUrl);
                 }
-                
+
                 // Guardar archivo temporal
                 if (file_put_contents($tempFile, $fileContent) === false) {
                     throw new \Exception("No se pudo guardar el archivo temporal");
                 }
-                
+
                 return $tempFile;
             }
 
@@ -1263,7 +1255,6 @@ class DocumentacionController extends Controller
             }
 
             throw new \Exception("No se encontró el archivo en ninguna ubicación: " . $fileUrl);
-
         } catch (\Exception $e) {
             Log::error('Error en getLocalPath: ' . $e->getMessage(), [
                 'fileUrl' => $fileUrl,
@@ -1292,7 +1283,6 @@ class DocumentacionController extends Controller
                 'message' => 'Se limpiaron ' . $cleanedCount . ' archivos obsoletos',
                 'cleaned_count' => $cleanedCount
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error limpiando archivos obsoletos: ' . $e->getMessage());
             return response()->json([
@@ -1386,7 +1376,6 @@ class DocumentacionController extends Controller
                         'file' => $file
                     ]
                 ]);
-
             } catch (\Exception $e) {
                 DB::rollback();
                 // Si hay error, eliminar el archivo subido
@@ -1395,7 +1384,6 @@ class DocumentacionController extends Controller
                 }
                 throw $e;
             }
-
         } catch (\Exception $e) {
             Log::error('Error en createDocumentacionFolder: ' . $e->getMessage());
             return response()->json([

@@ -31,6 +31,7 @@ use App\Http\Controllers\CargaConsolidada\FacturaGuiaController;
 use App\Http\Controllers\Commons\PaisController;
 use App\Http\Controllers\CargaConsolidada\CotizacionPagosController;
 use App\Http\Controllers\CargaConsolidada\AduanaController;
+use App\Http\Controllers\CargaConsolidada\Clientes\PagosController as ClientesPagosController;
 /*
 |--------------------------------------------------------------------------
 | API Routes
@@ -207,6 +208,7 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
             Route::get('filters/options', [CotizacionController::class, 'filterOptions']);
         }); 
         Route::group(['prefix' => 'clientes'], function () {
+            Route::get('/pagos/{idContenedor}', [ClientesPagosController::class, 'index']);
             Route::get('/general/{idContenedor}', [GeneralController::class, 'index']);
             Route::post('/general/estado-cliente', [GeneralController::class, 'updateEstadoCliente']);
             Route::get('/variacion/{idContenedor}', [VariacionController::class, 'index']);

@@ -51,8 +51,10 @@ class ClientesController extends Controller
     public function index(Request $request): JsonResponse
     {
         try {
-            $perPage = $request->get('limit', 10);
-            $page = $request->get('page', 1);
+            //?search=asd&itemsPerPage=10&currentPage=1
+            $search = $request->get('search', '');
+            $perPage = $request->get('itemsPerPage', 10);
+            $page = $request->get('currentPage', 1);
 
             // Usar el servicio para obtener datos
             $result = $this->clienteService->obtenerClientes($request, $page, $perPage);

@@ -79,6 +79,8 @@ class ContenedorController extends Controller
                     $query->where('estado_china', '!=', Contenedor::CONTEDOR_CERRADO);
                 }
             }
+            //order by int(carga) desc
+            $query->orderBy(DB::raw('CAST(carga AS UNSIGNED)'), 'desc');
             $data = $query->paginate(10);
 
             return response()->json([
