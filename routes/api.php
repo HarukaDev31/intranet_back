@@ -32,6 +32,7 @@ use App\Http\Controllers\Commons\PaisController;
 use App\Http\Controllers\CargaConsolidada\CotizacionPagosController;
 use App\Http\Controllers\CargaConsolidada\AduanaController;
 use App\Http\Controllers\CargaConsolidada\Clientes\PagosController as ClientesPagosController;
+use App\Http\Controllers\CalculadoraImportacion\CalculadoraImportacionController;
 /*
 |--------------------------------------------------------------------------
 | API Routes
@@ -299,8 +300,12 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
         Route::get('template', [ImportController::class, 'downloadTemplate']);
         Route::get('stats', [ImportController::class, 'getImportStats']);
     });
+   
 });
-
+Route::group(['prefix' => 'calculadora-importacion', 'middleware' => 'jwt.auth'], function () {
+    Route::post('clientes', [CalculadoraImportacionController::class, 'getClientesByWhatsapp']);
+    Route::get('tarifas', [CalculadoraImportacionController::class, 'getTarifas']);
+});
 Route::group(['prefix' => 'options', 'middleware' => 'jwt.auth'], function () {
     Route::get('paises', [PaisController::class, 'getPaisDropdown']);
 });
