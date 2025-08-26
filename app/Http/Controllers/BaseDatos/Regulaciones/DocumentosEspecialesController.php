@@ -461,6 +461,9 @@ class DocumentosEspecialesController extends Controller
                 ], 404);
             }
 
+            // Guardar el id_rubro antes de eliminar la regulación
+            $idRubro = $documento->id_rubro;
+
             // Eliminar archivos físicos
             foreach ($documento->media as $media) {
                 if (Storage::disk('public')->exists($media->ruta)) {
@@ -473,6 +476,17 @@ class DocumentosEspecialesController extends Controller
             
             // Eliminar la regulación
             $documento->delete();
+
+            // Si el rubro ya no tiene regulaciones, eliminar el rubro
+            if ($idRubro) {
+                $regulacionesRestantes = ProductoRegulacionDocumentoEspecial::where('id_rubro', $idRubro)->count();
+                if ($regulacionesRestantes === 0) {
+                    $rubro = ProductoRubro::find($idRubro);
+                    if ($rubro) {
+                        $rubro->delete();
+                    }
+                }
+            }
 
             return response()->json([
                 'success' => true,
