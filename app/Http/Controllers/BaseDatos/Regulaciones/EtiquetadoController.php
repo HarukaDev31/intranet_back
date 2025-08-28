@@ -470,6 +470,9 @@ class EtiquetadoController extends Controller
                 ], 404);
             }
 
+            // Guardar el id_rubro antes de eliminar la regulación
+            $idRubro = $etiquetado->id_rubro;
+
             // Eliminar archivos físicos
             foreach ($etiquetado->media as $media) {
                 if (Storage::disk('public')->exists($media->ruta)) {
@@ -479,9 +482,20 @@ class EtiquetadoController extends Controller
 
             // Eliminar registros de media
             $etiquetado->media()->delete();
-
+            
             // Eliminar la regulación
             $etiquetado->delete();
+
+            // Si el rubro ya no tiene regulaciones, eliminar el rubro
+            if ($idRubro) {
+                $regulacionesRestantes = ProductoRegulacionEtiquetado::where('id_rubro', $idRubro)->count();
+                if ($regulacionesRestantes === 0) {
+                    $rubro = ProductoRubro::find($idRubro);
+                    if ($rubro) {
+                        $rubro->delete();
+                    }
+                }
+            }
 
             return response()->json([
                 'success' => true,

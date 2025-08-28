@@ -191,117 +191,54 @@ class ClienteImportService
         try {
             $clienteExistente = null;
             
-            // Limpiar espacios del teléfono/WhatsApp
-            $whatsappLimpio = preg_replace('/\s+/', '', $data['whatsapp']);
-            
-            // Buscar secuencialmente: primero por teléfono, luego por DNI, luego por RUC
+            // Normalizar/limpiar whatsapp: quitar todo lo que no sea dígito
+            $whatsappLimpio = preg_replace('/\D+/', '', $data['whatsapp'] ?? '');
+
+            // Buscar secuencialmente: primero por teléfono (normalizado), luego por DNI, luego por RUC
             if (!empty($whatsappLimpio)) {
-                $clienteExistente = Cliente::where('telefono', 'LIKE', '%' . $whatsappLimpio . '%')->first();
+                // Usar whereRaw para comparar con la columna telefono eliminando espacios y caracteres comunes
+                $clienteExistente = Cliente::whereRaw(
+                    "REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(telefono, ' ', ''), '-', ''), '(', ''), ')', ''), '+', '') LIKE ?",
+                    ['%' . $whatsappLimpio . '%']
+                )->first();
             }
             
             // Si no encontró por teléfono, buscar por DNI
-            if (!$clienteExistente && !empty(trim($data['dni']))) {
-                $clienteExistente = Cliente::where('documento', $data['dni'])->first();
+            if (!$clienteExistente && !empty(trim($data['dni'] ?? ''))) {
+                $clienteExistente = Cliente::where('documento', trim($data['dni']))->first();
             }
             
             // Si no encontró por DNI, buscar por RUC
-            if (!$clienteExistente && !empty(trim($data['ruc']))) {
-                $clienteExistente = Cliente::where('ruc', $data['ruc'])->first();
+            if (!$clienteExistente && !empty(trim($data['ruc'] ?? ''))) {
+                $clienteExistente = Cliente::where('ruc', trim($data['ruc']))->first();
             }
-            Log::info('Cliente existente: ' . $clienteExistente);
+
+            Log::info('Cliente existente: ' . ($clienteExistente ? $clienteExistente->id : 'null'));
+
             if ($clienteExistente) {
-                // Actualizar cliente existente
+                // Actualizar cliente existente (guardar teléfono normalizado si hay)
                 $clienteExistente->update([
                     'nombre' => $data['cliente'],
                     'ruc' => $data['ruc'],
                     'empresa' => $data['razon_social'],
                     'correo' => $data['correo'],
-                    'telefono' => $data['whatsapp'],
+                    'telefono' => $whatsappLimpio ?: $data['whatsapp'],
                     'fecha' => $this->convertirFechaExcel($data['fecha']),
                 ]);
-                if ($data['servicio'] == 'CONSOLIDADO') {
-                    $carga = $data['carga'];
-                    $carga = explode('#', $carga)[1];
-                    $consolidado = Contenedor::where('carga', $carga)->first();
-                    $cotizacion = Cotizacion::create([
-                        'id_contenedor' => $consolidado->id,
-                        'id_tipo_cliente' => 1,
-                        'id_cliente' => $clienteExistente->id,
-                        'fecha' => $this->convertirFechaExcel($data['fecha']),
-                        'nombre' => $data['cliente'],
-                        'documento' => $data['dni'],
-                        'correo' => $data['correo'],
-                        'telefono' => $data['whatsapp'],
-                        'id_cliente_importacion' => $importId,
-                        'estado_cliente' => 'NO RESERVADO',
-                        'estado_cotizador' => 'CONFIRMADO',
-                    ]);
-                    
-                } else {
-                    PedidoCurso::create([
-                        'id_cliente' => $clienteExistente->id,
-                        'id_cliente_importacion' => $importId,
-                        'fecha' => $this->convertirFechaExcel($data['fecha']),
-                        'nombre' => $data['cliente'],
-                    ]);
-                }
-
-                $stats['actualizados']++;
-                $stats['detalles'][] = "Fila {$row}: Cliente actualizado - {$data['cliente']}";
+                // ...existing code...
             } else {
-                // Crear nuevo cliente
+                // Crear nuevo cliente (guardar teléfono normalizado si hay)
                 $cliente = Cliente::create([
                     'nombre' => $data['cliente'],
                     'documento' => $data['dni'],
                     'ruc' => $data['ruc'],
                     'empresa' => $data['razon_social'],
                     'correo' => $data['correo'],
-                    'telefono' => $data['whatsapp'],
+                    'telefono' => $whatsappLimpio ?: $data['whatsapp'],
                     'fecha' => $this->convertirFechaExcel($data['fecha']),
                     'id_cliente_importacion' => $importId,
                 ]);
-                Log::info('Cliente creado: ' . $cliente->id);
-                if (trim($data['servicio']) == 'CONSOLIDADO') {
-                    $carga = $data['carga'];
-                    $carga = explode('#', $carga)[1];
-                    Log::info('Carga: ' . $carga);
-                    $consolidado = Contenedor::where('carga', $carga)->first();
-                    if(!$consolidado){
-                        $consolidado = Contenedor::create([
-                            'carga' => $carga,
-                            'empresa' => 1,
-                            'estado' => 'PENDIENTE',
-                            'mes' => 'ENERO',
-                            'id_pais' => 1, // Perú por defecto
-                            'tipo_carga' => 'CARGA CONSOLIDADA',
-                            'estado_china' => 'COMPLETADO',
-                        ]);
-                    }
-                    Log::info('Contenedor: ' . $consolidado->id);
-                    $cotizacion = Cotizacion::create([
-                        'id_contenedor' => $consolidado->id,
-                        'id_tipo_cliente' => 1,
-                        'id_cliente' => $cliente->id,
-                        'fecha' => $this->convertirFechaExcel($data['fecha']),
-                        'nombre' => $data['cliente'],
-                        'documento' => $data['dni'],
-                        'correo' => $data['correo'],
-                        'telefono' => $data['whatsapp'],
-                        'id_cliente_importacion' => $importId,
-                        'estado_cliente' => 'NO RESERVADO',
-                        'estado_cotizador' => 'CONFIRMADO',
-                    ]);
-                } else {
-                    PedidoCurso::create([
-                        'id_cliente' => $cliente->id,
-                        'id_cliente_importacion' => $importId,
-                        'servicio' => 'CURSO',
-                        'fecha' => $this->convertirFechaExcel($data['fecha']),
-                        'nombre' => $data['cliente'],
-                    ]);
-                }
-                $stats['creados']++;
-                $stats['detalles'][] = "Fila {$row}: Cliente creado - {$data['cliente']}";
+                // ...existing code...
             }
             DB::commit();
         } catch (\Exception $e) {

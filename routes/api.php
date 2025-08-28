@@ -90,8 +90,10 @@ Route::group(['prefix' => 'base-datos', 'middleware' => 'jwt.auth'], function ()
         // Entidades y rubros
         Route::get('/entidades', [EntidadesController::class, 'getDropdown']);
         Route::post('/entidades', [EntidadesController::class, 'store']);
+        Route::put('/entidades/{id}', [EntidadesController::class, 'update']);
         Route::get('/rubros', [ProductoRubroController::class, 'getDropdown']);
         Route::post('/rubros', [ProductoRubroController::class, 'store']);
+        Route::put('/rubros/{id}', [ProductoRubroController::class, 'update']);
         // Regulaciones antidumping
         Route::group(['prefix' => 'antidumping'], function () {
             Route::get('/', [AntidumpingController::class, 'index']);
