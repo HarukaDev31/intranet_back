@@ -30,15 +30,27 @@ class ProductosController extends Controller
             $query = ProductoImportadoExcel::leftJoin('carga_consolidada_contenedor', 'productos_importados_excel.idContenedor', '=', 'carga_consolidada_contenedor.id')
                 ->select('productos_importados_excel.*', 'carga_consolidada_contenedor.carga as carga_contenedor');
 
-            // Aplicar filtros si están presentes
+            // Aplicar filtros si están presentes (reemplaza el bloque actual)
             if ($request->has('search') && $request->search) {
-                $query->where('productos_importados_excel.nombre_comercial', 'like', '%' . $request->search . '%')
+                $query->where(function($q) use ($request) {
+                    $q->where('productos_importados_excel.nombre_comercial', 'like', '%' . $request->search . '%')
                     ->orWhere('productos_importados_excel.caracteristicas', 'like', '%' . $request->search . '%');
+                });
             }
 
-            // Filtrar por idContenedor específico si se proporciona
-            if ($request->has('campana') && $request->campana) {
-                $query->where('carga', $request->campana);
+            // Filtrar por rubro si viene y no es 'todos'
+            if ($request->has('rubro') && $request->rubro && $request->rubro !== 'todos') {
+                $query->where('productos_importados_excel.rubro', $request->rubro);
+            }
+
+            // Filtrar por tipo de producto (frontend envía tipoProducto) -> columna tipo_producto
+            if ($request->has('tipoProducto') && $request->tipoProducto && $request->tipoProducto !== 'todos') {
+                $query->where('productos_importados_excel.tipo_producto', $request->tipoProducto);
+            }
+
+            // Filtrar por campaña (join) -> usar la columna completa de la tabla join
+            if ($request->has('campana') && $request->campana && $request->campana !== 'todos') {
+                $query->where('carga_consolidada_contenedor.carga', $request->campana);
             }
 
             $data = $query->paginate($perPage, ['*'], 'page', $page);

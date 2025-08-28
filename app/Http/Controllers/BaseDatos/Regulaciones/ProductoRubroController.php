@@ -59,6 +59,29 @@ class ProductoRubroController extends Controller
             ], 500);
         }
     }
+    public function update(Request $request, $id)
+    {
+        try {
+            $rubro = ProductoRubro::findOrFail($id);
+            // Actualiza solo los campos que sean enviados
+            $rubro->fill($request->only(['nombre', 'tipo', 'descripcion'])); // ajustar campos según modelo
+            $rubro->save();
+
+            Log::info('ProductoRubro updated', ['id' => $id, 'data' => $request->all()]);
+
+            return response()->json([
+                'success' => true,
+                'data' => $rubro
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error updating ProductoRubro: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al actualizar el rubro',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
     public function destroy($id){
         try {
             $rubro = ProductoRubro::find($id);

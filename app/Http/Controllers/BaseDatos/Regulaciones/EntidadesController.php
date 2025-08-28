@@ -40,6 +40,25 @@ class EntidadesController extends Controller
             ], 500);
         }
     }
+    public function update(Request $request, $id)
+    {
+        try {
+            $entidad = Entidad::findOrFail($id);
+            $entidad->fill($request->all());
+            $entidad->save();
+            return response()->json([
+                'success' => true,
+                'data' => $entidad
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al actualizar la entidad',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
     public function destroy($id){
         try {
             $entidad = Entidad::find($id);
