@@ -31,16 +31,16 @@ class ClienteImportService
             }
 
             $file = $request->file('excel_file');
-           
+
             // Validar tipo de archivo
             $allowedTypes = ['xlsx', 'xls', 'xlsm'];
             $filePath = $file->storeAs('imports/clientes', time() . '_' . uniqid() . '_' . $file->getClientOriginalName(), 'public');
-            
+
             // Crear registro de importación con la ruta relativa
             $importId = $this->crearRegistroImportacion($file->getClientOriginalName(), $filePath);
-            
+
             $fullPath = storage_path('app/public/' . $filePath);
-            
+
             // Procesar el Excel usando la ruta del sistema de archivos
             $resultado = $this->procesarExcel($fullPath, $importId, $file->getClientOriginalName());
 
@@ -114,7 +114,6 @@ class ClienteImportService
                     Log::info("Fila {$row}: Fila vacía o con celdas mergeadas, omitiendo");
                     continue;
                 }
-
             } catch (\Exception $e) {
                 $stats['errores']++;
                 $stats['detalles'][] = "Fila {$row}: Error - " . $e->getMessage();
@@ -162,13 +161,13 @@ class ClienteImportService
     {
         // Verificar si al menos uno de los campos principales tiene contenido
         $camposPrincipales = ['cliente', 'dni', 'ruc', 'correo', 'whatsapp'];
-        
+
         foreach ($camposPrincipales as $campo) {
             if (!empty(trim($data[$campo]))) {
                 return true;
             }
         }
-        
+
         // Si todos los campos principales están vacíos, la fila no es válida
         return false;
     }
@@ -190,7 +189,7 @@ class ClienteImportService
         DB::beginTransaction();
         try {
             $clienteExistente = null;
-            
+
             // Normalizar/limpiar whatsapp: quitar todo lo que no sea dígito
             $whatsappLimpio = preg_replace('/\D+/', '', $data['whatsapp'] ?? '');
 
@@ -202,12 +201,12 @@ class ClienteImportService
                     ['%' . $whatsappLimpio . '%']
                 )->first();
             }
-            
+
             // Si no encontró por teléfono, buscar por DNI
             if (!$clienteExistente && !empty(trim($data['dni'] ?? ''))) {
                 $clienteExistente = Cliente::where('documento', trim($data['dni']))->first();
             }
-            
+
             // Si no encontró por DNI, buscar por RUC
             if (!$clienteExistente && !empty(trim($data['ruc'] ?? ''))) {
                 $clienteExistente = Cliente::where('ruc', trim($data['ruc']))->first();
@@ -225,7 +224,34 @@ class ClienteImportService
                     'telefono' => $whatsappLimpio ?: $data['whatsapp'],
                     'fecha' => $this->convertirFechaExcel($data['fecha']),
                 ]);
-                // ...existing code...
+                if ($data['servicio'] == 'CONSOLIDADO') {
+                    $carga = $data['carga'];
+                    $carga = explode('#', $carga)[1];
+                    $consolidado = Contenedor::where('carga', $carga)->first();
+                    $cotizacion = Cotizacion::create([
+                        'id_contenedor' => $consolidado->id,
+                        'id_tipo_cliente' => 1,
+                        'id_cliente' => $clienteExistente->id,
+                        'fecha' => $this->convertirFechaExcel($data['fecha']),
+                        'nombre' => $data['cliente'],
+                        'documento' => $data['dni'],
+                        'correo' => $data['correo'],
+                        'telefono' => $data['whatsapp'],
+                        'id_cliente_importacion' => $importId,
+                        'estado_cliente' => 'NO RESERVADO',
+                        'estado_cotizador' => 'CONFIRMADO',
+                    ]);
+                } else {
+                    PedidoCurso::create([
+                        'id_cliente' => $clienteExistente->id,
+                        'id_cliente_importacion' => $importId,
+                        'fecha' => $this->convertirFechaExcel($data['fecha']),
+                        'nombre' => $data['cliente'],
+                    ]);
+                }
+
+                $stats['actualizados']++;
+                $stats['detalles'][] = "Fila {$row}: Cliente actualizado - {$data['cliente']}";
             } else {
                 // Crear nuevo cliente (guardar teléfono normalizado si hay)
                 $cliente = Cliente::create([
@@ -238,7 +264,47 @@ class ClienteImportService
                     'fecha' => $this->convertirFechaExcel($data['fecha']),
                     'id_cliente_importacion' => $importId,
                 ]);
-                // ...existing code...
+                if (trim($data['servicio']) == 'CONSOLIDADO') {
+                    $carga = $data['carga'];
+                    $carga = explode('#', $carga)[1];
+                    Log::info('Carga: ' . $carga);
+                    $consolidado = Contenedor::where('carga', $carga)->first();
+                    if (!$consolidado) {
+                        $consolidado = Contenedor::create([
+                            'carga' => $carga,
+                            'empresa' => 1,
+                            'estado' => 'PENDIENTE',
+                            'mes' => 'ENERO',
+                            'id_pais' => 1, // Perú por defecto
+                            'tipo_carga' => 'CARGA CONSOLIDADA',
+                            'estado_china' => 'COMPLETADO',
+                        ]);
+                    }
+                    Log::info('Contenedor: ' . $consolidado->id);
+                    $cotizacion = Cotizacion::create([
+                        'id_contenedor' => $consolidado->id,
+                        'id_tipo_cliente' => 1,
+                        'id_cliente' => $cliente->id,
+                        'fecha' => $this->convertirFechaExcel($data['fecha']),
+                        'nombre' => $data['cliente'],
+                        'documento' => $data['dni'],
+                        'correo' => $data['correo'],
+                        'telefono' => $data['whatsapp'],
+                        'id_cliente_importacion' => $importId,
+                        'estado_cliente' => 'NO RESERVADO',
+                        'estado_cotizador' => 'CONFIRMADO',
+                    ]);
+                } else {
+                    PedidoCurso::create([
+                        'id_cliente' => $cliente->id,
+                        'id_cliente_importacion' => $importId,
+                        'servicio' => 'CURSO',
+                        'fecha' => $this->convertirFechaExcel($data['fecha']),
+                        'nombre' => $data['cliente'],
+                    ]);
+                }
+                $stats['creados']++;
+                $stats['detalles'][] = "Fila {$row}: Cliente creado - {$data['cliente']}";
             }
             DB::commit();
         } catch (\Exception $e) {
@@ -362,12 +428,12 @@ class ClienteImportService
         if (empty($ruta)) {
             return null;
         }
-        
+
         // Si ya es una URL completa, devolverla tal como está
         if (filter_var($ruta, FILTER_VALIDATE_URL)) {
             return $ruta;
         }
-        
+
         // Generar URL completa desde storage
         return Storage::disk('public')->url($ruta);
     }
