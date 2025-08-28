@@ -26,7 +26,7 @@
     php_value post_max_size 100M
     php_value max_execution_time 300
     php_value max_input_time 300
-    php_value memory_limit 512M
+    php_value memory_limit 2G
 </IfModule>
 
 <IfModule mod_php8.c>
@@ -34,7 +34,7 @@
     php_value post_max_size 100M
     php_value max_execution_time 300
     php_value max_input_time 300
-    php_value memory_limit 512M
+    php_value memory_limit 2G
 </IfModule>
 
 # Permitir archivos Excel

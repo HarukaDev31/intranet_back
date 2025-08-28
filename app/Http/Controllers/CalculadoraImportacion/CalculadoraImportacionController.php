@@ -8,13 +8,18 @@ use App\Models\BaseDatos\Clientes\Cliente;
 use App\Models\CalculadoraImportacion;
 use App\Services\BaseDatos\Clientes\ClienteService;
 use App\Services\CalculadoraImportacionService;
+use App\Services\ResumenCostosImageService;
 use App\Models\CalculadoraTarifasConsolidado;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Storage;
+use App\Traits\WhatsappTrait;
+use App\Models\CargaConsolidada\Contenedor;
 
 class CalculadoraImportacionController extends Controller
 {
+    use WhatsappTrait;
     protected $clienteService;
     protected $calculadoraImportacionService;
 
@@ -34,6 +39,7 @@ class CalculadoraImportacionController extends Controller
             $clientes = Cliente::where('telefono', '!=', null)
                 ->where('telefono', '!=', '')
                 ->where('telefono', 'like', '%' . $whatsapp . '%')
+                ->limit(50)
                 ->get();
 
             if ($clientes->isEmpty()) {
@@ -52,10 +58,10 @@ class CalculadoraImportacionController extends Controller
 
             // Transformar datos de clientes con categoría
             $clientesTransformados = [];
-                        foreach ($clientes as $cliente) {
+            foreach ($clientes as $cliente) {
                 $servicios = $serviciosPorCliente[$cliente->id] ?? [];
                 $categoria = $this->determinarCategoriaCliente($servicios);
-                
+
                 $clientesTransformados[] = [
                     'id' => $cliente->id,
                     'value' => $cliente->telefono,
@@ -243,19 +249,14 @@ class CalculadoraImportacionController extends Controller
     public function index(Request $request)
     {
         try {
-            $query = CalculadoraImportacion::with(['proveedores.productos', 'cliente']);
+            $query = CalculadoraImportacion::with(['proveedores.productos', 'cliente', 'contenedor']);
 
-            // Filtros opcionales
-            if ($request->has('tipo_cliente') && $request->tipo_cliente) {
-                $query->where('tipo_cliente', $request->tipo_cliente);
+            //filter optional campania=54&estado_calculadora=PENDIENTE
+            if ($request->has('campania') && $request->campania) {
+                $query->where('id_carga_consolidada_contenedor', $request->campania);
             }
-
-            if ($request->has('dni_cliente') && $request->dni_cliente) {
-                $query->where('dni_cliente', 'like', '%' . $request->dni_cliente . '%');
-            }
-
-            if ($request->has('nombre_cliente') && $request->nombre_cliente) {
-                $query->where('nombre_cliente', 'like', '%' . $request->nombre_cliente . '%');
+            if ($request->has('estado_calculadora') && $request->estado_calculadora) {
+                $query->where('estado', $request->estado_calculadora);
             }
 
             // Ordenamiento
@@ -263,17 +264,31 @@ class CalculadoraImportacionController extends Controller
             $sortOrder = $request->get('sort_order', 'desc');
             $query->orderBy($sortBy, $sortOrder);
 
-            // Paginación
-            $perPage = $request->get('per_page', 15);
-            $calculos = $query->paginate($perPage);
+            $search = $request->get('search', '');
+            $perPage = $request->get('per_page', 10);
+            $page = (int) $request->get('page', 1);
+            $calculos = $query->where('nombre_cliente', 'like', '%' . $search . '%')->paginate($perPage, ['*'], 'page', $page);
 
             // Calcular totales para cada cálculo
             $data = $calculos->items();
             foreach ($data as $calculadora) {
                 $totales = $this->calculadoraImportacionService->calcularTotales($calculadora);
                 $calculadora->totales = $totales;
+                $calculadora->url_cotizacion = $this->generateUrl($calculadora->url_cotizacion);
+                $calculadora->url_cotizacion_pdf = $this->generateUrl($calculadora->url_cotizacion_pdf);
             }
-
+            //get filters estado calculadora, all contenedores carga id,
+            //get all containers label=carga value=id
+            $contenedores = Contenedor::all();
+            $contenedores = $contenedores->map(function ($contenedor) {
+                return [
+                    'id' => $contenedor->id,
+                    'label' => $contenedor->carga,
+                    'value' => $contenedor->id
+                ];
+            });
+            //get all estados calculadora label=estado value=estado
+            $estadoCalculadora = CalculadoraImportacion::getEstadosDisponiblesFilter();
             return response()->json([
                 'success' => true,
                 'data' => $data,
@@ -284,9 +299,18 @@ class CalculadoraImportacionController extends Controller
                     'total' => $calculos->total(),
                     'from' => $calculos->firstItem(),
                     'to' => $calculos->lastItem()
+                ],
+                'headers' => [
+                    'total_clientes' => [
+                        'value' => $calculos->total(),
+                        'label' => 'Total Cotizaciones Realizadas'
+                    ],
+                ],
+                'filters' => [
+                    'contenedores' => $contenedores,
+                    'estadoCalculadora' => $estadoCalculadora
                 ]
             ]);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -294,7 +318,13 @@ class CalculadoraImportacionController extends Controller
             ], 500);
         }
     }
-
+    private function generateUrl($ruta)
+    {
+        if ($ruta) {
+            return env('APP_URL') . $ruta;
+        }
+        return null;
+    }
     /**
      * Guardar cálculo de importación
      */
@@ -311,7 +341,6 @@ class CalculadoraImportacionController extends Controller
                 'proveedores' => 'required|array|min:1',
                 'proveedores.*.cbm' => 'required|numeric|min:0',
                 'proveedores.*.peso' => 'required|numeric|min:0',
-                'proveedores.*.qtyCaja' => 'required|integer|min:1',
                 'proveedores.*.productos' => 'required|array|min:1',
                 'proveedores.*.productos.*.nombre' => 'required|string',
                 'proveedores.*.productos.*.precio' => 'required|numeric|min:0',
@@ -333,7 +362,6 @@ class CalculadoraImportacionController extends Controller
                     'totales' => $totales
                 ]
             ]);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -349,7 +377,7 @@ class CalculadoraImportacionController extends Controller
     {
         try {
             $calculadora = $this->calculadoraImportacionService->obtenerCalculo($id);
-            
+
             if (!$calculadora) {
                 return response()->json([
                     'success' => false,
@@ -366,7 +394,6 @@ class CalculadoraImportacionController extends Controller
                     'totales' => $totales
                 ]
             ]);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -392,7 +419,6 @@ class CalculadoraImportacionController extends Controller
                 'data' => $calculos,
                 'total' => $calculos->count()
             ]);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -409,6 +435,7 @@ class CalculadoraImportacionController extends Controller
         try {
             $eliminado = $this->calculadoraImportacionService->eliminarCalculo($id);
 
+
             if ($eliminado) {
                 return response()->json([
                     'success' => true,
@@ -420,7 +447,6 @@ class CalculadoraImportacionController extends Controller
                 'success' => false,
                 'message' => 'No se pudo eliminar el cálculo'
             ], 400);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -429,7 +455,223 @@ class CalculadoraImportacionController extends Controller
         }
     }
 
+    public function duplicate($id)
+    {
+        try {
+            Log::info("Iniciando duplicación de calculadora ID: {$id}");
+
+            $calculadora = CalculadoraImportacion::with(['proveedores.productos'])->find($id);
+
+            if (!$calculadora) {
+                Log::warning("Calculadora no encontrada con ID: {$id}");
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Calculadora no encontrada'
+                ], 404);
+            }
+
+            Log::info("Calculadora encontrada. Proveedores: " . $calculadora->proveedores->count());
+
+            // Duplicar la calculadora principal
+            $newCalculadora = $calculadora->replicate();
+            $newCalculadora->id_carga_consolidada_contenedor = null;
+            $newCalculadora->estado = 'PENDIENTE'; // Resetear estado
+
+            $newCalculadora->save();
+
+            Log::info("Nueva calculadora creada con ID: {$newCalculadora->id}");
+
+            // Duplicar proveedores y sus productos
+            foreach ($calculadora->proveedores as $proveedor) {
+                Log::info("Duplicando proveedor ID: {$proveedor->id}");
+
+                $newProveedor = $proveedor->replicate();
+                $newProveedor->id_calculadora_importacion = $newCalculadora->id;
+                $newProveedor->save();
+
+                Log::info("Nuevo proveedor creado con ID: {$newProveedor->id}");
+
+                // Duplicar productos del proveedor
+                foreach ($proveedor->productos as $producto) {
+                    Log::info("Duplicando producto ID: {$producto->id} del proveedor ID: {$proveedor->id}");
+
+                    $newProducto = $producto->replicate();
+                    $newProducto->id_proveedor = $newProveedor->id;
+                    $newProducto->save();
+
+                    Log::info("Nuevo producto creado con ID: {$newProducto->id}");
+                }
+            }
+
+            Log::info("Duplicación completada exitosamente");
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Cálculo duplicado exitosamente',
+                'data' => [
+                    'id_original' => $id,
+                    'id_nuevo' => $newCalculadora->id
+                ]
+            ]);
+        } catch (\Exception $e) {
+            Log::error("Error al duplicar calculadora ID {$id}: " . $e->getMessage());
+            Log::error("Stack trace: " . $e->getTraceAsString());
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al duplicar el cálculo: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function changeEstado(Request $request, $id)
+    {
+        try {
+            $estado = $request->estado;
+            $calculadora = CalculadoraImportacion::find($id);
+            $calculadora->estado = $estado;
+            $calculadora->save();
+
+            if ($estado === 'COTIZADO') {
+                $this->sendWhatsAppMessage($calculadora->whatsapp_cliente, $calculadora);
+            }
+
+            return response()->json(['success' => true, 'message' => 'Estado cambiado exitosamente']);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => 'Error al cambiar el estado: ' . $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Enviar mensajes de WhatsApp cuando el estado cambie a COTIZADO
+     */
+    private function sendWhatsAppMessage($whatsappCliente, $calculadora)
+    {
+        try {
+            if (!$whatsappCliente) {
+                Log::warning('No se puede enviar WhatsApp: número no disponible', [
+                    'calculadora_id' => $calculadora->id,
+                    'cliente' => $calculadora->nombre_cliente
+                ]);
+                return;
+            }
+
+            // Formatear número de WhatsApp
+            $phoneNumberId = $this->formatWhatsAppNumber($whatsappCliente);
+
+            // Primer mensaje: Información de la cotización
+            $primerMensaje = "Bien, Te envío la cotización de tu importación, en el documento podrás ver el detalle de los costos.\n\n⚠️ Nota: Leer Términos y Condiciones.\n\n🎥 Video Explicativo:\n▶️ https://youtu.be/H7U-_5wCWd4";
+
+            $this->sendMessage($primerMensaje, $phoneNumberId, 2);
+            Log::info('Primer mensaje de WhatsApp enviado', ['calculadora_id' => $calculadora->id]);
 
 
-  
+
+            // Segundo mensaje: Enviar PDF de la cotización
+            if ($calculadora->url_cotizacion_pdf) {
+                $pdfPath = $this->getPdfPathFromUrl($calculadora->url_cotizacion_pdf);
+                if ($pdfPath && file_exists($pdfPath)) {
+                    $this->sendMedia($pdfPath, 'application/pdf', null, $phoneNumberId, 3);
+                    Log::info('PDF de cotización enviado por WhatsApp', ['calculadora_id' => $calculadora->id]);
+                } else {
+                    Log::warning('No se pudo enviar PDF: archivo no encontrado', [
+                        'calculadora_id' => $calculadora->id,
+                        'url' => $calculadora->url_cotizacion_pdf,
+                        'path' => $pdfPath
+                    ]);
+                }
+            }
+
+
+
+            // Tercer mensaje: Información sobre pagos
+            $tercerMensaje = "📊 Aquí te paso el resumen de cuánto te saldría cada modelo y el total de inversión\n\n💰 El primer pago es el SERVICIO DE IMPORTACIÓN y se realiza antes del zarpe de buque 🚢";
+
+            $this->sendMessage($tercerMensaje, $phoneNumberId, 2);
+            Log::info('Tercer mensaje de WhatsApp enviado', ['calculadora_id' => $calculadora->id]);
+
+            // Cuarto mensaje: Enviar imagen del resumen de costos
+            $resumenCostosService = new ResumenCostosImageService();
+            $imagenResumen = $resumenCostosService->generateResumenCostosImage($calculadora);
+
+            if ($imagenResumen) {
+                $this->sendMedia($imagenResumen['path'], 'image/png', '📊 Resumen detallado de costos y pagos', $phoneNumberId, 4);
+                Log::info('Imagen de resumen de costos enviada por WhatsApp', [
+                    'calculadora_id' => $calculadora->id,
+                    'image_path' => $imagenResumen['path']
+                ]);
+            } else {
+                Log::warning('No se pudo generar la imagen del resumen de costos', [
+                    'calculadora_id' => $calculadora->id
+                ]);
+            }
+
+            Log::info('Secuencia de mensajes de WhatsApp completada exitosamente', [
+                'calculadora_id' => $calculadora->id,
+                'cliente' => $calculadora->nombre_cliente,
+                'whatsapp' => $whatsappCliente
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error al enviar mensajes de WhatsApp: ' . $e->getMessage(), [
+                'calculadora_id' => $calculadora->id,
+                'cliente' => $calculadora->nombre_cliente,
+                'whatsapp' => $whatsappCliente,
+                'trace' => $e->getTraceAsString()
+            ]);
+        }
+    }
+
+    /**
+     * Formatear número de WhatsApp para la API
+     */
+    private function formatWhatsAppNumber($whatsapp)
+    {
+        // Remover caracteres no numéricos
+        $cleanNumber = preg_replace('/[^0-9]/', '', $whatsapp);
+
+        // Si empieza con 0, removerlo
+        if (substr($cleanNumber, 0, 1) === '0') {
+            $cleanNumber = substr($cleanNumber, 1);
+        }
+
+        // Si no empieza con 51 (código de Perú), agregarlo
+        if (substr($cleanNumber, 0, 2) !== '51') {
+            $cleanNumber = '51' . $cleanNumber;
+        }
+
+        return $cleanNumber . '@c.us';
+    }
+
+    /**
+     * Obtener ruta del archivo PDF desde la URL
+     */
+    private function getPdfPathFromUrl($url)
+    {
+        try {
+            // Si es una URL completa, extraer la ruta relativa
+            if (strpos($url, 'http') === 0) {
+                $parsedUrl = parse_url($url);
+                $path = $parsedUrl['path'] ?? '';
+
+                // Remover /storage/ del inicio si existe
+                if (strpos($path, '/storage/') === 0) {
+                    $path = substr($path, 9); // Remover '/storage/'
+                }
+
+                return storage_path('app/public/' . $path);
+            }
+
+            // Si es una ruta relativa
+            if (strpos($url, '/storage/') === 0) {
+                $path = substr($url, 9); // Remover '/storage/'
+                return storage_path('app/public/' . $path);
+            }
+
+            // Si es solo el nombre del archivo
+            return storage_path('app/public/boletas/' . $url);
+        } catch (\Exception $e) {
+            Log::error('Error al obtener ruta del PDF: ' . $e->getMessage(), ['url' => $url]);
+            return null;
+        }
+    }
 }

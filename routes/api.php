@@ -190,6 +190,7 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
         Route::get('valid-containers', [ContenedorController::class, 'getValidContainers']);
         Route::get('cargas-disponibles', [ContenedorController::class, 'getCargasDisponibles']);
         Route::post('move-cotizacion', [ContenedorController::class, 'moveCotizacionToConsolidado']);
+        Route::post('move-cotizacion-calculadora', [ContenedorController::class, 'moveCotizacionToCalculadora']);
         Route::get('/', [ContenedorController::class, 'index']);
         Route::get('pasos/{idContenedor}', [ContenedorController::class, 'getContenedorPasos']);
         Route::post('/', [ContenedorController::class, 'store']);
@@ -306,11 +307,12 @@ Route::group(['prefix' => 'calculadora-importacion', 'middleware' => 'jwt.auth']
     Route::post('clientes', [CalculadoraImportacionController::class, 'getClientesByWhatsapp']);
     Route::get('tarifas', [CalculadoraImportacionController::class, 'getTarifas']);
     
-    // Nuevas rutas para CRUD de cálculos
+    Route::post('duplicate/{id}', [CalculadoraImportacionController::class, 'duplicate']);
     Route::get('/', [CalculadoraImportacionController::class, 'index']);
     Route::post('/', [CalculadoraImportacionController::class, 'store']);
     Route::get('/{id}', [CalculadoraImportacionController::class, 'show']);
     Route::get('/cliente', [CalculadoraImportacionController::class, 'getCalculosPorCliente']);
+    Route::post('/change-estado/{id}', [CalculadoraImportacionController::class, 'changeEstado']);
     Route::delete('/{id}', [CalculadoraImportacionController::class, 'destroy']);
 });
 Route::group(['prefix' => 'options', 'middleware' => 'jwt.auth'], function () {

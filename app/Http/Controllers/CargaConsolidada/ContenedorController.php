@@ -13,6 +13,7 @@ use Tymon\JWTAuth\Facades\JWTAuth;
 use App\Models\CargaConsolidada\Cotizacion;
 use App\Models\CargaConsolidada\CotizacionProveedor;
 use Illuminate\Support\Facades\DB;
+use App\Models\CalculadoraImportacion;
 
 
 class ContenedorController extends Controller
@@ -303,5 +304,23 @@ class ContenedorController extends Controller
         }
 
         return response()->json(['message' => 'Cotización movida a consolidado correctamente', 'success' => true]);
+    }
+    public function moveCotizacionToCalculadora(Request $request)
+    {
+        try {
+            $data = $request->all();
+            $idCotizacion = $data['idCotizacion'];
+            $idContenedorDestino = $data['idContenedorDestino'];
+            //set calculadora importacion id_carga_consolidada_contenedor = idContenedorDestino where id=idCotizacion
+            $calculadora = CalculadoraImportacion::where('id', $idCotizacion)->first();
+            if (!$calculadora) {
+                return response()->json(['message' => 'Calculadora importación no encontrada', 'success' => false], 404);
+            }
+            $calculadora->id_carga_consolidada_contenedor = $idContenedorDestino;
+            $calculadora->save();
+            return response()->json(['message' => 'Cotización movida a calculadora correctamente', 'success' => true]);
+        } catch (\Exception $e) {
+            return response()->json(['message' => 'Error al mover cotización a calculadora: ' . $e->getMessage(), 'success' => false], 500);
+        }
     }
 }
