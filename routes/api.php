@@ -305,6 +305,13 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
 Route::group(['prefix' => 'calculadora-importacion', 'middleware' => 'jwt.auth'], function () {
     Route::post('clientes', [CalculadoraImportacionController::class, 'getClientesByWhatsapp']);
     Route::get('tarifas', [CalculadoraImportacionController::class, 'getTarifas']);
+    
+    // Nuevas rutas para CRUD de cálculos
+    Route::get('/', [CalculadoraImportacionController::class, 'index']);
+    Route::post('/', [CalculadoraImportacionController::class, 'store']);
+    Route::get('/{id}', [CalculadoraImportacionController::class, 'show']);
+    Route::get('/cliente', [CalculadoraImportacionController::class, 'getCalculosPorCliente']);
+    Route::delete('/{id}', [CalculadoraImportacionController::class, 'destroy']);
 });
 Route::group(['prefix' => 'options', 'middleware' => 'jwt.auth'], function () {
     Route::get('paises', [PaisController::class, 'getPaisDropdown']);

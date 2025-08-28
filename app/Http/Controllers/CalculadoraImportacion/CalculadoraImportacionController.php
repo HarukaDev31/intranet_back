@@ -5,18 +5,25 @@ namespace App\Http\Controllers\CalculadoraImportacion;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\BaseDatos\Clientes\Cliente;
+use App\Models\CalculadoraImportacion;
 use App\Services\BaseDatos\Clientes\ClienteService;
+use App\Services\CalculadoraImportacionService;
 use App\Models\CalculadoraTarifasConsolidado;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
 
 class CalculadoraImportacionController extends Controller
 {
     protected $clienteService;
+    protected $calculadoraImportacionService;
 
-    public function __construct(ClienteService $clienteService)
-    {
+    public function __construct(
+        ClienteService $clienteService,
+        CalculadoraImportacionService $calculadoraImportacionService
+    ) {
         $this->clienteService = $clienteService;
+        $this->calculadoraImportacionService = $calculadoraImportacionService;
     }
 
     public function getClientesByWhatsapp(Request $request)
@@ -50,7 +57,8 @@ class CalculadoraImportacionController extends Controller
                 $categoria = $this->determinarCategoriaCliente($servicios);
                 
                 $clientesTransformados[] = [
-                    'value' => $cliente->id,
+                    'id' => $cliente->id,
+                    'value' => $cliente->telefono,
                     'nombre' => $cliente->nombre,
                     'documento' => $cliente->documento,
                     'correo' => $cliente->correo,
@@ -163,11 +171,11 @@ class CalculadoraImportacionController extends Controller
         $totalServicios = count($servicios);
 
         if ($totalServicios === 0) {
-            return 'Inactivo';
+            return 'NUEVO';
         }
 
         if ($totalServicios === 1) {
-            return 'Cliente';
+            return 'RECURRENTE';
         }
 
         // Obtener la fecha del último servicio
@@ -178,7 +186,7 @@ class CalculadoraImportacionController extends Controller
 
         // Si la última compra fue hace más de 6 meses, es Inactivo
         if ($mesesDesdeUltimaCompra > 6) {
-            return 'Inactivo';
+            return 'INACTIVO';
         }
 
         // Para clientes con múltiples servicios
@@ -191,20 +199,32 @@ class CalculadoraImportacionController extends Controller
 
             // Si compra cada 2 meses o menos Y la última compra fue hace ≤ 2 meses
             if ($frecuenciaPromedio <= 2 && $mesesDesdeUltimaCompra <= 2) {
-                return 'Premium';
+                return 'PREMIUM';
             }
             // Si tiene múltiples compras Y la última fue hace ≤ 6 meses
             else if ($mesesDesdeUltimaCompra <= 6) {
-                return 'Recurrente';
+                return 'RECURRENTE';
             }
         }
 
-        return 'Inactivo';
+        return 'INACTIVO';
     }
     public function getTarifas()
     {
         try {
             $tarifas = CalculadoraTarifasConsolidado::with('tipoCliente')->get();
+            $tarifas = $tarifas->map(function ($tarifa) {
+                return [
+                    'id' => $tarifa->id,
+                    'limit_inf' => $tarifa->limit_inf,
+                    'limit_sup' => $tarifa->limit_sup,
+                    'type' => $tarifa->type,
+                    'tarifa' => $tarifa->value,
+                    'label' => $tarifa->tipoCliente->nombre,
+                    'id_tipo_cliente' => $tarifa->tipoCliente->id,
+                    'value' => $tarifa->tipoCliente->nombre
+                ];
+            });
             return response()->json([
                 'success' => true,
                 'data' => $tarifas
@@ -216,4 +236,200 @@ class CalculadoraImportacionController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Obtener todos los cálculos de importación
+     */
+    public function index(Request $request)
+    {
+        try {
+            $query = CalculadoraImportacion::with(['proveedores.productos', 'cliente']);
+
+            // Filtros opcionales
+            if ($request->has('tipo_cliente') && $request->tipo_cliente) {
+                $query->where('tipo_cliente', $request->tipo_cliente);
+            }
+
+            if ($request->has('dni_cliente') && $request->dni_cliente) {
+                $query->where('dni_cliente', 'like', '%' . $request->dni_cliente . '%');
+            }
+
+            if ($request->has('nombre_cliente') && $request->nombre_cliente) {
+                $query->where('nombre_cliente', 'like', '%' . $request->nombre_cliente . '%');
+            }
+
+            // Ordenamiento
+            $sortBy = $request->get('sort_by', 'created_at');
+            $sortOrder = $request->get('sort_order', 'desc');
+            $query->orderBy($sortBy, $sortOrder);
+
+            // Paginación
+            $perPage = $request->get('per_page', 15);
+            $calculos = $query->paginate($perPage);
+
+            // Calcular totales para cada cálculo
+            $data = $calculos->items();
+            foreach ($data as $calculadora) {
+                $totales = $this->calculadoraImportacionService->calcularTotales($calculadora);
+                $calculadora->totales = $totales;
+            }
+
+            return response()->json([
+                'success' => true,
+                'data' => $data,
+                'pagination' => [
+                    'current_page' => $calculos->currentPage(),
+                    'last_page' => $calculos->lastPage(),
+                    'per_page' => $calculos->perPage(),
+                    'total' => $calculos->total(),
+                    'from' => $calculos->firstItem(),
+                    'to' => $calculos->lastItem()
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al obtener los cálculos: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Guardar cálculo de importación
+     */
+    public function store(Request $request)
+    {
+        try {
+            $request->validate([
+                'clienteInfo.nombre' => 'required|string',
+                'clienteInfo.dni' => 'required|string',
+                'clienteInfo.whatsapp.value' => 'nullable|string',
+                'clienteInfo.correo' => 'nullable|email',
+                'clienteInfo.tipoCliente' => 'required|string',
+                'clienteInfo.qtyProveedores' => 'required|integer|min:1',
+                'proveedores' => 'required|array|min:1',
+                'proveedores.*.cbm' => 'required|numeric|min:0',
+                'proveedores.*.peso' => 'required|numeric|min:0',
+                'proveedores.*.qtyCaja' => 'required|integer|min:1',
+                'proveedores.*.productos' => 'required|array|min:1',
+                'proveedores.*.productos.*.nombre' => 'required|string',
+                'proveedores.*.productos.*.precio' => 'required|numeric|min:0',
+                'proveedores.*.productos.*.cantidad' => 'required|integer|min:1',
+                'proveedores.*.productos.*.antidumpingCU' => 'nullable|numeric|min:0',
+                'proveedores.*.productos.*.adValoremP' => 'nullable|numeric|min:0',
+                'tarifaTotalExtraProveedor' => 'nullable|numeric|min:0',
+                'tarifaTotalExtraItem' => 'nullable|numeric|min:0'
+            ]);
+
+            $calculadora = $this->calculadoraImportacionService->guardarCalculo($request->all());
+            $totales = $this->calculadoraImportacionService->calcularTotales($calculadora);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Cálculo guardado exitosamente',
+                'data' => [
+                    'calculadora' => $calculadora,
+                    'totales' => $totales
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al guardar el cálculo: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Obtener cálculo por ID
+     */
+    public function show($id)
+    {
+        try {
+            $calculadora = $this->calculadoraImportacionService->obtenerCalculo($id);
+            
+            if (!$calculadora) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Cálculo no encontrado'
+                ], 404);
+            }
+
+            $totales = $this->calculadoraImportacionService->calcularTotales($calculadora);
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'calculadora' => $calculadora,
+                    'totales' => $totales
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al obtener el cálculo: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Obtener cálculos por cliente
+     */
+    public function getCalculosPorCliente(Request $request)
+    {
+        try {
+            $request->validate([
+                'dni' => 'required|string'
+            ]);
+
+            $calculos = $this->calculadoraImportacionService->obtenerCalculosPorCliente($request->dni);
+
+            return response()->json([
+                'success' => true,
+                'data' => $calculos,
+                'total' => $calculos->count()
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al obtener los cálculos: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Eliminar cálculo
+     */
+    public function destroy($id)
+    {
+        try {
+            $eliminado = $this->calculadoraImportacionService->eliminarCalculo($id);
+
+            if ($eliminado) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Cálculo eliminado exitosamente'
+                ]);
+            }
+
+            return response()->json([
+                'success' => false,
+                'message' => 'No se pudo eliminar el cálculo'
+            ], 400);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al eliminar el cálculo: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+
+
+  
 }

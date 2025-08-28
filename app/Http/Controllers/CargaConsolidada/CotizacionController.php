@@ -745,6 +745,69 @@ class CotizacionController extends Controller
         return date('Y-m-d');
     }
 
+    /**
+     * Lee la plantilla de cotización inicial desde assets/templates
+     * @return array|string Datos de la plantilla o mensaje de error
+     */
+    public function leerPlantillaCotizacionInicial()
+    {
+        try {
+            $plantillaPath = public_path('assets/templates/PLANTILLA_COTIZACION_INICIAL.xlsm');
+            
+            if (!file_exists($plantillaPath)) {
+                Log::error('Plantilla de cotización inicial no encontrada en: ' . $plantillaPath);
+                return 'Plantilla de cotización inicial no encontrada: ' . $plantillaPath;
+            }
+
+            Log::info('Leyendo plantilla de cotización inicial desde: ' . $plantillaPath);
+
+            try {
+                $objPHPExcel = IOFactory::load($plantillaPath);
+            } catch (\Exception $e) {
+                Log::error('Error al cargar plantilla Excel: ' . $e->getMessage());
+                return 'Error al cargar plantilla Excel: ' . $e->getMessage();
+            }
+
+            $sheet = $objPHPExcel->getSheet(0);
+            
+            // Leer datos básicos de la plantilla
+            $datosPlantilla = [
+                'nombre_plantilla' => $sheet->getCell('A1')->getValue() ?? 'PLANTILLA_COTIZACION_INICIAL',
+                'fecha_plantilla' => $sheet->getCell('E9')->getValue() ?? date('Y-m-d'),
+                'tipo_cliente_default' => $sheet->getCell('E11')->getValue() ?? '',
+                'volumen_default' => $sheet->getCell('I11')->getCalculatedValue() ?? 0,
+                'peso_default' => $sheet->getCell('I9')->getOldCalculatedValue() ?? 0,
+                'valor_cot_default' => $sheet->getCell('J14')->getCalculatedValue() ?? 0,
+                'monto_default' => $sheet->getCell('J30')->getOldCalculatedValue() ?? 0,
+                'fob_default' => $sheet->getCell('J29')->getOldCalculatedValue() ?? 0,
+                'impuestos_default' => $sheet->getCell('J31')->getOldCalculatedValue() ?? 0,
+                'tarifa_default' => 0,
+                'qty_item_default' => 0
+            ];
+
+            // Calcular tarifa por defecto
+            if ($datosPlantilla['volumen_default'] > 0) {
+                $datosPlantilla['tarifa_default'] = $datosPlantilla['monto_default'] / $datosPlantilla['volumen_default'];
+            }
+
+            // Contar items por defecto
+            $highestRow = $sheet->getHighestRow();
+            for ($row = 36; $row <= $highestRow; $row++) {
+                $cellValue = $sheet->getCell('A' . $row)->getValue();
+                if (is_numeric($cellValue) && $cellValue > 0) {
+                    $datosPlantilla['qty_item_default']++;
+                }
+            }
+
+            Log::info('Plantilla leída exitosamente: ' . json_encode($datosPlantilla));
+            return $datosPlantilla;
+
+        } catch (Exception $e) {
+            Log::error('Error al leer plantilla de cotización inicial: ' . $e->getMessage());
+            return 'Error al leer plantilla: ' . $e->getMessage();
+        }
+    }
+
     // Propiedades de la clase
     protected $defaultHoursContactado = 60; // 1 hora por defecto
 
