@@ -85,72 +85,7 @@ class CotizacionController extends Controller
             $idContenedor = $request->idContenedor;
 
             // Obtener datos usando Query Builder
-            $headers = DB::table('contenedor_consolidado_cotizacion_proveedores as cccp')
-                ->join('contenedor_consolidado_cotizacion as cc', 'cccp.id_cotizacion', '=', 'cc.id')
-                ->where('cccp.id_contenedor', $idContenedor)
-                ->select([
-                    DB::raw('COALESCE(SUM(IF(cc.estado_cotizador = "CONFIRMADO", cccp.cbm_total_china, 0)), 0) as cbm_total_china'),
-                    DB::raw('(
-                        SELECT COALESCE(SUM(volumen), 0)
-                        FROM contenedor_consolidado_cotizacion
-                        WHERE id IN (
-                            SELECT DISTINCT id_cotizacion
-                            FROM contenedor_consolidado_cotizacion_proveedores
-                            WHERE id_contenedor = ' . $idContenedor . '
-                        )
-                        AND estado_cotizador = "CONFIRMADO"
-                    ) as cbm_total_peru'),
-                    DB::raw('(
-                        SELECT COALESCE(SUM(volumen), 0)
-                        FROM contenedor_consolidado_cotizacion
-                        WHERE id_contenedor = ' . $idContenedor . '
-                        AND estado_cotizador = "CONFIRMADO"
-                        AND id_usuario = ' . $userId . '
-                    ) as cbm_vendido'),
-                    DB::raw('(
-                        SELECT COALESCE(SUM(volumen), 0)
-                        FROM contenedor_consolidado_cotizacion
-                        WHERE id_contenedor = ' . $idContenedor . '
-                        AND estado_cotizador != "CONFIRMADO"
-                        AND id_usuario = ' . $userId . '
-                    ) as cbm_pendiente'),
-                    DB::raw('(
-                        SELECT COALESCE(SUM(cccp.cbm_total_china), 0)
-                        FROM contenedor_consolidado_cotizacion_proveedores cccp
-                        JOIN contenedor_consolidado_cotizacion cc ON cccp.id_cotizacion = cc.id
-                        WHERE cccp.id_contenedor = ' . $idContenedor . '
-                        AND cccp.estados_proveedor = "LOADED"
-                        AND cc.id_usuario = ' . $userId . '
-                    ) as cbm_embarcado'),
-                    DB::raw('(
-                        SELECT COALESCE(SUM(monto), 0)
-                        FROM contenedor_consolidado_cotizacion
-                        WHERE id IN (
-                            SELECT DISTINCT id_cotizacion
-                            FROM contenedor_consolidado_cotizacion_proveedores
-                            WHERE id_contenedor = ' . $idContenedor . '
-                        )
-                        AND estado_cotizador = "CONFIRMADO"
-                    ) as total_logistica'),
-                    DB::raw('(
-                        SELECT COALESCE(SUM(qty_item), 0)
-                        FROM contenedor_consolidado_cotizacion
-                        WHERE id IN (
-                            SELECT DISTINCT id_cotizacion
-                            FROM contenedor_consolidado_cotizacion_proveedores
-                            WHERE id_contenedor = ' . $idContenedor . '
-                        )
-                        AND estado_cotizador = "CONFIRMADO"
-                    ) as total_qty_items'),
-                    DB::raw('(
-                        SELECT COALESCE(SUM(monto), 0)
-                        FROM contenedor_consolidado_cotizacion_coordinacion_pagos cccp
-                        JOIN cotizacion_coordinacion_pagos_concept pc ON cccp.id_concept = pc.id
-                        WHERE cccp.id_contenedor = ' . $idContenedor . '
-                        AND pc.name = "LOGISTICA"
-                    ) as total_logistica_pagado')
-                ])
-                ->first();
+
 
             // Obtener datos del contenedor
             $files = DB::table('carga_consolidada_contenedor')
@@ -183,40 +118,10 @@ class CotizacionController extends Controller
                 ];
             });
 
-            // Preparar los headers
-            $headersData = [
-                'cbm_total_china' => [
-                    'value' => $headers ? $headers->cbm_total_china : 0,
-                    'label' => 'CBM Total China'
-                ],
-                'cbm_total_peru' => [
-                    'value' => $headers ? $headers->cbm_total_peru : 0,
-                    'label' => 'CBM Total Perú'
-                ],
-                'cbm_vendido' => [
-                    'value' => $headers ? $headers->cbm_vendido : 0,
-                    'label' => 'CBM Vendido'
-                ],
-                'cbm_pendiente' => [
-                    'value' => $headers ? $headers->cbm_pendiente : 0,
-                    'label' => 'CBM Pendiente'
-                ],
-                'cbm_embarcado' => [
-                    'value' => $headers ? $headers->cbm_embarcado : 0,
-                    'label' => 'CBM Embarcado'
-                ],
-                
-                'qty_items' => [
-                    'value' => $headers ? $headers->total_qty_items : 0,
-                    'label' => 'Cantidad de Items'
-                ],
-              
-            ];
 
             return response()->json([
                 'success' => true,
                 'data' => $data,
-                'headers' => $headersData,
                 'pagination' => [
                     'current_page' => $results->currentPage(),
                     'per_page' => $results->perPage(),
@@ -232,7 +137,125 @@ class CotizacionController extends Controller
             ], 500);
         }
     }
+    public function getHeadersData($idContenedor)
+    {
+        $userId = auth()->id();
 
+        $headers = DB::table('contenedor_consolidado_cotizacion_proveedores as cccp')
+            ->join('contenedor_consolidado_cotizacion as cc', 'cccp.id_cotizacion', '=', 'cc.id')
+            ->where('cccp.id_contenedor', $idContenedor)
+            ->select([
+                DB::raw('COALESCE(SUM(IF(cc.estado_cotizador = "CONFIRMADO", cccp.cbm_total_china, 0)), 0) as cbm_total_china'),
+                DB::raw('(
+                    SELECT COALESCE(SUM(volumen), 0)
+                    FROM contenedor_consolidado_cotizacion
+                    WHERE id IN (
+                        SELECT DISTINCT id_cotizacion
+                        FROM contenedor_consolidado_cotizacion_proveedores
+                        WHERE id_contenedor = ' . $idContenedor . '
+                    )
+                    AND estado_cotizador = "CONFIRMADO"
+                ) as cbm_total_peru'),
+                DB::raw('(
+                    SELECT COALESCE(SUM(volumen), 0)
+                    FROM contenedor_consolidado_cotizacion
+                    WHERE id_contenedor = ' . $idContenedor . '
+                    AND estado_cotizador = "CONFIRMADO"
+                    AND id_usuario = ' . $userId . '
+                ) as cbm_vendido'),
+                DB::raw('(
+                    SELECT COALESCE(SUM(volumen), 0)
+                    FROM contenedor_consolidado_cotizacion
+                    WHERE id_contenedor = ' . $idContenedor . '
+                    AND estado_cotizador != "CONFIRMADO"
+                    AND id_usuario = ' . $userId . '
+                ) as cbm_pendiente'),
+                DB::raw('(
+                    SELECT COALESCE(SUM(cccp.cbm_total_china), 0)
+                    FROM contenedor_consolidado_cotizacion_proveedores cccp
+                    JOIN contenedor_consolidado_cotizacion cc ON cccp.id_cotizacion = cc.id
+                    WHERE cccp.id_contenedor = ' . $idContenedor . '
+                    AND cccp.estados_proveedor = "LOADED"
+                    AND cc.id_usuario = ' . $userId . '
+                ) as cbm_embarcado'),
+                DB::raw('(
+                    SELECT COALESCE(SUM(monto), 0)
+                    FROM contenedor_consolidado_cotizacion
+                    WHERE id IN (
+                        SELECT DISTINCT id_cotizacion
+                        FROM contenedor_consolidado_cotizacion_proveedores
+                        WHERE id_contenedor = ' . $idContenedor . '
+                    )
+                    AND estado_cotizador = "CONFIRMADO"
+                ) as total_logistica'),
+                DB::raw('(
+                    SELECT COALESCE(SUM(qty_item), 0)
+                    FROM contenedor_consolidado_cotizacion
+                    WHERE id IN (
+                        SELECT DISTINCT id_cotizacion
+                        FROM contenedor_consolidado_cotizacion_proveedores
+                        WHERE id_contenedor = ' . $idContenedor . '
+                    )
+                    AND estado_cotizador = "CONFIRMADO"
+                ) as total_qty_items'),
+                DB::raw('(
+                    SELECT COALESCE(SUM(monto), 0)
+                    FROM contenedor_consolidado_cotizacion_coordinacion_pagos cccp
+                    JOIN cotizacion_coordinacion_pagos_concept pc ON cccp.id_concept = pc.id
+                    WHERE cccp.id_contenedor = ' . $idContenedor . '
+                    AND pc.name = "LOGISTICA"
+                ) as total_logistica_pagado')
+            ])
+            ->first();
+        // Preparar los headers
+        $headersData = [
+            'cbm_total_china' => [
+                'value' => $headers ? $headers->cbm_total_china : 0,
+                'label' => 'CBM Total ',
+                'icon' => 'https://upload.wikimedia.org/wikipedia/commons/f/fa/Flag_of_the_People%27s_Republic_of_China.svg'   
+            ],
+            'cbm_total_peru' => [
+                'value' => $headers ? $headers->cbm_total_peru : 0,
+                'label' => 'CBM Total ',
+                'icon' =>'https://upload.wikimedia.org/wikipedia/commons/c/cf/Flag_of_Peru.svg'
+            ],
+            'cbm_vendido' => [
+                'value' => $headers ? $headers->cbm_vendido : 0,
+                'label' => 'CBM Vendido',
+                'icon' => 'i-heroicons-currency-dollar'
+                
+            ],
+            'cbm_pendiente' => [
+                'value' => $headers ? $headers->cbm_pendiente : 0,
+                'label' => 'CBM Pendiente',
+                'icon' => 'i-heroicons-currency-dollar'
+            ],
+            'cbm_embarcado' => [
+                'value' => $headers ? $headers->cbm_embarcado : 0,
+                'label' => 'CBM Embarcado',
+                'icon' => 'i-heroicons-currency-dollar'
+            ],
+
+            'qty_items' => [
+                'value' => $headers ? $headers->total_qty_items : 0,
+                'label' => 'Cantidad de Items',
+                'icon' => 'i-heroicons-imbox-stack'
+            ],
+
+        ];
+        $contenedor = Contenedor::find($idContenedor);
+        if (!$contenedor) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Contenedor no encontrado'
+            ], 404);
+        }
+        return response()->json([
+            'success' => true,
+            'data' => $headersData,
+            'carga' => $contenedor->carga
+        ]);
+    }
     public function store(Request $request)
     {
         try {
@@ -753,7 +776,7 @@ class CotizacionController extends Controller
     {
         try {
             $plantillaPath = public_path('assets/templates/PLANTILLA_COTIZACION_INICIAL.xlsm');
-            
+
             if (!file_exists($plantillaPath)) {
                 Log::error('Plantilla de cotización inicial no encontrada en: ' . $plantillaPath);
                 return 'Plantilla de cotización inicial no encontrada: ' . $plantillaPath;
@@ -769,7 +792,7 @@ class CotizacionController extends Controller
             }
 
             $sheet = $objPHPExcel->getSheet(0);
-            
+
             // Leer datos básicos de la plantilla
             $datosPlantilla = [
                 'nombre_plantilla' => $sheet->getCell('A1')->getValue() ?? 'PLANTILLA_COTIZACION_INICIAL',
@@ -801,7 +824,6 @@ class CotizacionController extends Controller
 
             Log::info('Plantilla leída exitosamente: ' . json_encode($datosPlantilla));
             return $datosPlantilla;
-
         } catch (Exception $e) {
             Log::error('Error al leer plantilla de cotización inicial: ' . $e->getMessage());
             return 'Error al leer plantilla: ' . $e->getMessage();
@@ -1453,8 +1475,8 @@ class CotizacionController extends Controller
                         ->orWhere('products', '');
                 })->count();
 
- 
-         
+
+
 
             if ($proveedoresSinProductos > 0 && $estado == 'CONFIRMADO') {
                 return response()->json([

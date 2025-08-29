@@ -199,7 +199,7 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
         
         Route::group(['prefix' => 'cotizaciones'], function () {
             Route::post('/{id}/refresh', [CotizacionController::class, 'refreshCotizacionFile']);
-
+            Route::get('/{idContenedor}/headers', [CotizacionController::class, 'getHeadersData']);
             Route::get('/{idContenedor}', [CotizacionController::class, 'index']);
             Route::put('{id}', [CotizacionController::class, 'update']);
             Route::post('{id}/estado-cotizador', [CotizacionController::class, 'updateEstadoCotizacion']);
