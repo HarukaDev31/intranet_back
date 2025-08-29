@@ -34,7 +34,7 @@ class ProductosController extends Controller
             if ($request->has('search') && $request->search) {
                 $query->where(function($q) use ($request) {
                     $q->where('productos_importados_excel.nombre_comercial', 'like', '%' . $request->search . '%')
-                    ->orWhere('productos_importados_excel.caracteristicas', 'like', '%' . $request->search . '%');
+                    ->orWhere('productos_importados_excel.subpartida', 'like', '%' . $request->search . '%');
                 });
             }
 
@@ -89,8 +89,17 @@ class ProductosController extends Controller
     public function filterOptions()
     {
         try {
-            // Obtener cargas únicas de la tabla carga_consolidada_contenedor
-            $cargas = Contenedor::getCargasUnicas();
+            // Obtener solo las cargas que tienen productos (disponibles)
+            $cargas = ProductoImportadoExcel::leftJoin('carga_consolidada_contenedor', 'productos_importados_excel.idContenedor', '=', 'carga_consolidada_contenedor.id')
+                ->whereNotNull('carga_consolidada_contenedor.carga')
+                ->where('carga_consolidada_contenedor.carga', '!=', '')
+                ->distinct()
+                ->orderByRaw('CAST(carga_consolidada_contenedor.carga AS UNSIGNED)')
+                ->pluck('carga_consolidada_contenedor.carga')
+                ->map(function($c) { return trim((string)$c); })
+                ->filter()
+                ->values()
+                ->toArray();
 
             // Obtener otras opciones de filtro de productos
             $rubros = ProductoImportadoExcel::select('rubro')
