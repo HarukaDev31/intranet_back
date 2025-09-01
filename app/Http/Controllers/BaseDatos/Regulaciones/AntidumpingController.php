@@ -42,7 +42,7 @@ class AntidumpingController extends Controller
                         'id' => $antidumping->id,
                         'descripcion' => $antidumping->descripcion_producto,
                         'partida' => $antidumping->partida,
-                        'precio_declarado' => $antidumping->antidumping,
+                        'precio_declarado' => $antidumping->precio_declarado,
                         'antidumping' => $antidumping->antidumping,
                         'observaciones' => $antidumping->observaciones,
                         'imagenes' => $antidumping->media->map(function ($media) {
