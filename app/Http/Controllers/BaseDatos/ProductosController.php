@@ -54,7 +54,12 @@ class ProductosController extends Controller
             }
 
             $data = $query->paginate($perPage, ['*'], 'page', $page);
-
+            //for each foto add the url if url cannot contains http or https    
+            foreach ($data->items() as $item) {
+                if (!strpos($item->foto, 'http') && !strpos($item->foto, 'https')) {
+                    $item->foto = $this->generateImageUrl($item->foto);
+                }
+            }
             return response()->json([
                 'success' => true,
                 'data' => $data->items(),
@@ -166,13 +171,15 @@ class ProductosController extends Controller
                     'message' => 'Tipo de archivo no permitido. Formatos válidos: ' . implode(', ', $allowedExtensions)
                 ], 400);
             }
+            $filePath = $file->storeAs('imports/productos', time() . '_' . uniqid() . '_' . $file->getClientOriginalName(), 'public');
 
+            $fullPath = storage_path('app/public/' . $filePath);
 
             // Crear registro de importación
             $importProducto = ImportProducto::create([
                 'nombre_archivo' => $file->getClientOriginalName(),
-                'ruta_archivo' => $file->store('imports/productos'),
                 'cantidad_rows' => 0,
+                'ruta_archivo' => $filePath,
                 'estadisticas' => [],
                 'id_contenedor_consolidado_documentacion_files' => $idContenedor
             ]);
@@ -284,7 +291,7 @@ class ProductosController extends Controller
                 $row = 3;
                 
                 while ($row <= $highestRow) {
-                    $cellValue = $sheet->getCell("A$row")->getValue();
+                    $cellValue = $sheet->getCell("A$row")->getCalculatedValue();
                     
                     // Si la celda está vacía o es "-", terminar
                     if ($cellValue === null || $cellValue === "" || $cellValue === "-") {
@@ -362,7 +369,7 @@ class ProductosController extends Controller
                 $i = $startRow;
                 
                 $nombre_comercial = $sheet->getCell("B$i")->getValue();
-                $foto = $sheet->getCell("C$i")->getValue();
+                $foto = $this->extractImageFromExcel($sheet, $startRow, $endRow, $extractPath);
                 
                 // Obtener características de todas las filas del rango
                 $caracteristicas = "";
@@ -500,64 +507,83 @@ class ProductosController extends Controller
     /**
      * Extraer imagen específica del Excel
      */
-    private function extractImageFromExcel($drawings, $startRow, $endRow, $extractPath)
+    private function extractImageFromExcel($sheet, $startRow, $endRow, $extractPath)
     {
         $foto = '';
 
-        // Optimización: buscar solo en la fila específica, no en todo el rango
-        $searchRow = $startRow;
+        try {
+            // Obtener la colección de dibujos de la hoja directamente
+            $drawingCollection = $sheet->getDrawingCollection();
+            
+            if (!$drawingCollection || $drawingCollection->count() === 0) {
+                Log::info("No se encontraron dibujos en la hoja para el rango C{$startRow}-C{$endRow}");
+                return $foto;
+            }
 
-        foreach ($drawings as $drawing) {
-            $coordinates = $drawing->getCoordinates();
+            Log::info("Total de dibujos encontrados en la hoja: " . $drawingCollection->count());
 
-            if ($coordinates == "C$searchRow") {
-                $drawingPath = $drawing->getPath();
-                Log::info("Encontrado dibujo en C$searchRow: " . $drawingPath);
+            // Buscar la imagen en todas las filas del rango mergeado
+            for ($searchRow = $startRow; $searchRow <= $endRow; $searchRow++) {
+                Log::info("Buscando imagen en fila C$searchRow");
+                
+                foreach ($drawingCollection as $drawing) {
+                    $coordinates = $drawing->getCoordinates();
 
-                $hashPosition = strpos($drawingPath, '#');
-                if ($hashPosition !== false) {
-                    $extractedPart = substr($drawingPath, $hashPosition + 1);
-                    Log::info("Parte extraída: " . $extractedPart);
+                    if ($coordinates == "C$searchRow") {
+                        $drawingPath = $drawing->getPath();
+                        Log::info("Encontrado dibujo en C$searchRow: " . $drawingPath);
 
-                    // Definir posibles ubicaciones de la imagen
-                    $possiblePaths = [
-                        $extractPath . '/xl/media/' . $extractedPart,
-                        $extractPath . '/' . $extractedPart,
-                        $extractPath . '/media/' . $extractedPart
-                    ];
+                        $hashPosition = strpos($drawingPath, '#');
+                        if ($hashPosition !== false) {
+                            $extractedPart = substr($drawingPath, $hashPosition + 1);
+                            Log::info("Parte extraída: " . $extractedPart);
 
-                    foreach ($possiblePaths as $imagePath) {
-                        if (file_exists($imagePath)) {
-                            $imageData = file_get_contents($imagePath);
-                            if ($imageData !== false) {
-                                // Crear directorio si no existe
-                                $path = storage_path('app/public/productos/');
-                                if (!is_dir($path)) {
-                                    mkdir($path, 0777, true);
-                                }
+                            // Definir posibles ubicaciones de la imagen
+                            $possiblePaths = [
+                                $extractPath . '/xl/media/' . $extractedPart,
+                                $extractPath . '/' . $extractedPart,
+                                $extractPath . '/media/' . $extractedPart
+                            ];
 
-                                // Obtener extensión original o usar jpg por defecto
-                                $extension = pathinfo($extractedPart, PATHINFO_EXTENSION);
-                                $extension = $extension ? $extension : 'jpg';
+                            foreach ($possiblePaths as $imagePath) {
+                                if (file_exists($imagePath)) {
+                                    $imageData = file_get_contents($imagePath);
+                                    if ($imageData !== false) {
+                                        // Crear directorio si no existe
+                                        $path = storage_path('app/public/productos/');
+                                        if (!is_dir($path)) {
+                                            mkdir($path, 0777, true);
+                                        }
 
-                                $filename = 'productos/' . uniqid() . '.' . $extension;
-                                $fullPath = storage_path('app/public/' . $filename);
+                                        // Obtener extensión original o usar jpg por defecto
+                                        $extension = pathinfo($extractedPart, PATHINFO_EXTENSION);
+                                        $extension = $extension ? $extension : 'jpg';
 
-                                if (file_put_contents($fullPath, $imageData)) {
-                                    $foto = $filename;
-                                    Log::info("Imagen guardada: " . $foto);
-                                    return $foto;
+                                        $filename = 'productos/' . uniqid() . '.' . $extension;
+                                        $fullPath = storage_path('app/public/' . $filename);
+
+                                        if (file_put_contents($fullPath, $imageData)) {
+                                            $foto = $filename;
+                                            Log::info("Imagen guardada desde fila C$searchRow: " . $foto);
+                                            return $foto;
+                                        }
+                                    }
                                 }
                             }
                         }
+                        // Si encontramos un dibujo en esta fila, continuar buscando en las siguientes filas
+                        // por si hay múltiples imágenes en el rango
                     }
                 }
-                break; // Salir del foreach una vez que encontramos el dibujo
             }
-        }
 
-        Log::info("No se encontró imagen para la fila C$searchRow");
-        return $foto;
+            Log::info("No se encontró imagen en el rango C{$startRow}-C{$endRow}");
+            return $foto;
+            
+        } catch (\Exception $e) {
+            Log::error("Error al extraer imagen: " . $e->getMessage());
+            return $foto;
+        }
     }
 
     /**
@@ -816,9 +842,38 @@ class ProductosController extends Controller
     }
     public function obtenerListExcel(){
         $importProductos = ImportProducto::all();
+        //foreach ruta_archivo 
+        foreach ($importProductos as $importProducto) {
+            $importProducto->ruta_archivo = $this->generateImageUrl($importProducto->ruta_archivo);
+        }
         return response()->json([
             'success' => true,
             'data' => $importProductos
         ]);
     }
+    private function generateImageUrl($ruta)
+    {
+        if (empty($ruta)) {
+            return null;
+        }
+
+        // Si ya es una URL completa, devolverla tal como está
+        if (filter_var($ruta, FILTER_VALIDATE_URL)) {
+            return $ruta;
+        }
+
+        // Limpiar la ruta de barras iniciales para evitar doble slash
+        $ruta = ltrim($ruta, '/');
+
+        // Construir URL manualmente para evitar problemas con Storage::url()
+        $baseUrl = config('app.url');
+        $storagePath = '/storage/';
+
+        // Asegurar que no haya doble slash
+        $baseUrl = rtrim($baseUrl, '/');
+        $storagePath = ltrim($storagePath, '/');
+        $ruta = ltrim($ruta, '/');
+        return $baseUrl . '/' . $storagePath . '/' . $ruta;
+    }
+
 }
