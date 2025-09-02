@@ -28,6 +28,7 @@ class ImportProductosExcelJob implements ShouldQueue
     {
         $this->filePath = $filePath;
         $this->idImportProducto = $idImportProducto;
+        Log::info('Constructor ImportProductosExcelJob - ID: ' . $idImportProducto);
     }
 
     /**
@@ -420,5 +421,13 @@ class ImportProductosExcelJob implements ShouldQueue
             }
         }
         rmdir($dir);
+    }
+    public function failed(\Throwable $exception)
+    {
+        Log::error('Job ImportProductosExcelJob falló completamente', [
+            'idImportProducto' => $this->idImportProducto,
+            'filePath' => $this->filePath,
+            'error' => $exception->getMessage()
+        ]);
     }
 }
