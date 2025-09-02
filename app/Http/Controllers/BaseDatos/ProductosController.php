@@ -33,9 +33,9 @@ class ProductosController extends Controller
 
             // Aplicar filtros si están presentes (reemplaza el bloque actual)
             if ($request->has('search') && $request->search) {
-                $query->where(function($q) use ($request) {
+                $query->where(function ($q) use ($request) {
                     $q->where('productos_importados_excel.nombre_comercial', 'like', '%' . $request->search . '%')
-                    ->orWhere('productos_importados_excel.subpartida', 'like', '%' . $request->search . '%');
+                        ->orWhere('productos_importados_excel.subpartida', 'like', '%' . $request->search . '%');
                 });
             }
 
@@ -102,7 +102,9 @@ class ProductosController extends Controller
                 ->distinct()
                 ->orderByRaw('CAST(carga_consolidada_contenedor.carga AS UNSIGNED)')
                 ->pluck('carga_consolidada_contenedor.carga')
-                ->map(function($c) { return trim((string)$c); })
+                ->map(function ($c) {
+                    return trim((string)$c);
+                })
                 ->filter()
                 ->values()
                 ->toArray();
@@ -199,12 +201,9 @@ class ProductosController extends Controller
                 'id_contenedor_consolidado_documentacion_files' => $idContenedor
             ]);
 
-            Log::info('ImportProducto creado con ID: ' . $importProducto->id);
-            Log::info('Disparando job ImportProductosExcelJob con ID: ' . $importProducto->id);
             DB::commit();
 
             ImportProductosExcelJob::dispatch($fullTempPath, $importProducto->id);
-            Log::info('Job ImportProductosExcelJob disparado exitosamente');
             return response()->json([
                 'success' => true,
                 'message' => 'Importación iniciada correctamente. El procesamiento se realizará en segundo plano.',
@@ -215,7 +214,6 @@ class ProductosController extends Controller
                     'polling_url' => url("/api/productos/import/status/{$importProducto->id}")
                 ]
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error en importExcel: ' . $e->getMessage());
             Log::error('Stack trace: ' . $e->getTraceAsString());
@@ -224,9 +222,7 @@ class ProductosController extends Controller
                 'success' => false,
                 'message' => 'Error al procesar archivo: ' . $e->getMessage()
             ], 500);
-        } finally {
-            DB::rollBack();
-            }
+        }
     }
 
 
@@ -438,7 +434,7 @@ class ProductosController extends Controller
     {
         try {
             $importProducto = ImportProducto::find($id);
-            
+
             if (!$importProducto) {
                 return response()->json([
                     'success' => false,
@@ -466,7 +462,8 @@ class ProductosController extends Controller
             ], 500);
         }
     }
-    public function obtenerListExcel(){
+    public function obtenerListExcel()
+    {
         $importProductos = ImportProducto::all();
         //foreach ruta_archivo 
         foreach ($importProductos as $importProducto) {
@@ -485,7 +482,7 @@ class ProductosController extends Controller
     {
         try {
             $importProducto = ImportProducto::find($id);
-            
+
             if (!$importProducto) {
                 return response()->json([
                     'success' => false,
@@ -536,5 +533,4 @@ class ProductosController extends Controller
         $ruta = ltrim($ruta, '/');
         return $baseUrl . '/' . $storagePath . '/' . $ruta;
     }
-
 }
