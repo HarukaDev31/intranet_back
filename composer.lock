@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "6258ded700c882733f5ab070d4f7ef0e",
+    "content-hash": "0a99feb5f1edbf939b9f1fa11cd08c4c",
     "packages": [
         {
             "name": "asm89/stack-cors",
@@ -2373,6 +2373,83 @@
                 "source": "https://github.com/laravel/framework"
             },
             "time": "2024-11-20T15:55:41+00:00"
+        },
+        {
+            "name": "laravel/horizon",
+            "version": "v5.0.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/laravel/horizon.git",
+                "reference": "1093218e2bad6a5037389a72b4ecef19af763c10"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/laravel/horizon/zipball/1093218e2bad6a5037389a72b4ecef19af763c10",
+                "reference": "1093218e2bad6a5037389a72b4ecef19af763c10",
+                "shasum": ""
+            },
+            "require": {
+                "ext-json": "*",
+                "ext-pcntl": "*",
+                "ext-posix": "*",
+                "illuminate/contracts": "^8.0",
+                "illuminate/queue": "^8.0",
+                "illuminate/support": "^8.0",
+                "nesbot/carbon": "^2.17",
+                "php": "^7.3",
+                "ramsey/uuid": "^4.0",
+                "symfony/error-handler": "^5.0",
+                "symfony/process": "^5.0"
+            },
+            "require-dev": {
+                "mockery/mockery": "^1.0",
+                "orchestra/testbench": "^6.0",
+                "phpunit/phpunit": "^9.0",
+                "predis/predis": "^1.1"
+            },
+            "suggest": {
+                "ext-redis": "Required to use the Redis PHP driver.",
+                "predis/predis": "Required when not using the Redis PHP driver (^1.1)."
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "aliases": {
+                        "Horizon": "Laravel\\Horizon\\Horizon"
+                    },
+                    "providers": [
+                        "Laravel\\Horizon\\HorizonServiceProvider"
+                    ]
+                },
+                "branch-alias": {
+                    "dev-master": "5.x-dev"
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Laravel\\Horizon\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Taylor Otwell",
+                    "email": "taylor@laravel.com"
+                }
+            ],
+            "description": "Dashboard and code-driven configuration for Laravel queues.",
+            "keywords": [
+                "laravel",
+                "queue"
+            ],
+            "support": {
+                "issues": "https://github.com/laravel/horizon/issues",
+                "source": "https://github.com/laravel/horizon/tree/5.x"
+            },
+            "time": "2020-09-08T15:23:07+00:00"
         },
         {
             "name": "laravel/sanctum",
