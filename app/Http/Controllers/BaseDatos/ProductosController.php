@@ -199,9 +199,10 @@ class ProductosController extends Controller
             ]);
 
             Log::info('ImportProducto creado con ID: ' . $importProducto->id);
-
+            Log::info('Disparando job ImportProductosExcelJob con ID: ' . $importProducto->id);
             // Disparar el Job para procesar la importación en segundo plano
             ImportProductosExcelJob::dispatch($fullTempPath, $importProducto->id);
+            Log::info('Job ImportProductosExcelJob disparado exitosamente');
 
             return response()->json([
                 'success' => true,
