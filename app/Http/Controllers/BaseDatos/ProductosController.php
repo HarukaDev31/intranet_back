@@ -152,6 +152,7 @@ class ProductosController extends Controller
     }
     public function importExcel(Request $request)
     {
+        DB::beginTransaction();
         try {
             Log::info('Iniciando importación de productos');
 
@@ -200,10 +201,10 @@ class ProductosController extends Controller
 
             Log::info('ImportProducto creado con ID: ' . $importProducto->id);
             Log::info('Disparando job ImportProductosExcelJob con ID: ' . $importProducto->id);
-            // Disparar el Job para procesar la importación en segundo plano
+            DB::commit();
+
             ImportProductosExcelJob::dispatch($fullTempPath, $importProducto->id);
             Log::info('Job ImportProductosExcelJob disparado exitosamente');
-
             return response()->json([
                 'success' => true,
                 'message' => 'Importación iniciada correctamente. El procesamiento se realizará en segundo plano.',
@@ -223,7 +224,9 @@ class ProductosController extends Controller
                 'success' => false,
                 'message' => 'Error al procesar archivo: ' . $e->getMessage()
             ], 500);
-        }
+        } finally {
+            DB::rollBack();
+            }
     }
 
 
