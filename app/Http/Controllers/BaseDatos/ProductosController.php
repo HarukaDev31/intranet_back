@@ -375,6 +375,10 @@ class ProductosController extends Controller
             $importedCount = 0;
             $errors = [];
 
+            // Obtener la colección de dibujos una sola vez para optimizar
+            $drawingCollection = $sheet->getDrawingCollection();
+            Log::info("Total de dibujos encontrados en la hoja: " . ($drawingCollection ? $drawingCollection->count() : 0));
+
             // Procesar cada rango único
             foreach ($uniqueRanges as $range) {
                 $startRow = $range['start'];
@@ -387,7 +391,7 @@ class ProductosController extends Controller
                 $i = $startRow;
                 
                 $nombre_comercial = $sheet->getCell("B$i")->getValue();
-                $foto = $this->extractImageFromExcel($sheet, $startRow, $endRow, $extractPath);
+                $foto = $this->extractImageFromExcel($sheet, $startRow, $endRow, $extractPath, $drawingCollection);
                 
                 // Obtener características de todas las filas del rango
                 $caracteristicas = "";
@@ -525,72 +529,76 @@ class ProductosController extends Controller
     /**
      * Extraer imagen específica del Excel
      */
-    private function extractImageFromExcel($sheet, $startRow, $endRow, $extractPath)
+    private function extractImageFromExcel($sheet, $startRow, $endRow, $extractPath, $drawingCollection = null)
     {
         $foto = '';
 
         try {
-            // Obtener la colección de dibujos de la hoja directamente
-            $drawingCollection = $sheet->getDrawingCollection();
+            // Usar la colección de dibujos pasada como parámetro o obtenerla si no se proporciona
+            if ($drawingCollection === null) {
+                $drawingCollection = $sheet->getDrawingCollection();
+            }
             
             if (!$drawingCollection || $drawingCollection->count() === 0) {
                 Log::info("No se encontraron dibujos en la hoja para el rango C{$startRow}-C{$endRow}");
                 return $foto;
             }
 
-            Log::info("Total de dibujos encontrados en la hoja: " . $drawingCollection->count());
+            // Crear un mapa de coordenadas para búsqueda más eficiente
+            $drawingMap = [];
+            foreach ($drawingCollection as $drawing) {
+                $coordinates = $drawing->getCoordinates();
+                $drawingMap[$coordinates] = $drawing;
+            }
 
             // Buscar la imagen en todas las filas del rango mergeado
             for ($searchRow = $startRow; $searchRow <= $endRow; $searchRow++) {
-                Log::info("Buscando imagen en fila C$searchRow");
+                $coordinate = "C$searchRow";
+                Log::info("Buscando imagen en fila $coordinate");
                 
-                foreach ($drawingCollection as $drawing) {
-                    $coordinates = $drawing->getCoordinates();
+                // Verificar si existe un dibujo en esta coordenada específica
+                if (isset($drawingMap[$coordinate])) {
+                    $drawing = $drawingMap[$coordinate];
+                    $drawingPath = $drawing->getPath();
+                    Log::info("Encontrado dibujo en $coordinate: " . $drawingPath);
 
-                    if ($coordinates == "C$searchRow") {
-                        $drawingPath = $drawing->getPath();
-                        Log::info("Encontrado dibujo en C$searchRow: " . $drawingPath);
+                    $hashPosition = strpos($drawingPath, '#');
+                    if ($hashPosition !== false) {
+                        $extractedPart = substr($drawingPath, $hashPosition + 1);
+                        Log::info("Parte extraída: " . $extractedPart);
 
-                        $hashPosition = strpos($drawingPath, '#');
-                        if ($hashPosition !== false) {
-                            $extractedPart = substr($drawingPath, $hashPosition + 1);
-                            Log::info("Parte extraída: " . $extractedPart);
+                        // Definir posibles ubicaciones de la imagen
+                        $possiblePaths = [
+                            $extractPath . '/xl/media/' . $extractedPart,
+                            $extractPath . '/' . $extractedPart,
+                            $extractPath . '/media/' . $extractedPart
+                        ];
 
-                            // Definir posibles ubicaciones de la imagen
-                            $possiblePaths = [
-                                $extractPath . '/xl/media/' . $extractedPart,
-                                $extractPath . '/' . $extractedPart,
-                                $extractPath . '/media/' . $extractedPart
-                            ];
+                        foreach ($possiblePaths as $imagePath) {
+                            if (file_exists($imagePath)) {
+                                $imageData = file_get_contents($imagePath);
+                                if ($imageData !== false) {
+                                    // Crear directorio si no existe
+                                    $path = storage_path('app/public/productos/');
+                                    if (!is_dir($path)) {
+                                        mkdir($path, 0777, true);
+                                    }
 
-                            foreach ($possiblePaths as $imagePath) {
-                                if (file_exists($imagePath)) {
-                                    $imageData = file_get_contents($imagePath);
-                                    if ($imageData !== false) {
-                                        // Crear directorio si no existe
-                                        $path = storage_path('app/public/productos/');
-                                        if (!is_dir($path)) {
-                                            mkdir($path, 0777, true);
-                                        }
+                                    // Obtener extensión original o usar jpg por defecto
+                                    $extension = pathinfo($extractedPart, PATHINFO_EXTENSION);
+                                    $extension = $extension ? $extension : 'jpg';
 
-                                        // Obtener extensión original o usar jpg por defecto
-                                        $extension = pathinfo($extractedPart, PATHINFO_EXTENSION);
-                                        $extension = $extension ? $extension : 'jpg';
+                                    $filename = 'productos/' . uniqid() . '.' . $extension;
+                                    $fullPath = storage_path('app/public/' . $filename);
 
-                                        $filename = 'productos/' . uniqid() . '.' . $extension;
-                                        $fullPath = storage_path('app/public/' . $filename);
-
-                                        if (file_put_contents($fullPath, $imageData)) {
-                                            $foto = $filename;
-                                            Log::info("Imagen guardada desde fila C$searchRow: " . $foto);
-                                            return $foto;
-                                        }
+                                    if (file_put_contents($fullPath, $imageData)) {
+                                        $foto = $filename;
+                                        Log::info("Imagen guardada desde fila $coordinate: " . $foto);
+                                        return $foto;
                                     }
                                 }
                             }
                         }
-                        // Si encontramos un dibujo en esta fila, continuar buscando en las siguientes filas
-                        // por si hay múltiples imágenes en el rango
                     }
                 }
             }
