@@ -192,7 +192,7 @@ class ProductosController extends Controller
                 'estadisticas' => [],
                 'id_contenedor_consolidado_documentacion_files' => $idContenedor
             ]);
-
+            $importProducto->refresh();
             Log::info('ImportProducto creado con ID: ' . $importProducto->id);
 
             // Guardar archivo temporalmente
@@ -251,7 +251,16 @@ class ProductosController extends Controller
     private function importarProductosDesdeExcel($filePath, $idImportProducto)
     {
         try {
-            Log::info('Cargando archivo Excel: ' . $filePath);
+            $importExists = \App\Models\ImportProducto::find($idImportProducto);
+            if (!$importExists) {
+                Log::error("ImportProducto con ID $idImportProducto no encontrado");
+                return [
+                    'success' => false,
+                    'message' => "ImportProducto con ID $idImportProducto no encontrado"
+                ];
+            }
+            Log::info("ImportProducto verificado - ID: $idImportProducto existe");
+
 
             // Extraer el archivo Excel como ZIP para acceder a las imágenes
             $extractPath = storage_path('app/temp/excel_' . uniqid());
