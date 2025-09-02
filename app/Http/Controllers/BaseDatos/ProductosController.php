@@ -166,7 +166,7 @@ class ProductosController extends Controller
 
             // Validar el archivo con Laravel
             $request->validate([
-                'excel_file' => 'required|file|mimes:xlsx,xls,xlsm|max:102400', // 100MB max (en KB)
+                'excel_file' => 'required|file|mimes:xlsx,xls,xlsm'
             ]);
 
             // Validar tipo de archivo
