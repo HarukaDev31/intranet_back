@@ -14,6 +14,7 @@ use App\Models\ImportProducto;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use App\Jobs\ImportProductosExcelJob;
 
 class ProductosController extends Controller
 {
@@ -180,60 +181,38 @@ class ProductosController extends Controller
                     'message' => 'Tipo de archivo no permitido. Formatos válidos: ' . implode(', ', $allowedExtensions)
                 ], 400);
             }
-            $filePath = $file->storeAs('imports/productos', time() . '_' . uniqid() . '_' . $file->getClientOriginalName(), 'public');
-
-            $fullPath = storage_path('app/public/' . $filePath);
-
-            // Crear registro de importación
-            $importProducto = ImportProducto::create([
-                'nombre_archivo' => $file->getClientOriginalName(),
-                'cantidad_rows' => 0,
-                'ruta_archivo' => $filePath,
-                'estadisticas' => [],
-                'id_contenedor_consolidado_documentacion_files' => $idContenedor
-            ]);
-            $importProducto->refresh();
-            Log::info('ImportProducto creado con ID: ' . $importProducto->id);
 
             // Guardar archivo temporalmente
             $tempPath = $file->store('temp');
             $fullTempPath = storage_path('app/' . $tempPath);
 
-            // Importar productos usando el método privado
-            $result = $this->importarProductosDesdeExcel($fullTempPath, $importProducto->id);
-
-            // Actualizar estadísticas de la importación
-            $importedCount = $result['success'] ? $result['data']['imported_count'] : 0;
-            $importProducto->update([
-                'cantidad_rows' => $importedCount,
+            // Crear registro de importación
+            $importProducto = ImportProducto::create([
+                'nombre_archivo' => $file->getClientOriginalName(),
+                'cantidad_rows' => 0,
+                'ruta_archivo' => $tempPath,
                 'estadisticas' => [
-                    'imported_count' => $importedCount,
-                    'total_rows_processed' => $result['success'] ? $result['data']['total_rows_processed'] ?? 0 : 0,
-                    'errors' => $result['success'] ? $result['data']['errors'] : [],
-                    'total_errors' => $result['success'] ? count($result['data']['errors']) : 0
+                    'status' => 'processing',
+                    'message' => 'Importación iniciada'
+                ],
+                'id_contenedor_consolidado_documentacion_files' => $idContenedor
+            ]);
+
+            Log::info('ImportProducto creado con ID: ' . $importProducto->id);
+
+            // Disparar el Job para procesar la importación en segundo plano
+            ImportProductosExcelJob::dispatch($fullTempPath, $importProducto->id);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Importación iniciada correctamente. El procesamiento se realizará en segundo plano.',
+                'data' => [
+                    'import_id' => $importProducto->id,
+                    'import_info' => $importProducto,
+                    'status' => 'processing'
                 ]
             ]);
 
-            Log::info("ImportProducto actualizado - Productos insertados: $importedCount");
-
-            // Limpiar archivo temporal
-            Storage::delete($tempPath);
-
-            if ($result['success']) {
-                return response()->json([
-                    'success' => true,
-                    'message' => 'Productos importados correctamente',
-                    'data' => array_merge($result['data'], [
-                        'import_id' => $importProducto->id,
-                        'import_info' => $importProducto
-                    ])
-                ]);
-            } else {
-                return response()->json([
-                    'success' => false,
-                    'message' => $result['message']
-                ], 500);
-            }
         } catch (\Exception $e) {
             Log::error('Error en importExcel: ' . $e->getMessage());
             Log::error('Stack trace: ' . $e->getTraceAsString());
@@ -245,393 +224,9 @@ class ProductosController extends Controller
         }
     }
 
-    /**
-     * Importar productos desde archivo Excel
-     */
-    private function importarProductosDesdeExcel($filePath, $idImportProducto)
-    {
-        try {
-            $importExists = \App\Models\ImportProducto::find($idImportProducto);
-            if (!$importExists) {
-                Log::error("ImportProducto con ID $idImportProducto no encontrado");
-                return [
-                    'success' => false,
-                    'message' => "ImportProducto con ID $idImportProducto no encontrado"
-                ];
-            }
-            Log::info("ImportProducto verificado - ID: $idImportProducto existe");
 
 
-            // Extraer el archivo Excel como ZIP para acceder a las imágenes
-            $extractPath = storage_path('app/temp/excel_' . uniqid());
-            $this->extractExcelImages($filePath, $extractPath);
 
-            // Cargar el archivo Excel usando PhpSpreadsheet
-            $reader = \PhpOffice\PhpSpreadsheet\IOFactory::createReaderForFile($filePath);
-            $reader->setReadDataOnly(false);
-            $reader->setIncludeCharts(false);
-
-            $spreadsheet = $reader->load($filePath);
-            $sheet = $spreadsheet->getActiveSheet();
-            $highestRow = $sheet->getHighestRow();
-
-            // Obtener celdas combinadas (merge) de la columna A
-            $mergedCells = $sheet->getMergeCells();
-            Log::info("Total de rangos mergeados encontrados: " . count($mergedCells));
-
-            // Filtrar solo los rangos de la columna A
-            $columnARanges = [];
-            foreach ($mergedCells as $range) {
-                if (strpos($range, 'A') !== false) {
-                    $columnARanges[] = $range;
-                    Log::info('Rango de columna A encontrado: ' . $range);
-                }
-            }
-            
-            Log::info('Total de rangos de columna A: ' . count($columnARanges));
-
-            // Función para obtener el rango mergeado de una fila específica
-            $getMergeRange = function ($row) use ($columnARanges) {
-                foreach ($columnARanges as $range) {
-                    list($start, $end) = explode(':', $range);
-                    $startRow = (int)preg_replace('/[A-Z]/', '', $start);
-                    $endRow = (int)preg_replace('/[A-Z]/', '', $end);
-                    if ($row >= $startRow && $row <= $endRow) {
-                        return [$startRow, $endRow];
-                    }
-                }
-                return [$row, $row];
-            };
-
-            // Función para obtener todos los rangos únicos de la columna A
-            $getUniqueRanges = function () use ($sheet, $highestRow, $columnARanges) {
-                $ranges = [];
-                $row = 3;
-                
-                while ($row <= $highestRow) {
-                    $cellValue = $sheet->getCell("A$row")->getCalculatedValue();
-                    
-                    // Si la celda está vacía o es "-", terminar
-                    if ($cellValue === null || $cellValue === "" || $cellValue === "-") {
-                        Log::info("Celda A$row vacía o con '-', terminando procesamiento");
-                        break;
-                    }
-                    
-                    // Buscar el rango mergeado específico para esta fila
-                    $startRow = $row;
-                    $endRow = $row;
-                    
-                    foreach ($columnARanges as $range) {
-                        list($start, $end) = explode(':', $range);
-                        $rangeStartRow = (int)preg_replace('/[A-Z]/', '', $start);
-                        $rangeEndRow = (int)preg_replace('/[A-Z]/', '', $end);
-                        
-                        if ($row >= $rangeStartRow && $row <= $rangeEndRow) {
-                            $startRow = $rangeStartRow;
-                            $endRow = $rangeEndRow;
-                            break;
-                        }
-                    }
-                    
-                    // Solo agregar si no es un rango duplicado
-                    $rangeKey = $startRow . '-' . $endRow;
-                    if (!isset($ranges[$rangeKey])) {
-                        $ranges[$rangeKey] = [
-                            'start' => $startRow,
-                            'end' => $endRow,
-                            'item' => $cellValue
-                        ];
-                        Log::info('Rango encontrado: ' . $startRow . ' - ' . $endRow . ' Item: ' . $cellValue);
-                    }
-                    
-                    // Saltar al siguiente rango
-                    $row = $endRow + 1;
-                }
-                
-                return array_values($ranges);
-            };
-
-            // Obtener todos los rangos únicos
-            $uniqueRanges = $getUniqueRanges();
-            $totalRows = count($uniqueRanges);
-            
-            Log::info('Total de rangos únicos encontrados: ' . $totalRows);
-            
-            $estadisticas = [
-                'total_productos' => $totalRows,
-                'productos_importados' => 0,
-                'errores' => 0
-            ];
-
-            // Actualizar estadísticas en imports_productos
-            $importProducto = \App\Models\ImportProducto::find($idImportProducto);
-            if ($importProducto) {
-                $importProducto->update([
-                    'cantidad_rows' => $totalRows,
-                    'estadisticas' => $estadisticas
-                ]);
-            }
-
-            $importedCount = 0;
-            $errors = [];
-
-            // Obtener la colección de dibujos una sola vez para optimizar
-            $drawingCollection = $sheet->getDrawingCollection();
-            Log::info("Total de dibujos encontrados en la hoja: " . ($drawingCollection ? $drawingCollection->count() : 0));
-
-            // Procesar cada rango único
-            foreach ($uniqueRanges as $range) {
-                $startRow = $range['start'];
-                $endRow = $range['end'];
-                $item = $range['item'];
-                
-                Log::info('Procesando rango: ' . $startRow . ' - ' . $endRow . ' Item: ' . $item);
-                
-                // Procesar solo la primera fila del rango (evitar duplicados)
-                $i = $startRow;
-                
-                $nombre_comercial = $sheet->getCell("B$i")->getValue();
-                $foto = $this->extractImageFromExcel($sheet, $startRow, $endRow, $extractPath, $drawingCollection);
-                
-                // Obtener características de todas las filas del rango
-                $caracteristicas = "";
-                for ($j2 = $startRow; $j2 <= $endRow; $j2++) {
-                    $caracteristica = $sheet->getCell("D$j2")->getValue();
-                    if ($caracteristica) {
-                        $caracteristicas .= $caracteristica . " ";
-                    }
-                }
-                $caracteristicas = trim($caracteristicas);
-                
-                $rubro = trim($sheet->getCell("E$i")->getValue());
-                $tipo_producto = trim($sheet->getCell("F$i")->getValue());
-                $precio_exw = $sheet->getCell("G$i")->getValue();
-                $subpartida = $sheet->getCell("H$i")->getValue();
-                $link = $sheet->getCell("I$i")->getValue();
-                $unidad_comercial = $sheet->getCell("J$i")->getValue();
-                $arancel_sunat = $sheet->getCell("K$i")->getValue();
-                $arancel_tlc = $sheet->getCell("L$i")->getValue();
-                $antidumping = $sheet->getCell("M$i")->getValue();
-                $correlativo = $sheet->getCell("N$i")->getValue();
-                $etiquetado = $sheet->getCell("O$i")->getValue();
-                $doc_especial = $sheet->getCell("P$i")->getValue();
-               
-                // Guardar en la base de datos usando el modelo
-                $productoData = [
-                    'id_import_producto' => $idImportProducto,
-                    'item' => $item,
-                    'nombre_comercial' => $nombre_comercial,
-                    'foto' => $foto,
-                    'caracteristicas' => $caracteristicas,
-                    'rubro' => $rubro,
-                    'tipo_producto' => $tipo_producto,
-                    'precio_exw' => $precio_exw,
-                    'subpartida' => $subpartida,
-                    'link' => $link,
-                    'unidad_comercial' => $unidad_comercial,
-                    'arancel_sunat' => $arancel_sunat,
-                    'arancel_tlc' => $arancel_tlc,
-                    'antidumping' => $antidumping,
-                    'correlativo' => $correlativo,
-                    'etiquetado' => $etiquetado,
-                    'doc_especial' => $doc_especial
-                ];
-
-                try {
-                    ProductoImportadoExcel::create($productoData);
-                    $importedCount++;
-                    $estadisticas['productos_importados']++;
-                    Log::info('Producto importado exitosamente: ' . $item);
-                } catch (\Exception $e) {
-                    $estadisticas['errores']++;
-                    $errorMsg = 'Error al insertar producto ' . $item . ': ' . $e->getMessage();
-                    $errors[] = $errorMsg;
-                    Log::error($errorMsg);
-                }
-            }
-
-            // Actualizar estadísticas finales en imports_productos
-            if ($importProducto) {
-                $importProducto->update([
-                    'estadisticas' => $estadisticas
-                ]);
-            }
-
-            // Limpiar archivos temporales
-            $this->deleteDirectory($extractPath);
-
-            Log::info("Importación completada. Total productos insertados: $importedCount, Total rangos: $totalRows, Errores: " . count($errors));
-
-            return [
-                'success' => true,
-                'data' => [
-                    'imported_count' => $importedCount,
-                    'total_rows_processed' => $totalRows,
-                    'errors' => $errors,
-                    'estadisticas' => $estadisticas
-                ]
-            ];
-        } catch (\Exception $e) {
-            Log::error('Error en importarProductosDesdeExcel: ' . $e->getMessage());
-            return [
-                'success' => false,
-                'message' => 'Error en importarProductosDesdeExcel: ' . $e->getMessage()
-            ];
-        }
-    }
-
-    /**
-     * Extraer imágenes del archivo Excel
-     */
-    private function extractExcelImages($filePath, $extractPath)
-    {
-        try {
-            Log::info('Extrayendo imágenes de: ' . $filePath);
-
-            // Crear directorio de extracción
-            if (!file_exists($extractPath)) {
-                mkdir($extractPath, 0777, true);
-            }
-
-            // Renombrar el archivo temporal a .zip
-            $zipPath = $extractPath . '/temp.zip';
-            if (copy($filePath, $zipPath)) {
-                $zip = new \ZipArchive;
-                $res = $zip->open($zipPath);
-                if ($res === TRUE) {
-                    Log::info("Archivo ZIP abierto correctamente");
-                    $zip->extractTo($extractPath);
-                    $zip->close();
-                    unlink($zipPath);
-                    Log::info("Archivo Excel extraído exitosamente");
-
-                    // Verificar si se extrajeron las imágenes
-                    $mediaPath = $extractPath . '/xl/media/';
-                    if (is_dir($mediaPath)) {
-                        $files = scandir($mediaPath);
-                        Log::info("Archivos encontrados en xl/media: " . (count($files) - 2));
-                    } else {
-                        Log::info("Directorio xl/media no encontrado - puede ser normal para archivos sin imágenes");
-                    }
-                } else {
-                    Log::error("No se pudo abrir el archivo ZIP. Error: " . $res);
-                    // Para archivos .xlsm, esto puede ser normal si no tienen imágenes
-                }
-            } else {
-                Log::error("No se pudo copiar el archivo para extracción");
-            }
-        } catch (\Exception $e) {
-            Log::error('Error al extraer imágenes: ' . $e->getMessage());
-            // No lanzar excepción, continuar sin imágenes
-        }
-    }
-
-    /**
-     * Extraer imagen específica del Excel
-     */
-    private function extractImageFromExcel($sheet, $startRow, $endRow, $extractPath, $drawingCollection = null)
-    {
-        $foto = '';
-
-        try {
-            // Usar la colección de dibujos pasada como parámetro o obtenerla si no se proporciona
-            if ($drawingCollection === null) {
-                $drawingCollection = $sheet->getDrawingCollection();
-            }
-            
-            if (!$drawingCollection || $drawingCollection->count() === 0) {
-                Log::info("No se encontraron dibujos en la hoja para el rango C{$startRow}-C{$endRow}");
-                return $foto;
-            }
-
-            // Crear un mapa de coordenadas para búsqueda más eficiente
-            $drawingMap = [];
-            foreach ($drawingCollection as $drawing) {
-                $coordinates = $drawing->getCoordinates();
-                $drawingMap[$coordinates] = $drawing;
-            }
-
-            // Buscar la imagen en todas las filas del rango mergeado
-            for ($searchRow = $startRow; $searchRow <= $endRow; $searchRow++) {
-                $coordinate = "C$searchRow";
-                Log::info("Buscando imagen en fila $coordinate");
-                
-                // Verificar si existe un dibujo en esta coordenada específica
-                if (isset($drawingMap[$coordinate])) {
-                    $drawing = $drawingMap[$coordinate];
-                    $drawingPath = $drawing->getPath();
-                    Log::info("Encontrado dibujo en $coordinate: " . $drawingPath);
-
-                    $hashPosition = strpos($drawingPath, '#');
-                    if ($hashPosition !== false) {
-                        $extractedPart = substr($drawingPath, $hashPosition + 1);
-                        Log::info("Parte extraída: " . $extractedPart);
-
-                        // Definir posibles ubicaciones de la imagen
-                        $possiblePaths = [
-                            $extractPath . '/xl/media/' . $extractedPart,
-                            $extractPath . '/' . $extractedPart,
-                            $extractPath . '/media/' . $extractedPart
-                        ];
-
-                        foreach ($possiblePaths as $imagePath) {
-                            if (file_exists($imagePath)) {
-                                $imageData = file_get_contents($imagePath);
-                                if ($imageData !== false) {
-                                    // Crear directorio si no existe
-                                    $path = storage_path('app/public/productos/');
-                                    if (!is_dir($path)) {
-                                        mkdir($path, 0777, true);
-                                    }
-
-                                    // Obtener extensión original o usar jpg por defecto
-                                    $extension = pathinfo($extractedPart, PATHINFO_EXTENSION);
-                                    $extension = $extension ? $extension : 'jpg';
-
-                                    $filename = 'productos/' . uniqid() . '.' . $extension;
-                                    $fullPath = storage_path('app/public/' . $filename);
-
-                                    if (file_put_contents($fullPath, $imageData)) {
-                                        $foto = $filename;
-                                        Log::info("Imagen guardada desde fila $coordinate: " . $foto);
-                                        return $foto;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            Log::info("No se encontró imagen en el rango C{$startRow}-C{$endRow}");
-            return $foto;
-            
-        } catch (\Exception $e) {
-            Log::error("Error al extraer imagen: " . $e->getMessage());
-            return $foto;
-        }
-    }
-
-    /**
-     * Eliminar directorio recursivamente
-     */
-    private function deleteDirectory($dir)
-    {
-        if (!is_dir($dir)) {
-            return;
-        }
-
-        $files = array_diff(scandir($dir), array('.', '..'));
-        foreach ($files as $file) {
-            $path = $dir . '/' . $file;
-            if (is_dir($path)) {
-                $this->deleteDirectory($path);
-            } else {
-                unlink($path);
-            }
-        }
-        rmdir($dir);
-    }
     /**
      * Exportar productos a Excel
      */
@@ -876,6 +471,41 @@ class ProductosController extends Controller
             'success' => true,
             'data' => $importProductos
         ]);
+    }
+
+    /**
+     * Verificar estado de importación
+     */
+    public function checkImportStatus($id)
+    {
+        try {
+            $importProducto = ImportProducto::find($id);
+            
+            if (!$importProducto) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Importación no encontrada'
+                ], 404);
+            }
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'id' => $importProducto->id,
+                    'nombre_archivo' => $importProducto->nombre_archivo,
+                    'cantidad_rows' => $importProducto->cantidad_rows,
+                    'estadisticas' => $importProducto->estadisticas,
+                    'created_at' => $importProducto->created_at,
+                    'updated_at' => $importProducto->updated_at
+                ]
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error al verificar estado de importación: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al verificar estado de importación: ' . $e->getMessage()
+            ], 500);
+        }
     }
     private function generateImageUrl($ruta)
     {

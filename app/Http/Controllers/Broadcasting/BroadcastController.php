@@ -17,6 +17,14 @@ class BroadcastController extends Controller
      * @param  \Illuminate\Http\Request  $request
      * @return \Illuminate\Http\Response
      */
+    public $CHANNELS = [
+        'private-Cotizador-notifications' => 'Cotizador',
+        'private-Documentacion-notifications' => 'Documentacion',
+        'private-Coordinacion-notifications' => 'Coordinación',
+        'private-ContenedorAlmacen-notifications' => 'ContenedorAlmacen',
+        'private-CatalogoChina-notifications' => 'CatalogoChina',
+        'private-Administracion-notifications' => 'Administración',
+    ];
     public function authenticate(Request $request)
     {
         Log::info('Authenticate request', [
@@ -45,8 +53,8 @@ class BroadcastController extends Controller
             // Remover el prefijo 'private-' si existe
             $channelWithoutPrefix = str_replace('private-', '', $channelName);
 
-            if ($channelWithoutPrefix === 'Cotizador-notifications') {
-                if (!$user->grupo || $user->grupo->No_Grupo !== 'Cotizador') {
+            if ($channelWithoutPrefix === $this->CHANNELS[$channelWithoutPrefix]) {
+                if (!$user->grupo || $user->grupo->No_Grupo !== $this->CHANNELS[$channelWithoutPrefix]) {
                     Log::error('User not authorized for channel', [
                         'user_id' => $user->ID_Usuario,
                         'channel' => $channelName,
