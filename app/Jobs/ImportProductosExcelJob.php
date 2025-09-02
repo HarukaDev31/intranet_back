@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use App\Models\BaseDatos\ProductoImportadoExcel;
 use App\Models\ImportProducto;
+use App\Events\ImportacionExcelCompleted;
 
 class ImportProductosExcelJob implements ShouldQueue
 {
@@ -232,6 +233,14 @@ class ImportProductosExcelJob implements ShouldQueue
 
             Log::info("Importación completada. Total productos insertados: $importedCount, Total rangos: $totalRows, Errores: " . count($errors));
 
+            // Emitir evento de importación completada
+            event(new ImportacionExcelCompleted(
+                $importProducto,
+                'completed',
+                "Importación completada exitosamente. $importedCount productos importados de $totalRows totales.",
+                $estadisticas
+            ));
+            //notify to Documentacion channel
         } catch (\Exception $e) {
             Log::error('Error en ImportProductosExcelJob: ' . $e->getMessage());
             Log::error('Stack trace: ' . $e->getTraceAsString());
@@ -245,6 +254,17 @@ class ImportProductosExcelJob implements ShouldQueue
                         'status' => 'failed'
                     ]
                 ]);
+
+                // Emitir evento de error en la importación
+                event(new ImportacionExcelCompleted(
+                    $importProducto,
+                    'failed',
+                    "Error en la importación: " . $e->getMessage(),
+                    [
+                        'error' => $e->getMessage(),
+                        'status' => 'failed'
+                    ]
+                ));
             }
         }
     }
