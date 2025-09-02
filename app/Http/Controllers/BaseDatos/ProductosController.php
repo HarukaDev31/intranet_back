@@ -209,7 +209,8 @@ class ProductosController extends Controller
                 'data' => [
                     'import_id' => $importProducto->id,
                     'import_info' => $importProducto,
-                    'status' => 'processing'
+                    'status' => 'processing',
+                    'polling_url' => url("/api/productos/import/status/{$importProducto->id}")
                 ]
             ]);
 
