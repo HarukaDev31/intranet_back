@@ -50,15 +50,16 @@ class BroadcastController extends Controller
             // Verificar manualmente el acceso al canal
             $channelName = $request->channel_name;
             
-            // Remover el prefijo 'private-' si existe
-            $channelWithoutPrefix = str_replace('private-', '', $channelName);
-
-            if ($channelWithoutPrefix === $this->CHANNELS[$channelWithoutPrefix]) {
-                if (!$user->grupo || $user->grupo->No_Grupo !== $this->CHANNELS[$channelWithoutPrefix]) {
+            // Verificar si el canal está en nuestra lista de canales configurados
+            if (isset($this->CHANNELS[$channelName])) {
+                $requiredRole = $this->CHANNELS[$channelName];
+                
+                if (!$user->grupo || $user->grupo->No_Grupo !== $requiredRole) {
                     Log::error('User not authorized for channel', [
                         'user_id' => $user->ID_Usuario,
                         'channel' => $channelName,
-                        'grupo' => $user->grupo ? $user->grupo->No_Grupo : 'Sin grupo'
+                        'required_role' => $requiredRole,
+                        'user_grupo' => $user->grupo ? $user->grupo->No_Grupo : 'Sin grupo'
                     ]);
                     return response()->json(['message' => 'No autorizado para este canal'], 403);
                 }
@@ -75,7 +76,7 @@ class BroadcastController extends Controller
                 ]);
             }
 
-            // Para otros canales, usar el método estándar
+            // Para otros canales, usar el método estándar de Laravel
             $response = Broadcast::auth($request);
             
             Log::info('Broadcasting auth success', [
