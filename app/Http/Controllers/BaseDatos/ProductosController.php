@@ -193,7 +193,7 @@ class ProductosController extends Controller
             $importProducto = ImportProducto::create([
                 'nombre_archivo' => $file->getClientOriginalName(),
                 'cantidad_rows' => 0,
-                'ruta_archivo' => $tempPath,
+                'ruta_archivo' => $fullTempPath,
                 'estadisticas' => [
                     'status' => 'processing',
                     'message' => 'Importación iniciada'
