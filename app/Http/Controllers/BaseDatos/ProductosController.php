@@ -185,15 +185,16 @@ class ProductosController extends Controller
                 ], 400);
             }
 
-            // Guardar archivo temporalmente
+            //s
             $tempPath = $file->store('temp');
             $fullTempPath = storage_path('app/' . $tempPath);
+            $filePath = $file->storeAs('imports/productos', time() . '_' . uniqid() . '_' . $file->getClientOriginalName(), 'public');
 
             // Crear registro de importación
             $importProducto = ImportProducto::create([
                 'nombre_archivo' => $file->getClientOriginalName(),
                 'cantidad_rows' => 0,
-                'ruta_archivo' => $fullTempPath,
+                'ruta_archivo' => $filePath,
                 'estadisticas' => [
                     'status' => 'processing',
                     'message' => 'Importación iniciada'
