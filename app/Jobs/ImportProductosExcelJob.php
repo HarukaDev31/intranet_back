@@ -17,11 +17,6 @@ class ImportProductosExcelJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    /**
-     * El nombre de la cola en la que debe ejecutarse el job.
-     */
-    public $queue = 'importaciones';
-
     protected $filePath;
     protected $idImportProducto;
     protected $extractPath;

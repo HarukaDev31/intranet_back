@@ -203,7 +203,7 @@ class ProductosController extends Controller
 
             DB::commit();
 
-            ImportProductosExcelJob::dispatch($fullTempPath, $importProducto->id);
+            ImportProductosExcelJob::dispatch($fullTempPath, $importProducto->id)->onQueue('importaciones');
             return response()->json([
                 'success' => true,
                 'message' => 'Importación iniciada correctamente. El procesamiento se realizará en segundo plano.',
