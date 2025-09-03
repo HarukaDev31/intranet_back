@@ -173,6 +173,7 @@ return [
             'maxProcesses' => 2,
             'tries' => 3,
             'nice' => 0,
+            'timeout' => 180,
         ],
         'supervisor-emails' => [
             'connection' => 'redis',
