@@ -165,28 +165,63 @@ return [
     */
 
     'defaults' => [
-        'supervisor-1' => [
+        
+        'supervisor-importaciones' => [
             'connection' => 'redis',
-            'queue' => ['default'],
+            'queue' => ['importaciones'],
+            'balance' => 'auto',
+            'maxProcesses' => 2,
+            'tries' => 3,
+            'nice' => 0,
+        ],
+        'supervisor-emails' => [
+            'connection' => 'redis',
+            'queue' => ['emails'],
             'balance' => 'auto',
             'maxProcesses' => 1,
-            'tries' => 1,
+            'tries' => 3,
+            'nice' => 0,
+        ],
+        'supervisor-notificaciones' => [
+            'connection' => 'redis',
+            'queue' => ['notificaciones'],
+            'balance' => 'auto',
+            'maxProcesses' => 1,
+            'tries' => 2,
             'nice' => 0,
         ],
     ],
 
     'environments' => [
         'production' => [
-            'supervisor-1' => [
-                'maxProcesses' => 10,
+           
+            'supervisor-importaciones' => [
+                'maxProcesses' => 5,
+                'balanceMaxShift' => 1,
+                'balanceCooldown' => 3,
+            ],
+            'supervisor-emails' => [
+                'maxProcesses' => 3,
+                'balanceMaxShift' => 1,
+                'balanceCooldown' => 3,
+            ],
+            'supervisor-notificaciones' => [
+                'maxProcesses' => 2,
                 'balanceMaxShift' => 1,
                 'balanceCooldown' => 3,
             ],
         ],
 
         'local' => [
-            'supervisor-1' => [
-                'maxProcesses' => 3,
+            
+            'supervisor-importaciones' => [
+                'maxProcesses' => 2,
+            ],
+            'supervisor-emails' => [
+                'maxProcesses' => 1,
+            ],
+            'supervisor-notificaciones' => [
+                'maxProcesses' => 1,
             ],
         ],
     ],
