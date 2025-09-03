@@ -20,7 +20,7 @@ class ImportacionExcelCompleted implements ShouldBroadcast
     public $status;
     public $message;
     public $estadisticas;
-
+    public $queue = 'notificaciones';
     /**
      * Create a new event instance.
      *
