@@ -84,7 +84,7 @@ return [
     */
 
     'waits' => [
-        'redis:default' => 60,
+        'redis:default' => 120,
     ],
 
     /*
@@ -151,7 +151,7 @@ return [
     |
     */
 
-    'memory_limit' => 64,
+    'memory_limit' => 512,
 
     /*
     |--------------------------------------------------------------------------
@@ -189,6 +189,7 @@ return [
             'maxProcesses' => 1,
             'tries' => 2,
             'nice' => 0,
+            'timeout' => 180,
         ],
     ],
 
