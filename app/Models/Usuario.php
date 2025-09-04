@@ -138,6 +138,14 @@ class Usuario extends Authenticatable implements JWTSubject
     }
 
     /**
+     * Obtener el id del usuario
+     */
+    public function getIdUsuario()
+    {
+        return $this->ID_Usuario;
+    }
+
+    /**
      * Obtener la descripción del grupo principal del usuario
      */
     public function getDescripcionGrupoPrincipalAttribute()

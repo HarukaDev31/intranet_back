@@ -92,4 +92,22 @@ class GeneralController extends Controller
             'message' => 'Cotización no encontrada'
         ], 404);
     }
+    public function getHeadersData($idContenedor)
+    {
+        $headers = DB::table($this->table_contenedor_cotizacion)
+            ->select([
+                DB::raw('SUM(qty_items) as total_qty_items'),
+                DB::raw('SUM(total_logistica) as total_logistica'),
+                DB::raw('SUM(total_logistica_pagado) as total_logistica_pagado'),
+            ])
+            ->where('id_contenedor', $idContenedor)
+            ->whereNotNull('estado_cliente')
+            ->where('estado_cotizador', 'CONFIRMADO')
+            ->first();
+
+        return response()->json([
+            'data' => $headers,
+            'success' => true
+        ]);
+    }
 }
