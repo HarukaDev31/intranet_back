@@ -31,6 +31,8 @@ class PagosController extends Controller
     public function getConsolidadoPagos(Request $request)
     {
         try {
+            $search = $request->get('search', '');
+
             $perPage = $request->get('limit', 10);
             $page = $request->get('page', 1);
 
@@ -92,6 +94,13 @@ class PagosController extends Controller
 
             $query->where('contenedor_consolidado_cotizacion.estado_cotizador', 'CONFIRMADO');
 
+            // Aplicar búsqueda (nombre, documento, teléfono, carga)
+            if (!empty($search)) {
+                $query->where(function ($q) use ($search) {
+                    $q->where('contenedor_consolidado_cotizacion.nombre', 'like', "%{$search}%");
+                });
+            }
+
             // Filtros complejos
             $query->where(function($q) {
                 // Opción 1: Tiene pagos
@@ -112,6 +121,8 @@ class PagosController extends Controller
             // Obtener datos paginados
             $cotizaciones = $query->paginate($perPage, ['*'], 'page', $page);
 
+            $cargasDisponibles = $this->getCargasDisponibles();
+
             $data = [];
             $index = ($page - 1) * $perPage + 1;
 
@@ -130,7 +141,7 @@ class PagosController extends Controller
                 }
 
                 $pagosDetalle = $this->procesarPagosDetalle($cotizacion->pagos_details);
-                $estadosDisponibles = $this->getEstadosDisponibles();
+                $cargasDisponibles = $this->getCargasDisponibles();
 
                 $data[] = [
                     'id' => $cotizacion->id,
@@ -142,7 +153,7 @@ class PagosController extends Controller
                     'tipo' => "Consolidado",
                     'carga' => $cotizacion->carga,
                     'estado_pago' => $estadoPago,
-                    'estados_disponibles' => $estadosDisponibles,
+                    
                     'monto_a_pagar' => (($aPagar) == 0 ? $cotizacion->monto : $aPagar),
                     'monto_a_pagar_formateado' => number_format((($aPagar) == 0 ? $cotizacion->monto : $aPagar), 2, '.', ''),
                     'total_pagado' => $cotizacion->total_pagos_monto,
@@ -164,7 +175,8 @@ class PagosController extends Controller
                     'total' => $cotizaciones->total(),
                     'from' => $cotizaciones->firstItem(),
                     'to' => $cotizaciones->lastItem(),
-                ]
+                ],
+                'cargas_disponibles' => $cargasDisponibles,
             ]);
 
         } catch (\Exception $e) {
@@ -221,28 +233,59 @@ class PagosController extends Controller
     }
 
     /**
-     * Obtener estados disponibles
+     * Obtener campañas disponibles
      */
-    private function getEstadosDisponibles()
+    private function getCampanasDisponibles()
     {
-        return [
-            [
-                'value' => 'PENDIENTE',
-                'label' => 'Pendiente'
-            ],
-            [
-                'value' => 'ADELANTO',
-                'label' => 'Adelanto'
-            ],
-            [
-                'value' => 'PAGADO',
-                'label' => 'Pagado'
-            ],
-            [
-                'value' => 'SOBREPAGO',
-                'label' => 'Sobrepago'
-            ]
+        
+        // Obtener campañas y devolver nombre + año generado desde Fe_Inicio (Mes Año)
+        $meses_es = [
+            1 => 'Enero', 2 => 'Febrero', 3 => 'Marzo', 4 => 'Abril',
+            5 => 'Mayo', 6 => 'Junio', 7 => 'Julio', 8 => 'Agosto',
+            9 => 'Septiembre', 10 => 'Octubre', 11 => 'Noviembre', 12 => 'Diciembre'
         ];
+
+        //crear consulta donde se obtengan todas las campañas disponibles de la consulta que no tenga Fe_Borrado
+        return Campana::select('ID_Campana', 'Fe_Inicio', 'Fe_Fin')->whereNull('Fe_Borrado')->get()->map(function ($c) use ($meses_es) {
+            $date = $c->Fe_Inicio ?? $c->Fe_Fin;
+            if ($date) {
+                try {
+                    $dt = Carbon::parse($date);
+                    $mes = (int) $dt->format('n');
+                    $anio = $dt->format('Y');
+                    $nombre = ($meses_es[$mes] ?? 'Mes') . ' ' . $anio;
+                } catch (\Exception $e) {
+                    $nombre = "Campaña " . $c->ID_Campana;
+                    Log::error('Error al parsear fecha de campaña: ' . $e->getMessage());
+                }
+            } else {
+                $nombre = "Campaña " . $c->ID_Campana;
+            }
+
+            return [
+                'id' => $c->ID_Campana,
+                'nombre' => $nombre
+            ];
+        })->values();
+    }
+
+    /**
+     * Obtener cargas disponibles
+     */
+    private function getCargasDisponibles()
+    {
+       try{
+           $cargas = DB::table('carga_consolidada_contenedor as cc')
+                ->select('cc.carga')
+                ->distinct()
+                ->orderBy('cc.carga')
+                ->get();
+
+                return $cargas;
+       } catch (\Exception $e) {
+            Log::error('Error en getCargasDisponibles: ' . $e->getMessage());
+            return collect();
+        }
     }
 
     /**
@@ -264,6 +307,84 @@ class PagosController extends Controller
                 'status' => "error",
                 'message' => 'Error al obtener los pagos: ' . $e->getMessage()
             ];
+        }
+    }
+    public function actualizarPagoCoordinacion(Request $request, $idPago)
+    {
+        $request->validate([
+            'status' => 'required|string',
+            'monto' => 'nullable|numeric',
+            'payment_date' => 'nullable|date',
+        ]);
+
+        try {
+            DB::beginTransaction();
+
+            $pago = Pago::find($idPago);
+            if (! $pago) {
+                return response()->json(['success' => false, 'message' => 'Pago no encontrado'], 404);
+            }
+
+            // Guardar cambios permitidos
+            $pago->status = $request->input('status');
+            if ($request->filled('monto')) {
+                $pago->monto = $request->input('monto');
+            }
+            if ($request->filled('payment_date')) {
+                $pago->payment_date = $request->input('payment_date');
+            }
+            $pago->timestamps = false;
+            $pago->save();
+
+            // Recalcular totales para la cotización asociada (solo conceptos LOGISTICA / IMPUESTOS)
+            $cotizacionId = $pago->id_cotizacion;
+            $totales = Pago::where('id_cotizacion', $cotizacionId)
+                ->whereIn('id_concept', [PagoConcept::CONCEPT_PAGO_LOGISTICA, PagoConcept::CONCEPT_PAGO_IMPUESTOS])
+                ->selectRaw('COUNT(*) as pagos_count, IFNULL(SUM(monto),0) as total_pagos_monto')
+                ->first();
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Pago actualizado correctamente',
+                'pago' => $pago,
+                'totales_cotizacion' => [
+                    'pagos_count' => (int) ($totales->pagos_count ?? 0),
+                    'total_pagos_monto' => (float) ($totales->total_pagos_monto ?? 0),
+                ],
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error("Error actualizarPagoCoordinacion: " . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al actualizar el pago: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+    /**
+     * Actualizar la nota de administración de una cotización
+     */
+    public function updateNotaConsolidado(Request $request, $idCotizacion)
+    {
+        $request->validate([
+            'note_administracion' => 'nullable|string|max:255',
+        ]);
+
+        try {
+            $cotizacion = Cotizacion::find($idCotizacion);
+            if (!$cotizacion) {
+                return response()->json(['success' => false, 'message' => 'Cotización no encontrada'], 404);
+            }
+
+            $cotizacion->note_administracion = $request->input('note_administracion');
+            $cotizacion->save();
+
+            return response()->json(['success' => true, 'message' => 'Nota de administración actualizada correctamente']);
+        } catch (\Exception $e) {
+            Log::error("Error actualizarNotaAdministracion: " . $e->getMessage());
+            return response()->json(['success' => false, 'message' => 'Error al actualizar la nota de administración: ' . $e->getMessage()], 500);
         }
     }
 
@@ -313,6 +434,7 @@ class PagosController extends Controller
     public function getCursosPagos(Request $request)
     {
         try {
+            $search = $request->get('search', '');
             $perPage = $request->get('limit', 10);
             $page = $request->get('page', 1);
 
@@ -382,6 +504,13 @@ class PagosController extends Controller
                     ->where('id_concept', PedidoCursoPagoConcept::CONCEPT_PAGO_ADELANTO_CURSO);
             });
 
+            //filtrar por busqueda
+            if ($search) {
+                $query->where(function($q) use ($search) {
+                    $q->where('entidad.No_Entidad', 'LIKE', "%{$search}%");
+                });
+            }
+
             // Filtros de fecha
             if ($request->filled('Filtro_Fe_Inicio')) {
                 $query->where('pedido_curso.Fe_Emision', '>=', $request->Filtro_Fe_Inicio);
@@ -398,6 +527,9 @@ class PagosController extends Controller
 
             // Obtener datos paginados
             $cursos = $query->paginate($perPage, ['*'], 'page', $page);
+
+            // Obtener campañas disponibles
+            $campanasDisponibles = $this->getCampanasDisponibles();
 
             $data = [];
             $index = ($page - 1) * $perPage + 1;
@@ -427,7 +559,7 @@ class PagosController extends Controller
                     'tipo' => "Curso",
                     'campana' => $this->obtenerNombreCampana($curso->ID_Campana),
                     'estado_pago' => $estadoPago,
-                    'estados_disponibles' => $this->getEstadosDisponibles(),
+                    
                     'monto_a_pagar' => $aPagar,
                     'monto_a_pagar_formateado' => number_format($aPagar, 2, '.', ''),
                     'total_pagado' => $curso->total_pagos,
@@ -449,7 +581,8 @@ class PagosController extends Controller
                     'total' => $cursos->total(),
                     'from' => $cursos->firstItem(),
                     'to' => $cursos->lastItem(),
-                ]
+                ],
+                'campanas_disponibles' => $campanasDisponibles,
             ]);
 
         } catch (\Exception $e) {
@@ -489,12 +622,37 @@ class PagosController extends Controller
      */
     private function obtenerNombreCampana($idCampana)
     {
-        if (!$idCampana) {
+        if (! $idCampana) {
             return "";
         }
-        
-        $campana = Campana::find($idCampana);
-        return $campana ? $campana->nombre_campana : "Campaña " . $idCampana;
+
+        $campana = Campana::select('Fe_Inicio', 'Fe_Fin')->find($idCampana);
+
+        if (! $campana) {
+            return "Campaña " . $idCampana;
+        }
+
+        $date = $campana->Fe_Inicio ?? $campana->Fe_Fin;
+        if (! $date) {
+            return "Campaña " . $idCampana;
+        }
+
+        try {
+            $dt = Carbon::parse($date);
+        } catch (\Exception $e) {
+            return "Campaña " . $idCampana;
+        }
+
+        $meses_es = [
+            1 => 'Enero', 2 => 'Febrero', 3 => 'Marzo', 4 => 'Abril',
+            5 => 'Mayo', 6 => 'Junio', 7 => 'Julio', 8 => 'Agosto',
+            9 => 'Septiembre', 10 => 'Octubre', 11 => 'Noviembre', 12 => 'Diciembre'
+        ];
+
+        $mes = (int) $dt->format('n');
+        $anio = $dt->format('Y');
+
+        return ($meses_es[$mes] ?? 'Mes') . ' ' . $anio;
     }
 
     /**
@@ -534,6 +692,50 @@ class PagosController extends Controller
                 'success' => false,
                 'message' => 'Error al obtener los detalles de los pagos del curso: ' . $e->getMessage()
             ], 500);
+        }
+    }
+
+    /**
+     * Actualizar pagos de curso
+     */
+    public function updateStatusCurso(Request $request, $idPedidoCurso)
+    {
+        $request->validate([
+            'status' => 'required|string',
+        ]);
+
+        try {
+            $pedidoCurso = PedidoCursoPago::findOrFail($idPedidoCurso);
+            $pedidoCurso->status = $request->input('status');
+            $pedidoCurso->timestamps = false;
+            $pedidoCurso->save();
+
+            return response()->json(['success' => true, 'message' => 'Estado del curso actualizado correctamente']);
+        } catch (\Exception $e) {
+            Log::error('Error en updateStatusCurso: ' . $e->getMessage());
+            return response()->json(['success' => false, 'message' => 'Error al actualizar el estado del curso: ' . $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Actualizar nota de curso
+     */
+    public function updateNotaCurso(Request $request, $idPedidoCurso)
+    {
+        $request->validate([
+            'note_administracion' => 'nullable|string|max:255',
+        ]);
+
+        try {
+            $pedido = PedidoCurso::findOrFail($idPedidoCurso);
+            $pedido->note_administracion = $request->input('note_administracion');
+            $pedido->timestamps = false;
+            $pedido->save();
+
+            return response()->json(['success' => true, 'message' => 'Nota de cotización actualizada correctamente']);
+        } catch (\Exception $e) {
+            Log::error('Error en updateNotaConsolidado: ' . $e->getMessage());
+            return response()->json(['success' => false, 'message' => 'Error al actualizar la nota de cotización: ' . $e->getMessage()], 500);
         }
     }
 
