@@ -74,7 +74,7 @@ class AuthController extends Controller
                             'message' => $result['sMessage'],
                             'token' => $token,
                             'token_type' => 'bearer',
-                            'expires_in' => config('jwt.ttl') * 60,
+                            'expires_in' => 24*config('jwt.ttl') * 60,
                             'user' => [
                                 'id' => $usuario->ID_Usuario,
                                 'nombre' => $usuario->No_Usuario,

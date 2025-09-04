@@ -84,10 +84,6 @@ class CotizacionController extends Controller
             $userId = auth()->id();
             $idContenedor = $request->idContenedor;
 
-            // Obtener datos usando Query Builder
-
-
-            // Obtener datos del contenedor
             $files = DB::table('carga_consolidada_contenedor')
                 ->where('id', $idContenedor)
                 ->select('bl_file_url', 'lista_embarque_url')

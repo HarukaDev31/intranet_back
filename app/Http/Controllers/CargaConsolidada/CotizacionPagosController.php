@@ -171,15 +171,27 @@ class CotizacionPagosController extends Controller
     private function getPagosCotizacion($idCotizacion)
     {
         try {
+            // Obtener datos usando Query Builder
+
+            /**
+             * // 'id_pago', cccp2.id,
+             *  'monto', cccp2.monto,
+             * 'concepto', ccp2.name,
+             * 'status', cccp2.status,
+             * 'payment_date', cccp2.payment_date,
+             * 'banco', cccp2.banco,
+            'voucher_url', cccp2.voucher_url
+             */
+            // Obtener datos del contenedor
             $sql = "
                 SELECT 
-                    cccp.id,
+                    cccp.id AS id_pago,
                     cccp.monto,
-                    cccp.payment_date,
-                    cccp.status,
-                    cccp.banco,
+                    cccp.payment_date AS payment_date,
+                    cccp.status AS status,
+                    cccp.banco AS banco,
                     cccp.is_confirmed,
-                    cccp.voucher_url
+                    cccp.voucher_url AS voucher_url
                 FROM {$this->table_contenedor_consolidado_cotizacion_coordinacion_pagos} cccp
                 JOIN {$this->table_pagos_concept} ccp ON cccp.id_concept = ccp.id
                 WHERE cccp.id_cotizacion = ?
@@ -191,10 +203,10 @@ class CotizacionPagosController extends Controller
             Log::info('pagos', ['pagos' => $pagos]);
             return collect($pagos)->map(function ($pago) {
                 return [
-                    'id' => $pago->id,
+                    'id' => $pago->id_pago ?? 0,
                     'monto' => $pago->monto ?? 0,
-                    'fecha_pago' => $pago->payment_date ?? null,
-                    'estado' => $pago->status ?? 'PENDIENTE',
+                    'payment_date' => $pago->payment_date ?? null,
+                    'status' => $pago->status ?? 'PENDIENTE',
                     'is_confirmed' => $pago->is_confirmed ?? false,
                     'banco' => $this->cleanText($pago->banco ?? ''),
                     'voucher_url' => $pago->voucher_url ?? null

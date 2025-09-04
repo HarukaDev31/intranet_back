@@ -212,16 +212,22 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
             Route::get('filters/options', [CotizacionController::class, 'filterOptions']);
         }); 
         Route::group(['prefix' => 'clientes'], function () {
+
             Route::get('/pagos/{idContenedor}', [ClientesPagosController::class, 'index']);
             Route::get('/general/{idContenedor}', [GeneralController::class, 'index']);
             Route::post('/general/estado-cliente', [GeneralController::class, 'updateEstadoCliente']);
             Route::get('/variacion/{idContenedor}', [VariacionController::class, 'index']);
             Route::post('/variacion/vol-selected', [VariacionController::class, 'updateVolSelected']);
+            Route::post('/variacion/documentacion/proveedor/{idProveedor}/create', [DocumentacionController::class, 'createProveedorDocumentacionFolder']);
+
             Route::post('/variacion/documentacion/proveedor/{idProveedor}', [DocumentacionController::class, 'updateClienteDocumentacion']);
             Route::delete('/variacion/documentacion/proveedor/{idProveedor}/factura-comercial', [DocumentacionController::class, 'deleteProveedorFacturaComercial']);
             Route::delete('/variacion/documentacion/proveedor/{idProveedor}/excel-confirmacion', [DocumentacionController::class, 'deleteProveedorExcelConfirmacion']);
             Route::delete('/variacion/documentacion/proveedor/{idProveedor}/packing-list', [DocumentacionController::class, 'deleteProveedorPackingList']);
             Route::get('/variacion/documentacion/{idCotizacion}', [VariacionController::class, 'showClientesDocumentacion']);
+            Route::post('/pagos', [ClientesPagosController::class, 'store']);
+            Route::delete('/pagos/{id}', [ClientesPagosController::class, 'delete']);
+
         });
         Route::group(['prefix' => 'documentacion'], function () {
             Route::get('/download-factura-comercial/{idContenedor}', [DocumentacionController::class, 'downloadFacturaComercial']);

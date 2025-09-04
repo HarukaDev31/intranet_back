@@ -614,4 +614,132 @@ class ClienteService
             ]
         ];
     }
+
+    /**
+     * Obtener estadísticas del header para un contenedor específico
+     */
+    public function getClientesHeader($idContenedor)
+    {
+        try {
+            // Consulta para cbm_total_china usando DISTINCT para evitar duplicación
+            $cbmTotalChina = DB::table('contenedor_consolidado_cotizacion_proveedores as cccp')
+                ->join('contenedor_consolidado_cotizacion as cc', 'cccp.id_cotizacion', '=', 'cc.id')
+                ->where('cccp.id_contenedor', $idContenedor)
+                ->where('cccp.estados_proveedor', 'LOADED')
+                ->where('cc.estado_cotizador', 'CONFIRMADO')
+                ->sum('cccp.cbm_total_china');
+
+            // Subconsulta para cbm_total
+            $cbmTotal = DB::table('contenedor_consolidado_cotizacion_proveedores')
+                ->where('id_contenedor', $idContenedor)
+                ->whereIn('id_cotizacion', function ($query) {
+                    $query->select('id')
+                        ->from('contenedor_consolidado_cotizacion')
+                        ->where('estado_cotizador', 'CONFIRMADO');
+                })
+                ->sum('cbm_total');
+
+            // Subconsulta para total_logistica
+            $totalLogistica = DB::table('contenedor_consolidado_cotizacion')
+                ->whereIn('id', function ($query) use ($idContenedor) {
+                    $query->select(DB::raw('DISTINCT id_cotizacion'))
+                        ->from('contenedor_consolidado_cotizacion_proveedores')
+                        ->where('id_contenedor', $idContenedor);
+                })
+                ->where('estado_cotizador', 'CONFIRMADO')
+                ->whereIn('id', function ($query) use ($idContenedor) {
+                    $query->select('id_cotizacion')
+                        ->from('contenedor_consolidado_cotizacion_proveedores')
+                        ->where('id_contenedor', $idContenedor)
+                        ->where('estados_proveedor', 'LOADED');
+                })
+                ->sum('monto');
+
+            // Subconsulta para total_fob
+            $totalFob = DB::table('contenedor_consolidado_cotizacion')
+                ->whereIn('id', function ($query) use ($idContenedor) {
+                    $query->select(DB::raw('DISTINCT id_cotizacion'))
+                        ->from('contenedor_consolidado_cotizacion_proveedores')
+                        ->where('id_contenedor', $idContenedor);
+                })
+                ->where('estado_cotizador', 'CONFIRMADO')
+                ->whereIn('id', function ($query) use ($idContenedor) {
+                    $query->select('id_cotizacion')
+                        ->from('contenedor_consolidado_cotizacion_proveedores')
+                        ->where('id_contenedor', $idContenedor)
+                        ->where('estados_proveedor', 'LOADED');
+                })
+                ->sum('valor_doc');
+
+            // Subconsulta para total_qty_items
+            $totalQtyItems = DB::table('contenedor_consolidado_cotizacion')
+                ->whereIn('id', function ($query) use ($idContenedor) {
+                    $query->select(DB::raw('DISTINCT id_cotizacion'))
+                        ->from('contenedor_consolidado_cotizacion_proveedores')
+                        ->where('id_contenedor', $idContenedor);
+                })
+                ->where('estado_cotizador', 'CONFIRMADO')
+                ->sum('qty_item');
+
+            // Subconsulta para total_logistica_pagado
+            $totalLogisticaPagado = DB::table('contenedor_consolidado_cotizacion_coordinacion_pagos')
+                ->join('pagos_concept', 'contenedor_consolidado_cotizacion_coordinacion_pagos.id_concept', '=', 'pagos_concept.id')
+                ->where('contenedor_consolidado_cotizacion_coordinacion_pagos.id_contenedor', $idContenedor)
+                ->where('pagos_concept.name', 'LOGISTICA')
+                ->sum('contenedor_consolidado_cotizacion_coordinacion_pagos.monto');
+
+            // Obtener carga del contenedor
+            $carga = DB::table('contenedor_consolidado')
+                ->where('id', $idContenedor)
+                ->value('carga');
+
+            // Obtener bl_file_url y lista_empaque_file_url del contenedor
+            $contenedorInfo = DB::table('contenedor_consolidado')
+                ->where('id', $idContenedor)
+                ->select('bl_file_url', 'lista_embarque_url')
+                ->first();
+
+            // Obtener total de impuestos
+            $totalImpuestos = DB::table('contenedor_consolidado_cotizacion')
+                ->where('estado_cotizador', 'CONFIRMADO')
+                ->where('id_contenedor', $idContenedor)
+                ->sum('impuestos');
+
+            return [
+                'cbm_total_china' => $cbmTotalChina,
+                'cbm_total' => $cbmTotal,
+                'cbm_total_pendiente' => 0, // No se calcula en el original
+                'total_logistica' => $totalLogistica,
+                'total_logistica_pagado' => round($totalLogisticaPagado, 2),
+                'qty_items' => $totalQtyItems,
+                'bl_file_url' => $contenedorInfo ? $contenedorInfo->bl_file_url : '',
+                'carga' => $carga ?: '',
+                'lista_embarque_url' => $contenedorInfo ? $contenedorInfo->lista_embarque_url : '',
+                'total_fob' => $totalFob,
+                'total_impuestos' => $totalImpuestos
+            ];
+
+        } catch (\Exception $e) {
+            Log::error('Error en getClientesHeader: ' . $e->getMessage());
+            return [
+                'status' => "error",
+                'error' => true,
+                "data" => [
+                    'cbm_total_china' => 0,
+                    'cbm_total_pendiente' => 0,
+                    'total_logistica' => 0,
+                    'total_logistica_pagado' => 0,
+                    'qty_items' => 0,
+                    'cbm_total' => 0,
+                    'total_fob' => 0,
+                    'total_impuestos' => 0,
+                    'bl_file_url' => '',
+                    'carga' => '',
+                    'lista_embarque_url' => '',
+                    'total_fob' => 0,
+                    'total_impuestos' => 0
+                ]
+            ];
+        }
+    }
 } 

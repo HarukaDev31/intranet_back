@@ -169,19 +169,28 @@ class DocumentacionController extends Controller
             if ($request->hasFile('file_comercial')) {
                 $this->processFileUpload($proveedor, 'factura_comercial', $request->file('file_comercial'), $data);
             }
+            else{
+                unset($data['file_comercial']);
+            }
 
             // Procesar excel de confirmación
             if ($request->hasFile('excel_confirmacion')) {
                 $this->processFileUpload($proveedor, 'excel_confirmacion', $request->file('excel_confirmacion'), $data);
+            }
+            else{
+                unset($data['excel_confirmacion']);
             }
 
             // Procesar packing list
             if ($request->hasFile('packing_list')) {
                 $this->processFileUpload($proveedor, 'packing_list', $request->file('packing_list'), $data);
             }
+            else{
+                unset($data['packing_list']);
+            }
 
             // Remover campos que no se deben actualizar
-            unset($data['id'], $data['idProveedor'], $data['file_comercial'], $data['excel_confirmacion'], $data['packing_list']);
+            unset($data['id'], $data['idProveedor']);
             $proveedor->update($data);
             $this->updateCotizacionTotals($idCotizacion);
 
@@ -1389,6 +1398,140 @@ class DocumentacionController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Error al crear carpeta de documentación: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+    /**
+     * Crea una carpeta de documentación para proveedor
+     */
+    public function createProveedorDocumentacionFolder(Request $request)
+    {
+        try {
+            // Validar request
+            $request->validate([
+                'name' => 'required|string',
+                'file' => 'required|file',
+                'id_cotizacion' => 'required|integer',
+                'id_proveedor' => 'required|integer'
+            ]);
+
+            // Obtener usuario autenticado
+            $user = JWTAuth::parseToken()->authenticate();
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Usuario no autenticado'
+                ], 401);
+            }
+
+            $name = $request->name;
+            $categoria = 'proveedor';
+            $icon = $request->icon;
+            $idCotizacion = $request->id_cotizacion;
+            $idContenedor = Cotizacion::where('id', $idCotizacion)->first()->id_contenedor;
+            $idProveedor = $request->id_proveedor;
+            $file = $request->file('file');
+
+            // Validar extensión del archivo
+            $allowedExtensions = ['jpg', 'jpeg', 'png', 'gif', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'txt'];
+            $fileExtension = strtolower($file->getClientOriginalExtension());
+            
+            if (!in_array($fileExtension, $allowedExtensions)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Tipo de archivo no permitido'
+                ], 400);
+            }
+
+            // Validar tamaño del archivo (1MB)
+            $maxFileSize = 1000000;
+            if ($file->getSize() > $maxFileSize) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'El archivo excede el tamaño máximo permitido (1MB)'
+                ], 400);
+            }
+
+            // Generar nombre único y guardar archivo
+            $filename = time() . '_' . uniqid() . '.' . $fileExtension;
+            $path = 'assets/images/agentecompra/';
+            $fileUrl = $file->storeAs($path, $filename, 'public');
+
+            if (!$fileUrl) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Error al subir el archivo'
+                ], 500);
+            }
+
+            // Verificar si el usuario tiene perfil de documentación
+            $isDocumentationProfile = $user->getNombreGrupo() === $this->roleDocumentacion;
+
+            // Crear carpeta y archivo usando transacciones
+            DB::beginTransaction();
+            try {
+                // Crear carpeta de documentación
+                $folder = DocumentacionFolder::create([
+                    'id_contenedor' => $idContenedor,
+                    'folder_name' => $name,
+                    'categoria' => $categoria,
+                    'b_icon' => 'proveedor',
+                    'only_doc_profile' => $isDocumentationProfile,
+                ]);
+
+                if (!$folder) {
+                    throw new \Exception('Error al crear la carpeta de documentación');
+                }
+
+                // Crear archivo de documentación
+                $documentacionFile = DocumentacionFile::create([
+                    'id_folder' => $folder->id,
+                    'file_url' => $fileUrl,
+                    'id_contenedor' => $idContenedor
+                ]);
+
+                if (!$documentacionFile) {
+                    throw new \Exception('Error al crear el archivo de documentación');
+                }
+
+                // Insertar en la tabla de documentación de proveedor
+                $proveedorDocumentacion = DB::table($this->table_contenedor_cotizacion_documentacion)->insert([
+                    'id_cotizacion' => $idCotizacion,
+                    'name' => $name,
+                    'file_url' => $fileUrl,
+                    'id_proveedor' => $idProveedor
+                ]);
+
+                if (!$proveedorDocumentacion) {
+                    throw new \Exception('Error al crear la documentación del proveedor');
+                }
+
+                DB::commit();
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Carpeta de documentación para proveedor creada exitosamente',
+                    'data' => [
+                        'folder' => $folder,
+                        'file' => $documentacionFile,
+                        'proveedor_documentacion' => $proveedorDocumentacion
+                    ]
+                ]);
+
+            } catch (\Exception $e) {
+                DB::rollback();
+                // Si hay error, eliminar el archivo subido
+                if ($fileUrl && Storage::disk('public')->exists($fileUrl)) {
+                    Storage::disk('public')->delete($fileUrl);
+                }
+                throw $e;
+            }
+
+        } catch (\Exception $e) {
+            Log::error('Error en createProveedorDocumentacionFolder: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al crear carpeta de documentación para proveedor: ' . $e->getMessage()
             ], 500);
         }
     }

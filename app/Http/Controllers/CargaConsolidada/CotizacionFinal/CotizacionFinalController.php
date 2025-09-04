@@ -67,10 +67,9 @@ class CotizacionFinalController extends Controller
             $query = Cotizacion::with('tipoCliente')
                 ->select([
                     'contenedor_consolidado_cotizacion.*',
-
                     'contenedor_consolidado_cotizacion.id as id_cotizacion',
                     'contenedor_consolidado_tipo_cliente.name',
-                    DB::raw('UPPER(contenedor_consolidado_cotizacion.nombre)'),
+                    DB::raw('UPPER(contenedor_consolidado_cotizacion.nombre) as nombre_upper'),
                     DB::raw('UPPER(LEFT(TRIM(contenedor_consolidado_tipo_cliente.name), 1)) || LOWER(SUBSTRING(TRIM(contenedor_consolidado_tipo_cliente.name), 2)) as tipo_cliente_formateado'),
                     DB::raw('FORMAT(contenedor_consolidado_cotizacion.volumen_final, 2) as volumen_final_formateado'),
                     DB::raw('FORMAT(contenedor_consolidado_cotizacion.fob_final, 2) as fob_final_formateado'),
@@ -114,17 +113,17 @@ class CotizacionFinalController extends Controller
             foreach ($data->items() as $row) {
                 $subdata = [
                     'index' => $index,
-                    'nombre' => $row->nombre_formateado ?? ucwords(strtolower($row->nombre)),
-                    'documento' => $row->documento,
-                    'correo' => $row->correo,
-                    'telefono' => $row->telefono,
-                    'tipo_cliente' =>  ucwords(strtolower($row->name)),
+                    'nombre' => $this->cleanUtf8String($row->nombre_upper ?? $row->nombre),
+                    'documento' => $this->cleanUtf8String($row->documento),
+                    'correo' => $this->cleanUtf8String($row->correo),
+                    'telefono' => $this->cleanUtf8String($row->telefono),
+                    'tipo_cliente' => $this->cleanUtf8String($row->name),
                     'volumen_final' => $row->volumen_final_formateado ?? $row->volumen_final,
                     'fob_final' => $row->fob_final_formateado ?? $row->fob_final,
                     'logistica_final' => $row->logistica_final_formateado ?? $row->logistica_final,
                     'impuestos_final' => $row->impuestos_final_formateado ?? $row->impuestos_final,
                     'tarifa_final' => $row->tarifa_final_formateado ?? $row->tarifa_final,
-                    'estado_cotizacion_final' => $row->estado_cotizacion_final,
+                    'estado_cotizacion_final' => $this->cleanUtf8String($row->estado_cotizacion_final),
                     'id_cotizacion' => $row->id_cotizacion
                 ];
 
@@ -165,15 +164,25 @@ class CotizacionFinalController extends Controller
                     'contenedor_consolidado_cotizacion.*',
                     'contenedor_consolidado_cotizacion.id as id_cotizacion',
                     'TC.name',
-                    //get pagos array
+                    /**
+                     * 'id_pago', cccp2.id,
+                        'monto', cccp2.monto,
+                        'concepto', ccp2.name,
+                        'status', cccp2.status,
+                        'payment_date', cccp2.payment_date,
+                        'banco', cccp2.banco,
+                        'voucher_url', cccp2.voucher_url
+                     */
                     DB::raw("(
                         SELECT JSON_ARRAYAGG(
                             JSON_OBJECT(
-                                'id', cccp.id,
-                                'id_concept', ccp.id,
-                                'name', ccp.name,
+                                'id_pago', cccp.id,
+                                'concepto', ccp.name,
+                                'status', cccp.status,
+                                'payment_date', cccp.payment_date,
+                                'banco', cccp.banco,
                                 'monto', cccp.monto,
-                                'url', cccp.voucher_url
+                                'voucher_url', cccp.voucher_url
                             )
                         )
                         FROM contenedor_consolidado_cotizacion_coordinacion_pagos cccp
@@ -212,9 +221,7 @@ class CotizacionFinalController extends Controller
             }
 
             // Ordenamiento
-            $sortField = $request->input('sort_by', 'fecha');
-            $sortOrder = $request->input('sort_order', 'desc');
-            $query->orderBy($sortField, $sortOrder);
+     
 
             // Paginación
             $perPage = $request->input('per_page', 10);
@@ -227,10 +234,10 @@ class CotizacionFinalController extends Controller
             foreach ($data->items() as $row) {
                 $subdata = [
                     'index' => $index,
-                    'nombre' => $row->nombre,
-                    'documento' => $row->documento,
-                    'telefono' => $row->telefono,
-                    'tipo_cliente' => $row->name,
+                    'nombre' => $this->cleanUtf8String($row->nombre),
+                    'documento' => $this->cleanUtf8String($row->documento),
+                    'telefono' => $this->cleanUtf8String($row->telefono),
+                    'tipo_cliente' => $this->cleanUtf8String($row->name),
                     'total_logistica_impuestos' => $row->total_logistica_impuestos,
                     'total_pagos' => $row->total_pagos == 0 ? "0.00" : $row->total_pagos,
                     'pagos_count' => $row->pagos_count,
@@ -693,11 +700,131 @@ class CotizacionFinalController extends Controller
     /**
      * Verifica si dos nombres coinciden
      */
-    private function isNameMatch($name1, $name2)
+    private function isNameMatch($fullName, $partialName)
     {
-        return strtolower(trim($name1)) === strtolower(trim($name2));
-    }
+        // Verificación inicial
+        if (empty($fullName) || empty($partialName)) {
+            return false;
+        }
 
+        $fullName = $this->normalizeString($fullName);
+        $partialName = $this->normalizeString($partialName);
+
+        // Verificar que normalizeString no devolvió cadenas vacías
+        if (empty($fullName) || empty($partialName)) {
+            return false;
+        }
+
+        // Comparación exacta primero
+        if ($fullName === $partialName) {
+            return true;
+        }
+
+        // Verificar si el nombre parcial está contenido en el completo
+        // Verificar que $partialName no esté vacío antes de usar strpos
+        if (!empty($partialName) && strpos($fullName, $partialName) !== false) {
+            return true;
+        }
+
+        // Comparar palabra por palabra
+        $fullWords = array_filter(explode(' ', $fullName)); // array_filter elimina elementos vacíos
+        $partialWords = array_filter(explode(' ', $partialName)); // array_filter elimina elementos vacíos
+
+        // Verificar que tenemos palabras para comparar
+        if (empty($fullWords) || empty($partialWords)) {
+            return false;
+        }
+
+        $matchCount = 0;
+
+        foreach ($partialWords as $partialWord) {
+            // Verificar que la palabra parcial no esté vacía
+            if (empty($partialWord)) {
+                continue;
+            }
+
+            foreach ($fullWords as $fullWord) {
+                // Verificar que la palabra completa no esté vacía
+                if (empty($fullWord)) {
+                    continue;
+                }
+
+                if (strpos($fullWord, $partialWord) !== false) {
+                    $matchCount++;
+                    break;
+                }
+            }
+        }
+
+        // Si coinciden al menos 70% de las palabras del nombre parcial
+        return $matchCount >= ceil(count($partialWords) * 0.7);
+    }
+    private function normalizeString($string)
+    {
+        $string = strtolower(trim($string));
+        $accents = [
+            'á' => 'a',
+            'à' => 'a',
+            'ä' => 'a',
+            'â' => 'a',
+            'ā' => 'a',
+            'ã' => 'a',
+            'é' => 'e',
+            'è' => 'e',
+            'ë' => 'e',
+            'ê' => 'e',
+            'ē' => 'e',
+            'í' => 'i',
+            'ì' => 'i',
+            'ï' => 'i',
+            'î' => 'i',
+            'ī' => 'i',
+            'ó' => 'o',
+            'ò' => 'o',
+            'ö' => 'o',
+            'ô' => 'o',
+            'ō' => 'o',
+            'õ' => 'o',
+            'ú' => 'u',
+            'ù' => 'u',
+            'ü' => 'u',
+            'û' => 'u',
+            'ū' => 'u',
+            'ñ' => 'n',
+            'ç' => 'c',
+            'Á' => 'a',
+            'À' => 'a',
+            'Ä' => 'a',
+            'Â' => 'a',
+            'Ā' => 'a',
+            'Ã' => 'a',
+            'É' => 'e',
+            'È' => 'e',
+            'Ë' => 'e',
+            'Ê' => 'e',
+            'Ē' => 'e',
+            'Í' => 'i',
+            'Ì' => 'i',
+            'Ï' => 'i',
+            'Î' => 'i',
+            'Ī' => 'i',
+            'Ó' => 'o',
+            'Ò' => 'o',
+            'Ö' => 'o',
+            'Ô' => 'o',
+            'Ō' => 'o',
+            'Õ' => 'o',
+            'Ú' => 'u',
+            'Ù' => 'u',
+            'Ü' => 'u',
+            'Û' => 'u',
+            'Ū' => 'u',
+            'Ñ' => 'n',
+            'Ç' => 'c'
+        ];
+
+        return strtr($string, $accents);
+    }
     public function updateEstadoCotizacionFinal(Request $request)
     {
         try {
@@ -864,5 +991,42 @@ class CotizacionFinalController extends Controller
                 'message' => 'Error al actualizar factura general: ' . $e->getMessage()
             ], 500);
         }
+    }
+
+    /**
+     * Limpia y valida caracteres UTF-8
+     */
+    private function cleanUtf8String($string)
+    {
+        if (empty($string)) {
+            return '';
+        }
+
+        // Convertir a string si no lo es
+        $string = (string) $string;
+
+        // Verificar si la cadena es UTF-8 válida
+        if (!mb_check_encoding($string, 'UTF-8')) {
+            // Intentar convertir desde diferentes encodings
+            $encodings = ['ISO-8859-1', 'ISO-8859-15', 'Windows-1252', 'CP1252'];
+            
+            foreach ($encodings as $encoding) {
+                if (mb_check_encoding($string, $encoding)) {
+                    $string = mb_convert_encoding($string, 'UTF-8', $encoding);
+                    break;
+                }
+            }
+        }
+
+        // Limpiar caracteres inválidos
+        $string = mb_convert_encoding($string, 'UTF-8', 'UTF-8');
+        
+        // Remover caracteres de control excepto tab, newline, carriage return
+        $string = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/', '', $string);
+        
+        // Normalizar espacios
+        $string = preg_replace('/\s+/', ' ', $string);
+        
+        return trim($string);
     }
 }

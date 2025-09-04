@@ -80,7 +80,8 @@ class ContenedorController extends Controller
                     $query->where('estado_china', '!=', Contenedor::CONTEDOR_CERRADO);
                 }
             }
-            //order by int(carga) desc
+            //where empresa is 1
+            $query->where('empresa', '!=', 1);
             $query->orderBy(DB::raw('CAST(carga AS UNSIGNED)'), 'desc');
             $data = $query->paginate(10);
 
