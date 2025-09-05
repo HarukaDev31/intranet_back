@@ -97,11 +97,7 @@ class CotizacionFinalController extends Controller
                 $query->where('estado_cotizacion_final', $request->estado_cotizacion_final);
             }
 
-            // Ordenamiento
-            $sortField = $request->input('sort_by', 'fecha');
-            $sortOrder = $request->input('sort_order', 'desc');
-            $query->orderBy($sortField, $sortOrder);
-
+            
             // Paginación
             $perPage = $request->input('per_page', 10);
             $data = $query->paginate($perPage);
