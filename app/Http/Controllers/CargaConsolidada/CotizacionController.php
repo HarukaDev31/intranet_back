@@ -10,6 +10,7 @@ use App\Models\CargaConsolidada\TipoCliente;
 use App\Models\CargaConsolidada\CotizacionProveedor;
 use App\Models\CargaConsolidada\Contenedor;
 use App\Models\Usuario;
+use Tymon\JWTAuth\Facades\JWTAuth;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -136,6 +137,8 @@ class CotizacionController extends Controller
     public function getHeadersData($idContenedor)
     {
         $userId = auth()->id();
+        $user = JWTAuth::parseToken()->authenticate();
+        $usergroup = $user->getNombreGrupo(); 
 
         $headers = DB::table('contenedor_consolidado_cotizacion_proveedores as cccp')
             ->join('contenedor_consolidado_cotizacion as cc', 'cccp.id_cotizacion', '=', 'cc.id')
@@ -235,10 +238,83 @@ class CotizacionController extends Controller
             'qty_items' => [
                 'value' => $headers ? $headers->total_qty_items : 0,
                 'label' => 'Cantidad de Items',
-                'icon' => 'i-heroicons-imbox-stack'
-            ],
+                'icon' => 'bi:boxes'
+            ]
 
         ];
+        $roleAllowedMap = [
+            Usuario::ROL_COTIZADOR => ['cbm_vendido', 'cbm_pendiente', 'cbm_embarcado', 'qty_items', 'cbm_total_peru', 'cbm_total_china'],
+            Usuario::ROL_ALMACEN_CHINA => ['cbm_total_china', 'cbm_total_peru', 'qty_items'],
+            Usuario::ROL_ADMINISTRACION => ['cbm_total_china', 'cbm_total_peru', 'qty_items', 'total_logistica','total_logistica_pagado']
+            //por defecto:todos
+        ];
+        $cbmPorUsuario = [
+            'vendido' => [],
+            'pendiente' => [],
+            'embarcado' => []
+        ];
+        $userIdCheck = $user->ID_Usuario;
+        if (array_key_exists($usergroup, $roleAllowedMap)) {
+            $allowedKeys = $roleAllowedMap[$usergroup];
+            $headersData = array_filter($headersData, function ($key) use ($allowedKeys) {
+                return in_array($key, $allowedKeys);
+            }, ARRAY_FILTER_USE_KEY);
+        } 
+        if ($userIdCheck == "28791") {
+            // CBM Vendido por usuario (estado CONFIRMADO)
+            $vendidoRows = DB::table('contenedor_consolidado_cotizacion as c')
+                ->leftJoin('usuario as u', 'u.ID_Usuario', '=', 'c.id_usuario')
+                ->where('c.id_contenedor', $idContenedor)
+                ->where('c.estado_cotizador', 'CONFIRMADO')
+                ->select(DB::raw('u.No_Nombres_Apellidos as nombre'), DB::raw('COALESCE(SUM(c.volumen),0) as cbm_vendido'))
+                ->groupBy('u.No_Nombres_Apellidos')
+                ->get();
+            foreach ($vendidoRows as $r) {
+                $cbmPorUsuario['vendido'][$r->nombre ?? 'Sin nombre'] = (float) $r->cbm_vendido;
+            }
+
+            // CBM Pendiente por usuario (estado != CONFIRMADO)
+            $pendienteRows = DB::table('contenedor_consolidado_cotizacion as c')
+                ->leftJoin('usuario as u', 'u.ID_Usuario', '=', 'c.id_usuario')
+                ->where('c.id_contenedor', $idContenedor)
+                ->where('c.estado_cotizador', '!=', 'CONFIRMADO')
+                ->select(DB::raw('u.No_Nombres_Apellidos as nombre'), DB::raw('COALESCE(SUM(c.volumen),0) as cbm_pendiente'))
+                ->groupBy('u.No_Nombres_Apellidos')
+                ->get();
+            foreach ($pendienteRows as $r) {
+                $cbmPorUsuario['pendiente'][$r->nombre ?? 'Sin nombre'] = (float) $r->cbm_pendiente;
+            }
+
+            // CBM Embarcado por usuario (proveedores LOADED)
+            $embarcadoRows = DB::table('contenedor_consolidado_cotizacion_proveedores as cccp')
+                ->join('contenedor_consolidado_cotizacion as cc', 'cc.id', '=', 'cccp.id_cotizacion')
+                ->leftJoin('usuario as u', 'u.ID_Usuario', '=', 'cc.id_usuario')
+                ->where('cccp.id_contenedor', $idContenedor)
+                ->where('cccp.estados_proveedor', 'LOADED')
+                ->select(DB::raw('u.No_Nombres_Apellidos as nombre'), DB::raw('COALESCE(SUM(cccp.cbm_total_china),0) as cbm_embarcado'))
+                ->groupBy('u.No_Nombres_Apellidos')
+                ->get();
+            foreach ($embarcadoRows as $r) {
+                $cbmPorUsuario['embarcado'][$r->nombre ?? 'Sin nombre'] = (float) $r->cbm_embarcado;
+            }
+            $contenedor = Contenedor::find($idContenedor);
+            if (!$contenedor) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Contenedor no encontrado'
+                ], 404);
+            }
+            return response()->json([
+                'success' => true,
+                'data' => $headersData,
+                'carga' => $contenedor->carga,
+                'cbm_por_usuario' => $cbmPorUsuario   // incluir (vacío si no es el usuario especial)
+            ]);
+        } else {
+            // Si el rol no está en el mapa, devolver todos los headers
+            return $headersData;
+        }
+
         $contenedor = Contenedor::find($idContenedor);
         if (!$contenedor) {
             return response()->json([

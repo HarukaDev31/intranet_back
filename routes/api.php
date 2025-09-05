@@ -212,7 +212,7 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
             Route::get('filters/options', [CotizacionController::class, 'filterOptions']);
         }); 
         Route::group(['prefix' => 'clientes'], function () {
-
+            Route::get('/{idContenedor}/headers', [GeneralController::class, 'getHeadersData']);
             Route::get('/pagos/{idContenedor}', [ClientesPagosController::class, 'index']);
             Route::get('/general/{idContenedor}', [GeneralController::class, 'index']);
             Route::post('/general/estado-cliente', [GeneralController::class, 'updateEstadoCliente']);

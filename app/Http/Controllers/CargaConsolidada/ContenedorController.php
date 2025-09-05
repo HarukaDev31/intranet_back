@@ -82,6 +82,19 @@ class ContenedorController extends Controller
             }
             //where empresa is 1
             $query->where('empresa', '!=', 1);
+            //filtrar por los que f_cierre no este vacio
+            $query->whereNotNull('f_cierre');
+
+            //filtrar por buscador
+            if ($request->has('search') && !empty($request->search)) {
+                $search = $request->search;
+                $query->where(function ($q) use ($search) {
+                    $q->where('carga', 'LIKE', "%$search%")
+                        ->orWhere('mes', 'LIKE', "%$search%");
+                });
+            }
+
+            //order by int(carga) desc
             $query->orderBy(DB::raw('CAST(carga AS UNSIGNED)'), 'desc');
             $data = $query->paginate(10);
 
