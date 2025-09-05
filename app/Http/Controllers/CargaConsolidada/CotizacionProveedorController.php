@@ -569,7 +569,7 @@ class CotizacionProveedorController extends Controller
                 } else {
                     $message = "Se ha actualizado la cantidad de cajas y volumen total de china del proveedor con codigo de proveedor " . $supplierCode . " a " . $data['qty_box_china'] . " cajas y " . $data['cbm_total_china'] . " m3";
                 }
-                $contenedorEstado = Cotizacion::where('id', $idContenedor)->first()->estado_china;
+                $contenedorEstado = Cotizacion::where('id_contenedor', $idContenedor)->first()->estado_china;
                 if ($contenedorEstado == "PENDIENTE") {
                     $cotizacion = Cotizacion::find($idContenedor);
                     $cotizacion->estado_china = "RECIBIENDO";

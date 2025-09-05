@@ -17,7 +17,13 @@ class CotizacionProveedor extends Model
         'valor_doc',
         'factura_comercial',
         'excel_confirmacion',
-        'packing_list'
+        'packing_list',
+        'qty_box_china',
+        'arrive_date_china',
+        'cbm_total_china',
+        'estados_proveedor',
+        'estado_china',
+        'send_rotulado_status'
     ];
 
     /**

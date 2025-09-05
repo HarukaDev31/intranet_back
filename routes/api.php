@@ -196,7 +196,7 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
         Route::get('/', [ContenedorController::class, 'index']);
         Route::get('pasos/{idContenedor}', [ContenedorController::class, 'getContenedorPasos']);
         Route::post('/', [ContenedorController::class, 'store']);
-        
+        Route::post('/estado-documentacion', [ContenedorController::class, 'updateEstadoDocumentacion']);
         Route::group(['prefix' => 'cotizaciones'], function () {
             Route::post('/{id}/refresh', [CotizacionController::class, 'refreshCotizacionFile']);
             Route::get('/{idContenedor}/headers', [CotizacionController::class, 'getHeadersData']);
@@ -212,14 +212,14 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
             Route::get('filters/options', [CotizacionController::class, 'filterOptions']);
         }); 
         Route::group(['prefix' => 'clientes'], function () {
-            Route::get('/{idContenedor}/headers', [GeneralController::class, 'getHeadersData']);
+            Route::get('/general/{idContenedor}/headers', [GeneralController::class, 'getClientesHeader']);
             Route::get('/pagos/{idContenedor}', [ClientesPagosController::class, 'index']);
             Route::get('/general/{idContenedor}', [GeneralController::class, 'index']);
             Route::post('/general/estado-cliente', [GeneralController::class, 'updateEstadoCliente']);
             Route::get('/variacion/{idContenedor}', [VariacionController::class, 'index']);
             Route::post('/variacion/vol-selected', [VariacionController::class, 'updateVolSelected']);
             Route::post('/variacion/documentacion/proveedor/{idProveedor}/create', [DocumentacionController::class, 'createProveedorDocumentacionFolder']);
-
+            Route::post('/general/status-cliente-doc', [GeneralController::class, 'updateStatusCliente']);
             Route::post('/variacion/documentacion/proveedor/{idProveedor}', [DocumentacionController::class, 'updateClienteDocumentacion']);
             Route::delete('/variacion/documentacion/proveedor/{idProveedor}/factura-comercial', [DocumentacionController::class, 'deleteProveedorFacturaComercial']);
             Route::delete('/variacion/documentacion/proveedor/{idProveedor}/excel-confirmacion', [DocumentacionController::class, 'deleteProveedorExcelConfirmacion']);
@@ -238,15 +238,24 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
             Route::get('/download-zip/{idContenedor}', [DocumentacionController::class, 'downloadDocumentacionZip']);
         });
         Route::group(['prefix' => 'cotizacion-final'], function () {
+            Route::options('/general/upload-plantilla-final', [CotizacionFinalController::class, 'handleOptions']);
+            Route::post('/general/upload-plantilla-final', [CotizacionFinalController::class, 'generateMassiveExcelPayrolls']);
+            Route::get('/general/check-temp-directory', [CotizacionFinalController::class, 'checkTempDirectory']);
+
             Route::put('/general/update-estado', [CotizacionFinalController::class, 'updateEstadoCotizacionFinal']);
             Route::post('/general/upload-factura-comercial', [CotizacionFinalController::class, 'uploadFacturaComercial']);
+            Route::post('/general/generate-individual/{idContenedor}', [CotizacionFinalController::class, 'generateIndividualCotizacion']);
+            Route::post('/general/process-excel-data', [CotizacionFinalController::class, 'processExcelData']);
+
             Route::get('/general/download-plantilla-general/{idContenedor}', [CotizacionFinalController::class, 'downloadPlantillaGeneral']);
             Route::get('/pagos/{idCotizacion}', [CotizacionFinalController::class, 'getCotizacionFinalDocumentacionPagos']);
             Route::get('/general/{idContenedor}', [CotizacionFinalController::class, 'getContenedorCotizacionesFinales']);
+            Route::get('/general/{idContenedor}/headers', [CotizacionFinalController::class, 'getCotizacionFinalHeaders']);
 
         });
         Route::group(['prefix' => 'factura-guia'], function () {
             //get upload-guia-remision ,upload-factura-comercial
+            Route::get('/general/{idContenedor}/headers', [FacturaGuiaController::class, 'getHeadersData']);
             Route::post('/general/upload-guia-remision', [FacturaGuiaController::class, 'uploadGuiaRemision']);
             Route::post('/general/upload-factura-comercial', [FacturaGuiaController::class, 'uploadFacturaComercial']);
             Route::get('/general/{idContenedor}', [FacturaGuiaController::class, 'getContenedorFacturaGuia']);

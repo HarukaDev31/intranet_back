@@ -239,14 +239,24 @@ class CotizacionController extends Controller
                 'value' => $headers ? $headers->total_qty_items : 0,
                 'label' => 'Cantidad de Items',
                 'icon' => 'bi:boxes'
-            ]
+            ],
+            'total_logistica_pagado' => [
+                'value' => $headers ? $headers->total_logistica_pagado : 0,
+                'label' => 'Total Logistica Pagado',
+                'icon' => 'i-heroicons-currency-dollar'
+            ],
+            'total_logistica' => [
+                'value' => $headers ? $headers->total_logistica : 0,
+                'label' => 'Total Logistica',
+                'icon' => 'i-heroicons-currency-dollar'
+            ]   
 
         ];
         $roleAllowedMap = [
             Usuario::ROL_COTIZADOR => ['cbm_vendido', 'cbm_pendiente', 'cbm_embarcado', 'qty_items', 'cbm_total_peru', 'cbm_total_china'],
             Usuario::ROL_ALMACEN_CHINA => ['cbm_total_china', 'cbm_total_peru', 'qty_items'],
-            Usuario::ROL_ADMINISTRACION => ['cbm_total_china', 'cbm_total_peru', 'qty_items', 'total_logistica','total_logistica_pagado']
-            //por defecto:todos
+            Usuario::ROL_ADMINISTRACION => ['cbm_total_china', 'cbm_total_peru', 'qty_items', 'total_logistica','total_logistica_pagado'],
+            Usuario::ROL_COORDINACION => ['cbm_total_china', 'cbm_total_peru', 'qty_items', 'total_logistica','total_logistica_pagado']
         ];
         $cbmPorUsuario = [
             'vendido' => [],
@@ -260,6 +270,8 @@ class CotizacionController extends Controller
                 return in_array($key, $allowedKeys);
             }, ARRAY_FILTER_USE_KEY);
         } 
+        $contenedor = Contenedor::find($idContenedor);
+
         if ($userIdCheck == "28791") {
             // CBM Vendido por usuario (estado CONFIRMADO)
             $vendidoRows = DB::table('contenedor_consolidado_cotizacion as c')
@@ -297,7 +309,6 @@ class CotizacionController extends Controller
             foreach ($embarcadoRows as $r) {
                 $cbmPorUsuario['embarcado'][$r->nombre ?? 'Sin nombre'] = (float) $r->cbm_embarcado;
             }
-            $contenedor = Contenedor::find($idContenedor);
             if (!$contenedor) {
                 return response()->json([
                     'success' => false,
@@ -311,8 +322,11 @@ class CotizacionController extends Controller
                 'cbm_por_usuario' => $cbmPorUsuario   // incluir (vacío si no es el usuario especial)
             ]);
         } else {
-            // Si el rol no está en el mapa, devolver todos los headers
-            return $headersData;
+            return response()->json([
+                'success' => true,
+                'data' => $headersData,
+                'carga' => $contenedor->carga,
+            ]);
         }
 
         $contenedor = Contenedor::find($idContenedor);
@@ -1023,40 +1037,7 @@ class CotizacionController extends Controller
     /**
      * Actualiza el estado del cliente
      */
-    public function updateStatusCliente($id_cotizacion, $status)
-    {
-        try {
-            $user = Auth::user();
-            if ($user->No_Grupo != 'Documentacion') {
-                return 'success';
-            }
-
-            $cotizacion = Cotizacion::find($id_cotizacion);
-            if (!$cotizacion) {
-                return [
-                    'status' => "error",
-                    'message' => 'Cotización no encontrada'
-                ];
-            }
-
-            $currentStatus = $cotizacion->status_cliente_doc;
-            if ($currentStatus === 'Pendiente' || $currentStatus === 'Incompleto') {
-                $cotizacion->update(['status_cliente_doc' => $status]);
-                return 'success';
-            } else {
-                return [
-                    'status' => "error",
-                    'message' => 'Solo se puede cambiar el estado si está en Pendiente.'
-                ];
-            }
-        } catch (Exception $e) {
-            Log::error('Error en updateStatusCliente: ' . $e->getMessage());
-            return [
-                'status' => "error",
-                'message' => $e->getMessage()
-            ];
-        }
-    }
+   
 
     /**
      * Refresca el archivo de cotización

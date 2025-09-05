@@ -337,4 +337,29 @@ class ContenedorController extends Controller
             return response()->json(['message' => 'Error al mover cotización a calculadora: ' . $e->getMessage(), 'success' => false], 500);
         }
     }
+    public function updateEstadoDocumentacion(Request $request)
+    {
+        try {
+            $id = $request->id;
+            $estado = $request->estado_documentacion;
+            $contenedor = Contenedor::find($id);
+            if (!$contenedor) {
+                return response()->json(['message' => 'Contenedor no encontrado', 'success' => false], 404);
+            }
+            $contenedor->estado_documentacion = $estado;
+            $contenedor->save();
+            if ($contenedor) {
+                return [
+                    'success' => true,
+                    'message' => 'Estado actualizado correctamente'
+                ];
+            }
+            return response()->json(['message' => 'Estado actualizado correctamente', 'success' => true]);
+        } catch (\Exception $e) {
+            return [
+                'success' => false,
+                'message' => 'Error al actualizar el estado: ' . $e->getMessage()
+            ];
+        }
+    }
 }

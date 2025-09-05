@@ -13,6 +13,13 @@ use Illuminate\Support\Facades\Log;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+use PhpOffice\PhpSpreadsheet\Style\Fill;
+use PhpOffice\PhpSpreadsheet\Style\Border;
+use PhpOffice\PhpSpreadsheet\Style\Alignment;
+use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
+use PhpOffice\PhpSpreadsheet\Style\Color;
+use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
+use ZipArchive;
 
 class CotizacionFinalController extends Controller
 {
@@ -57,6 +64,8 @@ class CotizacionFinalController extends Controller
     private $aNewCotizacion = "new-cotizacion";
     private $cambioEstadoProveedor = "cambio-estado-proveedor";
     private $table_contenedor_cotizacion_final = "contenedor_consolidado_cotizacion_final";
+    private $table_contenedor_consolidado_cotizacion_coordinacion_pagos = "contenedor_consolidado_cotizacion_coordinacion_pagos";
+    private $table_pagos_concept = "cotizacion_coordinacion_pagos_concept";
     /**
      * Obtiene las cotizaciones finales de un contenedor específico
      */
@@ -120,7 +129,8 @@ class CotizacionFinalController extends Controller
                     'impuestos_final' => $row->impuestos_final_formateado ?? $row->impuestos_final,
                     'tarifa_final' => $row->tarifa_final_formateado ?? $row->tarifa_final,
                     'estado_cotizacion_final' => $this->cleanUtf8String($row->estado_cotizacion_final),
-                    'id_cotizacion' => $row->id_cotizacion
+                    'id_cotizacion' => $row->id_cotizacion,
+                    'cotizacion_final_url' => $row->cotizacion_final_url
                 ];
 
                 $transformedData[] = $subdata;
@@ -989,6 +999,7 @@ class CotizacionFinalController extends Controller
         }
     }
 
+
     /**
      * Limpia y valida caracteres UTF-8
      */
@@ -1025,4 +1036,1365 @@ class CotizacionFinalController extends Controller
         
         return trim($string);
     }
+
+    /**
+     * Maneja peticiones OPTIONS para CORS
+     */
+    public function handleOptions()
+    {
+        return response()->json([], 200)
+            ->header('Access-Control-Allow-Origin', '*')
+            ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+            ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+    }
+
+    /**
+     * Genera Excel masivo de cotizaciones para múltiples clientes
+     */
+    public function generateMassiveExcelPayrolls(Request $request)
+    {
+        try {
+            // Validar datos de entrada
+            $request->validate([
+                'file' => 'required|file|mimes:xlsx,xls',
+                'idContenedor' => 'required|integer'
+            ]);
+
+            // Aumentar límite de memoria
+            $originalMemoryLimit = ini_get('memory_limit');
+            ini_set('memory_limit', '2048M');
+            $idContainer = $request->idContenedor;
+            
+            // Obtener datos del Excel subido
+            $data = $this->getMassiveExcelData($request->file('file'));
+            
+            Log::info('Datos procesados del Excel: ' . json_encode($data));
+            
+            // Obtener datos de cotizaciones confirmadas
+            $result = DB::table($this->table_contenedor_cotizacion . ' as cc')
+                ->join($this->table_contenedor_tipo_cliente . ' as tc', 'cc.id_tipo_cliente', '=', 'tc.id')
+                ->select([
+                    'cc.id',
+                    'cc.tarifa',
+                    'cc.nombre',
+                    'tc.id as id_tipo_cliente',
+                    'tc.name as tipoCliente',
+                    'cc.correo',
+                    'cc.vol_selected',
+                    'cc.volumen',
+                    'cc.volumen_china',
+                    'cc.volumen_doc'
+                ])
+                ->where('id_contenedor', $idContainer)
+                ->where('estado_cotizador', 'CONFIRMADO')
+                ->whereNotNull('estado_cliente')
+                ->get();
+
+            Log::info('Datos de cotizaciones encontrados: ' . json_encode($result));
+
+            // Procesar datos y hacer matching
+            foreach ($data as &$cliente) {
+                $nombreCliente = $cliente['cliente']['nombre'];
+                $matchFound = false;
+
+                foreach ($result as $item) {
+                    Log::info('Comparando: ' . $nombreCliente . ' con ' . $item->nombre);
+                    if ($this->isNameMatch($nombreCliente, $item->nombre)) {
+                        Log::info('Coincidencia encontrada: ' . $nombreCliente . ' con ' . json_encode($item));
+                        $cliente['cliente']['tarifa'] = $item->tarifa ?? 0;
+                        Log::info('Tarifa: ' . $cliente['cliente']['tarifa']);
+                        $cliente['cliente']['correo'] = $item->correo ?? '';
+                        $cliente['cliente']['tipo_cliente'] = $item->tipoCliente ?? '';
+                        $cliente['cliente']['id_tipo_cliente'] = $item->id_tipo_cliente ?? 0;
+                        $cliente['id'] = $item->id;
+                        
+                        if ($item->vol_selected == 'volumen') {
+                            $cliente['cliente']['volumen'] = is_numeric($item->volumen) ? (float)$item->volumen : 0;
+                        } else if ($item->vol_selected == 'volumen_china') {
+                            $cliente['cliente']['volumen'] = is_numeric($item->volumen_china) ? (float)$item->volumen_china : 0;
+                        } else if ($item->vol_selected == 'volumen_doc') {
+                            $cliente['cliente']['volumen'] = is_numeric($item->volumen_doc) ? (float)$item->volumen_doc : 0;
+                        } else {
+                            $cliente['cliente']['volumen'] = 0;
+                        }
+                        $matchFound = true;
+                        break;
+                    }
+                }
+
+                // Si no se encontró match, asignar valores por defecto
+                if (!$matchFound) {
+                    Log::warning('No se encontró match para cliente: ' . $nombreCliente);
+                    $cliente['cliente']['tarifa'] = 0;
+                    $cliente['cliente']['correo'] = '';
+                    $cliente['cliente']['tipo_cliente'] = '';
+                    $cliente['cliente']['id_tipo_cliente'] = 0;
+                    $cliente['cliente']['volumen'] = 0;
+                    $cliente['id'] = 0;
+                }
+            }
+            unset($cliente);
+
+            // Generar nombre único para el archivo ZIP temporal
+            $zipFileName = 'Boletas_' . $idContainer . '_' . time() . '.zip';
+            $zipFilePath = storage_path('app' . DIRECTORY_SEPARATOR . 'temp' . DIRECTORY_SEPARATOR . $zipFileName);
+            
+            // Crear directorio temporal si no existe
+            $tempDir = storage_path('app' . DIRECTORY_SEPARATOR . 'temp');
+            if (!file_exists($tempDir)) {
+                mkdir($tempDir, 0755, true);
+            }
+
+            // Eliminar archivo ZIP anterior si existe
+            if (file_exists($zipFilePath)) {
+                unlink($zipFilePath);
+                Log::info('Archivo ZIP anterior eliminado: ' . $zipFilePath);
+            }
+
+            // Crear nuevo archivo ZIP
+            $zip = new ZipArchive();
+            Log::info('Intentando crear archivo ZIP en: ' . $zipFilePath);
+            Log::info('Directorio existe: ' . (file_exists(dirname($zipFilePath)) ? 'Sí' : 'No'));
+            Log::info('Directorio es escribible: ' . (is_writable(dirname($zipFilePath)) ? 'Sí' : 'No'));
+            
+            $zipResult = $zip->open($zipFilePath, ZipArchive::CREATE);
+            if ($zipResult !== TRUE) {
+                $errorMessages = [
+                    ZipArchive::ER_OK => 'Sin errores',
+                    ZipArchive::ER_MULTIDISK => 'Multi-disk zip archives not supported',
+                    ZipArchive::ER_RENAME => 'Renaming temporary file failed',
+                    ZipArchive::ER_CLOSE => 'Closing zip archive failed',
+                    ZipArchive::ER_SEEK => 'Seek error',
+                    ZipArchive::ER_READ => 'Read error',
+                    ZipArchive::ER_WRITE => 'Write error',
+                    ZipArchive::ER_CRC => 'CRC error',
+                    ZipArchive::ER_ZIPCLOSED => 'Containing zip archive was closed',
+                    ZipArchive::ER_NOENT => 'No such file',
+                    ZipArchive::ER_EXISTS => 'File already exists',
+                    ZipArchive::ER_OPEN => 'Can\'t open file',
+                    ZipArchive::ER_TMPOPEN => 'Failure to create temporary file',
+                    ZipArchive::ER_ZLIB => 'Zlib error',
+                    ZipArchive::ER_MEMORY => 'Memory allocation failure',
+                    ZipArchive::ER_CHANGED => 'Entry has been changed',
+                    ZipArchive::ER_COMPNOTSUPP => 'Compression method not supported',
+                    ZipArchive::ER_EOF => 'Premature EOF',
+                    ZipArchive::ER_INVAL => 'Invalid argument',
+                    ZipArchive::ER_NOZIP => 'Not a zip archive',
+                    ZipArchive::ER_INTERNAL => 'Internal error',
+                    ZipArchive::ER_INCONS => 'Zip archive inconsistent',
+                    ZipArchive::ER_REMOVE => 'Can\'t remove file',
+                    ZipArchive::ER_DELETED => 'Entry has been deleted'
+                ];
+                
+                $errorMessage = $errorMessages[$zipResult] ?? 'Error desconocido';
+                Log::error('Error al crear archivo ZIP. Código: ' . $zipResult . ' - ' . $errorMessage);
+                throw new \Exception('No se pudo crear el archivo ZIP. Error: ' . $errorMessage . ' (Código: ' . $zipResult . ')');
+            }
+            
+            Log::info('Archivo ZIP creado exitosamente: ' . $zipFilePath);
+
+            // Generar Excel para cada cliente
+            Log::info('Total de clientes a procesar: ' . count($data));
+            $processedCount = 0;
+            
+            foreach ($data as $key => $value) {
+                // Validar que el cliente tiene los datos necesarios
+                if (!isset($value['cliente']['tarifa']) || $value['cliente']['tarifa'] == 0) {
+                    Log::warning('Cliente sin tarifa válida, saltando: ' . json_encode($value));
+                    continue;
+                }
+
+                if (!isset($value['id']) || $value['id'] == 0) {
+                    Log::warning('Cliente sin ID válido, saltando: ' . json_encode($value));
+                    continue;
+                }
+
+                $processedCount++;
+                Log::info('Procesando cliente ' . $processedCount . ' de ' . count($data) . ': ' . $value['cliente']['nombre']);
+
+                try {
+                    Log::info('Iniciando generación de Excel para: ' . $value['cliente']['nombre']);
+                    $result = $this->getFinalCotizacionExcelv2($value, $idContainer);
+                    
+                    if (!$result || !isset($result['excel_file_name']) || !isset($result['excel_file_path'])) {
+                        Log::error('getFinalCotizacionExcelv2 no retornó datos válidos para: ' . $value['cliente']['nombre']);
+                        continue;
+                    }
+                    
+                    $excelFileName = $result['excel_file_name'];
+                    $excelFilePath = $result['excel_file_path'];
+
+                    // Agregar archivo al ZIP
+                    Log::info('Agregando archivo al ZIP: ' . $excelFileName);
+                    Log::info('Archivo Excel existe: ' . (file_exists($excelFilePath) ? 'Sí' : 'No'));
+                    
+                    if (file_exists($excelFilePath)) {
+                        $addResult = $zip->addFile($excelFilePath, $excelFileName);
+                        if ($addResult) {
+                            Log::info('Archivo agregado al ZIP exitosamente: ' . $excelFileName);
+                        } else {
+                            Log::error('Error al agregar archivo al ZIP: ' . $excelFileName);
+                        }
+                    } else {
+                        Log::error('El archivo Excel no existe: ' . $excelFilePath);
+                    }
+
+                    // Actualizar tabla de cotizaciones
+                    DB::table($this->table_contenedor_cotizacion)
+                        ->where('id', $result['id'])
+                        ->update([
+                            'cotizacion_final_url' => $result['cotizacion_final_url'],
+                            'volumen_final' => $result['volumen_final'],
+                            'monto_final' => $result['monto_final'],
+                            'tarifa_final' => $result['tarifa_final'],
+                            'impuestos_final' => $result['impuestos_final'],
+                            'logistica_final' => $result['logistica_final'],
+                            'fob_final' => $result['fob_final'],
+                            'estado_cotizacion_final' => 'PENDIENTE'
+                        ]);
+
+                    Log::info('Cotización procesada: ' . json_encode($result));
+                } catch (\Exception $e) {
+                    Log::error('Error procesando cliente ' . $value['cliente']['nombre'] . ': ' . $e->getMessage());
+                    continue;
+                }
+            }
+
+            Log::info('Total de clientes procesados: ' . $processedCount);
+            
+            // Verificar si se agregaron archivos al ZIP
+            $zipFileCount = $zip->numFiles;
+            Log::info('Archivos en el ZIP: ' . $zipFileCount);
+            
+            if ($zipFileCount === 0) {
+                Log::warning('No se agregaron archivos al ZIP. Creando archivo ZIP vacío con mensaje informativo.');
+                
+                // Crear contenido informativo directamente en el ZIP
+                $infoContent = "No se encontraron clientes válidos para procesar.\n\nTotal de clientes en Excel: " . count($data) . "\nClientes procesados: " . $processedCount . "\n\nVerifique que los clientes tengan tarifa válida y datos completos.";
+                
+                // Agregar contenido directamente al ZIP sin crear archivo temporal
+                $zip->addFromString('INFORMACION.txt', $infoContent);
+                Log::info('Archivo informativo agregado al ZIP');
+            }
+            
+            // Verificar estado del ZIP antes de cerrarlo
+            Log::info('Verificando estado del ZIP antes de cerrar...');
+            Log::info('Archivo ZIP existe: ' . (file_exists($zipFilePath) ? 'Sí' : 'No'));
+            Log::info('Número de archivos en ZIP: ' . $zip->numFiles);
+            
+            try {
+                $zip->close();
+                Log::info('Archivo ZIP cerrado correctamente');
+            } catch (\Exception $zipCloseError) {
+                Log::error('Error al cerrar ZIP: ' . $zipCloseError->getMessage());
+                Log::error('Archivo ZIP existe al momento del error: ' . (file_exists($zipFilePath) ? 'Sí' : 'No'));
+                throw new \Exception('Error al cerrar archivo ZIP: ' . $zipCloseError->getMessage());
+            }
+
+            // Restaurar límite de memoria
+            ini_set('memory_limit', $originalMemoryLimit);
+            gc_collect_cycles();
+            
+            // Validar que el archivo ZIP existe y tiene contenido
+            Log::info('Verificando archivo ZIP: ' . $zipFilePath);
+            Log::info('Archivo existe: ' . (file_exists($zipFilePath) ? 'Sí' : 'No'));
+            
+            if (!file_exists($zipFilePath)) {
+                Log::error('El archivo ZIP no existe después de cerrarlo');
+                throw new \Exception('El archivo ZIP no se creó correctamente');
+            }
+            
+            $fileSize = filesize($zipFilePath);
+            Log::info('Tamaño del archivo ZIP: ' . ($fileSize !== false ? $fileSize . ' bytes' : 'No se puede leer'));
+            
+            if ($fileSize === false || $fileSize === 0) {
+                Log::error('El archivo ZIP está vacío o no se puede leer el tamaño');
+                throw new \Exception('El archivo ZIP está vacío o no se puede leer');
+            }
+            
+            Log::info('Descargando archivo ZIP: ' . $zipFilePath . ' (Tamaño: ' . $fileSize . ' bytes)');
+            
+            // Configurar headers para descarga directa con CORS
+            $response = response()->download($zipFilePath, 'Boletas_' . $idContainer . '.zip')
+                ->deleteFileAfterSend(true);
+            
+            // Agregar headers CORS
+            $response->headers->set('Access-Control-Allow-Origin', '*');
+            $response->headers->set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+            $response->headers->set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+            $response->headers->set('Cache-Control', 'no-cache, must-revalidate');
+            $response->headers->set('Expires', '0');
+            
+            Log::info('Archivo ZIP enviado para descarga: ' . $zipFilePath);
+            
+            return $response;
+            
+
+        } catch (\Exception $e) {
+            Log::error('Error en generateMassiveExcelPayrolls: ' . $e->getMessage());
+            ini_set('memory_limit', $originalMemoryLimit ?? '128M');
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al generar Excel masivo: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Genera cotización final individual en Excel
+     */
+    public function getFinalCotizacionExcelv2($data, $idContenedor)
+    {
+        try {
+            Log::info('Iniciando getFinalCotizacionExcelv2 para cliente: ' . $data['cliente']['nombre']);
+            
+            // Validar datos básicos
+            if (!isset($data['cliente']) || !isset($data['cliente']['nombre'])) {
+                throw new \Exception('Datos de cliente incompletos');
+            }
+            
+            // Cargar plantilla
+            $templatePath = public_path('assets/templates/Boleta_Template.xlsx');
+            if (!file_exists($templatePath)) {
+                throw new \Exception('Plantilla de boleta no encontrada en: ' . $templatePath);
+            }
+
+            Log::info('Cargando plantilla desde: ' . $templatePath);
+            $objPHPExcel = IOFactory::load($templatePath);
+            
+            // Crear nueva hoja
+            $newSheet = $objPHPExcel->createSheet();
+            $newSheet->setTitle('3');
+
+            // Estilos base
+            $grayColor = 'F8F9F9';
+            $blueColor = '1F618D';
+            $yellowColor = 'FFFF33';
+            $greenColor = "009999";
+            $whiteColor = "FFFFFF";
+            
+            $borders = [
+                'borders' => [
+                    'allBorders' => [
+                        'borderStyle' => Border::BORDER_THIN,
+                    ],
+                ],
+            ];
+
+            // Aplicar zona de cálculo de tributos
+            $objPHPExcel->setActiveSheetIndex(2)->mergeCells('B3:G3');
+            $objPHPExcel->setActiveSheetIndex(2)->setCellValue('B3', 'Calculo de Tributos');
+            $style = $objPHPExcel->getActiveSheet()->getStyle('B3');
+            $style->getFill()->setFillType(Fill::FILL_SOLID);
+            $style->getFill()->getStartColor()->setARGB($grayColor);
+            $objPHPExcel->getActiveSheet()->getStyle('B3:G3')->applyFromArray($borders);
+            $objPHPExcel->getActiveSheet()->getStyle('B3')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+            // Configurar encabezados de columnas
+            $headers = [
+                'B5' => 'Nombres',
+                'B6' => 'Peso',
+                'B7' => 'Valor CBM',
+                'B8' => 'Valor Unitario',
+                'B9' => 'Valoracion',
+                'B10' => 'Cantidad',
+                'B11' => 'Valor FOB',
+                'B12' => 'Valor FOB Valoracion',
+                'B13' => 'Distribucion %',
+                'B14' => 'Flete',
+                'B15' => 'Valor CFR',
+                'B16' => 'CFR Valorizado',
+                'B17' => 'Seguro',
+                'B18' => 'Valor CIF',
+                'B19' => 'CIF Valorizado'
+            ];
+
+            foreach ($headers as $cell => $value) {
+                $objPHPExcel->setActiveSheetIndex(2)->setCellValue($cell, $value);
+                
+                // Aplicar colores específicos
+                if ($cell === 'B5') {
+                    $objPHPExcel->getActiveSheet()->getStyle($cell)->getFill()->setFillType(Fill::FILL_SOLID);
+                    $objPHPExcel->getActiveSheet()->getStyle($cell)->getFill()->getStartColor()->setARGB($blueColor);
+                    $objPHPExcel->getActiveSheet()->getStyle($cell)->getFont()->getColor()->setARGB(Color::COLOR_WHITE);
+                    $objPHPExcel->getActiveSheet()->getStyle($cell)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                } elseif (in_array($cell, ['B9', 'B12', 'B16', 'B19'])) {
+                    $objPHPExcel->getActiveSheet()->getStyle($cell)->getFill()->setFillType(Fill::FILL_SOLID);
+                    $objPHPExcel->getActiveSheet()->getStyle($cell)->getFill()->getStartColor()->setARGB($yellowColor);
+                }
+            }
+
+            $objPHPExcel->getActiveSheet()->getColumnDimension("B")->setAutoSize(true);
+            $InitialColumn = 'C';
+
+            $totalRows = 0;
+            $cbmTotal = 0;
+            $pesoTotal = 0;
+            Log::info('Data: ' . json_encode($data));
+            $tarifa = $data['cliente']['tarifa'];
+            $sheet1 = $objPHPExcel->getSheet(0);
+
+            // Primera iteración: zona de tributos
+            Log::info('Procesando productos para cliente: ' . $data['cliente']['nombre']);
+            foreach ($data['cliente']['productos'] as $index => $producto) {
+                Log::info('Producto ' . ($index + 1) . ': ' . json_encode($producto));
+                $objPHPExcel->getActiveSheet()->getColumnDimension($InitialColumn)->setAutoSize(true);
+                $objPHPExcel->setActiveSheetIndex(2)->setCellValue($InitialColumn . '5', $producto["nombre"]);
+                
+                // Aplicar color azul y letras blancas
+                $objPHPExcel->getActiveSheet()->getStyle($InitialColumn . '5')->getFill()->setFillType(Fill::FILL_SOLID);
+                $objPHPExcel->getActiveSheet()->getStyle($InitialColumn . '5')->getFill()->getStartColor()->setARGB($blueColor);
+                $objPHPExcel->getActiveSheet()->getStyle($InitialColumn . '5')->getFont()->getColor()->setARGB(Color::COLOR_WHITE);
+
+                $objPHPExcel->setActiveSheetIndex(2)->setCellValue($InitialColumn . '6', 0);
+                $objPHPExcel->setActiveSheetIndex(2)->setCellValue($InitialColumn . '7', 0);
+                $precioUnitario = is_numeric($producto["precio_unitario"]) ? (float)$producto["precio_unitario"] : 0;
+                $valoracion = is_numeric($producto["valoracion"]) ? (float)$producto["valoracion"] : 0;
+                $cantidad = is_numeric($producto["cantidad"]) ? (float)$producto["cantidad"] : 0;
+                
+                Log::info('Valores numéricos - Precio: ' . $precioUnitario . ', Valoración: ' . $valoracion . ', Cantidad: ' . $cantidad);
+                
+                $objPHPExcel->setActiveSheetIndex(2)->setCellValue($InitialColumn . '8', $precioUnitario);
+                $objPHPExcel->setActiveSheetIndex(2)->setCellValue($InitialColumn . '9', $valoracion);
+                $objPHPExcel->setActiveSheetIndex(2)->setCellValue($InitialColumn . '10', $cantidad);
+                $objPHPExcel->setActiveSheetIndex(2)->setCellValue($InitialColumn . '11', "=" . $InitialColumn . "8*" . $InitialColumn . "10");
+                $objPHPExcel->setActiveSheetIndex(2)->setCellValue($InitialColumn . '12', "=" . $InitialColumn . "10*" . $InitialColumn . "9");
+
+                // Formato de moneda
+                $currencyColumns = [$InitialColumn . '8', $InitialColumn . '9', $InitialColumn . '11', $InitialColumn . '12'];
+                foreach ($currencyColumns as $col) {
+                    $objPHPExcel->getActiveSheet()->getStyle($col)->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_CURRENCY_USD_SIMPLE);
+                }
+
+                $InitialColumn = $this->incrementColumn($InitialColumn);
+                $totalRows++;
+                $cbmValue = is_numeric($producto['cbm']) ? (float)$producto['cbm'] : 0;
+                Log::info('CBM del producto: ' . $cbmValue . ' (original: ' . $producto['cbm'] . ')');
+                $cbmTotal += $cbmValue;
+            }
+
+            $pesoTotal = isset($data['cliente']['productos'][0]['peso']) && is_numeric($data['cliente']['productos'][0]['peso']) 
+                ? (float)$data['cliente']['productos'][0]['peso'] 
+                : 0;
+
+            // Configurar información del cliente
+            $tipoCliente = trim($data['cliente']["tipo_cliente"]);
+            $volumen = is_numeric($data['cliente']['volumen']) ? (float)$data['cliente']['volumen'] : 0;
+            
+            $tipoClienteCell = $this->incrementColumn($InitialColumn, 3) . '6';
+            $tipoClienteCellValue = $this->incrementColumn($InitialColumn, 3) . '7';
+            $tarifaCell = $this->incrementColumn($InitialColumn, 4) . '6';
+            $tarifaCellValue = $this->incrementColumn($InitialColumn, 4) . '7';
+
+            $objPHPExcel->setActiveSheetIndex(2)->setCellValue($tipoClienteCell, "Tipo Cliente");
+            $objPHPExcel->setActiveSheetIndex(2)->setCellValue($tarifaCell, "Tarifa");
+            $objPHPExcel->setActiveSheetIndex(2)->setCellValue($tipoClienteCellValue, $tipoCliente);
+            $objPHPExcel->setActiveSheetIndex(2)->setCellValue($tarifaCellValue, $tarifa);
+
+            // Aplicar estilos a las celdas de tipo cliente y tarifa
+            $cellsToStyle = [$tipoClienteCell, $tarifaCell, $tipoClienteCellValue, $tarifaCellValue];
+            foreach ($cellsToStyle as $cell) {
+                $objPHPExcel->getActiveSheet()->getStyle($cell)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                $objPHPExcel->getActiveSheet()->getStyle($cell)->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
+                $objPHPExcel->getActiveSheet()->getStyle($cell)->getAlignment()->setWrapText(true);
+                $objPHPExcel->getActiveSheet()->getStyle($cell)->getAlignment()->setShrinkToFit(true);
+                $objPHPExcel->getActiveSheet()->getStyle($cell)->applyFromArray($borders);
+            }
+
+            // Calcular tarifa según tipo de cliente y volumen
+            Log::info('Calculando tarifa - Tipo: ' . $tipoCliente . ', Volumen: ' . $volumen . ', Tarifa base: ' . $tarifa);
+            $tarifaValue = $this->calculateTarifaByTipoCliente($tipoCliente, $volumen, $tarifa);
+            Log::info('Tarifa calculada: ' . $tarifaValue);
+            $objPHPExcel->setActiveSheetIndex(2)->setCellValue($tarifaCellValue, $tarifaValue);
+
+            // Configurar columnas totales
+            $InitialColumnLetter = $this->incrementColumn($InitialColumn, -1);
+            $LastColumnLetter = $InitialColumn;
+            
+            $objPHPExcel->getActiveSheet()->getStyle('B5:' . $InitialColumn . '19')->applyFromArray($borders);
+            $objPHPExcel->getActiveSheet()->getStyle('B28:' . $InitialColumn . '32')->applyFromArray($borders);
+            $objPHPExcel->getActiveSheet()->getStyle('B40:' . $InitialColumn . '40')->applyFromArray($borders);
+            $objPHPExcel->getActiveSheet()->getStyle('B43:' . $InitialColumn . '47')->applyFromArray($borders);
+
+            // Configurar columna total
+            $objPHPExcel->getActiveSheet()->getStyle($InitialColumn . '5')->getFill()->setFillType(Fill::FILL_SOLID);
+            $objPHPExcel->getActiveSheet()->getStyle($InitialColumn . '5')->getFill()->getStartColor()->setARGB($blueColor);
+            $objPHPExcel->setActiveSheetIndex(2)->setCellValue($InitialColumn . '5', "Total");
+            $objPHPExcel->getActiveSheet()->getStyle($InitialColumn . '5')->getFont()->getColor()->setARGB(Color::COLOR_WHITE);
+
+            // Configurar peso total
+            $objPHPExcel->setActiveSheetIndex(2)->setCellValue($InitialColumn . '6', $pesoTotal > 1000 ? round($pesoTotal / 1000, 2) : $pesoTotal);
+            if ($pesoTotal > 1000) {
+                $objPHPExcel->getActiveSheet()->getStyle($InitialColumn . '6')->getNumberFormat()->setFormatCode('0.00" tn"');
+            } else {
+                $objPHPExcel->getActiveSheet()->getStyle($InitialColumn . '6')->getNumberFormat()->setFormatCode('0.00" Kg"');
+            }
+            $objPHPExcel->getActiveSheet()->getStyle($InitialColumn . '6')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+
+            // Configurar fórmulas de totales
+            $objPHPExcel->setActiveSheetIndex(2)->setCellValue($InitialColumn . '10', "=SUM(C10:" . $InitialColumnLetter . "10)");
+            $objPHPExcel->setActiveSheetIndex(2)->setCellValue($InitialColumn . '11', "=SUM(C11:" . $InitialColumnLetter . "11)");
+            $objPHPExcel->setActiveSheetIndex(2)->setCellValue($InitialColumn . '12', "=SUM(C12:" . $InitialColumnLetter . "12)");
+
+            $VFOBCell = $InitialColumn . '11';
+            $CBMTotal = $InitialColumn . "7";
+            $FleteCell = $InitialColumn . '14';
+            $CobroCell = $InitialColumn . '40';
+
+            $cbmValue = isset($data['cliente']['productos'][0]['cbm']) && is_numeric($data['cliente']['productos'][0]['cbm']) 
+                ? (float)$data['cliente']['productos'][0]['cbm'] 
+                : 0;
+            $objPHPExcel->setActiveSheetIndex(2)->setCellValue($InitialColumn . '7', $cbmValue);
+            $cbmTotalProductos = is_numeric($volumen) ? (float)$volumen : 0;
+
+            // Configurar flete y cobro
+            $objPHPExcel->setActiveSheetIndex(2)->setCellValue(
+                $InitialColumn . '14',
+                "=IF($CBMTotal<1, $tarifaCellValue*0.6, $tarifaCellValue*0.6*$CBMTotal)"
+            );
+            $objPHPExcel->setActiveSheetIndex(2)->setCellValue(
+                $InitialColumn . '40',
+                "=IF($CBMTotal<1, $tarifaCellValue*0.4,$tarifaCellValue*0.4*$CBMTotal)"
+            );
+
+            // Segunda iteración: cálculos por producto
+            $InitialColumn = 'C';
+            $antidumpingSum = 0;
+
+            foreach ($data['cliente']['productos'] as $producto) {
+                // Distribución porcentual
+                $objPHPExcel->setActiveSheetIndex(2)->setCellValue($InitialColumn . '13', "=" . $InitialColumn . '11/' . $VFOBCell);
+                $distroCell = $InitialColumn . '13';
+                $objPHPExcel->getActiveSheet()->getStyle($InitialColumn . '13')->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_PERCENTAGE_00);
+
+                // Flete distribuido
+                $objPHPExcel->setActiveSheetIndex(2)->setCellValue($InitialColumn . '14', "=" . $FleteCell . '*' . $InitialColumn . '13');
+                $objPHPExcel->getActiveSheet()->getStyle($InitialColumn . '14')->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_CURRENCY_USD_SIMPLE);
+
+                // CFR
+                $objPHPExcel->setActiveSheetIndex(2)->setCellValue($InitialColumn . '15', "=" . $InitialColumn . '11+' . $InitialColumn . '14');
+                $objPHPExcel->getActiveSheet()->getStyle($InitialColumn . '15')->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_CURRENCY_USD_SIMPLE);
+                $cfrCell = $InitialColumn . '15';
+
+                // CFR Valorizado
+                $objPHPExcel->setActiveSheetIndex(2)->setCellValue($InitialColumn . '16', "=" . $InitialColumn . '12+' . $InitialColumn . '14');
+                $cfrvCell = $InitialColumn . '16';
+                $objPHPExcel->getActiveSheet()->getStyle($InitialColumn . '16')->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_CURRENCY_USD_SIMPLE);
+
+                // Seguro
+                $seguroCell = $InitialColumn . '17';
+                $objPHPExcel->getActiveSheet()->getStyle($InitialColumn . '17')->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_CURRENCY_USD_SIMPLE);
+                $objPHPExcel->setActiveSheetIndex(2)->setCellValue($InitialColumn . '17', "=IF(" . $LastColumnLetter . "11>5000,100*" . $distroCell . ",50*" . $distroCell . ")");
+
+                // CIF
+                $objPHPExcel->setActiveSheetIndex(2)->setCellValue($InitialColumn . '18', "=" . $cfrCell . '+' . $seguroCell . "");
+                $objPHPExcel->setActiveSheetIndex(2)->setCellValue($InitialColumn . '19', "=" . $cfrvCell . '+' . $seguroCell . "");
+                $objPHPExcel->getActiveSheet()->getStyle($InitialColumn . '18')->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_CURRENCY_USD_SIMPLE);
+                $objPHPExcel->getActiveSheet()->getStyle($InitialColumn . '19')->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_CURRENCY_USD_SIMPLE);
+
+                // Antidumping
+                $quantityCell = $InitialColumn . '10';
+                $antidumpingValue = (is_numeric($producto["antidumping"]) ? (float)$producto["antidumping"] : 0) * (is_numeric($producto["cantidad"]) ? (float)$producto["cantidad"] : 0);
+                $antidumpingSum += $antidumpingValue;
+                $antidumpingFormula = (is_numeric($producto["antidumping"]) && $producto["antidumping"] != "-") ? "=" . $InitialColumn . '10*' . $producto["antidumping"] : 0;
+                $objPHPExcel->setActiveSheetIndex(2)->setCellValue($InitialColumn . '26', $antidumpingFormula);
+                $objPHPExcel->getActiveSheet()->getStyle($InitialColumn . '26')->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_CURRENCY_USD_SIMPLE);
+
+                // Ad Valorem
+                $adValoremValue = is_numeric($producto["ad_valorem"]) ? (float)$producto["ad_valorem"] : 0;
+                $objPHPExcel->setActiveSheetIndex(2)->setCellValue($InitialColumn . '27', $adValoremValue);
+                $objPHPExcel->getActiveSheet()->getStyle($InitialColumn . '27')->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_PERCENTAGE_00);
+                $objPHPExcel->getActiveSheet()->getStyle($InitialColumn . '27')->getFont()->getColor()->setARGB(Color::COLOR_RED);
+
+                $AdValoremCell = $InitialColumn . '28';
+                $objPHPExcel->setActiveSheetIndex(2)->setCellValue(
+                    $InitialColumn . '28',
+                    "=MAX(" . $InitialColumn . "19," . $InitialColumn . "18)*" . $InitialColumn . "27"
+                );
+                $objPHPExcel->getActiveSheet()->getStyle($InitialColumn . '28')->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_CURRENCY_USD_SIMPLE);
+
+                // IGV
+                $objPHPExcel->setActiveSheetIndex(2)->setCellValue($InitialColumn . '29', "=" . (16 / 100) . "*(" . "MAX(" . $InitialColumn . "19," . $InitialColumn . "18)+" . $AdValoremCell . ")");
+                $objPHPExcel->getActiveSheet()->getStyle($InitialColumn . '29')->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_CURRENCY_USD_SIMPLE);
+
+                // IPM
+                $objPHPExcel->setActiveSheetIndex(2)->setCellValue($InitialColumn . '30', "=" . (2 / 100) . "*(" . "MAX(" . $InitialColumn . "19," . $InitialColumn . "18)+" . $AdValoremCell . ")");
+                $objPHPExcel->getActiveSheet()->getStyle($InitialColumn . '30')->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_CURRENCY_USD_SIMPLE);
+
+                // Percepción
+                $percepcionValue = is_numeric($producto['percepcion']) ? (float)$producto['percepcion'] : 0;
+                $objPHPExcel->setActiveSheetIndex(2)->setCellValue(
+                    $InitialColumn . '31',
+                    "=" . $percepcionValue . "*(MAX(" . $InitialColumn . '18,' . $InitialColumn . '19) +' . $InitialColumn . '28+' . $InitialColumn . '29+' . $InitialColumn . '30)'
+                );
+                $objPHPExcel->getActiveSheet()->getStyle($InitialColumn . '31')->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_CURRENCY_USD_SIMPLE);
+
+                // Total tributos
+                $sum = "=SUM(" . $InitialColumn . "28:" . $InitialColumn . "31)";
+                $objPHPExcel->setActiveSheetIndex(2)->setCellValue($InitialColumn . '32', $sum);
+                $objPHPExcel->getActiveSheet()->getStyle($InitialColumn . '32')->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_CURRENCY_USD_SIMPLE);
+
+                // Cobro distribuido
+                $objPHPExcel->setActiveSheetIndex(2)->setCellValue($InitialColumn . '40', "=" . $distroCell . "*" . $CobroCell);
+                $objPHPExcel->getActiveSheet()->getStyle($InitialColumn . '40')->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_CURRENCY_USD_SIMPLE);
+
+                // Información del producto
+                $objPHPExcel->setActiveSheetIndex(2)->setCellValue($InitialColumn . '43', $producto["nombre"]);
+                $objPHPExcel->setActiveSheetIndex(2)->setCellValue($InitialColumn . '45', $producto["cantidad"]);
+
+                // Costo total
+                $objPHPExcel->setActiveSheetIndex(2)->setCellValue(
+                    $InitialColumn . '44',
+                    "=SUM(" . $InitialColumn . "15," . $InitialColumn . "40," . $InitialColumn . "32,(" . $InitialColumn . "26" . "))"
+                );
+                $objPHPExcel->getActiveSheet()->getStyle($InitialColumn . '44')->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_CURRENCY_USD_SIMPLE);
+
+                // Costo unitario
+                $objPHPExcel->setActiveSheetIndex(2)->setCellValue($InitialColumn . '46', "=SUM(" . $InitialColumn . "44/" . $InitialColumn . "45)");
+                $objPHPExcel->getActiveSheet()->getStyle($InitialColumn . '46')->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_CURRENCY_USD_SIMPLE);
+
+                // Costo en soles
+                $objPHPExcel->setActiveSheetIndex(2)->setCellValue($InitialColumn . '47', "=" . $InitialColumn . "46*3.7");
+                $objPHPExcel->getActiveSheet()->getStyle($InitialColumn . '47')->getNumberFormat()->setFormatCode('"S/." #,##0.00_-');
+
+                $InitialColumn++;
+            }
+
+            // Configurar totales de tributos
+            $this->configureTributosSection($objPHPExcel, $InitialColumn, $InitialColumnLetter, $borders, $grayColor);
+
+            // Configurar costos destino
+            $this->configureCostosDestinoSection($objPHPExcel, $InitialColumn, $InitialColumnLetter, $borders, $grayColor);
+
+            // Configurar hoja principal
+            $this->configureMainSheet($objPHPExcel, $data, $pesoTotal, $tipoCliente, $cbmTotalProductos, $tarifaValue, $antidumpingSum);
+
+            // Guardar archivo
+            $objWriter = new Xlsx($objPHPExcel);
+            $excelFileName = 'Cotizacion_' . preg_replace('/[^a-zA-Z0-9_\-]/', '_', $data['cliente']['nombre']) . '.xlsx';
+            $excelFilePath = storage_path('app/temp/' . $excelFileName);
+            
+            if (!file_exists(dirname($excelFilePath))) {
+                mkdir(dirname($excelFilePath), 0755, true);
+            }
+
+            $objWriter->save($excelFilePath);
+
+            // Calcular valores finales
+            $sheet1 = $objPHPExcel->getSheet(0);
+            $montoFinal = is_numeric($sheet1->getCell('K30')->getCalculatedValue()) ? (float)$sheet1->getCell('K30')->getCalculatedValue() : 0;
+            $fob = is_numeric($sheet1->getCell('K29')->getCalculatedValue()) ? (float)$sheet1->getCell('K29')->getCalculatedValue() : 0;
+            $logistica = is_numeric($sheet1->getCell('K30')->getCalculatedValue()) ? (float)$sheet1->getCell('K30')->getCalculatedValue() : 0;
+            $impuestos = is_numeric($sheet1->getCell('K31')->getCalculatedValue()) ? (float)$sheet1->getCell('K31')->getCalculatedValue() : 0;
+
+            if ($sheet1->getCell('B23')->getValue() == "ANTIDUMPING") {
+                $fob = is_numeric($sheet1->getCell('K30')->getCalculatedValue()) ? (float)$sheet1->getCell('K30')->getCalculatedValue() : 0;
+                $logistica = is_numeric($sheet1->getCell('K31')->getCalculatedValue()) ? (float)$sheet1->getCell('K31')->getCalculatedValue() : 0;
+                $impuestos = is_numeric($sheet1->getCell('K32')->getCalculatedValue()) ? (float)$sheet1->getCell('K32')->getCalculatedValue() : 0;
+            }
+
+            return [
+                'id' => $data['id'],
+                'id_contenedor' => $idContenedor,
+                'id_tipo_cliente' => $data['cliente']['id_tipo_cliente'],
+                'nombre' => $data['cliente']['nombre'],
+                'documento' => $data['cliente']['dni'],
+                'correo' => $data['cliente']['correo'],
+                'whatsapp' => $data['cliente']['telefono'],
+                'volumen_final' => $volumen,
+                'monto_final' => $montoFinal,
+                'tarifa_final' => $tarifaValue,
+                'impuestos_final' => $impuestos,
+                'logistica_final' => $logistica,
+                'fob_final' => $fob,
+                'estado' => 'PENDIENTE',
+                "excel_file_name" => $excelFileName,
+                "excel_file_path" => $excelFilePath,
+                "cotizacion_final_url" => url('storage/temp/' . $excelFileName)
+            ];
+            
+            Log::info('Excel generado exitosamente para cliente: ' . $data['cliente']['nombre']);
+            Log::info('Archivo guardado en: ' . $excelFilePath);
+
+        } catch (\Exception $e) {
+            Log::error('Error en getFinalCotizacionExcelv2: ' . $e->getMessage());
+            Log::error('Stack trace: ' . $e->getTraceAsString());
+            Log::error('Datos del cliente: ' . json_encode($data));
+            throw $e;
+        }
+    }
+
+    /**
+     * Procesa datos masivos desde archivo Excel
+     */
+    public function getMassiveExcelData($excelFile)
+    {
+        try {
+            $excel = IOFactory::load($excelFile->getPathname());
+            $worksheet = $excel->getActiveSheet();
+
+            // Obtener el rango total de datos válidos
+            $highestRow = $worksheet->getHighestRow();
+            $highestColumn = $worksheet->getHighestColumn();
+
+            // Obtener todas las celdas combinadas
+            $mergedCells = $worksheet->getMergeCells();
+
+            // Función para obtener el valor real de una celda (considerando combinadas)
+            $getCellValue = function ($col, $row) use ($worksheet, $mergedCells) {
+                $cellAddress = $col . $row;
+                $cellValue = trim($worksheet->getCell($cellAddress)->getValue());
+
+                // Si la celda está vacía, buscar en celdas combinadas
+                if (empty($cellValue)) {
+                    foreach ($mergedCells as $mergedRange) {
+                        // Verificar si es un rango (contiene :)
+                        if (strpos($mergedRange, ':') !== false) {
+                            // Dividir el rango manualmente
+                            list($startCell, $endCell) = explode(':', $mergedRange);
+
+                            // Extraer coordenadas de inicio y fin
+                            preg_match('/([A-Z]+)(\d+)/', $startCell, $startMatches);
+                            preg_match('/([A-Z]+)(\d+)/', $endCell, $endMatches);
+
+                            if (count($startMatches) >= 3 && count($endMatches) >= 3) {
+                                $startCol = $startMatches[1];
+                                $startRow = (int)$startMatches[2];
+                                $endCol = $endMatches[1];
+                                $endRow = (int)$endMatches[2];
+
+                                // Verificar si la celda actual está dentro del rango
+                                if ($col >= $startCol && $col <= $endCol && $row >= $startRow && $row <= $endRow) {
+                                    $cellValue = trim($worksheet->getCell($startCell)->getValue());
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                return $cellValue;
+            };
+
+            // Función para verificar si una fila pertenece a un cliente específico
+            $getClientRowRange = function ($startRow) use ($worksheet, $getCellValue, $highestRow) {
+                $endRow = $startRow;
+                $clientName = $getCellValue('A', $startRow);
+
+                // Buscar hasta dónde se extiende este cliente
+                for ($row = $startRow + 1; $row <= $highestRow; $row++) {
+                    $nextClientName = $getCellValue('A', $row);
+                    if (!empty($nextClientName) && $nextClientName !== $clientName) {
+                        break;
+                    }
+                    $endRow = $row;
+                }
+
+                return $endRow;
+            };
+
+            $clients = [];
+            $processedRows = [];
+
+            // Recorrer todas las filas buscando clientes
+            for ($row = 1; $row <= $highestRow; $row++) {
+                // Saltar filas ya procesadas
+                if (in_array($row, $processedRows)) {
+                    continue;
+                }
+
+                $clientName = $getCellValue('A', $row);
+
+                // Verificar si hay un nombre de cliente válido
+                if (empty($clientName)) {
+                    continue;
+                }
+
+                // Determinar el rango de filas para este cliente
+                $endRow = $getClientRowRange($row);
+
+                // Marcar filas como procesadas
+                for ($r = $row; $r <= $endRow; $r++) {
+                    $processedRows[] = $r;
+                }
+
+                // Obtener datos básicos del cliente
+                $client = [
+                    'nombre' => $clientName,
+                    'tipo' => $getCellValue('B', $row),
+                    'dni' => $getCellValue('C', $row),
+                    'telefono' => $getCellValue('D', $row),
+                    'productos' => [],
+                ];
+
+                // Procesar productos dentro del rango del cliente
+                for ($productRow = $row; $productRow <= $endRow; $productRow++) {
+                    $producto = $getCellValue('F', $productRow);
+
+                    if (empty($producto)) {
+                        continue;
+                    }
+
+                    $cantidad = $getCellValue('N', $productRow);
+                    $precioUnitario = $getCellValue('O', $productRow);
+
+                    // Solo agregar productos con datos esenciales
+                    if (!empty($cantidad) && !empty($precioUnitario)) {
+                        $productoData = [
+                            'nombre' => $producto,
+                            'cantidad' => $cantidad,
+                            'precio_unitario' => $precioUnitario,
+                            'antidumping' => $getCellValue('P', $productRow) ?: 0,
+                            'valoracion' => $getCellValue('Q', $productRow) ?: 0,
+                            'ad_valorem' => $getCellValue('R', $productRow) ?: 0,
+                            'percepcion' => $getCellValue('S', $productRow) ?: 0.035,
+                            'peso' => $getCellValue('T', $productRow) ?: 0,
+                            'cbm' => $getCellValue('U', $productRow) ?: '',
+                        ];
+
+                        $client['productos'][] = $productoData;
+                    }
+                }
+
+                $clients[] = ['cliente' => $client];
+            }
+
+            return $clients;
+
+        } catch (\Exception $e) {
+            Log::error('Error en getMassiveExcelData: ' . $e->getMessage());
+            throw $e;
+        }
+    }
+
+    /**
+     * Incrementa una columna Excel (A -> B -> C, etc.)
+     */
+    private function incrementColumn($column, $increment = 1)
+    {
+        $columnIndex = Coordinate::columnIndexFromString($column);
+        $newIndex = $columnIndex + $increment;
+        return Coordinate::stringFromColumnIndex($newIndex);
+    }
+
+    /**
+     * Calcula tarifa según tipo de cliente y volumen
+     */
+    private function calculateTarifaByTipoCliente($tipoCliente, $volumen, $tarifaBase)
+    {
+        $tipoCliente = trim(strtoupper($tipoCliente));
+        $volumen = is_numeric($volumen) ? round((float)$volumen, 2) : 0;
+
+        switch ($tipoCliente) {
+            case "NUEVO":
+                if ($volumen < 0.59 && $volumen > 0) {
+                    return 280;
+                } elseif ($volumen < 1.00 && $volumen > 0.59) {
+                    return 375;
+                } elseif ($volumen < 2.00 && $volumen > 1.00) {
+                    return 375;
+                } elseif ($volumen < 3.00 && $volumen > 2.00) {
+                    return 350;
+                } elseif ($volumen <= 4.10 && $volumen > 3.00) {
+                    return 325;
+                } elseif ($volumen > 4.10) {
+                    return 300;
+                }
+                break;
+
+            case "ANTIGUO":
+                if ($volumen < 0.59 && $volumen > 0) {
+                    return 260;
+                } elseif ($volumen < 1.00 && $volumen > 0.59) {
+                    return 350;
+                } elseif ($volumen <= 2.09 && $volumen > 1.00) {
+                    return 350;
+                } elseif ($volumen <= 3.09 && $volumen > 2.09) {
+                    return 325;
+                } elseif ($volumen <= 4.10 && $volumen > 3.09) {
+                    return 300;
+                } elseif ($volumen > 4.10) {
+                    return 280;
+                }
+                break;
+
+            case "SOCIO":
+                return 250; // Tarifa fija para socios
+        }
+
+        return $tarifaBase; // Retornar tarifa base si no coincide con ningún caso
+    }
+
+    /**
+     * Configura la sección de tributos
+     */
+    private function configureTributosSection($objPHPExcel, $InitialColumn, $InitialColumnLetter, $borders, $grayColor)
+    {
+        $objPHPExcel->setActiveSheetIndex(2)->mergeCells('B23:E23');
+        $objPHPExcel->setActiveSheetIndex(2)->setCellValue('B23', 'Tributos Aplicables');
+        $style = $objPHPExcel->getActiveSheet()->getStyle('B23');
+        $style->getFill()->setFillType(Fill::FILL_SOLID);
+        $style->getFill()->getStartColor()->setARGB($grayColor);
+        $objPHPExcel->getActiveSheet()->getStyle('B23:E23')->applyFromArray($borders);
+        $objPHPExcel->getActiveSheet()->getStyle('B23')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+        $tributosHeaders = [
+            'B26' => 'ANTIDUMPING',
+            'B28' => 'AD VALOREM',
+            'B29' => 'IGV',
+            'B30' => 'IPM',
+            'B31' => 'PERCEPCION',
+            'B32' => 'TOTAL'
+        ];
+
+        foreach ($tributosHeaders as $cell => $value) {
+            $objPHPExcel->setActiveSheetIndex(2)->setCellValue($cell, $value);
+        }
+
+        // Configurar totales
+        $objPHPExcel->getActiveSheet()->getStyle('B26:' . $InitialColumn . '26')->applyFromArray($borders);
+        $objPHPExcel->getActiveSheet()->getStyle('C27:' . $InitialColumn . '27')->applyFromArray($borders);
+        
+        $objPHPExcel->setActiveSheetIndex(2)->setCellValue($InitialColumn . '26', "=SUM(C26:" . $InitialColumnLetter . "26)");
+        $objPHPExcel->getActiveSheet()->getStyle($InitialColumn . '26')->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_CURRENCY_USD_SIMPLE);
+
+        $objPHPExcel->setActiveSheetIndex(2)->setCellValue($InitialColumn . '27', "=SUM(C27:" . $InitialColumnLetter . "27)");
+        $objPHPExcel->getActiveSheet()->getStyle($InitialColumn . '27')->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_PERCENTAGE_00);
+
+        $objPHPExcel->setActiveSheetIndex(2)->setCellValue($InitialColumn . '28', "=SUM(C28:" . $InitialColumnLetter . "28)");
+        $objPHPExcel->getActiveSheet()->getStyle($InitialColumn . '28')->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_CURRENCY_USD_SIMPLE);
+
+        $objPHPExcel->setActiveSheetIndex(2)->setCellValue($InitialColumn . '29', "=SUM(C29:" . $InitialColumnLetter . "29)");
+        $objPHPExcel->getActiveSheet()->getStyle($InitialColumn . '29')->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_CURRENCY_USD_SIMPLE);
+
+        $objPHPExcel->setActiveSheetIndex(2)->setCellValue($InitialColumn . '30', "=SUM(C30:" . $InitialColumnLetter . "30)");
+        $objPHPExcel->getActiveSheet()->getStyle($InitialColumn . '30')->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_CURRENCY_USD_SIMPLE);
+
+        $objPHPExcel->setActiveSheetIndex(2)->setCellValue($InitialColumn . '31', "=SUM(C31:" . $InitialColumnLetter . "31)");
+        $objPHPExcel->getActiveSheet()->getStyle($InitialColumn . '31')->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_CURRENCY_USD_SIMPLE);
+
+        $objPHPExcel->setActiveSheetIndex(2)->setCellValue($InitialColumn . '32', "=SUM($InitialColumn" . "28:" . $InitialColumn . "31)");
+        $objPHPExcel->getActiveSheet()->getStyle($InitialColumn . '32')->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_CURRENCY_USD_SIMPLE);
+    }
+
+    /**
+     * Configura la sección de costos destino
+     */
+    private function configureCostosDestinoSection($objPHPExcel, $InitialColumn, $InitialColumnLetter, $borders, $grayColor)
+    {
+        $objPHPExcel->setActiveSheetIndex(2)->mergeCells('B37:E37');
+        $objPHPExcel->setActiveSheetIndex(2)->setCellValue('B37', 'Costos Destinos');
+        $style = $objPHPExcel->getActiveSheet()->getStyle('B37');
+        $style->getFill()->setFillType(Fill::FILL_SOLID);
+        $style->getFill()->getStartColor()->setARGB($grayColor);
+        $objPHPExcel->getActiveSheet()->getStyle('B37:E37')->applyFromArray($borders);
+        $objPHPExcel->getActiveSheet()->getStyle('B37')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+        $costosHeaders = [
+            'B40' => 'ITEM',
+            'B43' => 'ITEM',
+            'B44' => 'COSTO TOTAL',
+            'B45' => 'CANTIDAD',
+            'B46' => 'COSTO UNITARIO',
+            'B47' => 'COSTO SOLES'
+        ];
+
+        foreach ($costosHeaders as $cell => $value) {
+            $objPHPExcel->setActiveSheetIndex(2)->setCellValue($cell, $value);
+        }
+
+        $objPHPExcel->setActiveSheetIndex(2)->mergeCells('B41:E41');
+        $objPHPExcel->setActiveSheetIndex(2)->setCellValue($InitialColumn . '43', "Total");
+        $objPHPExcel->setActiveSheetIndex(2)->setCellValue($InitialColumn . '44', "=SUM(C44:" . $InitialColumnLetter . "44)");
+        $objPHPExcel->getActiveSheet()->getStyle($InitialColumn . '44')->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_CURRENCY_USD_SIMPLE);
+    }
+
+    /**
+     * Configura la hoja principal
+     */
+    private function configureMainSheet($objPHPExcel, $data, $pesoTotal, $tipoCliente, $cbmTotalProductos, $tarifaValue, $antidumpingSum)
+    {
+        $sheet1 = $objPHPExcel->getSheet(0);
+        
+        // Configurar información del cliente
+        $objPHPExcel->getActiveSheet()->mergeCells('C8:C9');
+        $objPHPExcel->getActiveSheet()->getStyle('C8')->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
+        $objPHPExcel->getActiveSheet()->getStyle('C8')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        $objPHPExcel->getActiveSheet()->setCellValue('C8', $data['cliente']['nombre']);
+        $objPHPExcel->getActiveSheet()->setCellValue('C10', $data['cliente']['dni']);
+        $objPHPExcel->getActiveSheet()->setCellValue('C11', $data['cliente']['telefono']);
+        
+        // Configurar peso
+        $objPHPExcel->getActiveSheet()->setCellValue('J9', $pesoTotal >= 1000 ? $pesoTotal / 1000 . " Tn" : $pesoTotal . " Kg");
+        $objPHPExcel->getActiveSheet()->getStyle('J9')->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_NUMBER);
+        
+        // Configurar CBM
+        $objPHPExcel->getActiveSheet()->setCellValue('J11', $cbmTotalProductos);
+        $objPHPExcel->getActiveSheet()->getStyle('J11')->getNumberFormat()->setFormatCode('#,##0.00');
+        $objPHPExcel->getActiveSheet()->setCellValue('I11', "CBM");
+        
+        // Configurar tipo de cliente
+        $objPHPExcel->getActiveSheet()->setCellValue('F11', $tipoCliente);
+        
+        // Configurar columnas de referencia
+        $productsCount = count($data['cliente']['productos']);
+        $columnaIndex = Coordinate::stringFromColumnIndex($productsCount + 2);
+        
+        $objPHPExcel->getActiveSheet()->setCellValue('K14', "='3'!" . $columnaIndex . "11");
+        $objPHPExcel->getActiveSheet()->setCellValue('K15', "='3'!" . $columnaIndex . "14 + '3'!" . $columnaIndex . "17");
+        $objPHPExcel->getActiveSheet()->setCellValue('K20', "='3'!" . $columnaIndex . "28");
+        $objPHPExcel->getActiveSheet()->setCellValue('K21', "='3'!" . $columnaIndex . "29");
+        $objPHPExcel->getActiveSheet()->setCellValue('K22', "='3'!" . $columnaIndex . "30");
+        $objPHPExcel->getActiveSheet()->setCellValue('K25', "='3'!" . $columnaIndex . "31");
+        $objPHPExcel->getActiveSheet()->setCellValue('K30', "=IF(J11<1, '3'!" . $columnaIndex . "14, '3'!" . $columnaIndex . "14*J11)");
+
+        // Configurar mensaje de WhatsApp
+        $ClientName = $objPHPExcel->getActiveSheet()->getCell('C8')->getValue();
+        $CobroCellValue = $objPHPExcel->getActiveSheet()->getCell('K30')->getCalculatedValue();
+        $ImpuestosCellValue = $objPHPExcel->getActiveSheet()->getCell('K31')->getCalculatedValue();
+        
+        // Asegurar que los valores sean numéricos
+        $CobroCellValue = is_numeric($CobroCellValue) ? (float)$CobroCellValue : 0;
+        $ImpuestosCellValue = is_numeric($ImpuestosCellValue) ? round((float)$ImpuestosCellValue, 2) : 0;
+        $TotalValue = $ImpuestosCellValue + $CobroCellValue;
+        
+        $N20CellValue = "Hola " . $ClientName . " 😁 un gusto saludarte!\n" .
+            "A continuación te envío la cotización final de tu importación📋📦.\n" .
+            "🙋‍♂️ PAGO PENDIENTE :\n" .
+            "☑️Costo CBM: $" . $CobroCellValue . "\n" .
+            "☑️Impuestos: $" . $ImpuestosCellValue . "\n" .
+            "☑️ Total: $" . $TotalValue . "\n" .
+            "Pronto le aviso nuevos avances, que tengan buen día🚢\n" .
+            "Último día de pago:";
+            
+        $objPHPExcel->getActiveSheet()->setCellValue('N20', $N20CellValue);
+
+        // Remover página 2 y renombrar hoja 3
+        $objPHPExcel->removeSheetByIndex(1);
+        $objPHPExcel->setActiveSheetIndex(1);
+        $objPHPExcel->getActiveSheet()->setTitle('2');
+    }
+
+    /**
+     * Genera cotización individual
+     */
+    public function generateIndividualCotizacion(Request $request, $idContenedor)
+    {
+        try {
+            $request->validate([
+                'cliente_data' => 'required|array',
+                'cliente_data.cliente' => 'required|array',
+                'cliente_data.cliente.nombre' => 'required|string',
+                'cliente_data.cliente.productos' => 'required|array'
+            ]);
+
+            $data = $request->cliente_data;
+            $result = $this->getFinalCotizacionExcelv2($data, $idContenedor);
+
+            // Actualizar tabla de cotizaciones
+            DB::table($this->table_contenedor_cotizacion)
+                ->where('id', $result['id'])
+                ->update([
+                    'cotizacion_final_url' => $result['cotizacion_final_url'],
+                    'volumen_final' => $result['volumen_final'],
+                    'monto_final' => $result['monto_final'],
+                    'tarifa_final' => $result['tarifa_final'],
+                    'impuestos_final' => $result['impuestos_final'],
+                    'logistica_final' => $result['logistica_final'],
+                    'fob_final' => $result['fob_final'],
+                    'estado_cotizacion_final' => 'PENDIENTE'
+                ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Cotización individual generada correctamente',
+                'data' => $result
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error en generateIndividualCotizacion: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al generar cotización individual: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Procesa datos de Excel sin generar archivos
+     */
+    public function processExcelData(Request $request)
+    {
+        try {
+            $request->validate([
+                'excel_file' => 'required|file|mimes:xlsx,xls'
+            ]);
+
+            $data = $this->getMassiveExcelData($request->file('excel_file'));
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Datos de Excel procesados correctamente',
+                'data' => $data,
+                'total_clientes' => count($data)
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error en processExcelData: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al procesar datos de Excel: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Verifica el directorio temporal y permisos
+     */
+    public function checkTempDirectory()
+    {
+        try {
+            $tempDir = storage_path('app' . DIRECTORY_SEPARATOR . 'temp');
+            
+            $info = [
+                'temp_dir' => $tempDir,
+                'exists' => file_exists($tempDir),
+                'writable' => is_writable($tempDir),
+                'readable' => is_readable($tempDir),
+                'permissions' => file_exists($tempDir) ? substr(sprintf('%o', fileperms($tempDir)), -4) : 'N/A',
+                'php_version' => PHP_VERSION,
+                'zip_extension' => extension_loaded('zip') ? 'Sí' : 'No',
+                'memory_limit' => ini_get('memory_limit'),
+                'max_execution_time' => ini_get('max_execution_time')
+            ];
+            
+            if (!file_exists($tempDir)) {
+                $info['created'] = mkdir($tempDir, 0755, true);
+                $info['created_permissions'] = file_exists($tempDir) ? substr(sprintf('%o', fileperms($tempDir)), -4) : 'N/A';
+            }
+            
+            // Probar crear un archivo de prueba
+            $testFile = $tempDir . DIRECTORY_SEPARATOR . 'test_' . time() . '.txt';
+            $testResult = file_put_contents($testFile, 'test');
+            if ($testResult !== false) {
+                $info['test_file_created'] = true;
+                $info['test_file_size'] = filesize($testFile);
+                unlink($testFile);
+            } else {
+                $info['test_file_created'] = false;
+            }
+            
+            return response()->json([
+                'success' => true,
+                'directory_info' => $info
+            ]);
+            
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al verificar directorio: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Obtiene los headers de cotizaciones finales para un contenedor
+     */
+    public function getCotizacionFinalHeaders($idContenedor)
+    {
+        try {
+            // Obtener ID del usuario autenticado
+            $userId = auth()->user()->ID_Usuario ?? null;
+
+            // Consulta principal con múltiples subconsultas
+            $result = DB::table($this->table_contenedor_cotizacion_proveedores . ' as cccp')
+                ->select([
+                    // CBM Total China con condición de estado
+                    DB::raw('COALESCE(SUM(IF(cc.estado_cotizador = "CONFIRMADO", cccp.cbm_total_china, 0)), 0) as cbm_total_china'),
+                    
+                    // CBM Total Perú (todos los CONFIRMADO)
+                    DB::raw('(
+                        SELECT COALESCE(SUM(volumen_final), 0)
+                        FROM ' . $this->table_contenedor_cotizacion . '
+                        WHERE id IN (
+                            SELECT DISTINCT id_cotizacion
+                            FROM ' . $this->table_contenedor_cotizacion_proveedores . '
+                            WHERE id_contenedor = ' . $idContenedor . '
+                        )
+                        AND estado_cotizador = "CONFIRMADO"
+                    ) as cbm_total_peru'),
+                    
+                    // Subconsulta para total_logistica
+                    DB::raw('(
+                        SELECT COALESCE(SUM(logistica_final), 0) 
+                        FROM ' . $this->table_contenedor_cotizacion . ' 
+                        WHERE id IN (
+                            SELECT DISTINCT id_cotizacion 
+                            FROM ' . $this->table_contenedor_cotizacion_proveedores . ' 
+                            WHERE id_contenedor = ' . $idContenedor . '
+                        )
+                        AND estado_cotizador = "CONFIRMADO"
+                    ) as total_logistica'),
+                    
+                    // Subconsulta para total_impuestos
+                    DB::raw('(
+                        SELECT COALESCE(SUM(impuestos_final), 0)
+                        FROM ' . $this->table_contenedor_cotizacion . '
+                        WHERE id IN (
+                            SELECT DISTINCT id_cotizacion
+                            FROM ' . $this->table_contenedor_cotizacion_proveedores . '
+                            WHERE id_contenedor = ' . $idContenedor . '
+                        )
+                        AND estado_cotizador = "CONFIRMADO"
+                    ) as total_impuestos'),
+                    
+                    // Suma de fob_final
+                    DB::raw('(
+                        SELECT COALESCE(SUM(fob_final), 0)
+                        FROM ' . $this->table_contenedor_cotizacion . '
+                        WHERE id IN (
+                            SELECT DISTINCT id_cotizacion
+                            FROM ' . $this->table_contenedor_cotizacion_proveedores . '
+                            WHERE id_contenedor = ' . $idContenedor . '
+                        )
+                        AND estado_cotizador = "CONFIRMADO"
+                    ) as total_fob'),
+                    
+                    // Total vendido logistica + impuestos
+                    DB::raw('(
+                        SELECT COALESCE(SUM(logistica_final + impuestos_final), 0)
+                        FROM ' . $this->table_contenedor_cotizacion . '
+                        WHERE id IN (
+                            SELECT DISTINCT id_cotizacion
+                            FROM ' . $this->table_contenedor_cotizacion_proveedores . '
+                            WHERE id_contenedor = ' . $idContenedor . '
+                        )
+                        AND estado_cotizador = "CONFIRMADO"
+                    ) as total_vendido_logistica_impuestos'),
+                    
+                    // Total pagado logistica
+                    DB::raw('(
+                        SELECT COALESCE(SUM(monto), 0)
+                        FROM ' . $this->table_contenedor_consolidado_cotizacion_coordinacion_pagos . ' 
+                        JOIN ' . $this->table_pagos_concept . ' ON ' . $this->table_contenedor_consolidado_cotizacion_coordinacion_pagos . '.id_concept = ' . $this->table_pagos_concept . '.id
+                        WHERE id_contenedor = ' . $idContenedor . '
+                        AND ' . $this->table_pagos_concept . '.name = "LOGISTICA"
+                    ) as total_logistica_pagado'),
+                    
+                    // Total pagado (logistica + impuestos)
+                    DB::raw('(
+                        SELECT COALESCE(SUM(monto), 0)
+                        FROM ' . $this->table_contenedor_consolidado_cotizacion_coordinacion_pagos . ' 
+                        JOIN ' . $this->table_pagos_concept . ' ON ' . $this->table_contenedor_consolidado_cotizacion_coordinacion_pagos . '.id_concept = ' . $this->table_pagos_concept . '.id
+                        WHERE id_contenedor = ' . $idContenedor . '
+                        AND (' . $this->table_pagos_concept . '.name = "LOGISTICA"
+                        OR ' . $this->table_pagos_concept . '.name = "IMPUESTOS")
+                    ) as total_pagado')
+                ])
+                ->join($this->table_contenedor_cotizacion . ' as cc', 'cccp.id_cotizacion', '=', 'cc.id')
+                ->where('cccp.id_contenedor', $idContenedor)
+                ->first();
+
+            // Obtener bl_file_url y lista_empaque_file_url del contenedor
+            $result2 = DB::table($this->table)
+                ->select('bl_file_url', 'lista_embarque_url','carga')
+                ->where('id', $idContenedor)
+                ->first();
+
+            // Si es el usuario 28791, obtener los CBM por usuario (vendido, pendiente, embarcado)
+            if ($userId == 28791) {
+                return response()->json([
+                    'success' => true,
+                    'data' => [
+                        'cbm_total_peru' => [
+                            "value" => $result->cbm_total_peru,
+                            "label" => "CBM Total Perú",
+                            "icon" => "https://upload.wikimedia.org/wikipedia/commons/c/cf/Flag_of_Peru.svg"
+                        ],
+                        'total_logistica' => [
+                            "value" => $result->total_logistica,
+                            "label" => "Total Logistica",
+                            "icon" => "fas fa-dollar-sign"
+                        ],
+                        'total_logistica_pagado' => [
+                            "value" => $result->total_logistica_pagado,
+                            "label" => "Total Logistica Pagado",
+                            "icon" => "fas fa-dollar-sign"
+                        ],
+                        'total_impuestos' => [
+                            "value" => $result->total_impuestos,
+                            "label" => "Total Impuestos",
+                            "icon" => "fas fa-dollar-sign"
+                        ],
+                        'total_fob' => [
+                            "value" => $result->total_fob,
+                            "label" => "Total FOB",
+                            "icon" => "fas fa-dollar-sign"
+                        ]
+                    ],
+                    'carga' => $result2->carga ?? ''
+                ]);
+            }
+
+            if ($result) {
+                return response()->json([
+                    'success' => true,
+                    'data' => [
+                        'cbm_total' => [
+                            "value" => $result->cbm_total_peru,
+                            "label" => "CBM Total Perú",
+                            "icon" => "https://upload.wikimedia.org/wikipedia/commons/c/cf/Flag_of_Peru.svg"
+                        ],
+                        'total_logistica' => [
+                            "value" => $result->total_logistica,
+                            "label" => "Total Logistica",
+                            "icon" => "fas fa-dollar-sign"
+                        ],
+                        'total_impuestos' => [
+                            "value" => $result->total_impuestos,
+                            "label" => "Total Impuestos",
+                            "icon" => "fas fa-dollar-sign"
+                        ],
+                        'total_fob' => [
+                            "value" => $result->total_fob,
+                            "label" => "Total FOB",
+                            "icon" => "fas fa-dollar-sign"
+                        ],
+                        'total_pagado' => [
+                            "value" => $result->total_pagado,
+                            "label" => "Total Pagado",
+                            "icon" => "fas fa-dollar-sign"
+                        ],
+                        'total_vendido_logistica_impuestos' => [
+                            "value" => $result->total_vendido_logistica_impuestos,
+                            "label" => "Total Vendido",
+                            "icon" => "fas fa-dollar-sign"
+                        ]
+                    ],
+                    'carga' => $result2->carga ?? ''
+                ]);
+            } else {
+                return response()->json([
+                    'success' => false,
+                    'data' => [
+                        'cbm_total' => ["value" => 0, "label" => "CBM Pendiente", "icon" => "fas fa-cube"],
+                        'cbm_embarcado' => ["value" => 0, "label" => "CBM Embarcado", "icon" => "fas fa-ship"],
+                        'total_logistica' => ["value" => 0, "label" => "Total Logistica", "icon" => "fas fa-dollar-sign"],
+                        'qty_items' => ["value" => 0, "label" => "Cantidad de Items", "icon" => "bi:boxes"],
+                        'cbm_total_peru' => ["value" => 0, "label" => "CBM Total Perú", "icon" => "https://upload.wikimedia.org/wikipedia/commons/c/cf/Flag_of_Peru.svg"],
+                        'total_fob' => ["value" => 0, "label" => "Total FOB", "icon" => "fas fa-dollar-sign"]
+                    ],
+                    'carga' => ''
+                ]);
+            }
+        } catch (\Exception $e) {
+            Log::error('Error en getCotizacionFinalHeaders: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al obtener headers de cotizaciones finales: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
 }
