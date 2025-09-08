@@ -58,7 +58,7 @@ class CotizacionController extends Controller
                     if ($user->getIdUsuario()!= 28791) {
                         $query->where('id_usuario', $user->getIdUsuario());
                     }
-                    $query->where('estado_cotizador', 'CONFIRMADO');
+                   
                     break;
 
                 case Usuario::ROL_DOCUMENTACION:
