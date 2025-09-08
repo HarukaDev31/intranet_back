@@ -82,9 +82,7 @@ class CotizacionController extends Controller
             $page = $request->input('page', 1);
             $results = $query->paginate($perPage, ['*'], 'page', $page);
 
-            // Obtener los headers del contenedor
             $userId = auth()->id();
-            $idContenedor = $request->idContenedor;
 
             $files = DB::table('carga_consolidada_contenedor')
                 ->where('id', $idContenedor)
@@ -92,7 +90,7 @@ class CotizacionController extends Controller
                 ->first();
 
             // Transformar los datos para la respuesta
-            $data = $results->map(function ($cotizacion) {
+            $data = $results->map(function ($cotizacion) use ($files) {
                 return [
                     'id' => $cotizacion->id,
                     'nombre' => $cotizacion->nombre,
@@ -113,6 +111,8 @@ class CotizacionController extends Controller
                     'cotizacion_file_url' => $cotizacion->cotizacion_file_url,
                     'impuestos' => $cotizacion->impuestos,
                     'tipo_cliente' => $cotizacion->tipoCliente->name,
+                    'bl_file_url' => $files ? $files->bl_file_url : null,
+                    'lista_embarque_url' => $files ? $files->lista_embarque_url : null,
                 ];
             });
 
@@ -125,7 +125,9 @@ class CotizacionController extends Controller
                     'per_page' => $results->perPage(),
                     'total' => $results->total(),
                     'last_page' => $results->lastPage()
-                ]
+                ],
+                'lista_embarque_url' => $files->lista_embarque_url ? $files->lista_embarque_url : null,
+                'bl_file_url' => $files->bl_file_url ? $files->bl_file_url : null,
             ]);
         } catch (\Exception $e) {
             Log::error('Error en index de cotizaciones: ' . $e->getMessage());
@@ -258,11 +260,7 @@ class CotizacionController extends Controller
             Usuario::ROL_ALMACEN_CHINA => ['cbm_total_china', 'cbm_total_peru', 'qty_items'],
             Usuario::ROL_ADMINISTRACION => ['cbm_total_china', 'cbm_total_peru', 'qty_items', 'total_logistica','total_logistica_pagado'],
             Usuario::ROL_COORDINACION => ['cbm_total_china', 'cbm_total_peru', 'qty_items', 'total_logistica','total_logistica_pagado']
-        ];
-        $cbmPorUsuario = [
-            'vendido' => [],
-            'pendiente' => [],
-            'embarcado' => []
+            //por defecto:todos
         ];
         $userIdCheck = $user->ID_Usuario;
         if (array_key_exists($usergroup, $roleAllowedMap)) {
@@ -270,20 +268,24 @@ class CotizacionController extends Controller
             $headersData = array_filter($headersData, function ($key) use ($allowedKeys) {
                 return in_array($key, $allowedKeys);
             }, ARRAY_FILTER_USE_KEY);
-        } 
-        $contenedor = Contenedor::find($idContenedor);
-
+        } else {
+            // Si el rol no está en el mapa, devolver todos los headers
+            return $headersData;
+        }
         if ($userIdCheck == "28791") {
             // CBM Vendido por usuario (estado CONFIRMADO)
             $vendidoRows = DB::table('contenedor_consolidado_cotizacion as c')
                 ->leftJoin('usuario as u', 'u.ID_Usuario', '=', 'c.id_usuario')
                 ->where('c.id_contenedor', $idContenedor)
                 ->where('c.estado_cotizador', 'CONFIRMADO')
-                ->select(DB::raw('u.No_Nombres_Apellidos as nombre'), DB::raw('COALESCE(SUM(c.volumen),0) as cbm_vendido'))
+                ->select(DB::raw('u.No_Nombres_Apellidos as nombre'), 
+                DB::raw('COALESCE(SUM(c.volumen),0) as cbm_vendido'),
+                (DB::raw('SUM(c.volumen) as cbm_vendido_total')))
                 ->groupBy('u.No_Nombres_Apellidos')
                 ->get();
+            $vendidoMap = [];
             foreach ($vendidoRows as $r) {
-                $cbmPorUsuario['vendido'][$r->nombre ?? 'Sin nombre'] = (float) $r->cbm_vendido;
+                $vendidoMap[$r->nombre ?? 'Sin nombre'] = (float) $r->cbm_vendido;
             }
 
             // CBM Pendiente por usuario (estado != CONFIRMADO)
@@ -294,8 +296,9 @@ class CotizacionController extends Controller
                 ->select(DB::raw('u.No_Nombres_Apellidos as nombre'), DB::raw('COALESCE(SUM(c.volumen),0) as cbm_pendiente'))
                 ->groupBy('u.No_Nombres_Apellidos')
                 ->get();
+            $pendienteMap = [];    
             foreach ($pendienteRows as $r) {
-                $cbmPorUsuario['pendiente'][$r->nombre ?? 'Sin nombre'] = (float) $r->cbm_pendiente;
+                $pendienteMap[$r->nombre ?? 'Sin nombre'] = (float) $r->cbm_pendiente;
             }
 
             // CBM Embarcado por usuario (proveedores LOADED)
@@ -307,22 +310,52 @@ class CotizacionController extends Controller
                 ->select(DB::raw('u.No_Nombres_Apellidos as nombre'), DB::raw('COALESCE(SUM(cccp.cbm_total_china),0) as cbm_embarcado'))
                 ->groupBy('u.No_Nombres_Apellidos')
                 ->get();
+            $embarcadoMap = [];
             foreach ($embarcadoRows as $r) {
-                $cbmPorUsuario['embarcado'][$r->nombre ?? 'Sin nombre'] = (float) $r->cbm_embarcado;
+                $embarcadoMap[$r->nombre ?? 'Sin nombre'] = (float) $r->cbm_embarcado;
             }
+            // Adjuntar el desglose por usuario dentro de los mismos headersData
+            if (isset($headersData['cbm_vendido'])) {
+                $headersData['cbm_vendido']['por_usuario'] = $vendidoMap;
+                $headersData['cbm_vendido']['value'] = number_format(array_sum($vendidoMap), 2, '.', '');
+            } else {
+                $headersData['cbm_vendido'] = [
+                    'value' => number_format(array_sum($vendidoMap), 2, '.', ''),
+                    'label' => 'CBM Vendido',
+                    'icon' => 'i-heroicons-currency-dollar',
+                    'por_usuario' => $vendidoMap
+                ];
+            }
+            if (isset($headersData['cbm_pendiente'])) {
+                $headersData['cbm_pendiente']['por_usuario'] = $pendienteMap;
+                $headersData['cbm_pendiente']['value'] = number_format(array_sum($pendienteMap), 2, '.', '');
+            } else {
+                $headersData['cbm_pendiente'] = [
+                    'value' => number_format(array_sum($pendienteMap), 2, '.', ''),
+                    'label' => 'CBM Pendiente',
+                    'icon' => 'i-heroicons-currency-dollar',
+                    'por_usuario' => $pendienteMap
+                ];
+            }
+            if (isset($headersData['cbm_embarcado'])) {
+                $headersData['cbm_embarcado']['por_usuario'] = $embarcadoMap;
+                $headersData['cbm_embarcado']['value'] = number_format(array_sum($embarcadoMap), 2, '.', '');
+            } else {
+                $headersData['cbm_embarcado'] = [
+                    'value' => number_format(array_sum($embarcadoMap), 2, '.', ''),
+                    'label' => 'CBM Embarcado',
+                    'icon' => 'i-heroicons-currency-dollar',
+                    'por_usuario' => $embarcadoMap
+                ];
+            }
+            
+            $contenedor = Contenedor::find($idContenedor);
             if (!$contenedor) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Contenedor no encontrado'
                 ], 404);
             }
-            return response()->json([
-                'success' => true,
-                'data' => $headersData,
-                'carga' => $contenedor->carga,
-                'cbm_por_usuario' => $cbmPorUsuario   // incluir (vacío si no es el usuario especial)
-            ]);
-        } else {
             return response()->json([
                 'success' => true,
                 'data' => $headersData,
