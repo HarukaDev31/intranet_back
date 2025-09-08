@@ -291,6 +291,7 @@ class ClienteService
             $fechaFin = Carbon::createFromFormat('d/m/Y', $request->fecha_fin)->endOfDay();
             $query->where('fecha', '<=', $fechaFin);
         }
+        $query->whereNull('id_cliente_importacion');
 
         // Ordenar por fecha de creación
         $query->orderBy('created_at', 'desc');
@@ -302,6 +303,10 @@ class ClienteService
     private function obtenerClientesConFiltroCategoria($query, $filtroCategoria, $page, $perPage)
     {
         $todosLosClientes = $query->get();
+        //filter clientes where id_cliente_importacion es nulo
+        $todosLosClientes = $todosLosClientes->filter(function ($cliente) {
+            return is_null($cliente->id_cliente_importacion ?? null);
+        });
         $todosLosIds = $todosLosClientes->pluck('id')->toArray();
         $serviciosPorCliente = $this->obtenerServiciosEnLote($todosLosIds);
 
@@ -357,6 +362,7 @@ class ClienteService
      */
     private function obtenerClientesSinFiltroCategoria($query, $page, $perPage)
     {
+        $query->whereNull('id_cliente_importacion');
         $clientes = $query->paginate($perPage, ['*'], 'page', $page);
         $clienteIds = $clientes->pluck('id')->toArray();
         $serviciosPorCliente = $this->obtenerServiciosEnLote($clienteIds);

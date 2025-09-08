@@ -62,9 +62,11 @@ class CotizacionPagosController extends Controller
             DB::statement('SET character_set_connection=utf8mb4');
             
             $results = DB::select($sql, $params);
-
-            // Aplicar filtros según el rol del usuario
-            $filteredResults = collect($results);
+            
+            // Filtrar resultados donde id_cliente_importacion es null
+            $filteredResults = collect($results)->filter(function ($item) {
+                return is_null($item->id_cliente_importacion ?? null);
+            });
             
             if ($user->No_Grupo == Usuario::ROL_COTIZADOR && $user->ID_Usuario != 28791) {
                 $filteredResults = $filteredResults->where('id_usuario', $user->ID_Usuario);

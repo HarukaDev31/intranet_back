@@ -19,15 +19,16 @@ use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use Exception;
 
+
 class CotizacionController extends Controller
 {
     use UserGroupsTrait;
     public function index(Request $request, $idContenedor)
     {
         try {
-            $user = Auth::user();
+            $user = JWTAuth::parseToken()->authenticate();
             $query = Cotizacion::where('id_contenedor', $idContenedor);
-
+            $rol=$user->getNombreGrupo();
             // Aplicar filtros básicos
             if ($request->has('search')) {
                 $search = $request->search;
@@ -52,12 +53,12 @@ class CotizacionController extends Controller
             }
 
             // Aplicar filtros según el rol del usuario
-            switch ($user->rol) {
+            switch ($rol) {
                 case Usuario::ROL_COTIZADOR:
-                    if ($user->id_usuario != 28791) {
-                        $query->where('id_usuario', $user->id_usuario);
+                    if ($user->getIdUsuario()!= 28791) {
+                        $query->where('id_usuario', $user->getIdUsuario());
                     }
-                    $query->where('estado_cotizador', 'CONFIRMADO');
+                   
                     break;
 
                 case Usuario::ROL_DOCUMENTACION:
@@ -70,14 +71,14 @@ class CotizacionController extends Controller
                         ->whereNotNull('estado_cliente');
                     break;
             }
-
+            $query->whereNull('id_cliente_importacion');
             // Ordenamiento
             $sortField = $request->input('sort_by', 'id');
             $sortOrder = $request->input('sort_order', 'desc');
             $query->orderBy($sortField, $sortOrder);
 
             // Paginación
-            $perPage = $request->input('per_page', 10);
+            $perPage = $request->input('limit', 100);
             $page = $request->input('page', 1);
             $results = $query->paginate($perPage, ['*'], 'page', $page);
 

@@ -89,6 +89,8 @@ class CotizacionFinalController extends Controller
                 ->join('contenedor_consolidado_tipo_cliente', 'contenedor_consolidado_cotizacion.id_tipo_cliente', '=', 'contenedor_consolidado_tipo_cliente.id')
                 ->where('id_contenedor', $idContenedor)
                 ->whereNotNull('estado_cliente')
+                ->whereNull('id_cliente_importacion')
+
                 ->where('estado_cotizador', 'CONFIRMADO');
 
             // Aplicar filtros adicionales si se proporcionan
@@ -214,7 +216,8 @@ class CotizacionFinalController extends Controller
                 ])
                 ->leftJoin('contenedor_consolidado_tipo_cliente as TC', 'TC.id', '=', 'contenedor_consolidado_cotizacion.id_tipo_cliente')
                 ->where('contenedor_consolidado_cotizacion.id_contenedor', $idContenedor)
-                ->whereNotNull('contenedor_consolidado_cotizacion.estado_cliente');
+                ->whereNotNull('contenedor_consolidado_cotizacion.estado_cliente')
+                ->where('contenedor_consolidado_cotizacion.estado_cotizador',"CONFIRMADO");
 
             // Aplicar filtros adicionales si se proporcionan
             if ($request->has('search')) {
@@ -226,11 +229,9 @@ class CotizacionFinalController extends Controller
                 });
             }
 
-            // Ordenamiento
-     
-
-            // Paginación
             $perPage = $request->input('per_page', 10);
+            $query->whereNull('id_cliente_importacion');
+
             $data = $query->paginate($perPage);
 
             // Transformar los datos para incluir las columnas específicas

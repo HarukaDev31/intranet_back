@@ -28,6 +28,7 @@ class VariacionController extends Controller
             ->leftJoin('usuario as U', 'U.ID_Usuario', '=', 'CC.id_usuario')
             ->where('CC.id_contenedor', $idContenedor)
             ->whereNotNull('CC.estado_cliente')
+            ->whereNull('id_cliente_importacion')
             ->where('CC.estado_cotizador', 'CONFIRMADO');
 
         // Aplicar filtro de estado si se proporciona
