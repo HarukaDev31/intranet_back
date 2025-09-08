@@ -64,6 +64,8 @@ class PagosController extends Controller
                 )
                 ->leftJoin($this->table_contenedor_tipo_cliente . ' AS TC', 'TC.id', '=', 'CC.id_tipo_cliente')
                 ->where('CC.id_contenedor', $idContenedor)
+                ->whereNull('CC.id_cliente_importacion')
+
                 ->orderBy('CC.id', 'asc');
             // Si el usuario es "Cotizador", filtrar por el id del usuario actual
             if ($user->getNombreGrupo() == Usuario::ROL_COTIZADOR && $user->ID_Usuario != 28791) {

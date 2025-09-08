@@ -41,6 +41,7 @@ class GeneralController extends Controller
             ->leftJoin('usuario as U', 'U.ID_Usuario', '=', 'CC.id_usuario')
             ->where('CC.id_contenedor', $idContenedor)
             ->whereNotNull('CC.estado_cliente')
+            ->whereNull('CC.id_cliente_importacion')
             ->where('CC.estado_cotizador', 'CONFIRMADO');
 
         // Aplicar filtro de estado si se proporciona
@@ -150,6 +151,7 @@ class GeneralController extends Controller
             ->where('id_contenedor', $idContenedor)
             ->whereNotNull('estado_cliente')
             ->where('estado_cotizador', 'CONFIRMADO')
+            ->whereNull('id_cliente_importacion')
             ->first();
 
         return response()->json([
@@ -240,6 +242,8 @@ class GeneralController extends Controller
                 ->join($this->table_contenedor_cotizacion . ' as cc', 'cccp.id_cotizacion', '=', 'cc.id')
                 ->where('cccp.id_contenedor', $idContenedor)
                 ->where('cccp.estados_proveedor', 'LOADED')
+                ->whereNull('id_cliente_importacion')
+
                 ->first();
 
             // Consulta para obtener carga del contenedor

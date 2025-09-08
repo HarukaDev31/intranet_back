@@ -26,6 +26,9 @@ class FacturaGuiaController extends Controller
             )
             ->where('id_contenedor', $idContenedor)
             ->whereNotNull('estado_cliente')
+            ->whereNull('id_cliente_importacion')
+            ->where('estado_cotizador',"CONFIRMADO")
+
             ->paginate($perPage);
 
         return response()->json([
