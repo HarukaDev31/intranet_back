@@ -55,8 +55,8 @@ class CotizacionController extends Controller
             // Aplicar filtros según el rol del usuario
             switch ($rol) {
                 case Usuario::ROL_COTIZADOR:
-                    if ($user->id_usuario != 28791) {
-                        $query->where('id_usuario', $user->id_usuario);
+                    if ($user->getIdUsuario()!= 28791) {
+                        $query->where('id_usuario', $user->getIdUsuario());
                     }
                     $query->where('estado_cotizador', 'CONFIRMADO');
                     break;
