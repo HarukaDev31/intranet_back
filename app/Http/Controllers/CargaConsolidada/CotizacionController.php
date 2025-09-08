@@ -224,18 +224,17 @@ class CotizacionController extends Controller
             'cbm_vendido' => [
                 'value' => $headers ? $headers->cbm_vendido : 0,
                 'label' => 'CBM Vendido',
-                'icon' => 'i-heroicons-currency-dollar'
-                
+                'icon' => 'mage:box-3d'
             ],
             'cbm_pendiente' => [
                 'value' => $headers ? $headers->cbm_pendiente : 0,
                 'label' => 'CBM Pendiente',
-                'icon' => 'i-heroicons-currency-dollar'
+                'icon' => 'mage:box-3d'
             ],
             'cbm_embarcado' => [
                 'value' => $headers ? $headers->cbm_embarcado : 0,
                 'label' => 'CBM Embarcado',
-                'icon' => 'i-heroicons-currency-dollar'
+                'icon' => 'mage:box-3d'
             ],
 
             'qty_items' => [
@@ -246,7 +245,7 @@ class CotizacionController extends Controller
             'total_logistica_pagado' => [
                 'value' => $headers ? $headers->total_logistica_pagado : 0,
                 'label' => 'Total Logistica Pagado',
-                'icon' => 'i-heroicons-currency-dollar'
+                'icon' => 'cryptocurrency-color:soc'
             ],
             'total_logistica' => [
                 'value' => $headers ? $headers->total_logistica : 0,
@@ -285,7 +284,7 @@ class CotizacionController extends Controller
                 ->get();
             $vendidoMap = [];
             foreach ($vendidoRows as $r) {
-                $vendidoMap[$r->nombre ?? 'Sin nombre'] = (float) $r->cbm_vendido;
+                $vendidoMap[$r->nombre] = (float) $r->cbm_vendido;
             }
 
             // CBM Pendiente por usuario (estado != CONFIRMADO)
@@ -298,7 +297,7 @@ class CotizacionController extends Controller
                 ->get();
             $pendienteMap = [];    
             foreach ($pendienteRows as $r) {
-                $pendienteMap[$r->nombre ?? 'Sin nombre'] = (float) $r->cbm_pendiente;
+                $pendienteMap[$r->nombre] = (float) $r->cbm_pendiente;
             }
 
             // CBM Embarcado por usuario (proveedores LOADED)
@@ -312,7 +311,7 @@ class CotizacionController extends Controller
                 ->get();
             $embarcadoMap = [];
             foreach ($embarcadoRows as $r) {
-                $embarcadoMap[$r->nombre ?? 'Sin nombre'] = (float) $r->cbm_embarcado;
+                $embarcadoMap[$r->nombre] = (float) $r->cbm_embarcado;
             }
             // Adjuntar el desglose por usuario dentro de los mismos headersData
             if (isset($headersData['cbm_vendido'])) {
