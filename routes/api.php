@@ -260,7 +260,8 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
             Route::post('/general/upload-guia-remision', [FacturaGuiaController::class, 'uploadGuiaRemision']);
             Route::post('/general/upload-factura-comercial', [FacturaGuiaController::class, 'uploadFacturaComercial']);
             Route::get('/general/{idContenedor}', [FacturaGuiaController::class, 'getContenedorFacturaGuia']);
-
+            Route::delete('/general/delete-factura-comercial/{idContenedor}', [FacturaGuiaController::class, 'deleteFacturaComercial']);
+            Route::delete('/general/delete-guia-remision/{idContenedor}', [FacturaGuiaController::class, 'deleteGuiaRemision']);
         });
         Route::group(['prefix' => 'aduana'], function () {
             Route::get('/{idContenedor}', [AduanaController::class, 'viewFormularioAduana']);

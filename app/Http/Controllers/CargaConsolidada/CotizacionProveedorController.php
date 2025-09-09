@@ -137,6 +137,7 @@ class CotizacionProveedorController extends Controller
 
 
             if (!empty($search)) {
+                Log::info('search: ' . $search);
                 $query->where('main.nombre', 'LIKE', '%' . $search . '%');
             }
             if ($request->has('estado_coordinacion') || $request->has('estado_china')) {
@@ -146,16 +147,16 @@ class CotizacionProveedorController extends Controller
                     $sub->select(DB::raw(1))
                         ->from('contenedor_consolidado_cotizacion_proveedores as proveedores')
                         ->whereRaw('proveedores.id_cotizacion = main.id');
-                    if ($request->has('estado_coordinacion')) {
+                    if ($request->has('estado_coordinacion') && $request->estado_coordinacion != 'todos') {
                         $sub->where('proveedores.estados', $request->estado_coordinacion);
                     }
-                    if ($request->has('estado_china')) {
+                    if ($request->has('estado_china') && $request->estado_china != 'todos') {
                         $sub->where('proveedores.estados_proveedor', $request->estado_china);
                     }
                 });
             }
             $query->orderBy('main.id', 'asc');
-
+            
             if ($rol != Usuario::ROL_COTIZADOR) {
                 $query->where('estado_cotizador', 'CONFIRMADO');
             } else if ($rol == Usuario::ROL_COTIZADOR && $user->ID_Usuario != 28791) {

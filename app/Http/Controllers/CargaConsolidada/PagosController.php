@@ -429,7 +429,7 @@ class PagosController extends Controller
         try {
             $details = $this->getPagosCoordination($idCotizacion);
 
-            $cotizacion = Cotizacion::select('note_administracion', 'cotizacion_file_url', 'cotizacion_final_url', 'monto', 'logistica_final', 'impuestos_final')
+            $cotizacion = Cotizacion::select('note_administracion', 'nombre', 'cotizacion_file_url', 'cotizacion_final_url', 'monto', 'logistica_final', 'impuestos_final')
                 ->where('id', $idCotizacion)
                 ->first();
 
@@ -444,6 +444,7 @@ class PagosController extends Controller
                 'success' => true,
                 'data' => $details,
                 'nota' => $cotizacion->note_administracion ?? '',
+                'cliente' => $cotizacion->nombre ?? '',
                 'cotizacion_inicial_url' => $cotizacion->cotizacion_file_url ?? '',
                 'cotizacion_final_url' => $cotizacion->cotizacion_final_url ?? '',
                 'total_a_pagar' => $aPagar,

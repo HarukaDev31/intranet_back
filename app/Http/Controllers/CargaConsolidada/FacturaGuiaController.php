@@ -106,4 +106,46 @@ class FacturaGuiaController extends Controller
             ]);
         }
     }
+    public function deleteFacturaComercial($idContenedor)
+    {
+        $cotizacion = Cotizacion::find($idContenedor);
+        if($cotizacion->factura_comercial){
+            $path = storage_path('app/' . $cotizacion->factura_comercial);
+            if(file_exists($path)){
+                unlink($path);
+            }
+        }else{
+            return response()->json([
+                'success' => false,
+                'message' => 'Factura comercial no encontrada'
+            ]);
+        }
+        $cotizacion->factura_comercial = null;
+        $cotizacion->save();
+        return response()->json([
+            'success' => true,
+            'message' => 'Factura comercial eliminada correctamente'
+        ]);
+    }
+    public function deleteGuiaRemision($idContenedor)
+    {
+        $cotizacion = Cotizacion::find($idContenedor);
+        if($cotizacion->guia_remision_url){
+            $path = storage_path('app/' . $cotizacion->guia_remision_url);
+            if(file_exists($path)){
+                unlink($path);
+            }
+        }else{
+            return response()->json([
+                'success' => false,
+                'message' => 'Guia remision no encontrada'
+            ]);
+        }
+        $cotizacion->guia_remision_url = null;
+        $cotizacion->save();
+        return response()->json([
+            'success' => true,
+            'message' => 'Guia remision eliminada correctamente'
+        ]);
+    }
 }
