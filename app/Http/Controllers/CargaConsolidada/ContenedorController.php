@@ -13,6 +13,7 @@ use Tymon\JWTAuth\Facades\JWTAuth;
 use App\Models\CargaConsolidada\Cotizacion;
 use App\Models\CargaConsolidada\CotizacionProveedor;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use App\Models\CalculadoraImportacion;
 
 
@@ -360,6 +361,155 @@ class ContenedorController extends Controller
                 'success' => false,
                 'message' => 'Error al actualizar el estado: ' . $e->getMessage()
             ];
+        }
+    }
+    public function uploadPackingList(Request $request)
+    {
+        try {
+            $idContenedor = $request->input('idContenedor');
+            
+            // Validar que se haya enviado un archivo
+            if (!$request->hasFile('file')) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'No se ha enviado ningún archivo'
+                ], 400);
+            }
+
+            $file = $request->file('file');
+            
+            // Validar tamaño del archivo (1MB = 1000000 bytes)
+            $maxFileSize = 1000000;
+            if ($file->getSize() > $maxFileSize) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'El archivo excede el tamaño máximo permitido (1MB)'
+                ], 400);
+            }
+
+            // Validar extensión del archivo
+            $allowedExtensions = ['jpg', 'jpeg', 'png', 'gif', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'txt'];
+            $fileExtension = strtolower($file->getClientOriginalExtension());
+
+            if (!in_array($fileExtension, $allowedExtensions)) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Tipo de archivo no permitido'
+                ], 400);
+            }
+
+            // Generar nombre único para el archivo
+            $filename = time() . '_' . uniqid() . '.' . $fileExtension;
+
+            // Ruta de almacenamiento
+            $path = 'assets/images/agentecompra/';
+
+            // Guardar archivo usando Laravel Storage
+            $fileUrl = $file->storeAs($path, $filename, 'public');
+
+            // Actualizar el contenedor usando Eloquent
+            $contenedor = Contenedor::find($idContenedor);
+            if (!$contenedor) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Contenedor no encontrado'
+                ], 404);
+            }
+
+            $contenedor->update(['lista_embarque_url' => $fileUrl]);
+
+            // Verificar si el contenedor está completado
+            $this->verifyContainerIsCompleted($idContenedor);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Lista de embarque actualizada correctamente',
+                'data' => [
+                    'file_url' => $fileUrl,
+                    'file_name' => $file->getClientOriginalName(),
+                    'file_size' => $file->getSize()
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error en uploadListaEmbarque: ' . $e->getMessage());
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Error al subir la lista de embarque: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function verifyContainerIsCompleted($idcontenedor)
+    {
+        try {
+            // Obtener la lista de embarque del contenedor
+            $contenedor = Contenedor::find($idcontenedor);
+            if (!$contenedor) {
+                Log::error('Contenedor no encontrado con ID: ' . $idcontenedor);
+                return;
+            }
+
+            $listaEmbarque = $contenedor->lista_embarque_url;
+
+            // Buscar si existe proveedor con estado "DATOS PROVEEDOR"
+            $estadoProveedores = Cotizacion::where('id_contenedor', $idcontenedor)
+                ->select('estado')
+                ->get();
+
+            $estado = null;
+            foreach ($estadoProveedores as $estadoProveedor) {
+                if ($estadoProveedor->estado == "DATOS PROVEEDOR") {
+                    $estado = "DATOS PROVEEDOR";
+                    break;
+                }
+            }
+
+            // Preparar los datos para actualizar
+            $updateData = [];
+
+            if ($listaEmbarque != null) {
+                $updateData['estado_china'] = 'COMPLETADO';
+            } else if ($estado == "DATOS PROVEEDOR") {
+                // No hacer nada
+            } else {
+                // Obtener el usuario autenticado
+                $user = JWTAuth::parseToken()->authenticate();
+                if ($user && $user->No_Grupo == 'Coordinación') {
+                    $updateData['estado'] = 'RECIBIENDO';
+                }
+            }
+
+            // Solo actualizar si hay datos para actualizar
+            if (!empty($updateData)) {
+                $contenedor->update($updateData);
+                Log::info('Contenedor actualizado:', [
+                    'id' => $idcontenedor,
+                    'update_data' => $updateData
+                ]);
+            }
+
+        } catch (\Exception $e) {
+            Log::error('Error en verifyContainerIsCompleted: ' . $e->getMessage());
+        }
+    }
+    public function deletePackingList($idContenedor)
+    {
+        try {   
+        $idContenedor = $idContenedor;
+        $contenedor = Contenedor::find($idContenedor);
+        $contenedor->lista_embarque_url = null;
+        $contenedor->save();
+        $this->verifyContainerIsCompleted($idContenedor);
+        return response()->json([
+            'success' => true,
+            'message' => 'Packing list eliminada correctamente'
+        ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al eliminar packing list: ' . $e->getMessage()
+            ], 500);
         }
     }
 }

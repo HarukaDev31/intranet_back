@@ -235,7 +235,12 @@ class CotizacionController extends Controller
                     JOIN cotizacion_coordinacion_pagos_concept pc ON cccp.id_concept = pc.id
                     WHERE cccp.id_contenedor = ' . $idContenedor . '
                     AND pc.name = "LOGISTICA"
-                ) as total_logistica_pagado')
+                ) as total_logistica_pagado'),
+                DB::raw('(
+                    SELECT lista_embarque_url
+                    FROM carga_consolidada_contenedor
+                    WHERE id = ' . $idContenedor . '
+                ) as lista_embarque_url')
             ])
             ->first();
         // Preparar los headers
@@ -280,7 +285,9 @@ class CotizacionController extends Controller
                 'value' => $headers ? $headers->total_logistica : 0,
                 'label' => 'Total Logistica',
                 'icon' => 'cryptocurrency-color:soc'
-            ]   
+            ] ,
+            
+
 
         ];
         $roleAllowedMap = [
@@ -405,6 +412,7 @@ class CotizacionController extends Controller
                 'success' => true,
                 'data' => $headersData,
                 'carga' => $contenedor->carga,
+                'lista_embarque_url' => $contenedor->lista_embarque_url
             ]);
         }
 
@@ -420,7 +428,8 @@ class CotizacionController extends Controller
     return response()->json([
             'success' => true,
             'data' => $headersData,
-            'carga' => $contenedor->carga
+            'carga' => $contenedor->carga,
+            'lista_embarque_url' => $contenedor->lista_embarque_url
         ]);
     }
     public function store(Request $request)
