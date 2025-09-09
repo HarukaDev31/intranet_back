@@ -20,6 +20,9 @@ class ClienteService
         // Aplicar filtros
         $this->aplicarFiltros($query, $request);
 
+    // Ordenar de manera ascendente por fecha (sobrescribe cualquier orden previo)
+    $query->reorder()->orderBy('fecha', 'desc');
+
         // Verificar si hay filtro de categoría
         $filtroCategoria = $request->has('categoria') && !empty($request->categoria) && $request->categoria != 'todos'
             ? $request->categoria : null;

@@ -322,7 +322,11 @@ class CotizacionController extends Controller
                 ->get();
             $vendidoMap = [];
             foreach ($vendidoRows as $r) {
-                $vendidoMap[$r->nombre] = (float) $r->cbm_vendido;
+                $nombre = is_string($r->nombre) ? trim($r->nombre) : '';
+                if ($nombre === '' || $nombre === null) {
+                    continue; // skip empty/null names
+                }
+                $vendidoMap[$nombre] = (float) $r->cbm_vendido;
             }
 
             // CBM Pendiente por usuario (estado != CONFIRMADO)
@@ -335,7 +339,11 @@ class CotizacionController extends Controller
                 ->get();
             $pendienteMap = [];
             foreach ($pendienteRows as $r) {
-                $pendienteMap[$r->nombre] = (float) $r->cbm_pendiente;
+                $nombre = is_string($r->nombre) ? trim($r->nombre) : '';
+                if ($nombre === '' || $nombre === null) {
+                    continue; // skip empty/null names
+                }
+                $pendienteMap[$nombre] = (float) $r->cbm_pendiente;
             }
 
             // CBM Embarcado por usuario (proveedores LOADED)
@@ -349,7 +357,11 @@ class CotizacionController extends Controller
                 ->get();
             $embarcadoMap = [];
             foreach ($embarcadoRows as $r) {
-                $embarcadoMap[$r->nombre] = (float) $r->cbm_embarcado;
+                $nombre = is_string($r->nombre) ? trim($r->nombre) : '';
+                if ($nombre === '' || $nombre === null) {
+                    continue; // skip empty/null names
+                }
+                $embarcadoMap[$nombre] = (float) $r->cbm_embarcado;
             }
             // Formatear valores por usuario como moneda (dólares) para mostrar
             $vendidoMapFormatted = [];
