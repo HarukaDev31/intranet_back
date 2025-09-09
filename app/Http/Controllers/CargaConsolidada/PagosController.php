@@ -72,7 +72,8 @@ class PagosController extends Controller
                         OR ccp2.id_concept = ' . PagoConcept::CONCEPT_PAGO_IMPUESTOS . ')
                     ) as pagos_details')
                 ])
-                ->join('carga_consolidada_contenedor', 'carga_consolidada_contenedor.id', '=', 'contenedor_consolidado_cotizacion.id_contenedor');
+                ->join('carga_consolidada_contenedor', 'carga_consolidada_contenedor.id', '=', 'contenedor_consolidado_cotizacion.id_contenedor')
+                ->orderBy('contenedor_consolidado_cotizacion.id', 'desc');
 
             // Filtros de fecha
             if ($request->filled('Filtro_Fe_Inicio')) {
@@ -526,7 +527,8 @@ class PagosController extends Controller
                 ->join('usuario', 'usuario.ID_Entidad', '=', 'entidad.ID_Entidad')
                 ->leftJoin('distrito', 'distrito.ID_Distrito', '=', 'entidad.ID_Distrito')
                 ->leftJoin('provincia', 'provincia.ID_Provincia', '=', 'entidad.ID_Provincia')
-                ->leftJoin('departamento', 'departamento.ID_Departamento', '=', 'entidad.ID_Departamento');
+                ->leftJoin('departamento', 'departamento.ID_Departamento', '=', 'entidad.ID_Departamento')
+                ->orderBy('pedido_curso.ID_Pedido_Curso', 'desc');
 
             // Filtro por empresa del usuario autenticado
             $query->where('pedido_curso.ID_Empresa', auth()->user()->ID_Empresa);

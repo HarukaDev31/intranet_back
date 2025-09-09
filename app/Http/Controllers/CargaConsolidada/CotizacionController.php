@@ -41,7 +41,7 @@ class CotizacionController extends Controller
             if (!is_array($item) || !array_key_exists('value', $item)) {
                 continue;
             }
-            if (strpos($key, 'cbm_') === 0 || in_array($key, ['total_logistica', 'total_logistica_pagado'])) {
+            if (in_array($key, ['total_logistica', 'total_logistica_pagado'])) {
                 $headers[$key]['value'] = $this->formatCurrency($item['value']);
             }
         }
@@ -270,12 +270,6 @@ class CotizacionController extends Controller
                 'label' => 'CBM Embarcado',
                 'icon' => 'mage:box-3d'
             ],
-
-            'qty_items' => [
-                'value' => $headers ? $headers->total_qty_items : 0,
-                'label' => 'Cantidad de Items',
-                'icon' => 'bi:boxes'
-            ],
             'total_logistica_pagado' => [
                 'value' => $headers ? $headers->total_logistica_pagado : 0,
                 'label' => 'Total Logistica Pagado',
@@ -285,7 +279,12 @@ class CotizacionController extends Controller
                 'value' => $headers ? $headers->total_logistica : 0,
                 'label' => 'Total Logistica',
                 'icon' => 'cryptocurrency-color:soc'
-            ] ,
+            ],
+            'qty_items' => [
+                'value' => $headers ? $headers->total_qty_items : 0,
+                'label' => 'Cantidad de Items',
+                'icon' => 'bi:boxes'
+            ],
             
 
 
@@ -366,15 +365,15 @@ class CotizacionController extends Controller
             // Formatear valores por usuario como moneda (dólares) para mostrar
             $vendidoMapFormatted = [];
             foreach ($vendidoMap as $nombre => $valor) {
-                $vendidoMapFormatted[$nombre] = $this->formatCurrency($valor);
+                $vendidoMapFormatted[$nombre] = number_format((float)$valor, 2, '.', '');
             }
             $pendienteMapFormatted = [];
             foreach ($pendienteMap as $nombre => $valor) {
-                $pendienteMapFormatted[$nombre] = $this->formatCurrency($valor);
+                $pendienteMapFormatted[$nombre] = number_format((float)$valor, 2, '.', '');
             }
             $embarcadoMapFormatted = [];
             foreach ($embarcadoMap as $nombre => $valor) {
-                $embarcadoMapFormatted[$nombre] = $this->formatCurrency($valor);
+                $embarcadoMapFormatted[$nombre] = number_format((float)$valor, 2, '.', '');
             }
             // Adjuntar el desglose por usuario dentro de los mismos headersData
             if (isset($headersData['cbm_vendido'])) {

@@ -151,8 +151,8 @@ class CursoController extends Controller
                 $query->where('PC.tipo_curso', $request->get('tipo_curso'));
             }
 
-            // Ordenar por fecha de registro descendente
-            $query->orderBy('PC.Fe_Registro', 'desc');
+            // Ordenar por id descendente
+            $query->orderBy('PC.ID_Pedido_Curso', 'desc');
 
             // Obtener el total antes de paginar para el filtro de estado
             $totalQuery = clone $query;

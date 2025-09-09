@@ -34,7 +34,7 @@ class GeneralController extends Controller
      */
     private function addCurrencyFormatting(array $headers)
     {
-        $keysToFormat = ['cbm_total_china', 'cbm_total', 'total_logistica', 'total_logistica_pagado', 'total_fob', 'total_impuestos'];
+        $keysToFormat = ['total_logistica', 'total_logistica_pagado', 'total_fob', 'total_impuestos'];
         foreach ($headers as $k => $item) {
             if (is_array($item) && array_key_exists('value', $item) && in_array($k, $keysToFormat)) {
                 $headers[$k]['value'] = $this->formatCurrency($item['value']);
@@ -219,15 +219,11 @@ class GeneralController extends Controller
                             WHERE id_contenedor = ' . $idContenedor . '
                         )
                         AND estado_cotizador = "CONFIRMADO"
-                        AND id IN (
-                            SELECT id_cotizacion 
-                            FROM ' . $this->table_contenedor_cotizacion_proveedores . ' 
-                            WHERE id_contenedor = ' . $idContenedor . '
-                            AND estados_proveedor = "LOADED"
-                        )
+                        AND estado_cliente IS NOT NULL
+                        AND id_cliente_importacion IS NULL
                     ) as total_logistica'),
 
-                    // Subconsulta para total_fob
+                    // Subconsulta para total_fob_loaded
                     DB::raw('(
                         SELECT COALESCE(SUM(valor_doc), 0) 
                         FROM ' . $this->table_contenedor_cotizacion . ' 
@@ -243,6 +239,20 @@ class GeneralController extends Controller
                             WHERE id_contenedor = ' . $idContenedor . '
                             AND estados_proveedor = "LOADED"
                         )
+                    ) as total_fob_loaded'),
+
+                    // Subconsulta para total_fob
+                    DB::raw('(
+                        SELECT COALESCE(SUM(fob), 0) 
+                        FROM ' . $this->table_contenedor_cotizacion . ' 
+                        WHERE id IN (
+                            SELECT DISTINCT id_cotizacion 
+                            FROM ' . $this->table_contenedor_cotizacion_proveedores . ' 
+                            WHERE id_contenedor = ' . $idContenedor . '
+                        )
+                        AND estado_cotizador = "CONFIRMADO"
+                        AND estado_cliente IS NOT NULL
+                        AND id_cliente_importacion IS NULL
                     ) as total_fob'),
 
                     // Subconsulta para total_qty_items
@@ -255,6 +265,8 @@ class GeneralController extends Controller
                             WHERE id_contenedor = ' . $idContenedor . '
                         )
                         AND estado_cotizador = "CONFIRMADO"
+                        AND estado_cliente IS NOT NULL
+                        AND id_cliente_importacion IS NULL
                     ) as total_qty_items'),
 
                     // Subconsulta para total_logistica_pagado
@@ -290,6 +302,8 @@ class GeneralController extends Controller
                 ->select(DB::raw('COALESCE(SUM(impuestos), 0) as total_impuestos'))
                 ->where('estado_cotizador', 'CONFIRMADO')
                 ->where('id_contenedor', $idContenedor)
+                ->whereNotNull('estado_cliente')
+                ->whereNull('id_cliente_importacion')
                 ->first();
 
             if ($result) {
@@ -315,11 +329,11 @@ class GeneralController extends Controller
                     /*cbm_total_pendiente' => ['value' => $result->cbm_total_pendiente ?? 0, 'label' => 'CBM Total Pendiente', 'icon' => 'i-heroicons-currency-dollar'],*/
                     'total_logistica' => ['value' => $result->total_logistica, 'label' => 'Total Logistica', 'icon' => 'cryptocurrency-color:soc'],
                     'total_logistica_pagado' => ['value' => round($result->total_logistica_pagado, 2), 'label' => 'Total Logistica Pagado', 'icon' => 'cryptocurrency-color:soc'],
-                    'qty_items' => ['value' => $result->total_qty_items, 'label' => 'Cantidad de Items', 'icon' => 'bi:boxes'],
                     /*'bl_file_url' => ['value' => $result2->bl_file_url ?? '', 'label' => 'BL File URL', 'icon' => 'i-heroicons-currency-dollar'],*/
                     /*'lista_embarque_url' => ['value' => $result2->lista_embarque_url ?? '', 'label' => 'Lista Embarque URL', 'icon' => 'i-heroicons-currency-dollar'],*/
                     'total_fob' => ['value' => $result->total_fob, 'label' => 'Total FOB', 'icon' => 'cryptocurrency-color:soc'],
-                    'total_impuestos' => ['value' => $result3->total_impuestos, 'label' => 'Total Impuestos', 'icon' => 'cryptocurrency-color:soc']
+                    'total_impuestos' => ['value' => $result3->total_impuestos, 'label' => 'Total Impuestos', 'icon' => 'cryptocurrency-color:soc'],
+                    'qty_items' => ['value' => $result->total_qty_items, 'label' => 'Cantidad de Items', 'icon' => 'bi:boxes']
                 ];
                 if (array_key_exists($userIdCheck, $roleAllowedMap)) {
                     $allowedKeys = $roleAllowedMap[$userIdCheck];
@@ -342,10 +356,10 @@ class GeneralController extends Controller
                         'cbm_total_pendiente' => ['value' => 0, 'label' => 'CBM Total Pendiente', 'icon' => 'i-heroicons-currency-dollar'],
                         'total_logistica' => ['value' => 0, 'label' => 'Total Logistica', 'icon' => 'cryptocurrency-color:soc'],
                         'total_logistica_pagado' => ['value' => 0, 'label' => 'Total Logistica Pagado', 'icon' => 'cryptocurrency-color:soc'],
-                        'qty_items' => ['value' => 0, 'label' => 'Cantidad de Items', 'icon' => 'bi:boxes'],
                         'cbm_total' => ['value' => 0, 'label' => 'CBM Total', 'icon' => 'i-heroicons-currency-dollar'],
                         'total_fob' => ['value' => 0, 'label' => 'Total FOB', 'icon' => 'i-heroicons-currency-dollar'],
                         'total_impuestos' => ['value' => 0, 'label' => 'Total Impuestos', 'icon' => 'i-heroicons-currency-dollar'],
+                        'qty_items' => ['value' => 0, 'label' => 'Cantidad de Items', 'icon' => 'bi:boxes'],
                         'bl_file_url' => ['value' => '', 'label' => 'BL File URL', 'icon' => 'i-heroicons-currency-dollar'],
                         'lista_embarque_url' => ['value' => '', 'label' => 'Lista Embarque URL', 'icon' => 'i-heroicons-currency-dollar']
                     ]),
