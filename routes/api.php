@@ -189,6 +189,7 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
 
     // Rutas de contenedores
     Route::group(['prefix' => 'contenedor'], function () {
+        Route::post('packing-list', [ContenedorController::class, 'uploadPackingList']);
         Route::get('valid-containers', [ContenedorController::class, 'getValidContainers']);
         Route::get('cargas-disponibles', [ContenedorController::class, 'getCargasDisponibles']);
         Route::post('move-cotizacion', [ContenedorController::class, 'moveCotizacionToConsolidado']);
@@ -197,6 +198,8 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
         Route::get('pasos/{idContenedor}', [ContenedorController::class, 'getContenedorPasos']);
         Route::post('/', [ContenedorController::class, 'store']);
         Route::post('/estado-documentacion', [ContenedorController::class, 'updateEstadoDocumentacion']);
+        Route::delete('packing-list/{idContenedor}', [ContenedorController::class, 'deletePackingList']);
+
         Route::group(['prefix' => 'cotizaciones'], function () {
             Route::post('/{id}/refresh', [CotizacionController::class, 'refreshCotizacionFile']);
             Route::get('/{idContenedor}/headers', [CotizacionController::class, 'getHeadersData']);
