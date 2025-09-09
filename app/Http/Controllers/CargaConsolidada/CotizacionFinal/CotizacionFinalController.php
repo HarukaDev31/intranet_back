@@ -191,6 +191,7 @@ class CotizacionFinalController extends Controller
                         JOIN cotizacion_coordinacion_pagos_concept ccp ON cccp.id_concept = ccp.id
                         WHERE cccp.id_cotizacion = contenedor_consolidado_cotizacion.id
                         AND (ccp.name = 'LOGISTICA' OR ccp.name = 'IMPUESTOS')
+                        order by cccp.id asc
                     ) AS pagos"),
                     DB::raw("(
                         SELECT IFNULL(SUM(cccp.monto), 0) 

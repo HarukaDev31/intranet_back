@@ -63,7 +63,8 @@ class PagosController extends Controller
                                 "concepto", ccpc2.name,
                                 "status", ccp2.status,
                                 "payment_date", ccp2.payment_date,
-                                "voucher_url", ccp2.voucher_url
+                                "voucher_url", ccp2.voucher_url,
+                                "banco", ccp2.banco
                             )
                         ) FROM contenedor_consolidado_cotizacion_coordinacion_pagos as ccp2
                         LEFT JOIN cotizacion_coordinacion_pagos_concept as ccpc2 ON ccp2.id_concept = ccpc2.id
@@ -225,8 +226,10 @@ class PagosController extends Controller
                     'concepto' => $pago['concepto'],
                     'status' => $pago['status'],
                     'payment_date' => $pago['payment_date'],
+                    'banco' => $pago['banco'],
                     'voucher_url' => !filter_var($pago['voucher_url'], FILTER_VALIDATE_URL) ? $this->generateImageUrl($pago['voucher_url']) : $pago['voucher_url']
-                    ];
+                    
+                ];
             }
         }
 
@@ -512,7 +515,8 @@ class PagosController extends Controller
                             "monto", cccp2.monto,
                             "status", cccp2.status,
                             "payment_date", cccp2.payment_date,
-                            "voucher_url", cccp2.voucher_url
+                            "voucher_url", cccp2.voucher_url,
+                            "banco", cccp2.banco
                         )   
                     ) FROM pedido_curso_pagos as cccp2
                     WHERE cccp2.id_pedido_curso = pedido_curso.ID_Pedido_Curso 
@@ -645,6 +649,7 @@ class PagosController extends Controller
                     'monto_formateado' => number_format($pago['monto'], 2, '.', ''),
                     'status' => $pago['status'],
                     'payment_date' => $pago['payment_date'],
+                    'banco' => $pago['banco'],
                     'voucher_url' => !filter_var($pago['voucher_url'], FILTER_VALIDATE_URL) ? $this->generateImageUrl($pago['voucher_url']) : $pago['voucher_url']
                 ];
             }
