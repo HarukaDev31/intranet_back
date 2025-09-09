@@ -141,6 +141,9 @@ class CotizacionFinalController extends Controller
                 $index++;
             }
 
+            //ordenar de manera descendente por id_cotizacion
+            $transformedData = collect($transformedData)->sortByDesc('id_cotizacion')->values()->toArray();
+
             return response()->json([
                 'success' => true,
                 'data' => $transformedData,
@@ -226,6 +229,10 @@ class CotizacionFinalController extends Controller
 
             $perPage = $request->input('per_page', 10);
             $query->whereNull('id_cliente_importacion');
+            // Ordenamiento
+            $sortField = $request->input('sort_by', 'id');
+            $sortOrder = $request->input('sort_order', 'desc');
+            $query->orderBy($sortField, $sortOrder);
 
             $data = $query->paginate($perPage);
 
@@ -2188,6 +2195,29 @@ class CotizacionFinalController extends Controller
     }
 
     /**
+     * Add value_formatted to headers with currency values (CBMs and logística related)
+     */
+    private function addCurrencyFormatting(array $headers)
+    {
+        $keysToFormat = ['total_logistica', 'total_logistica_pagado', 'total_fob', 'total_impuestos','total_vendido_logistica_impuestos', 'total_pagado'];
+        foreach ($headers as $k => $item) {
+            if (is_array($item) && array_key_exists('value', $item) && in_array($k, $keysToFormat)) {
+                $headers[$k]['value'] = $this->formatCurrency($item['value']);
+            }
+        }
+        return $headers;
+    }
+
+    /**
+     * Helper: format a number as currency (e.g., $1,234.56)
+     */
+    private function formatCurrency($value, $symbol = '$')
+    {
+        $num = is_numeric($value) ? (float)$value : 0.0;
+        return $symbol . number_format($num, 2, '.', ',');
+    }
+
+    /**
      * Obtiene los headers de cotizaciones finales para un contenedor
      */
     public function getCotizacionFinalHeaders($idContenedor)
@@ -2293,74 +2323,78 @@ class CotizacionFinalController extends Controller
 
             // Si es el usuario 28791, obtener los CBM por usuario (vendido, pendiente, embarcado)
             if ($userId == 28791) {
+                $dataHeaders = [
+                    'cbm_total_peru' => [
+                        "value" => $result->cbm_total_peru,
+                        "label" => "CBM Total Perú",
+                        "icon" => "https://upload.wikimedia.org/wikipedia/commons/c/cf/Flag_of_Peru.svg"
+                    ],
+                    'total_logistica' => [
+                        "value" => $result->total_logistica,
+                        "label" => "Total Logistica",
+                        "icon" => "cryptocurrency-color:soc"
+                    ],
+                    'total_logistica_pagado' => [
+                        "value" => $result->total_logistica_pagado,
+                        "label" => "Total Logistica Pagado",
+                        "icon" => "cryptocurrency-color:soc"
+                    ],
+                    'total_impuestos' => [
+                        "value" => $result->total_impuestos,
+                        "label" => "Total Impuestos",
+                        "icon" => "cryptocurrency-color:soc"
+                    ],
+                    'total_fob' => [
+                        "value" => $result->total_fob,
+                        "label" => "Total FOB",
+                        "icon" => "cryptocurrency-color:soc"
+                    ],
+                ];
+                $dataHeaders = $this->addCurrencyFormatting($dataHeaders);
                 return response()->json([
                     'success' => true,
-                    'data' => [
-                        'cbm_total_peru' => [
-                            "value" => $result->cbm_total_peru,
-                            "label" => "CBM Total Perú",
-                            "icon" => "https://upload.wikimedia.org/wikipedia/commons/c/cf/Flag_of_Peru.svg"
-                        ],
-                        'total_logistica' => [
-                            "value" => $result->total_logistica,
-                            "label" => "Total Logistica",
-                            "icon" => "fas fa-dollar-sign"
-                        ],
-                        'total_logistica_pagado' => [
-                            "value" => $result->total_logistica_pagado,
-                            "label" => "Total Logistica Pagado",
-                            "icon" => "fas fa-dollar-sign"
-                        ],
-                        'total_impuestos' => [
-                            "value" => $result->total_impuestos,
-                            "label" => "Total Impuestos",
-                            "icon" => "fas fa-dollar-sign"
-                        ],
-                        'total_fob' => [
-                            "value" => $result->total_fob,
-                            "label" => "Total FOB",
-                            "icon" => "fas fa-dollar-sign"
-                        ]
-                    ],
+                    'data' => $dataHeaders,
                     'carga' => $result2->carga ?? ''
                 ]);
             }
 
             if ($result) {
+                $dataHeaders = [
+                    'cbm_total' => [
+                        "value" => $result->cbm_total_peru,
+                        "label" => "CBM Total Perú",
+                        "icon" => "https://upload.wikimedia.org/wikipedia/commons/c/cf/Flag_of_Peru.svg"
+                    ],
+                    'total_logistica' => [
+                        "value" => $result->total_logistica,
+                        "label" => "Total Logistica",
+                        "icon" => "cryptocurrency-color:soc"
+                    ],
+                    'total_impuestos' => [
+                        "value" => $result->total_impuestos,
+                        "label" => "Total Impuestos",
+                        "icon" => "cryptocurrency-color:soc"
+                    ],
+                    'total_fob' => [
+                        "value" => $result->total_fob,
+                        "label" => "Total FOB",
+                        "icon" => "cryptocurrency-color:soc"
+                    ],
+                    'total_pagado' => [
+                        "value" => $result->total_pagado,
+                        "label" => "Total Pagado",
+                        "icon" => "cryptocurrency-color:soc"
+                    ],
+                    'total_vendido_logistica_impuestos' => [
+                        "value" => $result->total_vendido_logistica_impuestos,
+                        "label" => "Total Vendido",
+                        "icon" => "cryptocurrency-color:soc"
+                    ],
+                ];
+                $dataHeaders = $this->addCurrencyFormatting($dataHeaders);
                 return response()->json([
                     'success' => true,
-                    'data' => [
-                        'cbm_total' => [
-                            "value" => $result->cbm_total_peru,
-                            "label" => "CBM Total Perú",
-                            "icon" => "https://upload.wikimedia.org/wikipedia/commons/c/cf/Flag_of_Peru.svg"
-                        ],
-                        'total_logistica' => [
-                            "value" => $result->total_logistica,
-                            "label" => "Total Logistica",
-                            "icon" => "fas fa-dollar-sign"
-                        ],
-                        'total_impuestos' => [
-                            "value" => $result->total_impuestos,
-                            "label" => "Total Impuestos",
-                            "icon" => "fas fa-dollar-sign"
-                        ],
-                        'total_fob' => [
-                            "value" => $result->total_fob,
-                            "label" => "Total FOB",
-                            "icon" => "fas fa-dollar-sign"
-                        ],
-                        'total_pagado' => [
-                            "value" => $result->total_pagado,
-                            "label" => "Total Pagado",
-                            "icon" => "fas fa-dollar-sign"
-                        ],
-                        'total_vendido_logistica_impuestos' => [
-                            "value" => $result->total_vendido_logistica_impuestos,
-                            "label" => "Total Vendido",
-                            "icon" => "fas fa-dollar-sign"
-                        ]
-                    ],
+                    'data' => $dataHeaders,
                     'carga' => $result2->carga ?? ''
                 ]);
             } else {
