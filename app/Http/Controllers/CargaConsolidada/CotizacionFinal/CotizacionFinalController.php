@@ -20,6 +20,8 @@ use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
 use PhpOffice\PhpSpreadsheet\Style\Color;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use ZipArchive;
+use Dompdf\Dompdf;
+use Dompdf\Options;
 
 class CotizacionFinalController extends Controller
 {
@@ -80,11 +82,11 @@ class CotizacionFinalController extends Controller
                     'contenedor_consolidado_tipo_cliente.name',
                     DB::raw('UPPER(contenedor_consolidado_cotizacion.nombre) as nombre_upper'),
                     DB::raw('UPPER(LEFT(TRIM(contenedor_consolidado_tipo_cliente.name), 1)) || LOWER(SUBSTRING(TRIM(contenedor_consolidado_tipo_cliente.name), 2)) as tipo_cliente_formateado'),
-                    DB::raw('FORMAT(contenedor_consolidado_cotizacion.volumen_final, 2) as volumen_final_formateado'),
-                    DB::raw('FORMAT(contenedor_consolidado_cotizacion.fob_final, 2) as fob_final_formateado'),
-                    DB::raw('FORMAT(contenedor_consolidado_cotizacion.logistica_final, 2) as logistica_final_formateado'),
-                    DB::raw('FORMAT(contenedor_consolidado_cotizacion.impuestos_final, 2) as impuestos_final_formateado'),
-                    DB::raw('FORMAT(contenedor_consolidado_cotizacion.tarifa_final, 2) as tarifa_final_formateado')
+                    DB::raw('contenedor_consolidado_cotizacion.volumen_final as volumen_final_formateado'),
+                    DB::raw('contenedor_consolidado_cotizacion.fob_final as fob_final_formateado'),
+                    DB::raw('contenedor_consolidado_cotizacion.logistica_final as logistica_final_formateado'),
+                    DB::raw('contenedor_consolidado_cotizacion.impuestos_final as impuestos_final_formateado'),
+                    DB::raw('contenedor_consolidado_cotizacion.tarifa_final as tarifa_final_formateado')
                 ])
                 ->join('contenedor_consolidado_tipo_cliente', 'contenedor_consolidado_cotizacion.id_tipo_cliente', '=', 'contenedor_consolidado_tipo_cliente.id')
                 ->where('id_contenedor', $idContenedor)
@@ -172,15 +174,7 @@ class CotizacionFinalController extends Controller
                     'contenedor_consolidado_cotizacion.*',
                     'contenedor_consolidado_cotizacion.id as id_cotizacion',
                     'TC.name',
-                    /**
-                     * 'id_pago', cccp2.id,
-                        'monto', cccp2.monto,
-                        'concepto', ccp2.name,
-                        'status', cccp2.status,
-                        'payment_date', cccp2.payment_date,
-                        'banco', cccp2.banco,
-                        'voucher_url', cccp2.voucher_url
-                     */
+                   
                     DB::raw("(
                         SELECT JSON_ARRAYAGG(
                             JSON_OBJECT(
@@ -212,12 +206,12 @@ class CotizacionFinalController extends Controller
                         WHERE cccp.id_cotizacion = contenedor_consolidado_cotizacion.id
                         AND (ccp.name = 'LOGISTICA' OR ccp.name = 'IMPUESTOS')
                     ) AS pagos_count"),
-                    DB::raw('FORMAT(contenedor_consolidado_cotizacion.logistica_final + contenedor_consolidado_cotizacion.impuestos_final, 2) as total_logistica_impuestos')
+                    DB::raw('(contenedor_consolidado_cotizacion.logistica_final + contenedor_consolidado_cotizacion.impuestos_final) as total_logistica_impuestos')
                 ])
                 ->leftJoin('contenedor_consolidado_tipo_cliente as TC', 'TC.id', '=', 'contenedor_consolidado_cotizacion.id_tipo_cliente')
                 ->where('contenedor_consolidado_cotizacion.id_contenedor', $idContenedor)
                 ->whereNotNull('contenedor_consolidado_cotizacion.estado_cliente')
-                ->where('contenedor_consolidado_cotizacion.estado_cotizador',"CONFIRMADO");
+                ->where('contenedor_consolidado_cotizacion.estado_cotizador', "CONFIRMADO");
 
             // Aplicar filtros adicionales si se proporcionan
             if ($request->has('search')) {
@@ -241,6 +235,7 @@ class CotizacionFinalController extends Controller
             foreach ($data->items() as $row) {
                 $subdata = [
                     'index' => $index,
+                    'id_contenedor' => $row->id_contenedor,
                     'nombre' => $this->cleanUtf8String($row->nombre),
                     'documento' => $this->cleanUtf8String($row->documento),
                     'telefono' => $this->cleanUtf8String($row->telefono),
@@ -967,7 +962,6 @@ class CotizacionFinalController extends Controller
             }
 
             throw new \Exception("No se encontró el archivo en ninguna ubicación: " . $fileUrl);
-
         } catch (\Exception $e) {
             Log::error('Error en getLocalPath: ' . $e->getMessage(), [
                 'fileUrl' => $fileUrl,
@@ -1329,8 +1323,6 @@ class CotizacionFinalController extends Controller
             Log::info('Archivo ZIP enviado para descarga: ' . $zipFilePath);
             
             return $response;
-            
-
         } catch (\Exception $e) {
             Log::error('Error en generateMassiveExcelPayrolls: ' . $e->getMessage());
             ini_set('memory_limit', $originalMemoryLimit ?? '128M');
@@ -1717,7 +1709,6 @@ class CotizacionFinalController extends Controller
             
             Log::info('Excel generado exitosamente para cliente: ' . $data['cliente']['nombre']);
             Log::info('Archivo guardado en: ' . $excelFilePath);
-
         } catch (\Exception $e) {
             Log::error('Error en getFinalCotizacionExcelv2: ' . $e->getMessage());
             Log::error('Stack trace: ' . $e->getTraceAsString());
@@ -1862,7 +1853,6 @@ class CotizacionFinalController extends Controller
             }
 
             return $clients;
-
         } catch (\Exception $e) {
             Log::error('Error en getMassiveExcelData: ' . $e->getMessage());
             throw $e;
@@ -2112,7 +2102,6 @@ class CotizacionFinalController extends Controller
                 'message' => 'Cotización individual generada correctamente',
                 'data' => $result
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error en generateIndividualCotizacion: ' . $e->getMessage());
             return response()->json([
@@ -2140,7 +2129,6 @@ class CotizacionFinalController extends Controller
                 'data' => $data,
                 'total_clientes' => count($data)
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error en processExcelData: ' . $e->getMessage());
             return response()->json([
@@ -2190,7 +2178,6 @@ class CotizacionFinalController extends Controller
                 'success' => true,
                 'directory_info' => $info
             ]);
-            
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -2299,7 +2286,7 @@ class CotizacionFinalController extends Controller
 
             // Obtener bl_file_url y lista_empaque_file_url del contenedor
             $result2 = DB::table($this->table)
-                ->select('bl_file_url', 'lista_embarque_url','carga')
+                ->select('bl_file_url', 'lista_embarque_url', 'carga')
                 ->where('id', $idContenedor)
                 ->first();
 
@@ -2397,5 +2384,217 @@ class CotizacionFinalController extends Controller
             ], 500);
         }
     }
+    public function deleteCotizacionFinalFile($idCotizacionFinal)
+    {
+        try {
+            // Buscar la cotización por ID
+            $cotizacion = Cotizacion::find($idCotizacionFinal);
 
+            if (!$cotizacion) {
+                Log::error('Error en deleteCotizacionFinalFile: Cotización no encontrada con ID: ' . $idCotizacionFinal);
+                return false;
+            }
+
+            // Obtener la URL del archivo y eliminarlo si existe
+            $cotizacionFinalUrl = $cotizacion->cotizacion_final_url;
+            if ($cotizacionFinalUrl && file_exists($cotizacionFinalUrl)) {
+                    unlink($cotizacionFinalUrl);
+                }
+
+            // Actualizar el campo a null en la base de datos
+            $cotizacion->update(['cotizacion_final_url' => null]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Cotización final eliminada correctamente'
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error en deleteCotizacionFinalFile: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al eliminar cotización final: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+   
+    public function downloadCotizacionFinalPdf($idCotizacionFinal)
+    {
+        // Obtener la URL de cotización final y generar boleta
+        try {
+            $cotizacion = Cotizacion::find($idCotizacionFinal);
+            
+            if (!$cotizacion || !$cotizacion->cotizacion_final_url) {
+                Log::error('Error en downloadBoleta: Cotización no encontrada o sin archivo final con ID: ' . $idCotizacionFinal);
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Cotización no encontrada o sin archivo final'
+                ], 404);
+            }
+
+            $cotizacionFinalUrl = $cotizacion->cotizacion_final_url;
+            $fileUrl = str_replace(' ', '%20', $cotizacionFinalUrl);
+
+            $fileContent = file_get_contents($fileUrl);
+            if ($fileContent === false) {
+                throw new \Exception("No se pudo leer el archivo Excel.");
+            }
+            
+            $tempFile = tempnam(sys_get_temp_dir(), 'cotizacion_') . '.xlsx';
+            file_put_contents($tempFile, $fileContent);
+
+            // Cargar Excel usando PhpSpreadsheet
+            $spreadsheet = IOFactory::load($tempFile);
+            
+            // Generar y retornar el PDF
+            $pdfResponse = $this->generateBoleta($spreadsheet);
+            
+            // Limpiar archivo temporal
+            unlink($tempFile);
+            
+            return $pdfResponse;
+            
+        } catch (\Exception $e) {
+            Log::error('Error en downloadBoleta: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al generar boleta: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+    private function generateBoleta($spreadsheet)
+    {
+        try {
+            $spreadsheet->setActiveSheetIndex(0);
+            $activeSheet = $spreadsheet->getActiveSheet();
+            $antidumping = $activeSheet->getCell('B23')->getValue();
+            $data = [
+                "name" => $activeSheet->getCell('C8')->getValue(),
+                "lastname" => $activeSheet->getCell('C9')->getValue(),
+                "ID" => $activeSheet->getCell('C10')->getValue(),
+                "phone" => $activeSheet->getCell('C11')->getValue(),
+                "date" => date('d/m/Y'),
+                "tipocliente" => $activeSheet->getCell('F11')->getValue(),
+                "peso" => $activeSheet->getCell('J9')->getCalculatedValue(),
+                "qtysuppliers" => $activeSheet->getCell('J10')->getValue(),
+                "cbm" => $activeSheet->getCell('J11')->getCalculatedValue(),
+                "valorcarga" => round($activeSheet->getCell('K14')->getCalculatedValue(), 2),
+                "fleteseguro" => round($activeSheet->getCell('K15')->getCalculatedValue(), 2),
+                "valorcif" => round($activeSheet->getCell('K16')->getCalculatedValue(), 2),
+                "advalorempercent" => intval($activeSheet->getCell('J20')->getCalculatedValue() * 100),
+                "advalorem" => round($activeSheet->getCell('K20')->getCalculatedValue(), 2),
+                "antidumping" => $antidumping == "ANTIDUMPING" ? round($activeSheet->getCell('K23')->getCalculatedValue(), 2) : "",
+
+                "igv" => round($activeSheet->getCell('K21')->getCalculatedValue(), 2),
+                "ipm" => round($activeSheet->getCell('K22')->getCalculatedValue(), 2),
+                "subtotal" => $antidumping == "ANTIDUMPING" ? round($activeSheet->getCell('K24')->getCalculatedValue(), 2) : round($activeSheet->getCell('K23')->getCalculatedValue(), 2),
+                "percepcion" => $antidumping == "ANTIDUMPING" ? round($activeSheet->getCell('K26')->getCalculatedValue(), 2) : round($activeSheet->getCell('K25')->getCalculatedValue(), 2),
+                "total" => $antidumping == "ANTIDUMPING" ? round($activeSheet->getCell('K27')->getCalculatedValue(), 2) : round($activeSheet->getCell('K26')->getCalculatedValue(), 2),
+                "valorcargaproveedor" => $antidumping == "ANTIDUMPING" ? round($activeSheet->getCell('K30')->getCalculatedValue(), 2) : round($activeSheet->getCell('K29')->getCalculatedValue(), 2),
+                "servicioimportacion" => $antidumping == "ANTIDUMPING" ? round($activeSheet->getCell('K31')->getCalculatedValue(), 2) : round($activeSheet->getCell('K30')->getCalculatedValue(), 2),
+                "impuestos" => $antidumping == "ANTIDUMPING" ? round($activeSheet->getCell('K32')->getCalculatedValue(), 2) : round($activeSheet->getCell('K31')->getCalculatedValue(), 2),
+                "montototal" => $antidumping == "ANTIDUMPING" ? round($activeSheet->getCell('K33')->getCalculatedValue(), 2) : round($activeSheet->getCell('K32')->getCalculatedValue(), 2),
+            ];
+            $i = $antidumping == "ANTIDUMPING" ? 37 : 36;
+            $items = [];
+            while ($activeSheet->getCell('B' . $i)->getValue() != 'TOTAL') {
+                //add item to items array
+                $item = [
+                    "index" => $activeSheet->getCell('B' . $i)->getCalculatedValue(),
+                    "name" => $activeSheet->getCell('C' . $i)->getCalculatedValue(),
+                    "qty" => $activeSheet->getCell('F' . $i)->getCalculatedValue(),
+                    "costounit" => number_format(round((float)$activeSheet->getCell('G' . $i)->getCalculatedValue(), 2), 2, '.', ','),
+                    "preciounit" => number_format(round((float)$activeSheet->getCell('I' . $i)->getCalculatedValue(), 2), 2, '.', ','),
+                    "total" => round((float)$activeSheet->getCell('J' . $i)->getCalculatedValue(), 2),
+                    "preciounitpen" => number_format(round((float)$activeSheet->getCell('K' . $i)->getCalculatedValue(), 2), 2, '.', ','),
+                ];
+                $items[] = $item;
+                $i++;
+            }
+            $itemsCount = count($items);
+            $data["br"] = $itemsCount - 18 < 0 ? str_repeat("<br>", 18 - $itemsCount) : "";
+            $data['items'] = $items;
+            $logoContent = file_get_contents(public_path('assets/images/probusiness.png'));
+            $logoData = base64_encode($logoContent);
+            $data["logo"] = 'data:image/png;base64,' . $logoData;
+            $htmlFilePath = public_path('assets/templates/PLANTILLA_COTIZACION_FINAL.html');
+            $htmlContent = file_get_contents($htmlFilePath);
+            $pagosContent = file_get_contents(public_path('assets/images/pagos-full.jpg'));
+            $pagosData = base64_encode($pagosContent);
+            $data["pagos"] = 'data:image/png;base64,' . $pagosData;
+            //replace {{name}} with data['name']
+            foreach ($data as $key => $value) {
+                //if value is a number parse to 2 decimals with comma as unit separator and dot as decimal separator
+                if (is_numeric($value)) {
+                    if ($value == 0) {
+                        $value = '-';
+                    }
+                    if ($key != "ID" && $key != "phone" && $key != "qtysuppliers" && $key != "advalorempercent") {
+                        $value = number_format((float)$value, 2, '.', ',');
+                    }
+                }
+                if ($key == "antidumping" && $antidumping == "ANTIDUMPING") {
+                    $antidumpingHtml = '<tr style="background:#FFFF33">
+                    <td style="border-top:none!important;border-bottom:none!important" colspan="3">ANTIDUMPING</td>
+                    <td style="border-top:none!important;border-bottom:none!important" ></td>
+                    <td style="border-top:none!important;border-bottom:none!important" >$' . number_format((float)$data['antidumping'], 2, '.', ',') . '</td>
+                    <td style="border-top:none!important;border-bottom:none!important" >USD</td>
+                    </tr>';
+                    $htmlContent = str_replace('{{antidumping}}', $antidumpingHtml, $htmlContent);
+                    //search items with class ipm and set border none
+                }
+                if ($key == "items") {
+                    $itemsHtml = "";
+                    $total = 0;
+                    $cantidad = 0;
+                    foreach ($value as $item) {
+                        $total += $item['total'];
+                        $cantidad += $item['qty'];
+                        $itemsHtml .= '<tr>
+                        <td colspan="1">' . $item['index'] . '</td>
+                        <td colspan="5">' . $item['name'] . '</td>
+                        <td colspan="1">' . $item['qty'] . '</td>
+                        <td colspan="2">$ ' . $item['costounit'] . '</td>
+                        <td colspan="1">$ ' . $item['preciounit'] . '</td>
+                        <td colspan="1">$ ' . number_format((float)$item['total'], 2, '.', ',') . '</td>
+                        <td colspan="1">S/. ' . $item['preciounitpen'] . '</td>
+                    </tr>';
+                    }
+                    $itemsHtml .= '<tr>
+                    <td colspan="6" >TOTAL</td>
+                    <td >' . $cantidad . '</td>
+                    <td colspan="2" style="border:none!important"></td>
+                    <td style="border:none!important"></td>
+                    <td >$ ' . number_format((float)$total, 2, '.', ',') . '</td>
+                    <td style="border:none!important"></td>
+
+                </tr>';
+                    $htmlContent = str_replace('{{' . $key . '}}', $itemsHtml, $htmlContent);
+                } else {
+                    $htmlContent = str_replace('{{' . $key . '}}', $value, $htmlContent);
+                }
+            }
+            $options = new Options();
+            $options->set('isHtml5ParserEnabled', true);
+            $dompdf = new Dompdf($options);
+
+            $dompdf->loadHtml($htmlContent);
+            $dompdf->setPaper('A4', 'portrait');
+            $dompdf->render();
+            
+            // Obtener el contenido del PDF como string
+            $pdfContent = $dompdf->output();
+            
+            // Retornar el PDF como respuesta para descarga
+            return response($pdfContent)
+                ->header('Content-Type', 'application/pdf')
+                ->header('Content-Disposition', 'attachment; filename="Cotizacion.pdf"')
+                ->header('Content-Length', strlen($pdfContent));
+        } catch (\PhpOffice\PhpSpreadsheet\Exception $e) {
+            Log::error("Error en la fórmula de la celda: " . $e->getMessage());
+            throw $e;
+        } catch (\Exception $e) {
+            Log::error('Excepción descargarBoleta: ' . $e->getMessage());
+            throw $e;
+        }
+    }
 }

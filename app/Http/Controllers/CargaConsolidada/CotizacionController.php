@@ -28,7 +28,7 @@ class CotizacionController extends Controller
         try {
             $user = JWTAuth::parseToken()->authenticate();
             $query = Cotizacion::where('id_contenedor', $idContenedor);
-            $rol=$user->getNombreGrupo();
+            $rol = $user->getNombreGrupo();
             // Aplicar filtros básicos
             if ($request->has('search')) {
                 $search = $request->search;
@@ -44,21 +44,26 @@ class CotizacionController extends Controller
                 $query->where('estado', $request->estado);
             }
 
-            // Filtrar por fecha si se proporciona
             if ($request->has('fecha_inicio')) {
                 $query->whereDate('fecha', '>=', $request->fecha_inicio);
             }
             if ($request->has('fecha_fin')) {
                 $query->whereDate('fecha', '<=', $request->fecha_fin);
             }
-
+            //if request has estado_coordinacion or estado_china  then query with  proveedores  and just get cotizaciones with at least one proveedor with the state
+            if ($request->has('estado_coordinacion') || $request->has('estado_china')) {
+                $query->whereHas('proveedores', function ($query) use ($request) {
+                    $query->where('estados', $request->estado_coordinacion)
+                        ->orWhere('estados_proveedor', $request->estado_china);
+                });
+            }
             // Aplicar filtros según el rol del usuario
             switch ($rol) {
                 case Usuario::ROL_COTIZADOR:
-                    if ($user->getIdUsuario()!= 28791) {
+                    if ($user->getIdUsuario() != 28791) {
                         $query->where('id_usuario', $user->getIdUsuario());
                     }
-                   
+
                     break;
 
                 case Usuario::ROL_DOCUMENTACION:
@@ -141,7 +146,7 @@ class CotizacionController extends Controller
     {
         $userId = auth()->id();
         $user = JWTAuth::parseToken()->authenticate();
-        $usergroup = $user->getNombreGrupo(); 
+        $usergroup = $user->getNombreGrupo();
 
         $headers = DB::table('contenedor_consolidado_cotizacion_proveedores as cccp')
             ->join('contenedor_consolidado_cotizacion as cc', 'cccp.id_cotizacion', '=', 'cc.id')
@@ -214,12 +219,12 @@ class CotizacionController extends Controller
             'cbm_total_china' => [
                 'value' => $headers ? $headers->cbm_total_china : 0,
                 'label' => 'CBM Total ',
-                'icon' => 'https://upload.wikimedia.org/wikipedia/commons/f/fa/Flag_of_the_People%27s_Republic_of_China.svg'   
+                'icon' => 'https://upload.wikimedia.org/wikipedia/commons/f/fa/Flag_of_the_People%27s_Republic_of_China.svg'
             ],
             'cbm_total_peru' => [
                 'value' => $headers ? $headers->cbm_total_peru : 0,
                 'label' => 'CBM Total ',
-                'icon' =>'https://upload.wikimedia.org/wikipedia/commons/c/cf/Flag_of_Peru.svg'
+                'icon' => 'https://upload.wikimedia.org/wikipedia/commons/c/cf/Flag_of_Peru.svg'
             ],
             'cbm_vendido' => [
                 'value' => $headers ? $headers->cbm_vendido : 0,
@@ -251,14 +256,14 @@ class CotizacionController extends Controller
                 'value' => $headers ? $headers->total_logistica : 0,
                 'label' => 'Total Logistica',
                 'icon' => 'i-heroicons-currency-dollar'
-            ]   
+            ]
 
         ];
         $roleAllowedMap = [
             Usuario::ROL_COTIZADOR => ['cbm_vendido', 'cbm_pendiente', 'cbm_embarcado', 'qty_items', 'cbm_total_peru', 'cbm_total_china'],
             Usuario::ROL_ALMACEN_CHINA => ['cbm_total_china', 'cbm_total_peru', 'qty_items'],
-            Usuario::ROL_ADMINISTRACION => ['cbm_total_china', 'cbm_total_peru', 'qty_items', 'total_logistica','total_logistica_pagado'],
-            Usuario::ROL_COORDINACION => ['cbm_total_china', 'cbm_total_peru', 'qty_items', 'total_logistica','total_logistica_pagado']
+            Usuario::ROL_ADMINISTRACION => ['cbm_total_china', 'cbm_total_peru', 'qty_items', 'total_logistica', 'total_logistica_pagado'],
+            Usuario::ROL_COORDINACION => ['cbm_total_china', 'cbm_total_peru', 'qty_items', 'total_logistica', 'total_logistica_pagado']
             //por defecto:todos
         ];
         $userIdCheck = $user->ID_Usuario;
@@ -277,9 +282,11 @@ class CotizacionController extends Controller
                 ->leftJoin('usuario as u', 'u.ID_Usuario', '=', 'c.id_usuario')
                 ->where('c.id_contenedor', $idContenedor)
                 ->where('c.estado_cotizador', 'CONFIRMADO')
-                ->select(DB::raw('u.No_Nombres_Apellidos as nombre'), 
-                DB::raw('COALESCE(SUM(c.volumen),0) as cbm_vendido'),
-                (DB::raw('SUM(c.volumen) as cbm_vendido_total')))
+                ->select(
+                    DB::raw('u.No_Nombres_Apellidos as nombre'),
+                    DB::raw('COALESCE(SUM(c.volumen),0) as cbm_vendido'),
+                    (DB::raw('SUM(c.volumen) as cbm_vendido_total'))
+                )
                 ->groupBy('u.No_Nombres_Apellidos')
                 ->get();
             $vendidoMap = [];
@@ -295,7 +302,7 @@ class CotizacionController extends Controller
                 ->select(DB::raw('u.No_Nombres_Apellidos as nombre'), DB::raw('COALESCE(SUM(c.volumen),0) as cbm_pendiente'))
                 ->groupBy('u.No_Nombres_Apellidos')
                 ->get();
-            $pendienteMap = [];    
+            $pendienteMap = [];
             foreach ($pendienteRows as $r) {
                 $pendienteMap[$r->nombre] = (float) $r->cbm_pendiente;
             }
@@ -347,7 +354,7 @@ class CotizacionController extends Controller
                     'por_usuario' => $embarcadoMap
                 ];
             }
-            
+
             $contenedor = Contenedor::find($idContenedor);
             if (!$contenedor) {
                 return response()->json([
@@ -1070,7 +1077,7 @@ class CotizacionController extends Controller
     /**
      * Actualiza el estado del cliente
      */
-   
+
 
     /**
      * Refresca el archivo de cotización
