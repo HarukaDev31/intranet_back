@@ -62,7 +62,8 @@ class PagosController extends Controller
                                 "monto", ccp2.monto,
                                 "concepto", ccpc2.name,
                                 "status", ccp2.status,
-                                "payment_date", ccp2.payment_date
+                                "payment_date", ccp2.payment_date,
+                                "voucher_url", ccp2.voucher_url
                             )
                         ) FROM contenedor_consolidado_cotizacion_coordinacion_pagos as ccp2
                         LEFT JOIN cotizacion_coordinacion_pagos_concept as ccpc2 ON ccp2.id_concept = ccpc2.id
@@ -102,9 +103,9 @@ class PagosController extends Controller
             }
 
             // Filtros complejos
-            $query->where(function($q) {
+            $query->where(function ($q) {
                 // Opción 1: Tiene pagos
-                $q->whereExists(function($subQuery) {
+                $q->whereExists(function ($subQuery) {
                     $subQuery->select(DB::raw(1))
                         ->from('contenedor_consolidado_cotizacion_coordinacion_pagos')
                         ->whereRaw('contenedor_consolidado_cotizacion_coordinacion_pagos.id_cotizacion = contenedor_consolidado_cotizacion.id')
@@ -112,7 +113,7 @@ class PagosController extends Controller
                 });
 
                 // Opción 2: estado_cliente no es null Y contenedor completado
-                $q->orWhere(function($subQ) {
+                $q->orWhere(function ($subQ) {
                     $subQ->whereNotNull('contenedor_consolidado_cotizacion.estado_cliente')
                         ->where('carga_consolidada_contenedor.estado_china', 'COMPLETADO');
                 });
@@ -127,7 +128,7 @@ class PagosController extends Controller
             $index = ($page - 1) * $perPage + 1;
 
             foreach ($cotizaciones->items() as $cotizacion) {
-                $aPagar = ($cotizacion->logistica_final + $cotizacion->impuestos_final) == 0 ? 
+                $aPagar = ($cotizacion->logistica_final + $cotizacion->impuestos_final) == 0 ?
                     $cotizacion->monto : ($cotizacion->logistica_final + $cotizacion->impuestos_final);
 
                 // Determinar estado de pago
@@ -153,7 +154,7 @@ class PagosController extends Controller
                     'tipo' => "Consolidado",
                     'carga' => $cotizacion->carga,
                     'estado_pago' => $estadoPago,
-                    
+
                     'monto_a_pagar' => (($aPagar) == 0 ? $cotizacion->monto : $aPagar),
                     'monto_a_pagar_formateado' => number_format((($aPagar) == 0 ? $cotizacion->monto : $aPagar), 2, '.', ''),
                     'total_pagado' => $cotizacion->total_pagos_monto,
@@ -178,7 +179,6 @@ class PagosController extends Controller
                 ],
                 'cargas_disponibles' => $cargasDisponibles,
             ]);
-
         } catch (\Exception $e) {
             Log::error('PagosController getConsolidadoPagos: ' . $e->getMessage());
             return response()->json([
@@ -215,34 +215,67 @@ class PagosController extends Controller
     {
         $pagos = json_decode($pagosDetails, true);
         $pagosProcesados = [];
-        
+
         if ($pagos) {
             foreach ($pagos as $pago) {
                 $pagosProcesados[] = [
-                    'id' => $pago['id_pago'],
+                    'id_pago' => $pago['id_pago'],
                     'monto' => $pago['monto'],
                     'monto_formateado' => number_format($pago['monto'], 2, '.', ''),
                     'concepto' => $pago['concepto'],
                     'status' => $pago['status'],
-                    'payment_date' => $pago['payment_date']
-                ];
+                    'payment_date' => $pago['payment_date'],
+                    'voucher_url' => !filter_var($pago['voucher_url'], FILTER_VALIDATE_URL) ? $this->generateImageUrl($pago['voucher_url']) : $pago['voucher_url']
+                    ];
             }
         }
-        
+
         return $pagosProcesados;
     }
+    private function generateImageUrl($ruta)
+    {
+        if (empty($ruta)) {
+            return null;
+        }
 
+        // Si ya es una URL completa, devolverla tal como está
+        if (filter_var($ruta, FILTER_VALIDATE_URL)) {
+            return $ruta;
+        }
+
+        // Limpiar la ruta de barras iniciales para evitar doble slash
+        $ruta = ltrim($ruta, '/');
+
+        // Construir URL manualmente para evitar problemas con Storage::url()
+        $baseUrl = config('app.url');
+        $storagePath = '/storage/';
+
+        // Asegurar que no haya doble slash
+        $baseUrl = rtrim($baseUrl, '/');
+        $storagePath = ltrim($storagePath, '/');
+        $ruta = ltrim($ruta, '/');
+        return $baseUrl . '/' . $storagePath . '/' . $ruta;
+    }
     /**
      * Obtener campañas disponibles
      */
     private function getCampanasDisponibles()
     {
-        
+
         // Obtener campañas y devolver nombre + año generado desde Fe_Inicio (Mes Año)
         $meses_es = [
-            1 => 'Enero', 2 => 'Febrero', 3 => 'Marzo', 4 => 'Abril',
-            5 => 'Mayo', 6 => 'Junio', 7 => 'Julio', 8 => 'Agosto',
-            9 => 'Septiembre', 10 => 'Octubre', 11 => 'Noviembre', 12 => 'Diciembre'
+            1 => 'Enero',
+            2 => 'Febrero',
+            3 => 'Marzo',
+            4 => 'Abril',
+            5 => 'Mayo',
+            6 => 'Junio',
+            7 => 'Julio',
+            8 => 'Agosto',
+            9 => 'Septiembre',
+            10 => 'Octubre',
+            11 => 'Noviembre',
+            12 => 'Diciembre'
         ];
 
         //crear consulta donde se obtengan todas las campañas disponibles de la consulta que no tenga Fe_Borrado
@@ -274,15 +307,15 @@ class PagosController extends Controller
      */
     private function getCargasDisponibles()
     {
-       try{
-           $cargas = DB::table('carga_consolidada_contenedor as cc')
+        try {
+            $cargas = DB::table('carga_consolidada_contenedor as cc')
                 ->select('cc.carga')
                 ->distinct()
                 ->orderBy('cc.carga')
                 ->get();
 
-                return $cargas;
-       } catch (\Exception $e) {
+            return $cargas;
+        } catch (\Exception $e) {
             Log::error('Error en getCargasDisponibles: ' . $e->getMessage());
             return collect();
         }
@@ -395,13 +428,13 @@ class PagosController extends Controller
     {
         try {
             $details = $this->getPagosCoordination($idCotizacion);
-            
+
             $cotizacion = Cotizacion::select('note_administracion', 'cotizacion_file_url', 'cotizacion_final_url', 'monto', 'logistica_final', 'impuestos_final')
                 ->where('id', $idCotizacion)
                 ->first();
 
             // Calcular monto a pagar usando la misma lógica del método principal
-            $aPagar = ($cotizacion->logistica_final + $cotizacion->impuestos_final) == 0 ? 
+            $aPagar = ($cotizacion->logistica_final + $cotizacion->impuestos_final) == 0 ?
                 $cotizacion->monto : ($cotizacion->logistica_final + $cotizacion->impuestos_final);
 
             // Calcular total pagado sumando todos los pagos
@@ -418,7 +451,6 @@ class PagosController extends Controller
                 'total_pagado' => $totalPagado,
                 'total_pagado_formateado' => number_format($totalPagado, 2, '.', '')
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error en getDetailsPagosConsolidado: ' . $e->getMessage());
             return response()->json([
@@ -477,7 +509,9 @@ class PagosController extends Controller
                         JSON_OBJECT(
                             "id_pago", cccp2.id,
                             "monto", cccp2.monto,
-                            "status", cccp2.status
+                            "status", cccp2.status,
+                            "payment_date", cccp2.payment_date,
+                            "voucher_url", cccp2.voucher_url
                         )   
                     ) FROM pedido_curso_pagos as cccp2
                     WHERE cccp2.id_pedido_curso = pedido_curso.ID_Pedido_Curso 
@@ -497,7 +531,7 @@ class PagosController extends Controller
             $query->where('pedido_curso.ID_Empresa', auth()->user()->ID_Empresa);
 
             // Filtro para cursos que tienen pagos de adelanto
-            $query->whereExists(function($subQuery) {
+            $query->whereExists(function ($subQuery) {
                 $subQuery->select(DB::raw(1))
                     ->from('pedido_curso_pagos')
                     ->whereRaw('pedido_curso_pagos.id_pedido_curso = pedido_curso.ID_Pedido_Curso')
@@ -506,7 +540,7 @@ class PagosController extends Controller
 
             //filtrar por busqueda
             if ($search) {
-                $query->where(function($q) use ($search) {
+                $query->where(function ($q) use ($search) {
                     $q->where('entidad.No_Entidad', 'LIKE', "%{$search}%");
                 });
             }
@@ -535,7 +569,7 @@ class PagosController extends Controller
             $index = ($page - 1) * $perPage + 1;
 
             foreach ($cursos->items() as $curso) {
-                $aPagar = ($curso->logistica_final + $curso->impuestos_final) == 0 ? 
+                $aPagar = ($curso->logistica_final + $curso->impuestos_final) == 0 ?
                     $curso->Ss_Total : ($curso->logistica_final + $curso->impuestos_final);
 
                 // Determinar estado de pago
@@ -559,7 +593,7 @@ class PagosController extends Controller
                     'tipo' => "Curso",
                     'campana' => $this->obtenerNombreCampana($curso->ID_Campana),
                     'estado_pago' => $estadoPago,
-                    
+
                     'monto_a_pagar' => $aPagar,
                     'monto_a_pagar_formateado' => number_format($aPagar, 2, '.', ''),
                     'total_pagado' => $curso->total_pagos,
@@ -584,7 +618,6 @@ class PagosController extends Controller
                 ],
                 'campanas_disponibles' => $campanasDisponibles,
             ]);
-
         } catch (\Exception $e) {
             Log::error('PagosController getCursosPagos: ' . $e->getMessage());
             return response()->json([
@@ -602,18 +635,20 @@ class PagosController extends Controller
     {
         $pagos = json_decode($pagosDetails, true);
         $pagosProcesados = [];
-        
+
         if ($pagos) {
             foreach ($pagos as $pago) {
                 $pagosProcesados[] = [
                     'id' => $pago['id_pago'],
                     'monto' => $pago['monto'],
                     'monto_formateado' => number_format($pago['monto'], 2, '.', ''),
-                    'status' => $pago['status']
+                    'status' => $pago['status'],
+                    'payment_date' => $pago['payment_date'],
+                    'voucher_url' => !filter_var($pago['voucher_url'], FILTER_VALIDATE_URL) ? $this->generateImageUrl($pago['voucher_url']) : $pago['voucher_url']
                 ];
             }
         }
-        
+
         return $pagosProcesados;
     }
 
@@ -644,9 +679,18 @@ class PagosController extends Controller
         }
 
         $meses_es = [
-            1 => 'Enero', 2 => 'Febrero', 3 => 'Marzo', 4 => 'Abril',
-            5 => 'Mayo', 6 => 'Junio', 7 => 'Julio', 8 => 'Agosto',
-            9 => 'Septiembre', 10 => 'Octubre', 11 => 'Noviembre', 12 => 'Diciembre'
+            1 => 'Enero',
+            2 => 'Febrero',
+            3 => 'Marzo',
+            4 => 'Abril',
+            5 => 'Mayo',
+            6 => 'Junio',
+            7 => 'Julio',
+            8 => 'Agosto',
+            9 => 'Septiembre',
+            10 => 'Octubre',
+            11 => 'Noviembre',
+            12 => 'Diciembre'
         ];
 
         $mes = (int) $dt->format('n');
@@ -662,7 +706,7 @@ class PagosController extends Controller
     {
         try {
             $pedidoCurso = PedidoCurso::findOrFail($idPedidoCurso);
-            
+
             $pagos = PedidoCursoPago::with('concepto')
                 ->where('id_pedido_curso', $idPedidoCurso)
                 ->where('id_concept', PedidoCursoPagoConcept::CONCEPT_PAGO_ADELANTO_CURSO)
@@ -670,7 +714,7 @@ class PagosController extends Controller
                 ->get();
 
             // Calcular monto a pagar usando la misma lógica del método principal
-            $aPagar = ($pedidoCurso->logistica_final + $pedidoCurso->impuestos_final) == 0 ? 
+            $aPagar = ($pedidoCurso->logistica_final + $pedidoCurso->impuestos_final) == 0 ?
                 $pedidoCurso->Ss_Total : ($pedidoCurso->logistica_final + $pedidoCurso->impuestos_final);
 
             // Calcular total pagado sumando todos los pagos
@@ -685,7 +729,6 @@ class PagosController extends Controller
                 'total_pagado' => $totalPagado,
                 'total_pagado_formateado' => number_format($totalPagado, 2, '.', '')
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error en getDetailsPagosCurso: ' . $e->getMessage());
             return response()->json([
@@ -738,5 +781,4 @@ class PagosController extends Controller
             return response()->json(['success' => false, 'message' => 'Error al actualizar la nota de cotización: ' . $e->getMessage()], 500);
         }
     }
-
-} 
+}

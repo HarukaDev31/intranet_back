@@ -206,7 +206,7 @@ class CotizacionPagosController extends Controller
             Log::info('pagos', ['pagos' => $pagos]);
             return collect($pagos)->map(function ($pago) {
                 return [
-                    'id' => $pago->id_pago ?? 0,
+                    'id_pago' => $pago->id_pago ?? 0,
                     'monto' => $pago->monto ?? 0,
                     'payment_date' => $pago->payment_date ?? null,
                     'status' => $pago->status ?? 'PENDIENTE',

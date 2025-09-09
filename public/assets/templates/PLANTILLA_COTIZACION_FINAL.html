@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Boleta de Cotización</title>
+    <link rel="stylesheet" href="styles.css" />
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        font-size: 10px;
+        margin: 0;
+        padding: 0;
+      }
+
+      .client-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 20px auto;
+      }
+      .client-table th,
+      .client-table td {
+        border: 1px solid #000;
+        padding: 5px;
+        text-align: left;
+      }
+      .client-table .header {
+        background-color: #fbe4db;
+      }
+      .client-table .column {
+        width: 200px;
+      }
+      .client-table .highlight {
+        background-color: #fbe4db;
+      }
+      .cotizacion-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 20px auto;
+      }
+
+      .cotizacion-table th,
+      .cotizacion-table td {
+        border: 1px solid #000;
+        padding: 5px;
+        text-align: left;
+      }
+      .header {
+        background-color: #45b39d;
+        color: white;
+      }
+      .cotizacion-table .column {
+        width: 200px;
+      }
+      .cotizacion-table .highlight {
+        background-color: #fbe4db;
+      }
+      .all-border {
+        border: 1px solid #000 !important;
+      }
+      .no-border {
+        border: none !important;
+      }
+      .no-left-border {
+        border-left: none !important;
+      }
+      .no-right-border {
+        border-right: none !important;
+      }
+      .no-top-border {
+        border-top: none !important;
+      }
+      .no-bottom-border {
+        border-bottom: none !important;
+      }
+      .no-horizontal-border {
+        border-left: none !important;
+        border-right: none !important;
+      }
+      .no-vertical-border {
+        border-top: none !important;
+        border-bottom: none !important;
+      }.bbottom{
+        border-bottom: 1px solid #000;
+      }.btop{
+        border-top: 1px solid #000;
+      }
+      .cotizacion-table tr td:nth-child(1),
+      .cotizacion-table tr th:nth-child(1) {
+        border-right: none !important;
+        border-left: none !important;
+        border-top: none !important;
+        border-bottom: none !important;
+      }
+      .cotizacion-table tr td:nth-child(2),
+      .cotizacion-table tr td:nth-child(3),
+      .cotizacion-table tr th:nth-child(2),
+      .cotizacion-table tr th:nth-child(3) {
+        border-right: none !important;
+        border-left: none !important;
+        border-top: none !important;
+        border-bottom: none !important;
+      }
+      .cotizacion-table tr td:last-child,
+      .cotizacion-table tr th:last-child {
+        border-left: none !important;
+        border-right: none !important;
+        border-top: none !important;
+        border-bottom: none !important;
+      }
+      .resumen-header {
+        background-color: #e67e22;
+        color: white;
+      }
+      .cotizacion-table tr:nth-child(3),
+      .cotizacion-table tr:nth-child(8),
+      .cotizacion-table tr:nth-child(11),
+      .cotizacion-table tr:nth-child(17) {
+      }
+      .items-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 20px auto;
+      }
+      .items-table th,
+      .items-table td {
+        border: 1px solid #000 !important;
+        padding: 5px;
+        text-align: center;
+      }
+      .items-table tr td {
+        border: 1px solid #000 !important;
+      }
+      .table-header {
+        border-collapse: collapse;
+        margin: 20px auto;
+      }ul {
+        list-style-type: none;
+        padding: 0;
+      }li{
+        margin-bottom: 6  px;
+      }.water-mark {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        opacity: 0.05;
+        height: 80%;
+        width: 80%;
+      }.water-mark2{
+        position: absolute;
+        bottom: 10%;
+        right: 10%;
+        height: 80%;  
+        width: 80%; 
+        opacity: 0.05;
+      }
+    </style>
+  </head>
+  <body>
+    <img class="water-mark" src="{{logo}}" />
+
+    <table class="table-header">
+      <tr>
+        <td  class="no-border"></td>
+        <td  class="no-border">
+          <img src="{{logo}}" style="height: 100px;width: 100px;"/>
+        </td>
+        <td class="no-border " style="padding: 0 50px;">
+          <h1  style="font-size:28px;margin:0;padding: 0;">PRO MUNDO COMEX S.A.C.</h1>
+          <h2   style="color:#e67e22;font-size: 25px;text-align: center;margin:0;padding: 0;"> RUC: 206124524321</h2>
+        </td>
+        <td class="no-border"></td>
+        <td class="no-border"></td>
+      </tr>
+    </table>
+        
+    </table>
+    <table class="client-table">
+      <tr>
+        <td class="no-border">NOMBRE:</td>
+        <td class="highlight no-border">{{name}}</td>
+        <td class="no-border"></td>
+        <td class="no-right-border no-bottom-border">SERVICIO:</td>
+        <td class="no-left-border no-bottom-border">CARGA CONSOLIDADA</td>
+        <td class="no-border"></td>
+
+        <td class="no-border">N° CAJAS:</td>
+        <td class="highlight no-border">0</td>
+      </tr>
+      <tr>
+        <td class="no-border">APELLIDO:</td>
+        <td class="highlight no-border">{{lastname}}</td>
+        <td class="no-border"></td>
+        <td class="no-right-border no-top-border no-bottom-border">FECHA:</td>
+        <td class="no-left-border no-top-border no-bottom-border">{{date}}</td>
+        <td class="no-border"></td>
+
+        <td class="no-border">PESO:</td>
+        <td class="highlight no-border">{{peso}}</td>
+      </tr>
+      <tr>
+        <td class="no-border">DNI/RUC:</td>
+        <td class="highlight no-border">{{ID}}</td>
+        <td class="no-border"></td>
+        <td class="no-right-border no-top-border no-bottom-border">ORIGEN:</td>
+        <td class="no-left-border no-top-border no-bottom-border">CHINA</td>
+        <td class="no-border"></td>
+        <td class="no-border">QTY PROVEEDORES</td>
+        <td class="highlight no-border">{{qtysuppliers}}</td>
+      </tr>
+      <tr>
+        <td class="no-border">TELEFONO:</td>
+        <td class="highlight no-border">{{phone}}</td>
+        <td class="no-border"></td>
+        <td class="no-right-border no-top-border">CLIENTE:</td>
+        <td class="no-left-border no-top-border">{{tipocliente}}</td>
+        <td class="no-border"></td>
+
+        <td class="no-border">CBM</td>
+        <td class="highlight no-border">{{cbm}}</td>
+      </tr>
+    </table>
+    <table class="cotizacion-table">
+      <tr>
+        <th colspan="3" class="header no-right-border">
+          CALCULO DE BASE IMPONIBLE
+        </th>
+        <th class="no-horizontal-border header"></th>
+        <th class="header center no no-left-border">MONTO</th>
+        <th class="header center no-left-border">MONEDA</th>
+      </tr>
+      <tr>
+        <td colspan="3" class="no-right-border">VALOR DE CARGA</td>
+        <th class="no-horizontal-border"></th>
+
+        <td class="right no-left-border">$ {{valorcarga}}</td>
+
+        <td class="center no-left-border">USD</td>
+      </tr>
+      <tr class="bbottom">
+        <td colspan="3">FLETE INTERNACIONAL + SEGURO</td>
+        <td class="no-horizontal-border no-horizontal-border"></td>
+        <td class="no-horizontal-border right no-left-border">
+          $ {{fleteseguro}}
+        </td>
+        <td class="no-horizontal-border center no-left-border">USD</td>
+      </tr>
+      <tr >
+        <td colspan="3"><strong>VALOR CIF</strong></td>
+        <td class="no-horizontal-border no-horizontal-border"></td>
+
+        <td class="no-horizontal-border right">
+          <strong>$ {{valorcif}}</strong>
+        </td>
+        <td class="no-horizontal-border center">USD</td>
+      </tr>
+      <tr>
+        <td colspan="3" class="header">CALCULO DE TRIBUTOS</td>
+        <td class="no-horizontal-border header center">%</td>
+        <td class="no-horizontal-border header center">MONTO</td>
+        <td class="no-horizontal-border header center">MONEDA</td>
+      </tr>
+      <tr>
+        <td colspan="3">ADVALOREM</td>
+        <td class="no-horizontal-border center">{{advalorempercent}}%</td>
+        <td class="no-horizontal-border right">$ {{advalorem}}</td>
+        <td class="no-horizontal-border center">USD</td>
+      </tr>
+      <tr>
+        <td colspan="3">IGV</td>
+        <td class="no-horizontal-border center">16%</td>
+        <td class="no-horizontal-border right">$ {{igv}}</td>
+        <td class="no-horizontal-border center">USD</td>
+      </tr>
+      <tr>
+        <td style="border: none!important;" class="ipm" colspan="3">IPM</td>
+        <td style="border: none!important;" class="ipm  center">2%</td>
+        <td style="border: none!important;" class="ipm  right">$ {{ipm}}</td>
+        <td style="border: none!important;" class="ipm  center">USD</td>
+      </tr>
+      {{antidumping}}
+      <tr class="btop">
+        <td colspan="3" style="border-top: 1px solid #000;"><strong>SUB TOTAL</strong></td>
+        <td class="no-border" style="border-top: 1px solid #000;"></td>
+          
+        </td >
+        <td style="border-top: 1px solid #000;" >
+          <strong>$ {{subtotal}}</strong></td>  
+        <td class="no-horizontal-border center">USD</td>
+      </tr>
+
+      <tr>
+        <td colspan="12" class="no-border" style="border: none!important;"></td>
+      </tr>
+      <tr>
+        <td colspan="3">PERCEPCIÓN</td>
+        <td class="no-horizontal-border center">3.5%</td>
+        <td class="no-horizontal-border right">$ {{percepcion}}</td>
+        <td class="no-horizontal-border center">USD</td>
+      </tr>
+      <tr class="btop">
+        <td colspan="3"><strong>TOTAL</strong></td>
+        <td></td>
+        <td class="no-horizontal-border right"><strong>$ {{total}}</strong></td>
+        <td class="no-horizontal-border center">USD</td>
+      </tr>
+      <tr>
+        <td colspan="12" class=""></td>
+      </tr>
+      <tr>
+        <th colspan="3" class="resumen-header">RESUMEN DE COTIZACIÓN</th>
+        <th class="no-horizontal-border resumen-header"></th>
+
+        <th class="resumen-header center">MONTO</th>
+        <th class="resumen-header center">MONEDA</th>
+      </tr>
+      <tr>
+        <td colspan="3">VALOR DE CARGA (PAGO AL PROVEEDOR)</td>
+        <th class="no-horizontal-border"></th>
+
+        <td class="no-horizontal-border right">$ {{valorcargaproveedor}}</td>
+        <td class="no-horizontal-border center">USD</td>
+      </tr>
+      <tr>
+        <td colspan="3">SERVICIO DE IMPORTACIÓN (ORIGEN - FLETE - DESTINO)</td>
+        <th class="no-horizontal-border"></th>
+
+        <td class="no-horizontal-border right">$ {{servicioimportacion}}</td>
+        <td class="no-horizontal-border center">USD</td>
+      </tr>
+      <tr>
+        <td colspan="3">IMPUESTOS</td>
+        <th class="no-horizontal-border"></th>
+
+        <td class="no-horizontal-border right">$ {{impuestos}}</td>
+        <td class="no-horizontal-border center">USD</td>
+      </tr>
+      <tr class="btop">
+        <td colspan="3"><strong>MONTO TOTAL</strong></td>
+        <th class="no-horizontal-border"></th>
+
+        <td class="no-horizontal-border right">
+          <strong>$ {{montototal}}</strong>
+        </td>
+        <td class="no-horizontal-border center">USD</td>
+      </tr>
+      <tr>
+        <td colspan="3"></td>
+      </tr>
+    </table>
+    <table class="items-table">
+      <!---header with 100% width-->
+      <tr>
+        <td colspan="12" class="header">
+          SIMULACIÓN DEL PRECIO PUESTO EN PERÚ POR PIEZA
+        </td>
+      </tr>
+      <tr style="width: auto; border: 1px solid #000!important">
+        <td colspan="1">ITEM</td>
+        <td colspan="5" >NOMBRE PRODUCTO</td>
+        <td colspan="1"  >CANTIDAD</td>
+        <td colspan="2"  >COSTO UNI.</td>
+        <td colspan="1" >PRECIO U.</td>
+        <td colspan="1">TOTAL</td>
+        <td colspan="1">
+          PRECIO UNIT. (SOLES)
+        </td>
+
+      </tr>
+      {{items}}
+    </table>
+    {{br}}
+    <div style="position: relative!important;">
+
+        <h4 style="text-decoration: underline;"> NOTAS:</h4> 
+      <ul>
+      <li >*Las fechas brindadas son estimadas, estan sujetas a variación.</li>
+      <li >*No se emite comprobante por concepto de "PERCEPCIÓN, ANTI DUMPING, GESTIÓN DE COMPRA"</li>
+      <li >*A nosotros se nos pagan los Gastos Logísticos + Impuestos una semana antes de que el contenedor llegue al puerto del Callao.</li>
+      <li >*El tipo de cambio referencial usado para la conversión a soles es del 3.70</li>
+    </ul>
+    <table class="table-header">
+      <tr>
+        <td  class="no-border"></td>
+        <td  class="no-border">
+          <img src="{{logo}}" style="height: 100px;width: 100px;"/>
+        </td>
+        <td class="no-border " style="padding: 0 50px;">
+          <h1  style="font-size:28px;margin:0;padding: 0;">PRO MUNDO COMEX S.A.C.</h1>
+          <h2   style="color:#e67e22;font-size: 25px;text-align: center;margin:0;padding: 0;"> RUC: 206124524321</h2>
+        </td>
+        <td class="no-border"></td>
+        <td class="no-border"></td>
+      </tr>
+    </table>
+    <h1 style="margin: 0 auto;text-align: center;">TÉRMINOS Y CONDICIONES:</h1>
+    <ul>
+      <li>1. Todos los pagos se realizan en dólares.</li>
+      <li>2. Todas las marcas de los productos deben ser verificadas por el cliente, No se aceptan marcas con medidas de frontera.</li>
+      <li>3. No somos responsables de retraso del proveedor para entregar la carga.</li>
+      <li>4. La carga deberá llegar al almacén –Yiwu en el rango de fecha indicado por su asesor. En caso contrario, asumirá el costo de almacenaje $30 y será embarcado en la próxima salida.</li>
+      <li>5. Los pagos realizados fuera de fecha están sujetos a un recargo de S/.30 por día.</li>
+      <li>6.Se procederá a cobrar S/.30 x día de almacenaje si el cliente no recoge su pedido en el plazo acordado.</li>
+      <li>7. Los envíos a provincia se realizan a través de la agencia Marvisur o Shalom, con previo pago de flete interno. Costo: desde s/20.00</li>
+      <li>8. Las cargas mayores a 200 kg x bulto tendrán un costo adicional por manipuleo, consultar con el coordinador logístico la tarifa.</li>
+      <li>9. No hay opción de reembolso.</li>
+      <li>10. Si aduana realiza un ajuste de valor a su importación, el cliente tendrá que pagar la diferencia.</li>
+      <li>11. El costo por metro cubico incluye: Flete – Ag. Aduana – Costos en destino.</li>
+      <li>12. No se aceptan productos restringido.</li>
+      <li>13. Los documentos de importación deber ser entregados a tiempo, de lo contrario, el participante no tendrá opción de acogerse a un beneficio arancelario (C.O).</li>
+      <li>14. En caso el cliente esté importando una carga que no sea legal y la empresa Pro Business se vea perjudicada, se procederá a realizar las acciones legales del caso.</li>
+      <li>15. El cliente estará sujeto a pagar mayor el ad- valorem en caso aduanas aplique cambios de partida.</li>
+      <li>16. Si el cliente no paga los tributos o gastos administrativos de su cotización, Pro Business será dueño total de la carga.</li>
+      <li>17. Los ajustes de valor que aplique la aduana serán asumidos por el cliente.</li>
+      <li>18. No somos responsable de las mermas o faltante de la carga (entregamos su pedido tal cual el proveedor envío).</li>
+      <li>19. La fecha de entrega es aproximada, está sujeto a variaciones.</li>
+      <li>20. Las mercancías son declaradas a nombre de la empresa Grupo Pro Business.</li>
+      <li>21. Se emitirá comprobante (boleta o Factura) de su importación en base a la estrategia de declaración realizada.</li>
+      <li>22. El monto facturado sera en base al valor de la mercaderia + Gastos Logisticos</li>
+    </ul>
+    <table class="table-header">
+      <tr>
+        <td  class="no-border"></td>
+        <td  class="no-border">
+        </td>
+        <td class="no-border " style="padding: 0 50px;">
+          <img src="{{pagos}}" style="height: 300px;width: 300px;margin: 0 auto;"/>					
+
+        </td>
+        <td class="no-border"></td>
+        <td class="no-border"></td>
+      </tr>
+    </table>
+    </div>
+    <img class="water-mark2" src="{{logo}}" alt="w2" />
+
+  </body>
+</html>
+

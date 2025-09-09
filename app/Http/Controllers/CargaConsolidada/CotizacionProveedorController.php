@@ -139,7 +139,21 @@ class CotizacionProveedorController extends Controller
             if (!empty($search)) {
                 $query->where('main.nombre', 'LIKE', '%' . $search . '%');
             }
-
+            if ($request->has('estado_coordinacion') || $request->has('estado_china')) {
+                // Como estamos usando el constructor de consultas de Laravel (DB::table), no se puede usar whereHas directamente.
+                // En su lugar, hacemos un whereExists para filtrar cotizaciones que tengan al menos un proveedor con el estado requerido.
+                $query->whereExists(function ($sub) use ($request) {
+                    $sub->select(DB::raw(1))
+                        ->from('contenedor_consolidado_cotizacion_proveedores as proveedores')
+                        ->whereRaw('proveedores.id_cotizacion = main.id');
+                    if ($request->has('estado_coordinacion')) {
+                        $sub->where('proveedores.estados', $request->estado_coordinacion);
+                    }
+                    if ($request->has('estado_china')) {
+                        $sub->where('proveedores.estados_proveedor', $request->estado_china);
+                    }
+                });
+            }
             $query->orderBy('main.id', 'asc');
 
             if ($rol != Usuario::ROL_COTIZADOR) {
@@ -290,7 +304,7 @@ class CotizacionProveedorController extends Controller
             if (in_array($estado, ["ROTULADO", "RESERVADO", 'COBRANDO'])) {
                 DB::table($this->table_contenedor_cotizacion_proveedores)
                     ->where('id_cotizacion', $idCotizacion)
-                    ->where(function($query) {
+                    ->where(function ($query) {
                         $query->whereNull('estados')
                             ->orWhereIn('estados', [
                                 'RESERVADO',
@@ -315,7 +329,7 @@ class CotizacionProveedorController extends Controller
                     ->where('id_cotizacion', $idCotizacion)
                     ->where('estado', 'RESERVADO')
                     ->exists();
-                
+
                 $estadoCliente = $estadoReservado ? "RESERVADO" : "NO RESERVADO";
 
                 // Actualizar estado_cliente en cotización
@@ -359,7 +373,7 @@ class CotizacionProveedorController extends Controller
                 ->where('id_proveedor', $idProveedor)
                 ->update(['updated_at' => now()]);
 
-            
+
 
             // Verificar estado RESERVADO y actualizar estado_cliente
             $estadoReservado = DB::table($this->table_conteneodr_proveedor_estados_tracking)
@@ -381,7 +395,6 @@ class CotizacionProveedorController extends Controller
                 'message' => 'Estado actualizado correctamente',
                 'data' => $data
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error en updateEstadoCotizacionProveedor: ' . $e->getMessage());
             return response()->json([
@@ -1443,12 +1456,12 @@ class CotizacionProveedorController extends Controller
         $cotizacion = Cotizacion::where('id_contenedor', $idcontenedor)->first();
         $listaEmbarque = $cotizacion->lista_embarque_url;
         $blFile = $cotizacion->bl_file_url;
-        
+
         // Buscar si existe proveedor con estado DATOS PROVEEDOR
         $estadoProveedores = CotizacionProveedor::where('id_cotizacion', $idcontenedor)
             ->where('estados', 'DATOS PROVEEDOR')
             ->get();
-            
+
         $estado = null;
         foreach ($estadoProveedores as $estadoProveedor) {
             if ($estadoProveedor->estado == "DATOS PROVEEDOR") {
