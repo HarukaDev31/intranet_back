@@ -20,6 +20,29 @@ class GeneralController extends Controller
     private $table_pagos_concept = "cotizacion_coordinacion_pagos_concept";
     private $table = "carga_consolidada_contenedor";
 
+    /**
+     * Format a numeric value as currency string, e.g., $1,234.56
+     */
+    private function formatCurrency($value, $symbol = '$')
+    {
+        $num = is_numeric($value) ? (float) $value : 0.0;
+        return $symbol . number_format($num, 2, '.', ',');
+    }
+
+    /**
+     * Add value_formatted to headers with currency values (CBMs and logística related)
+     */
+    private function addCurrencyFormatting(array $headers)
+    {
+        $keysToFormat = ['cbm_total_china', 'cbm_total', 'total_logistica', 'total_logistica_pagado', 'total_fob', 'total_impuestos'];
+        foreach ($headers as $k => $item) {
+            if (is_array($item) && array_key_exists('value', $item) && in_array($k, $keysToFormat)) {
+                $headers[$k]['value'] = $this->formatCurrency($item['value']);
+            }
+        }
+        return $headers;
+    }
+
     public function index(Request $request, $idContenedor)
     {
         // Convertir la consulta SQL de CodeIgniter a Query Builder de Laravel
@@ -153,7 +176,11 @@ class GeneralController extends Controller
             ->where('estado_cotizador', 'CONFIRMADO')
             ->whereNull('id_cliente_importacion')
             ->first();
-
+        // Attach formatted totals alongside numeric values
+        if ($headers) {
+            $headers->total_logistica_formatted = $this->formatCurrency($headers->total_logistica ?? 0);
+            $headers->total_logistica_pagado_formatted = $this->formatCurrency($headers->total_logistica_pagado ?? 0);
+        }
         return response()->json([
             'data' => $headers,
             'success' => true
@@ -286,13 +313,13 @@ class GeneralController extends Controller
                         'icon' => 'https://upload.wikimedia.org/wikipedia/commons/c/cf/Flag_of_Peru.svg'
                     ],
                     /*cbm_total_pendiente' => ['value' => $result->cbm_total_pendiente ?? 0, 'label' => 'CBM Total Pendiente', 'icon' => 'i-heroicons-currency-dollar'],*/
-                    'total_logistica' => ['value' => $result->total_logistica, 'label' => 'Total Logistica', 'icon' => 'i-heroicons-currency-dollar'],
-                    'total_logistica_pagado' => ['value' => round($result->total_logistica_pagado, 2), 'label' => 'Total Logistica Pagado', 'icon' => 'i-heroicons-currency-dollar'],
+                    'total_logistica' => ['value' => $result->total_logistica, 'label' => 'Total Logistica', 'icon' => 'cryptocurrency-color:soc'],
+                    'total_logistica_pagado' => ['value' => round($result->total_logistica_pagado, 2), 'label' => 'Total Logistica Pagado', 'icon' => 'cryptocurrency-color:soc'],
                     'qty_items' => ['value' => $result->total_qty_items, 'label' => 'Cantidad de Items', 'icon' => 'bi:boxes'],
                     /*'bl_file_url' => ['value' => $result2->bl_file_url ?? '', 'label' => 'BL File URL', 'icon' => 'i-heroicons-currency-dollar'],*/
                     /*'lista_embarque_url' => ['value' => $result2->lista_embarque_url ?? '', 'label' => 'Lista Embarque URL', 'icon' => 'i-heroicons-currency-dollar'],*/
-                    'total_fob' => ['value' => $result->total_fob, 'label' => 'Total FOB', 'icon' => 'i-heroicons-currency-dollar'],
-                    'total_impuestos' => ['value' => $result3->total_impuestos, 'label' => 'Total Impuestos', 'icon' => 'i-heroicons-currency-dollar']
+                    'total_fob' => ['value' => $result->total_fob, 'label' => 'Total FOB', 'icon' => 'cryptocurrency-color:soc'],
+                    'total_impuestos' => ['value' => $result3->total_impuestos, 'label' => 'Total Impuestos', 'icon' => 'cryptocurrency-color:soc']
                 ];
                 if (array_key_exists($userIdCheck, $roleAllowedMap)) {
                     $allowedKeys = $roleAllowedMap[$userIdCheck];
@@ -300,6 +327,8 @@ class GeneralController extends Controller
                         return in_array($key, $allowedKeys);
                     }, ARRAY_FILTER_USE_KEY);
                 } 
+                // Add formatted currency strings for CBMs and logística totals
+                $headersData = $this->addCurrencyFormatting($headersData);
                 return response()->json([
                     'success' => true,
                     'data' => $headersData,
@@ -308,18 +337,18 @@ class GeneralController extends Controller
             } else {
                 return response()->json([
                     'success' => false,
-                    'data' => [
+                    'data' => $this->addCurrencyFormatting([
                         'cbm_total_china' => ['value' => 0, 'label' => 'CBM Total China', 'icon' => 'i-heroicons-currency-dollar'],
                         'cbm_total_pendiente' => ['value' => 0, 'label' => 'CBM Total Pendiente', 'icon' => 'i-heroicons-currency-dollar'],
-                        'total_logistica' => ['value' => 0, 'label' => 'Total Logistica', 'icon' => 'i-heroicons-currency-dollar'],
-                        'total_logistica_pagado' => ['value' => 0, 'label' => 'Total Logistica Pagado', 'icon' => 'i-heroicons-currency-dollar'],
+                        'total_logistica' => ['value' => 0, 'label' => 'Total Logistica', 'icon' => 'cryptocurrency-color:soc'],
+                        'total_logistica_pagado' => ['value' => 0, 'label' => 'Total Logistica Pagado', 'icon' => 'cryptocurrency-color:soc'],
                         'qty_items' => ['value' => 0, 'label' => 'Cantidad de Items', 'icon' => 'bi:boxes'],
                         'cbm_total' => ['value' => 0, 'label' => 'CBM Total', 'icon' => 'i-heroicons-currency-dollar'],
                         'total_fob' => ['value' => 0, 'label' => 'Total FOB', 'icon' => 'i-heroicons-currency-dollar'],
                         'total_impuestos' => ['value' => 0, 'label' => 'Total Impuestos', 'icon' => 'i-heroicons-currency-dollar'],
                         'bl_file_url' => ['value' => '', 'label' => 'BL File URL', 'icon' => 'i-heroicons-currency-dollar'],
                         'lista_embarque_url' => ['value' => '', 'label' => 'Lista Embarque URL', 'icon' => 'i-heroicons-currency-dollar']
-                    ],
+                    ]),
                     'carga' => $cargaRow->carga ?? '',
                 ]);
             }

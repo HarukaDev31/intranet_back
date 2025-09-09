@@ -271,10 +271,8 @@ class ContenedorController extends Controller
     }
     public function getValidContainers()
     {
-        // Obtener los contenedores existentes donde f_cierre is not null
-
-        $existingContainers = Contenedor::whereNotNull('f_cierre')->pluck('carga')->toArray();
-        Log::info($existingContainers);
+        // Obtener los contenedores existentes
+        $existingContainers = Contenedor::pluck('carga')->toArray();
 
         // Crear array con todos los contenedores (1-50) indicando cuáles están deshabilitados
         $data = [];
@@ -291,7 +289,7 @@ class ContenedorController extends Controller
     public function getCargasDisponibles()
     {
         $hoy = date('Y-m-d');
-        $query = Contenedor::whereNotNull('f_cierre');
+        $query = Contenedor::where(DB::raw('DATE(f_cierre)'), '>=', $hoy)->orderBy('carga', 'desc');
         return $query->get();
     }
     public function moveCotizacionToConsolidado(Request $request)

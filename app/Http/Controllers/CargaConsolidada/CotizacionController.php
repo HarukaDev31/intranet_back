@@ -23,6 +23,30 @@ use Exception;
 class CotizacionController extends Controller
 {
     use UserGroupsTrait;
+    /**
+     * Format a numeric value as currency string, e.g., $1,234.56
+     */
+    private function formatCurrency($value, $symbol = '$')
+    {
+        $num = is_numeric($value) ? (float) $value : 0.0;
+        return $symbol . number_format($num, 2, '.', ',');
+    }
+
+    /**
+     * Apply currency formatting directly to the 'value' of CBM and logística totals.
+     */
+    private function applyCurrencyToHeaders(array $headers)
+    {
+        foreach ($headers as $key => $item) {
+            if (!is_array($item) || !array_key_exists('value', $item)) {
+                continue;
+            }
+            if (strpos($key, 'cbm_') === 0 || in_array($key, ['total_logistica', 'total_logistica_pagado'])) {
+                $headers[$key]['value'] = $this->formatCurrency($item['value']);
+            }
+        }
+        return $headers;
+    }
     public function index(Request $request, $idContenedor)
     {
         try {
@@ -250,7 +274,7 @@ class CotizacionController extends Controller
             'total_logistica' => [
                 'value' => $headers ? $headers->total_logistica : 0,
                 'label' => 'Total Logistica',
-                'icon' => 'i-heroicons-currency-dollar'
+                'icon' => 'cryptocurrency-color:soc'
             ]   
 
         ];
@@ -313,38 +337,51 @@ class CotizacionController extends Controller
             foreach ($embarcadoRows as $r) {
                 $embarcadoMap[$r->nombre] = (float) $r->cbm_embarcado;
             }
+            // Formatear valores por usuario como moneda (dólares) para mostrar
+            $vendidoMapFormatted = [];
+            foreach ($vendidoMap as $nombre => $valor) {
+                $vendidoMapFormatted[$nombre] = $this->formatCurrency($valor);
+            }
+            $pendienteMapFormatted = [];
+            foreach ($pendienteMap as $nombre => $valor) {
+                $pendienteMapFormatted[$nombre] = $this->formatCurrency($valor);
+            }
+            $embarcadoMapFormatted = [];
+            foreach ($embarcadoMap as $nombre => $valor) {
+                $embarcadoMapFormatted[$nombre] = $this->formatCurrency($valor);
+            }
             // Adjuntar el desglose por usuario dentro de los mismos headersData
             if (isset($headersData['cbm_vendido'])) {
-                $headersData['cbm_vendido']['por_usuario'] = $vendidoMap;
+                $headersData['cbm_vendido']['por_usuario'] = $vendidoMapFormatted;
                 $headersData['cbm_vendido']['value'] = number_format(array_sum($vendidoMap), 2, '.', '');
             } else {
                 $headersData['cbm_vendido'] = [
                     'value' => number_format(array_sum($vendidoMap), 2, '.', ''),
                     'label' => 'CBM Vendido',
                     'icon' => 'i-heroicons-currency-dollar',
-                    'por_usuario' => $vendidoMap
+                    'por_usuario' => $vendidoMapFormatted
                 ];
             }
             if (isset($headersData['cbm_pendiente'])) {
-                $headersData['cbm_pendiente']['por_usuario'] = $pendienteMap;
+                $headersData['cbm_pendiente']['por_usuario'] = $pendienteMapFormatted;
                 $headersData['cbm_pendiente']['value'] = number_format(array_sum($pendienteMap), 2, '.', '');
             } else {
                 $headersData['cbm_pendiente'] = [
                     'value' => number_format(array_sum($pendienteMap), 2, '.', ''),
                     'label' => 'CBM Pendiente',
                     'icon' => 'i-heroicons-currency-dollar',
-                    'por_usuario' => $pendienteMap
+                    'por_usuario' => $pendienteMapFormatted
                 ];
             }
             if (isset($headersData['cbm_embarcado'])) {
-                $headersData['cbm_embarcado']['por_usuario'] = $embarcadoMap;
+                $headersData['cbm_embarcado']['por_usuario'] = $embarcadoMapFormatted;
                 $headersData['cbm_embarcado']['value'] = number_format(array_sum($embarcadoMap), 2, '.', '');
             } else {
                 $headersData['cbm_embarcado'] = [
                     'value' => number_format(array_sum($embarcadoMap), 2, '.', ''),
                     'label' => 'CBM Embarcado',
                     'icon' => 'i-heroicons-currency-dollar',
-                    'por_usuario' => $embarcadoMap
+                    'por_usuario' => $embarcadoMapFormatted
                 ];
             }
             
@@ -355,6 +392,8 @@ class CotizacionController extends Controller
                     'message' => 'Contenedor no encontrado'
                 ], 404);
             }
+            // Format values as currency where applicable before returning
+            $headersData = $this->applyCurrencyToHeaders($headersData);
             return response()->json([
                 'success' => true,
                 'data' => $headersData,
@@ -369,7 +408,9 @@ class CotizacionController extends Controller
                 'message' => 'Contenedor no encontrado'
             ], 404);
         }
-        return response()->json([
+    // Format values as currency where applicable before returning
+    $headersData = $this->applyCurrencyToHeaders($headersData);
+    return response()->json([
             'success' => true,
             'data' => $headersData,
             'carga' => $contenedor->carga

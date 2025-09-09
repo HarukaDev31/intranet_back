@@ -1407,7 +1407,11 @@ class CotizacionProveedorController extends Controller
     public function getCotizacionProveedor($idProveedor)
     {
         try {
-            $proveedor = CotizacionProveedor::with('contenedor')
+            // Eager load contenedor and only the needed fields from cotizacion
+            $proveedor = CotizacionProveedor::with([
+                    'contenedor',
+                    'cotizacion:id,nombre'
+                ])
                 ->where('id', $idProveedor)
                 ->first();
 
@@ -1417,6 +1421,9 @@ class CotizacionProveedorController extends Controller
                     'message' => 'Proveedor no encontrado'
                 ], 404);
             }
+
+            // Append client name (from cotizacion.nombre) for convenience
+            $proveedor->cliente_nombre = optional($proveedor->cotizacion)->nombre;
 
             return response()->json([
                 'success' => true,
