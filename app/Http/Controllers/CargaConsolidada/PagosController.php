@@ -314,6 +314,7 @@ class PagosController extends Controller
             $cargas = DB::table('carga_consolidada_contenedor as cc')
                 ->select('cc.carga')
                 ->distinct()
+                ->where('cc.empresa','!=','1')
                 ->orderBy('cc.carga')
                 ->get();
 
