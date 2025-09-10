@@ -74,7 +74,7 @@ class PagosController extends Controller
                     ) as pagos_details')
                 ])
                 ->join('carga_consolidada_contenedor', 'carga_consolidada_contenedor.id', '=', 'contenedor_consolidado_cotizacion.id_contenedor')
-                ->orderBy('contenedor_consolidado_cotizacion.id', 'desc');
+                ->whereNull('contenedor_consolidado_cotizacion.id_cliente_importacion')->orderBy('contenedor_consolidado_cotizacion.id', 'desc');
 
             // Filtros de fecha
             if ($request->filled('Filtro_Fe_Inicio')) {
@@ -156,7 +156,6 @@ class PagosController extends Controller
                     'tipo' => "Consolidado",
                     'carga' => $cotizacion->carga,
                     'estado_pago' => $estadoPago,
-
                     'monto_a_pagar' => (($aPagar) == 0 ? $cotizacion->monto : $aPagar),
                     'monto_a_pagar_formateado' => number_format((($aPagar) == 0 ? $cotizacion->monto : $aPagar), 2, '.', ''),
                     'total_pagado' => $cotizacion->total_pagos_monto,
