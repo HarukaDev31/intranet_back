@@ -33,7 +33,7 @@ class PagosController extends Controller
         try {
             $search = $request->get('search', '');
 
-            $perPage = $request->get('limit', 10);
+            $perPage = $request->get('limit', 100);
             $page = $request->get('page', 1);
 
             $query = Cotizacion::with(['contenedor', 'pagos.concepto'])
@@ -121,6 +121,84 @@ class PagosController extends Controller
                 });
             });
 
+            // Aplicar filtro de estado_pago antes de la paginación
+            if ($request->filled('estado_pago') && $request->estado_pago != '0') {
+                $estadoPagoFiltro = $request->estado_pago;
+                
+                if ($estadoPagoFiltro === 'PENDIENTE') {
+                    // Para PENDIENTE: no tiene pagos
+                    $query->whereNotExists(function ($noPagosQuery) {
+                        $noPagosQuery->select(DB::raw(1))
+                            ->from('contenedor_consolidado_cotizacion_coordinacion_pagos')
+                            ->whereRaw('contenedor_consolidado_cotizacion_coordinacion_pagos.id_cotizacion = contenedor_consolidado_cotizacion.id')
+                            ->whereIn('id_concept', [PagoConcept::CONCEPT_PAGO_LOGISTICA, PagoConcept::CONCEPT_PAGO_IMPUESTOS]);
+                    });
+                } elseif ($estadoPagoFiltro === 'PAGADO') {
+                    // Para PAGADO: tiene pagos y monto pagado = monto a pagar
+                    $query->whereExists(function ($pagosQuery) {
+                        $pagosQuery->select(DB::raw(1))
+                            ->from('contenedor_consolidado_cotizacion_coordinacion_pagos')
+                            ->whereRaw('contenedor_consolidado_cotizacion_coordinacion_pagos.id_cotizacion = contenedor_consolidado_cotizacion.id')
+                            ->whereIn('id_concept', [PagoConcept::CONCEPT_PAGO_LOGISTICA, PagoConcept::CONCEPT_PAGO_IMPUESTOS]);
+                    });
+                    
+                    // Agregar condición para que el monto pagado sea = monto a pagar
+                    $query->whereRaw('(
+                        SELECT IFNULL(SUM(ccp.monto), 0)
+                        FROM contenedor_consolidado_cotizacion_coordinacion_pagos as ccp
+                        JOIN cotizacion_coordinacion_pagos_concept as ccpc ON ccp.id_concept = ccpc.id
+                        WHERE ccp.id_cotizacion = contenedor_consolidado_cotizacion.id
+                        AND (ccpc.name = "LOGISTICA" OR ccpc.name = "IMPUESTOS")
+                    ) = CASE 
+                        WHEN (contenedor_consolidado_cotizacion.logistica_final + contenedor_consolidado_cotizacion.impuestos_final) = 0 
+                        THEN contenedor_consolidado_cotizacion.monto 
+                        ELSE (contenedor_consolidado_cotizacion.logistica_final + contenedor_consolidado_cotizacion.impuestos_final) 
+                    END');
+                } elseif ($estadoPagoFiltro === 'ADELANTO') {
+                    // Para ADELANTO: tiene pagos pero monto pagado < monto a pagar
+                    $query->whereExists(function ($pagosQuery) {
+                        $pagosQuery->select(DB::raw(1))
+                            ->from('contenedor_consolidado_cotizacion_coordinacion_pagos')
+                            ->whereRaw('contenedor_consolidado_cotizacion_coordinacion_pagos.id_cotizacion = contenedor_consolidado_cotizacion.id')
+                            ->whereIn('id_concept', [PagoConcept::CONCEPT_PAGO_LOGISTICA, PagoConcept::CONCEPT_PAGO_IMPUESTOS]);
+                    });
+                    
+                    // Agregar condición para que el monto pagado sea < monto a pagar
+                    $query->whereRaw('(
+                        SELECT IFNULL(SUM(ccp.monto), 0)
+                        FROM contenedor_consolidado_cotizacion_coordinacion_pagos as ccp
+                        JOIN cotizacion_coordinacion_pagos_concept as ccpc ON ccp.id_concept = ccpc.id
+                        WHERE ccp.id_cotizacion = contenedor_consolidado_cotizacion.id
+                        AND (ccpc.name = "LOGISTICA" OR ccpc.name = "IMPUESTOS")
+                    ) < CASE 
+                        WHEN (contenedor_consolidado_cotizacion.logistica_final + contenedor_consolidado_cotizacion.impuestos_final) = 0 
+                        THEN contenedor_consolidado_cotizacion.monto 
+                        ELSE (contenedor_consolidado_cotizacion.logistica_final + contenedor_consolidado_cotizacion.impuestos_final) 
+                    END');
+                } elseif ($estadoPagoFiltro === 'SOBREPAGO') {
+                    // Para SOBREPAGO: tiene pagos y monto pagado > monto a pagar
+                    $query->whereExists(function ($pagosQuery) {
+                        $pagosQuery->select(DB::raw(1))
+                            ->from('contenedor_consolidado_cotizacion_coordinacion_pagos')
+                            ->whereRaw('contenedor_consolidado_cotizacion_coordinacion_pagos.id_cotizacion = contenedor_consolidado_cotizacion.id')
+                            ->whereIn('id_concept', [PagoConcept::CONCEPT_PAGO_LOGISTICA, PagoConcept::CONCEPT_PAGO_IMPUESTOS]);
+                    });
+                    
+                    // Agregar condición para que el monto pagado sea > monto a pagar
+                    $query->whereRaw('(
+                        SELECT IFNULL(SUM(ccp.monto), 0)
+                        FROM contenedor_consolidado_cotizacion_coordinacion_pagos as ccp
+                        JOIN cotizacion_coordinacion_pagos_concept as ccpc ON ccp.id_concept = ccpc.id
+                        WHERE ccp.id_cotizacion = contenedor_consolidado_cotizacion.id
+                        AND (ccpc.name = "LOGISTICA" OR ccpc.name = "IMPUESTOS")
+                    ) > CASE 
+                        WHEN (contenedor_consolidado_cotizacion.logistica_final + contenedor_consolidado_cotizacion.impuestos_final) = 0 
+                        THEN contenedor_consolidado_cotizacion.monto 
+                        ELSE (contenedor_consolidado_cotizacion.logistica_final + contenedor_consolidado_cotizacion.impuestos_final) 
+                    END');
+                }
+            }
+
             // Obtener datos paginados
             $cotizaciones = $query->paginate($perPage, ['*'], 'page', $page);
 
@@ -136,15 +214,7 @@ class PagosController extends Controller
                 // Determinar estado de pago
                 $estadoPago = $this->determinarEstadoPago($cotizacion->total_pagos, $cotizacion->total_pagos_monto, $aPagar);
 
-                // Filtro por estado de pago
-                if ($request->filled('estado_pago') && $request->estado_pago != '0') {
-                    if ($estadoPago !== $request->estado_pago) {
-                        continue;
-                    }
-                }
-
                 $pagosDetalle = $this->procesarPagosDetalle($cotizacion->pagos_details);
-                $cargasDisponibles = $this->getCargasDisponibles();
 
                 $data[] = [
                     'id' => $cotizacion->id,
@@ -317,8 +387,11 @@ class PagosController extends Controller
                 ->where('cc.empresa','!=','1')
                 ->orderBy('cc.carga')
                 ->get();
-
-            return $cargas;
+            //carga is string number order by number
+            $cargas = $cargas->sortBy(function($carga) {
+                return (int) $carga->carga;
+            });
+            return $cargas->values();
         } catch (\Exception $e) {
             Log::error('Error en getCargasDisponibles: ' . $e->getMessage());
             return collect();
@@ -566,6 +639,84 @@ class PagosController extends Controller
                 $query->where('pedido_curso.ID_Campana', $request->campana);
             }
 
+            // Aplicar filtro de estado_pago antes de la paginación
+            if ($request->filled('estado_pago') && $request->estado_pago != '0') {
+                $estadoPagoFiltro = $request->estado_pago;
+                
+                if ($estadoPagoFiltro === 'PENDIENTE') {
+                    // Para PENDIENTE: no tiene pagos
+                    $query->whereNotExists(function ($noPagosQuery) {
+                        $noPagosQuery->select(DB::raw(1))
+                            ->from('pedido_curso_pagos')
+                            ->whereRaw('pedido_curso_pagos.id_pedido_curso = pedido_curso.ID_Pedido_Curso')
+                            ->where('id_concept', PedidoCursoPagoConcept::CONCEPT_PAGO_ADELANTO_CURSO);
+                    });
+                } elseif ($estadoPagoFiltro === 'PAGADO') {
+                    // Para PAGADO: tiene pagos y monto pagado = monto a pagar
+                    $query->whereExists(function ($pagosQuery) {
+                        $pagosQuery->select(DB::raw(1))
+                            ->from('pedido_curso_pagos')
+                            ->whereRaw('pedido_curso_pagos.id_pedido_curso = pedido_curso.ID_Pedido_Curso')
+                            ->where('id_concept', PedidoCursoPagoConcept::CONCEPT_PAGO_ADELANTO_CURSO);
+                    });
+                    
+                    // Agregar condición para que el monto pagado sea = monto a pagar
+                    $query->whereRaw('(
+                        SELECT IFNULL(SUM(cccp.monto), 0)
+                        FROM pedido_curso_pagos as cccp
+                        JOIN pedido_curso_pagos_concept ccp ON cccp.id_concept = ccp.id
+                        WHERE cccp.id_pedido_curso = pedido_curso.ID_Pedido_Curso
+                        AND (ccp.name = "ADELANTO")
+                    ) = CASE 
+                        WHEN (pedido_curso.logistica_final + pedido_curso.impuestos_final) = 0 
+                        THEN pedido_curso.Ss_Total 
+                        ELSE (pedido_curso.logistica_final + pedido_curso.impuestos_final) 
+                    END');
+                } elseif ($estadoPagoFiltro === 'ADELANTO') {
+                    // Para ADELANTO: tiene pagos pero monto pagado < monto a pagar
+                    $query->whereExists(function ($pagosQuery) {
+                        $pagosQuery->select(DB::raw(1))
+                            ->from('pedido_curso_pagos')
+                            ->whereRaw('pedido_curso_pagos.id_pedido_curso = pedido_curso.ID_Pedido_Curso')
+                            ->where('id_concept', PedidoCursoPagoConcept::CONCEPT_PAGO_ADELANTO_CURSO);
+                    });
+                    
+                    // Agregar condición para que el monto pagado sea < monto a pagar
+                    $query->whereRaw('(
+                        SELECT IFNULL(SUM(cccp.monto), 0)
+                        FROM pedido_curso_pagos as cccp
+                        JOIN pedido_curso_pagos_concept ccp ON cccp.id_concept = ccp.id
+                        WHERE cccp.id_pedido_curso = pedido_curso.ID_Pedido_Curso
+                        AND (ccp.name = "ADELANTO")
+                    ) < CASE 
+                        WHEN (pedido_curso.logistica_final + pedido_curso.impuestos_final) = 0 
+                        THEN pedido_curso.Ss_Total 
+                        ELSE (pedido_curso.logistica_final + pedido_curso.impuestos_final) 
+                    END');
+                } elseif ($estadoPagoFiltro === 'SOBREPAGO') {
+                    // Para SOBREPAGO: tiene pagos y monto pagado > monto a pagar
+                    $query->whereExists(function ($pagosQuery) {
+                        $pagosQuery->select(DB::raw(1))
+                            ->from('pedido_curso_pagos')
+                            ->whereRaw('pedido_curso_pagos.id_pedido_curso = pedido_curso.ID_Pedido_Curso')
+                            ->where('id_concept', PedidoCursoPagoConcept::CONCEPT_PAGO_ADELANTO_CURSO);
+                    });
+                    
+                    // Agregar condición para que el monto pagado sea > monto a pagar
+                    $query->whereRaw('(
+                        SELECT IFNULL(SUM(cccp.monto), 0)
+                        FROM pedido_curso_pagos as cccp
+                        JOIN pedido_curso_pagos_concept ccp ON cccp.id_concept = ccp.id
+                        WHERE cccp.id_pedido_curso = pedido_curso.ID_Pedido_Curso
+                        AND (ccp.name = "ADELANTO")
+                    ) > CASE 
+                        WHEN (pedido_curso.logistica_final + pedido_curso.impuestos_final) = 0 
+                        THEN pedido_curso.Ss_Total 
+                        ELSE (pedido_curso.logistica_final + pedido_curso.impuestos_final) 
+                    END');
+                }
+            }
+
             // Obtener datos paginados
             $cursos = $query->paginate($perPage, ['*'], 'page', $page);
 
@@ -581,13 +732,6 @@ class PagosController extends Controller
 
                 // Determinar estado de pago
                 $estadoPago = $this->determinarEstadoPago($curso->pagos_count, $curso->total_pagos, $aPagar);
-
-                // Filtro por estado de pago
-                if ($request->filled('estado_pago') && $request->estado_pago != '0') {
-                    if ($estadoPago !== $request->estado_pago) {
-                        continue;
-                    }
-                }
 
                 $pagosDetalle = $this->procesarPagosDetalleCurso($curso->pagos_details);
 
@@ -720,7 +864,9 @@ class PagosController extends Controller
                 ->where('id_concept', PedidoCursoPagoConcept::CONCEPT_PAGO_ADELANTO_CURSO)
                 ->orderBy('payment_date', 'DESC')
                 ->get();
-
+            $nombre = $pedidoCurso->ID_Entidad;
+            $entidad = Entidad::findOrFail($pedidoCurso->ID_Entidad);
+            $nombre = $entidad->No_Entidad;
             // Calcular monto a pagar usando la misma lógica del método principal
             $aPagar = ($pedidoCurso->logistica_final + $pedidoCurso->impuestos_final) == 0 ?
                 $pedidoCurso->Ss_Total : ($pedidoCurso->logistica_final + $pedidoCurso->impuestos_final);
@@ -731,6 +877,7 @@ class PagosController extends Controller
             return response()->json([
                 'success' => true,
                 'data' => $pagos,
+                'nombre' => $nombre,
                 'nota' => $pedidoCurso->note_administracion ?? '',
                 'total_a_pagar' => $aPagar,
                 'total_a_pagar_formateado' => number_format($aPagar, 2, '.', ''),
