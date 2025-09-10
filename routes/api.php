@@ -201,6 +201,8 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
         Route::delete('packing-list/{idContenedor}', [ContenedorController::class, 'deletePackingList']);
 
         Route::group(['prefix' => 'cotizaciones'], function () {
+            Route::get('exportar', [CotizacionController::class, 'exportarCotizacion']);
+
             Route::post('/{id}/refresh', [CotizacionController::class, 'refreshCotizacionFile']);
             Route::get('/{idContenedor}/headers', [CotizacionController::class, 'getHeadersData']);
             Route::get('/{idContenedor}', [CotizacionController::class, 'index']);

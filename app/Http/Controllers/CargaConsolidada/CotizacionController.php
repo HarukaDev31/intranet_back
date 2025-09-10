@@ -9,6 +9,8 @@ use App\Models\CargaConsolidada\Cotizacion;
 use App\Models\CargaConsolidada\TipoCliente;
 use App\Models\CargaConsolidada\CotizacionProveedor;
 use App\Models\CargaConsolidada\Contenedor;
+use App\Services\CargaConsolidada\CotizacionService;
+use App\Services\CargaConsolidada\CotizacionExportService;
 use App\Models\Usuario;
 use Tymon\JWTAuth\Facades\JWTAuth;
 use Illuminate\Support\Facades\Auth;
@@ -22,6 +24,17 @@ use Exception;
 
 class CotizacionController extends Controller
 {
+    protected $cotizacionService;
+    protected $cotizacionExportService;
+
+    public function __construct(
+        CotizacionService $cotizacionService,
+        CotizacionExportService $cotizacionExportService
+    ) {
+        $this->cotizacionService = $cotizacionService;
+        $this->cotizacionExportService = $cotizacionExportService;
+    }
+
     use UserGroupsTrait;
     /**
      * Format a numeric value as currency string, e.g., $1,234.56
@@ -118,6 +131,13 @@ class CotizacionController extends Controller
                 ->select('bl_file_url', 'lista_embarque_url')
                 ->first();
 
+            if (!$files) {
+                $files = (object) [
+                    'bl_file_url' => null,
+                    'lista_embarque_url' => null,
+                ];
+            }
+
             // Transformar los datos para la respuesta
             $data = $results->map(function ($cotizacion) use ($files) {
                 return [
@@ -140,8 +160,8 @@ class CotizacionController extends Controller
                     'cotizacion_file_url' => $cotizacion->cotizacion_file_url,
                     'impuestos' => $cotizacion->impuestos,
                     'tipo_cliente' => $cotizacion->tipoCliente->name,
-                    'bl_file_url' => $files ? $files->bl_file_url : null,
-                    'lista_embarque_url' => $files ? $files->lista_embarque_url : null,
+                    'bl_file_url' => $files->bl_file_url ? $files->bl_file_url : null,
+                    'lista_embarque_url' => $files->lista_embarque_url ? $files->lista_embarque_url : null,
                 ];
             });
 
@@ -155,8 +175,8 @@ class CotizacionController extends Controller
                     'total' => $results->total(),
                     'last_page' => $results->lastPage()
                 ],
-                'lista_embarque_url' => $files->lista_embarque_url ? $files->lista_embarque_url : null,
-                'bl_file_url' => $files->bl_file_url ? $files->bl_file_url : null,
+                'lista_embarque_url' => $files->lista_embarque_url,
+                'bl_file_url' => $files->bl_file_url,
             ]);
         } catch (\Exception $e) {
             Log::error('Error en index de cotizaciones: ' . $e->getMessage());
@@ -1774,6 +1794,20 @@ class CotizacionController extends Controller
         } catch (Exception $e) {
             Log::error('Error en deleteCotizacionFile: ' . $e->getMessage());
             return false;
+        }
+    }
+
+    public function exportarCotizacion(Request $request)
+    {
+        try{
+            return $this->cotizacionExportService->exportarCotizacion($request);
+        } catch (\Exception $e) {
+            Log::error('Error en exportarCotizacion: ' . $e->getMessage());
+            return response()->json([
+                'status' => 'error',
+                'success' => false,
+                'message' => 'Error al exportar cotización: ' . $e->getMessage()
+            ], 500);
         }
     }
 }
