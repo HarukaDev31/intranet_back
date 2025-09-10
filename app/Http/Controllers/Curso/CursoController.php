@@ -62,7 +62,7 @@ class CursoController extends Controller
                     'USR.No_Password',
                     'CAMP.Fe_Fin',
                     'CAMP.Fe_Inicio',
-                    DB::raw('0 AS tipo_curso'), // Por defecto virtual, se puede modificar según la lógica de negocio
+                    DB::raw('tipo_curso'), // Por defecto virtual, se puede modificar según la lógica de negocio
                     DB::raw('(
                         SELECT COUNT(*)
                         FROM pedido_curso_pagos AS cccp
@@ -200,7 +200,7 @@ class CursoController extends Controller
                     'Nu_Documento_Identidad' => $curso->Nu_Documento_Identidad,
                     'Nu_Celular_Entidad' => $curso->Nu_Celular_Entidad,
                     'Txt_Email_Entidad' => $curso->Txt_Email_Entidad,
-                    'tipo_curso' => $curso->tipo_curso,
+                    'tipo_curso' => strval($curso->tipo_curso),
                     'ID_Campana' => $curso->ID_Campana,
                     'ID_Usuario' => $curso->ID_Usuario,
                     'Nu_Estado_Usuario_Externo' => $curso->Nu_Estado_Usuario_Externo ?? 1,
