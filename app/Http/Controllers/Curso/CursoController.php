@@ -12,18 +12,22 @@ use Illuminate\Support\Facades\Auth;
 use Tymon\JWTAuth\Facades\JWTAuth;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
+
 class CursoController extends Controller
 {
+    public $table_pedido_curso_pagos = 'pedido_curso_pagos';
     public function index(Request $request)
     {
         try {
             $perPage = $request->get('limit', 10);
             $page = $request->get('page', 1);
             $search = $request->get('search', '');
-            $campana = $request->get('campana', '');
+            $campanas    = $request->get('campanas', '');
             $fechaInicio = $request->get('fechaInicio', '');
             $fechaFin = $request->get('fechaFin', '');
-            $estadoPago = $request->get('estado_pago', '');
+            $estadoPago = $request->get('estados_pago', '');
+            $tipoCurso = $request->get('tipos_curso', '');
+            $sobrepagado = $request->get('sobrepagado', '');
 
             // Obtener usuario autenticado
             $user = JWTAuth::parseToken()->authenticate();
@@ -87,11 +91,11 @@ class CursoController extends Controller
 
             // Aplicar filtros
             if (!empty($search)) {
-                $query->where(function($q) use ($search) {
+                $query->where(function ($q) use ($search) {
                     $q->where('CLI.No_Entidad', 'like', "%$search%")
-                    ->orWhere('CLI.Nu_Documento_Identidad', 'like', "%$search%")
-                    ->orWhere('PC.ID_Pedido_Curso', 'like', "%$search%")
-                    // Agrega aquí más campos si quieres que el buscador sea más amplio
+                        ->orWhere('CLI.Nu_Documento_Identidad', 'like', "%$search%")
+                        ->orWhere('PC.ID_Pedido_Curso', 'like', "%$search%")
+                        // Agrega aquí más campos si quieres que el buscador sea más amplio
                     ;
                 });
             }
@@ -101,8 +105,8 @@ class CursoController extends Controller
                 $query->whereBetween('PC.Fe_Registro', [$fechaInicio, $fechaFin]);
             }
 
-            if ($campana && $campana != '0') {
-                $query->where('PC.ID_Campana', $campana);
+            if ($campanas && $campanas != '0') {
+                $query->where('PC.ID_Campana', $campanas);
             }
 
             // Aplicar filtro de estado de pago
@@ -147,9 +151,12 @@ class CursoController extends Controller
                     END
                 ) = ?', [$estadoPago]);
             }
-            if ($request->has('tipo_curso') && $request->get('tipo_curso') !== '') {
-                $query->where('PC.tipo_curso', $request->get('tipo_curso'));
+            // Filtro por tipo de curso
+            if ($tipoCurso && $tipoCurso !== '') {
+                $query->where('PC.tipo_curso', $tipoCurso);
             }
+
+            
 
             // Ordenar por id descendente
             $query->orderBy('PC.ID_Pedido_Curso', 'desc');
@@ -184,7 +191,6 @@ class CursoController extends Controller
                 if ($tipoCurso == 1 && $fechaFin && strtotime($fechaHoy) > strtotime($fechaFin)) {
                     $estado = 'constancia';
                 }
-
                 return [
                     'ID_Pedido_Curso' => $curso->ID_Pedido_Curso,
                     'Fe_Registro' => DateHelper::formatDate($curso->Fe_Registro, '-', 0),
@@ -221,6 +227,7 @@ class CursoController extends Controller
                     'No_Usuario' => $curso->No_Usuario
                 ];
             });
+            $totalAmount = $cursosProcessed->sum('total_pagos');
 
             // Obtener campañas activas para el frontend
             $campanas = Campana::activas()->get(['ID_Campana', 'Fe_Inicio', 'Fe_Fin']);
@@ -238,7 +245,7 @@ class CursoController extends Controller
                 ],
                 'headers' => [
                     'importe_total' => [
-                        'value' => $cursosProcessed->sum('Ss_Total'),
+                        'value' => $totalAmount,
                         'label' => 'Importe Total'
                     ],
                     'total_pedidos' => [
@@ -248,7 +255,9 @@ class CursoController extends Controller
                 ],
                 'filters' => [
                     'campanas' => $campanas
-                ]
+                ],
+                'importe_total' => $totalAmount,
+                'total_pedidos' => $totalRecords
             ]);
         } catch (\Exception $e) {
             return response()->json([
@@ -275,13 +284,14 @@ class CursoController extends Controller
                     return [
                         'value' => $campana->ID_Campana,
                         'label' => $mes,
-                        
+
                     ];
                 });
 
             //campanas get month in spanish from Fe_Inicio as label and id as value
-           
+
             $estadosPago = [
+                ['value' => '0', 'label' => 'Todos'],
                 ['value' => 'pendiente', 'label' => 'Pendiente'],
                 ['value' => 'adelanto', 'label' => 'Adelanto'],
                 ['value' => 'pagado', 'label' => 'Pagado'],
@@ -299,10 +309,10 @@ class CursoController extends Controller
                 'success' => true,
                 'data' => [
                     [
-                     'key' => 'campanas',
-                     'label' => 'Campañas',
-                     'placeholder' => 'Selecciona una campaña',
-                     'options' => $campanas
+                        'key' => 'campanas',
+                        'label' => 'Campañas',
+                        'placeholder' => 'Selecciona una campaña',
+                        'options' => $campanas
                     ],
                     [
                         'key' => 'estados_pago',
@@ -328,21 +338,41 @@ class CursoController extends Controller
     }
 
     /**
-     * Eliminar pedido
+     * Eliminar pedido (migrado de CodeIgniter)
      */
-    public function eliminarPedido(Request $request, $idPedido)
+    public function eliminarPedido($idPedido)
     {
         try {
+            // Deshabilitar verificación de claves foráneas
             DB::statement('SET FOREIGN_KEY_CHECKS=0');
-            $deleted = PedidoCurso::where('ID_Pedido_Curso', $idPedido)->delete();
+            
+            $deleted = DB::table('pedido_curso')
+                ->where('ID_Pedido_Curso', $idPedido)
+                ->delete();
+            
+            // Rehabilitar verificación de claves foráneas
             DB::statement('SET FOREIGN_KEY_CHECKS=1');
-            if ($deleted) {
-                return response()->json(['status' => 'success', 'message' => 'Pedido eliminado correctamente']);
+            
+            if ($deleted > 0) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Pedido eliminado correctamente'
+                ]);
+            } else {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No se encontró el pedido o no se pudo eliminar'
+                ]);
             }
-            return response()->json(['status' => 'error', 'message' => 'Error al eliminar el pedido']);
         } catch (\Exception $e) {
+            // Asegurar que se rehabilite la verificación de claves foráneas en caso de error
+            DB::statement('SET FOREIGN_KEY_CHECKS=1');
+            
             Log::error('Error en eliminarPedido: ' . $e->getMessage());
-            return response()->json(['status' => 'error', 'message' => 'Error al eliminar el pedido: ' . $e->getMessage()]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al eliminar el pedido: ' . $e->getMessage()
+            ]);
         }
     }
 
@@ -352,8 +382,13 @@ class CursoController extends Controller
     public function actualizarDatosCliente(Request $request, $idEntidad)
     {
         $data = $request->only([
-            'No_Entidad', 'Nu_Tipo_Sexo', 'Nu_Documento_Identidad', 'Nu_Celular_Entidad',
-            'Txt_Email_Entidad', 'Fe_Nacimiento', 'Nu_Como_Entero_Empresa'
+            'No_Entidad',
+            'Nu_Tipo_Sexo',
+            'Nu_Documento_Identidad',
+            'Nu_Celular_Entidad',
+            'Txt_Email_Entidad',
+            'Fe_Nacimiento',
+            'Nu_Como_Entero_Empresa'
         ]);
         $updated = DB::table('entidad')->where('ID_Entidad', $idEntidad)->update($data);
         if ($updated) {
@@ -407,15 +442,25 @@ class CursoController extends Controller
             ->first();
 
         $meses_es = [
-            1 => 'Enero', 2 => 'Febrero', 3 => 'Marzo', 4 => 'Abril', 5 => 'Mayo', 6 => 'Junio',
-            7 => 'Julio', 8 => 'Agosto', 9 => 'Septiembre', 10 => 'Octubre', 11 => 'Noviembre', 12 => 'Diciembre'
+            1 => 'Enero',
+            2 => 'Febrero',
+            3 => 'Marzo',
+            4 => 'Abril',
+            5 => 'Mayo',
+            6 => 'Junio',
+            7 => 'Julio',
+            8 => 'Agosto',
+            9 => 'Septiembre',
+            10 => 'Octubre',
+            11 => 'Noviembre',
+            12 => 'Diciembre'
         ];
         $data = (array)$data;
         $data['mes_nombre'] = isset($data['mes_numero']) ? ($meses_es[(int)$data['mes_numero']] ?? '') : '';
         return response()->json(['status' => 'success', 'data' => $data]);
     }
 
-    
+
 
     /**
      * Actualizar usuario Moodle
@@ -455,29 +500,57 @@ class CursoController extends Controller
 
 
     /**
-     * Eliminar pago de curso y borrar voucher
+     * Eliminar pago de curso y borrar voucher (migrado de CodeIgniter)
      */
     public function borrarPagoCurso($idPagoCurso)
     {
         try {
-            $pago = DB::table('pedido_curso_pagos')->where('id', $idPagoCurso)->first();
-            if ($pago && $pago->voucher_url) {
+            // Buscar el pago por ID
+            $pago = DB::table($this->table_pedido_curso_pagos)
+                ->select('voucher_url')
+                ->where('id', $idPagoCurso)
+                ->first();
+
+            if (!$pago) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Pago no encontrado'
+                ]);
+            }
+
+            // Eliminar el archivo voucher si existe
+            if (!empty($pago->voucher_url)) {
                 $path = storage_path('app/' . $pago->voucher_url);
                 if (file_exists($path)) {
                     unlink($path);
                 }
             }
-            $deleted = DB::table('pedido_curso_pagos')->where('id', $idPagoCurso)->delete();
-            if ($deleted) {
-                return response()->json(['status' => 'success', 'message' => 'Pago eliminado correctamente']);
+
+            // Eliminar el registro del pago
+            $deleted = DB::table($this->table_pedido_curso_pagos)
+                ->where('id', $idPagoCurso)
+                ->delete();
+
+            if ($deleted > 0) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Pago eliminado correctamente'
+                ]);
+            } else {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No se pudo eliminar el pago'
+                ]);
             }
-            return response()->json(['status' => 'error', 'message' => 'No se pudo eliminar el pago']);
         } catch (\Exception $e) {
             Log::error('Error en borrarPagoCurso: ' . $e->getMessage());
-            return response()->json(['status' => 'error', 'message' => 'Error al eliminar el pago: ' . $e->getMessage()]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al eliminar el pago: ' . $e->getMessage()
+            ]);
         }
     }
-    
+
     /**
      * Guardar pago de cliente (con voucher)
      */
@@ -485,9 +558,9 @@ class CursoController extends Controller
     {
         try {
             $request->validate([
-                'voucher' => 'required|file|max:10240',
+                'voucher' => 'required|file',
                 'idPedido' => 'required|integer',
-                'amount' => 'required|numeric',
+                'monto' => 'required|numeric',
                 'fecha' => 'required|date',
                 'banco' => 'required|string'
             ]);
@@ -497,15 +570,15 @@ class CursoController extends Controller
                 'voucher_url' => $voucherUrl,
                 'id_pedido_curso' => $request->idPedido,
                 'id_concept' => 1, // ADELANTO
-                'monto' => $request->amount,
+                'monto' => $request->monto,
                 'payment_date' => $request->fecha,
                 'banco' => $request->banco
             ];
             DB::table('pedido_curso_pagos')->insert($data);
-            return response()->json(['status' => 'success', 'message' => 'Pago guardado exitosamente', 'data' => $data]);
+            return response()->json(['success' => true, 'message' => 'Pago guardado exitosamente', 'data' => $data]);
         } catch (\Exception $e) {
             Log::error('Error en saveClientePagosCurso: ' . $e->getMessage());
-            return response()->json(['status' => 'error', 'message' => 'Error al guardar el pago: ' . $e->getMessage()]);
+            return response()->json(['success' => false, 'message' => 'Error al guardar el pago: ' . $e->getMessage()]);
         }
     }
 
@@ -575,8 +648,18 @@ class CursoController extends Controller
             ->whereNull('Fe_Borrado')
             ->get();
         $meses_es = [
-            1 => 'Enero', 2 => 'Febrero', 3 => 'Marzo', 4 => 'Abril', 5 => 'Mayo', 6 => 'Junio',
-            7 => 'Julio', 8 => 'Agosto', 9 => 'Septiembre', 10 => 'Octubre', 11 => 'Noviembre', 12 => 'Diciembre'
+            1 => 'Enero',
+            2 => 'Febrero',
+            3 => 'Marzo',
+            4 => 'Abril',
+            5 => 'Mayo',
+            6 => 'Junio',
+            7 => 'Julio',
+            8 => 'Agosto',
+            9 => 'Septiembre',
+            10 => 'Octubre',
+            11 => 'Noviembre',
+            12 => 'Diciembre'
         ];
         foreach ($campanas as &$row) {
             $row->No_Campana = $meses_es[(int)$row->Mes_Numero] ?? '';
@@ -593,5 +676,220 @@ class CursoController extends Controller
         $dias = DB::table('campana_curso_dias')->where('id_campana', $id)->get();
         $campana->dias = $dias;
         return response()->json(['status' => 'success', 'data' => $campana]);
+    }
+
+    /**
+     * Asignar tipo de curso (migrado de CodeIgniter)
+     */
+    public function asignarTipoCurso(Request $request)
+    {
+        try {
+            $id_pedido = $request->input('id_pedido');
+            $id_tipo_curso = $request->input('id_tipo_curso');
+            Log::info('id_pedido: ' . $id_pedido);
+            Log::info('id_tipo_curso: ' . $id_tipo_curso);
+
+            if ($id_pedido !== null && $id_tipo_curso !== null) {
+                $updated = DB::table('pedido_curso')
+                    ->where('ID_Pedido_Curso', $id_pedido)
+                    ->update(['tipo_curso' => $id_tipo_curso]);
+
+                if ($updated > 0) {
+                    return response()->json([
+                        'success' => true,
+                        'message' => 'Tipo de curso actualizado'
+                    ]);
+                } else {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'No se encontró el pedido o no se realizaron cambios'
+                    ]);
+                }
+            } else {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Datos incompletos'
+                ]);
+            }
+        } catch (\Exception $e) {
+            Log::error('Error en asignarTipoCurso: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al actualizar el tipo de curso: ' . $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
+     * Asignar campaña a pedido (migrado de CodeIgniter)
+     */
+    public function asignarCampanaPedidoCurso(Request $request)
+    {
+        try {
+            $updated = DB::table('pedido_curso')
+                ->where('ID_Pedido_Curso', $request->id_pedido)
+                ->update(['ID_Campana' => $request->estado_pedido]);
+
+            if ($updated > 0) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Campaña asignada correctamente'
+                ]);
+            } else {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No se modificó ningún dato'
+                ]);
+            }
+        } catch (\Exception $e) {
+            Log::error('Error en asignarCampanaPedido: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al asignar la campaña: ' . $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
+     * Obtener pagos de cursos (migrado de CodeIgniter)
+     */
+    public function getPagosCurso(Request $request)
+    {
+        try {
+            // Obtener usuario autenticado
+            $user = JWTAuth::parseToken()->authenticate();
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Usuario no autenticado'
+                ], 401);
+            }
+
+            $query = DB::table('pedido_curso AS CC')
+                ->select([
+                    'CC.*',
+                    'CLI.Fe_Nacimiento',
+                    'CLI.Nu_Como_Entero_Empresa',
+                    'CLI.No_Otros_Como_Entero_Empresa',
+                    'DIST.No_Distrito',
+                    'PROV.No_Provincia',
+                    'DEP.No_Departamento',
+                    'TDI.No_Tipo_Documento_Identidad_Breve',
+                    'P.No_Pais',
+                    'CLI.Nu_Tipo_Sexo',
+                    'CLI.No_Entidad',
+                    'CLI.Nu_Documento_Identidad',
+                    'CLI.Nu_Celular_Entidad',
+                    'CLI.Txt_Email_Entidad',
+                    'CLI.Nu_Edad',
+                    'M.No_Signo',
+                    'USR.ID_Usuario',
+                    'USR.No_Usuario',
+                    'USR.No_Password',
+                    DB::raw('(
+                        SELECT COUNT(*)
+                        FROM pedido_curso_pagos as cccp
+                        JOIN pedido_curso_pagos_concept ccp ON cccp.id_concept = ccp.id
+                        WHERE cccp.id_pedido_curso = CC.ID_Pedido_Curso
+                        AND (ccp.name = "ADELANTO")
+                    ) AS pagos_count'),
+                    DB::raw('(
+                        SELECT IFNULL(SUM(cccp.monto), 0)
+                        FROM pedido_curso_pagos as cccp
+                        JOIN pedido_curso_pagos_concept ccp ON cccp.id_concept = ccp.id
+                        WHERE cccp.id_pedido_curso = CC.ID_Pedido_Curso
+                        AND (ccp.name = "ADELANTO")
+                    ) AS total_pagos'),
+                    DB::raw('(SELECT JSON_ARRAYAGG(
+                        JSON_OBJECT(
+                            "id_pago", ccp2.id,
+                            "monto", ccp2.monto,
+                            "concepto", ccpc2.name,
+                            "status", ccp2.status,
+                            "payment_date", ccp2.payment_date,
+                            "voucher_url", ccp2.voucher_url,
+                            "banco", ccp2.banco
+                        )
+                    ) FROM pedido_curso_pagos as ccp2
+                    LEFT JOIN pedido_curso_pagos_concept as ccpc2 ON ccp2.id_concept = ccpc2.id
+                    WHERE ccp2.id_pedido_curso = CC.ID_Pedido_Curso
+                    AND ccp2.id_concept = 1
+                    ) as pagos_details')
+                ])
+                ->join('pais AS P', 'P.ID_Pais', '=', 'CC.ID_Pais')
+                ->join('entidad AS CLI', 'CLI.ID_Entidad', '=', 'CC.ID_Entidad')
+                ->join('tipo_documento_identidad AS TDI', 'TDI.ID_Tipo_Documento_Identidad', '=', 'CLI.ID_Tipo_Documento_Identidad')
+                ->join('moneda AS M', 'M.ID_Moneda', '=', 'CC.ID_Moneda')
+                ->join('usuario AS USR', 'USR.ID_Entidad', '=', 'CLI.ID_Entidad')
+                ->leftJoin('distrito AS DIST', 'DIST.ID_Distrito', '=', 'CLI.ID_Distrito')
+                ->leftJoin('provincia AS PROV', 'PROV.ID_Provincia', '=', 'CLI.ID_Provincia')
+                ->leftJoin('departamento AS DEP', 'DEP.ID_Departamento', '=', 'CLI.ID_Departamento')
+                ->where('CC.ID_Empresa', $user->ID_Empresa);
+
+            // Filtros de fecha
+            if ($request->filled('Filtro_Fe_Inicio')) {
+                $query->whereRaw('DATE(CC.Fe_Registro) >= ?', [$request->Filtro_Fe_Inicio]);
+            }
+
+            if ($request->filled('Filtro_Fe_Fin')) {
+                $query->whereRaw('DATE(CC.Fe_Registro) <= ?', [$request->Filtro_Fe_Fin]);
+            }
+
+            // Ordenar por ID descendente por defecto
+            $query->orderBy('CC.ID_Pedido_Curso', 'desc');
+
+            // Aplicar paginación
+            $perPage = $request->get('limit', 100);
+            $page = $request->get('page', 1);
+            $result = $query->paginate($perPage, ['*'], 'page', $page);
+
+            // Procesar los datos después de la paginación
+            $processedData = collect($result->items())->map(function ($item) {
+                $item->pagos_details = json_decode($item->pagos_details, true) ?? [];
+                $item->total_amount = collect($item->pagos_details)->sum('monto');
+                return $item;
+            });
+         
+
+            // Calcular el total amount de todos los registros
+            $totalAmount = $processedData->sum('total_amount');
+
+            return response()->json([
+                'success' => true,
+                'data' => $processedData->values()->all(),
+                'pagination' => [
+                    'total' => $result->total(),
+                    'per_page' => $result->perPage(),
+                    'current_page' => $result->currentPage(),
+                    'last_page' => $result->lastPage(),
+                    'from' => $result->firstItem(),
+                    'to' => $result->lastItem()
+                ],
+                'total_amount' => $totalAmount,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error en getPagosCurso: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al obtener pagos de cursos',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+    public function changeImportePedido(Request $request)
+    {
+        try {
+            $importe = $request->importe;
+            $idPedido = $request->id_pedido;
+            DB::table('pedido_curso')->where('ID_Pedido_Curso', $idPedido)->update(['Ss_Total' => $importe]);
+            return response()->json(['success' => true, 'message' => 'Importe actualizado correctamente']);
+        } catch (\Exception $e) {
+            Log::error('Error en changeImportePedido: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al actualizar el importe del pedido',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
 }
