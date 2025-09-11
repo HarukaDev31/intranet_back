@@ -837,7 +837,10 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
 
                 $this->verifyContainerIsCompleted($idContenedor);
             }
-
+            if((isset($data['code_supplier'] ))){
+                $proveedor->code_supplier = $data['code_supplier'];
+                $proveedor->save();
+            }
             if (
                 isset($data['arrive_date_china']) &&
                 (!isset($data['qty_box_china']) && !isset($data['cbm_total_china']))
