@@ -1826,4 +1826,15 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                 ->update($updateData);
         }
     }
+    public function refreshRotuladoStatus($id)
+    {
+        try {   
+        $proveedor = CotizacionProveedor::find($id);
+        $proveedor->send_rotulado_status = 'PENDING';
+            $proveedor->save();
+            return response()->json(['success' => true, 'message' => 'Estado actualizado correctamente']);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => 'Error al actualizar estado', 'error' => $e->getMessage()], 500);
+        }
+    }
 }
