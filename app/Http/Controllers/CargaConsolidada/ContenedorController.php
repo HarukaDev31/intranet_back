@@ -273,8 +273,8 @@ class ContenedorController extends Controller
     public function getValidContainers()
     {
         // Obtener los contenedores existentes
-        $existingContainers = Contenedor::pluck('carga')->toArray();
-
+            $existingContainers = Contenedor::where('empresa', '!=', '1')->pluck('carga')->toArray();
+        Log::info('existingContainers', $existingContainers);
         // Crear array con todos los contenedores (1-50) indicando cuáles están deshabilitados
         $data = [];
         for ($i = 1; $i <= 50; $i++) {
@@ -290,7 +290,7 @@ class ContenedorController extends Controller
     public function getCargasDisponibles()
     {
         $hoy = date('Y-m-d');
-        $query = Contenedor::where(DB::raw('DATE(f_cierre)'), '>=', $hoy)->orderBy('carga', 'desc');
+        $query = Contenedor::where(DB::raw('DATE(f_cierre)'), '>=', $hoy)->where('empresa', '!=', 1)->orderBy('carga', 'desc');
         return $query->get();
     }
     public function moveCotizacionToConsolidado(Request $request)
