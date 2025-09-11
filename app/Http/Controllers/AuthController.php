@@ -372,7 +372,8 @@ class AuthController extends Controller
                         ORDER BY MNU.ID_Padre ASC, MNU.Nu_Orden, MNU.ID_MENU ASC";
 
             $arrMenuPadre = DB::select($sqlPadre);
-
+            //orde by Nu_Orden
+            $arrMenuPadre = collect($arrMenuPadre)->sortBy('Nu_Orden')->toArray();
             // Obtener hijos para cada menú padre
             foreach ($arrMenuPadre as $rowPadre) {
                 $sqlHijos = "SELECT {$selectDistinct}

@@ -439,7 +439,7 @@ class ClienteService
                 return strtotime($a['fecha']) - strtotime($b['fecha']);
             });
         }
-
+        
         return $serviciosPorCliente;
     }
 
@@ -501,7 +501,10 @@ class ClienteService
             $servicios = $serviciosPorCliente[$cliente->id] ?? [];
             $categoria = $this->determinarCategoriaCliente($servicios);
             $primerServicio = !empty($servicios) ? $servicios[0] : null;
-            
+            //if $primerServicio is null, then continue
+            if ($primerServicio === null) {
+                continue;
+            }
             $datosTransformados[] = [
                 'id' => $cliente->id,
                 'nombre' => $cliente->nombre,

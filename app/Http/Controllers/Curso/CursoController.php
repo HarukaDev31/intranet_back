@@ -12,9 +12,11 @@ use Illuminate\Support\Facades\Auth;
 use Tymon\JWTAuth\Facades\JWTAuth;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
+use App\Traits\CodeIgniterEncryption;
 
 class CursoController extends Controller
 {
+    use CodeIgniterEncryption;
     public $table_pedido_curso_pagos = 'pedido_curso_pagos';
     public function index(Request $request)
     {
@@ -457,6 +459,7 @@ class CursoController extends Controller
         ];
         $data = (array)$data;
         $data['mes_nombre'] = isset($data['mes_numero']) ? ($meses_es[(int)$data['mes_numero']] ?? '') : '';
+        $data['password_moodle'] = $this->ciDecrypt($data['password_moodle']);
         return response()->json(['status' => 'success', 'data' => $data]);
     }
 

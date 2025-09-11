@@ -100,7 +100,21 @@ class PagosController extends Controller
             // Aplicar búsqueda (nombre, documento, teléfono, carga)
             if (!empty($search)) {
                 $query->where(function ($q) use ($search) {
-                    $q->where('contenedor_consolidado_cotizacion.nombre', 'like', "%{$search}%");
+                    $q->where('contenedor_consolidado_cotizacion.nombre', 'like', "%{$search}%")
+                      ->orWhere('contenedor_consolidado_cotizacion.documento', 'like', "%{$search}%")
+                      ->orWhere('contenedor_consolidado_cotizacion.telefono', 'like', "%{$search}%")
+                      ->orWhere('carga_consolidada_contenedor.carga', 'like', "%{$search}%")
+                      ->orWhereExists(function ($subQuery) use ($search) {
+                          // Buscar adelantos por monto o referencia
+                          $subQuery->select(DB::raw(1))
+                              ->from('contenedor_consolidado_cotizacion_coordinacion_pagos')
+                              ->whereRaw('contenedor_consolidado_cotizacion_coordinacion_pagos.id_cotizacion = contenedor_consolidado_cotizacion.id')
+                              ->where(function ($innerQuery) use ($search) {
+                                  $innerQuery->where('monto', 'like', "%{$search}%")
+                                             ->orWhere('banco', 'like', "%{$search}%")
+                                             ->orWhere('voucher_url', 'like', "%{$search}%");
+                              });
+                      });
                 });
             }
 
@@ -265,13 +279,18 @@ class PagosController extends Controller
      */
     private function determinarEstadoPago($totalPagos, $totalPagosMonto, $aPagar)
     {
+        Log::info('totalPagos: ' . $totalPagos);
+        Log::info('totalPagosMonto: ' . $totalPagosMonto);
+        Log::info('aPagar: ' . $aPagar);
+        Log::info('round($totalPagosMonto, 2): ' . round($totalPagosMonto, 2));
+        Log::info('round($aPagar, 2): ' . round($aPagar, 2));
         if ($totalPagos == 0) {
             return 'PENDIENTE';
-        } else if ($totalPagosMonto < $aPagar) {
+        } else if (round($totalPagosMonto, 2) < round($aPagar, 2)) {
             return 'ADELANTO';
-        } else if ($totalPagosMonto == $aPagar) {
+        } else if (round($totalPagosMonto, 2) == round($aPagar, 2)) {
             return 'PAGADO';
-        } else if ($totalPagosMonto > $aPagar) {
+        } else if (round($totalPagosMonto, 2) > round($aPagar, 2)) {
             return 'SOBREPAGO';
         }
         return 'PENDIENTE';
@@ -621,7 +640,22 @@ class PagosController extends Controller
             //filtrar por busqueda
             if ($search) {
                 $query->where(function ($q) use ($search) {
-                    $q->where('entidad.No_Entidad', 'LIKE', "%{$search}%");
+                    $q->where('entidad.No_Entidad', 'LIKE', "%{$search}%")
+                      ->orWhere('entidad.Nu_Documento_Identidad', 'LIKE', "%{$search}%")
+                      ->orWhere('entidad.Nu_Celular_Entidad', 'LIKE', "%{$search}%")
+                      ->orWhere('pedido_curso.ID_Campana', 'LIKE', "%{$search}%")
+                      ->orWhereExists(function ($subQuery) use ($search) {
+                          // Buscar adelantos por monto o referencia
+                          $subQuery->select(DB::raw(1))
+                              ->from('pedido_curso_pagos')
+                              ->whereRaw('pedido_curso_pagos.id_pedido_curso = pedido_curso.ID_Pedido_Curso')
+                              ->where(function ($innerQuery) use ($search) {
+                                  $innerQuery->where('monto', 'like', "%{$search}%")
+                                             ->orWhere('banco', 'like', "%{$search}%")
+                                             ->orWhere('voucher_url', 'like', "%{$search}%");
+                              })
+                              ->where('id_concept', PedidoCursoPagoConcept::CONCEPT_PAGO_ADELANTO_CURSO);
+                      });
                 });
             }
 
