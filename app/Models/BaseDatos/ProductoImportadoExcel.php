@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use App\Models\BaseDatos\EntidadReguladora;
+use App\Models\CargaConsolidada\Contenedor as CargaConsolidadaContenedor;
 use App\Models\BaseDatos\Regulaciones\ProductoRubro;
 
 use App\Models\BaseDatos\Contenedor;
@@ -285,7 +286,7 @@ class ProductoImportadoExcel extends Model
      */
     public function contenedor()
     {
-        return $this->belongsTo(Contenedor::class, 'idContenedor', 'id');
+        return $this->belongsTo(CargaConsolidadaContenedor::class, 'idContenedor', 'id');
     }
 
     /**

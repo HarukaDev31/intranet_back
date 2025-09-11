@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="zh">
+
+<head>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <meta http-equiv="Content-Type" content="charset=utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; font-src 'self' https://fonts.gstatic.com; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline';">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC&display=swap" rel="stylesheet">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Notice Template</title>
+    <style>
+        html {
+            margin: 5px
+        }
+
+        body {
+            line-height: 1.2;
+            text-align: justify;
+        }
+
+        .container {
+            width: 95%;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .section {
+            margin-bottom: 5px;
+        }
+
+        .section h1 {
+            font-size: 18px;
+            font-weight: bold;
+            color: red;
+            margin-bottom: 5px;
+        }
+
+        .section p {
+            margin: 5px 0;
+            font-size: 14px;
+        }
+
+        .section span {
+            font-size: 14px;
+        }
+
+        .highlight {
+            color: red;
+            font-weight: bold;
+        }
+
+        .list-item {
+            margin-left: 20px;
+            margin-bottom: 2px;
+            font-size: 14px;
+        }
+
+        .header {
+            font-weight: bold;
+            font-size: 16px;
+        }
+
+        .twhite-subred {
+            color: #fff;
+            background-color: red;
+            text-decoration: underline;
+            padding: 5px 0;
+        }
+
+        .tred-sub {
+            color: red;
+            text-decoration: underline;
+
+        }
+
+        .twhite-subyellow {
+            color: #000;
+            background-color: yellow;
+        }
+
+        .tblack {
+            color: #000;
+        }
+
+        .info {
+            font-size: 14px;
+            margin: 10px 0;
+        }
+
+        .info span {
+            font-weight: bold;
+        }
+
+        .footer {
+            margin-top: 20px;
+            font-weight: bold;
+        }
+
+        .f-16 {
+            font-size: 16px !important;
+        }
+
+        .f-20 {
+            font-size: 20px !important;
+        }
+
+        h1 {
+            margin-bottom: 2px;
+        }
+
+        * {
+            font-family: 'Noto Sans SC', sans-serif;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="section">
+            <img src="{{base_url}}/assets/templates/ROTULADO_HEADER.png" alt="Rotulado Header" style="width: 100%;">
+            <span
+                style="text-align: center;display: flex;align-items: center;justify-content: center;font-size:18px;">CONSOLIDADO
+                #{{carga}}</span>
+            </span>
+            <ul style="list-style: none;padding: 0;font-size: 14px;gap:1em;">
+                <li>COMPANY: PRO MUNDO COMEX S.A.C</li>
+                <li>CONTACT: {{cliente}}</li>
+                <li>ITEM NRO:这里写产品货号
+                    （ 如果很多款式在箱子里要写每一款的货号和数量。如果你们货没有货号随便给一个 ）
+                </li>
+                <li>QTY:装箱数 PCS</li>
+                <li>N.W：净重 KGS</li>
+                <li>G.W： 毛重 KGS</li>
+                <li>MEASURE： 箱子规格 CM</li>
+                <li>SUPPLIER CODE: {{supplier_code}}</li>
+            </ul>
+            <span style="text-align: center;display: flex;align-items: center;justify-content: center;font-size:18px;">
+                <strong>HECHO EN CHINA</strong>
+
+            </span>
+        </div>
+    </div>
+</body>
+<style>
+    body {
+        font-family: 'Noto Sans SC', sans-serif;
+    }
+</style>
+
+</html>
