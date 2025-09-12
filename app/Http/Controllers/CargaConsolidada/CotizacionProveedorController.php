@@ -165,16 +165,23 @@ class CotizacionProveedorController extends Controller
             }
             $query->orderBy('main.id', 'asc');
             
-            if ($rol != Usuario::ROL_COTIZADOR) {
-                $query->where('estado_cotizador', 'CONFIRMADO');
-            } else if ($rol == Usuario::ROL_COTIZADOR && $user->ID_Usuario != 28791) {
-                $query->where('main.id_usuario', $user->ID_Usuario);
-                $query->orderBy('main.id', 'asc');
-            } else {
-            }
+            switch ($rol) {
+                case Usuario::ROL_COTIZADOR:
+                    if ($user->getIdUsuario() != 28791) {
+                        $query->where('id_usuario', $user->getIdUsuario());
+                    }
 
-            if ($rol == Usuario::ROL_COTIZADOR) {
-                $query->orderBy('main.fecha_confirmacion', 'asc');
+                    break;
+
+                case Usuario::ROL_DOCUMENTACION:
+                    $query->where('estado_cotizador', 'CONFIRMADO')
+                        ->whereNotNull('estado_cliente');
+                    break;
+
+                case Usuario::ROL_COORDINACION:
+                    $query->where('estado_cotizador', 'CONFIRMADO')
+                        ->whereNotNull('estado_cliente');
+                    break;
             }
 
 
