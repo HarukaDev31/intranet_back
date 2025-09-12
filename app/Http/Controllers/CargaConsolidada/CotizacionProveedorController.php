@@ -138,7 +138,7 @@ class CotizacionProveedorController extends Controller
                         WHERE proveedores.id_cotizacion = main.id
                     ) as proveedores')
                 ])
-                ->join('contenedor_consolidado_tipo_cliente AS TC', 'TC.id', '=', 'main.id_tipo_cliente')
+                ->leftJoin('contenedor_consolidado_tipo_cliente AS TC', 'TC.id', '=', 'main.id_tipo_cliente')
                 ->leftJoin('usuario AS U', 'U.ID_Usuario', '=', 'main.id_usuario')
                 ->where('main.id_contenedor', $idContenedor)
                 ->whereNull('id_cliente_importacion');
