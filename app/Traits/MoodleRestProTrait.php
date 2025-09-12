@@ -12,6 +12,20 @@ trait MoodleRestProTrait
      */
     private function make_test_user($arrPost)
     {
+        // Validar que el array no esté vacío y tenga las claves necesarias
+        if (!is_array($arrPost)) {
+            Log::error('make_test_user: arrPost no es un array: ' . gettype($arrPost));
+            throw new \Exception('Datos de usuario inválidos - no es un array');
+        }
+
+        $requiredKeys = ['username', 'password', 'firstname', 'lastname', 'email'];
+        foreach ($requiredKeys as $key) {
+            if (!array_key_exists($key, $arrPost)) {
+                Log::error("make_test_user: Clave faltante '$key' en arrPost: " . json_encode(array_keys($arrPost)));
+                throw new \Exception("Clave faltante en datos de usuario: $key");
+            }
+        }
+
         $user = new \stdClass();
         $user->username = strtolower($arrPost['username']);
         $user->password = $arrPost['password'];
@@ -21,6 +35,8 @@ trait MoodleRestProTrait
         $user->auth = isset($arrPost['auth']) ? $arrPost['auth'] : 'manual';
         $user->lang = isset($arrPost['lang']) ? $arrPost['lang'] : 'es';
         $user->calendartype = isset($arrPost['calendartype']) ? $arrPost['calendartype'] : 'gregorian';
+        
+        Log::info('Usuario Moodle creado exitosamente: ' . json_encode($user));
         return $user;
     }
 

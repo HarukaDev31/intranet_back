@@ -162,6 +162,7 @@ Route::group(['prefix' => 'base-datos', 'middleware' => 'jwt.auth'], function ()
 });
 // Rutas de carga consolidada
 Route::group(['prefix' => 'cursos'], function () {
+    Route::post('change-estado-usuario-externo', [CursoController::class, 'crearUsuarioCursosMoodle']);
     Route::get('filters/options', [CursoController::class, 'filterOptions']);
     Route::get('/', [CursoController::class, 'index']);
     Route::put('cliente/{id}', [CursoController::class, 'actualizarDatosCliente']);

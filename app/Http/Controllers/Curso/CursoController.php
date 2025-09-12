@@ -884,8 +884,8 @@ class CursoController extends Controller
     public function crearUsuarioCursosMoodle(Request $request)
     {
         try {
-            $id = $request->input('id');
-            $id_pedido_curso = $request->input('ID_Pedido_Curso');
+            $id = $request->input('id_usuario');
+            $id_pedido_curso = $request->input('id_pedido');
             
             // Buscar usuario
             $response_usuario_bd = $this->getUsuario($id);
@@ -895,7 +895,7 @@ class CursoController extends Controller
 
                 // Validar y limpiar datos antes de enviar a Moodle
                 $original_username = trim($result->No_Nombres_Apellidos);
-                $password = $this->decrypt($result->No_Password);
+                $password = $this->ciDecrypt($result->No_Password);
 
                 if ($password === false) {
                     $chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()_-=+;:,.?';
@@ -933,8 +933,17 @@ class CursoController extends Controller
                     ], 400);
                 }
 
+                // Limpiar y validar el email primero
+                $email = strtolower(trim($email));
+                if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                    return response()->json([
+                        'status' => 'error',
+                        'message' => 'Email inválido después de limpieza: ' . $email
+                    ], 400);
+                }
+
                 // Crear username más seguro (solo letras y números)
-                $username = $this->generateSafeUsername($original_username);
+                $username = $this->generateSafeUsername($email);
 
                 // Crear contraseña más segura (solo letras y números)
                 $cleaned_password = $this->generateSafePassword($password);
@@ -954,6 +963,34 @@ class CursoController extends Controller
                 $firstname = $this->validateLength($firstname, 2, 50);
                 $lastname = $this->validateLength($lastname, 2, 50);
 
+                // Validar que todos los campos requeridos estén presentes antes de crear el array
+                if (empty($username)) {
+                    $username = 'user' . rand(1000, 9999);
+                }
+                if (empty($cleaned_password)) {
+                    $cleaned_password = 'TempPass' . rand(1000, 9999) . '!';
+                }
+                if (empty($firstname)) {
+                    $firstname = 'Usuario';
+                }
+                if (empty($lastname)) {
+                    $lastname = 'Usuario';
+                }
+
+                // Validaciones finales específicas para Moodle
+                if (strlen($username) < 3 || strlen($username) > 100) {
+                    $username = 'user' . rand(1000, 9999);
+                }
+                if (strlen($firstname) < 1 || strlen($firstname) > 100) {
+                    $firstname = 'Usuario';
+                }
+                if (strlen($lastname) < 1 || strlen($lastname) > 100) {
+                    $lastname = 'Usuario';
+                }
+                if (strlen($cleaned_password) < 8) {
+                    $cleaned_password = 'TempPass' . rand(1000, 9999) . '!';
+                }
+
                 $arrPost = [
                     'username'     => $username,
                     'password'     => $cleaned_password,
@@ -963,6 +1000,24 @@ class CursoController extends Controller
                     'auth'         => 'manual',
                     'lang'         => 'es',
                 ];
+
+                // Log para debug - verificar que todos los campos estén presentes
+                Log::info('Array para Moodle creado:', $arrPost);
+
+                // Verificar específicamente cada clave requerida
+                $requiredKeys = ['username', 'password', 'firstname', 'lastname', 'email'];
+                foreach ($requiredKeys as $key) {
+                    if (!array_key_exists($key, $arrPost)) {
+                        Log::error("Clave faltante en arrPost: $key");
+                        return response()->json([
+                            'status' => 'error',
+                            'message' => "Clave faltante en datos de usuario: $key"
+                        ], 400);
+                    }
+                    if (empty($arrPost[$key])) {
+                        Log::warning("Clave vacía en arrPost: $key = " . ($arrPost[$key] ?? 'NULL'));
+                    }
+                }
 
                 // Log detallado para debug
                 Log::error('Datos limpiados para Moodle: ' . json_encode($arrPost));
@@ -1037,15 +1092,21 @@ class CursoController extends Controller
                         $error_message .= ': ' . $response_usuario_moodle['message'];
                     }
                     
-                    $arrPost = [];
-                    $arrPost['No_Usuario'] = $result->usuario_moodle == "" ? $result->No_Usuario : $result->usuario_moodle;
-                    $arrPost['No_Password'] = $this->decrypt($result->No_Password);
+                    // Crear array de debug con datos seguros
+                    $debugData = [
+                        'No_Usuario' => $result->usuario_moodle == "" ? $result->No_Usuario : $result->usuario_moodle,
+                        'No_Password' => $this->ciDecrypt($result->No_Password),
+                        'username' => $username ?? 'No generado',
+                        'firstname' => $firstname ?? 'No generado',
+                        'lastname' => $lastname ?? 'No generado',
+                        'email' => $email ?? 'No disponible'
+                    ];
 
                     return response()->json([
                         'status' => 'error',
                         'message' => "El usuario ya existe en Moodle o hubo un error al crearlo: $error_message",
-                        'debug_data' => $arrPost,
-                        'validation_results' => $this->getValidationResults($arrPost)
+                        'debug_data' => $debugData,
+                        'moodle_response' => $response_usuario_moodle
                     ], 500);
                 }
             } else {
@@ -1068,27 +1129,41 @@ class CursoController extends Controller
      */
     private function generateSafeUsername($email)
     {
-        $email_parts = explode('@', $email);
-        $base = $email_parts[0];
+        try {
+            // Validar que el email no esté vacío
+            if (empty($email)) {
+                Log::warning('Email vacío en generateSafeUsername, usando fallback');
+                return 'user' . rand(1000, 9999);
+            }
 
-        // Limpiar el nombre: solo letras y números
-        $clean = preg_replace('/[^a-zA-Z0-9]/', '', $base);
+            $email_parts = explode('@', $email);
+            $base = isset($email_parts[0]) ? $email_parts[0] : 'user';
 
-        // Si el nombre es muy corto o vacío, usar 'user' como base
-        if (empty($clean) || strlen($clean) < 3) {
-            $clean = 'user';
-        } else {
-            $clean = strtolower(substr($clean, 0, 10)); // Tomar máximo 10 caracteres del nombre
+            // Limpiar el nombre: solo letras y números
+            $clean = preg_replace('/[^a-zA-Z0-9]/', '', $base);
+
+            // Si el nombre es muy corto o vacío, usar 'user' como base
+            if (empty($clean) || strlen($clean) < 3) {
+                $clean = 'user';
+            } else {
+                $clean = strtolower(substr($clean, 0, 10)); // Tomar máximo 10 caracteres del nombre
+            }
+
+            // Generar string aleatorio (4 caracteres alfanuméricos)
+            $randomChars = substr(str_shuffle('0123456789abcdefghijklmnopqrstuvwxyz'), 0, 4);
+
+            // Construir el username final (max 20 chars)
+            $username = $clean . $randomChars;
+
+            // Asegurar que no exceda 20 caracteres
+            $finalUsername = substr($username, 0, 20);
+            
+            Log::info('Username generado: ' . $finalUsername . ' desde email: ' . $email);
+            return $finalUsername;
+        } catch (\Exception $e) {
+            Log::error('Error en generateSafeUsername: ' . $e->getMessage());
+            return 'user' . rand(1000, 9999);
         }
-
-        // Generar string aleatorio (4 caracteres alfanuméricos)
-        $randomChars = substr(str_shuffle('0123456789abcdefghijklmnopqrstuvwxyz'), 0, 4);
-
-        // Construir el username final (max 20 chars)
-        $username = $clean . $randomChars;
-
-        // Asegurar que no exceda 20 caracteres
-        return substr($username, 0, 20);
     }
 
     /**
@@ -1116,8 +1191,14 @@ class CursoController extends Controller
         $clean = preg_replace('/[<>"\'\\\&]/', '', $string);
         $clean = trim($clean);
 
-        // Solo letras, números, espacios y algunos caracteres básicos
-        $clean = preg_replace('/[^\w\d\s\-\.]/', '', $clean);
+        // Solo letras, números y espacios (más restrictivo para Moodle)
+        $clean = preg_replace('/[^a-zA-Z0-9\s]/', '', $clean);
+        
+        // Remover espacios múltiples
+        $clean = preg_replace('/\s+/', ' ', $clean);
+        
+        // Trim final
+        $clean = trim($clean);
 
         return $clean;
     }
@@ -1179,15 +1260,31 @@ class CursoController extends Controller
      */
     private function getValidationResults($arrPost)
     {
-        return [
-            'username_length' => strlen($arrPost['username']),
-            'username_chars' => preg_match('/^[a-zA-Z0-9._-]+$/', $arrPost['username']) ? 'valid' : 'invalid',
-            'email_valid' => filter_var($arrPost['email'], FILTER_VALIDATE_EMAIL) ? 'valid' : 'invalid',
-            'firstname_length' => strlen($arrPost['firstname']),
-            'lastname_length' => strlen($arrPost['lastname']),
-            'password_length' => strlen($arrPost['password']),
-            'password_chars' => preg_match('/^[a-zA-Z0-9!@#$%&*._-]+$/', $arrPost['password']) ? 'valid' : 'invalid'
-        ];
+        $results = [];
+        
+        if (isset($arrPost['username'])) {
+            $results['username_length'] = strlen($arrPost['username']);
+            $results['username_chars'] = preg_match('/^[a-zA-Z0-9._-]+$/', $arrPost['username']) ? 'valid' : 'invalid';
+        }
+        
+        if (isset($arrPost['email'])) {
+            $results['email_valid'] = filter_var($arrPost['email'], FILTER_VALIDATE_EMAIL) ? 'valid' : 'invalid';
+        }
+        
+        if (isset($arrPost['firstname'])) {
+            $results['firstname_length'] = strlen($arrPost['firstname']);
+        }
+        
+        if (isset($arrPost['lastname'])) {
+            $results['lastname_length'] = strlen($arrPost['lastname']);
+        }
+        
+        if (isset($arrPost['password'])) {
+            $results['password_length'] = strlen($arrPost['password']);
+            $results['password_chars'] = preg_match('/^[a-zA-Z0-9!@#$%&*._-]+$/', $arrPost['password']) ? 'valid' : 'invalid';
+        }
+        
+        return $results;
     }
 
     public function enviarEmailUsuarioMoodle($id, $ID_Pedido_Curso)
@@ -1218,7 +1315,7 @@ class CursoController extends Controller
                     $message = "Hola, {$result->No_Nombres_Apellidos},\n\n";
                     $message .= "Tu cuenta en ProBusiness ha sido creada exitosamente.\n\n";
                     $message .= "Usuario: " . (isset($result->usuario_moodle) && $result->usuario_moodle ? $result->usuario_moodle : $result->No_Usuario) . "\n";
-                    $message .= "Contraseña: {$this->decrypt($result->No_Password)}\n\n";
+                    $message .= "Contraseña: {$this->ciDecrypt($result->No_Password)}\n\n";
                     $message .= "Puedes acceder a tu cuenta en el siguiente enlace: https://aulavirtualprobusiness.com/login/\n\n";
                     $mensaje = "El día del inicio del curso, te agregaremos a un grupo de whatsapp por donde compartiremos los links de acceso al zoom, los materiales de trabajo y las grabaciones de las clases dictadas.\n\n";
                     $message .= "Saludos,\nEl equipo de ProBusiness";
@@ -1234,7 +1331,7 @@ class CursoController extends Controller
 
                 // Enviar email
                 $data_email["email"]    = $result->usuario_moodle ? $result->usuario_moodle : $result->No_Usuario;
-                $data_email["password"] = $this->decrypt($result->No_Password);
+                $data_email["password"] = $this->ciDecrypt($result->No_Password);
                 $data_email["name"]     = $result->No_Nombres_Apellidos;
                 
                 // Usar Laravel Mail en lugar de CodeIgniter email library
@@ -1304,9 +1401,38 @@ class CursoController extends Controller
     // Métodos auxiliares que necesitan ser implementados o adaptados
     private function getUsuario($id)
     {
-        // Implementar según tu modelo de datos
-        // Este método debe retornar ['status' => 'success', 'result' => [usuario]]
-        return ['status' => 'error', 'message' => 'Método no implementado'];
+        try {
+            $usuario = DB::table('usuario as u')
+                ->join('entidad as e', 'u.ID_Entidad', '=', 'e.ID_Entidad')
+                ->where('u.ID_Usuario', $id)
+                ->select([
+                    'u.ID_Usuario',
+                    'u.No_Usuario',
+                    'u.No_Password',
+                    'u.usuario_moodle',
+                    'e.No_Entidad as No_Nombres_Apellidos',
+                    'e.ID_Entidad'
+                ])
+                ->first();
+
+            if ($usuario) {
+                return [
+                    'status' => 'success',
+                    'result' => [$usuario]
+                ];
+            } else {
+                return [
+                    'status' => 'error',
+                    'message' => 'Usuario no encontrado'
+                ];
+            }
+        } catch (\Exception $e) {
+            Log::error('Error en getUsuario: ' . $e->getMessage());
+            return [
+                'status' => 'error',
+                'message' => 'Error al obtener usuario: ' . $e->getMessage()
+            ];
+        }
     }
 
     private function setUsuarioModdle($username, $password, $id)
