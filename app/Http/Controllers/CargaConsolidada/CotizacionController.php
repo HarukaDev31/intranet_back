@@ -115,6 +115,7 @@ class CotizacionController extends Controller
             }
             $query->whereNull('id_cliente_importacion');
             // Ordenamiento
+            Log::info('query: ' . $query->toSql());
             $sortField = $request->input('sort_by', 'id');
             $sortOrder = $request->input('sort_order', 'asc');
             $query->orderBy($sortField, $sortOrder);

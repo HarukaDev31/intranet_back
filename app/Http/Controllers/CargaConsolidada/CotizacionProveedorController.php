@@ -142,7 +142,7 @@ class CotizacionProveedorController extends Controller
                 ->leftJoin('usuario AS U', 'U.ID_Usuario', '=', 'main.id_usuario')
                 ->where('main.id_contenedor', $idContenedor)
                 ->whereNull('id_cliente_importacion');
-
+                Log::info('query: ' . $query->toSql());
 
             if (!empty($search)) {
                 Log::info('search: ' . $search);
@@ -163,7 +163,7 @@ class CotizacionProveedorController extends Controller
                     }
                 });
             }
-            $query->orderBy('main.id', 'asc');
+
             
             switch ($rol) {
                 case Usuario::ROL_COTIZADOR:
@@ -184,7 +184,7 @@ class CotizacionProveedorController extends Controller
                     break;
             }
 
-
+            $query->orderBy('main.id', 'asc');
 
             // Ejecutar consulta con paginación
             $data = $query->paginate($perPage, ['*'], 'page', $page);
