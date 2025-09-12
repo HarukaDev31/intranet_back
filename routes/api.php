@@ -33,6 +33,7 @@ use App\Http\Controllers\CargaConsolidada\CotizacionPagosController;
 use App\Http\Controllers\CargaConsolidada\AduanaController;
 use App\Http\Controllers\CargaConsolidada\Clientes\PagosController as ClientesPagosController;
 use App\Http\Controllers\CalculadoraImportacion\CalculadoraImportacionController;
+use App\Http\Controllers\CampaignController;
 /*
 |--------------------------------------------------------------------------
 | API Routes
@@ -348,6 +349,14 @@ Route::group(['prefix' => 'calculadora-importacion', 'middleware' => 'jwt.auth']
     Route::get('/cliente', [CalculadoraImportacionController::class, 'getCalculosPorCliente']);
     Route::post('/change-estado/{id}', [CalculadoraImportacionController::class, 'changeEstado']);
     Route::delete('/{id}', [CalculadoraImportacionController::class, 'destroy']);
+});
+//group campaigns
+Route::group(['prefix' => 'campaigns', 'middleware' => 'jwt.auth'], function () {
+    Route::get('/', [CampaignController::class, 'index']);
+    Route::post('/', [CampaignController::class, 'store']);
+    Route::get('{id}', [CampaignController::class, 'show']);
+    Route::put('{id}', [CampaignController::class, 'update']);
+    Route::delete('{id}', [CampaignController::class, 'destroy']);
 });
 Route::group(['prefix' => 'options', 'middleware' => 'jwt.auth'], function () {
     Route::get('paises', [PaisController::class, 'getPaisDropdown']);

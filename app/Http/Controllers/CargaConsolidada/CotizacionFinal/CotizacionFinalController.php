@@ -142,7 +142,7 @@ class CotizacionFinalController extends Controller
             }
 
             //ordenar de manera ascendente por id_cotizacion
-            $transformedData = collect($transformedData)->sort('id_cotizacion')->values()->toArray();
+            $transformedData = collect($transformedData)->sortBy('id_cotizacion')->values()->toArray();
 
             return response()->json([
                 'success' => true,

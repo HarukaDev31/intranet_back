@@ -12,11 +12,13 @@ use Illuminate\Support\Facades\Auth;
 use Tymon\JWTAuth\Facades\JWTAuth;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use App\Traits\CodeIgniterEncryption;
+use App\Traits\MoodleRestProTrait;
 
 class CursoController extends Controller
 {
-    use CodeIgniterEncryption;
+    use CodeIgniterEncryption, MoodleRestProTrait;
     public $table_pedido_curso_pagos = 'pedido_curso_pagos';
     public function index(Request $request)
     {
@@ -381,24 +383,7 @@ class CursoController extends Controller
     /**
      * Actualizar datos del cliente
      */
-    public function actualizarDatosCliente(Request $request, $idEntidad)
-    {
-        $data = $request->only([
-            'No_Entidad',
-            'Nu_Tipo_Sexo',
-            'Nu_Documento_Identidad',
-            'Nu_Celular_Entidad',
-            'Txt_Email_Entidad',
-            'Fe_Nacimiento',
-            'Nu_Como_Entero_Empresa'
-        ]);
-        $updated = DB::table('entidad')->where('ID_Entidad', $idEntidad)->update($data);
-        if ($updated) {
-            return response()->json(['status' => 'success', 'message' => 'Datos del cliente actualizados']);
-        }
-        return response()->json(['status' => 'warning', 'message' => 'No se modificó ningún dato']);
-    }
-
+  
     /**
      * Obtener datos del cliente por pedido
      */
@@ -481,7 +466,7 @@ class CursoController extends Controller
     /**
      * Actualizar pedido
      */
-    public function actualizarPedido(Request $request, $idPedido)
+    public function actualizarPedidoPublic(Request $request, $idPedido)
     {
         $data = $request->all();
         $updated = DB::table('pedido_curso')->where('ID_Pedido_Curso', $idPedido)->update($data);
@@ -893,6 +878,488 @@ class CursoController extends Controller
                 'message' => 'Error al actualizar el importe del pedido',
                 'error' => $e->getMessage()
             ], 500);
+        }
+    }
+
+    public function crearUsuarioCursosMoodle(Request $request)
+    {
+        try {
+            $id = $request->input('id');
+            $id_pedido_curso = $request->input('ID_Pedido_Curso');
+            
+            // Buscar usuario
+            $response_usuario_bd = $this->getUsuario($id);
+            if ($response_usuario_bd['status'] == 'success') {
+                $result = $response_usuario_bd['result'][0];
+                Log::error('result: ' . print_r($result, true));
+
+                // Validar y limpiar datos antes de enviar a Moodle
+                $original_username = trim($result->No_Nombres_Apellidos);
+                $password = $this->decrypt($result->No_Password);
+
+                if ($password === false) {
+                    $chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()_-=+;:,.?';
+                    $length = 12;
+                    $password = '';
+                    for ($i = 0; $i < $length; $i++) {
+                        $randomIndex = ord(random_bytes(1)) % strlen($chars);
+                        $password .= $chars[$randomIndex];
+                    }
+                }
+                
+                $nombres = trim($result->No_Nombres_Apellidos);
+                $email = trim($result->No_Usuario);
+                
+                Log::error('Datos del usuario: ' . json_encode([
+                    'original_username' => $original_username,
+                    'password' => $password,
+                    'nombres' => $nombres,
+                    'email' => $email,
+                ]));
+
+                // Validaciones básicas
+                if (empty($original_username) || empty($password) || empty($nombres)) {
+                    return response()->json([
+                        'status' => 'error',
+                        'message' => 'Datos de usuario incompletos'
+                    ], 400);
+                }
+
+                // Validar formato de email
+                if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                    return response()->json([
+                        'status' => 'error',
+                        'message' => 'Formato de email inválido: ' . $email
+                    ], 400);
+                }
+
+                // Crear username más seguro (solo letras y números)
+                $username = $this->generateSafeUsername($original_username);
+
+                // Crear contraseña más segura (solo letras y números)
+                $cleaned_password = $this->generateSafePassword($password);
+
+                // Separar nombres y apellidos con más validación
+                $nombres_array = explode(' ', $nombres);
+                $firstname = $this->cleanString(isset($nombres_array[0]) ? trim($nombres_array[0]) : 'Usuario');
+                $lastname = $this->cleanString(isset($nombres_array[1]) ? trim(implode(' ', array_slice($nombres_array, 1))) : 'Apellido');
+
+                // Si no hay apellido válido, usar algo simple
+                if (empty($lastname) || strlen($lastname) < 2) {
+                    $lastname = 'Usuario';
+                }
+
+                // Asegurar longitudes mínimas y máximas
+                $username = $this->validateLength($username, 3, 20);
+                $firstname = $this->validateLength($firstname, 2, 50);
+                $lastname = $this->validateLength($lastname, 2, 50);
+
+                $arrPost = [
+                    'username'     => $username,
+                    'password'     => $cleaned_password,
+                    'firstname'    => $firstname,
+                    'lastname'     => $lastname,
+                    'email'        => $email,
+                    'auth'         => 'manual',
+                    'lang'         => 'es',
+                ];
+
+                // Log detallado para debug
+                Log::error('Datos limpiados para Moodle: ' . json_encode($arrPost));
+
+                // Verificar cada campo individualmente
+                $this->validateMoodleFields($arrPost);
+
+                // Crear usuario y cursos para moodle
+                $response_usuario_moodle = $this->createUser($arrPost);
+
+                // Log de respuesta de Moodle
+                Log::error('Respuesta de Moodle: ' . json_encode($response_usuario_moodle));
+
+                if ($response_usuario_moodle['status'] == 'success') {
+                    // Buscar el usuario creado usando el nuevo username
+                    $arrParams['criteria'][0]['key']   = 'username';
+                    $arrParams['criteria'][0]['value'] = $username;
+                    
+                    // Set No_Usuario to $username
+                    $this->setUsuarioModdle(
+                        $username,
+                        $this->encrypt($cleaned_password),
+                        $id
+                    );
+                    
+                    $response_usuario = $this->getUser($arrParams);
+
+                    if ($response_usuario['status'] == 'success') {
+                        $result_usuario = $response_usuario['response'];
+                        $id_usuario = $result_usuario->id;
+
+                        $arrParamsCurso = [
+                            'id_usuario' => $id_usuario,
+                        ];
+
+                        $response_curso = $this->crearCursoUsuario($arrParamsCurso);
+
+                        if ($response_curso['status'] != 'success') {
+                            $this->actualizarPedido(['ID_Pedido_Curso' => $id_pedido_curso], ['Nu_Estado_Usuario_Externo' => '3']);
+
+                            return response()->json([
+                                'status' => 'error',
+                                'message' => 'Usuario creado pero error al asignar curso: ' . ($response_curso['message'] ?? 'Error desconocido')
+                            ], 500);
+                        } else {
+                            $this->actualizarPedido(['ID_Pedido_Curso' => $id_pedido_curso], ['Nu_Estado_Usuario_Externo' => '2']);
+
+                            return response()->json([
+                                'status' => 'success',
+                                'message' => 'Usuario y curso creados exitosamente',
+                                'data' => [
+                                    'original_username' => $original_username,
+                                    'moodle_username' => $username,
+                                    'moodle_id' => $id_usuario,
+                                ]
+                            ]);
+                        }
+                    } else {
+                        $this->actualizarPedido(['ID_Pedido_Curso' => $id_pedido_curso], ['Nu_Estado_Usuario_Externo' => '3']);
+
+                        return response()->json([
+                            'status' => 'error',
+                            'message' => 'Usuario creado pero no se pudo recuperar: ' . ($response_usuario['message'] ?? 'Error desconocido')
+                        ], 500);
+                        
+                    }
+                } else {
+                    $this->actualizarPedido(['ID_Pedido_Curso' => $id_pedido_curso], ['Nu_Estado_Usuario_Externo' => '2']);
+
+                    $error_message = 'Error al crear usuario en Moodle';
+                    if (isset($response_usuario_moodle['message'])) {
+                        $error_message .= ': ' . $response_usuario_moodle['message'];
+                    }
+                    
+                    $arrPost = [];
+                    $arrPost['No_Usuario'] = $result->usuario_moodle == "" ? $result->No_Usuario : $result->usuario_moodle;
+                    $arrPost['No_Password'] = $this->decrypt($result->No_Password);
+
+                    return response()->json([
+                        'status' => 'error',
+                        'message' => "El usuario ya existe en Moodle o hubo un error al crearlo: $error_message",
+                        'debug_data' => $arrPost,
+                        'validation_results' => $this->getValidationResults($arrPost)
+                    ], 500);
+                }
+            } else {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'No se pudieron obtener los datos del usuario: ' . ($response_usuario_bd['message'] ?? 'Error desconocido')
+                ], 500);
+            }
+        } catch (\Exception $e) {
+            Log::error('Error en crearUsuarioCursosMoodle: ' . $e->getMessage());
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Error al crear usuario en Moodle: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Genera un username ultra seguro para Moodle
+     */
+    private function generateSafeUsername($email)
+    {
+        $email_parts = explode('@', $email);
+        $base = $email_parts[0];
+
+        // Limpiar el nombre: solo letras y números
+        $clean = preg_replace('/[^a-zA-Z0-9]/', '', $base);
+
+        // Si el nombre es muy corto o vacío, usar 'user' como base
+        if (empty($clean) || strlen($clean) < 3) {
+            $clean = 'user';
+        } else {
+            $clean = strtolower(substr($clean, 0, 10)); // Tomar máximo 10 caracteres del nombre
+        }
+
+        // Generar string aleatorio (4 caracteres alfanuméricos)
+        $randomChars = substr(str_shuffle('0123456789abcdefghijklmnopqrstuvwxyz'), 0, 4);
+
+        // Construir el username final (max 20 chars)
+        $username = $clean . $randomChars;
+
+        // Asegurar que no exceda 20 caracteres
+        return substr($username, 0, 20);
+    }
+
+    /**
+     * Genera una contraseña ultra segura para Moodle
+     */
+    private function generateSafePassword($password)
+    {
+        // Primero intentar limpiar la contraseña original
+        $clean = preg_replace('/[<>"\'\\\]/', '', $password);
+
+        // Si es muy corta o tiene caracteres problemáticos, generar nueva
+        if (strlen($clean) < 8 || preg_match('/[^\w\d!@#%&*]/', $clean)) {
+            return 'TempPass' . rand(1000, 9999) . '!';
+        }
+
+        return $clean;
+    }
+
+    /**
+     * Limpia strings para Moodle
+     */
+    private function cleanString($string)
+    {
+        // Remover caracteres especiales peligrosos
+        $clean = preg_replace('/[<>"\'\\\&]/', '', $string);
+        $clean = trim($clean);
+
+        // Solo letras, números, espacios y algunos caracteres básicos
+        $clean = preg_replace('/[^\w\d\s\-\.]/', '', $clean);
+
+        return $clean;
+    }
+
+    /**
+     * Valida longitud de strings
+     */
+    private function validateLength($string, $min, $max)
+    {
+        if (strlen($string) < $min) {
+            return str_pad($string, $min, 'x');
+        }
+        if (strlen($string) > $max) {
+            return substr($string, 0, $max);
+        }
+        return $string;
+    }
+
+    /**
+     * Valida campos específicos de Moodle
+     */
+    private function validateMoodleFields($arrPost)
+    {
+        $errors = [];
+
+        // Validar username
+        if (!preg_match('/^[a-zA-Z0-9._-]+$/', $arrPost['username'])) {
+            $errors[] = 'Username contiene caracteres inválidos';
+        }
+
+        // Validar email
+        if (!filter_var($arrPost['email'], FILTER_VALIDATE_EMAIL)) {
+            $errors[] = 'Email inválido';
+        }
+
+        // Validar nombres
+        if (empty($arrPost['firstname']) || strlen($arrPost['firstname']) < 2) {
+            $errors[] = 'Firstname muy corto';
+        }
+
+        if (empty($arrPost['lastname']) || strlen($arrPost['lastname']) < 2) {
+            $errors[] = 'Lastname muy corto';
+        }
+
+        // Validar contraseña
+        if (strlen($arrPost['password']) < 8) {
+            $errors[] = 'Password muy corto';
+        }
+
+        if (!empty($errors)) {
+            Log::error('Errores de validación: ' . implode(', ', $errors));
+        }
+
+        return $errors;
+    }
+
+    /**
+     * Obtiene resultados de validación para debug
+     */
+    private function getValidationResults($arrPost)
+    {
+        return [
+            'username_length' => strlen($arrPost['username']),
+            'username_chars' => preg_match('/^[a-zA-Z0-9._-]+$/', $arrPost['username']) ? 'valid' : 'invalid',
+            'email_valid' => filter_var($arrPost['email'], FILTER_VALIDATE_EMAIL) ? 'valid' : 'invalid',
+            'firstname_length' => strlen($arrPost['firstname']),
+            'lastname_length' => strlen($arrPost['lastname']),
+            'password_length' => strlen($arrPost['password']),
+            'password_chars' => preg_match('/^[a-zA-Z0-9!@#$%&*._-]+$/', $arrPost['password']) ? 'valid' : 'invalid'
+        ];
+    }
+
+    public function enviarEmailUsuarioMoodle($id, $ID_Pedido_Curso)
+    {
+        try {
+            $id_pedido_curso = $ID_Pedido_Curso;
+            
+            // Buscar usuario
+            $response_usuario_bd = $this->getUsuario($id);
+            if ($response_usuario_bd['status'] == 'success') {
+                $result = $response_usuario_bd['result'][0];
+                
+                // Enviar correo con las credenciales
+                $entidad = $this->getEntidadByIdPedido($id_pedido_curso);
+                if ($entidad) {
+                    $idEntidad = $entidad->ID_Entidad;
+                    $idPais    = $entidad->ID_Pais;
+                    $telefono  = $entidad->Nu_Celular_Entidad;
+                    $telefono  = preg_replace('/\s+/', '', $telefono);
+                    $prefijoPais = $this->getPrefijoPais($idPais);
+                    
+                    if ($prefijoPais) {
+                        $telefono = $prefijoPais->Nu_Prefijo . $telefono . "@c.us";
+                    } else {
+                        $telefono = '51' . $telefono; // Default to Peru if no prefix found
+                    }
+                    
+                    $message = "Hola, {$result->No_Nombres_Apellidos},\n\n";
+                    $message .= "Tu cuenta en ProBusiness ha sido creada exitosamente.\n\n";
+                    $message .= "Usuario: " . (isset($result->usuario_moodle) && $result->usuario_moodle ? $result->usuario_moodle : $result->No_Usuario) . "\n";
+                    $message .= "Contraseña: {$this->decrypt($result->No_Password)}\n\n";
+                    $message .= "Puedes acceder a tu cuenta en el siguiente enlace: https://aulavirtualprobusiness.com/login/\n\n";
+                    $mensaje = "El día del inicio del curso, te agregaremos a un grupo de whatsapp por donde compartiremos los links de acceso al zoom, los materiales de trabajo y las grabaciones de las clases dictadas.\n\n";
+                    $message .= "Saludos,\nEl equipo de ProBusiness";
+                    
+                    $this->sendMessageVentas($message, $telefono);
+                    $this->sendMessageVentas($mensaje, $telefono, 2);
+                } else {
+                    return response()->json([
+                        'status'  => 'error',
+                        'message' => 'No se encontró la entidad asociada al pedido.',
+                    ], 404);
+                }
+
+                // Enviar email
+                $data_email["email"]    = $result->usuario_moodle ? $result->usuario_moodle : $result->No_Usuario;
+                $data_email["password"] = $this->decrypt($result->No_Password);
+                $data_email["name"]     = $result->No_Nombres_Apellidos;
+                
+                // Usar Laravel Mail en lugar de CodeIgniter email library
+                try {
+                    Mail::send('emails.cuenta_moodle', $data_email, function($message) use ($result) {
+                        $message->from('noreply@lae.one', 'ProBusiness');
+                        $message->to($result->No_Usuario);
+                        $message->subject('🎉 Bienvenido al curso');
+                    });
+
+                    return response()->json([
+                        'status'  => 'success',
+                        'message' => 'Se envío email',
+                    ]);
+                } catch (\Exception $e) {
+                    Log::error('Error al enviar email: ' . $e->getMessage());
+                    return response()->json([
+                        'status'             => 'error',
+                        'message'            => 'No se pudo enviar email, inténtelo más tarde.',
+                        'error_message_mail' => $e->getMessage(),
+                    ], 500);
+                }
+            } else {
+                return response()->json($response_usuario_bd, 500);
+            }
+        } catch (\Exception $e) {
+            Log::error('Error en enviarEmailUsuarioMoodle: ' . $e->getMessage());
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Error al enviar email: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function actualizarDatosCliente(Request $request)
+    {
+        try {
+            $id_entidad = $request->input('ID_Entidad');
+            $data = [
+                'No_Entidad'             => $request->input('No_Entidad'),
+                'Nu_Documento_Identidad' => $request->input('Nu_Documento_Identidad'),
+                'Nu_Tipo_Sexo'           => $request->input('Nu_Tipo_Sexo'),
+                'Nu_Como_Entero_Empresa' => $request->input('Nu_Como_Entero_Empresa'),
+                'Txt_Email_Entidad'      => $request->input('Txt_Email_Entidad'),
+                'ID_Pais'                => $request->input('ID_Pais'),
+                'Nu_Celular_Entidad'     => $request->input('Nu_Celular_Entidad'),
+                'ID_Departamento'        => $request->input('ID_Departamento'),
+                'Fe_Nacimiento'          => $request->input('Fe_Nacimiento'),
+                'ID_Provincia'           => $request->input('ID_Provincia'),
+                'ID_Distrito'            => $request->input('ID_Distrito'),
+            ];
+            
+            Log::error('ID_Entidad: ' . print_r($id_entidad, true));
+            Log::error('DATA: ' . print_r($data, true));
+            
+            $result = $this->actualizarDatosClienteModel($id_entidad, $data);
+            return response()->json($result);
+        } catch (\Exception $e) {
+            Log::error('Error en actualizarDatosCliente: ' . $e->getMessage());
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Error al actualizar datos del cliente: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    // Métodos auxiliares que necesitan ser implementados o adaptados
+    private function getUsuario($id)
+    {
+        // Implementar según tu modelo de datos
+        // Este método debe retornar ['status' => 'success', 'result' => [usuario]]
+        return ['status' => 'error', 'message' => 'Método no implementado'];
+    }
+
+    private function setUsuarioModdle($username, $password, $id)
+    {
+        // Implementar actualización de usuario con datos de Moodle
+        DB::table('usuario')
+            ->where('ID_Usuario', $id)
+            ->update([
+                'usuario_moodle' => $username,
+                'No_Password' => $password
+            ]);
+    }
+
+    private function actualizarPedido($where, $data)
+    {
+        DB::table('pedido_curso')->where($where)->update($data);
+    }
+
+ 
+
+    private function getEntidadByIdPedido($id_pedido)
+    {
+        return DB::table('pedido_curso as pc')
+            ->join('entidad as e', 'pc.ID_Entidad', '=', 'e.ID_Entidad')
+            ->where('pc.ID_Pedido_Curso', $id_pedido)
+            ->select('e.*')
+            ->first();
+    }
+
+    private function getPrefijoPais($id_pais)
+    {
+        return DB::table('pais')
+            ->where('ID_Pais', $id_pais)
+            ->select('Nu_Prefijo')
+            ->first();
+    }
+
+    private function sendMessageVentas($message, $telefono, $delay = 0)
+    {
+        // Implementar envío de WhatsApp según tu sistema
+        Log::info("Enviando mensaje a $telefono: $message");
+    }
+
+    private function actualizarDatosClienteModel($id_entidad, $data)
+    {
+        try {
+            DB::table('entidad')
+                ->where('ID_Entidad', $id_entidad)
+                ->update($data);
+            
+            return ['status' => 'success', 'message' => 'Datos actualizados correctamente'];
+        } catch (\Exception $e) {
+            return ['status' => 'error', 'message' => 'Error al actualizar: ' . $e->getMessage()];
         }
     }
 }
