@@ -273,7 +273,7 @@ class ContenedorController extends Controller
     public function getValidContainers()
     {
         // Obtener los contenedores existentes
-            $existingContainers = Contenedor::where('empresa', '!=', '1')->pluck('carga')->toArray();
+        $existingContainers = Contenedor::where('empresa', '!=', '1')->pluck('carga')->toArray();
         Log::info('existingContainers', $existingContainers);
         // Crear array con todos los contenedores (1-50) indicando cuáles están deshabilitados
         $data = [];
@@ -295,30 +295,34 @@ class ContenedorController extends Controller
     }
     public function moveCotizacionToConsolidado(Request $request)
     {
-        $data = $request->all();
-        $idCotizacion = $data['idCotizacion'];
-        $idContenedorDestino = $data['idContenedorDestino'];
-        // Actualiza la cotización principal
-        $cotizacion = Cotizacion::find($idCotizacion);
-        if (!$cotizacion) {
-            return response()->json(['message' => 'Cotización no encontrada', 'success' => false], 404);
-        }
-        $cotizacion->id_contenedor = $idContenedorDestino;
-        $cotizacion->estado_cotizador = 'CONFIRMADO';
-        $cotizacion->updated_at = date('Y-m-d H:i:s');
-        $cotizacion->save();
+        try {
+            $data = $request->all();
+            $idCotizacion = $data['idCotizacion'];
+            $idContenedorDestino = $data['idContenedorDestino'];
+            // Actualiza la cotización principal
+            $cotizacion = Cotizacion::find($idCotizacion);
+            if (!$cotizacion) {
+                return response()->json(['message' => 'Cotización no encontrada', 'success' => false], 404);
+            }
+            $cotizacion->id_contenedor = $idContenedorDestino;
+            $cotizacion->estado_cotizador = 'CONFIRMADO';
+            $cotizacion->updated_at = date('Y-m-d H:i:s');
+            $cotizacion->save();
 
-        // Actualiza los proveedores asociados
-        $proveedores = CotizacionProveedor::where('id_cotizacion', $idCotizacion);
-        if (!$proveedores) {
-            return response()->json(['message' => 'Proveedores no encontrados', 'success' => false], 404);
+            // Actualiza los proveedores asociados
+            $proveedores = CotizacionProveedor::where('id_cotizacion', $idCotizacion)->get();
+            if (!$proveedores || $proveedores->isEmpty()) {
+                return response()->json(['message' => 'Proveedores no encontrados', 'success' => false], 404);
+            }
+            foreach ($proveedores as $proveedor) {
+                Log::info('proveedor'.json_encode($proveedor));
+                $proveedor->id_contenedor = $idContenedorDestino;
+                $proveedor->save();
+            }
+            return response()->json(['message' => 'Cotización movida a consolidado correctamente', 'success' => true]);
+        } catch (\Exception $e) {
+            return response()->json(['message' => 'Error al mover cotización a consolidado: ' . $e->getMessage(), 'success' => false], 500);
         }
-        foreach ($proveedores as $proveedor) {
-            $proveedor->id_contenedor = $idContenedorDestino;
-            $proveedor->save();
-        }
-
-        return response()->json(['message' => 'Cotización movida a consolidado correctamente', 'success' => true]);
     }
     public function moveCotizacionToCalculadora(Request $request)
     {
@@ -367,7 +371,7 @@ class ContenedorController extends Controller
     {
         try {
             $idContenedor = $request->input('idContenedor');
-            
+
             // Validar que se haya enviado un archivo
             if (!$request->hasFile('file')) {
                 return response()->json([
@@ -377,7 +381,7 @@ class ContenedorController extends Controller
             }
 
             $file = $request->file('file');
-            
+
             // Validar tamaño del archivo (1MB = 1000000 bytes)
             $maxFileSize = 1000000;
             if ($file->getSize() > $maxFileSize) {
@@ -430,7 +434,6 @@ class ContenedorController extends Controller
                     'file_size' => $file->getSize()
                 ]
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error en uploadListaEmbarque: ' . $e->getMessage());
             return response()->json([
@@ -488,23 +491,22 @@ class ContenedorController extends Controller
                     'update_data' => $updateData
                 ]);
             }
-
         } catch (\Exception $e) {
             Log::error('Error en verifyContainerIsCompleted: ' . $e->getMessage());
         }
     }
     public function deletePackingList($idContenedor)
     {
-        try {   
-        $idContenedor = $idContenedor;
-        $contenedor = Contenedor::find($idContenedor);
-        $contenedor->lista_embarque_url = null;
-        $contenedor->save();
-        $this->verifyContainerIsCompleted($idContenedor);
-        return response()->json([
-            'success' => true,
-            'message' => 'Packing list eliminada correctamente'
-        ]);
+        try {
+            $idContenedor = $idContenedor;
+            $contenedor = Contenedor::find($idContenedor);
+            $contenedor->lista_embarque_url = null;
+            $contenedor->save();
+            $this->verifyContainerIsCompleted($idContenedor);
+            return response()->json([
+                'success' => true,
+                'message' => 'Packing list eliminada correctamente'
+            ]);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,

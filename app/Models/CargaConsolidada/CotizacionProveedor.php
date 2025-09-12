@@ -11,6 +11,7 @@ class CotizacionProveedor extends Model
     
     protected $fillable = [
         'id_cotizacion',
+        'id_contenedor',
         'products',
         'estado',
         'volumen_doc',
