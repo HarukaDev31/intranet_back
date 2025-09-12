@@ -168,18 +168,18 @@ class CotizacionProveedorController extends Controller
             switch ($rol) {
                 case Usuario::ROL_COTIZADOR:
                     if ($user->getIdUsuario() != 28791) {
-                        $query->where('id_usuario', $user->getIdUsuario());
+                        $query->where('main.id_usuario', $user->getIdUsuario());
                     }
 
                     break;
 
                 case Usuario::ROL_DOCUMENTACION:
-                    $query->where('estado_cotizador', 'CONFIRMADO')
+                    $query->where('main.estado_cotizador', 'CONFIRMADO')
                         ->whereNotNull('estado_cliente');
                     break;
 
                 case Usuario::ROL_COORDINACION:
-                    $query->where('estado_cotizador', 'CONFIRMADO')
+                    $query->where('main.estado_cotizador', 'CONFIRMADO')
                         ->whereNotNull('estado_cliente');
                     break;
             }
