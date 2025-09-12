@@ -749,7 +749,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
             $idCotizacion = $proveedorInfo->id_cotizacion;
 
             // Obtener información de la cotización
-            $cotizacionInfo = CargaConsolidadaContenedor::findOrFail($idCotizacion);
+            $cotizacionInfo = Cotizacion::findOrFail($idCotizacion);
 
             $volumen = $cotizacionInfo->volumen;
             $valorCot = $cotizacionInfo->monto;
@@ -788,7 +788,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
             $this->sendMessage($message);
 
             // Enviar imagen de pagos
-            $pagosUrl = url('public/assets/images/pagos-full.jpg');
+            $pagosUrl = public_path('assets/images/pagos-full.jpg');
             $this->sendMedia($pagosUrl, 'image/jpg');
 
             return "success";
