@@ -116,7 +116,7 @@ class CotizacionController extends Controller
             $query->whereNull('id_cliente_importacion');
             // Ordenamiento
             $sortField = $request->input('sort_by', 'id');
-            $sortOrder = $request->input('sort_order', 'desc');
+            $sortOrder = $request->input('sort_order', 'asc');
             $query->orderBy($sortField, $sortOrder);
 
             // Paginación
@@ -1797,17 +1797,13 @@ class CotizacionController extends Controller
         }
     }
 
-    public function exportarCotizacion(Request $request)
+    public function exportarCotizacion(Request $request, $idContenedor)
     {
-        try{
-            return $this->cotizacionExportService->exportarCotizacion($request);
+        try {
+            return $this->cotizacionExportService->exportarCotizacion($request, $idContenedor);
         } catch (\Exception $e) {
             Log::error('Error en exportarCotizacion: ' . $e->getMessage());
-            return response()->json([
-                'status' => 'error',
-                'success' => false,
-                'message' => 'Error al exportar cotización: ' . $e->getMessage()
-            ], 500);
+            return response()->json(['message' => $e->getMessage()], 500);
         }
     }
 }

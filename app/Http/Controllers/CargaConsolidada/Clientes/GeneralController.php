@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\CargaConsolidada\Clientes;
 
 use App\Http\Controllers\Controller;
+use App\Traits\UserGroupsTrait;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use App\Models\CargaConsolidada\Cotizacion;
@@ -10,7 +11,14 @@ use App\Models\CargaConsolidada\Contenedor;
 use App\Models\CargaConsolidada\TipoCliente;
 use App\Models\Usuario;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Tymon\JWTAuth\Facades\JWTAuth;
+use App\Services\CargaConsolidada\Clientes\GeneralService;
+use App\Services\CargaConsolidada\Clientes\GeneralExportService;
+use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use Exception;
+
 
 class GeneralController extends Controller
 {
@@ -19,6 +27,19 @@ class GeneralController extends Controller
     private $table_contenedor_consolidado_cotizacion_coordinacion_pagos = "contenedor_consolidado_cotizacion_coordinacion_pagos";
     private $table_pagos_concept = "cotizacion_coordinacion_pagos_concept";
     private $table = "carga_consolidada_contenedor";
+
+    protected $generalService;
+    protected $generalExportService;
+
+    public function __construct(
+        GeneralService $generalService,
+        GeneralExportService $generalExportService
+    ) {
+        $this->generalService = $generalService;
+        $this->generalExportService = $generalExportService;
+    }
+
+    use UserGroupsTrait;
 
     /**
      * Format a numeric value as currency string, e.g., $1,234.56
@@ -373,6 +394,15 @@ class GeneralController extends Controller
                 'message' => 'Error al obtener datos del header',
                 'error' => $e->getMessage()
             ], 500);
+        }
+    }
+    public function exportarClientes(Request $request, $idContenedor)
+    {
+        try {
+            return $this->generalExportService->exportarClientes($request, $idContenedor);
+        } catch (\Exception $e) {
+            Log::error('Error en exportarClientes: ' . $e->getMessage());
+            return response()->json(['message' => $e->getMessage()], 500);
         }
     }
 }

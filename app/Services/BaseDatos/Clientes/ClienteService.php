@@ -13,7 +13,7 @@ class ClienteService
     /**
      * Obtener clientes con paginación y filtros
      */
-    public function obtenerClientes(Request $request, $page = 1, $perPage = 15)
+    public function obtenerClientes(Request $request, $page = 1, $perPage = 100)
     {
         $query = Cliente::query();
 

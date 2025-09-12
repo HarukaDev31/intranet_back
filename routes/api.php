@@ -205,7 +205,7 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
         Route::delete('packing-list/{idContenedor}', [ContenedorController::class, 'deletePackingList']);
 
         Route::group(['prefix' => 'cotizaciones'], function () {
-            Route::get('exportar', [CotizacionController::class, 'exportarCotizacion']);
+            Route::get('{id}/exportar', [CotizacionController::class, 'exportarCotizacion']);
 
             Route::post('/{id}/refresh', [CotizacionController::class, 'refreshCotizacionFile']);
             Route::get('/{idContenedor}/headers', [CotizacionController::class, 'getHeadersData']);
@@ -221,19 +221,20 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
             Route::get('filters/options', [CotizacionController::class, 'filterOptions']);
         }); 
         Route::group(['prefix' => 'clientes'], function () {
+            Route::get('/general/{idContenedor}/export', [GeneralController::class, 'exportarClientes']);
             Route::get('/general/{idContenedor}/headers', [GeneralController::class, 'getClientesHeader']);
-            Route::get('/pagos/{idContenedor}', [ClientesPagosController::class, 'index']);
             Route::get('/general/{idContenedor}', [GeneralController::class, 'index']);
             Route::post('/general/estado-cliente', [GeneralController::class, 'updateEstadoCliente']);
+            Route::post('/general/status-cliente-doc', [GeneralController::class, 'updateStatusCliente']);
             Route::get('/variacion/{idContenedor}', [VariacionController::class, 'index']);
             Route::post('/variacion/vol-selected', [VariacionController::class, 'updateVolSelected']);
             Route::post('/variacion/documentacion/proveedor/{idProveedor}/create', [DocumentacionController::class, 'createProveedorDocumentacionFolder']);
-            Route::post('/general/status-cliente-doc', [GeneralController::class, 'updateStatusCliente']);
             Route::post('/variacion/documentacion/proveedor/{idProveedor}', [DocumentacionController::class, 'updateClienteDocumentacion']);
             Route::delete('/variacion/documentacion/proveedor/{idProveedor}/factura-comercial', [DocumentacionController::class, 'deleteProveedorFacturaComercial']);
             Route::delete('/variacion/documentacion/proveedor/{idProveedor}/excel-confirmacion', [DocumentacionController::class, 'deleteProveedorExcelConfirmacion']);
             Route::delete('/variacion/documentacion/proveedor/{idProveedor}/packing-list', [DocumentacionController::class, 'deleteProveedorPackingList']);
             Route::get('/variacion/documentacion/{idCotizacion}', [VariacionController::class, 'showClientesDocumentacion']);
+            Route::get('/pagos/{idContenedor}', [ClientesPagosController::class, 'index']);
             Route::post('/pagos', [ClientesPagosController::class, 'store']);
             Route::delete('/pagos/{id}', [ClientesPagosController::class, 'delete']);
 

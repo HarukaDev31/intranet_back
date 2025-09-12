@@ -51,9 +51,9 @@ class ClientesController extends Controller
     public function index(Request $request): JsonResponse
     {
         try {
-            //?search=asd&itemsPerPage=10&currentPage=1
+            //?search=asd&itemsPerPage=100&currentPage=1
             $search = $request->get('search', '');
-            $perPage = $request->get('itemsPerPage', 10);
+            $perPage = $request->get('itemsPerPage', 100);
             $page = $request->get('currentPage', 1);
 
             // Usar el servicio para obtener datos
@@ -960,7 +960,7 @@ class ClientesController extends Controller
         $filtroCategoria = $request->has('categoria') && !empty($request->categoria) && $request->categoria != 'todos'
             ? $request->categoria : null;
 
-        $query->orderBy('created_at', 'desc');
+        $query->orderBy('created_at', 'asc');
 
         // Obtener datos según filtro de categoría
         if ($filtroCategoria) {
@@ -1201,7 +1201,7 @@ class ClientesController extends Controller
             $query->where('fecha', '<=', $fechaFin);
         }
 
-        return $query->orderBy('created_at', 'desc');
+        return $query->orderBy('created_at', 'asc');
     }
 
     /**
@@ -1442,6 +1442,6 @@ class ClientesController extends Controller
             $query->where('fecha', '<=', $fechaFin);
         }
 
-        return $query->orderBy('created_at', 'desc');
+        return $query->orderBy('created_at', 'asc');
     }
 }

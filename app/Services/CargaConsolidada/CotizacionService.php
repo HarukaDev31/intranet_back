@@ -81,20 +81,8 @@ class CotizacionService
 
             $userId = auth()->id();
 
-            $files = DB::table('carga_consolidada_contenedor')
-                ->where('id', $idContenedor)
-                ->select('bl_file_url', 'lista_embarque_url')
-                ->first();
-
-            if (!$files) {
-                $files = (object) [
-                    'bl_file_url' => null,
-                    'lista_embarque_url' => null,
-                ];
-            }
-
             // Transformar los datos para la respuesta
-            $data = $results->map(function ($cotizacion) use ($files) {
+            $data = $results->map(function ($cotizacion) {
                 return [
                     'id' => $cotizacion->id,
                     'nombre' => $cotizacion->nombre,

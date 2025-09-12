@@ -81,7 +81,7 @@ class PagosController extends Controller
             }
 
             // Paginación
-            $perPage = $request->get('limit', 10);
+            $perPage = $request->get('limit', 100);
             $page = $request->get('page', 1);
             $query = $query->paginate($perPage, ['*'], 'page', $page);
             $items = $query->items();

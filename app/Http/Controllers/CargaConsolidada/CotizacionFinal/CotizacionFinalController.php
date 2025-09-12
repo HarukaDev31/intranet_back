@@ -141,8 +141,8 @@ class CotizacionFinalController extends Controller
                 $index++;
             }
 
-            //ordenar de manera descendente por id_cotizacion
-            $transformedData = collect($transformedData)->sortByDesc('id_cotizacion')->values()->toArray();
+            //ordenar de manera ascendente por id_cotizacion
+            $transformedData = collect($transformedData)->sort('id_cotizacion')->values()->toArray();
 
             return response()->json([
                 'success' => true,
@@ -231,7 +231,7 @@ class CotizacionFinalController extends Controller
             $query->whereNull('id_cliente_importacion');
             // Ordenamiento
             $sortField = $request->input('sort_by', 'id');
-            $sortOrder = $request->input('sort_order', 'desc');
+            $sortOrder = $request->input('sort_order', 'asc');
             $query->orderBy($sortField, $sortOrder);
 
             $data = $query->paginate($perPage);

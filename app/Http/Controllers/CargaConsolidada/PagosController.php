@@ -74,7 +74,7 @@ class PagosController extends Controller
                     ) as pagos_details')
                 ])
                 ->join('carga_consolidada_contenedor', 'carga_consolidada_contenedor.id', '=', 'contenedor_consolidado_cotizacion.id_contenedor')
-                ->whereNull('contenedor_consolidado_cotizacion.id_cliente_importacion')->orderBy('contenedor_consolidado_cotizacion.id', 'desc');
+                ->whereNull('contenedor_consolidado_cotizacion.id_cliente_importacion')->orderBy('contenedor_consolidado_cotizacion.id', 'asc');
 
             // Filtros de fecha
             if ($request->filled('Filtro_Fe_Inicio')) {
@@ -426,7 +426,7 @@ class PagosController extends Controller
             $pagos = Pago::with('concepto')
                 ->where('id_cotizacion', $idCotizacion)
                 ->whereIn('id_concept', [PagoConcept::CONCEPT_PAGO_LOGISTICA, PagoConcept::CONCEPT_PAGO_IMPUESTOS])
-                ->orderBy('payment_date', 'DESC')
+                ->orderBy('payment_date', 'asc')
                 ->get();
 
             return $pagos;
@@ -624,7 +624,7 @@ class PagosController extends Controller
                 ->leftJoin('distrito', 'distrito.ID_Distrito', '=', 'entidad.ID_Distrito')
                 ->leftJoin('provincia', 'provincia.ID_Provincia', '=', 'entidad.ID_Provincia')
                 ->leftJoin('departamento', 'departamento.ID_Departamento', '=', 'entidad.ID_Departamento')
-                ->orderBy('pedido_curso.ID_Pedido_Curso', 'desc');
+                ->orderBy('pedido_curso.ID_Pedido_Curso', 'asc');
 
             // Filtro por empresa del usuario autenticado
             $query->where('pedido_curso.ID_Empresa', auth()->user()->ID_Empresa);
@@ -896,7 +896,7 @@ class PagosController extends Controller
             $pagos = PedidoCursoPago::with('concepto')
                 ->where('id_pedido_curso', $idPedidoCurso)
                 ->where('id_concept', PedidoCursoPagoConcept::CONCEPT_PAGO_ADELANTO_CURSO)
-                ->orderBy('payment_date', 'DESC')
+                ->orderBy('payment_date', 'asc')
                 ->get();
             $nombre = $pedidoCurso->ID_Entidad;
             $entidad = Entidad::findOrFail($pedidoCurso->ID_Entidad);

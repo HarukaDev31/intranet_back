@@ -53,7 +53,7 @@ class VariacionController extends Controller
         $query->orderBy($sortField, $sortOrder);
 
         // Paginación
-        $perPage = $request->input('per_page', 10);
+        $perPage = $request->input('per_page', 100);
         $data = $query->paginate($perPage);
 
         return response()->json([

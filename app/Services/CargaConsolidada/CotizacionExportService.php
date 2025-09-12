@@ -8,17 +8,24 @@ use Illuminate\Support\Facades\Log;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use Carbon\Carbon;
+use App\Models\CargaConsolidada\CotizacionProveedor;
+use App\Models\CargaConsolidada\Contenedor;
+use Illuminate\Support\Facades\DB;
 
 class CotizacionExportService
 {
     protected $cotizacionService;
+    public function __construct(CotizacionService $cotizacionService)
+    {
+        $this->cotizacionService = $cotizacionService;
+    }
 
     //Exportar a Excel
-    public function exportarCotizacion(Request $request)
+    public function exportarCotizacion(Request $request, $query = null)
     {
         try{
             // Obtener datos filtrados
-            // $datosExport = $this->obtenerDatosParaExportar($request);
+            $datosExport = $this->obtenerDatosParaExportar($request, $query);
 
             //Crea el archivo Excel
             $spreadsheet = new Spreadsheet();
@@ -26,13 +33,13 @@ class CotizacionExportService
 
 
             //Configura los encabezados
-            // $this->configurarEncabezados($sheet);
+            $this->configurarEncabezados($sheet);
 
             //Llena los datos
-            // $info = $this->llenarDatosExcel($sheet, $datosExport);
+            $info = $this->llenarDatosExcel($sheet, $datosExport);
 
             //Aplica formato y estilos
-            // $this->aplicarFormatoExcel($sheet, $info);
+            $this->aplicarFormatoExcel($sheet, $info);
 
             //Genera el archivo Excel
             return $this->generarDescargaExcel($spreadsheet);
@@ -47,18 +54,92 @@ class CotizacionExportService
     }
 
     //Obtiene los datos filtrados para la exportación
-    private function obtenerDatosParaExportar(Request $request)
+    private function obtenerDatosParaExportar(Request $request, $id)
     {
-        $query = Cotizacion::query();
 
-        $query->orderBy('created_at', 'desc');
+        // Filtrar por contenedor
+        $query = Cotizacion::where('id_contenedor', $id);
+
+        ////if request has estado_coordinacion or estado_china  then query with  proveedores  and just get cotizaciones with at least one proveedor with the state
+        if ($request->has('estado_coordinacion') || $request->has('estado_china')) {
+                $query->whereHas('proveedores', function ($query) use ($request) {
+                    $query->where('estados', $request->estado_coordinacion)
+                        ->orWhere('estados_proveedor', $request->estado_china);
+                });
+        }
+
+        $query->whereNull('id_cliente_importacion');
+        
+        //obtener datos de la tabla carga_consolidado_contenedor
+        $contenedor = Contenedor::find($id);
+
+        //obtener asesores: construimos un mapa cotizacion_id => nombre_asesor
+        $asesoresQuery = DB::table('contenedor_consolidado_cotizacion AS main')
+            ->select(['main.id as cotizacion_id', 'U.No_Nombres_Apellidos'])
+            ->leftJoin('usuario AS U', 'U.ID_Usuario', '=', 'main.id_usuario')
+            ->where('main.id_contenedor', $id)
+            ->whereNull('id_cliente_importacion');
+
+        if ($request->has('estado_coordinacion') || $request->has('estado_china')) {
+            $asesoresQuery->whereExists(function ($sub) use ($request) {
+                $sub->select(DB::raw(1))
+                    ->from('contenedor_consolidado_cotizacion_proveedores as proveedores')
+                    ->whereRaw('proveedores.id_cotizacion = main.id')
+                    ->where(function ($q) use ($request) {
+                        if ($request->has('estado_coordinacion') && $request->estado_coordinacion != 'todos') {
+                            $q->where('proveedores.estados', $request->estado_coordinacion);
+                        }
+                        if ($request->has('estado_china') && $request->estado_china != 'todos') {
+                            $q->where('proveedores.estados_proveedor', $request->estado_china);
+                        }
+                    });
+            });
+        }
+        $asesoresResults = $asesoresQuery->get();
+        $asesoresMap = [];
+        foreach ($asesoresResults as $a) {
+            $asesoresMap[$a->cotizacion_id] = $a->No_Nombres_Apellidos ?? '';
+        }
+        //obtener tipo cliente: se obtiene de la relacion a la tabla contenedor_consolidado_tipo_cliente a travez del id_tipo_cliente en la tabla contenedor_consolidado_cotizacion
+        if ($request->has('tipo_cliente') && $request->tipo_cliente != 'todos') {
+            $query->whereHas('tipoCliente', function ($q) use ($request) {
+                $q->where('id', $request->tipo_cliente);
+            });
+        }
+
+        // Ordenamiento
+        $sortField = $request->input('sort_by', 'id');
+        $sortOrder = $request->input('sort_order', 'asc');
+        $query->orderBy($sortField, $sortOrder);
+
+        // Cargar relaciones necesarias
         $cotizaciones = $query->get();
 
         $datosExport = [];
-
+        $index = 1;
         foreach ($cotizaciones as $cotizacion) {
             $datosExport[] = [
-                'cotizacion' => $cotizacion->cotizacion,
+                'n' => $index++, 
+                'carga' => $contenedor->carga ?? '',
+                'fecha_cierre' => $contenedor->f_cierre ? Carbon::parse($contenedor->f_cierre)->format('d/m/Y') : '',
+                'asesor' => $asesoresMap[$cotizacion->id] ?? '',
+                // COD construido desde helper
+                'cod' => $this->buildCod($contenedor, $cotizacion),
+                'created_at' => $cotizacion->fecha ?? null,
+                'updated_at' => $cotizacion->updated_at ?? null,
+                'nombre_cliente' => $cotizacion->nombre ?? '',
+                'dni_ruc' => $cotizacion->documento ?? 'Sin documento',
+                'correo' => $cotizacion->correo ?? 'Sin correo',
+                'whatsapp' => $cotizacion->telefono ?? '',
+                'tipo_cliente' => $cotizacion->tipoCliente->name ?? '',
+                'volumen' => $cotizacion->volumen ?? '',
+                'volumen_china' => $cotizacion->volumen_final ?? '',
+                'qty_item' => $cotizacion->qty_item ?? '',
+                'fob' => $cotizacion->fob ?? '',
+                'logistica' => $cotizacion->monto ?? '',
+                'impuesto' => $cotizacion->impuestos ?? '',
+                'tarifa' => $cotizacion->tarifa ?? '',
+                'estado' => $cotizacion->estado_cotizador ?? '',
             ];
         }
 
@@ -112,18 +193,14 @@ class CotizacionExportService
         }
 
         // Estilos para el título
-        $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(16);
-        $sheet->mergeCells('A1:B1');
-        $sheet->getStyle('A1')->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
+        $sheet->getStyle('B2')->getFont()->setBold(true)->setSize(16);        $sheet->getStyle('B2')->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
+        $sheet->getStyle('B2')->getAlignment()->setVertical(\PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER);
 
         // Estilos para los encabezados de columna
-        $sheet->getStyle('A3:B3')->getFont()->setBold(true);
-        $sheet->getStyle('A3:B3')->getFill()->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)->getStartColor()->setARGB('FFCCCCCC');
-        $sheet->getStyle('A3:B3')->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
-
-        // Ancho de columnas
-        $sheet->getColumnDimension('A')->setWidth(30);
-        $sheet->getColumnDimension('B')->setWidth(50);
+        $sheet->getStyle('B3:U3')->getFont()->setBold(true);
+        $sheet->getStyle('B3:U3')->getFill()->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)->getStartColor()->setARGB('FFCCCCCC');
+        $sheet->getStyle('B3:U3')->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
+        $sheet->getStyle('B3:U3')->getAlignment()->setVertical(\PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER);
     }
     //Llena los datos en el Excel
     private function llenarDatosExcel($sheet, $datosExport)
@@ -132,28 +209,32 @@ class CotizacionExportService
         $n = 1; // Contador para la columna N
 
         foreach ($datosExport as $data) {
-            $sheet->setCellValue('B' . $row, $data['cotizacion']);
-            $sheet->setCellValue('C' . $row, $data['carga']);
-            $sheet->setCellValue('D' . $row, $data['fecha_cierre']);
-            $sheet->setCellValue('E' . $row, $data['asesor']);
-            $sheet->setCellValue('F' . $row, $data['cod']);
-            $sheet->setCellValue('G' . $row, isset($data['created_at']) ? Carbon::parse($data['created_at'])->format('Y-m-d') : '');
-            $sheet->setCellValue('H' . $row, isset($data['updated_at']) ? Carbon::parse($data['updated_at'])->format('Y-m-d') : '');
-            $sheet->setCellValue('I' . $row, $data['nombre_cliente']);
-            $sheet->setCellValue('J' . $row, $data['dni_ruc']);
-            $sheet->setCellValue('K' . $row, $data['correo']);
-            $sheet->setCellValue('L' . $row, $data['whatsapp']);
-            $sheet->setCellValue('M' . $row, $data['tipo_cliente']);
-            $sheet->setCellValue('N' . $row, $data['volumen']);
-            $sheet->setCellValue('O' . $row, $data['volumen_china']);
-            $sheet->setCellValue('P' . $row, $data['qty_item']);
-            $sheet->setCellValue('Q' . $row, $data['fob']);
-            $sheet->setCellValue('R' . $row, $data['logistica']);
-            $sheet->setCellValue('S' . $row, $data['impuesto']);
-            $sheet->setCellValue('T' . $row, $data['tarifa']);
-            $sheet->setCellValue('U' . $row, $data['estado']);
-        
-        $row++;
+            $sheet->setCellValue('B' . $row, $data['n'] ?? '');
+            $sheet->setCellValue('C' . $row, $data['carga'] ?? '');
+            // Fecha cierre formateada como d/m/Y usando helper seguro
+            $sheet->setCellValue('D' . $row, $this->safeFormatDate($data['fecha_cierre'] ?? null));
+            $sheet->setCellValue('E' . $row, $data['asesor'] ?? '');
+            $sheet->setCellValue('F' . $row, $data['cod'] ?? '');
+
+            // Usar helper seguro para crear las fechas en formato d/m/Y
+            $sheet->setCellValue('G' . $row, $this->safeFormatDate($data['created_at'] ?? null));
+            $sheet->setCellValue('H' . $row, $this->safeFormatDate($data['updated_at'] ?? null));
+
+            $sheet->setCellValue('I' . $row, $data['nombre_cliente'] ?? '');
+            $sheet->setCellValue('J' . $row, $data['dni_ruc'] ?? '');
+            $sheet->setCellValue('K' . $row, $data['correo'] ?? '');
+            $sheet->setCellValue('L' . $row, $data['whatsapp'] ?? '');
+            $sheet->setCellValue('M' . $row, $data['tipo_cliente'] ?? '');
+            $sheet->setCellValue('N' . $row, $data['volumen'] ?? '');
+            $sheet->setCellValue('O' . $row, $data['volumen_china'] ?? '');
+            $sheet->setCellValue('P' . $row, $data['qty_item'] ?? '');
+            $sheet->setCellValue('Q' . $row, $data['fob'] ?? '');
+            $sheet->setCellValue('R' . $row, $data['logistica'] ?? '');
+            $sheet->setCellValue('S' . $row, $data['impuesto'] ?? '');
+            $sheet->setCellValue('T' . $row, $data['tarifa'] ?? '');
+            $sheet->setCellValue('U' . $row, $data['estado'] ?? '');
+
+            $row++;
             $n++;
         }
         return [
@@ -163,12 +244,65 @@ class CotizacionExportService
     }
 
     /**
-     * Obtiene la letra de columna de Excel a partir de un índice numérico.
+     * Parse a date value safely and return formatted d/m/Y or empty string.
+     * Accepts DateTime, Carbon, timestamps, or strings in common formats (Y-m-d, d/m/Y, etc.).
      */
-    private function getColumnLetter($column = 'A', $i = 1)
+    private function safeFormatDate($value)
     {
-        $columnIndex = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::columnIndexFromString($column) + $i;
-        return \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($columnIndex);
+        if (empty($value)) {
+            return '';
+        }
+
+        // If it's already a Carbon/DateTime instance
+        if ($value instanceof \DateTime) {
+            return Carbon::instance($value)->format('d/m/Y');
+        }
+
+        // If numeric timestamp
+        if (is_numeric($value)) {
+            try {
+                return Carbon::createFromTimestamp($value)->format('d/m/Y');
+            } catch (\Exception $e) {
+                return '';
+            }
+        }
+
+        // Try known formats, fallback to Carbon::parse inside try/catch
+        $formats = ['Y-m-d H:i:s', 'Y-m-d', 'd/m/Y', 'd-m-Y', 'm/d/Y'];
+        foreach ($formats as $f) {
+            $dt = \DateTime::createFromFormat($f, $value);
+            if ($dt && $dt->format($f) === $value) {
+                return Carbon::instance($dt)->format('d/m/Y');
+            }
+        }
+
+        try {
+            return Carbon::parse($value)->format('d/m/Y');
+        } catch (\Exception $e) {
+            return '';
+        }
+    }
+
+    /**
+     * Construye el COD: carga + fecha (dmy con año de 2 dígitos) + primeras 3 letras del nombre en mayúsculas
+     */
+    private function buildCod($contenedor, $cotizacion)
+    {
+        try {
+            $carga = $contenedor->carga ?? '';
+            $fechaPart = '';
+            if (!empty($cotizacion->fecha)) {
+                try {
+                    $fechaPart = Carbon::parse($cotizacion->fecha)->format('dmy');
+                } catch (\Exception $e) {
+                    $fechaPart = date('dmy', strtotime($cotizacion->fecha ?? 'now'));
+                }
+            }
+            $nombrePart = strtoupper(substr($cotizacion->nombre ?? '', 0, 3));
+            return trim($carga . $fechaPart . $nombrePart);
+        } catch (\Exception $e) {
+            return $cotizacion->cod ?? '';
+        }
     }
 
     /**
@@ -182,12 +316,10 @@ class CotizacionExportService
         //Unir celdas para el título
         $sheet->mergeCells("B2:U2");
 
-        //unir celdas de encabezados
-        $sheet->mergeCells("B3:U3");
+
 
         //Configurar ancho de columnas
         $columnWidths = [
-            'A' => 5,
             'B' => 20,
             'C' => 15,
             'D' => 15,
@@ -196,7 +328,7 @@ class CotizacionExportService
             'G' => 15,
             'H' => 20,
             'I' => 30,
-            'J' => 15,
+            'J' => 20,
             'K' => 25,
             'L' => 15,
             'M' => 15,
@@ -216,19 +348,19 @@ class CotizacionExportService
         }
 
         // Bordes para todo el rango de datos
-        $sheet->getStyle("A3:U{$lastRow}")->getBorders()->getAllBorders()->setBorderStyle(\PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN);
+        $sheet->getStyle("B3:U{$lastRow}")->getBorders()->getAllBorders()->setBorderStyle(\PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN);
 
         // Alineación para todo el rango de datos
-        $sheet->getStyle("A3:U{$lastRow}")->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_LEFT);
-        $sheet->getStyle("A3:U{$lastRow}")->getAlignment()->setVertical(\PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER);
-        $sheet->getStyle("A3:U{$lastRow}")->getAlignment()->setWrapText(true);
+        $sheet->getStyle("B3:U{$lastRow}")->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_LEFT);
+        $sheet->getStyle("B3:U{$lastRow}")->getAlignment()->setVertical(\PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER);
+        $sheet->getStyle("B3:U{$lastRow}")->getAlignment()->setWrapText(true);
 
         // Formato de fecha para las columnas de fecha
         $sheet->getStyle("G4:G{$lastRow}")->getNumberFormat()->setFormatCode('yyyy-mm-dd');
         $sheet->getStyle("H4:H{$lastRow}")->getNumberFormat()->setFormatCode('yyyy-mm-dd');
 
         // Ajuste automático de ancho de columnas
-        foreach (range('A', 'U') as $columnID) {
+        foreach (range('B', 'U') as $columnID) {
             $sheet->getColumnDimension($columnID)->setAutoSize(true);
         }
     }

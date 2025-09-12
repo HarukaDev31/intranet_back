@@ -163,13 +163,13 @@ class CotizacionProveedorController extends Controller
                     }
                 });
             }
-            $query->orderBy('main.id', 'desc');
+            $query->orderBy('main.id', 'asc');
             
             if ($rol != Usuario::ROL_COTIZADOR) {
                 $query->where('estado_cotizador', 'CONFIRMADO');
             } else if ($rol == Usuario::ROL_COTIZADOR && $user->ID_Usuario != 28791) {
                 $query->where('main.id_usuario', $user->ID_Usuario);
-                $query->orderBy('main.id', 'desc');
+                $query->orderBy('main.id', 'asc');
             } else {
             }
 
