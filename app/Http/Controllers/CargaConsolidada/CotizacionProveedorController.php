@@ -201,10 +201,7 @@ class CotizacionProveedorController extends Controller
                         return ($proveedor['estados_proveedor'] ?? '') === $estadoChina;
                     });
                 }
-                //if proveedores is empty not show the item
-                if (empty($proveedores)) {
-                    return null;
-                }
+                
 
                 $cbmTotalChina = 0;
                 $cbmTotalPeru = 0;
