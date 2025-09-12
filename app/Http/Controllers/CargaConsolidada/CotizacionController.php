@@ -104,13 +104,11 @@ class CotizacionController extends Controller
                     break;
 
                 case Usuario::ROL_DOCUMENTACION:
-                    $query->where('estado_cotizador', 'CONFIRMADO')
-                        ->whereNotNull('estado_cliente');
+                    $query->where('estado_cotizador', 'CONFIRMADO');
                     break;
 
                 case Usuario::ROL_COORDINACION:
-                    $query->where('estado_cotizador', 'CONFIRMADO')
-                        ->whereNotNull('estado_cliente');
+                    $query->where('estado_cotizador', 'CONFIRMADO');
                     break;
             }
             $query->whereNull('id_cliente_importacion');
