@@ -171,15 +171,22 @@ class VariacionController extends Controller
                 $cotizacion->files_almacen_inspection = [];
             }
             foreach ($cotizacion->files_almacen_documentacion as $file) {
+                $file=json_decode($file, true) ?: [];
                 $file->file_url = $this->generateImageUrl($file->file_url);
+                $file = json_encode($file);
             }
             foreach ($cotizacion->files_almacen_inspection as $file) {
+                $file = json_decode($file, true) ?: [];
                 $file->file_url = $this->generateImageUrl($file->file_url);
+                $file = json_encode($file);
             }
             //foreach provider set factura_comercial and packing_list and excel_confirmacion
             foreach ($cotizacion->providers as $provider) {
+                $provider = json_decode($provider, true) ?: [];
                 $provider->factura_comercial = $this->generateImageUrl($provider->factura_comercial);
                 $provider->packing_list = $this->generateImageUrl($provider->packing_list);
+                $provider->excel_confirmacion = $this->generateImageUrl($provider->excel_confirmacion);
+                $provider = json_encode($provider);
             }
             return response()->json([
                 'success' => true,
