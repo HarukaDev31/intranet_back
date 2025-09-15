@@ -138,11 +138,11 @@ class CotizacionProveedorController extends Controller
                         WHERE proveedores.id_cotizacion = main.id
                     ) as proveedores')
                 ])
-                ->join('contenedor_consolidado_tipo_cliente AS TC', 'TC.id', '=', 'main.id_tipo_cliente')
+                ->leftJoin('contenedor_consolidado_tipo_cliente AS TC', 'TC.id', '=', 'main.id_tipo_cliente')
                 ->leftJoin('usuario AS U', 'U.ID_Usuario', '=', 'main.id_usuario')
                 ->where('main.id_contenedor', $idContenedor)
                 ->whereNull('id_cliente_importacion');
-
+                Log::info('query: ' . $query->toSql());
 
             if (!empty($search)) {
                 Log::info('search: ' . $search);
@@ -163,21 +163,26 @@ class CotizacionProveedorController extends Controller
                     }
                 });
             }
-            $query->orderBy('main.id', 'asc');
+
             
-            if ($rol != Usuario::ROL_COTIZADOR) {
-                $query->where('estado_cotizador', 'CONFIRMADO');
-            } else if ($rol == Usuario::ROL_COTIZADOR && $user->ID_Usuario != 28791) {
-                $query->where('main.id_usuario', $user->ID_Usuario);
-                $query->orderBy('main.id', 'asc');
-            } else {
+            switch ($rol) {
+                case Usuario::ROL_COTIZADOR:
+                    if ($user->getIdUsuario() != 28791) {
+                        $query->where('main.id_usuario', $user->getIdUsuario());
+                    }
+
+                    break;
+
+                case Usuario::ROL_DOCUMENTACION:
+                    $query->where('main.estado_cotizador', 'CONFIRMADO');
+                    break;
+
+                case Usuario::ROL_COORDINACION:
+                    $query->where('main.estado_cotizador', 'CONFIRMADO');
+                    break;
             }
 
-            if ($rol == Usuario::ROL_COTIZADOR) {
-                $query->orderBy('main.fecha_confirmacion', 'asc');
-            }
-
-
+            $query->orderBy('main.id', 'asc');
 
             // Ejecutar consulta con paginación
             $data = $query->paginate($perPage, ['*'], 'page', $page);
@@ -194,10 +199,7 @@ class CotizacionProveedorController extends Controller
                         return ($proveedor['estados_proveedor'] ?? '') === $estadoChina;
                     });
                 }
-                //if proveedores is empty not show the item
-                if (empty($proveedores)) {
-                    return null;
-                }
+                
 
                 $cbmTotalChina = 0;
                 $cbmTotalPeru = 0;
@@ -745,7 +747,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
             $idCotizacion = $proveedorInfo->id_cotizacion;
 
             // Obtener información de la cotización
-            $cotizacionInfo = CargaConsolidadaContenedor::findOrFail($idCotizacion);
+            $cotizacionInfo = Cotizacion::findOrFail($idCotizacion);
 
             $volumen = $cotizacionInfo->volumen;
             $valorCot = $cotizacionInfo->monto;
@@ -784,7 +786,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
             $this->sendMessage($message);
 
             // Enviar imagen de pagos
-            $pagosUrl = url('public/assets/images/pagos-full.jpg');
+            $pagosUrl = public_path('assets/images/pagos-full.jpg');
             $this->sendMedia($pagosUrl, 'image/jpg');
 
             return "success";

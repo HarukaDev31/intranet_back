@@ -104,17 +104,16 @@ class CotizacionController extends Controller
                     break;
 
                 case Usuario::ROL_DOCUMENTACION:
-                    $query->where('estado_cotizador', 'CONFIRMADO')
-                        ->whereNotNull('estado_cliente');
+                    $query->where('estado_cotizador', 'CONFIRMADO');
                     break;
 
                 case Usuario::ROL_COORDINACION:
-                    $query->where('estado_cotizador', 'CONFIRMADO')
-                        ->whereNotNull('estado_cliente');
+                    $query->where('estado_cotizador', 'CONFIRMADO');
                     break;
             }
             $query->whereNull('id_cliente_importacion');
             // Ordenamiento
+            Log::info('query: ' . $query->toSql());
             $sortField = $request->input('sort_by', 'id');
             $sortOrder = $request->input('sort_order', 'asc');
             $query->orderBy($sortField, $sortOrder);
@@ -157,7 +156,7 @@ class CotizacionController extends Controller
                     'tarifa' => $cotizacion->tarifa,
                     'qty_item' => $cotizacion->qty_item,
                     'fob' => $cotizacion->fob,
-                    'cotizacion_file_url' => $cotizacion->cotizacion_file_url,
+                    'cotizacion_file_url' => $cotizacion->cotizacion_file_url ? $this->generateImageUrl($cotizacion->cotizacion_file_url) : null,
                     'impuestos' => $cotizacion->impuestos,
                     'tipo_cliente' => $cotizacion->tipoCliente->name,
                     'bl_file_url' => $files->bl_file_url ? $files->bl_file_url : null,
@@ -185,6 +184,31 @@ class CotizacionController extends Controller
                 'message' => 'Error al obtener cotizaciones: ' . $e->getMessage()
             ], 500);
         }
+    }
+    private function generateImageUrl($ruta)
+    {
+        if (empty($ruta)) {
+            return null;
+        }
+        
+        // Si ya es una URL completa, devolverla tal como está
+        if (filter_var($ruta, FILTER_VALIDATE_URL)) {
+            return $ruta;
+        }
+        
+        // Limpiar la ruta de barras iniciales para evitar doble slash
+        $ruta = ltrim($ruta, '/');
+        
+        // Construir URL manualmente para evitar problemas con Storage::url()
+        $baseUrl = config('app.url');
+        $storagePath = '/storage/';
+        
+        // Asegurar que no haya doble slash
+        $baseUrl = rtrim($baseUrl, '/');
+        $storagePath = ltrim($storagePath, '/');
+        $ruta = ltrim($ruta, '/');
+        
+        return $baseUrl . '/'  . $ruta;
     }
     public function getHeadersData($idContenedor)
     {
@@ -520,6 +544,9 @@ class CotizacionController extends Controller
                 'size' => $file->getSize()
             ];
 
+            // Iniciar transacción de base de datos para todo el flujo
+            DB::beginTransaction();
+            
             try {
                 // Subir archivo usando el sistema de almacenamiento de Laravel
                 $fileName = time() . '_' . $file->getClientOriginalName();
@@ -527,6 +554,7 @@ class CotizacionController extends Controller
 
                 if (!$fileUrl) {
                     Log::error('Error al subir archivo usando Laravel Storage');
+                    DB::rollBack();
                     return response()->json([
                         'status' => 'error',
                         'success' => false,
@@ -536,13 +564,14 @@ class CotizacionController extends Controller
 
                 // Convertir la ruta de storage a URL pública
                 $fileUrl = Storage::url($fileUrl);
-                Log::error('Cotizacion: ' . json_encode($cotizacion));
-                Log::error('Data: ' . $fileUrl);
+                Log::info('Cotizacion: ' . json_encode($cotizacion));
+                Log::info('Data: ' . $fileUrl);
 
                 $dataToInsert = $this->getCotizacionData($cotizacion);
 
                 // Verificar si getCotizacionData devolvió un error
                 if (!is_array($dataToInsert)) {
+                    DB::rollBack();
                     Storage::delete($fileUrl); // Limpiar el archivo si hay error
                     return response()->json([
                         'status' => 'error',
@@ -555,71 +584,94 @@ class CotizacionController extends Controller
                 $dataToInsert['id_contenedor'] = $request->id_contenedor;
                 $dataToInsert['id_usuario'] = Auth::id();
 
-                DB::beginTransaction();
-
+                // Crear la cotización
                 $cotizacionModel = Cotizacion::create($dataToInsert);
 
-                if ($cotizacionModel) {
-                    $idCotizacion = $cotizacionModel->id;
-                    $dataToInsert['id_cotizacion'] = $idCotizacion;
-
-                    $dataEmbarque = $this->getEmbarqueData($cotizacion, $dataToInsert);
-                    Log::error('Data embarque: ' . json_encode($dataEmbarque));
-
-                    // Insertar proveedores en lote
-                    if (!empty($dataEmbarque)) {
-                        CotizacionProveedor::insert($dataEmbarque);
-                    }
-
-                    $nombre = $dataToInsert['nombre'];
-
-                    // Ya tenemos el contenedor validado desde el inicio
-                    $f_cierre = $contenedor->f_cierre;
-
-                    $message = 'Hola ' . $nombre . ' pudiste revisar la cotización enviada? 
-                    Te comento que cerramos nuestro consolidado este ' . $f_cierre . ' Por favor si cuentas con alguna duda me avisas y puedo llamarte para aclarar tus dudas.';
-
-                    $telefono = preg_replace('/\s+/', '', $dataToInsert['telefono']);
-                    $telefono = $telefono ? $telefono . '@c.us' : '';
-
-                    $data_json = [
-                        'message' => $message,
-                        'phoneNumberId' => $telefono,
-                    ];
-
-                    // Aquí podrías agregar la lógica para guardar en la tabla de crons si es necesario
-
-                    DB::commit();
-
-                    // Limpiar el archivo temporal
-                    if (file_exists($cotizacion['tmp_name'])) {
-                        unlink($cotizacion['tmp_name']);
-                    }
-
+                if (!$cotizacionModel) {
+                    DB::rollBack();
+                    Storage::delete($fileUrl);
                     return response()->json([
-                        'id' => $idCotizacion,
-                        'status' => 'success',
-                        'success' => true
-                    ]);
+                        'status' => 'error',
+                        'success' => false,
+                        'message' => 'No se pudo crear la cotización'
+                    ], 500);
                 }
 
-                DB::rollBack();
-                Storage::delete($fileUrl); // Limpiar el archivo si hay error
-                return response()->json([
-                    'status' => 'error',
-                    'success' => false,
-                    'message' => 'No se pudo crear la cotización'
-                ], 500);
-            } catch (\Exception $e) {
-                if (isset($fileUrl)) {
-                    Storage::delete($fileUrl); // Limpiar el archivo en caso de error
+                $idCotizacion = $cotizacionModel->id;
+                $dataToInsert['id_cotizacion'] = $idCotizacion;
+
+                // Obtener datos de proveedores
+                $dataEmbarque = $this->getEmbarqueData($cotizacion, $dataToInsert);
+                Log::info('Data embarque: ' . json_encode($dataEmbarque));
+
+                // Insertar proveedores en lote si existen
+                if (!empty($dataEmbarque)) {
+                    try {
+                        CotizacionProveedor::insert($dataEmbarque);
+                        Log::info('Proveedores insertados correctamente: ' . count($dataEmbarque));
+                    } catch (\Exception $e) {
+                        Log::error('Error al insertar proveedores: ' . $e->getMessage());
+                        DB::rollBack();
+                        Storage::delete($fileUrl);
+                        return response()->json([
+                            'status' => 'error',
+                            'success' => false,
+                            'message' => 'Error al insertar proveedores: ' . $e->getMessage()
+                        ], 500);
+                    }
                 }
+
+                $nombre = $dataToInsert['nombre'];
+
+                // Ya tenemos el contenedor validado desde el inicio
+                $f_cierre = $contenedor->f_cierre;
+
+                $message = 'Hola ' . $nombre . ' pudiste revisar la cotización enviada? 
+                Te comento que cerramos nuestro consolidado este ' . $f_cierre . ' Por favor si cuentas con alguna duda me avisas y puedo llamarte para aclarar tus dudas.';
+
+                $telefono = preg_replace('/\s+/', '', $dataToInsert['telefono']);
+                $telefono = $telefono ? $telefono . '@c.us' : '';
+
+                $data_json = [
+                    'message' => $message,
+                    'phoneNumberId' => $telefono,
+                ];
+
+                // Aquí podrías agregar la lógica para guardar en la tabla de crons si es necesario
+
+                // Si todo salió bien, confirmar la transacción
+                DB::commit();
+
+                // Limpiar el archivo temporal
+                if (file_exists($cotizacion['tmp_name'])) {
+                    unlink($cotizacion['tmp_name']);
+                }
+
+                return response()->json([
+                    'id' => $idCotizacion,
+                    'status' => 'success',
+                    'success' => true,
+                    'message' => 'Cotización creada exitosamente'
+                ]);
+
+            } catch (\Exception $e) {
+                // En caso de cualquier error, hacer rollback y limpiar archivos
                 DB::rollBack();
+                
+                if (isset($fileUrl)) {
+                    Storage::delete($fileUrl);
+                }
+                
+                // Limpiar archivo temporal
+                if (file_exists($cotizacion['tmp_name'])) {
+                    unlink($cotizacion['tmp_name']);
+                }
+                
                 Log::error('Error en store de cotizaciones: ' . $e->getMessage());
                 return response()->json([
                     'status' => 'error',
                     'success' => false,
-                    'message' => $e->getMessage()
+                    'message' => 'Error al procesar la cotización: ' . $e->getMessage()
                 ], 500);
             }
         } catch (\Exception $e) {
@@ -1762,8 +1814,136 @@ class CotizacionController extends Controller
      */
     private function getEmbarqueData($file, $data)
     {
-        // Implementar según la lógica específica de tu aplicación
-        return [];
+        try {
+            if (!file_exists($file['tmp_name'])) {
+                Log::error('Archivo no encontrado en getEmbarqueData: ' . $file['tmp_name']);
+                return [];
+            }
+
+            $objPHPExcel = IOFactory::load($file['tmp_name']);
+            $rowProveedores = 4;
+            $nameCliente = $objPHPExcel->getSheet(0)->getCell('B8')->getValue();
+            $sheet2 = $objPHPExcel->getSheet(1);
+            $columnStart = "C";
+            $columnTotales = "";
+            
+            // Convertir array a objeto si es necesario
+            if (is_array($data)) {
+                $data = (object)$data;
+            }
+            
+            $idContenedor = $data->id_contenedor;
+            
+            // Obtener campo carga de la tabla contenedor
+            $contenedor = DB::table('carga_consolidada_contenedor')
+                ->select('carga')
+                ->where('id', $idContenedor)
+                ->first();
+                
+            if (!$contenedor) {
+                Log::error('Contenedor no encontrado con ID: ' . $idContenedor);
+                return [];
+            }
+            
+            $carga = $contenedor->carga;
+            
+            // Completar a 2 dígitos si se puede convertir a número, sino usar últimos 2 caracteres
+            $count = is_numeric($carga) ? str_pad($carga, 2, "0", STR_PAD_LEFT) : substr($carga, -2);
+            $stop = false;
+
+            // Buscar la columna "TOTALES"
+            while (!$stop) {
+                $cell = $sheet2->getCell($columnStart . "3")->getValue();
+                if (strtoupper(trim($cell)) == "TOTALES") {
+                    $columnTotales = $columnStart;
+                    $stop = true;
+                } else {
+                    $columnStart = $this->incrementColumn($columnStart);
+                }
+            }
+            
+            $rowCajasProveedor = 5;
+            $rowPesoProveedor = 6;
+            $rowVolProveedor = 8;
+            
+            // Iterar desde C hasta $columnTotales y obtener valores de las filas 5,6,8
+            $columnStart = "C"; // Columna inicial
+            $stop = false;
+            $provider = 1;
+            $currentRange = null;
+            $processedRanges = []; // Almacena los rangos procesados
+            $proveedores = []; // Lista de proveedores
+
+            while (!$stop) {
+                // Verifica si la columna actual es la última
+                if ($columnStart == $columnTotales) {
+                    $stop = true;
+                } else {
+                    // Obtiene el rango combinado de la celda actual
+                    $cell = $sheet2->getCell($columnStart . $rowProveedores);
+                    $currentRange = $cell->getMergeRange();
+
+                    // Si el rango ya fue procesado, pasa a la siguiente columna
+                    if ($currentRange && in_array($currentRange, $processedRanges)) {
+                        $columnStart = $this->incrementColumn($columnStart);
+                        continue;
+                    }
+
+                    // Agrega el rango actual a los rangos procesados
+                    if ($currentRange) {
+                        $processedRanges[] = $currentRange;
+                    }
+
+                    // Genera el código del proveedor usando tu función
+                    $codeSupplier = $this->generateCodeSupplier($nameCliente, $idContenedor, $count, $provider);
+
+                    // Obtener valores de las celdas
+                    $qtyBox = $sheet2->getCell($columnStart . $rowCajasProveedor)->getValue();
+                    $peso = $sheet2->getCell($columnStart . $rowPesoProveedor)->getValue();
+                    $cbmTotal = $sheet2->getCell($columnStart . $rowVolProveedor)->getValue();
+
+                    // Solo agregar proveedor si tiene datos válidos
+                    if ($qtyBox > 0 || $peso > 0 || $cbmTotal > 0) {
+                        // Agrega los datos del proveedor
+                        $proveedores[] = [
+                            'qty_box' => $qtyBox ?? 0,
+                            'peso' => $peso ?? 0,
+                            'cbm_total' => $cbmTotal ?? 0,
+                            'id_cotizacion' => $data->id_cotizacion,
+                            'code_supplier' => $codeSupplier,
+                            'id_contenedor' => $data->id_contenedor,
+                            'supplier' => '', // Campo adicional si es necesario
+                            'products' => '', // Campo adicional si es necesario
+                            'volumen_doc' => 0,
+                            'valor_doc' => 0,
+                            'factura_comercial' => '',
+                            'excel_confirmacion' => '',
+                            'packing_list' => '',
+                            'supplier_phone' => '',
+                            'estados_proveedor' => 'NC',
+                            'estado_china' => 'PENDIENTE',
+                            'qty_box_china' => 0,
+                            'cbm_total_china' => 0,
+                            'arrive_date_china' => null,
+                            'send_rotulado_status' => 'PENDING',
+                            'created_at' => now(),
+                            'updated_at' => now()
+                        ];
+                    }
+
+                    // Incrementa la columna y el contador del proveedor
+                    $columnStart = $this->incrementColumn($columnStart);
+                    $provider++;
+                }
+            }
+
+            Log::info('Proveedores extraídos: ' . count($proveedores));
+            return $proveedores;
+            
+        } catch (\Exception $e) {
+            Log::error('Error en getEmbarqueData: ' . $e->getMessage());
+            return [];
+        }
     }
 
     /**
@@ -1771,9 +1951,174 @@ class CotizacionController extends Controller
      */
     private function getEmbarqueDataModified($file, $data)
     {
-        // Implementar según la lógica específica de tu aplicación
-        return [];
+        try {
+            if (!file_exists($file['tmp_name'])) {
+                Log::error('Archivo no encontrado en getEmbarqueDataModified: ' . $file['tmp_name']);
+                return [];
+            }
+
+            $objPHPExcel = IOFactory::load($file['tmp_name']);
+            $rowProveedores = 4;
+            $nameCliente = $objPHPExcel->getSheet(0)->getCell('B8')->getValue();
+            $sheet2 = $objPHPExcel->getSheet(1);
+            $columnStart = "C";
+            $columnTotales = "";
+            
+            // Convertir array a objeto si es necesario
+            if (is_array($data)) {
+                $data = (object)$data;
+            }
+            
+            $idContenedor = $data->id_contenedor;
+            
+            // Obtener campo carga de la tabla contenedor
+            $contenedor = DB::table('carga_consolidada_contenedor')
+                ->select('carga')
+                ->where('id', $idContenedor)
+                ->first();
+                
+            if (!$contenedor) {
+                Log::error('Contenedor no encontrado con ID: ' . $idContenedor);
+                return [];
+            }
+            
+            $carga = $contenedor->carga;
+            
+            // Completar a 2 dígitos si se puede convertir a número, sino usar últimos 2 caracteres
+            $count = is_numeric($carga) ? str_pad($carga, 2, "0", STR_PAD_LEFT) : substr($carga, -2);
+            $stop = false;
+
+            // Buscar la columna "TOTALES"
+            while (!$stop) {
+                $cell = $sheet2->getCell($columnStart . "3")->getValue();
+                if (strtoupper(trim($cell)) == "TOTALES") {
+                    $columnTotales = $columnStart;
+                    $stop = true;
+                } else {
+                    $columnStart = $this->incrementColumn($columnStart);
+                }
+            }
+            
+            $rowCodeSupplier = 3;
+            $rowCajasProveedor = 5;
+            $rowPesoProveedor = 6;
+            $rowVolProveedor = 8;
+            
+            // Iterar desde C hasta $columnTotales y obtener valores de las filas 5,6,8
+            $columnStart = "C"; // Columna inicial
+            $stop = false;
+            $provider = 1;
+            $currentRange = null;
+            $processedRanges = []; // Almacena los rangos procesados
+            $proveedores = []; // Lista de proveedores
+
+            while (!$stop) {
+                // Verifica si la columna actual es la última
+                if ($columnStart == $columnTotales) {
+                    $stop = true;
+                } else {
+                    // Obtiene el rango combinado de la celda actual
+                    $cell = $sheet2->getCell($columnStart . $rowProveedores);
+                    $currentRange = $cell->getMergeRange();
+
+                    // Si el rango ya fue procesado, pasa a la siguiente columna
+                    if ($currentRange && in_array($currentRange, $processedRanges)) {
+                        $columnStart = $this->incrementColumn($columnStart);
+                        continue;
+                    }
+
+                    // Agrega el rango actual a los rangos procesados
+                    if ($currentRange) {
+                        $processedRanges[] = $currentRange;
+                    }
+
+                    // Genera el código del proveedor
+                    $codeSupplier = $sheet2->getCell($columnStart . $rowCodeSupplier)->getValue();
+                    if (!$codeSupplier || $codeSupplier == '') {
+                        $codeSupplier = $this->generateCodeSupplier($nameCliente, $idContenedor, $count, $provider);
+                    }
+                    
+                    // Obtener valores usando el método getDataCell
+                    $qtyBox = $this->getDataCell($sheet2, $columnStart . $rowCajasProveedor);
+                    $peso = $this->getDataCell($sheet2, $columnStart . $rowPesoProveedor);
+                    $cbmTotal = $this->getDataCell($sheet2, $columnStart . $rowVolProveedor);
+
+                    // Solo agregar proveedor si tiene datos válidos
+                    if ($qtyBox > 0 || $peso > 0 || $cbmTotal > 0) {
+                        $proveedores[] = [
+                            'qty_box' => $qtyBox,
+                            'peso' => $peso,
+                            'cbm_total' => $cbmTotal,
+                            'id_cotizacion' => $data->id_cotizacion,
+                            'id_contenedor' => $data->id_contenedor,
+                            'code_supplier' => $codeSupplier,
+                            'supplier' => '',
+                            'products' => '',
+                            'volumen_doc' => 0,
+                            'valor_doc' => 0,
+                            'factura_comercial' => '',
+                            'excel_confirmacion' => '',
+                            'packing_list' => '',
+                            'supplier_phone' => '',
+                            'estados' => 'PENDIENTE',
+                            'estados_proveedor' => 'PENDIENTE',
+                            'estado_china' => 'PENDIENTE',
+                            'qty_box_china' => 0,
+                            'cbm_total_china' => 0,
+                            'arrive_date_china' => null,
+                            'send_rotulado_status' => 'PENDIENTE',
+                            'created_at' => now(),
+                            'updated_at' => now()
+                        ];
+                    }
+
+                    // Incrementa la columna y el contador del proveedor
+                    $columnStart = $this->incrementColumn($columnStart);
+                    $provider++;
+                }
+            }
+
+            Log::info('Proveedores modificados extraídos: ' . count($proveedores));
+            return $proveedores;
+            
+        } catch (\Exception $e) {
+            Log::error('Error en getEmbarqueDataModified: ' . $e->getMessage());
+            return [];
+        }
     }
+    public function generateCodeSupplier($string, $idContenedor, $rowCount, $index)
+    {
+        $words = explode(" ", trim($string));
+        $code = "";
+
+        // Primeras 2 letras de las primeras 2 palabras (protegido)
+        foreach ($words as $word) {
+            if (strlen($code) >= 4) break; // Ya tenemos 4 caracteres (2 palabras)
+            if (strlen($word) >= 2) { // Solo si la palabra tiene 2+ caracteres
+                $code .= strtoupper(substr($word, 0, 2));
+            }
+        }
+
+        // Completar con ceros y retornar
+        $idContenedor = str_pad($idContenedor, 2, "0", STR_PAD_LEFT);
+        return $code . $idContenedor . "-" . $rowCount;
+    }
+    /**
+     * Obtiene el valor de una celda, manejando diferentes tipos de datos
+     */
+    private function getDataCell($sheet, $cell)
+    {
+        $value = "";
+        $value = $sheet->getCell($cell)->getValue();
+        if ($value == "") {
+            $value = $sheet->getCell($cell)->getOldCalculatedValue();
+        }
+        if ($value == "") {
+            $value = $sheet->getCell($cell)->getCalculatedValue();
+        }
+        return $value;
+    }
+
     public function deleteCotizacionFile($id)
     {
         try {
