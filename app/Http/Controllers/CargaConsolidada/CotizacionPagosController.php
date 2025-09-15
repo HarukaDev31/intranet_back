@@ -152,19 +152,24 @@ class CotizacionPagosController extends Controller
                         'pagos' => $pagos
                     ];
                 });
-                //paginar
+                // Paginación manual para la colección
                 $perPage = $request->get('limit', 100);
-                $data = $data->paginate($perPage);  
-            return response()->json([
-                'success' => true,
-                'data' => $data->items(),
-                'pagination' => [
-                    'current_page' => $data->currentPage(),
-                    'last_page' => $data->lastPage(),
-                    'per_page' => $data->perPage(),
-                    'total' => $data->total(),
-                ]
-            ]);
+                $page = $request->get('page', 1);
+                $total = $data->count();
+                
+                // Calcular offset y obtener items de la página actual
+                $items = $data->slice(($page - 1) * $perPage, $perPage)->values();
+                
+                return response()->json([
+                    'success' => true,
+                    'data' => $items,
+                    'pagination' => [
+                        'current_page' => (int)$page,
+                        'last_page' => ceil($total / $perPage),
+                        'per_page' => (int)$perPage,
+                        'total' => $total,
+                    ]
+                ]);
 
         } catch (\Exception $e) {
             return response()->json([
