@@ -170,23 +170,31 @@ class VariacionController extends Controller
             } else {
                 $cotizacion->files_almacen_inspection = [];
             }
-            foreach ($cotizacion->files_almacen_documentacion as $file) {
-                $file=json_decode($file, true) ?: [];
-                $file->file_url = $this->generateImageUrl($file->file_url);
-                $file = json_encode($file);
+            // Procesar documentos de almacén
+            foreach ($cotizacion->files_almacen_documentacion as &$file) {
+                if (isset($file['file_url'])) {
+                    $file['file_url'] = $this->generateImageUrl($file['file_url']);
+                }
             }
-            foreach ($cotizacion->files_almacen_inspection as $file) {
-                $file = json_decode($file, true) ?: [];
-                $file->file_url = $this->generateImageUrl($file->file_url);
-                $file = json_encode($file);
+
+            // Procesar documentos de inspección
+            foreach ($cotizacion->files_almacen_inspection as &$file) {
+                if (isset($file['file_url'])) {
+                    $file['file_url'] = $this->generateImageUrl($file['file_url']);
+                }
             }
-            //foreach provider set factura_comercial and packing_list and excel_confirmacion
-            foreach ($cotizacion->providers as $provider) {
-                $provider = json_decode($provider, true) ?: [];
-                $provider->factura_comercial = $this->generateImageUrl($provider->factura_comercial);
-                $provider->packing_list = $this->generateImageUrl($provider->packing_list);
-                $provider->excel_confirmacion = $this->generateImageUrl($provider->excel_confirmacion);
-                $provider = json_encode($provider);
+
+            // Procesar documentos de proveedores
+            foreach ($cotizacion->providers as &$provider) {
+                if (isset($provider['factura_comercial'])) {
+                    $provider['factura_comercial'] = $this->generateImageUrl($provider['factura_comercial']);
+                }
+                if (isset($provider['packing_list'])) {
+                    $provider['packing_list'] = $this->generateImageUrl($provider['packing_list']);
+                }
+                if (isset($provider['excel_confirmacion'])) {
+                    $provider['excel_confirmacion'] = $this->generateImageUrl($provider['excel_confirmacion']);
+                }
             }
             return response()->json([
                 'success' => true,
