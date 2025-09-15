@@ -822,7 +822,11 @@ class CursoController extends Controller
             if ($request->filled('Filtro_Fe_Fin')) {
                 $query->whereRaw('DATE(CC.Fe_Registro) <= ?', [$request->Filtro_Fe_Fin]);
             }
-
+            if($request->filled('search')) {
+                $query->where('CLI.No_Entidad', 'like', "%$request->search%")
+                    ->orWhere('CLI.Nu_Documento_Identidad', 'like', "%$request->search%")
+                    ->orWhere('CC.ID_Pedido_Curso', 'like', "%$request->search%");
+            }
             // Ordenar por ID descendente por defecto
             $query->orderBy('CC.ID_Pedido_Curso', 'desc');
 
@@ -1104,10 +1108,11 @@ class CursoController extends Controller
 
                     return response()->json([
                         'status' => 'error',
+                        'success' => true,
                         'message' => "El usuario ya existe en Moodle o hubo un error al crearlo: $error_message",
-                        'debug_data' => $debugData,
+                        'data' => $debugData,
                         'moodle_response' => $response_usuario_moodle
-                    ], 500);
+                    ], 200);
                 }
             } else {
                 return response()->json([
@@ -1470,12 +1475,7 @@ class CursoController extends Controller
             ->first();
     }
 
-    private function sendMessageVentas($message, $telefono, $delay = 0)
-    {
-        // Implementar envío de WhatsApp según tu sistema
-        Log::info("Enviando mensaje a $telefono: $message");
-    }
-
+   
     private function actualizarDatosClienteModel($id_entidad, $data)
     {
         try {
