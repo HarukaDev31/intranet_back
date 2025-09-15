@@ -70,7 +70,7 @@ class GeneralExportService
                 'contenedor_consolidado_cotizacion.fob',
                 'contenedor_consolidado_cotizacion.monto as logistica',
                 'contenedor_consolidado_cotizacion.impuestos',
-                'contenedor_consolidado_cotizacion.tarifa_final',
+                'contenedor_consolidado_cotizacion.tarifa',
                 'contenedor_consolidado_cotizacion.fecha',
                 'contenedor_consolidado_tipo_cliente.name as tipo_cliente'
             ])
@@ -126,7 +126,7 @@ class GeneralExportService
             'fob' => 'contenedor_consolidado_cotizacion.fob',
             'logistica' => 'contenedor_consolidado_cotizacion.monto',
             'impuestos' => 'contenedor_consolidado_cotizacion.impuestos',
-            'tarifa_final' => 'contenedor_consolidado_cotizacion.tarifa_final',
+            'tarifa' => 'contenedor_consolidado_cotizacion.tarifa',
             'fecha' => 'contenedor_consolidado_cotizacion.fecha',
             'tipo_cliente' => 'contenedor_consolidado_tipo_cliente.name',
         ];
@@ -157,7 +157,7 @@ class GeneralExportService
                 'fob' => $row->fob ?? 0,
                 'logistica' => $row->logistica ?? 0,
                 'impuesto' => $row->impuestos ?? 0,
-                'tarifa' => $row->tarifa_final ?? 0,
+                'tarifa' => $row->tarifa ?? 0,
             ];
         }
         return $datosExport;

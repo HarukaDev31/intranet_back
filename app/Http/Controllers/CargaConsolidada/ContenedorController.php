@@ -250,6 +250,8 @@ class ContenedorController extends Controller
 
             switch ($role) {
                 case Usuario::ROL_COTIZADOR:
+                    // Aseguramos que sólo consultamos pasos del cotizador
+                    $query->where('tipo', 'COTIZADOR');
                     if ($user->ID_Usuario == 28791) {
                         $query->limit(2);
                         break;
@@ -260,7 +262,7 @@ class ContenedorController extends Controller
                     $query->where('tipo', 'DOCUMENTACION');
                     break;
                 default:
-                    $query->where('tipo', Usuario::ROL_COTIZADOR);
+                    $query->where('tipo', 'COTIZADOR');
                     break;
             }
             $data = $query->select('id', 'name', 'status', 'iconURL')->get();
