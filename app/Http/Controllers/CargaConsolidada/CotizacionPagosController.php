@@ -152,10 +152,17 @@ class CotizacionPagosController extends Controller
                         'pagos' => $pagos
                     ];
                 });
-
+                //paginar
+                $data = $data->paginate($perPage);  
             return response()->json([
                 'success' => true,
-                'data' => $data->values()->toArray()
+                'data' => $data->values()->toArray(),
+                'pagination' => [
+                    'current_page' => $data->currentPage(),
+                    'last_page' => $data->lastPage(),
+                    'per_page' => $data->perPage(),
+                    'total' => $data->total(),
+                ]
             ]);
 
         } catch (\Exception $e) {
