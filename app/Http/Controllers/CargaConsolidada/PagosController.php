@@ -346,7 +346,7 @@ class PagosController extends Controller
         $baseUrl = rtrim($baseUrl, '/');
         $storagePath = ltrim($storagePath, '/');
         $ruta = ltrim($ruta, '/');
-        return $baseUrl .  '/' . $ruta;
+        return $baseUrl .  '/'. $storagePath .  '/' . $ruta;
     }
     /**
      * Obtener campañas disponibles
