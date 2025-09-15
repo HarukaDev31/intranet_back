@@ -627,7 +627,6 @@ class PagosController extends Controller
                 ->orderBy('pedido_curso.ID_Pedido_Curso', 'asc');
 
             // Filtro por empresa del usuario autenticado
-            $query->where('pedido_curso.ID_Empresa', auth()->user()->ID_Empresa);
 
             // Filtro para cursos que tienen pagos de adelanto
             $query->whereExists(function ($subQuery) {
