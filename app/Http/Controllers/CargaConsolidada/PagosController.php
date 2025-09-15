@@ -316,7 +316,7 @@ class PagosController extends Controller
                     'status' => $pago['status'],
                     'payment_date' => $pago['payment_date'],
                     'banco' => $pago['banco'],
-                    'voucher_url' => !filter_var($pago['voucher_url'], FILTER_VALIDATE_URL) ? $this->generateImageUrl($pago['voucher_url']) : $pago['voucher_url']
+                    'voucher_url' => $this->generateImageUrl($pago['voucher_url'])
                     
                 ];
             }
@@ -346,7 +346,7 @@ class PagosController extends Controller
         $baseUrl = rtrim($baseUrl, '/');
         $storagePath = ltrim($storagePath, '/');
         $ruta = ltrim($ruta, '/');
-        return $baseUrl . '/' . $storagePath . '/' . $ruta;
+        return $baseUrl .  '/' . $ruta;
     }
     /**
      * Obtener campañas disponibles
@@ -829,7 +829,7 @@ class PagosController extends Controller
                     'status' => $pago['status'],
                     'payment_date' => $pago['payment_date'],
                     'banco' => $pago['banco'],
-                    'voucher_url' => !filter_var($pago['voucher_url'], FILTER_VALIDATE_URL) ? $this->generateImageUrl($pago['voucher_url']) : $pago['voucher_url']
+                    'voucher_url' => $this->generateImageUrl($pago['voucher_url'])
                 ];
             }
         }
