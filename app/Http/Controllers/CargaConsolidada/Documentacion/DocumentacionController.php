@@ -317,7 +317,7 @@ class DocumentacionController extends Controller
 
             $file = $request->file('file');
 
-            $maxFileSize = 100 * 1024 * 1024;
+            $maxFileSize = 200 * 1024 * 1024;
             if ($file->getSize() > $maxFileSize) {
                 return response()->json([
                     'success' => false,
@@ -326,16 +326,7 @@ class DocumentacionController extends Controller
             }
 
             // Validar extensión del archivo
-            $allowedExtensions = ['jpg', 'jpeg', 'png', 'gif', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'txt'];
-            $fileExtension = strtolower($file->getClientOriginalExtension());
-
-            if (!in_array($fileExtension, $allowedExtensions)) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Tipo de archivo no permitido'
-                ], 400);
-            }
-
+            
             // Generar nombre único para el archivo
             $filename = time() . '_' . uniqid() . '.' . $fileExtension;
 
