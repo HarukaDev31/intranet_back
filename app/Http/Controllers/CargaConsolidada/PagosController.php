@@ -334,6 +334,11 @@ class PagosController extends Controller
         if (filter_var($ruta, FILTER_VALIDATE_URL)) {
             return $ruta;
         }
+        //if ruta contains app.url but not /storage/ then add /storage/
+        if (strpos($ruta, config('app.url')) !== false && strpos($ruta, '/storage/') === false) {
+            $ruta = config('app.url') . '/storage/' . $ruta;
+            return $ruta;
+        }
 
         // Limpiar la ruta de barras iniciales para evitar doble slash
         $ruta = ltrim($ruta, '/');
