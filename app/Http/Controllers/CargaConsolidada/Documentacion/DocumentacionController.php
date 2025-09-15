@@ -326,7 +326,10 @@ class DocumentacionController extends Controller
             }
 
             // Validar extensión del archivo
-            
+            $fileExtension = strtolower($file->getClientOriginalExtension());
+
+           
+
             // Generar nombre único para el archivo
             $filename = time() . '_' . uniqid() . '.' . $fileExtension;
 
