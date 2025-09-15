@@ -102,7 +102,7 @@ class DocumentacionController extends Controller
                         $fileData = [
                             'id' => $folder->id,
                             'id_file' => $file->id,
-                            'file_url' => $file->file_url,
+                            'file_url' => $this->generateImageUrl($file->file_url),
                             'type' => $file->file_type,
                             'lista_embarque_url' => $listaEmbarqueUrl
                         ];
@@ -130,6 +130,35 @@ class DocumentacionController extends Controller
                 'message' => 'Error al obtener carpetas de documentación: ' . $e->getMessage()
             ], 500);
         }
+    }
+    private function generateImageUrl($ruta)
+    {
+        if (empty($ruta)) {
+            return null;
+        }
+
+        // Si ya es una URL completa, devolverla tal como está
+        if (filter_var($ruta, FILTER_VALIDATE_URL)) {
+            return $ruta;
+        }
+        //if ruta contains app.url but not /storage/ then add /storage/
+        if (strpos($ruta, config('app.url')) !== false && strpos($ruta, '/storage/') === false) {
+            $ruta = config('app.url') . '/storage/' . $ruta;
+            return $ruta;
+        }
+
+        // Limpiar la ruta de barras iniciales para evitar doble slash
+        $ruta = ltrim($ruta, '/');
+
+        // Construir URL manualmente para evitar problemas con Storage::url()
+        $baseUrl = config('app.url');
+        $storagePath = '/storage/';
+
+        // Asegurar que no haya doble slash
+        $baseUrl = rtrim($baseUrl, '/');
+        $storagePath = ltrim($storagePath, '/');
+        $ruta = ltrim($ruta, '/');
+        return $baseUrl .  '/'. $storagePath .  '/' . $ruta;
     }
 
     /**
