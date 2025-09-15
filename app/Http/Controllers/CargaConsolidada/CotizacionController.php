@@ -478,9 +478,9 @@ class CotizacionController extends Controller
                 'message' => 'Contenedor no encontrado'
             ], 404);
         }
-    // Format values as currency where applicable before returning
-    $headersData = $this->applyCurrencyToHeaders($headersData);
-    return response()->json([
+        // Format values as currency where applicable before returning
+        $headersData = $this->applyCurrencyToHeaders($headersData);
+        return response()->json([
             'success' => true,
             'data' => $headersData,
             'carga' => $contenedor->carga,

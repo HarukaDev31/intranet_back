@@ -24,7 +24,7 @@ class FacturaGuiaController extends Controller
                 '=',
                 'contenedor_consolidado_tipo_cliente.id'
             )
-            ->orderBy('contenedor_consolidado_cotizacion.id', 'desc')
+            ->orderBy('contenedor_consolidado_cotizacion.id', 'asc')
             ->where('id_contenedor', $idContenedor)
             ->whereNotNull('estado_cliente')
             ->whereNull('id_cliente_importacion')

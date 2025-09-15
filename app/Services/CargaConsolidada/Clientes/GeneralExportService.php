@@ -3,6 +3,7 @@
 namespace App\Services\CargaConsolidada\Clientes;
 
 use App\Models\Cliente;
+use App\Models\CargaConsolidada\Cotizacion as Cotizacion;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
@@ -13,11 +14,18 @@ use App\Models\CargaConsolidada\Contenedor;
 
 class GeneralExportService
 {
-    public function exportarClientes(Request $request, $query=null)
+    public function exportarClientes(Request $request, $idContenedor = null)
     {
         try{
+            if ($idContenedor === null) {
+                $idContenedor = $request->input('id_contenedor');
+            }
+            if (!$idContenedor) {
+                throw new \Exception('ID de contenedor no proporcionado');
+            }
+
             // Obtener datos filtrados
-            $datosExport = $this->obtenerDatosParaExportar($request, $query);
+            $datosExport = $this->obtenerDatosParaExportar($request, $idContenedor);
             
             // Crear el archivo Excel
             $spreadsheet = new Spreadsheet();
@@ -29,7 +37,7 @@ class GeneralExportService
             $infoDimensiones = $this->llenarDatosExcel($sheet, $datosExport);
             
             // Aplicar formato y estilos
-            // $this->aplicarFormatoExcel($sheet, $infoDimensiones);
+            $this->aplicarFormatoExcel($sheet, $infoDimensiones);
             
             // Generar y descargar archivo
             return $this->generarDescargaExcel($spreadsheet);
@@ -41,46 +49,115 @@ class GeneralExportService
     /**
      * Obtiene los datos filtrados para la exportación
      */
-    private function obtenerDatosParaExportar(Request $request, $id)
+    private function obtenerDatosParaExportar(Request $request, $idContenedor)
     {
-        //consulta base (para obtener carga,f_cierre,asesor,fecha,cliente,f_updated_at,nombre,documento,correo,telefono,tipo_cliente,volumen,volumen_china,fob,logistica,impuesto,tarifa)
-        $query = Cliente::query()
-            ->select('clientes.*', 'tipo_cliente.name')
-            ->leftJoin('contenedor_consolidado_tipo_cliente as tipo_cliente', 'clientes.id_tipo_cliente', '=', 'tipo_cliente.id')
-            ->where('clientes.id_contenedor', $id);
+        // Contenedor
+        $contenedor = Contenedor::find($idContenedor);
+        if (!$contenedor) {
+            throw new \Exception('Contenedor no encontrado');
+        }
 
-        //obtener datos de la tabla carga_consolidado_contenedor
-        $contenedor = Contenedor::find($id);
+        // Consulta base sobre cotizaciones confirmadas y con estado_cliente
+        $query = Cotizacion::query()
+            ->select([
+                'contenedor_consolidado_cotizacion.id',
+                'contenedor_consolidado_cotizacion.nombre',
+                'contenedor_consolidado_cotizacion.documento',
+                'contenedor_consolidado_cotizacion.correo',
+                'contenedor_consolidado_cotizacion.telefono',
+                'contenedor_consolidado_cotizacion.volumen_china',
+                'contenedor_consolidado_cotizacion.volumen',
+                'contenedor_consolidado_cotizacion.fob',
+                'contenedor_consolidado_cotizacion.monto as logistica',
+                'contenedor_consolidado_cotizacion.impuestos',
+                'contenedor_consolidado_cotizacion.tarifa_final',
+                'contenedor_consolidado_cotizacion.fecha',
+                'contenedor_consolidado_tipo_cliente.name as tipo_cliente'
+            ])
+            ->leftJoin('contenedor_consolidado_tipo_cliente', 'contenedor_consolidado_tipo_cliente.id', '=', 'contenedor_consolidado_cotizacion.id_tipo_cliente')
+            ->where('contenedor_consolidado_cotizacion.id_contenedor', $idContenedor)
+            ->where('estado_cotizador', 'CONFIRMADO')
+            ->whereNotNull('estado_cliente');
 
+        //obtener asesores: construimos un mapa cotizacion_id => nombre_asesor
+        $asesoresQuery = DB::table('contenedor_consolidado_cotizacion as CC')
+            ->select('CC.id', DB::raw('COALESCE(U.No_Nombres_Apellidos, "") as asesor'))
+            ->leftJoin('usuario as U', 'U.ID_Usuario', '=', 'CC.id_usuario')
+            ->where('CC.id_contenedor', $idContenedor)
+            ->whereNotNull('CC.estado_cliente')
+            ->whereNull('CC.id_cliente_importacion');
+        if ($request->has('estado_coordinacion') || $request->has('estado_china')) {
+            $asesoresQuery->whereExists(function ($sub) use ($request) {
+                $sub->select(DB::raw(1))
+                    ->from('contenedor_consolidado_cotizacion_proveedores as proveedores')
+                    ->whereRaw('proveedores.id_cotizacion = CC.id')
+                    ->when($request->has('estado_coordinacion') && $request->estado_coordinacion != 'todos', function ($q) use ($request) {
+                        $q->where('proveedores.estados', $request->estado_coordinacion);
+                    })
+                    ->when($request->has('estado_china') && $request->estado_china != 'todos', function ($q) use ($request) {
+                        $q->where('proveedores.estados_proveedor', $request->estado_china);
+                    });
+            });
+        }
+        $asesoresResults = $asesoresQuery->get();
+        $asesoresMap = [];
+        foreach ($asesoresResults as $a) {
+            $asesoresMap[$a->id] = $a->asesor;
+        }
 
-        // Ordenamiento
-        $sortField = $request->input('sort_by', 'CC.fecha');
-        $sortOrder = $request->input('sort_order', 'desc');
-        $query->orderBy($sortField, $sortOrder);
+        // Filtros opcionales
+        if ($request->filled('search')) {
+            $search = $request->input('search');
+            $query->where(function ($q) use ($search) {
+                $q->where('contenedor_consolidado_cotizacion.nombre', 'LIKE', "%{$search}%")
+                  ->orWhere('contenedor_consolidado_cotizacion.documento', 'LIKE', "%{$search}%")
+                  ->orWhere('contenedor_consolidado_cotizacion.correo', 'LIKE', "%{$search}%")
+                  ->orWhere('contenedor_consolidado_cotizacion.telefono', 'LIKE', "%{$search}%");
+            });
+        }
 
-        $clientes = $query->get();
+        // Ordenamiento seguro
+        $allowedSorts = [
+            'nombre' => 'contenedor_consolidado_cotizacion.nombre',
+            'documento' => 'contenedor_consolidado_cotizacion.documento',
+            'correo' => 'contenedor_consolidado_cotizacion.correo',
+            'telefono' => 'contenedor_consolidado_cotizacion.telefono',
+            'volumen' => 'contenedor_consolidado_cotizacion.volumen',
+            'fob' => 'contenedor_consolidado_cotizacion.fob',
+            'logistica' => 'contenedor_consolidado_cotizacion.monto',
+            'impuestos' => 'contenedor_consolidado_cotizacion.impuestos',
+            'tarifa_final' => 'contenedor_consolidado_cotizacion.tarifa_final',
+            'fecha' => 'contenedor_consolidado_cotizacion.fecha',
+            'tipo_cliente' => 'contenedor_consolidado_tipo_cliente.name',
+        ];
+        $sortField = $request->input('sort_by', 'fecha');
+        $sortOrder = strtolower($request->input('sort_order', 'asc'));
+        $sortColumn = $allowedSorts[$sortField] ?? $allowedSorts['fecha'];
+        $query->orderBy($sortColumn, $sortOrder);
+
+        $rows = $query->get();
 
         $datosExport = [];
         $index = 1;
-        foreach ($clientes as $cliente) {
+        foreach ($rows as $row) {
             $datosExport[] = [
                 'n' => $index++,
                 'carga' => $contenedor->carga ?? '',
-                'fecha_cierre' => $contenedor->f_cierre ? Carbon::parse($contenedor->f_cierre)->format('d/m/Y') : '',
-                'asesor' => $cliente->asesor ?? '',
-                'COD' => $this->buildCod($contenedor, $cliente),
-                'fecha' => $contenedor->fecha ?? '',
-                'cliente' => $contenedor->nombre ?? '',
-                'documento' => $cliente->documento ?? '',
-                'correo' => $cliente->correo ?? '',
-                'telefono' => $cliente->telefono ?? '',
-                'tipo_cliente' => $cliente->name ?? '',
-                'volumen' => $cliente->volumen ?? '',
-                'volumen_china' => $cliente->volumen_china ?? '',
-                'fob' => $cliente->fob ?? '',
-                'logistica' => $cliente->logistica ?? '',
-                'impuesto' => $cliente->impuesto ?? '',
-                'tarifa' => $cliente->tarifa ?? '',
+                'fecha_cierre' => $this->safeFormatDate($contenedor->f_cierre ?? null),
+                'asesor' => $asesoresMap[$row->id] ?? '',
+                'COD' => $this->buildCod($contenedor, $row),
+                'fecha' => $this->safeFormatDate($row->fecha ?? null),
+                'cliente' => $row->nombre ?? '',
+                'documento' => $row->documento ?? '',
+                'correo' => $row->correo ?? '',
+                'telefono' => $row->telefono ?? '',
+                'tipo_cliente' => $row->tipo_cliente ?? '',
+                'volumen' => $row->volumen,
+                'volumen_china' => $row->volumen_china ?? 0,
+                'fob' => $row->fob ?? 0,
+                'logistica' => $row->logistica ?? 0,
+                'impuesto' => $row->impuestos ?? 0,
+                'tarifa' => $row->tarifa_final ?? 0,
             ];
         }
         return $datosExport;
