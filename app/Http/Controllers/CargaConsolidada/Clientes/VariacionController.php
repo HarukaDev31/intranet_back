@@ -138,7 +138,9 @@ class VariacionController extends Controller
                 ->where('main.id', $id)
                 ->whereNotNull('main.estado')
                 ->first();
-
+                    
+            $cotizacion->files_almacen_documentacion = $this->generateImageUrl($cotizacion->files_almacen_documentacion);
+            $cotizacion->files_almacen_inspection = $this->generateImageUrl($cotizacion->files_almacen_inspection);
             if (!$cotizacion) {
                 return response()->json([
                     'success' => false,
@@ -152,11 +154,16 @@ class VariacionController extends Controller
             } else {
                 $cotizacion->files = [];
             }
-
             if ($cotizacion->files_almacen_documentacion) {
                 $cotizacion->files_almacen_documentacion = json_decode($cotizacion->files_almacen_documentacion, true) ?: [];
             } else {
                 $cotizacion->files_almacen_documentacion = [];
+            }
+
+            if ($cotizacion->files_almacen_inspection) {
+                $cotizacion->files_almacen_inspection = json_decode($cotizacion->files_almacen_inspection, true) ?: [];
+            } else {
+                $cotizacion->files_almacen_inspection = [];
             }
 
             if ($cotizacion->providers) {
@@ -182,6 +189,30 @@ class VariacionController extends Controller
                 'message' => 'Error al obtener documentación: ' . $e->getMessage()
             ], 500);
         }
+    }
+    private function generateImageUrl($ruta)
+    {
+        if (empty($ruta)) {
+            return null;
+        }
+
+        // Si ya es una URL completa, devolverla tal como está
+        if (filter_var($ruta, FILTER_VALIDATE_URL)) {
+            return $ruta;
+        }
+
+        // Limpiar la ruta de barras iniciales para evitar doble slash
+        $ruta = ltrim($ruta, '/');
+
+        // Construir URL manualmente para evitar problemas con Storage::url()
+        $baseUrl = config('app.url');
+        $storagePath = '/storage/';
+
+        // Asegurar que no haya doble slash
+        $baseUrl = rtrim($baseUrl, '/');
+        $storagePath = ltrim($storagePath, '/');
+        $ruta = ltrim($ruta, '/');
+        return $baseUrl . '/' . $storagePath . '/' . $ruta;
     }
     public function updateVolSelected(Request $request)
     {
