@@ -153,10 +153,11 @@ class CotizacionPagosController extends Controller
                     ];
                 });
                 //paginar
+                $perPage = $request->get('limit', 100);
                 $data = $data->paginate($perPage);  
             return response()->json([
                 'success' => true,
-                'data' => $data->values()->toArray(),
+                'data' => $data->items(),
                 'pagination' => [
                     'current_page' => $data->currentPage(),
                     'last_page' => $data->lastPage(),
