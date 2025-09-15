@@ -49,7 +49,7 @@ class VariacionController extends Controller
 
         // Ordenamiento
         $sortField = $request->input('sort_by', 'CC.fecha');
-        $sortOrder = $request->input('sort_order', 'desc');
+        $sortOrder = $request->input('sort_order', 'asc');
         $query->orderBy($sortField, $sortOrder);
 
         // Paginación

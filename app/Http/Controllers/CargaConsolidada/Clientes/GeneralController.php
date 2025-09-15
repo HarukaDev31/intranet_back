@@ -102,8 +102,8 @@ class GeneralController extends Controller
         }
 
         // Ordenamiento
-        $sortField = $request->input('sort_by', 'CC.fecha');
-        $sortOrder = $request->input('sort_order', 'desc');
+        $sortField = $request->input('sort_by', 'CC.id');
+        $sortOrder = $request->input('sort_order', 'asc');
         $query->orderBy($sortField, $sortOrder);
 
         // Paginación
@@ -333,7 +333,7 @@ class GeneralController extends Controller
                     Usuario::ROL_COTIZADOR => ['cbm_total_china', 'cbm_total', 'total_logistica', 'total_logistica_pagado', 'qty_items', 'total_fob', 'total_impuestos'],
                     Usuario::ROL_ADMINISTRACION => ['cbm_total_china', 'cbm_total', 'total_logistica', 'total_logistica_pagado', 'qty_items', 'total_fob', 'total_impuestos'],
                     Usuario::ROL_COORDINACION => ['cbm_total_china', 'cbm_total', 'total_logistica', 'total_logistica_pagado', 'qty_items', 'total_fob', 'total_impuestos'],
-                    Usuario::ROL_DOCUMENTACION => [ 'total_logistica', 'total_logistica_pagado'],
+                    Usuario::ROL_DOCUMENTACION => [ null],
                 ];
                 $userIdCheck = $user->getNombreGrupo();
                 $headersData = [

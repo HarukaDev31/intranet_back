@@ -71,7 +71,7 @@ class CotizacionService
             $query->whereNull('id_cliente_importacion');
             // Ordenamiento
             $sortField = $request->input('sort_by', 'id');
-            $sortOrder = $request->input('sort_order', 'desc');
+            $sortOrder = $request->input('sort_order', 'asc');
             $query->orderBy($sortField, $sortOrder);
 
             // Paginación
