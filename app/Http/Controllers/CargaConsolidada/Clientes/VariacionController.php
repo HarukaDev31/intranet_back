@@ -139,8 +139,6 @@ class VariacionController extends Controller
                 ->whereNotNull('main.estado')
                 ->first();
                     
-            $cotizacion->files_almacen_documentacion = $this->generateImageUrl($cotizacion->files_almacen_documentacion);
-            $cotizacion->files_almacen_inspection = $this->generateImageUrl($cotizacion->files_almacen_inspection);
             if (!$cotizacion) {
                 return response()->json([
                     'success' => false,
@@ -177,7 +175,18 @@ class VariacionController extends Controller
             } else {
                 $cotizacion->files_almacen_inspection = [];
             }
-
+            foreach ($cotizacion->files_almacen_documentacion as $file) {
+                $file->file_url = $this->generateImageUrl($file->file_url);
+            }
+            foreach ($cotizacion->files_almacen_inspection as $file) {
+                $file->file_url = $this->generateImageUrl($file->file_url);
+            }
+            //foreach provider set factura_comercial and packing_list and excel_confirmacion
+            foreach ($cotizacion->providers as $provider) {
+                $provider->factura_comercial = $this->generateImageUrl($provider->factura_comercial);
+                $provider->packing_list = $this->generateImageUrl($provider->packing_list);
+                $provider->excel_confirmacion = $this->generateImageUrl($provider->excel_confirmacion);
+            }
             return response()->json([
                 'success' => true,
                 'data' => $cotizacion,
