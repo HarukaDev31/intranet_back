@@ -278,6 +278,7 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
         Route::group(['prefix' => 'aduana'], function () {
             Route::get('/{idContenedor}', [AduanaController::class, 'viewFormularioAduana']);
             Route::post('/', [AduanaController::class, 'saveFormularioAduana']);
+            Route::delete('/files/{idFile}', [AduanaController::class, 'deleteFileAduana']);
         });
         Route::get('{id}', [ContenedorController::class, 'show']);
         Route::put('{id}', [ContenedorController::class, 'update']);

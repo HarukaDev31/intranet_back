@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use App\Models\CargaConsolidada\Contenedor;
-use App\Models\CargaConsolidada\ContenedorAduanaFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
 
@@ -136,5 +135,15 @@ class AduanaController extends Controller
         } finally {
             DB::commit();
         }
+    }
+    public function deleteFileAduana($idFile)
+    {
+        $file = DB::table('carga_consolidada_aduana_files')->where('id', $idFile)->first();
+        DB::table('carga_consolidada_aduana_files')->where('id', $idFile)->delete();
+        Storage::disk('public')->delete($file->file_path);
+        return response()->json([
+            'success' => true,
+            'message' => 'Archivo eliminado correctamente'
+        ]);
     }
 }
