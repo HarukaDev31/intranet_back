@@ -251,7 +251,6 @@ class ContenedorController extends Controller
             switch ($role) {
                 case Usuario::ROL_COTIZADOR:
                     if ($user->ID_Usuario == 28791) {
-                        Log::info('jefe');
                         $query->limit(2);
                         break;
                     }
@@ -265,10 +264,40 @@ class ContenedorController extends Controller
                     break;
             }
             $data = $query->select('id', 'name', 'status', 'iconURL')->get();
+            //FOR EACH DATA, IF ICONURL IS NOT NULL, REPLACE THE ICONURL WITH THE URL OF THE ICON
+            foreach ($data as $item) {
+                $item->iconURL = $this->generateImageUrl($item->iconURL);
+            }
+
             return response()->json(['data' => $data, 'success' => true]);
         } catch (\Exception $e) {
             return response()->json(['data' => [], 'success' => false, 'message' => 'Error al obtener pasos del contenedor: ' . $e->getMessage()]);
         }
+    }
+        private function generateImageUrl($ruta)
+    {
+        if (empty($ruta)) {
+            return null;
+        }
+        
+        // Si ya es una URL completa, devolverla tal como está
+        if (filter_var($ruta, FILTER_VALIDATE_URL)) {
+            return $ruta;
+        }
+        
+        // Limpiar la ruta de barras iniciales para evitar doble slash
+        $ruta = ltrim($ruta, '/');
+        
+        // Construir URL manualmente para evitar problemas con Storage::url()
+        $baseUrl = config('app.url');
+        $storagePath = '/storage/';
+        
+        // Asegurar que no haya doble slash
+        $baseUrl = rtrim($baseUrl, '/');
+        $storagePath = ltrim($storagePath, '/');
+        $ruta = ltrim($ruta, '/');
+        
+        return $baseUrl . '/'  . $ruta;
     }
     public function getValidContainers()
     {
