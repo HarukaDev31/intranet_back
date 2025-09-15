@@ -428,7 +428,9 @@ class PagosController extends Controller
                 ->whereIn('id_concept', [PagoConcept::CONCEPT_PAGO_LOGISTICA, PagoConcept::CONCEPT_PAGO_IMPUESTOS])
                 ->orderBy('payment_date', 'asc')
                 ->get();
-
+            foreach ($pagos as $pago) {
+                $pago->voucher_url = $this->generateImageUrl($pago->voucher_url);
+            }
             return $pagos;
         } catch (\Exception $e) {
             Log::error('Error en getPagosCoordination: ' . $e->getMessage());
