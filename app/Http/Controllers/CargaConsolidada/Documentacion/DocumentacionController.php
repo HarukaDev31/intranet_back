@@ -1045,6 +1045,10 @@ class DocumentacionController extends Controller
                 Log::info('Procesando hoja adicional - Item: ' . $itemN . ' en fila: ' . $row . ' de hoja: ' . $sheet->getTitle());
                 $client = $this->findClientForItem($itemToClientMap, $itemN);
                 Log::info('Cliente encontrado para ' . $itemN . ': ' . $client);
+                
+                // ESCRIBIR EL CLIENTE EN LA COLUMNA D - esto faltaba!
+                $sheet0->setCellValue('D' . $highestFirstSheetRow, $client);
+                
                 $this->processSystemData($sheet0, $highestFirstSheetRow, $client, $dataSystem);
 
                 // Procesar información aduanera
