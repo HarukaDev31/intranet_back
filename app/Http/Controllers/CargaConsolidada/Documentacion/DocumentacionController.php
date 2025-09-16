@@ -676,15 +676,20 @@ class DocumentacionController extends Controller
     private function findClientForItem($itemToClientMap, $itemN)
     {
         if (empty($itemN)) {
-            return 'Cliente no encontrado';
+            Log::warning('ItemN está vacío, retornando cadena vacía');
+            return '';
         }
 
         $cleanItemN = trim($itemN);
+        Log::info('🔍 BUSCANDO CLIENTE PARA ITEM: "' . $cleanItemN . '"');
+        Log::info('📋 Total items en mapeo: ' . count($itemToClientMap));
         
         // Estrategia 1: Búsqueda exacta
         if (isset($itemToClientMap[$cleanItemN])) {
-            Log::info('Cliente encontrado (exacto): ' . $cleanItemN . ' -> ' . $itemToClientMap[$cleanItemN]);
+            Log::info('✅ Cliente encontrado (exacto): ' . $cleanItemN . ' -> ' . $itemToClientMap[$cleanItemN]);
             return $itemToClientMap[$cleanItemN];
+        } else {
+            Log::info('❌ No encontrado en búsqueda exacta para: "' . $cleanItemN . '"');
         }
 
         // Estrategia 2: Búsqueda sin considerar mayúsculas/minúsculas
@@ -721,8 +726,24 @@ class DocumentacionController extends Controller
             }
         }
 
-        Log::warning('Cliente no encontrado para itemId: ' . $cleanItemN);
-        Log::warning('ItemIds disponibles en el mapeo: ' . implode(', ', array_keys($itemToClientMap)));
+        Log::warning('❌ Cliente no encontrado para itemId: ' . $cleanItemN);
+        
+        // Mostrar items similares para debug
+        $numericKeys = array_filter(array_keys($itemToClientMap), 'is_numeric');
+        sort($numericKeys, SORT_NUMERIC);
+        $nearbyItems = [];
+        $targetNum = is_numeric($cleanItemN) ? intval($cleanItemN) : 0;
+        
+        foreach ($numericKeys as $key) {
+            $keyNum = intval($key);
+            if (abs($keyNum - $targetNum) <= 3) { // Mostrar items ±3 del target
+                $nearbyItems[] = $key . ' -> ' . $itemToClientMap[$key];
+            }
+        }
+        
+        if (!empty($nearbyItems)) {
+            Log::warning('🔍 Items cercanos disponibles: ' . implode(', ', $nearbyItems));
+        }
         
         // Si no hay cliente, devolver cadena vacía en lugar de texto
         return '';

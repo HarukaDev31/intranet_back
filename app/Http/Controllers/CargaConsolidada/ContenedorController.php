@@ -405,7 +405,7 @@ class ContenedorController extends Controller
     public function getCargasDisponibles()
     {
         $hoy = date('Y-m-d');
-        $query = Contenedor::where(DB::raw('DATE(f_cierre)'), '>=', $hoy)->where('empresa', '!=', 1)->orderBy('carga', 'desc');
+        $query = Contenedor::where('empresa', '!=', 1)->orderBy('carga', 'desc');
         return $query->get();
     }
     public function moveCotizacionToConsolidado(Request $request)
