@@ -961,6 +961,27 @@ class DocumentacionController extends Controller
     }
 
     /**
+     * Procesa merge de cliente para hojas adicionales
+     */
+    private function processAdditionalClientMerge($sheet, $row, $client, &$currentClient, &$clientStartRow, &$clientEndRow, &$pendingMerge)
+    {
+        if ($client !== $currentClient) {
+            if ($currentClient !== "" && $currentClient !== null && $clientStartRow > 0) {
+                $pendingMerge[] = [
+                    'client' => $currentClient,
+                    'start' => $clientStartRow,
+                    'end' => $clientEndRow
+                ];
+            }
+
+            $currentClient = $client;
+            $clientStartRow = $row;
+        }
+
+        $clientEndRow = $row;
+    }
+
+    /**
      * Procesa hojas adicionales
      */
     private function processAdditionalSheets($facturaExcel, $itemToClientMap, $dataSystem, $listaPartidasExcel)
@@ -1017,6 +1038,12 @@ class DocumentacionController extends Controller
         $highestRow = $sheet->getHighestRow();
         $startIndex = 26;
         
+        // Variables para manejar merge de clientes
+        $currentClient = "";
+        $clientStartRow = 0;
+        $clientEndRow = 0;
+        $pendingMerge = [];
+        
         Log::info('=== INICIANDO PROCESAMIENTO DE HOJA ADICIONAL ===');
         Log::info('Hoja: ' . $sheet->getTitle() . ', Filas: ' . $highestRow);
         
@@ -1049,6 +1076,9 @@ class DocumentacionController extends Controller
                 // ESCRIBIR EL CLIENTE EN LA COLUMNA D - esto faltaba!
                 $sheet0->setCellValue('D' . $highestFirstSheetRow, $client);
                 
+                // Procesar merge de cliente (similar a processClientMerge pero adaptado)
+                $this->processAdditionalClientMerge($sheet0, $highestFirstSheetRow, $client, $currentClient, $clientStartRow, $clientEndRow, $pendingMerge);
+                
                 $this->processSystemData($sheet0, $highestFirstSheetRow, $client, $dataSystem);
 
                 // Procesar información aduanera
@@ -1065,6 +1095,9 @@ class DocumentacionController extends Controller
                 break;
             }
         }
+        
+        // Aplicar merges pendientes al final
+        $this->applyPendingMerges($sheet0, $pendingMerge, $currentClient, $clientStartRow, $clientEndRow);
     }
 
     /**
