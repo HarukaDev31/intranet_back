@@ -1091,10 +1091,11 @@ class CotizacionFinalController extends Controller
                 ->where('id_contenedor', $idContainer)
                 ->where('estado_cotizador', 'CONFIRMADO')
                 ->whereNotNull('estado_cliente')
+                ->whereNull('id_cliente_importacion')
                 ->get();
 
             Log::info('Datos de cotizaciones encontrados: ' . json_encode($result));
-
+            Log::info('Datos de excel: ' . json_encode($data));
             // Procesar datos y hacer matching
             foreach ($data as &$cliente) {
                 $nombreCliente = $cliente['cliente']['nombre'];
