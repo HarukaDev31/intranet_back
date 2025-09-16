@@ -968,6 +968,52 @@ class DocumentacionController extends Controller
     }
 
     /**
+     * Desmerge celdas de forma segura sin lanzar errores
+     */
+    private function safeUnmergeCells($sheet, $cellAddress)
+    {
+        try {
+            // Obtener todas las celdas mergeadas
+            $mergedCells = $sheet->getMergeCells();
+            
+            foreach ($mergedCells as $mergedRange) {
+                // Si la celda está dentro del rango mergeado, desmergear
+                if ($this->isCellInRange($cellAddress, $mergedRange)) {
+                    $sheet->unmergeCells($mergedRange);
+                    Log::info('🔓 Desmergeado: ' . $mergedRange . ' (contiene ' . $cellAddress . ')');
+                    break;
+                }
+            }
+        } catch (\Exception $e) {
+            // Silenciar errores de unmerge - puede que la celda no esté mergeada
+            Log::info('ℹ️ No se pudo desmergar ' . $cellAddress . ': ' . $e->getMessage());
+        }
+    }
+    
+    /**
+     * Verifica si una celda está dentro de un rango
+     */
+    private function isCellInRange($cellAddress, $range)
+    {
+        try {
+            $coordinate = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::coordinateFromString($cellAddress);
+            $rangeCoordinates = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::getRangeCoordinates($range);
+            
+            $cellCol = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::columnIndexFromString($coordinate[0]);
+            $cellRow = $coordinate[1];
+            
+            $startCol = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::columnIndexFromString($rangeCoordinates[0][0]);
+            $startRow = $rangeCoordinates[0][1];
+            $endCol = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::columnIndexFromString($rangeCoordinates[1][0]);
+            $endRow = $rangeCoordinates[1][1];
+            
+            return ($cellCol >= $startCol && $cellCol <= $endCol && $cellRow >= $startRow && $cellRow <= $endRow);
+        } catch (\Exception $e) {
+            return false;
+        }
+    }
+
+    /**
      * Aplica merges pendientes
      */
     private function applyPendingMerges($sheet, $pendingMerge, $currentClient, $clientStartRow, $clientEndRow)
@@ -983,11 +1029,23 @@ class DocumentacionController extends Controller
         foreach ($pendingMerge as $merge) {
             if ($merge['start'] < $merge['end'] && $merge['start'] > 0 && $merge['end'] > 0) {
                 try {
+                    Log::info('🔗 Procesando merge para cliente: ' . $merge['client'] . ' desde fila ' . $merge['start'] . ' hasta ' . $merge['end']);
+                    
+                    // Primero desmergar todas las celdas en el rango para evitar conflictos
+                    for ($row = $merge['start']; $row <= $merge['end']; $row++) {
+                        $this->safeUnmergeCells($sheet, 'C' . $row);
+                        $this->safeUnmergeCells($sheet, 'D' . $row);  
+                        $this->safeUnmergeCells($sheet, 'T' . $row);
+                    }
+                    
+                    // Ahora aplicar los nuevos merges
                     $sheet->mergeCells('C' . $merge['start'] . ':C' . $merge['end']);
                     $sheet->mergeCells('D' . $merge['start'] . ':D' . $merge['end']);
                     $sheet->mergeCells('T' . $merge['start'] . ':T' . $merge['end']);
+                    
+                    Log::info('✅ Merge aplicado exitosamente para cliente: ' . $merge['client']);
                 } catch (\Exception $e) {
-                    Log::warning('Error aplicando merge: ' . $e->getMessage());
+                    Log::error('❌ Error merging cells for client ' . $merge['client'] . ': ' . $e->getMessage());
                 }
             }
         }
