@@ -606,7 +606,7 @@ class DocumentacionController extends Controller
         $sheet = $packingExcel->getSheet(0);
         $highestRow = $sheet->getHighestRow();
 
-        for ($row = 27; $row <= $highestRow; $row++) {
+        for ($row = 26; $row <= $highestRow; $row++) {
             $itemId = $sheet->getCell('B' . $row)->getValue();
             $client = $sheet->getCell('C' . $row)->getValue();
 
