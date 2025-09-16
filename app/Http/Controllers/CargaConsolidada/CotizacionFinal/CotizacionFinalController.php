@@ -2040,44 +2040,47 @@ class CotizacionFinalController extends Controller
      */
     private function configureMainSheet($objPHPExcel, $data, $pesoTotal, $tipoCliente, $cbmTotalProductos, $tarifaValue, $antidumpingSum)
     {
-        $sheet1 = $objPHPExcel->getSheet(0);
+        // Asegurarse de trabajar con la hoja principal (índice 0)
+        $objPHPExcel->setActiveSheetIndex(0);
+        $sheet1 = $objPHPExcel->getActiveSheet();
         
         // Configurar información del cliente
-        $objPHPExcel->getActiveSheet()->mergeCells('C8:C9');
-        $objPHPExcel->getActiveSheet()->getStyle('C8')->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
-        $objPHPExcel->getActiveSheet()->getStyle('C8')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-        $objPHPExcel->getActiveSheet()->setCellValue('C8', $data['cliente']['nombre']);
-        $objPHPExcel->getActiveSheet()->setCellValue('C10', $data['cliente']['dni']);
-        $objPHPExcel->getActiveSheet()->setCellValue('C11', $data['cliente']['telefono']);
+        $sheet1->mergeCells('C8:C9');
+        $sheet1->getStyle('C8')->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
+        $sheet1->getStyle('C8')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        $sheet1->setCellValue('C8', $data['cliente']['nombre']);
+        $sheet1->setCellValue('C10', $data['cliente']['dni']);
+        $sheet1->setCellValue('C11', $data['cliente']['telefono']);
         
         // Configurar peso
-        $objPHPExcel->getActiveSheet()->setCellValue('J9', $pesoTotal >= 1000 ? $pesoTotal / 1000 . " Tn" : $pesoTotal . " Kg");
-        $objPHPExcel->getActiveSheet()->getStyle('J9')->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_NUMBER);
+        $sheet1->setCellValue('J9', $pesoTotal >= 1000 ? $pesoTotal / 1000 . " Tn" : $pesoTotal . " Kg");
+        $sheet1->getStyle('J9')->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_NUMBER);
         
         // Configurar CBM
-        $objPHPExcel->getActiveSheet()->setCellValue('J11', $cbmTotalProductos);
-        $objPHPExcel->getActiveSheet()->getStyle('J11')->getNumberFormat()->setFormatCode('#,##0.00');
-        $objPHPExcel->getActiveSheet()->setCellValue('I11', "CBM");
+        $sheet1->setCellValue('J11', $cbmTotalProductos);
+        $sheet1->getStyle('J11')->getNumberFormat()->setFormatCode('#,##0.00');
+        $sheet1->setCellValue('I11', "CBM");
         
         // Configurar tipo de cliente
-        $objPHPExcel->getActiveSheet()->setCellValue('F11', $tipoCliente);
+        $sheet1->setCellValue('F11', $tipoCliente);
         
         // Configurar columnas de referencia
         $productsCount = count($data['cliente']['productos']);
         $columnaIndex = Coordinate::stringFromColumnIndex($productsCount + 2);
         
-        $objPHPExcel->getActiveSheet()->setCellValue('K14', "='3'!" . $columnaIndex . "11");
-        $objPHPExcel->getActiveSheet()->setCellValue('K15', "='3'!" . $columnaIndex . "14 + '3'!" . $columnaIndex . "17");
-        $objPHPExcel->getActiveSheet()->setCellValue('K20', "='3'!" . $columnaIndex . "28");
-        $objPHPExcel->getActiveSheet()->setCellValue('K21', "='3'!" . $columnaIndex . "29");
-        $objPHPExcel->getActiveSheet()->setCellValue('K22', "='3'!" . $columnaIndex . "30");
-        $objPHPExcel->getActiveSheet()->setCellValue('K25', "='3'!" . $columnaIndex . "31");
-        $objPHPExcel->getActiveSheet()->setCellValue('K30', "=IF(J11<1, '3'!" . $columnaIndex . "14, '3'!" . $columnaIndex . "14*J11)");
+        // Configurar referencias a la hoja de cálculos (que será la hoja "2" después de la reorganización)
+        $sheet1->setCellValue('K14', "='2'!" . $columnaIndex . "11");
+        $sheet1->setCellValue('K15', "='2'!" . $columnaIndex . "14 + '2'!" . $columnaIndex . "17");
+        $sheet1->setCellValue('K20', "='2'!" . $columnaIndex . "28");
+        $sheet1->setCellValue('K21', "='2'!" . $columnaIndex . "29");
+        $sheet1->setCellValue('K22', "='2'!" . $columnaIndex . "30");
+        $sheet1->setCellValue('K25', "='2'!" . $columnaIndex . "31");
+        $sheet1->setCellValue('K30', "=IF(J11<1, '2'!" . $columnaIndex . "14, '2'!" . $columnaIndex . "14*J11)");
 
         // Configurar mensaje de WhatsApp
-        $ClientName = $objPHPExcel->getActiveSheet()->getCell('C8')->getValue();
-        $CobroCellValue = $objPHPExcel->getActiveSheet()->getCell('K30')->getCalculatedValue();
-        $ImpuestosCellValue = $objPHPExcel->getActiveSheet()->getCell('K31')->getCalculatedValue();
+        $ClientName = $sheet1->getCell('C8')->getValue();
+        $CobroCellValue = $sheet1->getCell('K30')->getCalculatedValue();
+        $ImpuestosCellValue = $sheet1->getCell('K31')->getCalculatedValue();
         
         // Asegurar que los valores sean numéricos
         $CobroCellValue = is_numeric($CobroCellValue) ? (float)$CobroCellValue : 0;
@@ -2093,9 +2096,9 @@ class CotizacionFinalController extends Controller
             "Pronto le aviso nuevos avances, que tengan buen día🚢\n" .
             "Último día de pago:";
             
-        $objPHPExcel->getActiveSheet()->setCellValue('N20', $N20CellValue);
+        $sheet1->setCellValue('N20', $N20CellValue);
 
-        // Remover página 2 y renombrar hoja 3
+        // Remover página 2 (índice 1) y renombrar hoja de cálculos (índice 2) como "2"
         $objPHPExcel->removeSheetByIndex(1);
         $objPHPExcel->setActiveSheetIndex(1);
         $objPHPExcel->getActiveSheet()->setTitle('2');
