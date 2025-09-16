@@ -625,10 +625,33 @@ class DocumentacionController extends Controller
                         $cleanItemId = trim($itemId);
                         $cleanClient = trim($client);
                         
+                        // Manejar duplicados: crear claves únicas para items duplicados
+                        $originalKey = $cleanItemId;
+                        $counter = 1;
+                        
+                        // Si ya existe este itemId, crear una variación única
+                        while (isset($itemToClientMap[$cleanItemId])) {
+                            Log::info('ItemId duplicado encontrado: ' . $originalKey . ' (cliente existente: ' . $itemToClientMap[$originalKey] . ', nuevo cliente: ' . $cleanClient . ')');
+                            $cleanItemId = $originalKey . '_' . $counter;
+                            $counter++;
+                        }
+                        
                         // Agregar múltiples variaciones del itemId para mayor compatibilidad
                         $itemToClientMap[$cleanItemId] = $cleanClient;
                         $itemToClientMap[strtoupper($cleanItemId)] = $cleanClient;
                         $itemToClientMap[strtolower($cleanItemId)] = $cleanClient;
+                        
+                        // También mantener el original si es diferente
+                        if ($cleanItemId !== $originalKey) {
+                            // Crear array de clientes para el itemId original si no existe
+                            if (!isset($itemToClientMap[$originalKey . '_ALL'])) {
+                                $itemToClientMap[$originalKey . '_ALL'] = [];
+                            }
+                            if (!is_array($itemToClientMap[$originalKey . '_ALL'])) {
+                                $itemToClientMap[$originalKey . '_ALL'] = [$itemToClientMap[$originalKey]];
+                            }
+                            $itemToClientMap[$originalKey . '_ALL'][] = $cleanClient;
+                        }
                         
                         Log::info('Mapeado: ' . $cleanItemId . ' -> ' . $cleanClient);
                     }
@@ -643,6 +666,7 @@ class DocumentacionController extends Controller
         }
 
         Log::info('Mapeo completo creado con ' . count($itemToClientMap) . ' elementos');
+        Log::info('Contenido del mapeo: ' . json_encode($itemToClientMap, JSON_UNESCAPED_UNICODE));
         return $itemToClientMap;
     }
 
@@ -693,6 +717,7 @@ class DocumentacionController extends Controller
         }
 
         Log::warning('Cliente no encontrado para itemId: ' . $cleanItemN);
+        Log::warning('ItemIds disponibles en el mapeo: ' . implode(', ', array_keys($itemToClientMap)));
         return 'Cliente no encontrado';
     }
 
@@ -946,8 +971,12 @@ class DocumentacionController extends Controller
         $sheet0 = $facturaExcel->getSheet(0);
         $highestFirstSheetRow = $this->getHighestRowFirstSheet($facturaExcel);
         Log::info('Fila más alta de la primera hoja: ' . $highestFirstSheetRow);
+        Log::info('Total de hojas en factura comercial: ' . $sheetCount);
+        Log::info('Elementos en itemToClientMap antes de procesar hojas adicionales: ' . count($itemToClientMap));
+        
         for ($i = 1; $i < $sheetCount; $i++) {
             $sheet = $facturaExcel->getSheet($i);
+            Log::info('Procesando hoja adicional ' . $i . ' - Nombre: ' . $sheet->getTitle());
             $this->processAdditionalSheet($sheet, $sheet0, $itemToClientMap, $dataSystem, $listaPartidasExcel, $highestFirstSheetRow);
         }
     }
@@ -987,6 +1016,19 @@ class DocumentacionController extends Controller
     {
         $highestRow = $sheet->getHighestRow();
         $startIndex = 26;
+        
+        Log::info('=== INICIANDO PROCESAMIENTO DE HOJA ADICIONAL ===');
+        Log::info('Hoja: ' . $sheet->getTitle() . ', Filas: ' . $highestRow);
+        
+        // Primero, mostrar todos los itemIds que encuentra en esta hoja
+        $itemsEncontrados = [];
+        for ($row = $startIndex; $row <= $highestRow; $row++) {
+            $itemN = $sheet->getCell('B' . $row)->getValue();
+            if (!empty($itemN) && stripos(trim($itemN), "TOTAL") === false) {
+                $itemsEncontrados[] = trim($itemN);
+            }
+        }
+        Log::info('ItemIds encontrados en hoja adicional: ' . implode(', ', $itemsEncontrados));
 
         for ($row = $startIndex; $row <= $highestRow; $row++) {
             $itemN = $sheet->getCell('B' . $row)->getValue();
@@ -1000,7 +1042,9 @@ class DocumentacionController extends Controller
                 $this->copyProductData($sheet, $sheet0, $row, $highestFirstSheetRow);
 
                 // Procesar cliente y datos del sistema - búsqueda mejorada
+                Log::info('Procesando hoja adicional - Item: ' . $itemN . ' en fila: ' . $row . ' de hoja: ' . $sheet->getTitle());
                 $client = $this->findClientForItem($itemToClientMap, $itemN);
+                Log::info('Cliente encontrado para ' . $itemN . ': ' . $client);
                 $this->processSystemData($sheet0, $highestFirstSheetRow, $client, $dataSystem);
 
                 // Procesar información aduanera
