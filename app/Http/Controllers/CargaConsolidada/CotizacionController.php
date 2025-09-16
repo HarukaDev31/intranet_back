@@ -12,6 +12,7 @@ use App\Models\CargaConsolidada\Contenedor;
 use App\Services\CargaConsolidada\CotizacionService;
 use App\Services\CargaConsolidada\CotizacionExportService;
 use App\Models\Usuario;
+use App\Models\Notificacion;
 use Tymon\JWTAuth\Facades\JWTAuth;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -640,6 +641,9 @@ class CotizacionController extends Controller
 
                 // Si todo salió bien, confirmar la transacción
                 DB::commit();
+
+                // Crear notificación para Coordinación
+                $this->crearNotificacionCoordinacion($cotizacionModel, $contenedor);
 
                 // Limpiar el archivo temporal
                 if (file_exists($cotizacion['tmp_name'])) {
@@ -2148,6 +2152,65 @@ class CotizacionController extends Controller
         } catch (\Exception $e) {
             Log::error('Error en exportarCotizacion: ' . $e->getMessage());
             return response()->json(['message' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Crea una notificación para el perfil de Coordinación cuando se crea una nueva cotización
+     */
+    private function crearNotificacionCoordinacion($cotizacion, $contenedor)
+    {
+        try {
+            // Obtener el usuario que creó la cotización
+            $usuarioCreador = Usuario::find($cotizacion->id_usuario);
+            
+            if (!$usuarioCreador) {
+                Log::warning('Usuario creador no encontrado para la cotización: ' . $cotizacion->id);
+                return;
+            }
+
+            // Crear la notificación para Coordinación
+            $notificacion = Notificacion::create([
+                'titulo' => 'Nueva Cotización Creada',
+                'mensaje' => "El usuario {$usuarioCreador->No_Nombres_Apellidos} ha creado una nueva cotización para {$cotizacion->nombre}",
+                'descripcion' => "Cliente: {$cotizacion->nombre} | Documento: {$cotizacion->documento} | Volumen: {$cotizacion->volumen} CBM | Contenedor: {$contenedor->carga}",
+                'modulo' => Notificacion::MODULO_CARGA_CONSOLIDADA,
+                'rol_destinatario' => Usuario::ROL_COORDINACION,
+                'navigate_to' => 'cargaconsolidada/abiertos/cotizaciones',
+                'navigate_params' => json_encode([
+                    'idContenedor' => $contenedor->id,
+                    'tab' => 'prospectos',
+                    'idCotizacion' => $cotizacion->id
+                ]),
+                'tipo' => Notificacion::TIPO_INFO,
+                'icono' => 'mdi:file-document-plus',
+                'prioridad' => Notificacion::PRIORIDAD_MEDIA,
+                'referencia_tipo' => 'cotizacion',
+                'referencia_id' => $cotizacion->id,
+                'activa' => true,
+                'creado_por' => $usuarioCreador->ID_Usuario,
+                'configuracion_roles' => json_encode([
+                    Usuario::ROL_COORDINACION => [
+                        'titulo' => 'Nueva Cotización - Revisar',
+                        'mensaje' => "Nueva cotización de {$cotizacion->nombre} requiere revisión",
+                        'descripcion' => "Cotización #{$cotizacion->id} para contenedor {$contenedor->carga}"
+                    ]
+                ])
+            ]);
+
+            Log::info('Notificación creada para Coordinación:', [
+                'notificacion_id' => $notificacion->id,
+                'cotizacion_id' => $cotizacion->id,
+                'contenedor_id' => $contenedor->id,
+                'usuario_creador' => $usuarioCreador->No_Nombres_Apellidos
+            ]);
+
+            return $notificacion;
+
+        } catch (\Exception $e) {
+            Log::error('Error al crear notificación para Coordinación: ' . $e->getMessage());
+            // No lanzar excepción para no afectar el flujo principal de creación de cotización
+            return null;
         }
     }
 }

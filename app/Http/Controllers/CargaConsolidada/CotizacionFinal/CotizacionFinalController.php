@@ -386,7 +386,7 @@ class CotizacionFinalController extends Controller
                 ->where('CC.id_contenedor', $idContenedor)
                 ->whereNotNull('CC.estado_cliente')
                 ->get();
-
+            Log::info('Data system: ' . json_encode($dataSystem));
             // Obtener y validar ruta del archivo
             $facturaGeneralUrl = $this->getLocalPath($contenedor->factura_general_url);
             $plantillaPath = public_path('assets/templates/PLANTILLA_GENERAL.xlsx');
