@@ -502,9 +502,7 @@ class CotizacionFinalController extends Controller
 
                     // Buscar datos del sistema para el cliente
                     foreach ($dataSystem as $data) {
-                        Log::info('Data: ' . json_encode($data));
-                        Log::info('Client name: ' . trim($clientName));
-                        Log::info('Data nombre: ' . trim($data->nombre));
+                
                         if ($this->isNameMatch(trim($clientName), trim($data->nombre))) {
                             $newSheet->setCellValue('C' . $newRow, $data->documento);
                             $newSheet->setCellValue('D' . $newRow, $data->telefono);
