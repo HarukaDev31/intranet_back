@@ -1274,16 +1274,11 @@ class CotizacionFinalController extends Controller
                             continue; // Saltar este cliente si no es un error de rango
                         }
                     }
-
-                    Log::info('Cotización procesada: ' . json_encode($result));
                 } catch (\Exception $e) {
                     Log::error('Error procesando cliente ' . $value['cliente']['nombre'] . ': ' . $e->getMessage());
                     continue;
                 }
-            }
-
-            Log::info('Total de clientes procesados: ' . $processedCount);
-            
+            }            
             // Verificar si se agregaron archivos al ZIP
             $zipFileCount = $zip->numFiles;
             Log::info('Archivos en el ZIP: ' . $zipFileCount);
@@ -1298,15 +1293,8 @@ class CotizacionFinalController extends Controller
                 $zip->addFromString('INFORMACION.txt', $infoContent);
                 Log::info('Archivo informativo agregado al ZIP');
             }
-            
-            // Verificar estado del ZIP antes de cerrarlo
-            Log::info('Verificando estado del ZIP antes de cerrar...');
-            Log::info('Archivo ZIP existe: ' . (file_exists($zipFilePath) ? 'Sí' : 'No'));
-            Log::info('Número de archivos en ZIP: ' . $zip->numFiles);
-            
             try {
                 $zip->close();
-                Log::info('Archivo ZIP cerrado correctamente');
             } catch (\Exception $zipCloseError) {
                 Log::error('Error al cerrar ZIP: ' . $zipCloseError->getMessage());
                 Log::error('Archivo ZIP existe al momento del error: ' . (file_exists($zipFilePath) ? 'Sí' : 'No'));
@@ -1316,11 +1304,6 @@ class CotizacionFinalController extends Controller
             // Restaurar límite de memoria
             ini_set('memory_limit', $originalMemoryLimit);
             gc_collect_cycles();
-            
-            // Validar que el archivo ZIP existe y tiene contenido
-            Log::info('Verificando archivo ZIP: ' . $zipFilePath);
-            Log::info('Archivo existe: ' . (file_exists($zipFilePath) ? 'Sí' : 'No'));
-            
             if (!file_exists($zipFilePath)) {
                 Log::error('El archivo ZIP no existe después de cerrarlo');
                 throw new \Exception('El archivo ZIP no se creó correctamente');
@@ -1690,15 +1673,17 @@ class CotizacionFinalController extends Controller
             // Configurar hoja principal
             $this->configureMainSheet($objPHPExcel, $data, $pesoTotal, $tipoCliente, $cbmTotalProductos, $tarifaValue, $antidumpingSum);
 
-            // Guardar archivo
+            // Guardar archivo en directorio permanente
             $objWriter = new Xlsx($objPHPExcel);
-            $excelFileName = 'Cotizacion_' . preg_replace('/[^a-zA-Z0-9_\-]/', '_', $data['cliente']['nombre']) . '.xlsx';
-            $excelFilePath = storage_path('app/temp/' . $excelFileName);
+            $excelFileName = 'Cotizacion_' . preg_replace('/[^a-zA-Z0-9_\-]/', '_', $data['cliente']['nombre']) . '_' . time() . '.xlsx';
             
-            if (!file_exists(dirname($excelFilePath))) {
-                mkdir(dirname($excelFilePath), 0755, true);
+            // Crear directorio para cotizaciones finales si no existe
+            $cotizacionesDir = storage_path('app/public/cotizaciones_finales/' . $idContenedor);
+            if (!file_exists($cotizacionesDir)) {
+                mkdir($cotizacionesDir, 0755, true);
             }
-
+            
+            $excelFilePath = $cotizacionesDir . '/' . $excelFileName;
             $objWriter->save($excelFilePath);
 
             // Calcular valores finales
@@ -1753,7 +1738,7 @@ class CotizacionFinalController extends Controller
                 'estado' => 'PENDIENTE',
                 "excel_file_name" => $excelFileName,
                 "excel_file_path" => $excelFilePath,
-                "cotizacion_final_url" => url('storage/temp/' . $excelFileName)
+                "cotizacion_final_url" => url('storage/cotizaciones_finales/' . $idContenedor . '/' . $excelFileName)
             ];
             
             Log::info('Excel generado exitosamente para cliente: ' . $data['cliente']['nombre']);
@@ -2489,6 +2474,65 @@ class CotizacionFinalController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Error al eliminar cotización final: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Descarga el archivo Excel de cotización final individual
+     */
+    public function downloadCotizacionFinalExcel($idCotizacion)
+    {
+        try {
+            // Buscar la cotización por ID
+            $cotizacion = Cotizacion::find($idCotizacion);
+
+            if (!$cotizacion) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Cotización no encontrada'
+                ], 404);
+            }
+
+            if (!$cotizacion->cotizacion_final_url) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No se encontró archivo de cotización final'
+                ], 404);
+            }
+
+            // Obtener la ruta del archivo
+            $fileUrl = $cotizacion->cotizacion_final_url;
+            
+            // Si es una URL completa, extraer la ruta local
+            if (strpos($fileUrl, 'http') === 0) {
+                $pathParts = parse_url($fileUrl);
+                $filePath = storage_path('app/public' . $pathParts['path']);
+            } else {
+                // Si es una ruta relativa, construir la ruta completa
+                $filePath = storage_path('app/public/' . $fileUrl);
+            }
+
+            // Verificar que el archivo existe
+            if (!file_exists($filePath)) {
+                Log::error('Archivo de cotización final no encontrado: ' . $filePath);
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Archivo no encontrado en el servidor'
+                ], 404);
+            }
+
+            // Obtener el nombre del archivo
+            $fileName = basename($filePath);
+            
+            // Retornar el archivo para descarga
+            return response()->download($filePath, $fileName);
+
+        } catch (\Exception $e) {
+            Log::error('Error en downloadCotizacionFinalExcel: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al descargar cotización final: ' . $e->getMessage()
             ], 500);
         }
     }
