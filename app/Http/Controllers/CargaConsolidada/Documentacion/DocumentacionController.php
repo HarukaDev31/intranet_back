@@ -646,7 +646,7 @@ class DocumentacionController extends Controller
         $this->applyHeaderStyles($sheet);
 
         // Procesar filas de datos
-        $this->processDataRows($sheet, $itemToClientMap, $dataSystem, $listaPartidasExcel, 6);
+        $this->processDataRows($sheet, $itemToClientMap, $dataSystem, $listaPartidasExcel, 26);
     }
 
     /**
