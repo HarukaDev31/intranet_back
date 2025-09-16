@@ -495,7 +495,7 @@ class CotizacionFinalController extends Controller
                         'S' => 0.035,
                         'U' => $sheet->getCell('T' . $currentRow)->getValue()
                     ];
-
+                    Log::info('Row data: ' . json_encode($rowData));
                     foreach ($rowData as $column => $value) {
                         $newSheet->setCellValue($column . $newRow, $value);
                     }
