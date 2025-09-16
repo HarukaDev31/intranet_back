@@ -564,7 +564,9 @@ class DocumentacionController extends Controller
             ->join('contenedor_consolidado_tipo_cliente', 'main.id_tipo_cliente', '=', 'contenedor_consolidado_tipo_cliente.id')
             ->select('nombre', 'volumen', 'volumen_doc', 'valor_doc', 'valor_cot', 'volumen_china', 'name', 'vol_selected')
             ->where('id_contenedor', $idContenedor)
+            ->where('estado_cotizador', 'CONFIRMADO')
             ->whereNotNull('estado_cliente')
+            ->whereNull('id_cliente_importacion')
             ->get();
     }
 
