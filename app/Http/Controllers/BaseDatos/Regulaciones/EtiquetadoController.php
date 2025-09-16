@@ -153,7 +153,7 @@ class EtiquetadoController extends Controller
             $validator = Validator::make($data, [
                 'id_rubro' => 'required|integer|exists:bd_productos,id',
                 'observaciones' => 'nullable|string|max:1000',
-                'imagenes.*' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048' // 2MB máximo
+                'imagenes.*' => 'nullable|image|mimes:jpeg,png,jpg,gif' // 2MB máximo
             ], [
                 'id_rubro.required' => 'El ID del rubro es obligatorio',
                 'id_rubro.integer' => 'El ID del rubro debe ser un número entero',

@@ -1621,11 +1621,9 @@ class CotizacionFinalController extends Controller
                 $objPHPExcel->setActiveSheetIndex(2)->setCellValue($InitialColumn . '30', "=" . (2 / 100) . "*(" . "MAX(" . $InitialColumn . "19," . $InitialColumn . "18)+" . $AdValoremCell . ")");
                 $objPHPExcel->getActiveSheet()->getStyle($InitialColumn . '30')->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_CURRENCY_USD_SIMPLE);
                 
-                // Percepción
-                $percepcionValue = is_numeric($producto['percepcion']) ? (float)$producto['percepcion'] : 0;
                 $objPHPExcel->setActiveSheetIndex(2)->setCellValue(
                     $InitialColumn . '31',
-                    "=" . $percepcionValue . "*(MAX(" . $InitialColumn . '18,' . $InitialColumn . '19) +' . $InitialColumn . '28+' . $InitialColumn . '29+' . $InitialColumn . '30)'
+                    "=" . ($producto['percepcion']) . "*(MAX(" . $InitialColumn . '18,' . $InitialColumn . '19) +' . $InitialColumn . '28+' . $InitialColumn . '29+' . $InitialColumn . '30)'
                 );
                 $objPHPExcel->getActiveSheet()->getStyle($InitialColumn . '31')->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_CURRENCY_USD_SIMPLE);
 
@@ -1731,6 +1729,148 @@ class CotizacionFinalController extends Controller
                 "cotizacion_final_url" => url('storage/cotizaciones_finales/' . $idContenedor . '/' . $excelFileName)
             ];
             
+        } catch (\Exception $e) {
+            Log::error('Error en getFinalCotizacionExcelv2: ' . $e->getMessage());
+            Log::error('Stack trace: ' . $e->getTraceAsString());
+            Log::error('Datos del cliente: ' . json_encode($data));
+            throw $e;
+        }
+    }
+                $objPHPExcel->getActiveSheet()->getStyle($InitialColumn . '27')->getFont()->getColor()->setARGB(Color::COLOR_RED);
+
+                $AdValoremCell = $InitialColumn . '28';
+                $objPHPExcel->setActiveSheetIndex(2)->setCellValue(
+                    $InitialColumn . '28',
+                    "=MAX(" . $InitialColumn . "19," . $InitialColumn . "18)*" . $InitialColumn . "27"
+                );
+                $objPHPExcel->getActiveSheet()->getStyle($InitialColumn . '28')->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_CURRENCY_USD_SIMPLE);
+
+                // IGV
+                $objPHPExcel->setActiveSheetIndex(2)->setCellValue($InitialColumn . '29', "=" . (16 / 100) . "*(" . "MAX(" . $InitialColumn . "19," . $InitialColumn . "18)+" . $AdValoremCell . ")");
+                $objPHPExcel->getActiveSheet()->getStyle($InitialColumn . '29')->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_CURRENCY_USD_SIMPLE);
+
+                // IPM
+                $objPHPExcel->setActiveSheetIndex(2)->setCellValue($InitialColumn . '30', "=" . (2 / 100) . "*(" . "MAX(" . $InitialColumn . "19," . $InitialColumn . "18)+" . $AdValoremCell . ")");
+                $objPHPExcel->getActiveSheet()->getStyle($InitialColumn . '30')->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_CURRENCY_USD_SIMPLE);
+
+                // Percepción
+                $percepcionValue = is_numeric($producto['percepcion']) ? (float)$producto['percepcion'] : 0;
+                $objPHPExcel->setActiveSheetIndex(2)->setCellValue(
+                    $InitialColumn . '31',
+                    "=" . $percepcionValue . "*(MAX(" . $InitialColumn . '18,' . $InitialColumn . '19) +' . $InitialColumn . '28+' . $InitialColumn . '29+' . $InitialColumn . '30)'
+                );
+                $objPHPExcel->getActiveSheet()->getStyle($InitialColumn . '31')->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_CURRENCY_USD_SIMPLE);
+
+                // Total tributos
+                $sum = "=SUM(" . $InitialColumn . "28:" . $InitialColumn . "31)";
+                $objPHPExcel->setActiveSheetIndex(2)->setCellValue($InitialColumn . '32', $sum);
+                $objPHPExcel->getActiveSheet()->getStyle($InitialColumn . '32')->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_CURRENCY_USD_SIMPLE);
+
+                // Cobro distribuido
+                $objPHPExcel->setActiveSheetIndex(2)->setCellValue($InitialColumn . '40', "=" . $distroCell . "*" . $CobroCell);
+                $objPHPExcel->getActiveSheet()->getStyle($InitialColumn . '40')->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_CURRENCY_USD_SIMPLE);
+
+                // Información del producto
+                $objPHPExcel->setActiveSheetIndex(2)->setCellValue($InitialColumn . '43', $producto["nombre"]);
+                $objPHPExcel->setActiveSheetIndex(2)->setCellValue($InitialColumn . '45', $producto["cantidad"]);
+
+                // Costo total
+                $objPHPExcel->setActiveSheetIndex(2)->setCellValue(
+                    $InitialColumn . '44',
+                    "=SUM(" . $InitialColumn . "15," . $InitialColumn . "40," . $InitialColumn . "32,(" . $InitialColumn . "26" . "))"
+                );
+                $objPHPExcel->getActiveSheet()->getStyle($InitialColumn . '44')->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_CURRENCY_USD_SIMPLE);
+
+                // Costo unitario
+                $objPHPExcel->setActiveSheetIndex(2)->setCellValue($InitialColumn . '46', "=SUM(" . $InitialColumn . "44/" . $InitialColumn . "45)");
+                $objPHPExcel->getActiveSheet()->getStyle($InitialColumn . '46')->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_CURRENCY_USD_SIMPLE);
+
+                // Costo en soles
+                $objPHPExcel->setActiveSheetIndex(2)->setCellValue($InitialColumn . '47', "=" . $InitialColumn . "46*3.7");
+                $objPHPExcel->getActiveSheet()->getStyle($InitialColumn . '47')->getNumberFormat()->setFormatCode('"S/." #,##0.00_-');
+
+                $InitialColumn++;
+            }
+
+            // Configurar totales de tributos
+            $this->configureTributosSection($objPHPExcel, $InitialColumn, $InitialColumnLetter, $borders, $grayColor);
+
+            // Configurar costos destino
+            $this->configureCostosDestinoSection($objPHPExcel, $InitialColumn, $InitialColumnLetter, $borders, $grayColor);
+
+            // Configurar hoja principal
+            $this->configureMainSheet($objPHPExcel, $data, $pesoTotal, $tipoCliente, $cbmTotalProductos, $tarifaValue, $antidumpingSum);
+
+            // Guardar archivo en directorio permanente
+            $objWriter = new Xlsx($objPHPExcel);
+            $excelFileName = 'Cotizacion_' . preg_replace('/[^a-zA-Z0-9_\-]/', '_', $data['cliente']['nombre']) . '_' . time() . '.xlsx';
+            
+            // Crear directorio para cotizaciones finales si no existe
+            $cotizacionesDir = storage_path('app/public/cotizaciones_finales/' . $idContenedor);
+            if (!file_exists($cotizacionesDir)) {
+                mkdir($cotizacionesDir, 0755, true);
+            }
+            
+            $excelFilePath = $cotizacionesDir . '/' . $excelFileName;
+            $objWriter->save($excelFilePath);
+
+            // Calcular valores finales
+            $sheet1 = $objPHPExcel->getSheet(0);
+            $antidumping = $sheet1->getCell('B23')->getValue() == "ANTIDUMPING";
+            
+            // Asignar valores según si hay antidumping o no
+            if ($antidumping) {
+                $fob = is_numeric($sheet1->getCell('K29')->getCalculatedValue()) ? (float)$sheet1->getCell('K29')->getCalculatedValue() : 0;
+                $logistica = is_numeric($sheet1->getCell('K30')->getCalculatedValue()) ? (float)$sheet1->getCell('K30')->getCalculatedValue() : 0;
+                $impuestos = is_numeric($sheet1->getCell('K31')->getCalculatedValue()) ? (float)$sheet1->getCell('K31')->getCalculatedValue() : 0;
+                $montoFinal = is_numeric($sheet1->getCell('K32')->getCalculatedValue()) ? (float)$sheet1->getCell('K32')->getCalculatedValue() : 0;
+            } else {
+                $fob = is_numeric($sheet1->getCell('K29')->getCalculatedValue()) ? (float)$sheet1->getCell('K29')->getCalculatedValue() : 0;
+                $logistica = is_numeric($sheet1->getCell('K30')->getCalculatedValue()) ? (float)$sheet1->getCell('K30')->getCalculatedValue() : 0;
+                $impuestos = is_numeric($sheet1->getCell('K31')->getCalculatedValue()) ? (float)$sheet1->getCell('K31')->getCalculatedValue() : 0;
+                $montoFinal = is_numeric($sheet1->getCell('K32')->getCalculatedValue()) ? (float)$sheet1->getCell('K32')->getCalculatedValue() : 0;
+            }
+            
+            // Validar que los valores no sean excesivamente grandes (máximo 1 millón)
+            $maxValue = 1000000;
+            if ($montoFinal > $maxValue || $logistica > $maxValue || $impuestos > $maxValue || $fob > $maxValue) {
+                Log::warning('Valores calculados excesivamente grandes para cliente: ' . $data['cliente']['nombre'], [
+                    'monto_final' => $montoFinal,
+                    'logistica_final' => $logistica,
+                    'impuestos_final' => $impuestos,
+                    'fob_final' => $fob,
+                    'antidumping' => $antidumping
+                ]);
+                
+                // Limitar valores a un máximo razonable
+                $montoFinal = min($montoFinal, $maxValue);
+                $logistica = min($logistica, $maxValue);
+                $impuestos = min($impuestos, $maxValue);
+                $fob = min($fob, $maxValue);
+            }
+
+            return [
+                'id' => $data['id'],
+                'id_contenedor' => $idContenedor,
+                'id_tipo_cliente' => $data['cliente']['id_tipo_cliente'],
+                'nombre' => $data['cliente']['nombre'],
+                'documento' => $data['cliente']['dni'],
+                'correo' => $data['cliente']['correo'],
+                'whatsapp' => $data['cliente']['telefono'],
+                'volumen_final' => $volumen,
+                'monto_final' => $montoFinal,
+                'tarifa_final' => $tarifaValue,
+                'impuestos_final' => $impuestos,
+                'logistica_final' => $logistica,
+                'fob_final' => $fob,
+                'estado' => 'PENDIENTE',
+                "excel_file_name" => $excelFileName,
+                "excel_file_path" => $excelFilePath,
+                "cotizacion_final_url" => url('storage/cotizaciones_finales/' . $idContenedor . '/' . $excelFileName)
+            ];
+            
+            Log::info('Excel generado exitosamente para cliente: ' . $data['cliente']['nombre']);
+            Log::info('Archivo guardado en: ' . $excelFilePath);
         } catch (\Exception $e) {
             Log::error('Error en getFinalCotizacionExcelv2: ' . $e->getMessage());
             Log::error('Stack trace: ' . $e->getTraceAsString());
