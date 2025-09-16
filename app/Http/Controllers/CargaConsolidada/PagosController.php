@@ -316,7 +316,7 @@ class PagosController extends Controller
                     'status' => $pago['status'],
                     'payment_date' => $pago['payment_date'],
                     'banco' => $pago['banco'],
-                    'voucher_url' => !filter_var($pago['voucher_url'], FILTER_VALIDATE_URL) ? $this->generateImageUrl($pago['voucher_url']) : $pago['voucher_url']
+                    'voucher_url' => $this->generateImageUrl($pago['voucher_url'])
                     
                 ];
             }
@@ -334,6 +334,11 @@ class PagosController extends Controller
         if (filter_var($ruta, FILTER_VALIDATE_URL)) {
             return $ruta;
         }
+        //if ruta contains app.url but not /storage/ then add /storage/
+        if (strpos($ruta, config('app.url')) !== false && strpos($ruta, '/storage/') === false) {
+            $ruta = config('app.url') . '/storage/' . $ruta;
+            return $ruta;
+        }
 
         // Limpiar la ruta de barras iniciales para evitar doble slash
         $ruta = ltrim($ruta, '/');
@@ -346,7 +351,7 @@ class PagosController extends Controller
         $baseUrl = rtrim($baseUrl, '/');
         $storagePath = ltrim($storagePath, '/');
         $ruta = ltrim($ruta, '/');
-        return $baseUrl . '/' . $storagePath . '/' . $ruta;
+        return $baseUrl .  '/'. $storagePath .  '/' . $ruta;
     }
     /**
      * Obtener campañas disponibles
@@ -428,7 +433,9 @@ class PagosController extends Controller
                 ->whereIn('id_concept', [PagoConcept::CONCEPT_PAGO_LOGISTICA, PagoConcept::CONCEPT_PAGO_IMPUESTOS])
                 ->orderBy('payment_date', 'asc')
                 ->get();
-
+            foreach ($pagos as $pago) {
+                $pago->voucher_url = $this->generateImageUrl($pago->voucher_url);
+            }
             return $pagos;
         } catch (\Exception $e) {
             Log::error('Error en getPagosCoordination: ' . $e->getMessage());
@@ -617,17 +624,16 @@ class PagosController extends Controller
                     ) as pagos_details')
                 ])
                 ->join('pais', 'pais.ID_Pais', '=', 'pedido_curso.ID_Pais')
-                ->join('entidad', 'entidad.ID_Entidad', '=', 'pedido_curso.ID_Entidad')
-                ->join('tipo_documento_identidad', 'tipo_documento_identidad.ID_Tipo_Documento_Identidad', '=', 'entidad.ID_Tipo_Documento_Identidad')
-                ->join('moneda', 'moneda.ID_Moneda', '=', 'pedido_curso.ID_Moneda')
-                ->join('usuario', 'usuario.ID_Entidad', '=', 'entidad.ID_Entidad')
+                ->leftJoin('entidad', 'entidad.ID_Entidad', '=', 'pedido_curso.ID_Entidad')
+                ->leftJoin('tipo_documento_identidad', 'tipo_documento_identidad.ID_Tipo_Documento_Identidad', '=', 'entidad.ID_Tipo_Documento_Identidad')
+                ->leftJoin('moneda', 'moneda.ID_Moneda', '=', 'pedido_curso.ID_Moneda')
+                ->leftJoin('usuario', 'usuario.ID_Entidad', '=', 'entidad.ID_Entidad')
                 ->leftJoin('distrito', 'distrito.ID_Distrito', '=', 'entidad.ID_Distrito')
                 ->leftJoin('provincia', 'provincia.ID_Provincia', '=', 'entidad.ID_Provincia')
                 ->leftJoin('departamento', 'departamento.ID_Departamento', '=', 'entidad.ID_Departamento')
                 ->orderBy('pedido_curso.ID_Pedido_Curso', 'asc');
 
             // Filtro por empresa del usuario autenticado
-            $query->where('pedido_curso.ID_Empresa', auth()->user()->ID_Empresa);
 
             // Filtro para cursos que tienen pagos de adelanto
             $query->whereExists(function ($subQuery) {
@@ -830,7 +836,7 @@ class PagosController extends Controller
                     'status' => $pago['status'],
                     'payment_date' => $pago['payment_date'],
                     'banco' => $pago['banco'],
-                    'voucher_url' => !filter_var($pago['voucher_url'], FILTER_VALIDATE_URL) ? $this->generateImageUrl($pago['voucher_url']) : $pago['voucher_url']
+                    'voucher_url' => $this->generateImageUrl($pago['voucher_url'])
                 ];
             }
         }
