@@ -21,7 +21,7 @@ class PermisoController extends Controller
     public function index(Request $request)
     {
         try {
-            $perPage = $request->get('limit', 10);
+            $perPage = $request->get('limit', 50);
             $page = $request->get('page', 1);
             
             // Query para entidades reguladoras con sus regulaciones de permisos

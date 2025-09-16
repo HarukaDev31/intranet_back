@@ -18,7 +18,7 @@ class CreateNotificacionUsuarioTable extends Migration
             
             // Relaciones
             $table->unsignedBigInteger('notificacion_id')->comment('ID de la notificación');
-            $table->unsignedBigInteger('usuario_id')->comment('ID del usuario');
+            $table->unsignedInteger('usuario_id')->comment('ID del usuario');
             
             // Estado de la notificación para el usuario
             $table->boolean('leida')->default(false)->comment('Si el usuario ha leído la notificación');

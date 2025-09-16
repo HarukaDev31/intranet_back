@@ -27,7 +27,7 @@ class CreateNotificacionesTable extends Migration
             // Información de destino
             $table->string('modulo', 100)->comment('Módulo al que pertenece: BaseDatos, CargaConsolidada, Cursos, etc.');
             $table->string('rol_destinatario', 100)->nullable()->comment('Rol específico destinatario (null = todos los roles)');
-            $table->unsignedBigInteger('usuario_destinatario')->nullable()->comment('Usuario específico destinatario (null = todos los usuarios del rol)');
+            $table->unsignedInteger('usuario_destinatario')->nullable()->comment('Usuario específico destinatario (null = todos los usuarios del rol)');
             
             // Navegación
             $table->string('navigate_to', 500)->nullable()->comment('URL o ruta para redirección en el frontend');
@@ -45,7 +45,7 @@ class CreateNotificacionesTable extends Migration
             // Control
             $table->boolean('activa')->default(true)->comment('Si la notificación está activa');
             $table->timestamp('fecha_expiracion')->nullable()->comment('Fecha de expiración de la notificación');
-            $table->unsignedBigInteger('creado_por')->comment('ID del usuario que creó la notificación');
+            $table->unsignedInteger('creado_por')->comment('ID del usuario que creó la notificación');
             
             $table->timestamps();
             
