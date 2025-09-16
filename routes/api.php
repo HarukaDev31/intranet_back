@@ -192,6 +192,15 @@ Route::group(['prefix' => 'cursos'], function () {
 
 });
 Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], function () {
+    // Dashboard de Ventas
+    Route::prefix('dashboard-ventas')->group(function () {
+        Route::get('/resumen', [App\Http\Controllers\CargaConsolidada\DashboardVentasController::class, 'getResumenVentas']);
+        Route::get('/por-vendedor', [App\Http\Controllers\CargaConsolidada\DashboardVentasController::class, 'getVentasPorVendedor']);
+        Route::get('/filtros/contenedores', [App\Http\Controllers\CargaConsolidada\DashboardVentasController::class, 'getContenedoresFiltro']);
+        Route::get('/filtros/vendedores', [App\Http\Controllers\CargaConsolidada\DashboardVentasController::class, 'getVendedoresFiltro']);
+        Route::get('/evolucion/{idContenedor}', [App\Http\Controllers\CargaConsolidada\DashboardVentasController::class, 'getEvolucionContenedor']);
+        Route::get('/evolucion-total', [App\Http\Controllers\CargaConsolidada\DashboardVentasController::class, 'getEvolucionTotal']);
+    });
 
     // Rutas de contenedores
     Route::group(['prefix' => 'contenedor'], function () {
