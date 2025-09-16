@@ -686,6 +686,7 @@ class DocumentacionController extends Controller
         for ($row = $startRow; $row <= $highestRow; $row++) {
             $itemN = $sheet->getCell('B' . $row)->getValue();
 
+            // Verificar si contiene TOTAL, pero primero procesar si hay datos válidos
             if (stripos(trim($itemN), "TOTAL") !== false) {
                 $this->processTotalRow($sheet, $row);
                 break;
@@ -909,6 +910,7 @@ class DocumentacionController extends Controller
         for ($row = $startIndex; $row <= $highestRow; $row++) {
             $itemN = $sheet->getCell('B' . $row)->getValue();
 
+            // Verificar si contiene TOTAL después de procesar datos válidos
             if (stripos(trim($itemN), "TOTAL") !== false) {
                 break;
             }
