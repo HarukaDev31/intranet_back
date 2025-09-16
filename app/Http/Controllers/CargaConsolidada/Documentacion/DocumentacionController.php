@@ -582,10 +582,10 @@ class DocumentacionController extends Controller
 
             // Procesar primera hoja
             $sheet0 = $facturaExcel->getSheet(0);
-            $this->processFirstSheet($sheet0, $itemToClientMap, $dataSystem, $listaPartidasExcel);
+            $lastClientInfo = $this->processFirstSheet($sheet0, $itemToClientMap, $dataSystem, $listaPartidasExcel);
 
             // Procesar hojas adicionales
-            $this->processAdditionalSheets($facturaExcel, $itemToClientMap, $dataSystem, $listaPartidasExcel);
+            $this->processAdditionalSheets($facturaExcel, $itemToClientMap, $dataSystem, $listaPartidasExcel, $lastClientInfo);
 
             // Aplicar estilos finales
             $this->applyFinalStyles($sheet0);
@@ -772,8 +772,10 @@ class DocumentacionController extends Controller
         // Aplicar estilos de encabezado
         $this->applyHeaderStyles($sheet);
 
-        // Procesar filas de datos
-        $this->processDataRows($sheet, $itemToClientMap, $dataSystem, $listaPartidasExcel, 26);
+        // Procesar filas de datos y obtener información del último cliente
+        $lastClientInfo = $this->processDataRows($sheet, $itemToClientMap, $dataSystem, $listaPartidasExcel, 26);
+        
+        return $lastClientInfo;
     }
 
     /**
@@ -840,6 +842,13 @@ class DocumentacionController extends Controller
 
         // Aplicar merges pendientes
         $this->applyPendingMerges($sheet, $pendingMerge, $currentClient, $clientStartRow, $clientEndRow);
+        
+        // Retornar información del último cliente para continuidad entre hojas
+        return [
+            'lastClient' => $currentClient,
+            'lastClientEndRow' => $clientEndRow,
+            'lastProcessedRow' => $row - 1 // La última fila procesada antes del TOTAL
+        ];
     }
 
     /**
@@ -1086,7 +1095,7 @@ class DocumentacionController extends Controller
     /**
      * Procesa hojas adicionales
      */
-    private function processAdditionalSheets($facturaExcel, $itemToClientMap, $dataSystem, $listaPartidasExcel)
+    private function processAdditionalSheets($facturaExcel, $itemToClientMap, $dataSystem, $listaPartidasExcel, $lastClientInfo)
     {
         $sheetCount = $facturaExcel->getSheetCount();
         if ($sheetCount <= 1) return;
@@ -1100,7 +1109,7 @@ class DocumentacionController extends Controller
         for ($i = 1; $i < $sheetCount; $i++) {
             $sheet = $facturaExcel->getSheet($i);
             Log::info('Procesando hoja adicional ' . $i . ' - Nombre: ' . $sheet->getTitle());
-            $this->processAdditionalSheet($sheet, $sheet0, $itemToClientMap, $dataSystem, $listaPartidasExcel, $highestFirstSheetRow);
+            $lastClientInfo = $this->processAdditionalSheet($sheet, $sheet0, $itemToClientMap, $dataSystem, $listaPartidasExcel, $highestFirstSheetRow, $lastClientInfo);
         }
     }
 
@@ -1135,16 +1144,18 @@ class DocumentacionController extends Controller
     /**
      * Procesa hoja adicional
      */
-    private function processAdditionalSheet($sheet, $sheet0, $itemToClientMap, $dataSystem, $listaPartidasExcel, &$highestFirstSheetRow)
+    private function processAdditionalSheet($sheet, $sheet0, $itemToClientMap, $dataSystem, $listaPartidasExcel, &$highestFirstSheetRow, $lastClientInfo)
     {
         $highestRow = $sheet->getHighestRow();
         $startIndex = 26;
         
-        // Variables para manejar merge de clientes
-        $currentClient = "";
-        $clientStartRow = 0;
-        $clientEndRow = 0;
+        // Variables para manejar merge de clientes - inicializar con info de hoja anterior
+        $currentClient = $lastClientInfo['lastClient'] ?? "";
+        $clientStartRow = $lastClientInfo['lastClientEndRow'] ?? 0;
+        $clientEndRow = $lastClientInfo['lastClientEndRow'] ?? 0;
         $pendingMerge = [];
+        
+        Log::info('🔗 Iniciando hoja adicional con último cliente: "' . $currentClient . '" en fila ' . $clientStartRow);
         
         Log::info('=== INICIANDO PROCESAMIENTO DE HOJA ADICIONAL ===');
         Log::info('Hoja: ' . $sheet->getTitle() . ', Filas: ' . $highestRow);
@@ -1205,6 +1216,13 @@ class DocumentacionController extends Controller
         
         // Aplicar merges pendientes al final
         $this->applyPendingMerges($sheet0, $pendingMerge, $currentClient, $clientStartRow, $clientEndRow);
+        
+        // Retornar información del último cliente para la siguiente hoja
+        return [
+            'lastClient' => $currentClient,
+            'lastClientEndRow' => $clientEndRow,
+            'lastProcessedRow' => $highestFirstSheetRow - 1
+        ];
     }
 
     /**
