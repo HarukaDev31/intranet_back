@@ -686,26 +686,29 @@ class DocumentacionController extends Controller
         for ($row = $startRow; $row <= $highestRow; $row++) {
             $itemN = $sheet->getCell('B' . $row)->getValue();
 
-            // Verificar si contiene TOTAL, pero primero procesar si hay datos válidos
+            // Procesar datos válidos si no contiene TOTAL
+            if (stripos(trim($itemN), "TOTAL") === false) {
+                // Obtener cliente
+                $client = $itemToClientMap[trim($itemN)] ?? 'Cliente no encontrado';
+
+                // Procesar cliente y merge
+                $this->processClientMerge($sheet, $row, $client, $currentClient, $clientStartRow, $clientEndRow, $pendingMerge);
+
+                // Buscar información aduanera
+                $this->processCustomsInfo($sheet, $row, $itemN, $listaPartidasExcel);
+
+                // Buscar datos del sistema
+                $this->processSystemData($sheet, $row, $client, $dataSystem);
+
+                // Aplicar estilos
+                $this->applyRowStyles($sheet, $row);
+            }
+
+            // Verificar si contiene TOTAL después de procesar
             if (stripos(trim($itemN), "TOTAL") !== false) {
                 $this->processTotalRow($sheet, $row);
                 break;
             }
-
-            // Obtener cliente
-            $client = $itemToClientMap[trim($itemN)] ?? 'Cliente no encontrado';
-
-            // Procesar cliente y merge
-            $this->processClientMerge($sheet, $row, $client, $currentClient, $clientStartRow, $clientEndRow, $pendingMerge);
-
-            // Buscar información aduanera
-            $this->processCustomsInfo($sheet, $row, $itemN, $listaPartidasExcel);
-
-            // Buscar datos del sistema
-            $this->processSystemData($sheet, $row, $client, $dataSystem);
-
-            // Aplicar estilos
-            $this->applyRowStyles($sheet, $row);
         }
 
         // Aplicar merges pendientes
@@ -910,28 +913,31 @@ class DocumentacionController extends Controller
         for ($row = $startIndex; $row <= $highestRow; $row++) {
             $itemN = $sheet->getCell('B' . $row)->getValue();
 
-            // Verificar si contiene TOTAL después de procesar datos válidos
+            // Procesar datos válidos si no contiene TOTAL
+            if (stripos(trim($itemN), "TOTAL") === false) {
+                // Insertar nueva fila
+                $sheet0->insertNewRowBefore($highestFirstSheetRow, 1);
+
+                // Copiar datos del producto
+                $this->copyProductData($sheet, $sheet0, $row, $highestFirstSheetRow);
+
+                // Procesar cliente y datos del sistema
+                $client = $itemToClientMap[trim($itemN)] ?? 'Cliente no encontrado';
+                $this->processSystemData($sheet0, $highestFirstSheetRow, $client, $dataSystem);
+
+                // Procesar información aduanera
+                $this->processCustomsInfo($sheet0, $highestFirstSheetRow, $itemN, $listaPartidasExcel);
+
+                // Aplicar estilos
+                $this->applyAdditionalRowStyles($sheet0, $highestFirstSheetRow);
+
+                $highestFirstSheetRow++;
+            }
+
+            // Verificar si contiene TOTAL después de procesar
             if (stripos(trim($itemN), "TOTAL") !== false) {
                 break;
             }
-
-            // Insertar nueva fila
-            $sheet0->insertNewRowBefore($highestFirstSheetRow, 1);
-
-            // Copiar datos del producto
-            $this->copyProductData($sheet, $sheet0, $row, $highestFirstSheetRow);
-
-            // Procesar cliente y datos del sistema
-            $client = $itemToClientMap[trim($itemN)] ?? 'Cliente no encontrado';
-            $this->processSystemData($sheet0, $highestFirstSheetRow, $client, $dataSystem);
-
-            // Procesar información aduanera
-            $this->processCustomsInfo($sheet0, $highestFirstSheetRow, $itemN, $listaPartidasExcel);
-
-            // Aplicar estilos
-            $this->applyAdditionalRowStyles($sheet0, $highestFirstSheetRow);
-
-            $highestFirstSheetRow++;
         }
     }
 
