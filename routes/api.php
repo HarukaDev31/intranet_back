@@ -34,6 +34,7 @@ use App\Http\Controllers\CargaConsolidada\AduanaController;
 use App\Http\Controllers\CargaConsolidada\Clientes\PagosController as ClientesPagosController;
 use App\Http\Controllers\CalculadoraImportacion\CalculadoraImportacionController;
 use App\Http\Controllers\CampaignController;
+use App\Http\Controllers\NotificacionController;
 /*
 |--------------------------------------------------------------------------
 | API Routes
@@ -371,4 +372,15 @@ Route::group(['prefix' => 'campaigns', 'middleware' => 'jwt.auth'], function () 
 });
 Route::group(['prefix' => 'options', 'middleware' => 'jwt.auth'], function () {
     Route::get('paises', [PaisController::class, 'getPaisDropdown']);
+});
+
+// Rutas de notificaciones
+Route::group(['prefix' => 'notificaciones', 'middleware' => 'jwt.auth'], function () {
+    Route::get('/', [NotificacionController::class, 'index']);
+    Route::get('/conteo-no-leidas', [NotificacionController::class, 'conteoNoLeidas']);
+    Route::get('/{id}', [NotificacionController::class, 'show']);
+    Route::post('/', [NotificacionController::class, 'store']);
+    Route::patch('/{id}/marcar-leida', [NotificacionController::class, 'marcarComoLeida']);
+    Route::patch('/marcar-multiples-leidas', [NotificacionController::class, 'marcarMultiplesComoLeidas']);
+    Route::patch('/{id}/archivar', [NotificacionController::class, 'archivar']);
 });

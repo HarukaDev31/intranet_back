@@ -501,7 +501,7 @@ class DocumentacionController extends Controller
 
             // Obtener datos del sistema
             $dataSystem = $this->getSystemData($idContenedor);
-
+            Log::info('Datos del sistema: ' . json_encode($dataSystem));
             // Procesar Excel
             $processedExcel = $this->processExcelFiles(
                 $objPHPExcel,
@@ -568,6 +568,7 @@ class DocumentacionController extends Controller
             ->whereNotNull('estado_cliente')
             ->whereNull('id_cliente_importacion')
             ->get();
+        
     }
 
     /**
