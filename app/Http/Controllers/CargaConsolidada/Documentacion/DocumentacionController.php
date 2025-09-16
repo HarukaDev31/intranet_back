@@ -996,19 +996,30 @@ class DocumentacionController extends Controller
     private function isCellInRange($cellAddress, $range)
     {
         try {
+            // Parsear la celda objetivo
             $coordinate = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::coordinateFromString($cellAddress);
-            $rangeCoordinates = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::getRangeCoordinates($range);
-            
             $cellCol = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::columnIndexFromString($coordinate[0]);
             $cellRow = $coordinate[1];
             
-            $startCol = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::columnIndexFromString($rangeCoordinates[0][0]);
-            $startRow = $rangeCoordinates[0][1];
-            $endCol = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::columnIndexFromString($rangeCoordinates[1][0]);
-            $endRow = $rangeCoordinates[1][1];
+            // Parsear el rango (ej: "C5:C7" -> ["C5", "C7"])
+            $rangeParts = explode(':', $range);
+            if (count($rangeParts) !== 2) {
+                return false;
+            }
             
+            // Parsear coordenadas de inicio y fin del rango
+            $startCoordinate = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::coordinateFromString($rangeParts[0]);
+            $endCoordinate = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::coordinateFromString($rangeParts[1]);
+            
+            $startCol = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::columnIndexFromString($startCoordinate[0]);
+            $startRow = $startCoordinate[1];
+            $endCol = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::columnIndexFromString($endCoordinate[0]);
+            $endRow = $endCoordinate[1];
+            
+            // Verificar si la celda está dentro del rango
             return ($cellCol >= $startCol && $cellCol <= $endCol && $cellRow >= $startRow && $cellRow <= $endRow);
         } catch (\Exception $e) {
+            Log::warning('Error verificando si celda está en rango: ' . $e->getMessage());
             return false;
         }
     }
