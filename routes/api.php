@@ -380,7 +380,7 @@ Route::group(['prefix' => 'notificaciones', 'middleware' => 'jwt.auth'], functio
     Route::get('/conteo-no-leidas', [NotificacionController::class, 'conteoNoLeidas']);
     Route::get('/{id}', [NotificacionController::class, 'show']);
     Route::post('/', [NotificacionController::class, 'store']);
-    Route::patch('/{id}/marcar-leida', [NotificacionController::class, 'marcarComoLeida']);
-    Route::patch('/marcar-multiples-leidas', [NotificacionController::class, 'marcarMultiplesComoLeidas']);
-    Route::patch('/{id}/archivar', [NotificacionController::class, 'archivar']);
+    Route::post('/marcar-multiples-leidas', [NotificacionController::class, 'marcarMultiplesComoLeidas']);
+    Route::put('/{id}/archivar', [NotificacionController::class, 'archivar']);
+    Route::put('/{id}/marcar-leida', [NotificacionController::class, 'marcarComoLeida']);
 });

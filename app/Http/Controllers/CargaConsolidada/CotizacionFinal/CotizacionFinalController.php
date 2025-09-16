@@ -1221,19 +1221,59 @@ class CotizacionFinalController extends Controller
                         Log::error('El archivo Excel no existe: ' . $excelFilePath);
                     }
 
-                    // Actualizar tabla de cotizaciones
-                    DB::table($this->table_contenedor_cotizacion)
-                        ->where('id', $result['id'])
-                        ->update([
-                            'cotizacion_final_url' => $result['cotizacion_final_url'],
-                            'volumen_final' => $result['volumen_final'],
-                            'monto_final' => $result['monto_final'],
-                            'tarifa_final' => $result['tarifa_final'],
-                            'impuestos_final' => $result['impuestos_final'],
-                            'logistica_final' => $result['logistica_final'],
-                            'fob_final' => $result['fob_final'],
-                            'estado_cotizacion_final' => 'PENDIENTE'
+                    // Validar valores antes de actualizar la base de datos
+                    $updateData = [
+                        'cotizacion_final_url' => $result['cotizacion_final_url'],
+                        'volumen_final' => $result['volumen_final'],
+                        'monto_final' => $result['monto_final'],
+                        'tarifa_final' => $result['tarifa_final'],
+                        'impuestos_final' => $result['impuestos_final'],
+                        'logistica_final' => $result['logistica_final'],
+                        'fob_final' => $result['fob_final'],
+                        'estado_cotizacion_final' => 'PENDIENTE'
+                    ];
+                    
+                    Log::info('Actualizando cotización con datos:', [
+                        'id' => $result['id'],
+                        'cliente' => $value['cliente']['nombre'],
+                        'datos' => $updateData
+                    ]);
+                    
+                    // Actualizar tabla de cotizaciones con manejo de errores
+                    try {
+                        DB::table($this->table_contenedor_cotizacion)
+                            ->where('id', $result['id'])
+                            ->update($updateData);
+                        Log::info('Cotización actualizada exitosamente en BD');
+                    } catch (\Exception $dbError) {
+                        Log::error('Error al actualizar cotización en BD: ' . $dbError->getMessage(), [
+                            'id' => $result['id'],
+                            'cliente' => $value['cliente']['nombre'],
+                            'update_data' => $updateData
                         ]);
+                        
+                        // Si es un error de rango numérico, intentar con valores limitados
+                        if (strpos($dbError->getMessage(), 'Out of range value') !== false) {
+                            Log::warning('Intentando actualizar con valores limitados...');
+                            $limitedData = $updateData;
+                            $limitedData['monto_final'] = min($limitedData['monto_final'], 999999.99);
+                            $limitedData['logistica_final'] = min($limitedData['logistica_final'], 999999.99);
+                            $limitedData['impuestos_final'] = min($limitedData['impuestos_final'], 999999.99);
+                            $limitedData['fob_final'] = min($limitedData['fob_final'], 999999.99);
+                            
+                            try {
+                                DB::table($this->table_contenedor_cotizacion)
+                                    ->where('id', $result['id'])
+                                    ->update($limitedData);
+                                Log::info('Cotización actualizada con valores limitados');
+                            } catch (\Exception $retryError) {
+                                Log::error('Error persistente al actualizar cotización: ' . $retryError->getMessage());
+                                continue; // Saltar este cliente y continuar con el siguiente
+                            }
+                        } else {
+                            continue; // Saltar este cliente si no es un error de rango
+                        }
+                    }
 
                     Log::info('Cotización procesada: ' . json_encode($result));
                 } catch (\Exception $e) {
@@ -1663,15 +1703,37 @@ class CotizacionFinalController extends Controller
 
             // Calcular valores finales
             $sheet1 = $objPHPExcel->getSheet(0);
-            $montoFinal = is_numeric($sheet1->getCell('K30')->getCalculatedValue()) ? (float)$sheet1->getCell('K30')->getCalculatedValue() : 0;
-            $fob = is_numeric($sheet1->getCell('K29')->getCalculatedValue()) ? (float)$sheet1->getCell('K29')->getCalculatedValue() : 0;
-            $logistica = is_numeric($sheet1->getCell('K30')->getCalculatedValue()) ? (float)$sheet1->getCell('K30')->getCalculatedValue() : 0;
-            $impuestos = is_numeric($sheet1->getCell('K31')->getCalculatedValue()) ? (float)$sheet1->getCell('K31')->getCalculatedValue() : 0;
-
-            if ($sheet1->getCell('B23')->getValue() == "ANTIDUMPING") {
-                $fob = is_numeric($sheet1->getCell('K30')->getCalculatedValue()) ? (float)$sheet1->getCell('K30')->getCalculatedValue() : 0;
-                $logistica = is_numeric($sheet1->getCell('K31')->getCalculatedValue()) ? (float)$sheet1->getCell('K31')->getCalculatedValue() : 0;
-                $impuestos = is_numeric($sheet1->getCell('K32')->getCalculatedValue()) ? (float)$sheet1->getCell('K32')->getCalculatedValue() : 0;
+            $antidumping = $sheet1->getCell('B23')->getValue() == "ANTIDUMPING";
+            
+            // Asignar valores según si hay antidumping o no
+            if ($antidumping) {
+                $fob = is_numeric($sheet1->getCell('K29')->getCalculatedValue()) ? (float)$sheet1->getCell('K29')->getCalculatedValue() : 0;
+                $logistica = is_numeric($sheet1->getCell('K30')->getCalculatedValue()) ? (float)$sheet1->getCell('K30')->getCalculatedValue() : 0;
+                $impuestos = is_numeric($sheet1->getCell('K31')->getCalculatedValue()) ? (float)$sheet1->getCell('K31')->getCalculatedValue() : 0;
+                $montoFinal = is_numeric($sheet1->getCell('K32')->getCalculatedValue()) ? (float)$sheet1->getCell('K32')->getCalculatedValue() : 0;
+            } else {
+                $fob = is_numeric($sheet1->getCell('K29')->getCalculatedValue()) ? (float)$sheet1->getCell('K29')->getCalculatedValue() : 0;
+                $logistica = is_numeric($sheet1->getCell('K30')->getCalculatedValue()) ? (float)$sheet1->getCell('K30')->getCalculatedValue() : 0;
+                $impuestos = is_numeric($sheet1->getCell('K31')->getCalculatedValue()) ? (float)$sheet1->getCell('K31')->getCalculatedValue() : 0;
+                $montoFinal = is_numeric($sheet1->getCell('K32')->getCalculatedValue()) ? (float)$sheet1->getCell('K32')->getCalculatedValue() : 0;
+            }
+            
+            // Validar que los valores no sean excesivamente grandes (máximo 1 millón)
+            $maxValue = 1000000;
+            if ($montoFinal > $maxValue || $logistica > $maxValue || $impuestos > $maxValue || $fob > $maxValue) {
+                Log::warning('Valores calculados excesivamente grandes para cliente: ' . $data['cliente']['nombre'], [
+                    'monto_final' => $montoFinal,
+                    'logistica_final' => $logistica,
+                    'impuestos_final' => $impuestos,
+                    'fob_final' => $fob,
+                    'antidumping' => $antidumping
+                ]);
+                
+                // Limitar valores a un máximo razonable
+                $montoFinal = min($montoFinal, $maxValue);
+                $logistica = min($logistica, $maxValue);
+                $impuestos = min($impuestos, $maxValue);
+                $fob = min($fob, $maxValue);
             }
 
             return [
