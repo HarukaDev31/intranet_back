@@ -698,19 +698,24 @@ class DocumentacionController extends Controller
             return $itemToClientMap[strtolower($cleanItemN)];
         }
 
-        // Estrategia 3: Búsqueda parcial (contiene)
-        foreach ($itemToClientMap as $mappedItemId => $client) {
-            if (stripos($mappedItemId, $cleanItemN) !== false || stripos($cleanItemN, $mappedItemId) !== false) {
-                Log::info('Cliente encontrado (parcial): ' . $cleanItemN . ' -> ' . $client . ' (mapeado: ' . $mappedItemId . ')');
-                return $client;
+        // Estrategia 3: Búsqueda parcial (contiene) - SOLO para números
+        if (is_numeric($cleanItemN)) {
+            foreach ($itemToClientMap as $mappedItemId => $client) {
+                // Solo buscar coincidencias parciales si ambos son números y tienen longitud similar
+                if (is_numeric($mappedItemId) && abs(strlen($cleanItemN) - strlen($mappedItemId)) <= 1) {
+                    if (stripos($mappedItemId, $cleanItemN) !== false || stripos($cleanItemN, $mappedItemId) !== false) {
+                        Log::info('Cliente encontrado (parcial numérico): ' . $cleanItemN . ' -> ' . $client . ' (mapeado: ' . $mappedItemId . ')');
+                        return $client;
+                    }
+                }
             }
         }
 
-        // Estrategia 4: Búsqueda removiendo espacios y caracteres especiales
+        // Estrategia 4: Búsqueda removiendo espacios y caracteres especiales - SOLO si hay coincidencia exacta
         $normalizedItemN = preg_replace('/[^a-zA-Z0-9]/', '', $cleanItemN);
         foreach ($itemToClientMap as $mappedItemId => $client) {
             $normalizedMapped = preg_replace('/[^a-zA-Z0-9]/', '', $mappedItemId);
-            if (strcasecmp($normalizedItemN, $normalizedMapped) === 0) {
+            if (strcasecmp($normalizedItemN, $normalizedMapped) === 0 && strlen($normalizedItemN) > 0) {
                 Log::info('Cliente encontrado (normalizado): ' . $cleanItemN . ' -> ' . $client . ' (mapeado: ' . $mappedItemId . ')');
                 return $client;
             }
@@ -718,7 +723,9 @@ class DocumentacionController extends Controller
 
         Log::warning('Cliente no encontrado para itemId: ' . $cleanItemN);
         Log::warning('ItemIds disponibles en el mapeo: ' . implode(', ', array_keys($itemToClientMap)));
-        return 'Cliente no encontrado';
+        
+        // Si no hay cliente, devolver cadena vacía en lugar de texto
+        return '';
     }
 
     /**
@@ -785,8 +792,13 @@ class DocumentacionController extends Controller
             // Obtener cliente - búsqueda mejorada
             $client = $this->findClientForItem($itemToClientMap, $itemN);
 
-                // Procesar cliente y merge
-                $this->processClientMerge($sheet, $row, $client, $currentClient, $clientStartRow, $clientEndRow, $pendingMerge);
+                // Solo procesar cliente y merge si hay un cliente válido
+                if (!empty($client)) {
+                    // Procesar cliente y merge
+                    $this->processClientMerge($sheet, $row, $client, $currentClient, $clientStartRow, $clientEndRow, $pendingMerge);
+                } else {
+                    Log::info('Item ' . $itemN . ' no tiene cliente asociado, se dejará vacío');
+                }
 
                 // Buscar información aduanera
                 $this->processCustomsInfo($sheet, $row, $itemN, $listaPartidasExcel);
@@ -1073,11 +1085,16 @@ class DocumentacionController extends Controller
                 $client = $this->findClientForItem($itemToClientMap, $itemN);
                 Log::info('Cliente encontrado para ' . $itemN . ': ' . $client);
                 
-                // ESCRIBIR EL CLIENTE EN LA COLUMNA D - esto faltaba!
-                $sheet0->setCellValue('D' . $highestFirstSheetRow, $client);
-                
-                // Procesar merge de cliente (similar a processClientMerge pero adaptado)
-                $this->processAdditionalClientMerge($sheet0, $highestFirstSheetRow, $client, $currentClient, $clientStartRow, $clientEndRow, $pendingMerge);
+                // Solo escribir cliente y procesar merge si hay un cliente válido
+                if (!empty($client)) {
+                    // ESCRIBIR EL CLIENTE EN LA COLUMNA D
+                    $sheet0->setCellValue('D' . $highestFirstSheetRow, $client);
+                    
+                    // Procesar merge de cliente (similar a processClientMerge pero adaptado)
+                    $this->processAdditionalClientMerge($sheet0, $highestFirstSheetRow, $client, $currentClient, $clientStartRow, $clientEndRow, $pendingMerge);
+                } else {
+                    Log::info('Item ' . $itemN . ' no tiene cliente asociado en hoja adicional, se dejará vacío');
+                }
                 
                 $this->processSystemData($sheet0, $highestFirstSheetRow, $client, $dataSystem);
 
