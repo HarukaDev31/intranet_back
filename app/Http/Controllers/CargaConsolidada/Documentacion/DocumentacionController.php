@@ -1203,11 +1203,80 @@ class DocumentacionController extends Controller
     }
 
     /**
-     * Verifica si dos nombres coinciden
+     * Verifica si dos nombres coinciden con normalización avanzada
      */
     private function isNameMatch($name1, $name2)
     {
-        return strtolower(trim($name1)) === strtolower(trim($name2));
+        // Normalizar ambos nombres
+        $normalized1 = $this->normalizeClientName($name1);
+        $normalized2 = $this->normalizeClientName($name2);
+        
+        Log::info('Comparando clientes: "' . $name1 . '" (' . $normalized1 . ') vs "' . $name2 . '" (' . $normalized2 . ')');
+        
+        // Comparación exacta
+        if ($normalized1 === $normalized2) {
+            Log::info('✅ Coincidencia exacta encontrada');
+            return true;
+        }
+        
+        // Comparación de similitud (85% o más)
+        $similarity = 0;
+        similar_text($normalized1, $normalized2, $similarity);
+        if ($similarity >= 85) {
+            Log::info('✅ Coincidencia por similitud encontrada: ' . round($similarity, 2) . '%');
+            return true;
+        }
+        
+        Log::info('❌ No hay coincidencia (similitud: ' . round($similarity, 2) . '%)');
+        return false;
+    }
+    
+    /**
+     * Normaliza un nombre de cliente para comparación
+     */
+    private function normalizeClientName($name)
+    {
+        if (empty($name)) {
+            return '';
+        }
+        
+        // Convertir a string si no lo es
+        $name = (string) $name;
+        
+        // Convertir a minúsculas
+        $name = mb_strtolower($name, 'UTF-8');
+        
+        // Remover acentos y caracteres especiales
+        $name = $this->removeAccents($name);
+        
+        // Remover caracteres que no sean letras, números o espacios
+        $name = preg_replace('/[^a-z0-9\s]/', '', $name);
+        
+        // Normalizar espacios (múltiples espacios a uno solo)
+        $name = preg_replace('/\s+/', ' ', $name);
+        
+        // Quitar espacios al inicio y final
+        $name = trim($name);
+        
+        return $name;
+    }
+    
+    /**
+     * Remueve acentos de un texto
+     */
+    private function removeAccents($text)
+    {
+        $accents = [
+            'á' => 'a', 'à' => 'a', 'ä' => 'a', 'â' => 'a', 'ā' => 'a', 'ã' => 'a',
+            'é' => 'e', 'è' => 'e', 'ë' => 'e', 'ê' => 'e', 'ē' => 'e',
+            'í' => 'i', 'ì' => 'i', 'ï' => 'i', 'î' => 'i', 'ī' => 'i',
+            'ó' => 'o', 'ò' => 'o', 'ö' => 'o', 'ô' => 'o', 'ō' => 'o', 'õ' => 'o',
+            'ú' => 'u', 'ù' => 'u', 'ü' => 'u', 'û' => 'u', 'ū' => 'u',
+            'ñ' => 'n',
+            'ç' => 'c'
+        ];
+        
+        return strtr($text, $accents);
     }
     public function deleteFileDocumentation(Request $request, $idFile)
     {
