@@ -598,33 +598,102 @@ class DocumentacionController extends Controller
     }
 
     /**
-     * Crea mapeo de items a clientes
+     * Crea mapeo de items a clientes desde todas las hojas del packing list
      */
     private function createItemToClientMap($packingExcel)
     {
         $itemToClientMap = [];
-        $sheet = $packingExcel->getSheet(0);
-        $highestRow = $sheet->getHighestRow();
+        $sheetCount = $packingExcel->getSheetCount();
+        
+        Log::info('Procesando packing list con ' . $sheetCount . ' hojas');
 
-        for ($row = 26; $row <= $highestRow; $row++) {
-            $itemId = $sheet->getCell('B' . $row)->getValue();
-            $client = $sheet->getCell('C' . $row)->getValue();
+        // Procesar todas las hojas del packing list
+        for ($sheetIndex = 0; $sheetIndex < $sheetCount; $sheetIndex++) {
+            $sheet = $packingExcel->getSheet($sheetIndex);
+            $highestRow = $sheet->getHighestRow();
+            
+            Log::info('Procesando hoja ' . $sheetIndex . ' del packing list, filas: ' . $highestRow);
 
-            // Primero agregar datos válidos si existen
-            if (!empty($itemId) && !empty($client)) {
-                // Verificar si no contienen "TOTAL" antes de agregar
-                if (stripos(trim($itemId), "TOTAL") === false && stripos(trim($client), "TOTAL") === false) {
-                    $itemToClientMap[trim($itemId)] = trim($client);
+            for ($row = 26; $row <= $highestRow; $row++) {
+                $itemId = $sheet->getCell('B' . $row)->getValue();
+                $client = $sheet->getCell('C' . $row)->getValue();
+
+                // Primero agregar datos válidos si existen
+                if (!empty($itemId) && !empty($client)) {
+                    // Verificar si no contienen "TOTAL" antes de agregar
+                    if (stripos(trim($itemId), "TOTAL") === false && stripos(trim($client), "TOTAL") === false) {
+                        $cleanItemId = trim($itemId);
+                        $cleanClient = trim($client);
+                        
+                        // Agregar múltiples variaciones del itemId para mayor compatibilidad
+                        $itemToClientMap[$cleanItemId] = $cleanClient;
+                        $itemToClientMap[strtoupper($cleanItemId)] = $cleanClient;
+                        $itemToClientMap[strtolower($cleanItemId)] = $cleanClient;
+                        
+                        Log::info('Mapeado: ' . $cleanItemId . ' -> ' . $cleanClient);
+                    }
                 }
-            }
 
-            // Luego verificar si debemos parar (después de procesar la fila actual)
-            if (stripos(trim($itemId), "TOTAL") !== false || stripos(trim($client), "TOTAL") !== false) {
-                break;
+                // Luego verificar si debemos parar (después de procesar la fila actual)
+                if (stripos(trim($itemId), "TOTAL") !== false || stripos(trim($client), "TOTAL") !== false) {
+                    Log::info('Encontrado TOTAL en hoja ' . $sheetIndex . ', fila ' . $row);
+                    break;
+                }
             }
         }
 
+        Log::info('Mapeo completo creado con ' . count($itemToClientMap) . ' elementos');
         return $itemToClientMap;
+    }
+
+    /**
+     * Busca el cliente para un itemId con múltiples estrategias de búsqueda
+     */
+    private function findClientForItem($itemToClientMap, $itemN)
+    {
+        if (empty($itemN)) {
+            return 'Cliente no encontrado';
+        }
+
+        $cleanItemN = trim($itemN);
+        
+        // Estrategia 1: Búsqueda exacta
+        if (isset($itemToClientMap[$cleanItemN])) {
+            Log::info('Cliente encontrado (exacto): ' . $cleanItemN . ' -> ' . $itemToClientMap[$cleanItemN]);
+            return $itemToClientMap[$cleanItemN];
+        }
+
+        // Estrategia 2: Búsqueda sin considerar mayúsculas/minúsculas
+        if (isset($itemToClientMap[strtoupper($cleanItemN)])) {
+            Log::info('Cliente encontrado (mayúsculas): ' . $cleanItemN . ' -> ' . $itemToClientMap[strtoupper($cleanItemN)]);
+            return $itemToClientMap[strtoupper($cleanItemN)];
+        }
+
+        if (isset($itemToClientMap[strtolower($cleanItemN)])) {
+            Log::info('Cliente encontrado (minúsculas): ' . $cleanItemN . ' -> ' . $itemToClientMap[strtolower($cleanItemN)]);
+            return $itemToClientMap[strtolower($cleanItemN)];
+        }
+
+        // Estrategia 3: Búsqueda parcial (contiene)
+        foreach ($itemToClientMap as $mappedItemId => $client) {
+            if (stripos($mappedItemId, $cleanItemN) !== false || stripos($cleanItemN, $mappedItemId) !== false) {
+                Log::info('Cliente encontrado (parcial): ' . $cleanItemN . ' -> ' . $client . ' (mapeado: ' . $mappedItemId . ')');
+                return $client;
+            }
+        }
+
+        // Estrategia 4: Búsqueda removiendo espacios y caracteres especiales
+        $normalizedItemN = preg_replace('/[^a-zA-Z0-9]/', '', $cleanItemN);
+        foreach ($itemToClientMap as $mappedItemId => $client) {
+            $normalizedMapped = preg_replace('/[^a-zA-Z0-9]/', '', $mappedItemId);
+            if (strcasecmp($normalizedItemN, $normalizedMapped) === 0) {
+                Log::info('Cliente encontrado (normalizado): ' . $cleanItemN . ' -> ' . $client . ' (mapeado: ' . $mappedItemId . ')');
+                return $client;
+            }
+        }
+
+        Log::warning('Cliente no encontrado para itemId: ' . $cleanItemN);
+        return 'Cliente no encontrado';
     }
 
     /**
@@ -688,8 +757,8 @@ class DocumentacionController extends Controller
 
             // Procesar datos válidos si no contiene TOTAL
             if (stripos(trim($itemN), "TOTAL") === false) {
-                // Obtener cliente
-                $client = $itemToClientMap[trim($itemN)] ?? 'Cliente no encontrado';
+            // Obtener cliente - búsqueda mejorada
+            $client = $this->findClientForItem($itemToClientMap, $itemN);
 
                 // Procesar cliente y merge
                 $this->processClientMerge($sheet, $row, $client, $currentClient, $clientStartRow, $clientEndRow, $pendingMerge);
@@ -930,8 +999,8 @@ class DocumentacionController extends Controller
                 // Copiar datos del producto
                 $this->copyProductData($sheet, $sheet0, $row, $highestFirstSheetRow);
 
-                // Procesar cliente y datos del sistema
-                $client = $itemToClientMap[trim($itemN)] ?? 'Cliente no encontrado';
+                // Procesar cliente y datos del sistema - búsqueda mejorada
+                $client = $this->findClientForItem($itemToClientMap, $itemN);
                 $this->processSystemData($sheet0, $highestFirstSheetRow, $client, $dataSystem);
 
                 // Procesar información aduanera
