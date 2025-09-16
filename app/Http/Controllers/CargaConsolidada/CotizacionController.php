@@ -602,7 +602,6 @@ class CotizacionController extends Controller
 
                 // Obtener datos de proveedores
                 $dataEmbarque = $this->getEmbarqueData($cotizacion, $dataToInsert);
-                Log::info('Data embarque: ' . json_encode($dataEmbarque));
 
                 // Insertar proveedores en lote si existen
                 if (!empty($dataEmbarque)) {
