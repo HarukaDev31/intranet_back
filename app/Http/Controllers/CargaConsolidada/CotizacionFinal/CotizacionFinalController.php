@@ -460,69 +460,44 @@ class CotizacionFinalController extends Controller
                     }
                 }
 
-                if (!$clientMergeRange) {
-                    $startRow++;
-                    continue;
-                }
+                // Obtener información del cliente - manejar tanto celdas mergeadas como individuales
+                $clientName = '';
+                $clientType = '';
+                $currentRow = $startRow;
 
-                // Obtener información del cliente
-                $clientName = $sheet->getCell('D' . $clientMergeRange['start'])->getValue();
-                $clientType = $sheet->getCell('C' . $clientMergeRange['start'])->getValue();
-
-                $mergeStartRow = $newRow;
-
-                // Procesar cada fila del rango
-                for ($currentRow = $clientMergeRange['start']; $currentRow <= $clientMergeRange['end']; $currentRow++) {
-                    // Insertar nueva fila
-                    if ($newRow > 2) {
-                        $newSheet->insertNewRowBefore($newRow);
+                if ($clientMergeRange) {
+                    // Si hay merge, obtener datos del inicio del rango
+                    $clientName = $sheet->getCell('D' . $clientMergeRange['start'])->getValue();
+                    $clientType = $sheet->getCell('C' . $clientMergeRange['start'])->getValue();
+                    $mergeStartRow = $newRow;
+                    
+                    // Procesar cada fila del rango mergeado
+                    for ($currentRow = $clientMergeRange['start']; $currentRow <= $clientMergeRange['end']; $currentRow++) {
+                        $this->processSingleRow($sheet, $newSheet, $newRow, $currentRow, $clientName, $clientType, $dataSystem);
+                        $newRow++;
                     }
-
-                    // Combinar celdas de descripción
-                    $newSheet->mergeCells('F' . $newRow . ':M' . $newRow);
-
-                    // Copiar datos
-                    $rowData = [
-                        'A' => $clientName,
-                        'B' => $clientType,
-                        'E' => $sheet->getCell('B' . $currentRow)->getValue(),
-                        'F' => $sheet->getCell('E' . $currentRow)->getValue(),
-                        'N' => $sheet->getCell('M' . $currentRow)->getValue(),
-                        'O' => $sheet->getCell('O' . $currentRow)->getValue(),
-                        'P' => $sheet->getCell('S' . $currentRow)->getValue(),
-                        'Q' => 0,
-                        'R' => $sheet->getCell('R' . $currentRow)->getValue(),
-                        'S' => 0.035,
-                        'U' => $sheet->getCell('T' . $currentRow)->getValue()
-                    ];
-                    Log::info('Row data: ' . json_encode($rowData));
-                    foreach ($rowData as $column => $value) {
-                        $newSheet->setCellValue($column . $newRow, $value);
-                    }
-
-                    // Buscar datos del sistema para el cliente
-                    foreach ($dataSystem as $data) {
-                
-                        if ($this->isNameMatch(trim($clientName), trim($data->nombre))) {
-                            $newSheet->setCellValue('C' . $newRow, $data->documento);
-                            $newSheet->setCellValue('D' . $newRow, $data->telefono);
-                            $newSheet->setCellValue('T' . $newRow, $data->peso);
-                            break;
-                        }
-                    }
-
-                    // Aplicar estilos
-                    $this->applyRowStyles($newSheet, $newRow);
-
+                } else {
+                    // Si no hay merge, obtener datos de la fila actual
+                    $clientName = $sheet->getCell('D' . $startRow)->getValue();
+                    $clientType = $sheet->getCell('C' . $startRow)->getValue();
+                    $mergeStartRow = $newRow;
+                    
+                    // Procesar solo la fila actual
+                    $this->processSingleRow($sheet, $newSheet, $newRow, $startRow, $clientName, $clientType, $dataSystem);
                     $newRow++;
                 }
 
-                // Combinar celdas para el cliente
-                if ($mergeStartRow < ($newRow - 1)) {
+                // Combinar celdas para el cliente solo si hay múltiples filas
+                if ($clientMergeRange && $mergeStartRow < ($newRow - 1)) {
                     $this->applyClientMerges($newSheet, $mergeStartRow, $newRow - 1);
                 }
 
-                $startRow = $clientMergeRange['end'] + 1;
+                // Avanzar a la siguiente fila o grupo
+                if ($clientMergeRange) {
+                    $startRow = $clientMergeRange['end'] + 1;
+                } else {
+                    $startRow++;
+                }
             }
 
             // Aplicar estilos finales
@@ -2635,5 +2610,53 @@ class CotizacionFinalController extends Controller
             Log::error('Excepción descargarBoleta: ' . $e->getMessage());
             throw $e;
         }
+    }
+
+    /**
+     * Procesa una sola fila del Excel
+     */
+    private function processSingleRow($sheet, $newSheet, $newRow, $currentRow, $clientName, $clientType, $dataSystem)
+    {
+        // Insertar nueva fila
+        if ($newRow > 2) {
+            $newSheet->insertNewRowBefore($newRow);
+        }
+
+        // Combinar celdas de descripción
+        $newSheet->mergeCells('F' . $newRow . ':M' . $newRow);
+
+        // Copiar datos
+        $rowData = [
+            'A' => $clientName,
+            'B' => $clientType,
+            'E' => $sheet->getCell('B' . $currentRow)->getValue(),
+            'F' => $sheet->getCell('E' . $currentRow)->getValue(),
+            'N' => $sheet->getCell('M' . $currentRow)->getValue(),
+            'O' => $sheet->getCell('O' . $currentRow)->getValue(),
+            'P' => $sheet->getCell('S' . $currentRow)->getValue(),
+            'Q' => 0,
+            'R' => $sheet->getCell('R' . $currentRow)->getValue(),
+            'S' => 0.035,
+            'U' => $sheet->getCell('T' . $currentRow)->getValue()
+        ];
+        
+        Log::info('Row data: ' . json_encode($rowData));
+        
+        foreach ($rowData as $column => $value) {
+            $newSheet->setCellValue($column . $newRow, $value);
+        }
+
+        // Buscar datos del sistema para el cliente
+        foreach ($dataSystem as $data) {
+            if ($this->isNameMatch(trim($clientName), trim($data->nombre))) {
+                $newSheet->setCellValue('C' . $newRow, $data->documento);
+                $newSheet->setCellValue('D' . $newRow, $data->telefono);
+                $newSheet->setCellValue('T' . $newRow, $data->peso);
+                break;
+            }
+        }
+
+        // Aplicar estilos
+        $this->applyRowStyles($newSheet, $newRow);
     }
 }
