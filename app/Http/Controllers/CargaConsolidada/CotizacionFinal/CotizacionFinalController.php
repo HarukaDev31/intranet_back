@@ -384,6 +384,8 @@ class CotizacionFinalController extends Controller
                     'CC.telefono'
                 )
                 ->where('CC.id_contenedor', $idContenedor)
+                ->where('CC.estado_cotizador', 'CONFIRMADO')
+                ->whereNull('CC.id_cliente_importacion')
                 ->whereNotNull('CC.estado_cliente')
                 ->get();
             Log::info('Data system: ' . json_encode($dataSystem));
