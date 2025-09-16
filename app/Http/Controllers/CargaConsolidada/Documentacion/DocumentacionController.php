@@ -610,12 +610,17 @@ class DocumentacionController extends Controller
             $itemId = $sheet->getCell('B' . $row)->getValue();
             $client = $sheet->getCell('C' . $row)->getValue();
 
-            if (stripos(trim($itemId), "TOTAL") !== false || stripos(trim($client), "TOTAL") !== false) {
-                break;
+            // Primero agregar datos válidos si existen
+            if (!empty($itemId) && !empty($client)) {
+                // Verificar si no contienen "TOTAL" antes de agregar
+                if (stripos(trim($itemId), "TOTAL") === false && stripos(trim($client), "TOTAL") === false) {
+                    $itemToClientMap[trim($itemId)] = trim($client);
+                }
             }
 
-            if (!empty($itemId) && !empty($client)) {
-                $itemToClientMap[trim($itemId)] = trim($client);
+            // Luego verificar si debemos parar (después de procesar la fila actual)
+            if (stripos(trim($itemId), "TOTAL") !== false || stripos(trim($client), "TOTAL") !== false) {
+                break;
             }
         }
 
