@@ -904,6 +904,9 @@ class PagosController extends Controller
                 ->where('id_concept', PedidoCursoPagoConcept::CONCEPT_PAGO_ADELANTO_CURSO)
                 ->orderBy('payment_date', 'asc')
                 ->get();
+            foreach ($pagos as $pago) {
+                $pago->voucher_url = $this->generateImageUrl($pago->voucher_url);
+            }
             $nombre = $pedidoCurso->ID_Entidad;
             $entidad = Entidad::findOrFail($pedidoCurso->ID_Entidad);
             $nombre = $entidad->No_Entidad;
