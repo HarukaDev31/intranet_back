@@ -884,22 +884,31 @@ class DocumentacionController extends Controller
     }
 
     /**
-     * Obtiene la fila más alta de la primera hoja
+     * Obtiene la fila más alta de la primera hoja (donde insertar elementos de hojas adicionales)
      */
     private function getHighestRowFirstSheet($facturaExcel)
     {
         $sheet0 = $facturaExcel->getSheet(0);
         $highestRow = $sheet0->getHighestRow();
+        $lastValidRow = $highestRow;
 
         for ($row = 26; $row <= $highestRow; $row++) {
             $itemN = $sheet0->getCell('B' . $row)->getValue();
             Log::info('Item N: ' . $itemN);
+            
+            // Si encontramos TOTAL, la posición de inserción debe ser DESPUÉS del último elemento válido
             if (stripos(trim($itemN), "TOTAL") !== false) {
-                return $row - 1;
+                // Retornar la fila de TOTAL para insertar ANTES de ella
+                return $row;
+            }
+            
+            // Si no es TOTAL y tiene contenido, actualizar última fila válida
+            if (!empty(trim($itemN))) {
+                $lastValidRow = $row + 1; // +1 para insertar después
             }
         }
 
-        return $highestRow;
+        return $lastValidRow;
     }
 
     /**
