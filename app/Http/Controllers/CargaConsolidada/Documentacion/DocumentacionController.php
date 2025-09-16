@@ -867,7 +867,7 @@ class DocumentacionController extends Controller
 
         $sheet0 = $facturaExcel->getSheet(0);
         $highestFirstSheetRow = $this->getHighestRowFirstSheet($facturaExcel);
-
+        Log::info('Fila más alta de la primera hoja: ' . $highestFirstSheetRow);
         for ($i = 1; $i < $sheetCount; $i++) {
             $sheet = $facturaExcel->getSheet($i);
             $this->processAdditionalSheet($sheet, $sheet0, $itemToClientMap, $dataSystem, $listaPartidasExcel, $highestFirstSheetRow);
@@ -884,6 +884,7 @@ class DocumentacionController extends Controller
 
         for ($row = 26; $row <= $highestRow; $row++) {
             $itemN = $sheet0->getCell('B' . $row)->getValue();
+            Log::info('Item N: ' . $itemN);
             if (stripos(trim($itemN), "TOTAL") !== false) {
                 return $row - 1;
             }
