@@ -397,7 +397,7 @@ class EtiquetadoController extends Controller
             $validator = Validator::make($data, [
                 'id_rubro' => 'sometimes|required|integer|exists:bd_productos,id',
                 'observaciones' => 'nullable|string|max:1000',
-                'imagenes.*' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048'
+                'imagenes.*' => 'nullable|image|mimes:jpeg,png,jpg,gif'
             ]);
 
             if ($validator->fails()) {

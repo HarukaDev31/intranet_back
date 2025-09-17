@@ -493,7 +493,7 @@ class AntidumpingController extends Controller
                 'precio_declarado' => 'required|numeric|min:0',
                 'antidumping' => 'required|boolean',
                 'observaciones' => 'nullable|string|max:1000',
-                'imagenes.*' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048'
+                'imagenes.*' => 'nullable|image|mimes:jpeg,png,jpg,gif'
             ]);
 
             if ($validator->fails()) {
