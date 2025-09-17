@@ -29,6 +29,7 @@ class Usuario extends Authenticatable implements JWTSubject
     protected $hidden = [
         'No_Password',
     ];
+    const ID_JEFE_VENTAS = 28791;
 
     /**
      * Get the identifier that will be stored in the subject claim of the JWT.
@@ -102,16 +103,16 @@ class Usuario extends Authenticatable implements JWTSubject
     public function getAllGrupos()
     {
         $grupos = collect();
-        
+
         // Agregar el grupo directo si existe
         if ($this->grupo) {
             $grupos->push($this->grupo);
         }
-        
+
         // Agregar grupos de la relación many-to-many
         $gruposManyToMany = $this->gruposUsuario()->with('grupo')->get()->pluck('grupo');
         $grupos = $grupos->merge($gruposManyToMany);
-        
+
         return $grupos->unique('ID_Grupo');
     }
 
@@ -124,7 +125,7 @@ class Usuario extends Authenticatable implements JWTSubject
         if ($this->ID_Grupo == $grupoId) {
             return true;
         }
-        
+
         // Verificar grupos many-to-many
         return $this->gruposUsuario()->where('ID_Grupo', $grupoId)->exists();
     }
@@ -160,4 +161,4 @@ class Usuario extends Authenticatable implements JWTSubject
     {
         return $this->grupo ? $this->grupo->Nu_Tipo_Privilegio_Acceso : null;
     }
-} 
+}

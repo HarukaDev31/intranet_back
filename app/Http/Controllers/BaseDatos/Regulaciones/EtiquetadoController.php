@@ -277,7 +277,7 @@ class EtiquetadoController extends Controller
                 
                 $etiquetado->load(['rubro', 'media']);
                 
-                Log::info('Regulación de etiquetado actualizada exitosamente', ['id' => $etiquetado->id]);
+                Log::info('Regulación de etiquetado actuali zada exitosamente', ['id' => $etiquetado->id]);
 
                 return response()->json([
                     'success' => true,

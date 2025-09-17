@@ -113,8 +113,6 @@ class CotizacionController extends Controller
                     break;
             }
             $query->whereNull('id_cliente_importacion');
-            // Ordenamiento
-            Log::info('query: ' . $query->toSql());
             $sortField = $request->input('sort_by', 'id');
             $sortOrder = $request->input('sort_order', 'asc');
             $query->orderBy($sortField, $sortOrder);
@@ -1749,6 +1747,9 @@ class CotizacionController extends Controller
             if ($estado == 'CONFIRMADO') {
                 $message = "El cliente {$cotizacion->nombre} ha pasado a confirmado, por favor contactar.";
                 event(new \App\Events\CotizacionStatusUpdated($cotizacion, $estado, $message));
+                
+                // Crear notificación para Coordinación cuando se confirma la cotización
+                $this->crearNotificacionCotizacionConfirmada($cotizacion);
             }
 
             return response()->json([
@@ -2176,12 +2177,6 @@ class CotizacionController extends Controller
                 'descripcion' => "Cliente: {$cotizacion->nombre} | Documento: {$cotizacion->documento} | Volumen: {$cotizacion->volumen} CBM | Contenedor: {$contenedor->carga}",
                 'modulo' => Notificacion::MODULO_CARGA_CONSOLIDADA,
                 'rol_destinatario' => Usuario::ROL_COORDINACION,
-                'navigate_to' => 'cargaconsolidada/abiertos/cotizaciones',
-                'navigate_params' => json_encode([
-                    'idContenedor' => $contenedor->id,
-                    'tab' => 'prospectos',
-                    'idCotizacion' => $cotizacion->id
-                ]),
                 'tipo' => Notificacion::TIPO_INFO,
                 'icono' => 'mdi:file-document-plus',
                 'prioridad' => Notificacion::PRIORIDAD_MEDIA,
@@ -2198,18 +2193,138 @@ class CotizacionController extends Controller
                 ])
             ]);
 
-            Log::info('Notificación creada para Coordinación:', [
-                'notificacion_id' => $notificacion->id,
+            // Crear la notificación para Jefe de Ventas
+            $notificacionJefeVentas = Notificacion::create([
+                'titulo' => 'Nueva Cotización Creada',
+                'mensaje' => "El usuario {$usuarioCreador->No_Nombres_Apellidos} ha creado una nueva cotización para {$cotizacion->nombre}",
+                'descripcion' => "Cliente: {$cotizacion->nombre} | Documento: {$cotizacion->documento} | Volumen: {$cotizacion->volumen} CBM | Contenedor: {$contenedor->carga}",
+                'modulo' => Notificacion::MODULO_CARGA_CONSOLIDADA,
+                'usuario_destinatario' => Usuario::ID_JEFE_VENTAS,
+                'tipo' => Notificacion::TIPO_INFO,
+                'icono' => 'mdi:file-document-plus',
+                'prioridad' => Notificacion::PRIORIDAD_MEDIA,
+                'referencia_tipo' => 'cotizacion',
+                'referencia_id' => $cotizacion->id,
+                'activa' => true,
+                'creado_por' => $usuarioCreador->ID_Usuario,
+                'configuracion_roles' => json_encode([
+                    Usuario::ROL_COTIZADOR => [
+                        'titulo' => 'Nueva Cotización - Supervisión',
+                        'mensaje' => "Nueva cotización de {$cotizacion->nombre} creada por {$usuarioCreador->No_Nombres_Apellidos}",
+                        'descripcion' => "Cotización #{$cotizacion->id} para contenedor {$contenedor->carga} - Supervisión requerida"
+                    ]
+                ])
+            ]);
+
+            Log::info('Notificaciones creadas para Coordinación y Jefe de Ventas:', [
+                'notificacion_coordinacion_id' => $notificacion->id,
+                'notificacion_jefe_ventas_id' => $notificacionJefeVentas->id,
                 'cotizacion_id' => $cotizacion->id,
                 'contenedor_id' => $contenedor->id,
                 'usuario_creador' => $usuarioCreador->No_Nombres_Apellidos
             ]);
 
-            return $notificacion;
+            return [$notificacion, $notificacionJefeVentas];
 
         } catch (\Exception $e) {
-            Log::error('Error al crear notificación para Coordinación: ' . $e->getMessage());
+            Log::error('Error al crear notificaciones para Coordinación y Jefe de Ventas: ' . $e->getMessage());
             // No lanzar excepción para no afectar el flujo principal de creación de cotización
+            return null;
+        }
+    }
+
+    /**
+     * Crea una notificación para Coordinación cuando una cotización se confirma
+     */
+    private function crearNotificacionCotizacionConfirmada($cotizacion)
+    {
+        try {
+            // Obtener el contenedor
+            $contenedor = $cotizacion->contenedor;
+            if (!$contenedor) {
+                Log::warning('Contenedor no encontrado para la cotización: ' . $cotizacion->id);
+                return;
+            }
+
+            // Obtener el usuario que confirmó la cotización
+            $usuarioActual = Auth::user();
+            if (!$usuarioActual) {
+                Log::warning('Usuario actual no encontrado al confirmar cotización: ' . $cotizacion->id);
+                return;
+            }
+
+            // Crear la notificación para Coordinación
+            $notificacion = Notificacion::create([
+                'titulo' => 'Cotización Confirmada',
+                'mensaje' => "El usuario {$usuarioActual->No_Nombres_Apellidos} confirmó la cotización del cliente {$cotizacion->nombre}",
+                'descripcion' => "Cotización #{$cotizacion->id} confirmada | Cliente: {$cotizacion->nombre} | Documento: {$cotizacion->documento} | Volumen: {$cotizacion->volumen} CBM | Contenedor: {$contenedor->carga}",
+                'modulo' => Notificacion::MODULO_CARGA_CONSOLIDADA,
+                'rol_destinatario' => Usuario::ROL_COORDINACION,
+                'navigate_to' => 'cargaconsolidada/abiertos/cotizaciones',
+                'navigate_params' => json_encode([
+                    'idContenedor' => $contenedor->id,
+                    'tab' => 'prospectos',
+                    'idCotizacion' => $cotizacion->id
+                ]),
+                'tipo' => Notificacion::TIPO_SUCCESS,
+                'icono' => 'mdi:check-circle',
+                'prioridad' => Notificacion::PRIORIDAD_ALTA,
+                'referencia_tipo' => 'cotizacion',
+                'referencia_id' => $cotizacion->id,
+                'activa' => true,
+                'creado_por' => $usuarioActual->ID_Usuario,
+                'configuracion_roles' => json_encode([
+                    Usuario::ROL_COORDINACION => [
+                        'titulo' => 'Cotización Confirmada - Acción Requerida',
+                        'mensaje' => "El usuario {$usuarioActual->No_Nombres_Apellidos} confirmó la cotización de {$cotizacion->nombre} - Requiere seguimiento",
+                        'descripcion' => "Cotización #{$cotizacion->id} para contenedor {$contenedor->carga} confirmada por el usuario {$usuarioActual->No_Nombres_Apellidos}"
+                    ]
+                ])
+            ]);
+
+            // Crear la notificación para Jefe de Ventas
+            $notificacionJefeVentas = Notificacion::create([
+                'titulo' => 'Cotización Confirmada',
+                'mensaje' => "El usuario {$usuarioActual->No_Nombres_Apellidos} confirmó la cotización del cliente {$cotizacion->nombre}",
+                'descripcion' => "Cotización #{$cotizacion->id} confirmada | Cliente: {$cotizacion->nombre} | Documento: {$cotizacion->documento} | Volumen: {$cotizacion->volumen} CBM | Contenedor: {$contenedor->carga}",
+                'modulo' => Notificacion::MODULO_CARGA_CONSOLIDADA,
+                'usuario_destinatario' => Usuario::ID_JEFE_VENTAS,
+                'rol_destinatario' => Usuario::ROL_COTIZADOR,
+                'navigate_to' => 'cargaconsolidada/abiertos/cotizaciones',
+                'navigate_params' => json_encode([
+                    'idContenedor' => $contenedor->id,
+                    'tab' => 'prospectos',
+                    'idCotizacion' => $cotizacion->id
+                ]),
+                'tipo' => Notificacion::TIPO_SUCCESS,
+                'icono' => 'mdi:check-circle',
+                'prioridad' => Notificacion::PRIORIDAD_ALTA,
+                'referencia_tipo' => 'cotizacion',
+                'referencia_id' => $cotizacion->id,
+                'activa' => true,
+                'creado_por' => $usuarioActual->ID_Usuario,
+                'configuracion_roles' => json_encode([
+                    Usuario::ROL_COTIZADOR => [
+                        'titulo' => 'Cotización Confirmada - Supervisión',
+                        'mensaje' => "El usuario {$usuarioActual->No_Nombres_Apellidos} confirmó la cotización de {$cotizacion->nombre} - Seguimiento requerido",
+                        'descripcion' => "Cotización #{$cotizacion->id} para contenedor {$contenedor->carga} confirmada por {$usuarioActual->No_Nombres_Apellidos}"
+                    ]
+                ])
+            ]);
+
+            Log::info('Notificaciones de cotización confirmada creadas para Coordinación y Jefe de Ventas:', [
+                'notificacion_coordinacion_id' => $notificacion->id,
+                'notificacion_jefe_ventas_id' => $notificacionJefeVentas->id,
+                'cotizacion_id' => $cotizacion->id,
+                'contenedor_id' => $contenedor->id,
+                'usuario_actual' => $usuarioActual->No_Nombres_Apellidos
+            ]);
+
+            return [$notificacion, $notificacionJefeVentas];
+
+        } catch (\Exception $e) {
+            Log::error('Error al crear notificaciones de cotización confirmada para Coordinación y Jefe de Ventas: ' . $e->getMessage());
+            // No lanzar excepción para no afectar el flujo principal de actualización de estado
             return null;
         }
     }
