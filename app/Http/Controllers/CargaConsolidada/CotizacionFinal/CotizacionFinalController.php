@@ -871,6 +871,7 @@ class CotizacionFinalController extends Controller
                     "Último día de pago: " . date('d/m/Y', strtotime($fechaArribo)) . "\n";
                 $this->sendMessage($message);
                 $pathCotizacionFinalPDF = $this->getBoletaForSend($request->idCotizacion);
+                Log::info('Path cotización final: ' . $pathCotizacionFinalPDF);
                 $this->sendMedia($pathCotizacionFinalPDF, null, null, null, 3);
                 $message = "Resumen de Pago\n" .
                     "✅Cotización final: $" . number_format($total, 2) . "\n" .
@@ -878,7 +879,7 @@ class CotizacionFinalController extends Controller
                     "✅ Pendiente de pago: $" . number_format($totalAPagar, 2) . "\n";
                 $this->sendMessage($message, null, 5);
                 $pagosUrl = public_path('assets/images/pagos-full.jpg');
-                $this->sendMedia($pagosUrl, 'jpg', null, null, 10);
+                $this->sendMedia($pagosUrl, 'image/jpg', null, null, 10);
             }
             return response()->json([
                 'success' => true,
@@ -2366,7 +2367,140 @@ class CotizacionFinalController extends Controller
             throw $e;
         }
     }
+    private function generateBoletaForSend($spreadsheet)
+    {
+        try {
+            $spreadsheet->setActiveSheetIndex(0);
+            $activeSheet = $spreadsheet->getActiveSheet();
+            $antidumping = $activeSheet->getCell('B23')->getValue();
+            $data = [
+                "name" => $activeSheet->getCell('C8')->getValue(),
+                "lastname" => $activeSheet->getCell('C9')->getValue(),
+                "ID" => $activeSheet->getCell('C10')->getValue(),
+                "phone" => $activeSheet->getCell('C11')->getValue(),
+                "date" => date('d/m/Y'),
+                "tipocliente" => $activeSheet->getCell('F11')->getValue(),
+                "peso" => $activeSheet->getCell('J9')->getCalculatedValue(),
+                "qtysuppliers" => $activeSheet->getCell('J10')->getValue(),
+                "cbm" => $activeSheet->getCell('J11')->getCalculatedValue(),
+                "valorcarga" => round($activeSheet->getCell('K14')->getCalculatedValue(), 2),
+                "fleteseguro" => round($activeSheet->getCell('K15')->getCalculatedValue(), 2),
+                "valorcif" => round($activeSheet->getCell('K16')->getCalculatedValue(), 2),
+                "advalorempercent" => intval($activeSheet->getCell('J20')->getCalculatedValue() * 100),
+                "advalorem" => round($activeSheet->getCell('K20')->getCalculatedValue(), 2),
+                "antidumping" => $antidumping == "ANTIDUMPING" ? round($activeSheet->getCell('K23')->getCalculatedValue(), 2) : "",
 
+                "igv" => round($activeSheet->getCell('K21')->getCalculatedValue(), 2),
+                "ipm" => round($activeSheet->getCell('K22')->getCalculatedValue(), 2),
+                "subtotal" => $antidumping == "ANTIDUMPING" ? round($activeSheet->getCell('K24')->getCalculatedValue(), 2) : round($activeSheet->getCell('K23')->getCalculatedValue(), 2),
+                "percepcion" => $antidumping == "ANTIDUMPING" ? round($activeSheet->getCell('K26')->getCalculatedValue(), 2) : round($activeSheet->getCell('K25')->getCalculatedValue(), 2),
+                "total" => $antidumping == "ANTIDUMPING" ? round($activeSheet->getCell('K27')->getCalculatedValue(), 2) : round($activeSheet->getCell('K26')->getCalculatedValue(), 2),
+                "valorcargaproveedor" => $antidumping == "ANTIDUMPING" ? round($activeSheet->getCell('K30')->getCalculatedValue(), 2) : round($activeSheet->getCell('K29')->getCalculatedValue(), 2),
+                "servicioimportacion" => $antidumping == "ANTIDUMPING" ? round($activeSheet->getCell('K31')->getCalculatedValue(), 2) : round($activeSheet->getCell('K30')->getCalculatedValue(), 2),
+                "impuestos" => $antidumping == "ANTIDUMPING" ? round($activeSheet->getCell('K32')->getCalculatedValue(), 2) : round($activeSheet->getCell('K31')->getCalculatedValue(), 2),
+                "montototal" => $antidumping == "ANTIDUMPING" ? round($activeSheet->getCell('K33')->getCalculatedValue(), 2) : round($activeSheet->getCell('K32')->getCalculatedValue(), 2),
+            ];
+            $i = $antidumping == "ANTIDUMPING" ? 37 : 36;
+            $items = [];
+            while ($activeSheet->getCell('B' . $i)->getValue() != 'TOTAL') {
+                //add item to items array
+                $item = [
+                    "index" => $activeSheet->getCell('B' . $i)->getCalculatedValue(),
+                    "name" => $activeSheet->getCell('C' . $i)->getCalculatedValue(),
+                    "qty" => $activeSheet->getCell('F' . $i)->getCalculatedValue(),
+                    "costounit" => number_format(round((float)$activeSheet->getCell('G' . $i)->getCalculatedValue(), 2), 2, '.', ','),
+                    "preciounit" => number_format(round((float)$activeSheet->getCell('I' . $i)->getCalculatedValue(), 2), 2, '.', ','),
+                    "total" => round((float)$activeSheet->getCell('J' . $i)->getCalculatedValue(), 2),
+                    "preciounitpen" => number_format(round((float)$activeSheet->getCell('K' . $i)->getCalculatedValue(), 2), 2, '.', ','),
+                ];
+                $items[] = $item;
+                $i++;
+            }
+            $itemsCount = count($items);
+            $data["br"] = $itemsCount - 18 < 0 ? str_repeat("<br>", 18 - $itemsCount) : "";
+            $data['items'] = $items;
+            $logoContent = file_get_contents(public_path('assets/images/probusiness.png'));
+            $logoData = base64_encode($logoContent);
+            $data["logo"] = 'data:image/png;base64,' . $logoData;
+            $htmlFilePath = public_path('assets/templates/PLANTILLA_COTIZACION_FINAL.html');
+            $htmlContent = file_get_contents($htmlFilePath);
+            $pagosContent = file_get_contents(public_path('assets/images/pagos-full.jpg'));
+            $pagosData = base64_encode($pagosContent);
+            $data["pagos"] = 'data:image/png;base64,' . $pagosData;
+            //replace {{name}} with data['name']
+            foreach ($data as $key => $value) {
+                //if value is a number parse to 2 decimals with comma as unit separator and dot as decimal separator
+                if (is_numeric($value)) {
+                    if ($value == 0) {
+                        $value = '-';
+                    }
+                    if ($key != "ID" && $key != "phone" && $key != "qtysuppliers" && $key != "advalorempercent") {
+                        $value = number_format((float)$value, 2, '.', ',');
+                    }
+                }
+                if ($key == "antidumping" && $antidumping == "ANTIDUMPING") {
+                    $antidumpingHtml = '<tr style="background:#FFFF33">
+                    <td style="border-top:none!important;border-bottom:none!important" colspan="3">ANTIDUMPING</td>
+                    <td style="border-top:none!important;border-bottom:none!important" ></td>
+                    <td style="border-top:none!important;border-bottom:none!important" >$' . number_format((float)$data['antidumping'], 2, '.', ',') . '</td>
+                    <td style="border-top:none!important;border-bottom:none!important" >USD</td>
+                    </tr>';
+                    $htmlContent = str_replace('{{antidumping}}', $antidumpingHtml, $htmlContent);
+                    //search items with class ipm and set border none
+                }
+                if ($key == "items") {
+                    $itemsHtml = "";
+                    $total = 0;
+                    $cantidad = 0;
+                    foreach ($value as $item) {
+                        $total += $item['total'];
+                        $cantidad += $item['qty'];
+                        $itemsHtml .= '<tr>
+                        <td colspan="1">' . $item['index'] . '</td>
+                        <td colspan="5">' . $item['name'] . '</td>
+                        <td colspan="1">' . $item['qty'] . '</td>
+                        <td colspan="2">$ ' . $item['costounit'] . '</td>
+                        <td colspan="1">$ ' . $item['preciounit'] . '</td>
+                        <td colspan="1">$ ' . number_format((float)$item['total'], 2, '.', ',') . '</td>
+                        <td colspan="1">S/. ' . $item['preciounitpen'] . '</td>
+                    </tr>';
+                    }
+                    $itemsHtml .= '<tr>
+                    <td colspan="6" >TOTAL</td>
+                    <td >' . $cantidad . '</td>
+                    <td colspan="2" style="border:none!important"></td>
+                    <td style="border:none!important"></td>
+                    <td >$ ' . number_format((float)$total, 2, '.', ',') . '</td>
+                    <td style="border:none!important"></td>
+
+                </tr>';
+                    $htmlContent = str_replace('{{' . $key . '}}', $itemsHtml, $htmlContent);
+                } else {
+                    $htmlContent = str_replace('{{' . $key . '}}', $value, $htmlContent);
+                }
+            }
+            $options = new Options();
+            $options->set('isHtml5ParserEnabled', true);
+            $dompdf = new Dompdf($options);
+
+            $dompdf->loadHtml($htmlContent);
+            $dompdf->setPaper('A4', 'portrait');
+            $dompdf->render();
+            
+            // Obtener el contenido del PDF como string
+            $pdfContent = $dompdf->output();
+            //save pdf in temp file
+            $tempFile = tempnam(sys_get_temp_dir(), 'cotizacion_') . '.pdf';
+            file_put_contents($tempFile, $pdfContent);
+            return $tempFile;
+        } catch (\PhpOffice\PhpSpreadsheet\Exception $e) {
+            Log::error("Error en la fórmula de la celda: " . $e->getMessage());
+            throw $e;
+        } catch (\Exception $e) {
+            Log::error('Excepción generateBoletaForSend: ' . $e->getMessage());
+            throw $e;
+        }
+    }
     /**
      * Procesa una sola fila del Excel
      */
