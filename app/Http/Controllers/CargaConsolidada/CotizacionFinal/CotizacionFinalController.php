@@ -857,6 +857,9 @@ class CotizacionFinalController extends Controller
 
                 $carga = $contenedor->carga;
                 $fechaArribo = $contenedor->fecha_arribo;
+                $telefono = preg_replace('/\s+/', '', $cotizacion->telefono);
+                $this->phoneNumberId = $telefono ? $telefono . '@c.us' : '';
+    
                 $message = "📦 *Consolidado #" . $carga . "*\n" .
                     "Hola " . $nombre . " 😁 un gusto saludarte! \n" .
                     "A continuación te envio la cotización final de tu importación📋📦.\n" .
