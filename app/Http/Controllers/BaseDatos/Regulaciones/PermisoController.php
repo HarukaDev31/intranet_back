@@ -147,7 +147,7 @@ class PermisoController extends Controller
                 'codigo_permiso' => 'nullable|numeric|min:0',
                 'costo_tramitador' => 'nullable|numeric|min:0',
                 'observaciones' => 'nullable|string|max:1000',
-                'documentos.*' => 'nullable|file|mimes:pdf,doc,docx,xls,xlsx' // 5MB máximo
+                'documentos.*' => 'nullable|file|mimes:pdf,doc,docx,xls,xlsx,png,jpg,jpeg,gif' // 5MB máximo
             ], [
 
                 'id_entidad_reguladora.required' => 'La entidad reguladora es obligatoria',
