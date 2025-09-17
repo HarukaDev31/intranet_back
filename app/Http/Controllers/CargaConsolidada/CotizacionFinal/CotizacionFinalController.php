@@ -951,7 +951,7 @@ class CotizacionFinalController extends Controller
         try {
             $idContenedor = $request->idContenedor;
             $file = $request->file;
-            $path = $file->storeAs('cargaconsolidada/cotizacionfinal/' . $idContenedor, 'factura_general.xlsx');
+            $path = $file->storeAs('cargaconsolidada/cotizacionfinal/' . $idContenedor, 'factura_general'.time().'.xlsx');
             $contenedor = Contenedor::find($idContenedor);
             $contenedor->factura_general_url = $path;
             $contenedor->save();
