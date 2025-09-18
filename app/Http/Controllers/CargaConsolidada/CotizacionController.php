@@ -1538,7 +1538,9 @@ class CotizacionController extends Controller
                 // Obtener datos de embarque
                 $dataEmbarque = $this->getEmbarqueDataModified($file, $dataToInsert);
                 $newProviders = array_column($dataEmbarque, 'code_supplier');
-
+                Log::info("newProviders", $newProviders);
+                Log::info("existingProviders", $existingProviders);
+                Log::info("dataEmbarque", $dataEmbarque);
                 // Actualizar proveedores existentes
                 foreach ($existingProviders as $code) {
                     if (in_array($code, $newProviders)) {
@@ -2033,7 +2035,7 @@ class CotizacionController extends Controller
                         $processedRanges[] = $currentRange;
                     }
 
-                    $codeSupplier = $this->generateCodeSupplier($nameCliente, $idContenedor, $count, $provider);
+                    $codeSupplier = $this->getDataCell($sheet2, $columnStart . $rowCodeSupplier);
                     $qtyBox = $this->getDataCell($sheet2, $columnStart . $rowCajasProveedor);
                     $peso = $this->getDataCell($sheet2, $columnStart . $rowPesoProveedor);
                     $cbmTotal = $this->getDataCell($sheet2, $columnStart . $rowVolProveedor);
@@ -2047,17 +2049,7 @@ class CotizacionController extends Controller
                             'id_cotizacion' => $data->id_cotizacion,
                             'id_contenedor' => $data->id_contenedor,
                             'code_supplier' => $codeSupplier,
-                            'supplier' => '',
-                            'products' => '',
                             'volumen_doc' => 0,
-                            'valor_doc' => 0,
-                            'factura_comercial' => '',
-                            'excel_confirmacion' => '',
-                            'packing_list' => '',
-                            'supplier_phone' => '',
-                            'qty_box_china' => 0,
-                            'cbm_total_china' => 0,
-                            'arrive_date_china' => null,
                             'send_rotulado_status' => 'PENDING',
                             'created_at' => now(),
                             'updated_at' => now()
