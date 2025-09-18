@@ -308,8 +308,10 @@ class CotizacionFinalController extends Controller
             
             // Verificar si es una URL o ruta local
             if (filter_var($fileUrl, FILTER_VALIDATE_URL)) {
+                Log::info("URL externa");
                 // Manejar URL externa con cURL para mayor control
                 $fileContent = $this->downloadFileFromUrl($fileUrl);
+                Log::info($fileContent." - fileContent");
             } else {
                 // Si es ruta local, intentar diferentes rutas
                 $possiblePaths = [
