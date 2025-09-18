@@ -201,6 +201,7 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
         Route::get('/filtros/vendedores', [App\Http\Controllers\CargaConsolidada\DashboardVentasController::class, 'getVendedoresFiltro']);
         Route::get('/evolucion/{idContenedor}', [App\Http\Controllers\CargaConsolidada\DashboardVentasController::class, 'getEvolucionContenedor']);
         Route::get('/evolucion-total', [App\Http\Controllers\CargaConsolidada\DashboardVentasController::class, 'getEvolucionTotal']);
+        Route::get('/cotizaciones-confirmadas-por-vendedor-por-dia', [App\Http\Controllers\CargaConsolidada\DashboardVentasController::class, 'getCotizacionesConfirmadasPorVendedorPorDia']);
     });
 
     // Rutas de contenedores
@@ -310,6 +311,7 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
 
     // Rutas de cotizaciones con proveedores
     Route::group(['prefix' => 'cotizaciones-proveedores'], function () {
+        Route::get('proveedor/cotizacion/{idCotizacion}', [CotizacionProveedorController::class, 'getCotizacionProveedorByIdCotizacion']);
         Route::get('contenedor/{idContenedor}', [CotizacionProveedorController::class, 'getContenedorCotizacionProveedores']);
         Route::post('proveedor', [CotizacionProveedorController::class, 'updateProveedorData']);
         Route::delete('{idCotizacion}/proveedor/{idProveedor}', [CotizacionProveedorController::class, 'deleteCotizacion']);

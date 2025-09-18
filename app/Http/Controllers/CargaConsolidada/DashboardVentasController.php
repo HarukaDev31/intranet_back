@@ -649,4 +649,194 @@ class DashboardVentasController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Obtiene las cotizaciones confirmadas por vendedor agrupadas por día
+     * Ideal para mostrar en Chart.js con datos diarios
+     */
+    public function getCotizacionesConfirmadasPorVendedorPorDia(Request $request)
+    {
+        try {
+            $fechaInicio = $request->input('fecha_inicio');
+            $fechaFin = $request->input('fecha_fin');
+            $idVendedor = $request->input('id_vendedor');
+            $idContenedor = $request->input('id_contenedor');
+
+            // Si no se proporcionan fechas, usar los últimos 30 días
+            if (!$fechaInicio || !$fechaFin) {
+                $fechaFin = Carbon::now()->format('Y-m-d');
+                $fechaInicio = Carbon::now()->subDays(180)->format('Y-m-d');
+            }
+
+            $query = DB::table($this->table_contenedor_cotizacion . ' as cc')
+                ->select([
+                    DB::raw('DATE(cc.fecha_confirmacion) as fecha'),
+                    'u.ID_Usuario as id_vendedor',
+                    'u.No_Nombres_Apellidos as vendedor',
+                    DB::raw('COUNT(DISTINCT cc.id) as total_cotizaciones_confirmadas'),
+                    DB::raw('COALESCE(SUM(cccp.cbm_total), 0) as volumen_total_confirmado'),
+                    DB::raw('COALESCE(SUM(cc.monto), 0) as monto_total_logistica'),
+                    DB::raw('COALESCE(SUM(cc.fob), 0) as monto_total_fob'),
+                    DB::raw('COALESCE(SUM(cc.impuestos), 0) as monto_total_impuestos')
+                ])
+                ->leftJoin('usuario as u', 'cc.id_usuario', '=', 'u.ID_Usuario')
+                ->leftJoin($this->table_contenedor_cotizacion_proveedores . ' as cccp', 'cc.id', '=', 'cccp.id_cotizacion')
+                ->leftJoin($this->table_contenedor . ' as cont', 'cc.id_contenedor', '=', 'cont.id')
+                ->where('cc.estado_cotizador', 'CONFIRMADO')
+                ->where('cont.empresa', '!=', '1')
+                ->whereNotNull('cc.fecha_confirmacion')
+                ->whereBetween(DB::raw('DATE(cc.fecha_confirmacion)'), [$fechaInicio, $fechaFin]);
+
+            // Filtrar por vendedor específico si se proporciona
+            if ($idVendedor) {
+                $query->where('cc.id_usuario', $idVendedor);
+            }
+
+            // Filtrar por contenedor específico si se proporciona
+            if ($idContenedor) {
+                $query->where('cc.id_contenedor', $idContenedor);
+            }
+
+            $query->groupBy(
+                DB::raw('DATE(cc.fecha_confirmacion)'),
+                'u.ID_Usuario',
+                'u.No_Nombres_Apellidos'
+            )
+            ->orderBy('fecha', 'asc')
+            ->orderBy('vendedor', 'asc');
+
+            $resultados = $query->get();
+            Log::info($resultados."resultados");
+            // Procesar datos para Chart.js
+            $vendedores = $resultados->pluck('vendedor')->unique()->values();
+            $fechas = $resultados->pluck('fecha')->unique()->sort()->values();
+
+            // Crear estructura de datos para Chart.js
+            $datasets = [];
+            $colores = [
+                '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF',
+                '#FF9F40', '#FF6384', '#C9CBCF', '#4BC0C0', '#FF6384'
+            ];
+
+            // Datasets para conteo de cotizaciones
+            foreach ($vendedores as $index => $vendedor) {
+                $vendedorData = $resultados->where('vendedor', $vendedor);
+                
+                $dataCotizaciones = [];
+                foreach ($fechas as $fecha) {
+                    $cotizacionesDia = $vendedorData->where('fecha', $fecha)->first();
+                    $dataCotizaciones[] = $cotizacionesDia ? (int) $cotizacionesDia->total_cotizaciones_confirmadas : 0;
+                }
+
+                $datasets[] = [
+                    'label' => $vendedor . ' (Cotizaciones)',
+                    'data' => $dataCotizaciones,
+                    'backgroundColor' => $colores[$index % count($colores)],
+                    'borderColor' => $colores[$index % count($colores)],
+                    'borderWidth' => 2,
+                    'fill' => false,
+                    'tension' => 0.1,
+                    'yAxisID' => 'y',
+                    'type' => 'line'
+                ];
+            }
+
+            // Datasets para volumen CBM
+            foreach ($vendedores as $index => $vendedor) {
+                $vendedorData = $resultados->where('vendedor', $vendedor);
+                
+                $dataVolumen = [];
+                foreach ($fechas as $fecha) {
+                    $cotizacionesDia = $vendedorData->where('fecha', $fecha)->first();
+                    $dataVolumen[] = $cotizacionesDia ? round($cotizacionesDia->volumen_total_confirmado, 2) : 0;
+                }
+
+                $datasets[] = [
+                    'label' => $vendedor . ' (CBM)',
+                    'data' => $dataVolumen,
+                    'backgroundColor' => $colores[$index % count($colores)] . '80', // Transparencia
+                    'borderColor' => $colores[$index % count($colores)],
+                    'borderWidth' => 2,
+                    'fill' => false,
+                    'tension' => 0.1,
+                    'borderDash' => [5, 5], // Línea punteada para diferenciar
+                    'yAxisID' => 'y1',
+                    'type' => 'line'
+                ];
+            }
+
+            // Formatear fechas para mostrar
+            $labels = $fechas->map(function($fecha) {
+                return Carbon::parse($fecha)->format('d/m/Y');
+            });
+
+            // Calcular estadísticas adicionales
+            $estadisticas = [
+                'total_cotizaciones' => $resultados->sum('total_cotizaciones_confirmadas'),
+                'total_volumen' => round($resultados->sum('volumen_total_confirmado'), 2),
+                'total_monto_logistica' => round($resultados->sum('monto_total_logistica'), 2),
+                'total_monto_fob' => round($resultados->sum('monto_total_fob'), 2),
+                'total_monto_impuestos' => round($resultados->sum('monto_total_impuestos'), 2),
+                'promedio_diario' => $fechas->count() > 0 ? round($resultados->sum('total_cotizaciones_confirmadas') / $fechas->count(), 2) : 0,
+                'total_vendedores' => $vendedores->count(),
+                'periodo' => [
+                    'inicio' => Carbon::parse($fechaInicio)->format('d/m/Y'),
+                    'fin' => Carbon::parse($fechaFin)->format('d/m/Y'),
+                    'dias' => $fechas->count()
+                ]
+            ];
+
+            // Datos detallados por vendedor
+            $detalleVendedores = [];
+            foreach ($vendedores as $vendedor) {
+                $vendedorData = $resultados->where('vendedor', $vendedor);
+                $detalleVendedores[] = [
+                    'vendedor' => $vendedor,
+                    'total_cotizaciones' => $vendedorData->sum('total_cotizaciones_confirmadas'),
+                    'total_volumen' => round($vendedorData->sum('volumen_total_confirmado'), 2),
+                    'total_monto_logistica' => round($vendedorData->sum('monto_total_logistica'), 2),
+                    'promedio_diario' => $fechas->count() > 0 ? round($vendedorData->sum('total_cotizaciones_confirmadas') / $fechas->count(), 2) : 0,
+                    'dias_activos' => $vendedorData->count()
+                ];
+            }
+
+            // Datos para tabla detallada (opcional)
+            $datosDetalle = $resultados->map(function($item) {
+                return [
+                    'fecha' => Carbon::parse($item->fecha)->format('d/m/Y'),
+                    'vendedor' => $item->vendedor,
+                    'cotizaciones_confirmadas' => (int) $item->total_cotizaciones_confirmadas,
+                    'volumen_confirmado' => round($item->volumen_total_confirmado, 2),
+                    'monto_logistica' => round($item->monto_total_logistica, 2),
+                    'monto_fob' => round($item->monto_total_fob, 2),
+                    'monto_impuestos' => round($item->monto_total_impuestos, 2)
+                ];
+            });
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    // Datos para Chart.js
+                    'chart' => [
+                        'labels' => $labels,
+                        'datasets' => $datasets
+                    ],
+                    // Estadísticas generales
+                    'estadisticas' => $estadisticas,
+                    // Detalle por vendedor
+                    'detalle_vendedores' => $detalleVendedores,
+                    // Datos detallados (opcional para tabla)
+                    'datos_detalle' => $datosDetalle
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error en getCotizacionesConfirmadasPorVendedorPorDia: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al obtener las cotizaciones confirmadas por vendedor por día',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
 }

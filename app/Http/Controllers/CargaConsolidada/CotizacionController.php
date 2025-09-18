@@ -2035,12 +2035,7 @@ class CotizacionController extends Controller
                         $processedRanges[] = $currentRange;
                     }
 
-                    // Genera el código del proveedor
-
                     $codeSupplier = $this->generateCodeSupplier($nameCliente, $idContenedor, $count, $provider);
-
-
-                    // Obtener valores usando el método getDataCell
                     $qtyBox = $this->getDataCell($sheet2, $columnStart . $rowCajasProveedor);
                     $peso = $this->getDataCell($sheet2, $columnStart . $rowPesoProveedor);
                     $cbmTotal = $this->getDataCell($sheet2, $columnStart . $rowVolProveedor);

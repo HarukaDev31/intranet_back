@@ -116,7 +116,7 @@ class CotizacionFinalController extends Controller
                 $query->where('estado_cotizacion_final', $request->estado_cotizacion_final);
             }
 
-            
+
             // Paginación
             $perPage = $request->input('per_page', 10);
             $data = $query->paginate($perPage);
@@ -239,7 +239,7 @@ class CotizacionFinalController extends Controller
             $sortField = $request->input('sort_by', 'id');
             $sortOrder = $request->input('sort_order', 'asc');
             $query->orderBy($sortField, $sortOrder);
-
+     
             $data = $query->paginate($perPage);
 
             // Transformar los datos para incluir las columnas específicas
@@ -473,12 +473,12 @@ class CotizacionFinalController extends Controller
 
                 if ($clientMergeRange) {
                     // Si hay merge, obtener datos del inicio del rango
-                    $clientName = $sheet->getCell('D' . $clientMergeRange['start'])->getValue();
-                    $clientType = $sheet->getCell('C' . $clientMergeRange['start'])->getValue();
-                    $mergeStartRow = $newRow;
-                    
+                $clientName = $sheet->getCell('D' . $clientMergeRange['start'])->getValue();
+                $clientType = $sheet->getCell('C' . $clientMergeRange['start'])->getValue();
+                $mergeStartRow = $newRow;
+
                     // Procesar cada fila del rango mergeado
-                    for ($currentRow = $clientMergeRange['start']; $currentRow <= $clientMergeRange['end']; $currentRow++) {
+                for ($currentRow = $clientMergeRange['start']; $currentRow <= $clientMergeRange['end']; $currentRow++) {
                         $this->processSingleRow($sheet, $newSheet, $newRow, $currentRow, $clientName, $clientType, $dataSystem);
                         $newRow++;
                     }
@@ -500,7 +500,7 @@ class CotizacionFinalController extends Controller
 
                 // Avanzar a la siguiente fila o grupo
                 if ($clientMergeRange) {
-                    $startRow = $clientMergeRange['end'] + 1;
+                $startRow = $clientMergeRange['end'] + 1;
                 } else {
                     $startRow++;
                 }

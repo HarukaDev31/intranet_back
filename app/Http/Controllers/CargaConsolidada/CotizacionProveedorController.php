@@ -119,6 +119,7 @@ class CotizacionProveedorController extends Controller
                                 "id", proveedores.id,
                                 "qty_box", proveedores.qty_box,
                                 "peso", proveedores.peso,
+                                "id_cotizacion", proveedores.id_cotizacion,
                                 "cbm_total", proveedores.cbm_total,
                                 "supplier", proveedores.supplier,
                                 "code_supplier", proveedores.code_supplier,
@@ -191,8 +192,9 @@ class CotizacionProveedorController extends Controller
 
             // Procesar datos para el frontend
             $dataProcessed = collect($data->items())->map(function ($item) use ($user, $estadoChina, $rol, $search) {
+                Log::info($item->proveedores."proveedores");
                 $proveedores = json_decode($item->proveedores, true) ?: [];
-
+               
                 // Filtrar proveedores por estado_china si es necesario
                 if ($rol == Usuario::ROL_ALMACEN_CHINA && $estadoChina != "todos") {
                     $proveedores = array_filter($proveedores, function ($proveedor) use ($estadoChina) {
@@ -1749,6 +1751,20 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                 'error' => $e->getMessage()
             ], 500);
         }
+    }
+    public function getCotizacionProveedorByIdCotizacion($idCotizacion)
+    {
+        $proveedores = CotizacionProveedor::where('id_cotizacion', $idCotizacion)->get();
+        if (!$proveedores) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Proveedores no encontrados'
+            ], 404);
+        }
+        return response()->json([
+            'success' => true,
+            'data' => $proveedores
+        ]);
     }
     public function getCotizacionProveedor($idProveedor)
     {
