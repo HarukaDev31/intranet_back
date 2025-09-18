@@ -313,7 +313,8 @@ class CotizacionFinalController extends Controller
                 $possiblePaths = [
                     storage_path('app/public/' . $fileUrl),
                     storage_path($fileUrl),
-                    public_path($fileUrl)
+                    public_path($fileUrl),
+                    $fileUrl
                 ];
 
                 $fileContent = false;
@@ -323,6 +324,7 @@ class CotizacionFinalController extends Controller
                         break;
                     }
                 }
+                //prueba con ruta externa
             }
 
             if ($fileContent === false) {
@@ -860,7 +862,7 @@ class CotizacionFinalController extends Controller
                 $carga = $contenedor->carga;
                 $fechaArribo = $contenedor->fecha_arribo;
                 $telefono = preg_replace('/\s+/', '', $cotizacion->telefono);
-                $this->phoneNumberId = $telefono ? $telefono . '@c.us' : '';
+                $this->phoneNumberId = '51912705923' ? '51912705923' . '@c.us' : '';
     
                 $message = "📦 *Consolidado #" . $carga . "*\n" .
                     "Hola " . $nombre . " 😁 un gusto saludarte! \n" .
