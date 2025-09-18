@@ -2038,7 +2038,6 @@ class CotizacionController extends Controller
                     // Genera el código del proveedor
 
                     $codeSupplier = $this->generateCodeSupplier($nameCliente, $idContenedor, $count, $provider);
-                    Log::info($codeSupplier . "codeSupplier");
 
 
                     // Obtener valores usando el método getDataCell
@@ -2063,13 +2062,10 @@ class CotizacionController extends Controller
                             'excel_confirmacion' => '',
                             'packing_list' => '',
                             'supplier_phone' => '',
-                            'estados' => 'PENDIENTE',
-                            'estados_proveedor' => 'PENDIENTE',
-                            'estado_china' => 'PENDIENTE',
                             'qty_box_china' => 0,
                             'cbm_total_china' => 0,
                             'arrive_date_china' => null,
-                            'send_rotulado_status' => 'PENDIENTE',
+                            'send_rotulado_status' => 'PENDING',
                             'created_at' => now(),
                             'updated_at' => now()
                         ];
