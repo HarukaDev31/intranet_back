@@ -910,18 +910,10 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                     $proveedor->estados = $this->STATUS_RECIVED;
                     $proveedor->save();
 
-
-                    //update estado column in table $this->table to estado RECIBIENDO where id = $idContenedor
-
-
-
-
                     $usuariosAlmacen = $this->getUsersByGrupo(Usuario::ROL_COORDINACION);
                     $ids = array_column($usuariosAlmacen, 'ID_Usuario');
                     $message = "Se ha actualizado el proveedor con codigo de proveedor " . $supplierCode . " a estado RECIBIDO";
-                    $notifications = $this->createNotification($ids, $message, "CARGA CONSOLIDADA", $user->ID_Usuario);
 
-                    // ]);
                 } else {
                     $message = "Se ha actualizado la cantidad de cajas y volumen total de china del proveedor con codigo de proveedor " . $supplierCode . " a " . $data['qty_box_china'] . " cajas y " . $data['cbm_total_china'] . " m3";
                 }

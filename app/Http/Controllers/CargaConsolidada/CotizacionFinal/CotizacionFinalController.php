@@ -7,6 +7,8 @@ use Illuminate\Http\Request;
 use App\Models\CargaConsolidada\Cotizacion;
 use App\Models\CargaConsolidada\TipoCliente;
 use App\Models\CargaConsolidada\Contenedor;
+use App\Models\Usuario;
+use App\Models\Notificacion;
 use Illuminate\Support\Facades\DB;
 use App\Traits\WhatsappTrait;
 use Illuminate\Support\Facades\Log;
@@ -23,6 +25,7 @@ use Maatwebsite\Excel\Facades\Excel;
 use ZipArchive;
 use Dompdf\Dompdf;
 use Dompdf\Options;
+use Tymon\JWTAuth\Facades\JWTAuth;
 
 class CotizacionFinalController extends Controller
 {
@@ -69,6 +72,8 @@ class CotizacionFinalController extends Controller
     private $table_contenedor_cotizacion_final = "contenedor_consolidado_cotizacion_final";
     private $table_contenedor_consolidado_cotizacion_coordinacion_pagos = "contenedor_consolidado_cotizacion_coordinacion_pagos";
     private $table_pagos_concept = "cotizacion_coordinacion_pagos_concept";
+    private $CONCEPT_PAGO_IMPUESTOS = 2;
+    private $CONCEPT_PAGO_LOGISTICA = 1;
     /**
      * Obtiene las cotizaciones finales de un contenedor específico
      */
@@ -949,7 +954,118 @@ class CotizacionFinalController extends Controller
             throw $e;
         }
     }
+    public function store(Request $request)
+    {
+        try {
+            // Validar los datos de entrada
+            $request->validate([
+                'voucher' => 'required|file',
+                'idCotizacion' => 'required|integer',
+                'idContenedor' => 'required|integer',
+                'monto' => 'required|numeric|min:0',
+                'fecha' => 'required|date',
+                'banco' => 'required|string|max:255'
+            ]);
 
+            // Autenticar usuario
+            $user = JWTAuth::parseToken()->authenticate();
+
+            // Subir el archivo voucher
+            $voucherUrl = null;
+            if ($request->hasFile('voucher')) {
+                $file = $request->file('voucher');
+                $fileName = time() . '_' . $file->getClientOriginalName();
+                $voucherUrl = $file->storeAs('cargaconsolidada/pagos', $fileName, 'public');
+            }
+
+            // Verificar si la cotización tiene cotizacion_final_url
+            $cotizacion = DB::table($this->table_contenedor_cotizacion)
+                ->select('cotizacion_final_url')
+                ->where('id', $request->idCotizacion)
+                ->first();
+
+            $cotizacionFinalUrl = $cotizacion ? $cotizacion->cotizacion_final_url : null;
+
+            if ($cotizacion) {
+                Log::info('Cotizacion Final URL: ' . $cotizacion->cotizacion_final_url);
+            }
+
+            // Determinar el concepto de pago
+            $conceptId =  $this->CONCEPT_PAGO_IMPUESTOS;
+
+            // Preparar datos para insertar
+            $data = [
+                'voucher_url' => $voucherUrl,
+                'id_cotizacion' => $request->idCotizacion,
+                'id_contenedor' => $request->idContenedor,
+                'id_concept' => $conceptId,
+                'monto' => $request->monto,
+                'payment_date' => date('Y-m-d', strtotime($request->fecha)),
+                'banco' => $request->banco,
+                'created_at' => now(),
+                'updated_at' => now()
+            ];
+
+            // Insertar en la base de datos
+            $inserted = DB::table($this->table_contenedor_consolidado_cotizacion_coordinacion_pagos)->insert($data);
+
+            if ($inserted) {
+                // Obtener información del cliente y contenedor para la notificación
+                $cotizacionInfo = DB::table($this->table_contenedor_cotizacion . ' as CC')
+                    ->join('carga_consolidada_contenedor as C', 'C.id', '=', 'CC.id_contenedor')
+                    ->select('CC.nombre as cliente_nombre', 'CC.documento as cliente_documento', 'C.carga as contenedor_nombre')
+                    ->where('CC.id', $request->idCotizacion)
+                    ->first();
+
+                // Crear notificación para el perfil Administración
+                if ($cotizacionInfo) {
+                    Notificacion::create([
+                        'titulo' => 'Nuevo Pago de Impuestos Registrado',
+                        'mensaje' => "Se ha registrado un pago de impuestos de S/ {$request->monto} para el cliente {$cotizacionInfo->cliente_nombre} del contenedor {$cotizacionInfo->contenedor_nombre}",
+                        'descripcion' => "Cliente: {$cotizacionInfo->cliente_nombre} | Documento: {$cotizacionInfo->cliente_documento} | Monto: S/ {$request->monto} | Banco: {$request->banco} | Fecha: {$request->fecha}",
+                        'modulo' => Notificacion::MODULO_CARGA_CONSOLIDADA,
+                        'rol_destinatario' => Usuario::ROL_ADMINISTRACION,
+                        'navigate_to' => 'verificacion',
+                        'navigate_params' => [
+                            'idCotizacion' => $request->idCotizacion,
+                            'tab' => 'consolidado'
+                        ],
+                        'tipo' => Notificacion::TIPO_SUCCESS,
+                        'icono' => 'mdi:cash-check',
+                        'prioridad' => Notificacion::PRIORIDAD_ALTA,
+                        'referencia_tipo' => 'pago_impuestos',
+                        'referencia_id' => $request->idCotizacion,
+                        'activa' => true,
+                        'creado_por' => $user->ID_Usuario,
+                        'configuracion_roles' => [
+                            Usuario::ROL_ADMINISTRACION => [
+                                'titulo' => 'Pago Impuestos - Verificar',
+                                'mensaje' => "Nuevo pago de S/ {$request->monto} para verificar",
+                                'descripcion' => "Cliente: {$cotizacionInfo->cliente_nombre} | Contenedor: {$cotizacionInfo->contenedor_nombre}"
+                            ]
+                        ]
+                    ]);
+                }
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Pago guardado exitosamente',
+                    'data' => $data
+                ]);
+            } else {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Error al guardar el pago en la base de datos'
+                ], 500);
+            }
+        } catch (\Exception $e) {
+            Log::error('Error en store: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al guardar el pago: ' . $e->getMessage()
+            ], 500);
+        }
+    }
     public function uploadFacturaComercial(Request $request)
     {
         try {

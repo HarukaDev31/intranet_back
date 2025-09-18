@@ -40,6 +40,7 @@ class NotificacionController extends Controller
 
             $notificaciones = Notificacion::paraUsuario($usuario, $filtros)
                 ->with(['creador', 'usuarioDestinatario'])
+                ->orderBy('created_at', 'desc')
                 ->paginate($request->get('per_page', 15));
 
             // Transformar las notificaciones para incluir información específica del usuario

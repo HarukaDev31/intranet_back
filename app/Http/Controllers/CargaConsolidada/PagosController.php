@@ -76,6 +76,12 @@ class PagosController extends Controller
                 ->join('carga_consolidada_contenedor', 'carga_consolidada_contenedor.id', '=', 'contenedor_consolidado_cotizacion.id_contenedor')
                 ->whereNull('contenedor_consolidado_cotizacion.id_cliente_importacion')->orderBy('contenedor_consolidado_cotizacion.id', 'asc');
 
+
+            //if idCotizacion is not null, then add where id_cotizacion = $idCotizacion
+            if ($request->filled('idCotizacion')) {
+                $query->where('contenedor_consolidado_cotizacion.id', $request->idCotizacion);
+            }
+
             // Filtros de fecha
             if ($request->filled('Filtro_Fe_Inicio')) {
                 $query->where('contenedor_consolidado_cotizacion.fecha', '>=', $request->Filtro_Fe_Inicio);
@@ -668,7 +674,10 @@ class PagosController extends Controller
                       });
                 });
             }
-
+            //if idPedido is not null, then add where id_pedido = $idPedido
+            if ($request->filled('idPedido')) {
+                $query->where('pedido_curso.ID_Pedido_Curso', $request->idPedido);
+            }
             // Filtros de fecha
             if ($request->filled('Filtro_Fe_Inicio')) {
                 $query->where('pedido_curso.Fe_Emision', '>=', $request->Filtro_Fe_Inicio);

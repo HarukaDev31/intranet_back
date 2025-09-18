@@ -13,9 +13,7 @@ class AddUrlCotizacionToCalculadoraImportacionTable extends Migration
      */
     public function up()
     {
-        Schema::table('calculadora_importacion', function (Blueprint $table) {
-            $table->text('url_cotizacion')->nullable()->after('tarifa_total_extra_item');
-        });
+        
     }
 
     /**

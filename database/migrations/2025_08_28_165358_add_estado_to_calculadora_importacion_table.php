@@ -13,9 +13,7 @@ class AddEstadoToCalculadoraImportacionTable extends Migration
      */
     public function up()
     {
-        Schema::table('calculadora_importacion', function (Blueprint $table) {
-            $table->enum('estado', ['PENDIENTE', 'COTIZADO', 'CONFIRMADO'])->default('PENDIENTE')->after('logistica');
-        });
+      
     }
 
     /**

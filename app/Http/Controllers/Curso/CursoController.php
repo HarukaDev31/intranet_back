@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\PedidoCurso;
 use App\Models\Campana;
+use App\Models\Usuario;
+use App\Models\Notificacion;
 use App\Helpers\DateHelper;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
@@ -562,8 +564,55 @@ class CursoController extends Controller
                 'payment_date' => $request->fecha,
                 'banco' => $request->banco
             ];
-            DB::table('pedido_curso_pagos')->insert($data);
-            return response()->json(['success' => true, 'message' => 'Pago guardado exitosamente', 'data' => $data]);
+            
+            // Insertar el pago en la base de datos
+            $inserted = DB::table('pedido_curso_pagos')->insert($data);
+            
+            if ($inserted) {
+                // Obtener información del cliente del curso para la notificación
+                $cursoInfo = DB::table('pedido_curso AS PC')
+                    ->join('entidad AS CLI', 'CLI.ID_Entidad', '=', 'PC.ID_Entidad')
+                    ->select('CLI.No_Entidad as cliente_nombre', 'CLI.Nu_Documento_Identidad as cliente_documento', 'PC.ID_Pedido_Curso as pedido_id')
+                    ->where('PC.ID_Pedido_Curso', $request->idPedido)
+                    ->first();
+
+                // Obtener usuario autenticado
+                $user = JWTAuth::parseToken()->authenticate();
+
+                // Crear notificación para el perfil Administración
+                if ($cursoInfo && $user) {
+                    Notificacion::create([
+                        'titulo' => 'Nuevo Pago de Curso Registrado',
+                        'mensaje' => "Se ha registrado un pago de curso de S/ {$request->monto} para el cliente {$cursoInfo->cliente_nombre}",
+                        'descripcion' => "Cliente: {$cursoInfo->cliente_nombre} | Documento: {$cursoInfo->cliente_documento} | Monto: S/ {$request->monto} | Banco: {$request->banco} | Fecha: {$request->fecha}",
+                        'modulo' => Notificacion::MODULO_CURSOS,
+                        'rol_destinatario' => Usuario::ROL_ADMINISTRACION,
+                        'navigate_to' => 'verificacion',
+                        'navigate_params' => [
+                            'idPedido' => $request->idPedido,
+                            'tab' => 'cursos'
+                        ],
+                        'tipo' => Notificacion::TIPO_SUCCESS,
+                        'icono' => 'mdi:cash-check',
+                        'prioridad' => Notificacion::PRIORIDAD_ALTA,
+                        'referencia_tipo' => 'pago_curso',
+                        'referencia_id' => $request->idPedido,
+                        'activa' => true,
+                        'creado_por' => $user->ID_Usuario,
+                        'configuracion_roles' => [
+                            Usuario::ROL_ADMINISTRACION => [
+                                'titulo' => 'Pago Curso - Verificar',
+                                'mensaje' => "Nuevo pago de S/ {$request->monto} para verificar",
+                                'descripcion' => "Cliente: {$cursoInfo->cliente_nombre} | Pedido: {$cursoInfo->pedido_id}"
+                            ]
+                        ]
+                    ]);
+                }
+                
+                return response()->json(['success' => true, 'message' => 'Pago guardado exitosamente', 'data' => $data]);
+            } else {
+                return response()->json(['success' => false, 'message' => 'Error al guardar el pago en la base de datos']);
+            }
         } catch (\Exception $e) {
             Log::error('Error en saveClientePagosCurso: ' . $e->getMessage());
             return response()->json(['success' => false, 'message' => 'Error al guardar el pago: ' . $e->getMessage()]);

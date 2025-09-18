@@ -5,6 +5,7 @@ namespace App\Http\Controllers\CargaConsolidada\Clientes;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Usuario;
+use App\Models\Notificacion;
 use Tymon\JWTAuth\Facades\JWTAuth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -183,6 +184,42 @@ class PagosController extends Controller
             $inserted = DB::table($this->table_contenedor_consolidado_cotizacion_coordinacion_pagos)->insert($data);
 
             if ($inserted) {
+                // Obtener información del cliente y contenedor para la notificación
+                $cotizacionInfo = DB::table($this->table_contenedor_cotizacion . ' as CC')
+                    ->join('carga_consolidada_contenedor as C', 'C.id', '=', 'CC.id_contenedor')
+                    ->select('CC.nombre as cliente_nombre', 'CC.documento as cliente_documento', 'C.carga as contenedor_nombre')
+                    ->where('CC.id', $request->idCotizacion)
+                    ->first();
+
+                if ($cotizacionInfo) {
+                    Notificacion::create([
+                        'titulo' => 'Nuevo Pago de Logística Registrado',
+                        'mensaje' => "Se ha registrado un pago de logística de $ {$request->monto} para el cliente {$cotizacionInfo->cliente_nombre} del contenedor {$cotizacionInfo->contenedor_nombre}",
+                        'descripcion' => "Cliente: {$cotizacionInfo->cliente_nombre} | Documento: {$cotizacionInfo->cliente_documento} | Monto: S/ {$request->monto} | Banco: {$request->banco} | Fecha: {$request->fecha}",
+                        'modulo' => Notificacion::MODULO_CARGA_CONSOLIDADA,
+                        'rol_destinatario' => Usuario::ROL_ADMINISTRACION,
+                        'navigate_to' => 'verificacion',
+                        'navigate_params' => [
+                            'idCotizacion' => $request->idCotizacion,
+                            'tab' => 'consolidado'
+                        ],
+                        'tipo' => Notificacion::TIPO_SUCCESS,
+                        'icono' => 'mdi:cash-check',
+                        'prioridad' => Notificacion::PRIORIDAD_ALTA,
+                        'referencia_tipo' => 'pago_logistica',
+                        'referencia_id' => $request->idCotizacion,
+                        'activa' => true,
+                        'creado_por' => $user->ID_Usuario,
+                        'configuracion_roles' => [
+                            Usuario::ROL_ADMINISTRACION => [
+                                'titulo' => 'Pago Logística - Verificar',
+                                'mensaje' => "Nuevo pago de $ {$request->monto} para verificar",
+                                'descripcion' => "Cliente: {$cotizacionInfo->cliente_nombre} | Contenedor: {$cotizacionInfo->contenedor_nombre}"
+                            ]
+                        ]
+                    ]);
+                }
+
                 return response()->json([
                     'success' => true,
                     'message' => 'Pago guardado exitosamente',

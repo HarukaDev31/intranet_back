@@ -14,48 +14,7 @@ class CreateCalculadoraTipoClienteTable extends Migration
      */
     public function up()
     {
-        Schema::create('calculadora_tipo_cliente', function (Blueprint $table) {
-            $table->id();
-            $table->string('nombre')->unique();
-            $table->timestamps();
-            
-            // Índices
-            $table->index('nombre');
-        });
-
-        // Insertar tipos de cliente iniciales
-        DB::table('calculadora_tipo_cliente')->insert([
-            [
-                'nombre' => 'NUEVO',
-                'created_at' => now(),
-                'updated_at' => now()
-            ],
-            [
-                'nombre' => 'INACTIVO',
-                'created_at' => now(),
-                'updated_at' => now()
-            ],
-            [
-                'nombre' => 'RECURRENTE',
-                'created_at' => now(),
-                'updated_at' => now()
-            ],
-            [
-                'nombre' => 'ANTIGUO',
-                'created_at' => now(),
-                'updated_at' => now()
-            ],
-            [
-                'nombre' => 'PREMIUM',
-                'created_at' => now(),
-                'updated_at' => now()
-            ],
-            [
-                'nombre' => 'SOCIO',
-                'created_at' => now(),
-                'updated_at' => now()
-            ]
-        ]);
+        
     }
 
     /**

@@ -260,6 +260,8 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
             Route::get('/download-zip/{idContenedor}', [DocumentacionController::class, 'downloadDocumentacionZip']);
         });
         Route::group(['prefix' => 'cotizacion-final'], function () {
+            Route::post('/pagos', [CotizacionFinalController::class, 'store']);
+
             Route::options('/general/upload-plantilla-final', [CotizacionFinalController::class, 'handleOptions']);
             Route::post('/general/upload-plantilla-final', [CotizacionFinalController::class, 'generateMassiveExcelPayrolls']);
             Route::get('/general/check-temp-directory', [CotizacionFinalController::class, 'checkTempDirectory']);
@@ -269,7 +271,6 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
             Route::post('/general/upload-factura-comercial', [CotizacionFinalController::class, 'uploadFacturaComercial']);
             Route::post('/general/generate-individual/{idContenedor}', [CotizacionFinalController::class, 'generateIndividualCotizacion']);
             Route::post('/general/process-excel-data', [CotizacionFinalController::class, 'processExcelData']);
-
             Route::get('/general/download-plantilla-general/{idContenedor}', [CotizacionFinalController::class, 'downloadPlantillaGeneral']);
             Route::get('/general/download-cotizacion-excel/{idCotizacion}', [CotizacionFinalController::class, 'downloadCotizacionFinalExcel']);
             Route::get('/pagos/{idCotizacion}', [CotizacionFinalController::class, 'getCotizacionFinalDocumentacionPagos']);

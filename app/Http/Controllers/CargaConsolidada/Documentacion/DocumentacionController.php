@@ -9,6 +9,8 @@ use App\Models\CargaConsolidada\Contenedor;
 use App\Models\CargaConsolidada\CotizacionProveedor;
 use App\Models\CargaConsolidada\Cotizacion;
 use App\Models\CargaConsolidada\DocumentacionFile;
+use App\Models\Usuario;
+use App\Models\Notificacion;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
@@ -388,6 +390,41 @@ class DocumentacionController extends Controller
             $documentacionFile->id_contenedor = $idContenedor;
 
             $documentacionFile->save();
+
+            // Obtener información de la carpeta para la notificación
+            $folder = DocumentacionFolder::find($idFolder);
+            $folderName = $folder ? $folder->folder_name : 'Documento';
+
+            // Obtener información del contenedor
+            $contenedor = Contenedor::find($idContenedor);
+            $contenedorNombre = $contenedor ? $contenedor->carga : 'Contenedor';
+
+            // Crear notificación para el perfil Coordinación
+            if ($folder) {
+                Notificacion::create([
+                    'titulo' => 'Nuevo Documento Subido',
+                    'mensaje' => "Se ha subido un nuevo documento en la carpeta '{$folderName}' para el contenedor {$contenedorNombre}",
+                    'descripcion' => "Carpeta: {$folderName} | Contenedor: {$contenedorNombre} | Archivo: {$file->getClientOriginalName()} | Usuario: {$user->No_Nombres_Apellidos}",
+                    'modulo' => Notificacion::MODULO_CARGA_CONSOLIDADA,
+                    'rol_destinatario' => Usuario::ROL_COORDINACION,
+                    'navigate_to' => "cargaconsolidada/completados/documentacion/{$idContenedor}",
+                    'navigate_params' => [],
+                    'tipo' => Notificacion::TIPO_INFO,
+                    'icono' => 'mdi:file-upload',
+                    'prioridad' => Notificacion::PRIORIDAD_MEDIA,
+                    'referencia_tipo' => 'documentacion_upload',
+                    'referencia_id' => $idContenedor,
+                    'activa' => true,
+                    'creado_por' => $user->ID_Usuario,
+                    'configuracion_roles' => [
+                        Usuario::ROL_COORDINACION => [
+                            'titulo' => 'Documento Subido - Revisar',
+                            'mensaje' => "Nuevo documento en '{$folderName}' para revisar",
+                            'descripcion' => "Contenedor: {$contenedorNombre} | Archivo: {$file->getClientOriginalName()}"
+                        ]
+                    ]
+                ]);
+            }
 
             // Si es el folder 9 (productos), procesar Excel
             if ($idFolder == 9 && $fileExtension == 'xlsx') {
