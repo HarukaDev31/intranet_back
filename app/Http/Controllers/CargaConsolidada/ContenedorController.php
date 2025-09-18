@@ -134,18 +134,22 @@ class ContenedorController extends Controller
                         ->whereIn('p.id_contenedor', $pageIds)
                         ->select([
                             'p.id_contenedor',
-                            DB::raw('SUM(IF(estado_cotizador = "CONFIRMADO", p.cbm_total_china, 0)) as sum_china'),
-                            // Subconsulta para Peru sólo de confirmados y embarcados (si aplica misma condición de confirmación)
+                            // China: sólo confirmados
+                            DB::raw('SUM(IF(cc.estado_cotizador = "CONFIRMADO", p.cbm_total_china, 0)) as sum_china'),
+                            // Perú: confirmados y embarcados (LOADED)
                             DB::raw('(
-                                SELECT COALESCE(SUM(volumen),0) FROM contenedor_consolidado_cotizacion
-                                WHERE id IN (
-                                    SELECT DISTINCT id_cotizacion FROM contenedor_consolidado_cotizacion_proveedores
-                                    WHERE id_contenedor = p.id_contenedor AND estados_proveedor = "LOADED"
-                                ) AND estado_cotizador = "CONFIRMADO"
+                                SELECT COALESCE(SUM(subp.cbm_total),0)
+                                FROM contenedor_consolidado_cotizacion_proveedores AS subp
+                                WHERE subp.id_contenedor = p.id_contenedor
+                                  AND subp.estados_proveedor = "LOADED"
+                                  AND subp.id_cotizacion IN (
+                                    SELECT id FROM contenedor_consolidado_cotizacion
+                                    WHERE estado_cotizador = "CONFIRMADO"
+                                  )
                             ) as sum_peru')
                         ])
                         ->where('p.estados_proveedor', 'LOADED')
-                        ->whereNull('id_cliente_importacion')
+                        ->whereNull('cc.id_cliente_importacion')
                         ->groupBy('p.id_contenedor')
                         ->get();
                     foreach ($embRows as $r) {

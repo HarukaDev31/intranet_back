@@ -223,6 +223,7 @@ class GeneralController extends Controller
                         SELECT COALESCE(SUM(cbm_total), 0) 
                         FROM ' . $this->table_contenedor_cotizacion_proveedores . ' 
                         WHERE id_contenedor = ' . $idContenedor . '
+                        AND estados_proveedor = "LOADED"
                         AND id_cotizacion IN (
                             SELECT id 
                             FROM ' . $this->table_contenedor_cotizacion . ' 
