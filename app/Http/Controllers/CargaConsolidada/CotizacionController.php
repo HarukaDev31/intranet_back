@@ -189,24 +189,24 @@ class CotizacionController extends Controller
         if (empty($ruta)) {
             return null;
         }
-        
+
         // Si ya es una URL completa, devolverla tal como está
         if (filter_var($ruta, FILTER_VALIDATE_URL)) {
             return $ruta;
         }
-        
+
         // Limpiar la ruta de barras iniciales para evitar doble slash
         $ruta = ltrim($ruta, '/');
-        
+
         // Construir URL manualmente para evitar problemas con Storage::url()
         $baseUrl = config('app.url');
         $storagePath = '/storage/';
-        
+
         // Asegurar que no haya doble slash
         $baseUrl = rtrim($baseUrl, '/');
         $storagePath = ltrim($storagePath, '/');
         $ruta = ltrim($ruta, '/');
-        
+
         return $baseUrl . '/'  . $ruta;
     }
     public function getHeadersData($idContenedor)
@@ -328,7 +328,7 @@ class CotizacionController extends Controller
                 'label' => 'Cantidad de Items',
                 'icon' => 'bi:boxes'
             ],
-            
+
 
 
         ];
@@ -545,7 +545,7 @@ class CotizacionController extends Controller
 
             // Iniciar transacción de base de datos para todo el flujo
             DB::beginTransaction();
-            
+
             try {
                 // Subir archivo usando el sistema de almacenamiento de Laravel
                 $fileName = time() . '_' . $file->getClientOriginalName();
@@ -654,20 +654,19 @@ class CotizacionController extends Controller
                     'success' => true,
                     'message' => 'Cotización creada exitosamente'
                 ]);
-
             } catch (\Exception $e) {
                 // En caso de cualquier error, hacer rollback y limpiar archivos
                 DB::rollBack();
-                
+
                 if (isset($fileUrl)) {
                     Storage::delete($fileUrl);
                 }
-                
+
                 // Limpiar archivo temporal
                 if (file_exists($cotizacion['tmp_name'])) {
                     unlink($cotizacion['tmp_name']);
                 }
-                
+
                 Log::error('Error en store de cotizaciones: ' . $e->getMessage());
                 return response()->json([
                     'status' => 'error',
@@ -1747,7 +1746,7 @@ class CotizacionController extends Controller
             if ($estado == 'CONFIRMADO') {
                 $message = "El cliente {$cotizacion->nombre} ha pasado a confirmado, por favor contactar.";
                 event(new \App\Events\CotizacionStatusUpdated($cotizacion, $estado, $message));
-                
+
                 // Crear notificación para Coordinación cuando se confirma la cotización
                 $this->crearNotificacionCotizacionConfirmada($cotizacion);
             }
@@ -1830,27 +1829,27 @@ class CotizacionController extends Controller
             $sheet2 = $objPHPExcel->getSheet(1);
             $columnStart = "C";
             $columnTotales = "";
-            
+
             // Convertir array a objeto si es necesario
             if (is_array($data)) {
                 $data = (object)$data;
             }
-            
+
             $idContenedor = $data->id_contenedor;
-            
+
             // Obtener campo carga de la tabla contenedor
             $contenedor = DB::table('carga_consolidada_contenedor')
                 ->select('carga')
                 ->where('id', $idContenedor)
                 ->first();
-                
+
             if (!$contenedor) {
                 Log::error('Contenedor no encontrado con ID: ' . $idContenedor);
                 return [];
             }
-            
+
             $carga = $contenedor->carga;
-            
+
             // Completar a 2 dígitos si se puede convertir a número, sino usar últimos 2 caracteres
             $count = is_numeric($carga) ? str_pad($carga, 2, "0", STR_PAD_LEFT) : substr($carga, -2);
             $stop = false;
@@ -1865,11 +1864,11 @@ class CotizacionController extends Controller
                     $columnStart = $this->incrementColumn($columnStart);
                 }
             }
-            
+
             $rowCajasProveedor = 5;
             $rowPesoProveedor = 6;
             $rowVolProveedor = 8;
-            
+
             // Iterar desde C hasta $columnTotales y obtener valores de las filas 5,6,8
             $columnStart = "C"; // Columna inicial
             $stop = false;
@@ -1899,8 +1898,8 @@ class CotizacionController extends Controller
                     }
 
                     // Genera el código del proveedor usando tu función
-                    $codeSupplier = $this->generateCodeSupplier($nameCliente, $idContenedor, $count, $provider);
-
+                    $codeSupplier = $this->generateCodeSupplier($nameCliente, $carga, $count, $provider);
+                    Log::info($codeSupplier."codeSupplier");
                     // Obtener valores de las celdas
                     $qtyBox = $sheet2->getCell($columnStart . $rowCajasProveedor)->getValue();
                     $peso = $sheet2->getCell($columnStart . $rowPesoProveedor)->getValue();
@@ -1933,6 +1932,7 @@ class CotizacionController extends Controller
                             'created_at' => now(),
                             'updated_at' => now()
                         ];
+                        Log::info($proveedores."proveedores");
                     }
 
                     // Incrementa la columna y el contador del proveedor
@@ -1943,7 +1943,6 @@ class CotizacionController extends Controller
 
             Log::info('Proveedores extraídos: ' . count($proveedores));
             return $proveedores;
-            
         } catch (\Exception $e) {
             Log::error('Error en getEmbarqueData: ' . $e->getMessage());
             return [];
@@ -1967,27 +1966,27 @@ class CotizacionController extends Controller
             $sheet2 = $objPHPExcel->getSheet(1);
             $columnStart = "C";
             $columnTotales = "";
-            
+
             // Convertir array a objeto si es necesario
             if (is_array($data)) {
                 $data = (object)$data;
             }
-            
+
             $idContenedor = $data->id_contenedor;
-            
+
             // Obtener campo carga de la tabla contenedor
             $contenedor = DB::table('carga_consolidada_contenedor')
                 ->select('carga')
                 ->where('id', $idContenedor)
                 ->first();
-                
+
             if (!$contenedor) {
                 Log::error('Contenedor no encontrado con ID: ' . $idContenedor);
                 return [];
             }
-            
+
             $carga = $contenedor->carga;
-            
+
             // Completar a 2 dígitos si se puede convertir a número, sino usar últimos 2 caracteres
             $count = is_numeric($carga) ? str_pad($carga, 2, "0", STR_PAD_LEFT) : substr($carga, -2);
             $stop = false;
@@ -2002,12 +2001,12 @@ class CotizacionController extends Controller
                     $columnStart = $this->incrementColumn($columnStart);
                 }
             }
-            
+
             $rowCodeSupplier = 3;
             $rowCajasProveedor = 5;
             $rowPesoProveedor = 6;
             $rowVolProveedor = 8;
-            
+
             // Iterar desde C hasta $columnTotales y obtener valores de las filas 5,6,8
             $columnStart = "C"; // Columna inicial
             $stop = false;
@@ -2037,11 +2036,11 @@ class CotizacionController extends Controller
                     }
 
                     // Genera el código del proveedor
-                    $codeSupplier = $sheet2->getCell($columnStart . $rowCodeSupplier)->getValue();
-                    if (!$codeSupplier || $codeSupplier == '') {
-                        $codeSupplier = $this->generateCodeSupplier($nameCliente, $idContenedor, $count, $provider);
-                    }
-                    
+
+                    $codeSupplier = $this->generateCodeSupplier($nameCliente, $idContenedor, $count, $provider);
+                    Log::info($codeSupplier . "codeSupplier");
+
+
                     // Obtener valores usando el método getDataCell
                     $qtyBox = $this->getDataCell($sheet2, $columnStart . $rowCajasProveedor);
                     $peso = $this->getDataCell($sheet2, $columnStart . $rowPesoProveedor);
@@ -2084,14 +2083,14 @@ class CotizacionController extends Controller
 
             Log::info('Proveedores modificados extraídos: ' . count($proveedores));
             return $proveedores;
-            
         } catch (\Exception $e) {
             Log::error('Error en getEmbarqueDataModified: ' . $e->getMessage());
             return [];
         }
     }
-    public function generateCodeSupplier($string, $idContenedor, $rowCount, $index)
+    public function generateCodeSupplier($string, $carga, $rowCount, $index)
     {
+
         $words = explode(" ", trim($string));
         $code = "";
 
@@ -2104,8 +2103,7 @@ class CotizacionController extends Controller
         }
 
         // Completar con ceros y retornar
-        $idContenedor = str_pad($idContenedor, 2, "0", STR_PAD_LEFT);
-        return $code . $idContenedor . "-" . $rowCount;
+        return $code . $carga . "-" . $index;
     }
     /**
      * Obtiene el valor de una celda, manejando diferentes tipos de datos
@@ -2164,7 +2162,7 @@ class CotizacionController extends Controller
         try {
             // Obtener el usuario que creó la cotización
             $usuarioCreador = Usuario::find($cotizacion->id_usuario);
-            
+
             if (!$usuarioCreador) {
                 Log::warning('Usuario creador no encontrado para la cotización: ' . $cotizacion->id);
                 return;
@@ -2225,7 +2223,6 @@ class CotizacionController extends Controller
             ]);
 
             return [$notificacion, $notificacionJefeVentas];
-
         } catch (\Exception $e) {
             Log::error('Error al crear notificaciones para Coordinación y Jefe de Ventas: ' . $e->getMessage());
             // No lanzar excepción para no afectar el flujo principal de creación de cotización
@@ -2321,7 +2318,6 @@ class CotizacionController extends Controller
             ]);
 
             return [$notificacion, $notificacionJefeVentas];
-
         } catch (\Exception $e) {
             Log::error('Error al crear notificaciones de cotización confirmada para Coordinación y Jefe de Ventas: ' . $e->getMessage());
             // No lanzar excepción para no afectar el flujo principal de actualización de estado
