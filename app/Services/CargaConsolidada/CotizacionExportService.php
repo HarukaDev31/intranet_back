@@ -60,6 +60,9 @@ class CotizacionExportService
         // Filtrar por contenedor
         $query = Cotizacion::where('id_contenedor', $id);
 
+        //usar volumen_china de la suma total de los cbm_total_china de los proovedores con el mismo id_cotizacion de la tabla contenedor_consolidado_cotizacion_proveedores
+    $query->selectRaw('*, (SELECT SUM(cbm_total_china) FROM contenedor_consolidado_cotizacion_proveedores WHERE id_cotizacion = contenedor_consolidado_cotizacion.id) as volumen_chinaa');
+
         ////if request has estado_coordinacion or estado_china  then query with  proveedores  and just get cotizaciones with at least one proveedor with the state
         if ($request->has('estado_coordinacion') || $request->has('estado_china')) {
                 $query->whereHas('proveedores', function ($query) use ($request) {
@@ -133,13 +136,14 @@ class CotizacionExportService
                 'whatsapp' => $cotizacion->telefono ?? '',
                 'tipo_cliente' => $cotizacion->tipoCliente->name ?? '',
                 'volumen' => $cotizacion->volumen ?? '',
-                'volumen_china' => $cotizacion->volumen_final ?? '',
+                'volumen_china' => $cotizacion->volumen_chinaa ?? '0',
                 'qty_item' => $cotizacion->qty_item ?? '',
                 'fob' => $cotizacion->fob ?? '',
                 'logistica' => $cotizacion->monto ?? '',
                 'impuesto' => $cotizacion->impuestos ?? '',
                 'tarifa' => $cotizacion->tarifa ?? '',
-                'estado' => $cotizacion->estado_cotizador ?? '',
+                'estado' => $cotizacion->estado_cotizador ?? 'PENDIENTE',
+                'cotizacion' => $cotizacion->cotizacion_file_url ?? ''
             ];
         }
 
@@ -185,6 +189,7 @@ class CotizacionExportService
             'S3' => 'Impuesto',
             'T3' => 'Tarifa',
             'U3' => 'Estado',
+            'V3' => 'Cotización',
         ];
 
         foreach ($headers as $cell => $value) {
@@ -197,10 +202,10 @@ class CotizacionExportService
         $sheet->getStyle('B2')->getAlignment()->setVertical(\PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER);
 
         // Estilos para los encabezados de columna
-        $sheet->getStyle('B3:U3')->getFont()->setBold(true);
-        $sheet->getStyle('B3:U3')->getFill()->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)->getStartColor()->setARGB('FFCCCCCC');
-        $sheet->getStyle('B3:U3')->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
-        $sheet->getStyle('B3:U3')->getAlignment()->setVertical(\PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER);
+        $sheet->getStyle('B3:V3')->getFont()->setBold(true);
+        $sheet->getStyle('B3:V3')->getFill()->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)->getStartColor()->setARGB('FFCCCCCC');
+        $sheet->getStyle('B3:V3')->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
+        $sheet->getStyle('B3:V3')->getAlignment()->setVertical(\PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER);
     }
     //Llena los datos en el Excel
     private function llenarDatosExcel($sheet, $datosExport)
@@ -233,6 +238,7 @@ class CotizacionExportService
             $sheet->setCellValue('S' . $row, $data['impuesto'] ?? '');
             $sheet->setCellValue('T' . $row, $data['tarifa'] ?? '');
             $sheet->setCellValue('U' . $row, $data['estado'] ?? '');
+            $sheet->setCellValue('V' . $row, $data['cotizacion'] ?? '');
 
             $row++;
             $n++;
@@ -314,7 +320,7 @@ class CotizacionExportService
         $totalRows = $info['totalRows'];
 
         //Unir celdas para el título
-        $sheet->mergeCells("B2:U2");
+        $sheet->mergeCells("B2:V2");
 
 
 
@@ -339,7 +345,8 @@ class CotizacionExportService
             'R' => 15,
             'S' => 10,
             'T' => 10,
-            'U' => 15,
+            'U' => 18,
+            'V' => 25,
         ];
 
         //Aplicar los anchos de columna
@@ -348,19 +355,19 @@ class CotizacionExportService
         }
 
         // Bordes para todo el rango de datos
-        $sheet->getStyle("B3:U{$lastRow}")->getBorders()->getAllBorders()->setBorderStyle(\PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN);
+        $sheet->getStyle("B3:V{$lastRow}")->getBorders()->getAllBorders()->setBorderStyle(\PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN);
 
         // Alineación para todo el rango de datos
-        $sheet->getStyle("B3:U{$lastRow}")->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_LEFT);
-        $sheet->getStyle("B3:U{$lastRow}")->getAlignment()->setVertical(\PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER);
-        $sheet->getStyle("B3:U{$lastRow}")->getAlignment()->setWrapText(true);
+        $sheet->getStyle("B3:V{$lastRow}")->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_LEFT);
+        $sheet->getStyle("B3:V{$lastRow}")->getAlignment()->setVertical(\PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER);
+        $sheet->getStyle("B3:V{$lastRow}")->getAlignment()->setWrapText(true);
 
         // Formato de fecha para las columnas de fecha
         $sheet->getStyle("G4:G{$lastRow}")->getNumberFormat()->setFormatCode('yyyy-mm-dd');
         $sheet->getStyle("H4:H{$lastRow}")->getNumberFormat()->setFormatCode('yyyy-mm-dd');
 
         // Ajuste automático de ancho de columnas
-        foreach (range('B', 'U') as $columnID) {
+        foreach (range('B', 'V') as $columnID) {
             $sheet->getColumnDimension($columnID)->setAutoSize(true);
         }
     }
