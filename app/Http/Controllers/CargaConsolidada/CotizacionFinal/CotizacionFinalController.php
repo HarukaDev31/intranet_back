@@ -304,7 +304,7 @@ class CotizacionFinalController extends Controller
 
             // Procesar URL y obtener contenido
             $fileUrl = str_replace(' ', '%20', $cotizacion->cotizacion_final_url);
-
+            Log::info($fileUrl."fileUrl");
             // Verificar si es una URL o ruta local
             if (filter_var($fileUrl, FILTER_VALIDATE_URL)) {
                 $fileContent = file_get_contents($fileUrl);
