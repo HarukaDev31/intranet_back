@@ -181,6 +181,9 @@ class CotizacionProveedorController extends Controller
                 case Usuario::ROL_COORDINACION:
                     $query->where('main.estado_cotizador', 'CONFIRMADO');
                     break;
+                case Usuario::ROL_ALMACEN_CHINA:
+                    $query->where('main.estado_cotizador', 'CONFIRMADO');
+                    break;
             }
 
             $query->orderBy('main.id', 'asc');
