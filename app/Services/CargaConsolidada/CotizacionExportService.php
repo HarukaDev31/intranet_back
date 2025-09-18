@@ -61,7 +61,7 @@ class CotizacionExportService
         $query = Cotizacion::where('id_contenedor', $id);
 
         //usar volumen_china de la suma total de los cbm_total_china de los proovedores con el mismo id_cotizacion de la tabla contenedor_consolidado_cotizacion_proveedores
-    $query->selectRaw('*, (SELECT SUM(cbm_total_china) FROM contenedor_consolidado_cotizacion_proveedores WHERE id_cotizacion = contenedor_consolidado_cotizacion.id) as volumen_chinaa');
+        $query->selectRaw('*, (SELECT SUM(cbm_total_china) FROM contenedor_consolidado_cotizacion_proveedores WHERE id_cotizacion = contenedor_consolidado_cotizacion.id) as volumen_chinaa');
 
         ////if request has estado_coordinacion or estado_china  then query with  proveedores  and just get cotizaciones with at least one proveedor with the state
         if ($request->has('estado_coordinacion') || $request->has('estado_china')) {
@@ -142,8 +142,8 @@ class CotizacionExportService
                 'logistica' => $cotizacion->monto ?? '',
                 'impuesto' => $cotizacion->impuestos ?? '',
                 'tarifa' => $cotizacion->tarifa ?? '',
+                'cotizacion' => $cotizacion->cotizacion_file_url ?? '',
                 'estado' => $cotizacion->estado_cotizador ?? 'PENDIENTE',
-                'cotizacion' => $cotizacion->cotizacion_file_url ?? ''
             ];
         }
 
@@ -188,8 +188,8 @@ class CotizacionExportService
             'R3' => 'Logistica',
             'S3' => 'Impuesto',
             'T3' => 'Tarifa',
-            'U3' => 'Estado',
-            'V3' => 'Cotización',
+            'U3' => 'Cotización',
+            'V3' => 'Estado',
         ];
 
         foreach ($headers as $cell => $value) {
@@ -237,8 +237,8 @@ class CotizacionExportService
             $sheet->setCellValue('R' . $row, $data['logistica'] ?? '');
             $sheet->setCellValue('S' . $row, $data['impuesto'] ?? '');
             $sheet->setCellValue('T' . $row, $data['tarifa'] ?? '');
-            $sheet->setCellValue('U' . $row, $data['estado'] ?? '');
-            $sheet->setCellValue('V' . $row, $data['cotizacion'] ?? '');
+            $sheet->setCellValue('U' . $row, $data['cotizacion'] ?? '');
+            $sheet->setCellValue('V' . $row, $data['estado'] ?? '');
 
             $row++;
             $n++;
@@ -345,8 +345,8 @@ class CotizacionExportService
             'R' => 15,
             'S' => 10,
             'T' => 10,
-            'U' => 18,
-            'V' => 25,
+            'U' => 20,
+            'V' => 20,
         ];
 
         //Aplicar los anchos de columna
