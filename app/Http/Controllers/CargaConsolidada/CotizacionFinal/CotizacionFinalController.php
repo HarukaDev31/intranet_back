@@ -304,10 +304,12 @@ class CotizacionFinalController extends Controller
 
             // Procesar URL y obtener contenido
             $fileUrl = str_replace(' ', '%20', $cotizacion->cotizacion_final_url);
-            Log::info($fileUrl."fileUrl");
+            Log::info($fileUrl . " - fileUrl");
+            
             // Verificar si es una URL o ruta local
             if (filter_var($fileUrl, FILTER_VALIDATE_URL)) {
-                $fileContent = file_get_contents($fileUrl);
+                // Manejar URL externa con cURL para mayor control
+                $fileContent = $this->downloadFileFromUrl($fileUrl);
             } else {
                 // Si es ruta local, intentar diferentes rutas
                 $possiblePaths = [
@@ -324,7 +326,6 @@ class CotizacionFinalController extends Controller
                         break;
                     }
                 }
-                //prueba con ruta externa
             }
 
             if ($fileContent === false) {
@@ -349,7 +350,101 @@ class CotizacionFinalController extends Controller
             ]);
             return false;
         } finally {
-           
+            // Limpiar archivo temporal si existe
+            if (isset($tempFile) && file_exists($tempFile)) {
+                unlink($tempFile);
+            }
+        }
+    }
+
+    /**
+     * Descarga un archivo desde una URL externa usando cURL
+     * 
+     * @param string $url URL del archivo a descargar
+     * @return string|false Contenido del archivo o false si falla
+     */
+    private function downloadFileFromUrl($url)
+    {
+        try {
+            Log::info("Intentando descargar archivo desde URL: " . $url);
+            
+            // Inicializar cURL
+            $ch = curl_init();
+            
+            // Configurar opciones de cURL
+            curl_setopt_array($ch, [
+                CURLOPT_URL => $url,
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_FOLLOWLOCATION => true,
+                CURLOPT_MAXREDIRS => 5,
+                CURLOPT_TIMEOUT => 60,
+                CURLOPT_CONNECTTIMEOUT => 30,
+                CURLOPT_SSL_VERIFYPEER => false,
+                CURLOPT_SSL_VERIFYHOST => false,
+                CURLOPT_USERAGENT => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                CURLOPT_HTTPHEADER => [
+                    'Accept: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,*/*',
+                    'Accept-Language: es-ES,es;q=0.9,en;q=0.8',
+                    'Cache-Control: no-cache',
+                    'Pragma: no-cache'
+                ],
+            ]);
+            
+            // Ejecutar la petición
+            $fileContent = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $error = curl_error($ch);
+            $contentType = curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
+            
+            curl_close($ch);
+            
+            // Verificar errores de cURL
+            if ($error) {
+                Log::error("Error cURL al descargar archivo: " . $error, ['url' => $url]);
+                return false;
+            }
+            
+            // Verificar código HTTP
+            if ($httpCode !== 200) {
+                Log::error("Error HTTP al descargar archivo. Código: " . $httpCode, [
+                    'url' => $url,
+                    'content_type' => $contentType
+                ]);
+                return false;
+            }
+            
+            // Verificar que el contenido no esté vacío
+            if (empty($fileContent)) {
+                Log::error("Archivo descargado está vacío", ['url' => $url]);
+                return false;
+            }
+            
+            // Verificar que sea un archivo Excel válido (opcional)
+            $validMimeTypes = [
+                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                'application/vnd.ms-excel',
+                'application/octet-stream'
+            ];
+            
+            if ($contentType && !in_array($contentType, $validMimeTypes)) {
+                Log::warning("Tipo de contenido inesperado: " . $contentType, ['url' => $url]);
+                // No retornar false aquí, ya que algunos servidores no envían el Content-Type correcto
+            }
+            
+            Log::info("Archivo descargado exitosamente", [
+                'url' => $url,
+                'size' => strlen($fileContent),
+                'content_type' => $contentType
+            ]);
+            
+            return $fileContent;
+            
+        } catch (\Exception $e) {
+            Log::error("Excepción al descargar archivo desde URL: " . $e->getMessage(), [
+                'url' => $url,
+                'trace' => $e->getTraceAsString()
+            ]);
+            return false;
         }
     }
 
