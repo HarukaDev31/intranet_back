@@ -863,7 +863,7 @@ class CotizacionFinalController extends Controller
                 $carga = $contenedor->carga;
                 $fechaArribo = $contenedor->fecha_arribo;
                 $telefono = preg_replace('/\s+/', '', $cotizacion->telefono);
-                $this->phoneNumberId = '51912705923'? '51912705923'. '@c.us' : '';
+                $this->phoneNumberId = $telefono ? $telefono . '@c.us' : '';
     
                 $message = "📦 *Consolidado #" . $carga . "*\n" .
                     "Hola " . $nombre . " 😁 un gusto saludarte! \n" .
