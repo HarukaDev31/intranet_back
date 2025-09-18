@@ -847,7 +847,7 @@ class CotizacionFinalController extends Controller
                 }
 
                 $telefono = preg_replace('/\s+/', '', $cotizacion->telefono);
-                $phoneNumberId = '51912705923' ? '51912705923' . '@c.us' : '';
+                $this->phoneNumberId = '51912705923' ? '51912705923' . '@c.us' : '';
                 $totalPagos = $cotizacion->total_pagos;
 
                 $volumen = $cotizacion->volumen_final;
