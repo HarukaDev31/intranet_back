@@ -347,10 +347,7 @@ class CotizacionFinalController extends Controller
             ]);
             return false;
         } finally {
-            // Limpiar archivo temporal si existe
-            if (isset($tempFile) && file_exists($tempFile)) {
-                unlink($tempFile);
-            }
+           
         }
     }
 
