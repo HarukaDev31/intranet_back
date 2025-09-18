@@ -1899,7 +1899,6 @@ class CotizacionController extends Controller
 
                     // Genera el código del proveedor usando tu función
                     $codeSupplier = $this->generateCodeSupplier($nameCliente, $carga, $count, $provider);
-                    Log::info($codeSupplier."codeSupplier");
                     // Obtener valores de las celdas
                     $qtyBox = $sheet2->getCell($columnStart . $rowCajasProveedor)->getValue();
                     $peso = $sheet2->getCell($columnStart . $rowPesoProveedor)->getValue();
@@ -1932,7 +1931,6 @@ class CotizacionController extends Controller
                             'created_at' => now(),
                             'updated_at' => now()
                         ];
-                        Log::info($proveedores."proveedores");
                     }
 
                     // Incrementa la columna y el contador del proveedor
