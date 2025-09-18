@@ -303,11 +303,41 @@ class CotizacionFinalController extends Controller
             }
 
             // Procesar URL y obtener contenido
-            $fileUrl = str_replace(' ', '%20', $cotizacion->cotizacion_final_url);
-            Log::info($fileUrl . " - fileUrl");
+            $originalUrl = $cotizacion->cotizacion_final_url;
+            Log::info("URL original: " . $originalUrl);
+            
+            // Primero intentar decodificar la URL para validarla
+            $decodedUrl = urldecode($originalUrl);
+            Log::info("URL decodificada: " . $decodedUrl);
+            
+            // Luego codificar solo los espacios y caracteres especiales para la descarga
+            $fileUrl = str_replace(' ', '%20', $originalUrl);
+            Log::info("URL para descarga: " . $fileUrl);
+            
+            // Verificar si es una URL válida usando la versión decodificada
+            $isValidUrl = filter_var($decodedUrl, FILTER_VALIDATE_URL);
+            
+            // Si la decodificada no funciona, probar con la original
+            if (!$isValidUrl) {
+                $isValidUrl = filter_var($originalUrl, FILTER_VALIDATE_URL);
+                Log::info("Probando validación con URL original");
+            }
+            
+            // Si aún no funciona, verificar manualmente si parece una URL HTTP/HTTPS
+            if (!$isValidUrl) {
+                $isValidUrl = preg_match('/^https?:\/\//', $originalUrl);
+                Log::info("Validación manual con regex: " . ($isValidUrl ? 'true' : 'false'));
+            }
+            
+            Log::info("Validación de URL", [
+                'url_original' => $originalUrl,
+                'url_decodificada' => $decodedUrl,
+                'url_para_descarga' => $fileUrl,
+                'is_valid_url' => $isValidUrl ? 'true' : 'false'
+            ]);
             
             // Verificar si es una URL o ruta local
-            if (filter_var($fileUrl, FILTER_VALIDATE_URL)) {
+            if ($isValidUrl) {
                 Log::info("URL externa detectada: " . $fileUrl);
                 // Manejar URL externa con cURL para mayor control
                 $fileContent = $this->downloadFileFromUrl($fileUrl);
@@ -318,6 +348,7 @@ class CotizacionFinalController extends Controller
                     Log::info("Archivo descargado exitosamente, tamaño: " . strlen($fileContent) . " bytes");
                 }
             } else {
+                Log::info("URL NO válida, intentando como ruta local: " . $fileUrl);
                 // Si es ruta local, intentar diferentes rutas
                 $possiblePaths = [
                     storage_path('app/public/' . $fileUrl),
