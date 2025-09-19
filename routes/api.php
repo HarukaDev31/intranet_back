@@ -193,7 +193,12 @@ Route::group(['prefix' => 'cursos'], function () {
 
 });
 Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], function () {
-    // Dashboard de Ventas
+    Route::prefix('commons')->group(function () {
+        Route::post('/force-send-inspection', [App\Http\Controllers\CargaConsolidada\CotizacionProveedorController::class, 'forceSendInspection']);
+        //force-send-rotulado
+        Route::post('/force-send-rotulado', [App\Http\Controllers\CargaConsolidada\CotizacionProveedorController::class, 'forceSendRotulado']);
+    });
+
     Route::prefix('dashboard-ventas')->group(function () {
         Route::get('/resumen', [App\Http\Controllers\CargaConsolidada\DashboardVentasController::class, 'getResumenVentas']);
         Route::get('/por-vendedor', [App\Http\Controllers\CargaConsolidada\DashboardVentasController::class, 'getVentasPorVendedor']);

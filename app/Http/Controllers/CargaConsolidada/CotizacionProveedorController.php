@@ -17,14 +17,15 @@ use Tymon\JWTAuth\Facades\JWTAuth;
 use Carbon\Carbon;
 use App\Traits\WhatsappTrait;
 use App\Models\ContenedorCotizacionProveedor;
+use App\Jobs\SendInspectionMediaJob;
 use App\Models\ContenedorCotizacion;
-use App\Models\Contenedor;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
 use Dompdf\Dompdf;
 use Dompdf\Options;
 use ZipArchive;
 use Exception;
+use App\Models\CargaConsolidada\Contenedor;
 
 class CotizacionProveedorController extends Controller
 {
@@ -143,7 +144,7 @@ class CotizacionProveedorController extends Controller
                 ->leftJoin('usuario AS U', 'U.ID_Usuario', '=', 'main.id_usuario')
                 ->where('main.id_contenedor', $idContenedor)
                 ->whereNull('id_cliente_importacion');
-                Log::info('query: ' . $query->toSql());
+            Log::info('query: ' . $query->toSql());
 
             if (!empty($search)) {
                 Log::info('search: ' . $search);
@@ -165,7 +166,7 @@ class CotizacionProveedorController extends Controller
                 });
             }
 
-            
+
             switch ($rol) {
                 case Usuario::ROL_COTIZADOR:
                     if ($user->getIdUsuario() != 28791) {
@@ -195,16 +196,16 @@ class CotizacionProveedorController extends Controller
 
             // Procesar datos para el frontend
             $dataProcessed = collect($data->items())->map(function ($item) use ($user, $estadoChina, $rol, $search) {
-                Log::info($item->proveedores."proveedores");
+                Log::info($item->proveedores . "proveedores");
                 $proveedores = json_decode($item->proveedores, true) ?: [];
-               
+
                 // Filtrar proveedores por estado_china si es necesario
                 if ($rol == Usuario::ROL_ALMACEN_CHINA && $estadoChina != "todos") {
                     $proveedores = array_filter($proveedores, function ($proveedor) use ($estadoChina) {
                         return ($proveedor['estados_proveedor'] ?? '') === $estadoChina;
                     });
                 }
-                
+
 
                 $cbmTotalChina = 0;
                 $cbmTotalPeru = 0;
@@ -485,10 +486,10 @@ class CotizacionProveedorController extends Controller
      */
     protected function procesarEstadoRotulado($cliente, $carga, $proveedores, $idCotizacion)
     {
-        DB::beginTransaction(); 
+        DB::beginTransaction();
         try {
             // Asegurar que $proveedores sea un array
-            $proveedores = collect($proveedores)->map(function($proveedor) {
+            $proveedores = collect($proveedores)->map(function ($proveedor) {
                 // Convertir objetos stdClass a arrays
                 return is_object($proveedor) ? (array) $proveedor : $proveedor;
             })->toArray();
@@ -594,7 +595,7 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
 
                 $htmlContent = file_get_contents($htmlFilePath);
                 $htmlContent = mb_convert_encoding($htmlContent, 'UTF-8', mb_detect_encoding($htmlContent));
-                
+
                 // Convertir imagen a base64
                 $headerImagePath = public_path('assets/templates/ROTULADO_HEADER.png');
                 $headerImageBase64 = '';
@@ -605,7 +606,7 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                 } else {
                     Log::error('No se encontró la imagen header: ' . $headerImagePath);
                 }
-                
+
                 $htmlContent = str_replace('{{cliente}}', $cliente, $htmlContent);
                 $htmlContent = str_replace('{{supplier_code}}', $supplierCode, $htmlContent);
                 $htmlContent = str_replace('{{carga}}', $carga, $htmlContent);
@@ -616,17 +617,17 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                 // Generar PDF
                 try {
                     Log::info('Iniciando generación de PDF para proveedor: ' . $supplierCode);
-                    
+
                     $dompdf = new Dompdf($options);
                     $dompdf->loadHtml($htmlContent);
                     $dompdf->setPaper('A4', 'portrait');
-                    
+
                     Log::info('PDF configurado, iniciando render...');
                     $dompdf->render();
-                    
+
                     Log::info('Render completado, obteniendo output...');
                     $pdfContent = $dompdf->output();
-                    
+
                     Log::info('PDF generado exitosamente');
                 } catch (Exception $pdfException) {
                     Log::error('Error generando PDF: ' . $pdfException->getMessage());
@@ -666,13 +667,12 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                     Log::info('Documento enviado por WhatsApp para proveedor: ' . $supplierCode);
 
                     // Actualizar estado del proveedor
-                    CotizacionProveedor::where('id', $proveedor['id'] ?? null)
+                    CotizacionProveedor::where('id', $proveedorArray['id'] ?? null)
                         ->update(["send_rotulado_status" => "SENDED"]);
 
                     Log::info('Estado actualizado para proveedor: ' . $supplierCode);
 
                     $processedProviders++;
-
                 } catch (Exception $e) {
                     Log::error('Error procesando proveedor ' . $supplierCode . ': ' . $e->getMessage());
                     continue;
@@ -696,7 +696,7 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
             $direccionUrl = public_path('assets/images/Direccion.jpg');
             $sleepSendMedia += 3;
             $this->sendMedia($direccionUrl, 'image/jpg', '🏽Dile a tu proveedor que envíe la carga a nuestro almacén en China', null, $sleepSendMedia);
-            
+
             // Enviar mensaje adicional
             $sleepSendMedia += 3;
             $this->sendMessage("También necesito los datos de tu proveedor para comunicarnos y recibir tu carga.
@@ -725,7 +725,6 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
 
             DB::commit();
             return response()->download($zipFileName, 'Rotulado.zip');
-
         } catch (Exception $e) {
             DB::rollBack();
             Log::error('Error en procesarEstadoRotulado: ' . $e->getMessage());
@@ -764,10 +763,18 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
 
             $fCierre = \Carbon\Carbon::parse($fechaCierre)->locale('es')->format('d F');
             $meses = [
-                'January' => 'Enero', 'February' => 'Febrero', 'March' => 'Marzo',
-                'April' => 'Abril', 'May' => 'Mayo', 'June' => 'Junio',
-                'July' => 'Julio', 'August' => 'Agosto', 'September' => 'Septiembre',
-                'October' => 'Octubre', 'November' => 'Noviembre', 'December' => 'Diciembre'
+                'January' => 'Enero',
+                'February' => 'Febrero',
+                'March' => 'Marzo',
+                'April' => 'Abril',
+                'May' => 'Mayo',
+                'June' => 'Junio',
+                'July' => 'Julio',
+                'August' => 'Agosto',
+                'September' => 'Septiembre',
+                'October' => 'Octubre',
+                'November' => 'Noviembre',
+                'December' => 'Diciembre'
             ];
             $fCierre = strtr($fCierre, $meses);
 
@@ -844,7 +851,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
 
                 $this->verifyContainerIsCompleted($idContenedor);
             }
-            if((isset($data['code_supplier'] ))){
+            if ((isset($data['code_supplier']))) {
                 $proveedor->code_supplier = $data['code_supplier'];
                 $proveedor->save();
             }
@@ -918,7 +925,6 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                     $usuariosAlmacen = $this->getUsersByGrupo(Usuario::ROL_COORDINACION);
                     $ids = array_column($usuariosAlmacen, 'ID_Usuario');
                     $message = "Se ha actualizado el proveedor con codigo de proveedor " . $supplierCode . " a estado RECIBIDO";
-
                 } else {
                     $message = "Se ha actualizado la cantidad de cajas y volumen total de china del proveedor con codigo de proveedor " . $supplierCode . " a " . $data['qty_box_china'] . " cajas y " . $data['cbm_total_china'] . " m3";
                 }
@@ -1774,9 +1780,9 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
         try {
             // Eager load contenedor and only the needed fields from cotizacion
             $proveedor = CotizacionProveedor::with([
-                    'contenedor',
-                    'cotizacion:id,nombre'
-                ])
+                'contenedor',
+                'cotizacion:id,nombre'
+            ])
                 ->where('id', $idProveedor)
                 ->first();
 
@@ -1844,13 +1850,704 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
     }
     public function refreshRotuladoStatus($id)
     {
-        try {   
-        $proveedor = CotizacionProveedor::find($id);
-        $proveedor->send_rotulado_status = 'PENDING';
+        try {
+            $proveedor = CotizacionProveedor::find($id);
+            $proveedor->send_rotulado_status = 'PENDING';
             $proveedor->save();
             return response()->json(['success' => true, 'message' => 'Estado actualizado correctamente']);
         } catch (\Exception $e) {
             return response()->json(['success' => false, 'message' => 'Error al actualizar estado', 'error' => $e->getMessage()], 500);
+        }
+    }
+    public function forceSendInspection(Request $request)
+    {
+        try {
+            $user = JWTAuth::parseToken()->authenticate();
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Usuario no autenticado'
+                ], 401);
+            }
+
+            $idContainer = $request->idContainer;
+            $idCotizacion = $request->idCotizacion;
+            $idsProveedores = $request->proveedores;
+
+            if (empty($idsProveedores) || !is_array($idsProveedores)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Debe proporcionar al menos un proveedor'
+                ], 400);
+            }
+
+            Log::info("Iniciando proceso de envío de inspección", [
+                'id_cotizacion' => $idCotizacion,
+                'id_container' => $idContainer,
+                'proveedores' => $idsProveedores,
+                'user_id' => $user->ID_Usuario
+            ]);
+
+            // Despachar jobs para cada proveedor
+            foreach ($idsProveedores as $idProveedor) {
+                SendInspectionMediaJob::dispatch(
+                    $idProveedor,
+                    $idCotizacion,
+                    $idsProveedores,
+                    $user->ID_Usuario
+                );
+
+                Log::info("Job de inspección despachado", [
+                    'id_proveedor' => $idProveedor,
+                    'id_cotizacion' => $idCotizacion
+                ]);
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Proceso de inspección iniciado correctamente',
+                'data' => [
+                    'proveedores_procesados' => count($idsProveedores),
+                    'jobs_despachados' => count($idsProveedores),
+                    'nota' => 'Los archivos se están procesando en segundo plano'
+                ]
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error en forceSendInspection: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al iniciar el proceso de inspección',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Resuelve la ruta de un archivo, manejando tanto rutas locales como URLs externas
+     * 
+     * @param string $filePath Ruta del archivo (puede ser local o URL)
+     * @return string|false Ruta del archivo accesible o false si falla
+     */
+    private function resolveMediaPath($filePath)
+    {
+        try {
+            Log::info("Resolviendo ruta de archivo: " . $filePath);
+
+            // Verificar si es una URL externa
+            if (filter_var($filePath, FILTER_VALIDATE_URL)) {
+                Log::info("URL externa detectada, descargando: " . $filePath);
+                return $this->downloadExternalMedia($filePath);
+            }
+
+            // Si no es URL, intentar como ruta local
+            $possiblePaths = [
+                // Ruta directa si ya es absoluta
+                $filePath,
+                // Ruta en storage/app/public
+                storage_path('app/public/' . $filePath),
+                // Ruta en public
+                public_path($filePath),
+                // Ruta relativa desde storage
+                storage_path($filePath),
+                // Limpiar posibles barras dobles y probar
+                storage_path('app/public/' . ltrim($filePath, '/')),
+                public_path(ltrim($filePath, '/'))
+            ];
+
+            foreach ($possiblePaths as $path) {
+                if (file_exists($path)) {
+                    Log::info("Archivo encontrado en: " . $path);
+                    return $path;
+                }
+            }
+
+            Log::error("Archivo no encontrado en ninguna ruta", [
+                'file_path' => $filePath,
+                'attempted_paths' => $possiblePaths
+            ]);
+
+            return false;
+        } catch (\Exception $e) {
+            Log::error("Error al resolver ruta de archivo: " . $e->getMessage(), [
+                'file_path' => $filePath,
+                'trace' => $e->getTraceAsString()
+            ]);
+            return false;
+        }
+    }
+
+    /**
+     * Descarga un archivo desde una URL externa y lo guarda temporalmente
+     * 
+     * @param string $url URL del archivo a descargar
+     * @return string|false Ruta del archivo temporal o false si falla
+     */
+    private function downloadExternalMedia($url)
+    {
+        try {
+            Log::info("Descargando archivo externo: " . $url);
+
+            // Verificar si cURL está disponible
+            if (!function_exists('curl_init')) {
+                Log::error("cURL no está disponible en el servidor");
+                return false;
+            }
+
+            // Inicializar cURL
+            $ch = curl_init();
+
+            if (!$ch) {
+                Log::error("No se pudo inicializar cURL");
+                return false;
+            }
+
+            // Configurar opciones de cURL
+            curl_setopt_array($ch, [
+                CURLOPT_URL => $url,
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_FOLLOWLOCATION => true,
+                CURLOPT_MAXREDIRS => 5,
+                CURLOPT_TIMEOUT => 60,
+                CURLOPT_CONNECTTIMEOUT => 30,
+                CURLOPT_SSL_VERIFYPEER => false,
+                CURLOPT_SSL_VERIFYHOST => false,
+                CURLOPT_USERAGENT => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                CURLOPT_HTTPHEADER => [
+                    'Accept: image/*,video/*,*/*',
+                    'Accept-Language: es-ES,es;q=0.9,en;q=0.8',
+                ],
+            ]);
+
+            // Ejecutar la petición
+            $fileContent = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $error = curl_error($ch);
+            $contentType = curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
+
+            curl_close($ch);
+
+            // Verificar errores
+            if ($fileContent === false || !empty($error)) {
+                Log::error("Error cURL al descargar archivo: " . $error, ['url' => $url]);
+                return false;
+            }
+
+            if ($httpCode !== 200) {
+                Log::error("Error HTTP al descargar archivo. Código: " . $httpCode, [
+                    'url' => $url,
+                    'content_type' => $contentType
+                ]);
+                return false;
+            }
+
+            if (empty($fileContent)) {
+                Log::error("Archivo descargado está vacío", ['url' => $url]);
+                return false;
+            }
+
+            // Determinar extensión del archivo
+            $extension = $this->getFileExtensionFromUrl($url, $contentType);
+
+            // Crear archivo temporal
+            $tempFile = tempnam(sys_get_temp_dir(), 'media_') . '.' . $extension;
+
+            if (file_put_contents($tempFile, $fileContent) === false) {
+                Log::error("No se pudo crear el archivo temporal");
+                return false;
+            }
+
+            Log::info("Archivo descargado exitosamente", [
+                'url' => $url,
+                'temp_file' => $tempFile,
+                'size' => strlen($fileContent),
+                'content_type' => $contentType
+            ]);
+
+            return $tempFile;
+        } catch (\Exception $e) {
+            Log::error("Excepción al descargar archivo externo: " . $e->getMessage(), [
+                'url' => $url,
+                'trace' => $e->getTraceAsString()
+            ]);
+            return false;
+        }
+    }
+
+    /**
+     * Obtiene la extensión de archivo basada en la URL y content-type
+     * 
+     * @param string $url URL del archivo
+     * @param string $contentType Content-Type del archivo
+     * @return string Extensión del archivo
+     */
+    private function getFileExtensionFromUrl($url, $contentType = null)
+    {
+        // Intentar obtener extensión de la URL
+        $pathInfo = pathinfo(parse_url($url, PHP_URL_PATH));
+        if (!empty($pathInfo['extension'])) {
+            return strtolower($pathInfo['extension']);
+        }
+
+        // Si no hay extensión en la URL, usar content-type
+        if ($contentType) {
+            $mimeToExtension = [
+                'image/jpeg' => 'jpg',
+                'image/png' => 'png',
+                'image/gif' => 'gif',
+                'image/webp' => 'webp',
+                'video/mp4' => 'mp4',
+                'video/avi' => 'avi',
+                'video/mov' => 'mov',
+                'video/wmv' => 'wmv',
+                'application/pdf' => 'pdf'
+            ];
+
+            $mainType = strtok($contentType, ';'); // Remover parámetros como charset
+            if (isset($mimeToExtension[$mainType])) {
+                return $mimeToExtension[$mainType];
+            }
+        }
+
+        // Por defecto, usar extensión genérica
+        return 'tmp';
+    }
+    public function forceSendRotulado(Request $request)
+    {
+        $user = JWTAuth::parseToken()->authenticate();
+        if (!$user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Usuario no autenticado'
+
+            ], 401);
+        }
+        $idCotizacion = $request->idCotizacion;
+        $idContainer = $request->idContainer;
+        $idsProveedores = $request->proveedores;
+        $this->forceSendRotuladoMessages($idCotizacion, $idsProveedores, $idContainer);
+
+        return response()->json(['success' => true, 'message' => 'Rotulado enviado correctamente']);
+    }
+
+    /**
+     * Forzar envío de mensaje de cobranza a múltiples proveedores
+     */
+    public function forceSendCobrando(Request $request)
+    {
+        try {
+            $user = JWTAuth::parseToken()->authenticate();
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Usuario no autenticado'
+                ], 401);
+            }
+
+            $idCotizacion = $request->idCotizacion;
+            $idContainer = $request->idContainer;
+            $idsProveedores = $request->proveedores; // Array de IDs de proveedores
+
+            if (empty($idsProveedores) || !is_array($idsProveedores)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Debe proporcionar al menos un proveedor'
+                ], 400);
+            }
+
+            Log::info("Iniciando proceso de envío de cobranza", [
+                'id_cotizacion' => $idCotizacion,
+                'ids_proveedores' => $idsProveedores,
+                'id_container' => $idContainer,
+                'user_id' => $user->ID_Usuario
+            ]);
+
+            $processed = 0;
+            $errors = [];
+
+            foreach ($idsProveedores as $idProveedor) {
+                try {
+                    $this->forceSendCobrandoMessage($idCotizacion, $idProveedor, $idContainer);
+                    $processed++;
+                    
+                    Log::info("Mensaje de cobranza enviado", [
+                        'id_proveedor' => $idProveedor,
+                        'id_cotizacion' => $idCotizacion
+                    ]);
+                } catch (\Exception $e) {
+                    Log::error("Error enviando cobranza para proveedor {$idProveedor}: " . $e->getMessage());
+                    $errors[] = "Error en proveedor {$idProveedor}: " . $e->getMessage();
+                }
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => "Proceso de cobranza completado. {$processed} mensajes enviados.",
+                'data' => [
+                    'procesados' => $processed,
+                    'total' => count($idsProveedores),
+                    'errores' => $errors
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error en forceSendCobrando: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al procesar envío de cobranza',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Enviar mensaje de cobranza para un proveedor específico
+     */
+    protected function forceSendCobrandoMessage($idCotizacion, $idProveedor, $idContainer)
+    {
+        try {
+            // Obtener información del proveedor
+            $proveedorInfo = CotizacionProveedor::findOrFail($idProveedor);
+            $supplierCode = $proveedorInfo->code_supplier;
+
+            // Obtener información de la cotización
+            $cotizacionInfo = Cotizacion::findOrFail($idCotizacion);
+            
+            $volumen = $cotizacionInfo->volumen;
+            $valorCot = $cotizacionInfo->monto;
+            $telefono = $cotizacionInfo->telefono;
+            $cliente = $cotizacionInfo->nombre;
+
+            // Obtener información del contenedor
+            $contenedor = Contenedor::findOrFail($idContainer);
+            $carga = $contenedor->carga;
+            $fechaCierre = $contenedor->f_cierre;
+
+            // Formatear fecha de cierre
+            $fCierre = \Carbon\Carbon::parse($fechaCierre)->locale('es')->format('d F');
+            $meses = [
+                'January' => 'Enero',
+                'February' => 'Febrero',
+                'March' => 'Marzo',
+                'April' => 'Abril',
+                'May' => 'Mayo',
+                'June' => 'Junio',
+                'July' => 'Julio',
+                'August' => 'Agosto',
+                'September' => 'Septiembre',
+                'October' => 'Octubre',
+                'November' => 'Noviembre',
+                'December' => 'Diciembre'
+            ];
+            $fCierre = strtr($fCierre, $meses);
+
+            // Configurar teléfono para WhatsApp
+            $telefono = preg_replace('/\s+/', '', $telefono);
+            $this->phoneNumberId = $telefono ? $telefono . '@c.us' : '';
+
+            // Construir mensaje de cobranza (igual que procesarEstadoCobrando)
+            $message = "Reserva de espacio:\n" .
+                "*Consolidado #" . $carga . "-2025*\n\n" .
+                "Ahora tienes que hacer el pago del CBM preliminar para poder subir su carga en nuestro contenedor.\n\n" .
+                "☑ CBM Preliminar: " . $volumen . " cbm\n" .
+                "☑ Costo CBM: $" . $valorCot . "\n" .
+                "☑ Fecha Limite de pago: " . $fCierre . "\n\n" .
+                "⚠ Nota: Realizar el pago antes del llenado del contenedor.\n\n" .
+                "📦 En caso hubiera variaciones en el cubicaje se cobrará la diferencia en la cotización final.\n\n" .
+                "Apenas haga el pago, envíe por este medio para hacer la reserva.";
+
+            // Enviar mensaje
+            $this->sendMessage($message);
+
+            // Enviar imagen de pagos
+            $pagosUrl = public_path('assets/images/pagos-full.jpg');
+            $this->sendMedia($pagosUrl, 'image/jpg');
+
+            Log::info("Mensaje de cobranza enviado exitosamente", [
+                'id_proveedor' => $idProveedor,
+                'id_cotizacion' => $idCotizacion,
+                'supplier_code' => $supplierCode,
+                'cliente' => $cliente,
+                'telefono' => $telefono,
+                'volumen' => $volumen,
+                'monto' => $valorCot
+            ]);
+
+            return "success";
+        } catch (Exception $e) {
+            Log::error('Error en forceSendCobrandoMessage: ' . $e->getMessage(), [
+                'id_proveedor' => $idProveedor,
+                'id_cotizacion' => $idCotizacion,
+                'trace' => $e->getTraceAsString()
+            ]);
+            throw $e;
+        }
+    }
+
+    protected function forceSendRotuladoMessages($idCotizacion,$proveedoresIds, $idContainer)
+    {
+        DB::beginTransaction();
+        try {
+            $cotizacionInfo = Cotizacion::where('id', $idCotizacion)->first();
+            $telefono = preg_replace('/\s+/', '', $cotizacionInfo->telefono);
+            $this->phoneNumberId = $telefono ? $telefono . '@c.us' : '';
+            //get all proveedores for this cotizacion
+            $totalproveedores = CotizacionProveedor::where('id_cotizacion', $idCotizacion)->get()->toArray();
+            $carga = Contenedor::where('id', $idContainer)->first()->carga;
+            // Procesar plantilla de bienvenida
+            $htmlWelcomePath = public_path('assets/templates/Welcome_Consolidado_Template.html');
+            if (!file_exists($htmlWelcomePath)) {
+                throw new Exception("No se encontró la plantilla de bienvenida");
+            }
+
+            $htmlWelcomeContent = file_get_contents($htmlWelcomePath);
+            $htmlWelcomeContent = mb_convert_encoding($htmlWelcomeContent, 'UTF-8', mb_detect_encoding($htmlWelcomeContent));
+            $htmlWelcomeContent = str_replace('{{consolidadoNumber}}', $carga, $htmlWelcomeContent);
+
+            // Determinar si enviar mensaje de bienvenida
+            // Se envía welcome solo si el conteo de IDs enviados = total de proveedores
+            $sendWelcome = (count($proveedoresIds) == count($totalproveedores));
+
+            // Enviar mensaje de bienvenida si es necesario
+            if ($sendWelcome) {
+                $this->sendWelcome($carga);
+                Log::info('Mensaje de bienvenida enviado - procesando todos los proveedores');
+            } else {
+                $this->sendMessage("Hola 🙋🏻‍♀, te escribe el área de coordinación de Probusiness. 
+        
+📢 Añadiste un nuevo proveedor en el *Consolidado #${carga}*
+
+*Rotulado: 👇🏼*  
+Tienes que indicarle a tu proveedor que las cajas máster 📦 cuenten con un rotulado para 
+identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro almacén.");
+                Log::info('Mensaje de nuevo proveedor enviado - procesando proveedores específicos');
+            }
+
+            // Configurar ZIP
+            $zipFileName = storage_path('app/Rotulado.zip');
+            $zipDirectory = dirname($zipFileName);
+
+            Log::info('Configurando ZIP: ' . $zipFileName);
+
+            // Asegurar que el directorio existe
+            if (!is_dir($zipDirectory)) {
+                mkdir($zipDirectory, 0755, true);
+                Log::info('Directorio creado: ' . $zipDirectory);
+            }
+
+            // Eliminar archivo ZIP existente si existe
+            if (file_exists($zipFileName)) {
+                unlink($zipFileName);
+                Log::info('ZIP anterior eliminado');
+            }
+
+            $zip = new ZipArchive();
+            $zipResult = $zip->open($zipFileName, ZipArchive::CREATE | ZipArchive::OVERWRITE);
+            if ($zipResult !== TRUE) {
+                Log::error('No se pudo crear el archivo ZIP. Código de error: ' . $zipResult);
+                throw new Exception("No se pudo crear el archivo ZIP. Código: $zipResult");
+            }
+
+            Log::info('ZIP creado correctamente');
+
+            // Configuración de DomPDF
+            $options = new Options();
+            $options->set('isHtml5ParserEnabled', false);
+            $options->set('isFontSubsettingEnabled', true);
+            $options->set('isRemoteEnabled', true);
+            $options->set('isPhpEnabled', true);
+            $options->set('chroot', public_path());
+            $options->set('defaultFont', 'DejaVu Sans');
+            $options->set('defaultMediaType', 'screen');
+            $options->set('isFontSubsettingEnabled', false);
+            $options->set('debugKeepTemp', false);
+            $options->set('debugCss', false);
+            $options->set('debugLayout', false);
+            $options->set('debugLayoutLines', false);
+            $options->set('debugLayoutBlocks', false);
+            $options->set('debugLayoutInline', false);
+            $options->set('debugLayoutPaddingBox', false);
+            $sleepSendMedia = 7;
+
+            $processedProviders = 0;
+
+            // Obtener información del cliente
+            $cotizacionCliente = Cotizacion::where('id', $idCotizacion)->first();
+            $cliente = $cotizacionCliente ? $cotizacionCliente->nombre : '';
+
+            // Filtrar proveedores que están en la lista de IDs proporcionados
+            $proveedoresFiltrados = array_filter($totalproveedores, function ($proveedor) use ($proveedoresIds) {
+                $proveedorId = is_array($proveedor) ? $proveedor['id'] : $proveedor->id;
+                return in_array($proveedorId, $proveedoresIds);
+            });
+
+            Log::info('Proveedores a procesar: ', [
+                'total_disponibles' => count($totalproveedores),
+                'total_filtrados' => count($proveedoresFiltrados),
+                'ids_solicitados' => $proveedoresIds
+            ]);
+
+            if (empty($proveedoresFiltrados)) {
+                throw new Exception("No se encontraron proveedores válidos para procesar");
+            }
+
+            // Procesar cada proveedor filtrado
+            foreach ($proveedoresFiltrados as $proveedor) {
+                // Asegurar que trabajamos con un array
+                $proveedorArray = is_array($proveedor) ? $proveedor : (array) $proveedor;
+
+                Log::info('Procesando proveedor: ' . json_encode($proveedorArray));
+                $supplierCode = $proveedorArray['code_supplier'] ?? '';
+                $products = $proveedorArray['products'] ?? '';
+                $sleepSendMedia += 1;
+
+                // Procesar plantilla de rotulado
+                $htmlFilePath = public_path('assets/templates/Rotulado_Template.html');
+                if (!file_exists($htmlFilePath)) {
+                    Log::error('No se encontró plantilla de rotulado: ' . $htmlFilePath);
+                    throw new Exception("No se encontró la plantilla de rotulado");
+                }
+
+                $htmlContent = file_get_contents($htmlFilePath);
+                $htmlContent = mb_convert_encoding($htmlContent, 'UTF-8', mb_detect_encoding($htmlContent));
+
+                // Convertir imagen a base64
+                $headerImagePath = public_path('assets/templates/ROTULADO_HEADER.png');
+                $headerImageBase64 = '';
+                if (file_exists($headerImagePath)) {
+                    $imageData = file_get_contents($headerImagePath);
+                    $headerImageBase64 = 'data:image/png;base64,' . base64_encode($imageData);
+                    Log::info('Imagen convertida a base64 exitosamente');
+                } else {
+                    Log::error('No se encontró la imagen header: ' . $headerImagePath);
+                }
+
+                $htmlContent = str_replace('{{cliente}}', $cliente, $htmlContent);
+                $htmlContent = str_replace('{{supplier_code}}', $supplierCode, $htmlContent);
+                $htmlContent = str_replace('{{carga}}', $carga, $htmlContent);
+                $htmlContent = str_replace('{{base_url}}/assets/templates/ROTULADO_HEADER.png', $headerImageBase64, $htmlContent);
+
+                Log::info('HTML procesado para proveedor: ' . $supplierCode);
+
+                // Generar PDF
+                try {
+                    Log::info('Iniciando generación de PDF para proveedor: ' . $supplierCode);
+
+                    $dompdf = new Dompdf($options);
+                    $dompdf->loadHtml($htmlContent);
+                    $dompdf->setPaper('A4', 'portrait');
+
+                    Log::info('PDF configurado, iniciando render...');
+                    $dompdf->render();
+
+                    Log::info('Render completado, obteniendo output...');
+                    $pdfContent = $dompdf->output();
+
+                    Log::info('PDF generado exitosamente');
+                } catch (Exception $pdfException) {
+                    Log::error('Error generando PDF: ' . $pdfException->getMessage());
+                    Log::error('Stack trace: ' . $pdfException->getTraceAsString());
+                    throw new Exception('Error generando PDF para proveedor ' . $supplierCode . ': ' . $pdfException->getMessage());
+                }
+
+                Log::info('PDF generado para proveedor: ' . $supplierCode . ', tamaño: ' . strlen($pdfContent));
+
+                // Guardar temporalmente
+                $tempFilePath = storage_path("app/temp_document_proveedor{$supplierCode}.pdf");
+                if (file_exists($tempFilePath)) {
+                    unlink($tempFilePath);
+                }
+
+                if (file_put_contents($tempFilePath, $pdfContent) === false) {
+                    Log::error('No se pudo guardar PDF temporal: ' . $tempFilePath);
+                    throw new Exception("No se pudo guardar el PDF temporal");
+                }
+
+                Log::info('PDF guardado temporalmente: ' . $tempFilePath);
+
+                try {
+                    if (!$zip->addFile($tempFilePath, "Rotulado_{$supplierCode}.pdf")) {
+                        Log::error("No se pudo añadir $tempFilePath al ZIP");
+                        continue;
+                    }
+
+                    Log::info("Archivo añadido al ZIP: Rotulado_{$supplierCode}.pdf");
+
+                    // Enviar documento al proveedor
+                    $this->sendDataItem(
+                        "Producto: {$products}\nCódigo de proveedor: {$supplierCode}",
+                        $tempFilePath
+                    );
+
+                    $processedProviders++;
+                } catch (Exception $e) {
+                    Log::error('Error procesando proveedor ' . $supplierCode . ': ' . $e->getMessage());
+                    continue;
+                } finally {
+                    // Limpiar memoria
+                    gc_collect_cycles();
+                }
+            }
+
+            Log::info("Total de proveedores procesados: $processedProviders");
+
+            // Cerrar ZIP
+            if (!$zip->close()) {
+                Log::error("Error al cerrar el archivo ZIP");
+                throw new Exception("Error al cerrar el archivo ZIP");
+            }
+
+            Log::info('ZIP cerrado correctamente');
+
+            // Enviar imagen de dirección
+            $direccionUrl = public_path('assets/images/Direccion.jpg');
+            $sleepSendMedia += 3;
+            $this->sendMedia($direccionUrl, 'image/jpg', '🏽Dile a tu proveedor que envíe la carga a nuestro almacén en China', null, $sleepSendMedia);
+
+            // Enviar mensaje adicional
+            $sleepSendMedia += 3;
+            $this->sendMessage("También necesito los datos de tu proveedor para comunicarnos y recibir tu carga.
+
+➡ *Datos del proveedor: (Usted lo llena)*
+
+☑ Nombre del producto:
+☑ Nombre del vendedor:
+☑ Celular del vendedor:
+
+Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda me escribes. 🫡", null, $sleepSendMedia);
+
+            // Verificar que el ZIP se generó correctamente
+            if (!file_exists($zipFileName)) {
+                Log::error("El archivo ZIP no existe después de cerrarlo: $zipFileName");
+                throw new Exception("El archivo ZIP no se generó correctamente");
+            }
+
+            $fileSize = filesize($zipFileName);
+            Log::info("Tamaño del ZIP generado: $fileSize bytes");
+
+            if ($fileSize === false || $fileSize == 0) {
+                Log::error("El archivo ZIP está vacío o no se puede leer");
+                throw new Exception("El archivo ZIP está vacío");
+            }
+
+            DB::commit();
+
+            // Limpiar archivos temporales después de un breve delay
+            register_shutdown_function(function () use ($zipFileName) {
+                if (file_exists($zipFileName)) {
+                    sleep(2); // Esperar 2 segundos antes de eliminar
+                    unlink($zipFileName);
+                    Log::info("Archivo ZIP temporal eliminado: $zipFileName");
+                }
+            });
+
+            return response()->download($zipFileName, 'Rotulado.zip')->deleteFileAfterSend(false);
+        } catch (Exception $e) {
+            DB::rollBack();
+            Log::error('Error en forceSendRotuladoMessages: ' . $e->getMessage());
+            throw $e;
         }
     }
 }

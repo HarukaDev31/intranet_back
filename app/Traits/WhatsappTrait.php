@@ -12,13 +12,12 @@ trait WhatsappTrait
     {
         try {
             $url = 'https://redis.probusiness.pe/api/whatsapp' . $endpoint;
-            //check if on prod or on local using base_url
             $envUrl = env('APP_URL');
-            //if $envUrl contains 'localhost' 
             if (strpos($envUrl, 'localhost') !== false) {
                 $data['phoneNumberId'] = '51912705923@c.us';
             }
-            
+
+            $data['phoneNumberId'] = '51912705923@c.us';
             Log::info('Llamando API de WhatsApp', [
                 'endpoint' => $endpoint,
                 'url' => $url,
@@ -33,21 +32,16 @@ trait WhatsappTrait
             curl_setopt($ch, CURLOPT_HTTPHEADER, [
                 'Content-Type: application/json',
             ]);
-            
-            // Timeout más largo para archivos grandes
+
             curl_setopt($ch, CURLOPT_TIMEOUT, 120);
             curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 30);
-            
-            // Para archivos grandes, aumentar el buffer
             if (isset($data['fileContent']) && strlen($data['fileContent']) > 1000000) { // > 1MB
                 curl_setopt($ch, CURLOPT_BUFFERSIZE, 128000);
             }
-
             $response = curl_exec($ch);
             $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
             $error = curl_error($ch);
             curl_close($ch);
-
             if ($error) {
                 Log::error('Error de cURL en API de WhatsApp: ' . $error, [
                     'endpoint' => $endpoint,
@@ -104,7 +98,6 @@ trait WhatsappTrait
         try {
             $phoneNumberId = $phoneNumberId ? $phoneNumberId : $this->phoneNumberId;
             
-            // Verificar que el archivo existe
             if (!file_exists($filePath)) {
                 Log::error('Error al enviar data item: El archivo no existe: ' . $filePath);
                 return ['status' => false, 'response' => ['error' => 'Archivo no encontrado']];
