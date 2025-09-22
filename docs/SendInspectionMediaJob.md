@@ -207,3 +207,4 @@ stopwaitsecs=3600
 - **Retry manual** con `php artisan queue:retry all`
 - **Limpieza periódica** de jobs antiguos
 
+
