@@ -149,6 +149,7 @@ class CotizacionPagosController extends Controller
                         'pagos_count' => $row->pagos_count ?? 0,
                         'id_cotizacion' => $row->id_cotizacion,
                         'id_contenedor'=>$row->id_contenedor,
+                        'id_contenedor_pago'=>$row->id_contenedor_pago,
                         'pagos' => $pagos
                     ];
                 });

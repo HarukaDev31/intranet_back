@@ -243,6 +243,8 @@ class GeneralController extends Controller
                         AND estado_cotizador = "CONFIRMADO"
                         AND estado_cliente IS NOT NULL
                         AND id_cliente_importacion IS NULL
+                        AND (id_contenedor_pago =' .$idContenedor. ' OR id_contenedor_pago is null)
+
                     ) as total_logistica'),
 
                     // Subconsulta para total_fob_loaded

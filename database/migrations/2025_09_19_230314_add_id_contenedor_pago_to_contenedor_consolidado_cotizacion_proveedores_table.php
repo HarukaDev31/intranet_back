@@ -13,11 +13,16 @@ class AddIdContenedorPagoToContenedorConsolidadoCotizacionProveedoresTable exten
      */
     public function up()
     {
+        //add to contenedor_consolidado_cotizacion id_contenedor_pago 
+        Schema::table('contenedor_consolidado_cotizacion', function (Blueprint $table) {
+            $table->unsignedInteger('id_contenedor_pago')->nullable()->after('id');
+        });
         //if arrive_date chins is invalid datetime difernet of null fix it
         Schema::table('contenedor_consolidado_cotizacion_proveedores', function (Blueprint $table) {
             $table->unsignedInteger('id_contenedor_pago')->nullable()->after('id');
             $table->foreign('id_contenedor_pago', 'fk_contenedor_pago_proveedores')->references('id')->on('carga_consolidada_contenedor')->onDelete('set null');
         });
+        
     }
 
     /**

@@ -24,6 +24,7 @@ class Cotizacion extends Model
      * @var array
      */
     protected $fillable = [
+        'id_contenedor_pago',
         'id_contenedor',
         'id_tipo_cliente',
         'id_cliente',

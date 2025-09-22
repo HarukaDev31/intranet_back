@@ -263,6 +263,8 @@ class CotizacionController extends Controller
                         WHERE id_contenedor = ' . $idContenedor . '
                     )
                     AND estado_cotizador = "CONFIRMADO"
+                    AND (id_contenedor_pago =' .$idContenedor. ' OR id_contenedor_pago is null)
+
                 ) as total_logistica'),
                 DB::raw('(
                     SELECT COALESCE(SUM(qty_item), 0)

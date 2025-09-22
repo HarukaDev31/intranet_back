@@ -225,6 +225,7 @@ class CotizacionProveedorController extends Controller
                     'id' => $item->id,
                     'id_contenedor' => $item->id_contenedor,
                     'id_usuario' => $item->id_usuario,
+                    'id_contenedor_pago'=>$item->id_contenedor_pago,
                     'id_tipo_cliente' => $item->id_tipo_cliente,
                     'nombre' => $item->nombre,
                     'telefono' => $item->telefono,
@@ -2238,7 +2239,10 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
             $proveedores = $request->proveedores;
             //busca la cotizacion con ese id , clona su datos pero con el id_contenedor de idContainerDestino y luego mueve los proveedores con los id des proveedores([1,2,3]) a la nueva cotizacion cambiando el id_cotizacion  a la nueva cotizacion y tambien cambia el id_contenedor de los proveedores a idContainerDestino y id_contenedor_pago  a idContainerPagoDestino y luego actualiza los datos de la nueva cotizacion y los proveedores
             $cotizacion = Cotizacion::find($idCotizacion);
+            
             $cotizacionDestino = $cotizacion->replicate();
+            $cotizacion->id_contenedor_pago=$idContainerDestino;
+            $cotizacion->save();
             $cotizacionDestino->id_contenedor = $idContainerDestino;
             $cotizacionDestino->save();
             foreach($proveedores as $proveedor){
