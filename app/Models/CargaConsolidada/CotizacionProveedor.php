@@ -12,6 +12,7 @@ class CotizacionProveedor extends Model
     protected $fillable = [
         'id_cotizacion',
         'id_contenedor',
+        'code_supplier',
         'products',
         'estado',
         'volumen_doc',
@@ -23,6 +24,13 @@ class CotizacionProveedor extends Model
         'arrive_date_china',
         'cbm_total_china',
         'estados_proveedor',
+        'peso',
+        'qty_box',
+        'cbm_total',
+        'supplier',
+        'supplier_phone',
+        'id_proveedor',
+        'id_contenedor_pago',
         'estado_china',
         'send_rotulado_status'
     ];

@@ -1535,16 +1535,14 @@ class CotizacionController extends Controller
                 $dataToInsert['id_contenedor'] = $cotizacion->id_contenedor;
 
                 // Obtener proveedores existentes
-                $existingProviders = CotizacionProveedor::where('id_cotizacion', $id)
+                $existingProviders = CotizacionProveedor::where('id_cotizacion', $id)->whereNotNull('code_supplier')
                     ->pluck('code_supplier')
                     ->toArray();
-
-                // Obtener datos de embarque
+                //delete existing providers with code_supplier null
+                CotizacionProveedor::where('id_cotizacion', $id)->whereNull('code_supplier')->delete();
                 $dataEmbarque = $this->getEmbarqueDataModified($file, $dataToInsert);
                 $newProviders = array_column($dataEmbarque, 'code_supplier');
-                Log::info("newProviders", $newProviders);
-                Log::info("existingProviders", $existingProviders);
-                Log::info("dataEmbarque", $dataEmbarque);
+
                 // Actualizar proveedores existentes
                 foreach ($existingProviders as $code) {
                     if (in_array($code, $newProviders)) {
@@ -1563,6 +1561,7 @@ class CotizacionController extends Controller
                 // Insertar nuevos proveedores
                 foreach ($dataEmbarque as $data) {
                     if (!in_array($data['code_supplier'], $existingProviders)) {
+                        Log::info('Insertando nuevo prove edor: ' . json_encode($data));
                         CotizacionProveedor::create($data);
                     }
                 }
@@ -2043,7 +2042,9 @@ class CotizacionController extends Controller
                     $qtyBox = $this->getDataCell($sheet2, $columnStart . $rowCajasProveedor);
                     $peso = $this->getDataCell($sheet2, $columnStart . $rowPesoProveedor);
                     $cbmTotal = $this->getDataCell($sheet2, $columnStart . $rowVolProveedor);
-
+                    if ($codeSupplier == null) {
+                        $codeSupplier = $this->generateCodeSupplier($nameCliente, $carga, $count, $provider);
+                    }
                     // Solo agregar proveedor si tiene datos válidos
                     if ($qtyBox > 0 || $peso > 0 || $cbmTotal > 0) {
                         $proveedores[] = [
@@ -2065,8 +2066,8 @@ class CotizacionController extends Controller
                     $provider++;
                 }
             }
-
             Log::info('Proveedores modificados extraídos: ' . count($proveedores));
+            Log::info('Proveedores modificados extraídos: ' . json_encode($proveedores));
             return $proveedores;
         } catch (\Exception $e) {
             Log::error('Error en getEmbarqueDataModified: ' . $e->getMessage());
