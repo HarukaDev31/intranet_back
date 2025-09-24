@@ -63,7 +63,6 @@ class InsertSampleContenedorConsolidadoData extends Migration
             'logistica_final' => 936.00,
             'qty_item' => 1,
             'updated_at' => '2025-09-17 17:09:49',
-            'created_at' => now()
         ]);
 
         // Insertar datos en contenedor_consolidado_cotizacion_proveedores
@@ -94,7 +93,7 @@ class InsertSampleContenedorConsolidadoData extends Migration
             'packing_list' => 'https://intranet.probusiness.pe/assets/images/agentecompra/1756417998_1754717142_packing_list_mochila.pdf',
             'estados_proveedor' => 'LOADED',
             'updated_at' => now(),
-            'created_at' => now()
+     
         ]);
     }
 
