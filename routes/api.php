@@ -49,7 +49,10 @@ use App\Http\Controllers\NotificacionController;
 // Rutas de autenticación
 Route::group(['prefix' => 'auth'], function () {
     Route::post('login', [AuthController::class, 'login']);
-
+    Route::group(['prefix' => 'clientes'], function () {
+        Route::post('register', [AuthController::class, 'register'])->middleware('throttle:5,1');
+        Route::post('login', [AuthController::class, 'loginCliente'])->middleware('throttle:5,1');
+    });
     // Rutas protegidas con JWT
     Route::group(['middleware' => 'jwt.auth'], function () {
         Route::post('logout', [AuthController::class, 'logout']);

@@ -6,6 +6,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Tymon\JWTAuth\Facades\JWTAuth;
 use Tymon\JWTAuth\Exceptions\JWTException;
 use App\Models\Usuario;
@@ -14,6 +16,8 @@ use App\Models\Organizacion;
 use App\Models\Almacen;
 use App\Helpers\CodeIgniterEncryption;
 use App\Http\Controllers\MenuController;
+use App\Http\Requests\RegisterRequest;
+use App\Models\User;
 
 class AuthController extends Controller
 {
@@ -24,7 +28,7 @@ class AuthController extends Controller
      */
     public function __construct()
     {
-        $this->middleware('auth:api', ['except' => ['login']]);
+        $this->middleware('auth:api', ['except' => ['login', 'register', 'loginCliente']]);
     }
 
     /**
@@ -74,7 +78,7 @@ class AuthController extends Controller
                             'message' => $result['sMessage'],
                             'token' => $token,
                             'token_type' => 'bearer',
-                            'expires_in' => 24*config('jwt.ttl') * 60,
+                            'expires_in' => 24 * config('jwt.ttl') * 60,
                             'user' => [
                                 'id' => $usuario->ID_Usuario,
                                 'nombre' => $usuario->No_Usuario,
@@ -413,6 +417,256 @@ class AuthController extends Controller
         } catch (\Exception $e) {
             // En caso de error, devolver array vacío
             return [];
+        }
+    }
+
+    /**
+     * Obtener menús del usuario externo
+     *
+     * @param \App\Models\User $user
+     * @return array
+     */
+    private function obtenerMenusUsuarioExterno($user)
+    {
+        try {
+            $userId = $user->id;
+
+            // Obtener menús padre para usuarios externos
+            $arrMenuPadre = DB::select("
+                SELECT DISTINCT
+                    MNU.*,
+                    (SELECT COUNT(*) FROM menu_user WHERE ID_Padre = MNU.ID_Menu AND Nu_Activo = 0) AS Nu_Cantidad_Menu_Padre
+                FROM menu_user AS MNU
+                JOIN menu_user_access AS MNUACCESS ON (MNU.ID_Menu = MNUACCESS.ID_Menu)
+                WHERE MNU.ID_Padre = 0
+                AND MNU.Nu_Activo = 0
+                AND MNUACCESS.user_id = ?
+                ORDER BY MNU.Nu_Orden, MNU.ID_Menu ASC
+            ", [$userId]);
+
+            // Convertir a array y ordenar por Nu_Orden
+            $arrMenuPadre = collect($arrMenuPadre)->sortBy('Nu_Orden')->values()->toArray();
+
+            // Obtener hijos para cada menú padre
+            foreach ($arrMenuPadre as $rowPadre) {
+                $sqlHijos = "
+                    SELECT DISTINCT
+                        MNU.*,
+                        (SELECT COUNT(*) FROM menu_user WHERE ID_Padre = MNU.ID_Menu AND Nu_Activo = 0) AS Nu_Cantidad_Menu_Hijos
+                    FROM menu_user AS MNU
+                    JOIN menu_user_access AS MNUACCESS ON (MNU.ID_Menu = MNUACCESS.ID_Menu)
+                    WHERE MNU.ID_Padre = ?
+                    AND MNU.Nu_Activo = 0
+                    AND MNUACCESS.user_id = ?
+                    ORDER BY MNU.Nu_Orden
+                ";
+
+                $rowPadre->Hijos = DB::select($sqlHijos, [$rowPadre->ID_Menu, $userId]);
+
+                // Obtener sub-hijos para cada hijo
+                foreach ($rowPadre->Hijos as $rowSubHijos) {
+                    if ($rowSubHijos->Nu_Cantidad_Menu_Hijos > 0) {
+                        $sqlSubHijos = "
+                            SELECT DISTINCT MNU.*
+                            FROM menu_user AS MNU
+                            JOIN menu_user_access AS MNUACCESS ON (MNU.ID_Menu = MNUACCESS.ID_Menu)
+                            WHERE MNU.ID_Padre = ?
+                            AND MNU.Nu_Activo = 0
+                            AND MNUACCESS.user_id = ?
+                            ORDER BY MNU.Nu_Orden
+                        ";
+
+                        $rowSubHijos->SubHijos = DB::select($sqlSubHijos, [$rowSubHijos->ID_Menu, $userId]);
+                    } else {
+                        $rowSubHijos->SubHijos = [];
+                    }
+                }
+            }
+
+            return $arrMenuPadre;
+        } catch (\Exception $e) {
+            Log::error('Error obteniendo menús de usuario externo: ' . $e->getMessage());
+            // En caso de error, devolver array vacío
+            return [];
+        }
+    }
+
+        /**
+     * Asignar todos los menús disponibles a un usuario
+     *
+     * @param int $userId
+     * @return void
+     */
+    private function asignarMenusUsuario($userId)
+    {
+        try {
+            // Obtener todos los menús disponibles en menu_user
+            $menus = DB::table('menu_user')->select('ID_Menu')->get();
+
+            // Preparar datos para inserción masiva
+            $menuAccess = [];
+            foreach ($menus as $menu) {
+                $menuAccess[] = [
+                    'ID_Menu' => $menu->ID_Menu,
+                    'user_id' => $userId,
+                    'created_at' => now(),
+                    'updated_at' => now()
+                ];
+            }
+
+            // Insertar todos los accesos de menú para el usuario
+            if (!empty($menuAccess)) {
+                DB::table('menu_user_access')->insert($menuAccess);
+                Log::info("Asignados " . count($menuAccess) . " menús al usuario ID: " . $userId);
+            }
+        } catch (\Exception $e) {
+            Log::error('Error asignando menús al usuario ' . $userId . ': ' . $e->getMessage());
+        }
+    }
+
+    public function register(RegisterRequest $request)
+    {
+        DB::beginTransaction();
+        Log::info('register', $request->all());
+        $validatedData = $request->validated();
+        try {
+            $user = User::create([
+                'name' => $validatedData['nombre'],
+                'email' => $validatedData['email'],
+                'whatsapp' => $validatedData['whatsapp'],
+                'password' => Hash::make($validatedData['password']),
+            ]);
+
+            $token = JWTAuth::fromUser($user);
+
+            $user->api_token = $token;
+            $user->save();
+
+            // Asignar todos los menús disponibles al usuario recién registrado
+            $this->asignarMenusUsuario($user->id);
+
+            // Obtener menús del usuario externo
+            $menus = $this->obtenerMenusUsuarioExterno($user);
+
+            try {
+                Mail::to($user['email'])->send(
+                    new \App\Mail\RegisterConfirmationMail(
+                        $user['email'],
+                        $user['password'],
+                        $user['nombre'],
+                        public_path('storage/logo_header.png'),
+                        public_path('storage/logo_footer.png')
+                    )
+                );
+            } catch (\Exception $mailException) {
+                Log::warning('Error enviando email de confirmación: ' . $mailException->getMessage());
+                // No fallar el registro por problemas de email
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'status' => 'success',
+                'success' => true,
+                'message' => 'Usuario registrado correctamente',
+                'token' => $token,
+                'token_type' => 'bearer',
+                'expires_in' => 24*config('jwt.ttl') * 60,
+                'user' => [
+                    'id' => $user->id,
+                    'nombre' => $user->name,
+                    'nombres_apellidos' => $user->name,
+                    'email' => $user->email,
+                    'whatsapp' => $user->whatsapp,
+                    'estado' => 1,
+                    'empresa' => null,
+                    'organizacion' => null,
+                    'grupo' => null
+                ],
+                'iCantidadAcessoUsuario' => 1,
+                'iIdEmpresa' => null,
+                'menus' => $menus,
+                'success' => true
+            ], 201);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['error' => $e->getMessage(), 'success' => false], 500);
+        }
+    }
+    public function loginCliente(Request $request)
+    {
+        try {
+            $credentials = $request->only(['No_Usuario', 'No_Password']);
+            
+            // Validar campos requeridos
+            if (empty($credentials['No_Usuario']) || empty($credentials['No_Password'])) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Email y contraseña son requeridos'
+                ], 400);
+            }
+
+            // Buscar usuario por email
+            $user = User::where('email', $credentials['No_Usuario'])->first();
+            
+            if (!$user) {
+                return response()->json([
+                    'status' => 'danger',
+                    'message' => 'Usuario no encontrado'
+                ], 401);
+            }
+
+            // Verificar contraseña
+            if (!Hash::check($credentials['No_Password'], $user->password)) {
+                return response()->json([
+                    'status' => 'warning',
+                    'message' => 'Contraseña incorrecta'
+                ], 401);
+            }
+
+            try {
+                // Generar token JWT
+                $token = JWTAuth::fromUser($user);
+
+                // Obtener menús del usuario externo
+                $menus = $this->obtenerMenusUsuarioExterno($user);
+
+                return response()->json([
+                    'status' => 'success',
+                    'message' => 'Iniciando sesión',
+                    'token' => $token,
+                    'token_type' => 'bearer',
+                    'expires_in' => 24*config('jwt.ttl') * 60,
+                    'user' => [
+                        'id' => $user->id,
+                        'nombre' => $user->name,
+                        'nombres_apellidos' => $user->name,
+                        'email' => $user->email,
+                        'whatsapp' => $user->whatsapp,
+                        'estado' => 1,
+                        'empresa' => null,
+                        'organizacion' => null,
+                        'grupo' => null
+                    ],
+                    'iCantidadAcessoUsuario' => 1,
+                    'iIdEmpresa' => null,
+                    'menus' => $menus,
+                    'success' => true
+                ]);
+
+            } catch (JWTException $e) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'No se pudo crear el token'
+                ], 500);
+            }
+
+        } catch (\Exception $e) {
+            Log::error('Error en loginCliente: ' . $e->getMessage());
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Error al iniciar sesión'
+            ], 500);
         }
     }
 }
