@@ -135,7 +135,7 @@ class SendInspectionMediaJob implements ShouldQueue
             $cliente = $cotizacion->nombre;
             $telefono = $cotizacion->telefono;
             $telefono = preg_replace('/\s+/', '', $telefono);
-            $telefono = '51912705923@c.us'; // Número de prueba
+            $telefono = $telefono . '@c.us';
 
             $sendStatus = true;
             $cotizacionProviders = CotizacionProveedor::where('id_cotizacion', $this->idCotizacion)->get();
