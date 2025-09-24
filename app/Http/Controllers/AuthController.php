@@ -625,7 +625,8 @@ class AuthController extends Controller
             }
 
             try {
-                // Generar token JWT
+                // Generar token JWT para usuarios externos
+                config(['auth.defaults.guard' => 'api-external']);
                 $token = JWTAuth::fromUser($user);
 
                 // Obtener menús del usuario externo
@@ -646,7 +647,9 @@ class AuthController extends Controller
                         'estado' => 1,
                         'empresa' => null,
                         'organizacion' => null,
-                        'grupo' => null
+                        'grupo' => [
+                            'nombre' => 'Cliente'
+                        ]
                     ],
                     'iCantidadAcessoUsuario' => 1,
                     'iIdEmpresa' => null,
@@ -666,6 +669,104 @@ class AuthController extends Controller
             return response()->json([
                 'status' => 'error',
                 'message' => 'Error al iniciar sesión'
+            ], 500);
+        }
+    }
+
+    /**
+     * Get the authenticated external user.
+     *
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function meExternal()
+    {
+        try {
+            config(['auth.defaults.guard' => 'api-external']);
+            $user = JWTAuth::user();
+            
+            if (!$user) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Usuario no encontrado'
+                ], 401);
+            }
+
+            // Obtener menús del usuario externo
+            $menus = $this->obtenerMenusUsuarioExterno($user);
+
+            return response()->json([
+                'status' => 'success',
+                'user' => [
+                    'id' => $user->id,
+                    'nombre' => $user->name,
+                    'nombres_apellidos' => $user->name,
+                    'email' => $user->email,
+                    'whatsapp' => $user->whatsapp,
+                    'estado' => 1,
+                    'empresa' => null,
+                    'organizacion' => null,
+                    'grupo' => [
+                        'nombre' => 'Cliente'
+                    ]
+                ],
+                'iCantidadAcessoUsuario' => 1,
+                'iIdEmpresa' => null,
+                'menus' => $menus
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error en meExternal: ' . $e->getMessage());
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Error al obtener información del usuario'
+            ], 500);
+        }
+    }
+
+    /**
+     * Log the external user out (Invalidate the token).
+     *
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function logoutExternal()
+    {
+        try {
+            config(['auth.defaults.guard' => 'api-external']);
+            JWTAuth::logout();
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Usuario desconectado exitosamente'
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error en logoutExternal: ' . $e->getMessage());
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Error al cerrar sesión'
+            ], 500);
+        }
+    }
+
+    /**
+     * Refresh external user token.
+     *
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function refreshExternal()
+    {
+        try {
+            config(['auth.defaults.guard' => 'api-external']);
+            $token = JWTAuth::refresh();
+            return response()->json([
+                'status' => 'success',
+                'token' => $token,
+                'token_type' => 'bearer',
+                'expires_in' => 24*config('jwt.ttl') * 60
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error en refreshExternal: ' . $e->getMessage());
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Error al refrescar token'
             ], 500);
         }
     }
