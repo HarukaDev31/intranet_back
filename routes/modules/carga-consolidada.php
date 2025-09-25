@@ -152,8 +152,9 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
             Route::get('/clientes/{idContenedor}', [EntregaController::class, 'getClientesEntrega']);
             Route::post('/clientes/{idContenedor}/sendForm', [EntregaController::class, 'sendForm']);
             Route::get('/entregas/{idContenedor}', [EntregaController::class, 'getEntregas']);
-            Route::get('/entregas/{idEntrega}', [EntregaController::class, 'getEntregasDetalle']);
-            Route::post('/entregas/updateStatus/{idEntrega}', [EntregaController::class, 'updateStatusEntrega']);
+            Route::get('/entregas/detalle/{idCotizacion}', [EntregaController::class, 'getEntregasDetalle']);
+            Route::post('/entregas/updateStatus/{idCotizacion}', [EntregaController::class, 'updateStatusEntrega']);
+            Route::get('/delivery/{idContenedor}', [EntregaController::class, 'getDelivery']);
         });
     });
 
