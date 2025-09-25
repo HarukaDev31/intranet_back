@@ -26,6 +26,7 @@ class ContenedorController extends Controller
     private $defaultJefeChina = [];
     private $defaultCotizador = [];
     private $defaultDocumentacion = [];
+    private $defaultAdministracion = [];
     public function __construct()
     {
         $this->defaultAgenteSteps = array(
@@ -54,12 +55,20 @@ class ContenedorController extends Controller
             ["name" => "CLIENTES", "iconURL" => env('APP_URL') . "assets/icons/clientes.png"],
             ["name" => "DOCUMENTACION", "iconURL" => env('APP_URL') . "assets/icons/cdocumentacion.png"],
             ["name" => "COTIZACION FINAL", "iconURL" => env('APP_URL') . "assets/icons/cotizacion_final.png"],
+            ["name" => "ENTREGA", "iconURL" => env('APP_URL') . "assets/icons/entrega.png"],
             ["name" => "FACTURA Y GUIA", "iconURL" => env('APP_URL') . "assets/icons/factura.png"]
         );
         $this->defaultDocumentacion = array(
             ["name" => "COTIZACION", "iconURL" => env('APP_URL') . "assets/icons/cotizacion.png"],
             ["name" => "DOCUMENTACION", "iconURL" => env('APP_URL') . "assets/icons/cdocumentacion.png"],
             ["name" => "ADUANA", "iconURL" => env('APP_URL') . "assets/icons/aduana.png"],
+        );
+        $this->defaultAdministracion = array(
+            ["name" => "CLIENTES", "iconURL" => env('APP_URL') . "assets/icons/clientes.png"],
+            ["name" => "DOCUMENTACION", "iconURL" => env('APP_URL') . "assets/icons/cdocumentacion.png"],
+            ["name" => "COTIZACION FINAL", "iconURL" => env('APP_URL') . "assets/icons/cotizacion_final.png"],
+            ["name" => "ENTREGA", "iconURL" => env('APP_URL') . "assets/icons/entrega.png"],
+            ["name" => "FACTURA Y GUIA", "iconURL" => env('APP_URL') . "assets/icons/factura.png"]
         );
     }
     public function index(Request $request)
@@ -240,7 +249,8 @@ class ContenedorController extends Controller
     {
         $cotizadorSteps = $this->getCotizacionSteps($idContenedor);
         $documentacionSteps = $this->getDocumentacionSteps($idContenedor);
-        $this->insertSteps($cotizadorSteps, $documentacionSteps);
+        $administracionSteps = $this->getAdministracionSteps($idContenedor);
+        $this->insertSteps($cotizadorSteps, $documentacionSteps, $administracionSteps);
     }
     public function getCotizacionSteps($idContenedor)
     {
@@ -277,6 +287,24 @@ class ContenedorController extends Controller
             $index++;
         }
         return $stepDocumentacion;
+    }
+    public function getAdministracionSteps($idContenedor)
+    {
+        $stepsAdministracion = [];
+        $idContenedor = intval($idContenedor);
+        $index = 1;
+        foreach ($this->defaultAdministracion as $step) {
+            $stepsAdministracion[] = [
+                "id_pedido" => $idContenedor,
+                'id_order' => $index,
+                'tipo' => 'ADMINISTRACION',
+                'name' => $step['name'],
+                'iconURL' => $step['iconURL'],
+                'status' => 'PENDING'
+            ];
+            $index++;
+        }
+        return $stepsAdministracion;
     }
     public function insertSteps($steps, $stepsDocumentacion)
     {
@@ -347,6 +375,9 @@ class ContenedorController extends Controller
                     }
                     $query->limit(1);
                     break;
+                case Usuario::ROL_ADMINISTRACION:
+                    $query->where('tipo', 'COTIZADOR')->where('id_order', '>', 1);
+                    break;
                 case Usuario::ROL_DOCUMENTACION:
                     $query->where('tipo', 'DOCUMENTACION');
                     break;
@@ -370,25 +401,50 @@ class ContenedorController extends Controller
         if (empty($ruta)) {
             return null;
         }
-        
-        // Si ya es una URL completa, devolverla tal como está
+
+        $ruta = trim($ruta);
+
+        // Caso 1: si ya es una URL válida y NO está rota, devolverla tal cual.
         if (filter_var($ruta, FILTER_VALIDATE_URL)) {
+            // Evitar duplicados tipo baseUrl/baseUrl/...
+            $base = rtrim(config('app.url'), '/');
+            if (substr_count($ruta, $base) > 1) {
+                // Quitar repeticiones dejando la última aparición
+                $parts = explode($base, $ruta);
+                $ruta = $base . end($parts);
+            }
             return $ruta;
         }
-        
-        // Limpiar la ruta de barras iniciales para evitar doble slash
+
+        // Caso 2: URL mal formada local, ej: http://localhost:8000assets/icons/xxx.png (falta / tras puerto)
+        // Normalizar insertando la barra para que luego podamos recortar.
+        $ruta = preg_replace('#^(https?://[^/]+)(assets/)#i', '$1/$2', $ruta);
+
+        // Caso 3: Si contiene múltiples http/https (concatenaciones erróneas) conservar sólo la última
+        if (preg_match_all('#https?://#i', $ruta, $m) && count($m[0]) > 1) {
+            $last = strrpos($ruta, 'http');
+            $ruta = substr($ruta, $last);
+        }
+
+        // Caso 4: Si contiene 'assets/icons' recortamos desde allí, eliminando cualquier dominio previo (aun si estaba roto)
+        if (strpos($ruta, 'assets/icons') !== false) {
+            $ruta = substr($ruta, strpos($ruta, 'assets/icons'));
+        }
+
+        // Caso 5: eliminar cualquier residuo de dominio de nuestro host si quedó pegado
+        $ruta = preg_replace('#^https?://[^/]+/#i', '', $ruta); // dominio + /
+        $ruta = preg_replace('#^https?://[^/]+#i', '', $ruta);  // dominio sin /
+
+        // Asegurar ruta relativa limpia
         $ruta = ltrim($ruta, '/');
-        
-        // Construir URL manualmente para evitar problemas con Storage::url()
-        $baseUrl = config('app.url');
-        $storagePath = '/storage/';
-        
-        // Asegurar que no haya doble slash
-        $baseUrl = rtrim($baseUrl, '/');
-        $storagePath = ltrim($storagePath, '/');
-        $ruta = ltrim($ruta, '/');
-        
-        return $baseUrl . '/'  . $ruta;
+
+        // Si después de limpiar no arranca con assets/, no forzamos nada: devolvemos base + original limpio
+        $baseUrl = rtrim(config('app.url'), '/');
+        if (!preg_match('#^(assets/|storage/)#', $ruta)) {
+            return $baseUrl . '/' . $ruta;
+        }
+
+        return $baseUrl . '/' . $ruta;
     }
     public function getValidContainers()
     {

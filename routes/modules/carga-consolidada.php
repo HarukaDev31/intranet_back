@@ -15,6 +15,7 @@ use App\Http\Controllers\CargaConsolidada\FacturaGuiaController;
 use App\Http\Controllers\CargaConsolidada\CotizacionPagosController;
 use App\Http\Controllers\CargaConsolidada\AduanaController;
 use App\Http\Controllers\CargaConsolidada\Clientes\PagosController as ClientesPagosController;
+use App\Http\Controllers\CargaConsolidada\EntregaController;
 
 /*
 |--------------------------------------------------------------------------
@@ -144,6 +145,16 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
         Route::put('{id}', [ContenedorController::class, 'update']);
         Route::delete('{id}', [ContenedorController::class, 'destroy']);
         Route::get('filters/options', [ContenedorController::class, 'filterOptions']);
+
+        // Entrega
+        Route::group(['prefix' => 'entrega'], function () {
+            Route::get('/{idContenedor}/headers', [EntregaController::class, 'getHeaders']);
+            Route::get('/clientes/{idContenedor}', [EntregaController::class, 'getClientesEntrega']);
+            Route::post('/clientes/{idContenedor}/sendForm', [EntregaController::class, 'sendForm']);
+            Route::get('/entregas/{idContenedor}', [EntregaController::class, 'getEntregas']);
+            Route::get('/entregas/{idEntrega}', [EntregaController::class, 'getEntregasDetalle']);
+            Route::post('/entregas/updateStatus/{idEntrega}', [EntregaController::class, 'updateStatusEntrega']);
+        });
     });
 
     // Tipos de cliente
