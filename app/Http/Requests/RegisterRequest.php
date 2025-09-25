@@ -29,7 +29,7 @@ class RegisterRequest extends FormRequest
             'nombre' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users',
             'password' => 'required|string|min:6',
-            'whatsapp' => 'required|string|max:255',
+            'whatsapp' => 'required|string|max:255|unique:users',
         ];
     }
 

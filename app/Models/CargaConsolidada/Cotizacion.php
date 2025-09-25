@@ -294,10 +294,10 @@ class Cotizacion extends Model
      */
     public function scopeBuscar($query, $termino)
     {
-        return $query->where(function($q) use ($termino) {
+        return $query->where(function ($q) use ($termino) {
             $q->where('nombre', 'LIKE', "%{$termino}%")
-              ->orWhere('documento', 'LIKE', "%{$termino}%")
-              ->orWhere('correo', 'LIKE', "%{$termino}%");
+                ->orWhere('documento', 'LIKE', "%{$termino}%")
+                ->orWhere('correo', 'LIKE', "%{$termino}%");
         });
     }
 
@@ -322,10 +322,10 @@ class Cotizacion extends Model
      */
     public function getTieneDocumentacionCompletaAttribute()
     {
-        return !empty($this->cotizacion_file_url) && 
-               !empty($this->cotizacion_final_file_url) &&
-               !empty($this->guia_remision_url) &&
-               !empty($this->factura_general_url);
+        return !empty($this->cotizacion_file_url) &&
+            !empty($this->cotizacion_final_file_url) &&
+            !empty($this->guia_remision_url) &&
+            !empty($this->factura_general_url);
     }
 
     /**
@@ -341,8 +341,8 @@ class Cotizacion extends Model
      */
     public function getEstaPagadaAttribute()
     {
-        return $this->estado_pagos_coordinacion === 'PAGADO' || 
-               $this->estado_pagos_coordinacion === 'SOBREPAGO';
+        return $this->estado_pagos_coordinacion === 'PAGADO' ||
+            $this->estado_pagos_coordinacion === 'SOBREPAGO';
     }
 
     /**
@@ -399,5 +399,15 @@ class Cotizacion extends Model
     public function inspeccionAlmacen()
     {
         return $this->hasMany(AlmacenInspection::class, 'id_cotizacion');
+    }
+    //function get sum of cbm_total of proveedores whwere estados_proveedor is 'LOADED' and estado_cotizador is 'CONFIRMADO'
+    public function getSumCbmTotalChinaAttribute()
+    {
+        return $this->proveedores->where('estados_proveedor', 'LOADED')->sum('cbm_total_china');
+    }
+    //function get sum of qty_box of proveedores whwere estados_proveedor is 'LOADED' and estado_cotizador is 'CONFIRMADO'
+    public function getSumQtyBoxChinaAttribute()
+    {
+        return $this->proveedores->where('estados_proveedor', 'LOADED')->sum('qty_box_china');
     }
 }
