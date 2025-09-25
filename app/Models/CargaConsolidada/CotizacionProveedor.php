@@ -50,4 +50,12 @@ class CotizacionProveedor extends Model
     {
         return $this->belongsTo(Contenedor::class, 'id_contenedor', 'id');
     }
+
+    /**
+     * Relación con AlmacenInspection
+     */
+    public function inspectionAlmacen()
+    {
+        return $this->hasMany(AlmacenInspection::class, 'id_proveedor');
+    }
 }

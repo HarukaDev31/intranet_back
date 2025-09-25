@@ -26,6 +26,7 @@ class Cotizacion extends Model
     protected $fillable = [
         'id_contenedor_pago',
         'id_contenedor',
+        'uuid',
         'id_tipo_cliente',
         'id_cliente',
         'fecha',

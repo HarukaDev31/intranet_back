@@ -7,5 +7,7 @@ use App\Http\Controllers\Clientes\ImportacionesController;
 Route::group(['prefix' => 'clientes/importaciones', 'middleware' => 'jwt.external'], function () {
     Route::group(['prefix' => 'trayecto'], function () {
         Route::get('/', [ImportacionesController::class, 'getTrayectos']);
+        Route::get('/inspeccion/{uuid}', [ImportacionesController::class, 'getInspecciones']);
+        Route::get('/seguimiento/{uuid}', [ImportacionesController::class, 'getSeguimiento']);
     });
 });

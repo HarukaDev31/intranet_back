@@ -3,9 +3,8 @@
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
-use Illuminate\Support\Facades\DB;
 
-class InsertSampleContenedorConsolidadoData extends Migration
+class CreateDeliveryAgenciesTable extends Migration
 {
     /**
      * Run the migrations.
@@ -14,7 +13,13 @@ class InsertSampleContenedorConsolidadoData extends Migration
      */
     public function up()
     {
-       
+        Schema::create('delivery_agencies', function (Blueprint $table) {
+            $table->id();
+            $table->string('name');
+            $table->string('ruc');
+            $table->timestamps();
+     
+        });
     }
 
     /**
@@ -24,8 +29,6 @@ class InsertSampleContenedorConsolidadoData extends Migration
      */
     public function down()
     {
-        // Eliminar los registros insertados
-        DB::table('contenedor_consolidado_cotizacion_proveedores')->where('id', 1330)->delete();
-        DB::table('contenedor_consolidado_cotizacion')->where('id', 929)->delete();
+        Schema::dropIfExists('delivery_agencies');
     }
 }

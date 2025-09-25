@@ -20,6 +20,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use Illuminate\Support\Str;
 use Exception;
 
 
@@ -586,7 +587,7 @@ class CotizacionController extends Controller
                 $dataToInsert['cotizacion_file_url'] = $fileUrl;
                 $dataToInsert['id_contenedor'] = $request->id_contenedor;
                 $dataToInsert['id_usuario'] = Auth::id();
-
+                $dataToInsert['uuid'] = Str::uuid();
                 // Crear la cotización
                 $cotizacionModel = Cotizacion::create($dataToInsert);
 

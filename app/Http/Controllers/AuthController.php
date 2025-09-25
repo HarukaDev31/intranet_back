@@ -581,7 +581,7 @@ class AuthController extends Controller
                     'estado' => 1,
                     'empresa' => null,
                     'organizacion' => null,
-                    'grupo' => null
+                    'grupo' =>'Cliente'
                 ],
                 'iCantidadAcessoUsuario' => 1,
                 'iIdEmpresa' => null,

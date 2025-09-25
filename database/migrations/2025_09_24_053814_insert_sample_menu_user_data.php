@@ -14,8 +14,8 @@ class InsertSampleMenuUserData extends Migration
      */
     public function up()
     {
-        
-
+        //set foreign key checks to 0
+      
         $importacionesId = DB::table('menu_user')->insertGetId([
             'ID_Padre' => 0,
             'Nu_Orden' => 2,
@@ -38,7 +38,7 @@ class InsertSampleMenuUserData extends Migration
             'ID_Padre' => $importacionesId,
             'Nu_Orden' => 1,
             'No_Menu' => 'Trayectos',
-            'No_Menu_Url' => '#',
+            'No_Menu_Url' => 'importaciones/trayectos',
             'No_Class_Controller' => '',
             'Txt_Css_Icons' => 'fas fa-calculator',
             'Nu_Separador' => 0,
@@ -56,7 +56,7 @@ class InsertSampleMenuUserData extends Migration
             'ID_Padre' => $importacionesId,
             'Nu_Orden' => 2,
             'No_Menu' => 'Entregados',
-            'No_Menu_Url' => '#',
+            'No_Menu_Url' => 'importaciones/entregados',
             'No_Class_Controller' => '',
             'Txt_Css_Icons' => 'fas fa-calculator',
             'Nu_Separador' => 0,
@@ -71,7 +71,7 @@ class InsertSampleMenuUserData extends Migration
             'updated_at' => now()
         ]);
 
-        
+        //set foreign key checks to 1
     }
 
     /**

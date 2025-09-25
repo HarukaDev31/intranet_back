@@ -8,9 +8,83 @@ use App\Models\CargaConsolidada\Cotizacion;
 use Tymon\JWTAuth\Facades\JWTAuth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
+use App\Models\CargaConsolidada\Contenedor;
+use App\Models\CargaConsolidada\CotizacionProveedor;
+use App\Models\CargaConsolidada\AlmacenInspection;
 
 class ImportacionesController extends Controller
 {
+    private $pasoCompleted = 'COMPLETADO';
+    private $pasoPending = 'PENDIENTE';
+    private $pasosSeguimiento;
+
+    public function __construct()
+    {
+        $this->pasosSeguimiento = [
+            [
+                'key' => 'carga_recibida',
+                'name' => 'Carga Recibida',
+                'status' => $this->pasoPending,
+                'date' => '-',
+                'description' => 'La carga ha sido recibida en el almacén'
+            ],
+            [
+                'key' => 'llenado_de_contenedor',
+                'name' => 'LLenado de contenedor',
+                'status' => $this->pasoPending,
+                'date' => '-',
+                'description' => 'La carga ha sido recibida en el almacén'
+            ],
+            [
+                'key' => 'zarpe',
+                'name' => 'Zarpe',
+                'status' => $this->pasoPending,
+                'date' => '-',
+                'description' => 'La carga ha sido recibida en el almacén'
+            ],
+            [
+                'key' => 'en_trayecto',
+                'name' => 'En Trayecto',
+                'status' => $this->pasoPending,
+                'date' => '-',
+                'description' => 'La carga ha sido recibida en el almacén'
+            ],
+            [
+                'key' => 'arribo',
+                'name' => 'Arribo',
+                'status' => $this->pasoPending,
+                'date' => '-',
+                'description' => 'La carga ha sido recibida en el almacén'
+            ],
+            [
+                'key' => 'declaracion_aduanera',
+                'name' => 'Declaracion aduanera',
+                'status' => $this->pasoPending,
+                'description' => 'La carga ha sido recibida en el almacén'
+            ],
+            [
+                'key' => 'levante',
+                'name' => 'Levante',
+                'status' => $this->pasoPending,
+                'date' => '-',
+                'description' => 'La carga ha sido recibida en el almacén'
+            ],
+            [
+                'key' => 'pago',
+                'name' => 'Pago',
+                'status' => $this->pasoPending,
+                'date' => '-',
+                'description' => 'La carga ha sido recibida en el almacén'
+            ],
+            [
+                'key' => 'entregado',
+                'name' => 'Entregado',
+                'status' => $this->pasoPending,
+                'date' => '-',
+                'description' => 'La carga ha sido recibida en el almacén'
+            ]
+        ];
+    }
     public function getTrayectos(Request $request)
     {
         try {
@@ -38,14 +112,14 @@ class ImportacionesController extends Controller
                 //where telefono trim and remove +51 from db
                 ->where(DB::raw('TRIM(telefono)'), 'like', '%' . $whatsapp . '%')
                 ->whereNotNull('estado_cliente')
-                ->select('id', 'id_contenedor', 'qty_item', 'volumen_final', 'fob_final', 'logistica_final', 'fob', 'monto', 'estado_cliente')
+                ->select('id', 'id_contenedor', 'qty_item', 'volumen_final', 'fob_final', 'logistica_final', 'fob', 'monto', 'estado_cliente', 'uuid')
                 ->orderBy('id', 'desc')
                 ->paginate($perPage);
 
             // Transformar los datos para incluir la información del contenedor
             $trayectosData = $trayectos->getCollection()->map(function ($cotizacion) {
                 return [
-                    'id' => $cotizacion->id,
+                    'id' => $cotizacion->uuid,
                     'id_contenedor' => $cotizacion->id_contenedor,
                     'carga' => $cotizacion->contenedor ? $cotizacion->contenedor->carga : null,
                     'fecha_cierre' => $cotizacion->contenedor ? $cotizacion->contenedor->f_cierre : null,
@@ -81,10 +155,9 @@ class ImportacionesController extends Controller
             ], 500);
         }
     }
-    public function getInspecciones(Request $request, $idCotizacion)
+    public function getInspecciones(Request $request, $uuid)
     {
         try {
-            // Obtener usuario actual
             $user = JWTAuth::user();
             if (!$user) {
                 return response()->json([
@@ -92,9 +165,9 @@ class ImportacionesController extends Controller
                     'message' => 'Usuario no encontrado'
                 ], 401);
             }
-            
+
             $whatsapp = $user->whatsapp;
-            
+
             // Validar que la cotización pertenece al cliente actual
             $cotizacion = DB::table('contenedor_consolidado_cotizacion as main')
                 ->select([
@@ -154,7 +227,7 @@ class ImportacionesController extends Controller
                         WHERE inspection_docs.id_cotizacion = main.id
                     ) as files_almacen_inspection")
                 ])
-                ->where('main.id', $idCotizacion) // Validar ID específico
+                ->where('main.uuid', $uuid) // Validar ID específico
                 ->where(DB::raw('TRIM(main.telefono)'), 'like', '%' . $whatsapp . '%') // Validar que pertenece al cliente
                 ->where('main.estado_cotizador', 'CONFIRMADO')
                 ->whereNull('main.id_cliente_importacion')
@@ -180,11 +253,58 @@ class ImportacionesController extends Controller
                 'success' => true,
                 'data' => $cotizacion
             ]);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
                 'message' => 'Error al obtener inspecciones: ' . $e->getMessage(),
+                'data' => null
+            ], 500);
+        }
+    }
+    public function getSeguimiento(Request $request, $uuid)
+    {
+        try {
+            $user = JWTAuth::user();
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No se pudo obtener el usuario'
+                ], 401);
+            }
+            //get contenedor from id_cotizacion with uuid
+            $idContenedor = Cotizacion::where('uuid', $uuid)->first()->id_contenedor;
+            $contenedor = Contenedor::where('id', $idContenedor)->first();
+            $idCotizacion = Cotizacion::where('uuid', $uuid)->first()->id;
+            $hasInspection = CotizacionProveedor::where('id_cotizacion', $idCotizacion)->whereHas('inspectionAlmacen')->exists();
+            if ($hasInspection) {
+                //get gile with min last_modified_at
+                $file = AlmacenInspection::where('id_cotizacion', $idCotizacion)->orderBy('last_modified', 'asc')->first();
+                $this->pasosSeguimiento[0]['status'] = $this->pasoCompleted;
+                $this->pasosSeguimiento[0]['date'] = $file->last_modified;
+            }
+            if ($contenedor->lista_embarque_url) {
+                $this->pasosSeguimiento[1]['status'] = $this->pasoCompleted;
+                $this->pasosSeguimiento[1]['date'] = $contenedor->lista_embarque_uploaded_at;
+            }
+            //if contenedor has fecha_zarpe
+            if ($contenedor->fecha_zarpe) {
+                //if current date > fecha_zarpe
+                if (date('Y-m-d') > $contenedor->fecha_zarpe) {
+                    $this->pasosSeguimiento[2]['status'] = $this->pasoCompleted;
+                }
+                $this->pasosSeguimiento[2]['date'] = $contenedor->fecha_zarpe;
+            }
+            //if contenedor has fecha_arribo
+           
+
+            return response()->json([
+                'success' => true,
+                'data' => $this->pasosSeguimiento
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al obtener seguimiento: ' . $e->getMessage(),
                 'data' => null
             ], 500);
         }

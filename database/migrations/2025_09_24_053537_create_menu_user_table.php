@@ -3,7 +3,7 @@
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
-
+use Illuminate\Support\Facades\DB;
 class CreateMenuUserTable extends Migration
 {
     /**
@@ -13,6 +13,8 @@ class CreateMenuUserTable extends Migration
      */
     public function up()
     {
+        DB::statement('SET FOREIGN_KEY_CHECKS = 0');
+        Schema::dropIfExists('menu_user');
         Schema::create('menu_user', function (Blueprint $table) {
             $table->id('ID_Menu');
             $table->unsignedTinyInteger('ID_Padre')->default(0);
@@ -31,7 +33,10 @@ class CreateMenuUserTable extends Migration
             $table->tinyInteger('show_father')->default(1);
             $table->timestamps();
         });
+        DB::statement('SET FOREIGN_KEY_CHECKS = 1');
+
     }
+    
 
     /**
      * Reverse the migrations.

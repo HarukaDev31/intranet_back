@@ -600,7 +600,9 @@ class ContenedorController extends Controller
                 ], 404);
             }
 
-            $contenedor->update(['lista_embarque_url' => $fileUrl]);
+            $contenedor->update(['lista_embarque_url' => $fileUrl,
+                'lista_embarque_uploaded_at' => date('Y-m-d H:i:s')
+        ]);
 
             // Verificar si el contenedor está completado
             $this->verifyContainerIsCompleted($idContenedor);
