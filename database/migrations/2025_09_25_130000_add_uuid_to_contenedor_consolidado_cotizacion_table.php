@@ -5,6 +5,7 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Log;
 
 class AddUuidToContenedorConsolidadoCotizacionTable extends Migration
 {
@@ -50,7 +51,7 @@ class AddUuidToContenedorConsolidadoCotizacionTable extends Migration
 
         // Log del proceso
         $totalUpdated = $cotizaciones->count();
-        \Log::info("UUIDs generados para {$totalUpdated} cotizaciones existentes");
+        Log::info("UUIDs generados para {$totalUpdated} cotizaciones existentes");
     }
 
     /**
