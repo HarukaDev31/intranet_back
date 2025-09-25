@@ -411,4 +411,14 @@ class Cotizacion extends Model
     {
         return $this->proveedores->where('estados_proveedor', 'LOADED')->sum('qty_box_china');
     }
+    public function getSumValorDocAttribute()
+    {
+        return $this->proveedores->where('estados_proveedor', 'LOADED')->sum('valor_doc');
+    }
+    //sum volume_doc of proveedores whwere estados_proveedor is 'LOADED' and estado_cotizador is 'CONFIRMADO'
+    public function getSumVolumeDocAttribute()
+    {
+        return $this->proveedores->where('estados_proveedor', 'LOADED')->sum('volume_doc');
+    }
+    
 }

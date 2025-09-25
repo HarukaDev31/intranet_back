@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\DB;
 use App\Models\CargaConsolidada\Contenedor;
 use App\Models\CargaConsolidada\CotizacionProveedor;
 use App\Models\CargaConsolidada\AlmacenInspection;
+use App\Models\CargaConsolidada\Pago;
 
 class ImportacionesController extends Controller
 {
@@ -33,7 +34,7 @@ class ImportacionesController extends Controller
                 'name' => 'LLenado de contenedor',
                 'status' => $this->pasoPending,
                 'date' => '-',
-                'description' => 'La carga ha sido recibida en el almacén'
+                'description' => 'Almacen Yiwu'
             ],
             [
                 'key' => 'zarpe',
@@ -50,18 +51,19 @@ class ImportacionesController extends Controller
                 'description' => 'La carga ha sido recibida en el almacén'
             ],
             [
+                'key' => 'declaracion_aduanera',
+                'name' => 'Declaracion aduanera',
+                'status' => $this->pasoPending,
+                'description' => 'La carga ha sido recibida en el almacén'
+            ],
+            [
                 'key' => 'arribo',
                 'name' => 'Arribo',
                 'status' => $this->pasoPending,
                 'date' => '-',
                 'description' => 'La carga ha sido recibida en el almacén'
             ],
-            [
-                'key' => 'declaracion_aduanera',
-                'name' => 'Declaracion aduanera',
-                'status' => $this->pasoPending,
-                'description' => 'La carga ha sido recibida en el almacén'
-            ],
+
             [
                 'key' => 'levante',
                 'name' => 'Levante',
@@ -274,13 +276,19 @@ class ImportacionesController extends Controller
             //get contenedor from id_cotizacion with uuid
             $idContenedor = Cotizacion::where('uuid', $uuid)->first()->id_contenedor;
             $contenedor = Contenedor::where('id', $idContenedor)->first();
-            $idCotizacion = Cotizacion::where('uuid', $uuid)->first()->id;
+            $cotizacion = Cotizacion::where('uuid', $uuid)->first();
+            $idCotizacion = $cotizacion->id;
             $hasInspection = CotizacionProveedor::where('id_cotizacion', $idCotizacion)->whereHas('inspectionAlmacen')->exists();
             if ($hasInspection) {
                 //get gile with min last_modified_at
                 $file = AlmacenInspection::where('id_cotizacion', $idCotizacion)->orderBy('last_modified', 'asc')->first();
                 $this->pasosSeguimiento[0]['status'] = $this->pasoCompleted;
                 $this->pasosSeguimiento[0]['date'] = $file->last_modified;
+                //description is Inspeccion en Yiwu \n Cajas is qty_box_china and volumen_doc from provideer 
+                // sum of qty_box_china and cbm_total_china and valor_doc from provideer
+                $this->pasosSeguimiento[0]['description'] = "Inspeccion en Yiwu \n Cajas: " . $cotizacion->getSumQtyBoxChinaAttribute();
+                $maxVol = max($cotizacion->getSumCbmTotalChinaAttribute(), $cotizacion->getSumVolumeDocAttribute());
+                $this->pasosSeguimiento[0]['description'] .= " \n Volumen: " . $maxVol." m3";
             }
             if ($contenedor->lista_embarque_url) {
                 $this->pasosSeguimiento[1]['status'] = $this->pasoCompleted;
@@ -289,13 +297,62 @@ class ImportacionesController extends Controller
             //if contenedor has fecha_zarpe
             if ($contenedor->fecha_zarpe) {
                 //if current date > fecha_zarpe
-                if (date('Y-m-d') > $contenedor->fecha_zarpe) {
+                if (date('Y-m-d') >= $contenedor->fecha_zarpe) {
                     $this->pasosSeguimiento[2]['status'] = $this->pasoCompleted;
                 }
                 $this->pasosSeguimiento[2]['date'] = $contenedor->fecha_zarpe;
+                //tambien if current date > fecha_zarpe sum 2 days
+                if (date('Y-m-d') >= date('Y-m-d', strtotime($contenedor->fecha_zarpe . ' + 2 days'))) {
+                    $this->pasosSeguimiento[3]['status'] = $this->pasoCompleted;
+                    $this->pasosSeguimiento[3]['date'] = date('Y-m-d', strtotime($contenedor->fecha_zarpe . ' + 2 days'));
+                    $this->pasosSeguimiento[3]['description'] = "El contenedor va camino al puerto del Callao-Peru";
+                }
+                //description is naviera: $contenedor->naviera
+                $this->pasosSeguimiento[2]['description'] = "Naviera: " . $contenedor->naviera;
             }
-            //if contenedor has fecha_arribo
-           
+            if ($contenedor->fecha_declaracion) {
+                if (date('Y-m-d') >= $contenedor->fecha_declaracion) {
+                    $this->pasosSeguimiento[4]['status'] = $this->pasoCompleted;
+                }
+                $this->pasosSeguimiento[4]['date'] = $contenedor->fecha_declaracion;
+                //description canal control: $contenedor->canal_control
+                $this->pasosSeguimiento[4]['description'] = "Canal control: " . $contenedor->canal_control." Esperando Levante" ;
+            }
+            if ($contenedor->fecha_arribo) {
+                if (date('Y-m-d') >= $contenedor->fecha_arribo) {
+                    $this->pasosSeguimiento[5]['status'] = $this->pasoCompleted;
+                }
+                $this->pasosSeguimiento[5]['date'] = $contenedor->fecha_arribo;
+                $this->pasosSeguimiento[5]['description'] = "El contenedor ha llegado al puerto del Callao-Peru";
+            }
+            if ($contenedor->fecha_levante) {
+                if (date('Y-m-d') >= $contenedor->fecha_levante) {
+                    $this->pasosSeguimiento[6]['status'] = $this->pasoCompleted;
+                }
+                $this->pasosSeguimiento[6]['date'] = $contenedor->fecha_levante;
+                $this->pasosSeguimiento[6]['description'] = "Podemos retirar el contenedor de aduanas.";
+
+            }
+            //for pagos sum all pagos for this cotizacion and if sum >logistica_final + impuestos_final then pago is completed and date is last payment date from file
+
+            $pagos = Pago::where('id_cotizacion', $idCotizacion)->get();
+            if ($pagos->count() > 0) {
+                $totalPagos = $pagos->sum('monto');
+                if ($totalPagos >= $cotizacion->logistica_final + $cotizacion->impuestos_final) {
+                    $this->pasosSeguimiento[7]['status'] = $this->pasoCompleted;
+                    if ($pagos->where('status','!=' ,'CONFIRMADO')->count() > 0) {
+                        $this->pasosSeguimiento[7]['description'] = "Tu pago ha sido recibido, pero aún no ha sido confirmado";
+                        $this->pasosSeguimiento[7]['date'] = $pagos->last()->payment_date;
+
+                    } else {
+                        $this->pasosSeguimiento[7]['description'] = "Tu pago ha sido confirmado exitosamente";
+                        //confirm date is last payment date from file
+                        $this->pasosSeguimiento[7]['date'] = $pagos->last()->confirmation_date??$pagos->last()->payment_date;
+                    }
+                }
+            }
+
+
 
             return response()->json([
                 'success' => true,
