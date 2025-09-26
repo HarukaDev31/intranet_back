@@ -32,7 +32,7 @@ class InsertSampleMenuUserData extends Migration
             'Txt_Url_Video' => null,
             'No_Menu_China' => null,
             'url_intranet_v2' => 'importaciones',
-            'show_father' => 0,
+            'show_father' => 1,
             'created_at' => now(),
             'updated_at' => now()
         ]);
