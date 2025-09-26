@@ -44,7 +44,8 @@ class AssignMenusToExistingUsers extends Command
             // Obtener todos los usuarios
             $users = DB::table('users')->select('id')->get();
             $this->info("Encontrados {$users->count()} usuarios");
-
+            //drop table menu_user_access
+            DB::table('menu_user_access')->truncate();
             // Obtener todos los menús disponibles
             $menus = DB::table('menu_user')->select('ID_Menu')->get();
             $this->info("Encontrados {$menus->count()} menús disponibles");
