@@ -29,7 +29,6 @@ Route::group(['prefix' => 'auth'], function () {
 Route::group(['prefix' => 'auth/clientes'], function () {
     Route::post('register', [AuthController::class, 'register'])->middleware('throttle:5,1');
     Route::post('login', [AuthController::class, 'loginCliente'])->middleware('throttle:5,1');
-    
     // Rutas protegidas para usuarios externos
     Route::group(['middleware' => 'jwt.external'], function () {
         Route::get('me', [AuthController::class, 'meExternal']);
