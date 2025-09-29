@@ -79,7 +79,11 @@ class AduanaController extends Controller
         $baseUrl = rtrim($baseUrl, '/');
         $storagePath = ltrim($storagePath, '/');
         $ruta = ltrim($ruta, '/');
-        return $baseUrl . '/' . $storagePath . '/' . $ruta;
+        
+        // Codificar toda la ruta incluyendo el nombre del archivo para caracteres especiales como #
+        $rutaEncoded = rawurlencode($ruta);
+        
+        return $baseUrl . '/' . $storagePath . '/' . $rutaEncoded;
     }
     public function saveFormularioAduana(Request $request)
     {
