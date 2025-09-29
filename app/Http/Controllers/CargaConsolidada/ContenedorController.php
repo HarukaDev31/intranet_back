@@ -562,8 +562,8 @@ class ContenedorController extends Controller
 
             $file = $request->file('file');
 
-            // Validar tamaño del archivo 400 M
-            $maxFileSize = 1000000;
+            // Validar tamaño del archivo 400 MB
+            $maxFileSize = 400 * 1024 * 1024; // 400 MB en bytes
             if ($file->getSize() > $maxFileSize) {
                 return response()->json([
                     'status' => 'error',
