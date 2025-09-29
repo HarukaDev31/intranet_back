@@ -15,7 +15,9 @@ class InsertSampleMenuUserData extends Migration
     public function up()
     {
         //set foreign key checks to 0
-      
+       //truncate table menu_user
+       Schema::disableForeignKeyConstraints();
+       DB::table('menu_user')->truncate();
         $importacionesId = DB::table('menu_user')->insertGetId([
             'ID_Padre' => 0,
             'Nu_Orden' => 2,
@@ -47,7 +49,7 @@ class InsertSampleMenuUserData extends Migration
             'Nu_Tipo_Sistema' => 0,
             'Txt_Url_Video' => null,
             'No_Menu_China' => null,
-            'url_intranet_v2' => 'importaciones/trayectos',
+            'url_intranet_v2' => 'importaciones/trayecto',
             'show_father' => 1,
             'created_at' => now(),
             'updated_at' => now()
@@ -72,6 +74,7 @@ class InsertSampleMenuUserData extends Migration
         ]);
 
         //set foreign key checks to 1
+        Schema::enableForeignKeyConstraints();
     }
 
     /**
