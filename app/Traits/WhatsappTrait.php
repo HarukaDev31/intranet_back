@@ -20,9 +20,9 @@ trait WhatsappTrait
             Log::info('Llamando API de WhatsApp', [
                 'endpoint' => $endpoint,
                 'url' => $url,
-                'dataSize' => strlen(json_encode($data))
+                'dataSize' => strlen(json_encode($data)),
+                'data' => $data
             ]);
-            
             $ch = curl_init();
             curl_setopt($ch, CURLOPT_URL, $url);
             curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
