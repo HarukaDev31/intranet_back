@@ -137,7 +137,7 @@ class DeliveryController extends Controller
         /**
          * {"nombreCompleto":"Miguel Villegas Perez","dni":"48558558","importador":"miguel_villegas","tipoComprobante":"boleta","tiposProductos":"Juguetes, stickers, botellas de agua, artículos de oficina","clienteDni":"48558558","clienteNombre":"Miguel Villegas Perez","clienteCorreo":"mvillegas@probusiness.pe","clienteRuc":"20603287721","clienteRazonSocial":"Grupo Pro Business sac","choferNombre":"","choferDni":"456457457","choferLicencia":"456457457","choferPlaca":"456457457","direccionDestino":"","distritoDestino":"","fechaEntrega":"2025-09-30T05:00:00.000Z","horarioSeleccionado":{"range_id":1,"start_time":"10:00:00","end_time":"13:00:00","capacity":2,"assigned":0,"available":2}}
          */
-
+        DB::beginTransaction();
         try {
             // Validar que la cotización existe
             $cotizacion = Cotizacion::where('uuid', $request->importador)->first();
@@ -209,6 +209,7 @@ class DeliveryController extends Controller
 
             // Despachar job para enviar mensaje de WhatsApp
             SendDeliveryConfirmationWhatsAppLimaJob::dispatch($deliveryForm->id);
+            DB::commit();
 
             return response()->json([
                 'message' => 'Formulario de delivery registrado correctamente',
@@ -220,11 +221,12 @@ class DeliveryController extends Controller
                 ]
             ], 200);
         } catch (\Exception $e) {
+            DB::rollBack();
             return response()->json([
                 'message' => 'Error al registrar el formulario de delivery',
                 'success' => false,
                 'error' => $e->getMessage()
             ], 500);
-        }
+        } 
     }
 }
