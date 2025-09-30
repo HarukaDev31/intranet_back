@@ -23,6 +23,8 @@ class MakeDriverFieldsNullableInConsolidadoDeliveryFormLimaTable extends Migrati
         //DROP COLUMN DRIVER_dOC_TYPE AND  ADD CREATE AGAIN BUT WITH NULLABLE
         Schema::table('consolidado_delivery_form_lima', function (Blueprint $table) {
             $table->dropColumn('driver_doc_type');
+        });
+        Schema::table('consolidado_delivery_form_lima', function (Blueprint $table) {
             $table->enum('driver_doc_type', ['DNI', 'PASAPORTE'])->nullable();
         });
     }
