@@ -882,7 +882,7 @@ class CotizacionController extends Controller
      * @param array $cotizacion Array con información del archivo subido
      * @return array|string Datos extraídos o mensaje de error
      */
-    public function extraerDatosCotizacion($cotizacion)
+    public function getCotizacionData($cotizacion)
     {
         try {
             if (!file_exists($cotizacion['tmp_name'])) {
