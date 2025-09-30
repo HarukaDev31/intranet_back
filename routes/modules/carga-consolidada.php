@@ -148,6 +148,14 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
 
         // Entrega
         Route::group(['prefix' => 'entrega'], function () {
+            Route::get('/{idContenedor}/horarios-disponibles', [EntregaController::class, 'getHorariosDisponibles']);
+            // CRUD fechas
+            Route::post('/{idContenedor}/fechas', [EntregaController::class, 'createFecha']);
+            Route::delete('/{idContenedor}/fechas/{idFecha}', [EntregaController::class, 'deleteFecha']);
+            // CRUD rangos (horarios) por fecha
+            Route::post('/{idContenedor}/fechas/{idFecha}/rangos', [EntregaController::class, 'createRango']);
+            Route::put('/{idContenedor}/fechas/{idFecha}/rangos/{idRango}', [EntregaController::class, 'updateRango']);
+            Route::delete('/{idContenedor}/fechas/{idFecha}/rangos/{idRango}', [EntregaController::class, 'deleteRango']);
             Route::get('/{idContenedor}/headers', [EntregaController::class, 'getHeaders']);
             Route::get('/clientes/{idContenedor}', [EntregaController::class, 'getClientesEntrega']);
             Route::post('/clientes/{idContenedor}/sendForm', [EntregaController::class, 'sendForm']);
