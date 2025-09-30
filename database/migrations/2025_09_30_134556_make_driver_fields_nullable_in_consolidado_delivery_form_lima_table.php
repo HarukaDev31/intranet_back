@@ -16,7 +16,6 @@ class MakeDriverFieldsNullableInConsolidadoDeliveryFormLimaTable extends Migrati
         Schema::table('consolidado_delivery_form_lima', function (Blueprint $table) {
             // Hacer nullable los campos del conductor
             $table->string('drver_name')->nullable()->change();
-            $table->enum('driver_doc_type', ['DNI', 'PASAPORTE'])->nullable()->change();
             $table->string('driver_doc')->nullable()->change();
             $table->string('driver_license')->nullable()->change();
             $table->string('driver_plate')->nullable()->change();
