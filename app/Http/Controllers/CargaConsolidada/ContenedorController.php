@@ -157,7 +157,6 @@ class ContenedorController extends Controller
                                   )
                             ) as sum_peru')
                         ])
-                        ->where('p.estados_proveedor', 'LOADED')
                         ->whereNull('cc.id_cliente_importacion')
                         ->groupBy('p.id_contenedor')
                         ->get();
