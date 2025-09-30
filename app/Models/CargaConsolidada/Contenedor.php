@@ -262,4 +262,6 @@ class Contenedor extends Model
             ->pluck('carga')
             ->toArray();
     }
+    //get cotizaciones en paso clientes, deben tewer estado_cotizacion CONFIRMADO y estado_cliente !=null
+    
 }

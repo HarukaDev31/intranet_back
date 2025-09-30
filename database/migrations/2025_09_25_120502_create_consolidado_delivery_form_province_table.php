@@ -16,7 +16,7 @@ class CreateConsolidadoDeliveryFormProvinceTable extends Migration
         Schema::dropIfExists('consolidado_delivery_form_province');
         Schema::create('consolidado_delivery_form_province', function (Blueprint $table) {
             $table->id();
-           //id_contenedor id_user id_cotizacion importer_nmae voucher_doc voucher_doc_type voucher_name voucher_email id_agency r_type r_doc r_name r_phone id_department id_province id_district agency_address_initial_delivery agency_address_final_delivery home_adress_delivery
+           //id_contenedor id_user id_cotizacion importer_nmae voucher_doc voucher_doc_type voucher_name voucher_email id_agency agency_ruc r_type r_doc r_name r_phone id_department id_province id_district agency_address_initial_delivery agency_address_final_delivery home_adress_delivery
            $table->unsignedInteger('id_contenedor');
            $table->unsignedBigInteger('id_user');
            $table->integer('id_cotizacion');
@@ -26,6 +26,8 @@ class CreateConsolidadoDeliveryFormProvinceTable extends Migration
            $table->string('voucher_name');
            $table->string('voucher_email');
            $table->unsignedBigInteger('id_agency');
+           $table->string('agency_ruc');
+           $table->string('agency_name');
            $table->enum('r_type', ['PERSONA NATURAL', 'EMPRESA']);
            $table->string('r_doc');
            $table->string('r_name');

@@ -3,6 +3,8 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\Broadcasting\BroadcastController;
+use App\Http\Controllers\UserBusinessController;
+use App\Http\Controllers\UserProfileController;
 
 /*
 |--------------------------------------------------------------------------
@@ -34,6 +36,15 @@ Route::group(['prefix' => 'auth/clientes'], function () {
         Route::get('me', [AuthController::class, 'meExternal']);
         Route::post('logout', [AuthController::class, 'logoutExternal']);
         Route::post('refresh', [AuthController::class, 'refreshExternal']);
+        
+        // Rutas de perfil de usuario
+        Route::get('profile', [UserProfileController::class, 'show']);
+        Route::post('profile', [UserProfileController::class, 'update']);
+        
+        // Rutas de empresa
+        Route::get('business', [UserBusinessController::class, 'show']);
+        Route::post('business', [UserBusinessController::class, 'storeOrUpdate']);
+        Route::put('business', [UserBusinessController::class, 'storeOrUpdate']);
     });
 });
 

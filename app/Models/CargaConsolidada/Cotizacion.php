@@ -69,7 +69,8 @@ class Cotizacion extends Model
         'status_cliente_doc',
         'logistica_final',
         'qty_item',
-        'id_cliente_importacion'
+        'id_cliente_importacion',
+        'delivery_form_registered_at'
     ];
 
     /**
@@ -95,6 +96,7 @@ class Cotizacion extends Model
         'fob_final' => 'decimal:2',
         'logistica_final' => 'decimal:2',
         'qty_item' => 'integer',
+        'delivery_form_registered_at' => 'date',
     ];
 
     /**
@@ -420,5 +422,33 @@ class Cotizacion extends Model
     {
         return $this->proveedores->where('estados_proveedor', 'LOADED')->sum('volume_doc');
     }
-    
+    //return cotizaciones en paso clientes, deben tewer estado_cotizacion CONFIRMADO y estado_cliente !=null
+    public function scopeCotizacionesEnPasoClientes($query){
+            return $query->where('estado_cotizador', 'CONFIRMADO')
+            ->whereNotNull('estado_cliente');
+    }
+
+    /**
+     * Verifica si el formulario de delivery fue registrado.
+     */
+    public function getFormularioDeliveryRegistradoAttribute()
+    {
+        return !is_null($this->delivery_form_registered_at);
+    }
+
+    /**
+     * Scope para filtrar cotizaciones con formulario de delivery registrado.
+     */
+    public function scopeConFormularioDelivery($query)
+    {
+        return $query->whereNotNull('delivery_form_registered_at');
+    }
+
+    /**
+     * Scope para filtrar cotizaciones sin formulario de delivery registrado.
+     */
+    public function scopeSinFormularioDelivery($query)
+    {
+        return $query->whereNull('delivery_form_registered_at');
+    }
 }
