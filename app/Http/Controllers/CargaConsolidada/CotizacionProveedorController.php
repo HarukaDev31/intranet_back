@@ -110,8 +110,9 @@ class CotizacionProveedorController extends Controller
 
             $estadoChina = $request->estado_china ?? 'todos';
             $search = $request->search ?? '';
-            $page = $request->currentPage ?? 1;
-            $perPage = $request->itemsPerPage ?? 10;
+            // Compatibilidad con ambos nombres de parámetros
+            $page = $request->input('page', $request->input('currentPage', 1));
+            $perPage = $request->input('limit', $request->input('itemsPerPage', 100));
             $query = DB::table('contenedor_consolidado_cotizacion AS main')
                 ->select([
                     'main.*',
@@ -144,8 +145,7 @@ class CotizacionProveedorController extends Controller
                 ])
                 ->leftJoin('contenedor_consolidado_tipo_cliente AS TC', 'TC.id', '=', 'main.id_tipo_cliente')
                 ->leftJoin('usuario AS U', 'U.ID_Usuario', '=', 'main.id_usuario')
-                ->where('main.id_contenedor', $idContenedor)
-                ->whereNull('id_cliente_importacion');
+                ->where('main.id_contenedor', $idContenedor);
             Log::info('query: ' . $query->toSql());
 
             if (!empty($search)) {
@@ -159,12 +159,16 @@ class CotizacionProveedorController extends Controller
                     $sub->select(DB::raw(1))
                         ->from('contenedor_consolidado_cotizacion_proveedores as proveedores')
                         ->whereRaw('proveedores.id_cotizacion = main.id');
-                    if ($request->has('estado_coordinacion') && $request->estado_coordinacion != 'todos') {
-                        $sub->where('proveedores.estados', $request->estado_coordinacion);
-                    }
-                    if ($request->has('estado_china') && $request->estado_china != 'todos') {
-                        $sub->where('proveedores.estados_proveedor', $request->estado_china);
-                    }
+                    
+                    // Usar OR en lugar de AND para que coincida con la lógica del CotizacionController
+                    $sub->where(function ($q) use ($request) {
+                        if ($request->has('estado_coordinacion') && $request->estado_coordinacion != 'todos') {
+                            $q->where('proveedores.estados', $request->estado_coordinacion);
+                        }
+                        if ($request->has('estado_china') && $request->estado_china != 'todos') {
+                            $q->orWhere('proveedores.estados_proveedor', $request->estado_china);
+                        }
+                    });
                 });
             }
 
@@ -189,8 +193,10 @@ class CotizacionProveedorController extends Controller
                     break;
             }
 
+            // Aplicar filtro whereNull después de los filtros de rol, igual que en CotizacionController
+            $query->whereNull('main.id_cliente_importacion');
             $query->orderBy('main.id', 'asc');
-
+            Log::info($query->toSql());
             // Ejecutar consulta con paginación
             $data = $query->paginate($perPage, ['*'], 'page', $page);
             $estadoChina = $request->estado_china;

@@ -109,44 +109,44 @@ class ContenedorController extends Controller
             $query->orderBy(DB::raw('CAST(carga AS UNSIGNED)'), 'desc');
             $data = $query->paginate(10);
 
-                // Optimización: obtener todos los ids de la página y hacer agregaciones en lote.
-                $pageIds = collect($data->items())->pluck('id')->all();
-                $cbmVendidos = [];
-                $cbmEmbarcados = [];
-                if ($pageIds) {
-                    // Vendidos (usa lógica proporcionada: china = suma confirmados de proveedores, peru = subconsulta volumen confirmados)
-                    $vendRows = DB::table('contenedor_consolidado_cotizacion_proveedores as cccp')
-                        ->join('contenedor_consolidado_cotizacion as cc','cccp.id_cotizacion','=','cc.id')
-                        ->whereIn('cccp.id_contenedor', $pageIds)
-                        ->select([
-                            'cccp.id_contenedor',
-                            DB::raw('COALESCE(SUM(IF(cc.estado_cotizador = "CONFIRMADO", cccp.cbm_total_china, 0)),0) as cbm_total_china'),
-                            DB::raw('(
+            // Optimización: obtener todos los ids de la página y hacer agregaciones en lote.
+            $pageIds = collect($data->items())->pluck('id')->all();
+            $cbmVendidos = [];
+            $cbmEmbarcados = [];
+            if ($pageIds) {
+                // Vendidos (usa lógica proporcionada: china = suma confirmados de proveedores, peru = subconsulta volumen confirmados)
+                $vendRows = DB::table('contenedor_consolidado_cotizacion_proveedores as cccp')
+                    ->join('contenedor_consolidado_cotizacion as cc', 'cccp.id_cotizacion', '=', 'cc.id')
+                    ->whereIn('cccp.id_contenedor', $pageIds)
+                    ->select([
+                        'cccp.id_contenedor',
+                        DB::raw('COALESCE(SUM(IF(cc.estado_cotizador = "CONFIRMADO", cccp.cbm_total_china, 0)),0) as cbm_total_china'),
+                        DB::raw('(
                                 SELECT COALESCE(SUM(volumen),0) FROM contenedor_consolidado_cotizacion
                                 WHERE id IN (
                                     SELECT DISTINCT id_cotizacion FROM contenedor_consolidado_cotizacion_proveedores
                                     WHERE id_contenedor = cccp.id_contenedor
                                 ) AND estado_cotizador = "CONFIRMADO"
                             ) as cbm_total_peru')
-                        ])
-                        ->groupBy('cccp.id_contenedor')
-                        ->get();
-                    foreach ($vendRows as $r) {
-                        $cbmVendidos[$r->id_contenedor] = [
-                            'peru' => (float)$r->cbm_total_peru,
-                            'china' => (float)$r->cbm_total_china,
-                        ];
-                    }
-                    // Embarcados (estado proveedor EMBARCADO) - solo tenemos cbm_total_china, Peru se debe derivar igual que vendidos pero restringido a EMBARCADO.
-                    $embRows = DB::table('contenedor_consolidado_cotizacion_proveedores as p')
-                        ->join('contenedor_consolidado_cotizacion as cc','p.id_cotizacion','=','cc.id')
-                        ->whereIn('p.id_contenedor', $pageIds)
-                        ->select([
-                            'p.id_contenedor',
-                            // China: sólo confirmados
-                            DB::raw('SUM(IF(cc.estado_cotizador = "CONFIRMADO", p.cbm_total_china, 0)) as sum_china'),
-                            // Perú: confirmados y embarcados (LOADED)
-                            DB::raw('(SELECT COALESCE(SUM(cc2.volumen), 0)
+                    ])
+                    ->groupBy('cccp.id_contenedor')
+                    ->get();
+                foreach ($vendRows as $r) {
+                    $cbmVendidos[$r->id_contenedor] = [
+                        'peru' => (float)$r->cbm_total_peru,
+                        'china' => (float)$r->cbm_total_china,
+                    ];
+                }
+                // Embarcados (estado proveedor EMBARCADO) - solo tenemos cbm_total_china, Peru se debe derivar igual que vendidos pero restringido a EMBARCADO.
+                $embRows = DB::table('contenedor_consolidado_cotizacion_proveedores as p')
+                    ->join('contenedor_consolidado_cotizacion as cc', 'p.id_cotizacion', '=', 'cc.id')
+                    ->whereIn('p.id_contenedor', $pageIds)
+                    ->select([
+                        'p.id_contenedor',
+                        // China: sólo confirmados
+                        DB::raw('SUM(IF(cc.estado_cotizador = "CONFIRMADO", p.cbm_total_china, 0)) as sum_china'),
+                        // Perú: confirmados y embarcados (LOADED)
+                        DB::raw('(SELECT COALESCE(SUM(cc2.volumen), 0)
                                     FROM contenedor_consolidado_cotizacion cc2
                                     WHERE cc2.id IN (
                                         SELECT DISTINCT p2.id_cotizacion
@@ -154,57 +154,58 @@ class ContenedorController extends Controller
                                         WHERE p2.id_contenedor = p.id_contenedor
                                     )
                                     AND cc2.estado_cotizador = "CONFIRMADO") as sum_peru')
-                        ])
-                        ->whereNull('cc.id_cliente_importacion')
-                        ->groupBy('p.id_contenedor')
-                        ->get();
-                    foreach ($embRows as $r) {
-                        $cbmEmbarcados[$r->id_contenedor] = [
-                            'peru' => (float)$r->sum_peru,
-                            'china' => (float)$r->sum_china,
-                        ];
-                    }
-                }
-
-                $items = collect($data->items())->map(function($c) use ($cbmVendidos, $cbmEmbarcados) {
-                    $cbm_total_peru = 0; $cbm_total_china = 0;
-                    if ($c->estado_china === Contenedor::CONTEDOR_CERRADO) {
-                        $vals = $cbmEmbarcados[$c->id] ?? ['peru'=>0,'china'=>0];
-                        $cbm_total_peru = $vals['peru'];
-                        $cbm_total_china = $vals['china'];
-                    } else {
-                        $vals = $cbmVendidos[$c->id] ?? ['peru'=>0,'china'=>0];
-                        $cbm_total_peru = $vals['peru'];
-                        $cbm_total_china = $vals['china'];
-                    }
-                    return [
-                        'id' => $c->id,
-                        'carga' => $c->carga,
-                        'mes' => $c->mes,
-                        'f_cierre' => $c->f_cierre,
-                        'f_puerto' => $c->f_puerto,
-                        'f_entrega' => $c->f_entrega,
-                        'fecha_arribo' => $c->fecha_arribo,
-                        'fecha_declaracion' => $c->fecha_declaracion,
-                        'fecha_levante' => $c->fecha_levante,
-                        'fecha_zarpe' => $c->fecha_zarpe,
-                        'empresa' => $c->empresa,
-                        'estado_documentacion' => $c->estado_documentacion,
-                        'estado_china' => $c->estado_china,
-                        'pais' => $c->pais,
-                        'tipo_contenedor' => $c->tipo_contenedor,
-                        'canal_control' => $c->canal_control,
-                        'naviera' => $c->naviera,
-                        'ajuste_valor' => $c->ajuste_valor,
-                        'multa' => $c->multa,
-                        'valor_fob' => $c->valor_fob,
-                        'valor_flete' => $c->valor_flete,
-                        'costo_destino' => $c->costo_destino,
-                        //colocar decimales
-                        'cbm_total_peru' => number_format($cbm_total_peru, 2),
-                        'cbm_total_china' => number_format($cbm_total_china, 2),
+                    ])
+                    ->whereNull('cc.id_cliente_importacion')
+                    ->groupBy('p.id_contenedor')
+                    ->get();
+                foreach ($embRows as $r) {
+                    $cbmEmbarcados[$r->id_contenedor] = [
+                        'peru' => (float)$r->sum_peru,
+                        'china' => (float)$r->sum_china,
                     ];
-                });
+                }
+            }
+
+            $items = collect($data->items())->map(function ($c) use ($cbmVendidos, $cbmEmbarcados) {
+                $cbm_total_peru = 0;
+                $cbm_total_china = 0;
+                if ($c->estado_china === Contenedor::CONTEDOR_CERRADO) {
+                    $vals = $cbmEmbarcados[$c->id] ?? ['peru' => 0, 'china' => 0];
+                    $cbm_total_peru = $vals['peru'];
+                    $cbm_total_china = $vals['china'];
+                } else {
+                    $vals = $cbmVendidos[$c->id] ?? ['peru' => 0, 'china' => 0];
+                    $cbm_total_peru = $vals['peru'];
+                    $cbm_total_china = $vals['china'];
+                }
+                return [
+                    'id' => $c->id,
+                    'carga' => $c->carga,
+                    'mes' => $c->mes,
+                    'f_cierre' => $c->f_cierre,
+                    'f_puerto' => $c->f_puerto,
+                    'f_entrega' => $c->f_entrega,
+                    'fecha_arribo' => $c->fecha_arribo,
+                    'fecha_declaracion' => $c->fecha_declaracion,
+                    'fecha_levante' => $c->fecha_levante,
+                    'fecha_zarpe' => $c->fecha_zarpe,
+                    'empresa' => $c->empresa,
+                    'estado_documentacion' => $c->estado_documentacion,
+                    'estado_china' => $c->estado_china,
+                    'pais' => $c->pais,
+                    'tipo_contenedor' => $c->tipo_contenedor,
+                    'canal_control' => $c->canal_control,
+                    'naviera' => $c->naviera,
+                    'ajuste_valor' => $c->ajuste_valor,
+                    'multa' => $c->multa,
+                    'valor_fob' => $c->valor_fob,
+                    'valor_flete' => $c->valor_flete,
+                    'costo_destino' => $c->costo_destino,
+                    //colocar decimales
+                    'cbm_total_peru' => number_format($cbm_total_peru, 2),
+                    'cbm_total_china' => number_format($cbm_total_china, 2),
+                ];
+            });
 
             return response()->json([
                 'success' => true,
@@ -405,7 +406,7 @@ class ContenedorController extends Controller
             return response()->json(['data' => [], 'success' => false, 'message' => 'Error al obtener pasos del contenedor: ' . $e->getMessage()]);
         }
     }
-        private function generateImageUrl($ruta)
+    private function generateImageUrl($ruta)
     {
         if (empty($ruta)) {
             return null;
@@ -475,7 +476,8 @@ class ContenedorController extends Controller
     public function getCargasDisponibles()
     {
         $hoy = date('Y-m-d');
-        $query = Contenedor::where('empresa', '!=', 1)->orderBy('carga', 'desc');
+        $query = Contenedor::where('empresa', '!=', 1)
+            ->orderByRaw('CAST(carga AS UNSIGNED) DESC');
         return $query->get();
     }
     public function moveCotizacionToConsolidado(Request $request)
@@ -500,7 +502,7 @@ class ContenedorController extends Controller
                 return response()->json(['message' => 'Proveedores no encontrados', 'success' => false], 404);
             }
             foreach ($proveedores as $proveedor) {
-                Log::info('proveedor'.json_encode($proveedor));
+                Log::info('proveedor' . json_encode($proveedor));
                 $proveedor->id_contenedor = $idContenedorDestino;
                 $proveedor->save();
             }
@@ -609,9 +611,10 @@ class ContenedorController extends Controller
                 ], 404);
             }
 
-            $contenedor->update(['lista_embarque_url' => $fileUrl,
+            $contenedor->update([
+                'lista_embarque_url' => $fileUrl,
                 'lista_embarque_uploaded_at' => date('Y-m-d H:i:s')
-        ]);
+            ]);
 
             // Verificar si el contenedor está completado
             $this->verifyContainerIsCompleted($idContenedor);
@@ -795,7 +798,6 @@ class ContenedorController extends Controller
             ]);
 
             return [$notificacionCoordinacion, $notificacionJefeVentas];
-
         } catch (\Exception $e) {
             Log::error('Error al crear notificaciones de movimiento a consolidado para Coordinación y Jefe de Ventas: ' . $e->getMessage());
             // No lanzar excepción para no afectar el flujo principal de movimiento

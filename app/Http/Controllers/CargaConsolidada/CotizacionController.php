@@ -66,8 +66,10 @@ class CotizacionController extends Controller
     {
         try {
             $user = JWTAuth::parseToken()->authenticate();
-            $query = Cotizacion::where('id_contenedor', $idContenedor);
+            Log::info($user);
+            $query = Cotizacion::where('id_contenedor', $idContenedor)->whereNull('id_cliente_importacion');
             $rol = $user->getNombreGrupo();
+            Log::info($query->toSql());
             // Aplicar filtros básicos
             if ($request->has('search')) {
                 $search = $request->search;
@@ -89,6 +91,9 @@ class CotizacionController extends Controller
             if ($request->has('fecha_fin')) {
                 $query->whereDate('fecha', '<=', $request->fecha_fin);
             }
+            // Siempre filtrar cotizaciones que tengan al menos un proveedor
+            $query->whereHas('proveedores');
+            
             //if request has estado_coordinacion or estado_china  then query with  proveedores  and just get cotizaciones with at least one proveedor with the state
             if ($request->has('estado_coordinacion') || $request->has('estado_china')) {
                 $query->whereHas('proveedores', function ($query) use ($request) {
