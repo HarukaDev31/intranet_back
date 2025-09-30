@@ -5,8 +5,17 @@ namespace App\Http\Controllers\CargaConsolidada;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use App\Models\CargaConsolidada\Cotizacion;
+use App\Models\CargaConsolidada\Pago;
+use App\Models\CargaConsolidada\PagoConcept;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
+
 class EntregaController extends Controller
 {
+    private $table_contenedor_consolidado_cotizacion_coordinacion_pagos = "contenedor_consolidado_cotizacion_coordinacion_pagos";
+    private $table_pagos_concept = "cotizacion_coordinacion_pagos_concept";
+
     /**
      * Listar horarios disponibles (rangos de entrega) para un contenedor.
      * Calcula la disponibilidad como delivery_count - asignados.
@@ -36,13 +45,19 @@ class EntregaController extends Controller
                           GROUP BY id_date, id_range_date) as a'),
                 function ($join) {
                     $join->on('a.id_date', '=', 'd.id')
-                         ->on('a.id_range_date', '=', 'r.id');
+                        ->on('a.id_range_date', '=', 'r.id');
                 }
             )
             ->where('d.id_contenedor', $idContenedor)
             ->select([
-                'd.id as date_id', 'd.day', 'd.month', 'd.year',
-                'r.id as range_id', 'r.start_time', 'r.end_time', 'r.delivery_count',
+                'd.id as date_id',
+                'd.day',
+                'd.month',
+                'd.year',
+                'r.id as range_id',
+                'r.start_time',
+                'r.end_time',
+                'r.delivery_count',
                 DB::raw('COALESCE(a.assigned_count, 0) as assigned_count'),
                 DB::raw('(r.delivery_count - COALESCE(a.assigned_count, 0)) as available')
             ])
@@ -249,7 +264,7 @@ class EntregaController extends Controller
             ->where('id_date', $idFecha)
             ->where(function ($q) use ($start, $end) {
                 $q->where('start_time', '<', $end)
-                  ->where('end_time', '>', $start);
+                    ->where('end_time', '>', $start);
             })
             ->exists();
         if ($overlap) {
@@ -330,7 +345,7 @@ class EntregaController extends Controller
             ->where('id', '!=', $idRango)
             ->where(function ($q) use ($start, $end) {
                 $q->where('start_time', '<', $end)
-                  ->where('end_time', '>', $start);
+                    ->where('end_time', '>', $start);
             })
             ->exists();
         if ($overlap) {
@@ -404,16 +419,16 @@ class EntregaController extends Controller
             // Formularios (Lima y Provincia) asociados por id_cotizacion y mismo contenedor
             ->leftJoin('consolidado_delivery_form_lima as L', function ($join) use ($idContenedor) {
                 $join->on('L.id_cotizacion', '=', 'CC.id')
-                     ->where('L.id_contenedor', '=', $idContenedor);
+                    ->where('L.id_contenedor', '=', $idContenedor);
             })
             ->leftJoin('consolidado_delivery_form_province as P', function ($join) use ($idContenedor) {
                 $join->on('P.id_cotizacion', '=', 'CC.id')
-                     ->where('P.id_contenedor', '=', $idContenedor);
+                    ->where('P.id_contenedor', '=', $idContenedor);
             })
             ->where('CC.id_contenedor', $idContenedor)
             ->whereNotNull('CC.estado_cliente')
             ->whereNull('CC.id_cliente_importacion')
-                        ->where('CC.estado_cotizador', 'CONFIRMADO')
+            ->where('CC.estado_cotizador', 'CONFIRMADO')
             ->select([
                 'CC.*',
                 'TC.name as name',
@@ -428,8 +443,8 @@ class EntregaController extends Controller
             $search = $request->input('search');
             $query->where(function ($q) use ($search) {
                 $q->where('CC.nombre', 'LIKE', "%{$search}%")
-                  ->orWhere('CC.documento', 'LIKE', "%{$search}%")
-                  ->orWhere('CC.correo', 'LIKE', "%{$search}%");
+                    ->orWhere('CC.documento', 'LIKE', "%{$search}%")
+                    ->orWhere('CC.correo', 'LIKE', "%{$search}%");
             });
         }
 
@@ -480,11 +495,11 @@ class EntregaController extends Controller
             ->join('carga_consolidada_contenedor as C', 'C.id', '=', 'CC.id_contenedor')
             ->leftJoin('consolidado_delivery_form_lima as L', function ($join) use ($idContenedor) {
                 $join->on('L.id_cotizacion', '=', 'CC.id')
-                     ->where('L.id_contenedor', '=', $idContenedor);
+                    ->where('L.id_contenedor', '=', $idContenedor);
             })
             ->leftJoin('consolidado_delivery_form_province as P', function ($join) use ($idContenedor) {
                 $join->on('P.id_cotizacion', '=', 'CC.id')
-                     ->where('P.id_contenedor', '=', $idContenedor);
+                    ->where('P.id_contenedor', '=', $idContenedor);
             })
             // Departamento (solo aplica para formulario de provincia)
             ->leftJoin('departamento as DPT', 'DPT.ID_Departamento', '=', 'P.id_department')
@@ -501,7 +516,7 @@ class EntregaController extends Controller
             })
             ->leftJoin('consolidado_delivery_date as D2', function ($join) use ($idContenedor) {
                 $join->on('D2.id', '=', 'UR2.id_date')
-                     ->where('D2.id_contenedor', '=', $idContenedor);
+                    ->where('D2.id_contenedor', '=', $idContenedor);
             })
             ->leftJoin('consolidado_delivery_range_date as R2', 'R2.id', '=', 'UR2.id_range_date')
             ->where('CC.id_contenedor', $idContenedor)
@@ -511,7 +526,7 @@ class EntregaController extends Controller
             // Solo filas que tengan algún formulario asociado
             ->where(function ($q) {
                 $q->whereNotNull('L.id')
-                  ->orWhereNotNull('P.id');
+                    ->orWhereNotNull('P.id');
             })
             ->select([
                 'C.*',
@@ -539,7 +554,7 @@ class EntregaController extends Controller
                 DB::raw('R2.start_time as delivery_start_time'),
                 DB::raw('R2.end_time as delivery_end_time'),
                 DB::raw('UR2.id_date as delivery_date_id'),
-                DB::raw('UR2.id_range_date as delivery_range_id'), 
+                DB::raw('UR2.id_range_date as delivery_range_id'),
             ]);
 
         // Búsqueda
@@ -547,8 +562,8 @@ class EntregaController extends Controller
             $search = $request->input('search');
             $query->where(function ($q) use ($search) {
                 $q->where('CC.nombre', 'LIKE', "%{$search}%")
-                  ->orWhere('CC.documento', 'LIKE', "%{$search}%")
-                  ->orWhere('CC.correo', 'LIKE', "%{$search}%");
+                    ->orWhere('CC.documento', 'LIKE', "%{$search}%")
+                    ->orWhere('CC.correo', 'LIKE', "%{$search}%");
             });
         }
 
@@ -591,12 +606,58 @@ class EntregaController extends Controller
         // Lo obtiene de la tabla de clientes asociados al contenedor
         $query = DB::table('contenedor_consolidado_cotizacion as CC')
             ->join('carga_consolidada_contenedor as C', 'C.id', '=', 'CC.id_contenedor')
-            ->select('C.*','CC.*')
+            ->leftJoin('consolidado_delivery_form_lima as L', 'L.id_cotizacion', '=', 'CC.id')
+            ->leftJoin('consolidado_delivery_form_province as P', 'P.id_cotizacion', '=', 'CC.id')
+            ->leftJoin('distrito as DIST', 'DIST.ID_Distrito', '=', 'P.id_district')
+            ->select(
+                'C.*',
+                'CC.*',
+                DB::raw("CASE 
+                    WHEN L.id IS NOT NULL THEN 'LIMA'
+                    WHEN P.id IS NOT NULL THEN 'PROVINCIA'
+                    ELSE 'N/A'
+                END as entrega"),
+                // Si L.id no es nulo, usar final_destination_district, si no, usar id_district con join a distrito
+                DB::raw("CASE WHEN L.id IS NOT NULL THEN L.final_destination_district ELSE DIST.No_Distrito END as ciudad"),
+                // Para documento: usar r_doc para provincia y driver_doc para lima
+                DB::raw("CASE WHEN P.id IS NOT NULL THEN P.r_doc WHEN L.id IS NOT NULL THEN L.driver_doc ELSE NULL END as documento"),
+                // Para razón social: usar r_name para provincia y driver_name para lima
+                DB::raw("CASE WHEN P.id IS NOT NULL THEN P.r_name WHEN L.id IS NOT NULL THEN L.drver_name ELSE NULL END as razon_social"),
+                // Subquery para obtener pagos de DELIVERY
+                DB::raw("CC.total_pago_delivery as importe"),
+                DB::raw("(
+                    SELECT IFNULL(SUM(cccp.monto), 0)
+                    FROM {$this->table_contenedor_consolidado_cotizacion_coordinacion_pagos} cccp
+                    JOIN {$this->table_pagos_concept} ccp ON cccp.id_concept = ccp.id
+                    WHERE cccp.id_cotizacion = CC.id
+                    AND ccp.name = 'DELIVERY'
+                ) AS pagado"),
+                // Subquery para obtener detalles de pagos de DELIVERY
+                DB::raw("(
+                    SELECT JSON_ARRAYAGG(
+                        JSON_OBJECT(
+                            'id_pago', cccp.id,
+                            'monto', cccp.monto,
+                            'payment_date', cccp.payment_date,
+                            'status', cccp.status,
+                            'banco', cccp.banco,
+                            'is_confirmed', cccp.is_confirmed,
+                            'voucher_url', cccp.voucher_url
+                        )
+                    )
+                    FROM {$this->table_contenedor_consolidado_cotizacion_coordinacion_pagos} cccp
+                    JOIN {$this->table_pagos_concept} ccp ON cccp.id_concept = ccp.id
+                    WHERE cccp.id_cotizacion = CC.id
+                    AND ccp.name = 'DELIVERY'
+                    ORDER BY cccp.payment_date ASC, cccp.id ASC
+                ) AS pagos_details")
+            )
+
             ->where('CC.id_contenedor', $idContenedor)
             ->whereNotNull('CC.estado_cliente')
             ->whereNull('CC.id_cliente_importacion')
             ->where('CC.estado_cotizador', 'CONFIRMADO');
-            // Aplicar filtro de estado si se proporciona
+
         $page = $request->input('currentPage', 1);
         $perPage = $request->input('itemsPerPage', 100);
         $clientes = $query->paginate($perPage, ['*'], 'currentPage', $page);
@@ -798,5 +859,54 @@ class EntregaController extends Controller
         }
 
         return response()->json(['data' => $payload, 'success' => true]);
+    }
+    public function saveImporteDelivery(Request $request)
+    {
+        try {
+            $idCotizacion = $request->id_cotizacion;
+            $importe = $request->importe;
+            $cotizacion = Cotizacion::find($idCotizacion);
+            if (!$cotizacion) {
+                return response()->json(['message' => 'Cotización no encontrada', 'success' => false]);
+            }
+            $cotizacion->total_pago_delivery = $importe;
+            $cotizacion->save();
+            return response()->json(['message' => 'Importe guardado correctamente', 'success' => true]);
+        } catch (\Exception $e) {
+            return response()->json(['message' => $e->getMessage(), 'success' => false]);
+        }
+    }
+    public function savePagosDelivery(Request $request)
+    {
+        try {
+            Log::info('savePagosDelivery: ' . json_encode($request->all()));
+            $idCotizacion = $request->idCotizacion;
+            $idContenedor = $request->idContenedor;
+            $monto = $request->monto;
+            $banco = $request->banco;
+            $fecha = $request->fecha;
+            $voucher = $request->voucher;
+            $cotizacion = Cotizacion::find($idCotizacion);
+            if (!$cotizacion) {
+                return response()->json(['message' => 'Cotización no encontrada', 'success' => false]);
+            }
+            DB::beginTransaction();
+            //save voucher in storage
+            $voucherUrl = Storage::disk('public')->put('vouchers', $voucher);
+            $pago = new Pago();
+            $pago->id_concept = PagoConcept::CONCEPT_PAGO_DELIVERY;
+            $pago->id_cotizacion = $idCotizacion;
+            $pago->id_contenedor = $idContenedor;
+            $pago->monto = $monto;
+            $pago->banco = $banco;
+            $pago->payment_date = $fecha;
+            $pago->voucher_url = $voucherUrl;
+            $pago->save();
+            DB::commit();
+            return response()->json(['message' => 'Pagos guardados correctamente', 'success' => true]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['message' => $e->getMessage(), 'success' => false]);
+        }
     }
 }

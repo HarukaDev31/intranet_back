@@ -26,6 +26,7 @@ class PagoConcept extends Model
      */
     public const CONCEPT_PAGO_LOGISTICA = 1;
     public const CONCEPT_PAGO_IMPUESTOS = 2;
+    public const CONCEPT_PAGO_DELIVERY = 3;
 
     /**
      * Obtener concepto por nombre

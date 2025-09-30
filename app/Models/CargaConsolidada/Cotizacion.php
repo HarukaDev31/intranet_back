@@ -70,7 +70,8 @@ class Cotizacion extends Model
         'logistica_final',
         'qty_item',
         'id_cliente_importacion',
-        'delivery_form_registered_at'
+        'delivery_form_registered_at',
+        'total_pago_delivery'
     ];
 
     /**
@@ -97,6 +98,7 @@ class Cotizacion extends Model
         'logistica_final' => 'decimal:2',
         'qty_item' => 'integer',
         'delivery_form_registered_at' => 'date',
+        'total_pago_delivery' => 'decimal:2',
     ];
 
     /**
