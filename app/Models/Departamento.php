@@ -12,4 +12,12 @@ class Departamento extends Model
     protected $fillable = [
         'No_Departamento'
     ];
+
+    /**
+     * Relación con Provincias
+     */
+    public function provincias()
+    {
+        return $this->hasMany(Provincia::class, 'ID_Departamento', 'ID_Departamento');
+    }
 } 

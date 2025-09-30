@@ -10,6 +10,15 @@ class Distrito extends Model
     protected $primaryKey = 'ID_Distrito';
     
     protected $fillable = [
-        'No_Distrito'
+        'No_Distrito',
+        'ID_Provincia'
     ];
+
+    /**
+     * Relación con Provincia
+     */
+    public function provincia()
+    {
+        return $this->belongsTo(Provincia::class, 'ID_Provincia', 'ID_Provincia');
+    }
 } 

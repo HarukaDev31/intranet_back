@@ -20,9 +20,15 @@ class User extends Authenticatable implements JWTSubject
      */
     protected $fillable = [
         'name',
+        'lastname',
         'email',
         'password',
         'whatsapp',
+        'photo_url',
+        'goals',
+        'age',
+        'country',
+        'id_user_business',
         'api_token',
     ];
 
@@ -63,5 +69,21 @@ class User extends Authenticatable implements JWTSubject
     public function getJWTCustomClaims()
     {
         return [];
+    }
+
+    /**
+     * Relación con UserBusiness
+     */
+    public function userBusiness()
+    {
+        return $this->belongsTo(UserBusiness::class, 'id_user_business');
+    }
+
+    /**
+     * Obtener el nombre completo del usuario
+     */
+    public function getFullNameAttribute()
+    {
+        return trim($this->name . ' ' . $this->lastname);
     }
 }

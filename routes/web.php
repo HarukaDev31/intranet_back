@@ -19,6 +19,13 @@ Route::get('/', function () {
     return view('welcome');
 });
 
+// Ruta de login básica para evitar errores de redirección
+Route::get('/login', function () {
+    return response()->json([
+        'message' => 'Esta es una API. Use los endpoints de autenticación correspondientes.'
+    ], 200);
+})->name('login');
+
 // WebSocket Dashboard Routes
 Route::group(['prefix' => 'laravel-websockets'], function () {
     Route::get('/', [WebSocketController::class, 'showDashboard']);

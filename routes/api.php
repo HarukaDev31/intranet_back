@@ -51,5 +51,10 @@ require __DIR__.'/modules/notificaciones.php';
 // Módulo de Opciones Generales
 require __DIR__.'/modules/options.php';
 
+//Clientes
+// Módulo de Delivery
+require __DIR__.'/modules/external/delivery.php';
 // Módulo de Importaciones
 require __DIR__.'/modules/external/importaciones.php';
+// Módulo de Location
+require __DIR__.'/modules/external/commons/location.php';

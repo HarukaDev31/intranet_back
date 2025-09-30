@@ -18,9 +18,11 @@ use App\Helpers\CodeIgniterEncryption;
 use App\Http\Controllers\MenuController;
 use App\Http\Requests\RegisterRequest;
 use App\Models\User;
-
+use App\Models\CargaConsolidada\Cotizacion;
+use App\Traits\FileTrait;
 class AuthController extends Controller
 {
+    use FileTrait;
     /**
      * Create a new AuthController instance.
      *
@@ -28,7 +30,7 @@ class AuthController extends Controller
      */
     public function __construct()
     {
-        $this->middleware('auth:api', ['except' => ['login', 'register', 'loginCliente']]);
+        $this->middleware('auth:api', ['except' => ['login', 'register', 'loginCliente', 'meExternal', 'logoutExternal', 'refreshExternal']]);
     }
 
     /**
@@ -74,7 +76,7 @@ class AuthController extends Controller
                         }
 
                         return response()->json([
-                            'status' => 'success',
+                            'success' => true,
                             'message' => $result['sMessage'],
                             'token' => $token,
                             'token_type' => 'bearer',
@@ -140,7 +142,7 @@ class AuthController extends Controller
         auth()->logout();
 
         return response()->json([
-            'status' => 'success',
+            'success' => true,
             'message' => 'Sesión cerrada exitosamente'
         ]);
     }
@@ -491,7 +493,7 @@ class AuthController extends Controller
         }
     }
 
-        /**
+    /**
      * Asignar todos los menús disponibles a un usuario
      *
      * @param int $userId
@@ -532,8 +534,11 @@ class AuthController extends Controller
         try {
             $user = User::create([
                 'name' => $validatedData['nombre'],
+                'lastname' => $validatedData['lastname'] ?? null,
                 'email' => $validatedData['email'],
-                'whatsapp' => $validatedData['whatsapp'],
+                'whatsapp' => $validatedData['whatsapp'] ?? null,
+                'photo_url' => $this->generateImageUrl($validatedData['photo_url']) ?? null,
+                'goals' => $validatedData['goals'] ?? null,
                 'password' => Hash::make($validatedData['password']),
             ]);
 
@@ -566,22 +571,26 @@ class AuthController extends Controller
             DB::commit();
 
             return response()->json([
-                'status' => 'success',
+                'success' => true,
                 'success' => true,
                 'message' => 'Usuario registrado correctamente',
                 'token' => $token,
                 'token_type' => 'bearer',
-                'expires_in' => 24*config('jwt.ttl') * 60,
+                'expires_in' => 24 * config('jwt.ttl') * 60,
                 'user' => [
                     'id' => $user->id,
-                    'nombre' => $user->name,
-                    'nombres_apellidos' => $user->name,
+                    'fullName' => $user->full_name,
+                    'photoUrl' => $this->generateImageUrl($user->photo_url),
                     'email' => $user->email,
-                    'whatsapp' => $user->whatsapp,
-                    'estado' => 1,
-                    'empresa' => null,
-                    'organizacion' => null,
-                    'grupo' =>'Cliente'
+                    'documentNumber' => null, // Campo no disponible en la estructura actual
+                    'age' => null, // Campo no disponible en la estructura actual
+                    'country' => null, // Campo no disponible en la estructura actual
+                    'city' => null, // Campo no disponible en la estructura actual
+                    'phone' => $user->whatsapp,
+                    'business' => null, // No hay negocio asociado al registrarse
+                    'importedAmount' => 0, // Campo no disponible en la estructura actual
+                    'importedContainers' => 0, // Campo no disponible en la estructura actual
+                    'goals' => $user->goals,
                 ],
                 'iCantidadAcessoUsuario' => 1,
                 'iIdEmpresa' => null,
@@ -597,7 +606,7 @@ class AuthController extends Controller
     {
         try {
             $credentials = $request->only(['No_Usuario', 'No_Password']);
-            
+
             // Validar campos requeridos
             if (empty($credentials['No_Usuario']) || empty($credentials['No_Password'])) {
                 return response()->json([
@@ -608,7 +617,7 @@ class AuthController extends Controller
 
             // Buscar usuario por email
             $user = User::where('email', $credentials['No_Usuario'])->first();
-            
+
             if (!$user) {
                 return response()->json([
                     'status' => 'danger',
@@ -632,38 +641,65 @@ class AuthController extends Controller
                 // Obtener menús del usuario externo
                 $menus = $this->obtenerMenusUsuarioExterno($user);
 
+                // Cargar la relación con userBusiness
+                $user->load('userBusiness');
+
+                // Preparar información del negocio
+                $business = null;
+                if ($user->userBusiness) {
+                    $business = [
+                        'id' => $user->userBusiness->id,
+                        'name' => $user->userBusiness->name,
+                        'ruc' => $user->userBusiness->ruc,
+                        'comercialCapacity' => $user->userBusiness->comercial_capacity,
+                        'rubric' => $user->userBusiness->rubric,
+                        'socialAddress' => $user->userBusiness->social_address,
+                    ];
+                }
+
                 return response()->json([
-                    'status' => 'success',
+                    'success' => true,
                     'message' => 'Iniciando sesión',
                     'token' => $token,
                     'token_type' => 'bearer',
-                    'expires_in' => 24*config('jwt.ttl') * 60,
+                    'expires_in' => 24 * config('jwt.ttl') * 60,
                     'user' => [
                         'id' => $user->id,
-                        'nombre' => $user->name,
-                        'nombres_apellidos' => $user->name,
+                        'fullName' => $user->full_name,
+                        'photoUrl' => $this->generateImageUrl($user->photo_url),
                         'email' => $user->email,
-                        'whatsapp' => $user->whatsapp,
-                        'estado' => 1,
-                        'empresa' => null,
-                        'organizacion' => null,
-                        'grupo' => [
-                            'nombre' => 'Cliente'
-                        ]
+                        'documentNumber' => null, // Campo no disponible en la estructura actual
+                        'age' => null, // Campo no disponible en la estructura actual
+                        'country' => null, // Campo no disponible en la estructura actual
+                        'city' => null, // Campo no disponible en la estructura actual
+                        'phone' => $user->whatsapp,
+                        'business' => $business,
+                        'importedAmount' => 0, // Campo no disponible en la estructura actual
+                        'importedContainers' => 0, // Campo no disponible en la estructura actual
+                        'goals' => $user->goals,
+                        'raw' => [
+                            'grupo' => [
+                                'id' => 1,
+                                'nombre' => "Cliente",
+                                'descripcion' => "Cliente",
+                                'tipo_privilegio' => 1,
+                                'estado' => 1,
+                                'notificacion' => 1
+                            ],
+                        ],
                     ],
+
                     'iCantidadAcessoUsuario' => 1,
                     'iIdEmpresa' => null,
                     'menus' => $menus,
                     'success' => true
                 ]);
-
             } catch (JWTException $e) {
                 return response()->json([
                     'status' => 'error',
                     'message' => 'No se pudo crear el token'
                 ], 500);
             }
-
         } catch (\Exception $e) {
             Log::error('Error en loginCliente: ' . $e->getMessage());
             return response()->json([
@@ -681,9 +717,31 @@ class AuthController extends Controller
     public function meExternal()
     {
         try {
-            config(['auth.defaults.guard' => 'api-external']);
             $user = JWTAuth::user();
-            
+            /* return this format export interface UserProfile{
+    id:number,
+    fullName:string,
+    photoUrl:string,
+    email:string,
+    documentNumber:string,
+    age:number,
+    country:string,
+    city?:string,
+    phone?:string,
+    business?:UserBusiness,   
+    importedAmount:number,
+    importedContainers:number,
+    goals?:string, 
+}
+export interface UserBusiness{
+    id:number,
+    name:string,
+    ruc:string,
+    comercialCapacity:string,
+    rubric:string,
+    socialAddress?:string,
+}*/
+
             if (!$user) {
                 return response()->json([
                     'status' => 'error',
@@ -694,26 +752,44 @@ class AuthController extends Controller
             // Obtener menús del usuario externo
             $menus = $this->obtenerMenusUsuarioExterno($user);
 
+            // Cargar la relación con userBusiness
+            $user->load('userBusiness');
+
+            // Preparar información del negocio
+            $business = null;
+            if ($user->userBusiness) {
+                $business = [
+                    'id' => $user->userBusiness->id,
+                    'name' => $user->userBusiness->name,
+                    'ruc' => $user->userBusiness->ruc,
+                    'comercialCapacity' => $user->userBusiness->comercial_capacity,
+                    'rubric' => $user->userBusiness->rubric,
+                    'socialAddress' => $user->userBusiness->social_address,
+                ];
+            }
+            $importedAmount = $this->getUserCotizacionesByWhatsapp($user->whatsapp);
+
             return response()->json([
-                'status' => 'success',
+                'success' => true,
                 'user' => [
                     'id' => $user->id,
-                    'nombre' => $user->name,
-                    'nombres_apellidos' => $user->name,
+                    'fullName' => $user->full_name,
+                    'photoUrl' => $this->generateImageUrl($user->photo_url),
                     'email' => $user->email,
-                    'whatsapp' => $user->whatsapp,
-                    'estado' => 1,
-                    'empresa' => null,
-                    'organizacion' => null,
-                    'grupo' => [
-                        'nombre' => 'Cliente'
-                    ]
+                    'documentNumber' => null, // Campo no disponible en la estructura actual
+                    'age' => null, // Campo no disponible en la estructura actual
+                    'country' => null, // Campo no disponible en la estructura actual
+                    'city' => null, // Campo no disponible en la estructura actual
+                    'phone' => $user->whatsapp,
+                    'business' => $business,
+                    'importedAmount' => $importedAmount['sumFob'], // Campo no disponible en la estructura actual
+                    'importedContainers' => $importedAmount['count'], // Campo no disponible en la estructura actual
+                    'goals' => $user->goals,
                 ],
                 'iCantidadAcessoUsuario' => 1,
                 'iIdEmpresa' => null,
                 'menus' => $menus
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error en meExternal: ' . $e->getMessage());
             return response()->json([
@@ -732,17 +808,17 @@ class AuthController extends Controller
     {
         try {
             config(['auth.defaults.guard' => 'api-external']);
-            JWTAuth::logout();
+            JWTAuth::invalidate(JWTAuth::getToken());
             return response()->json([
-                'status' => 'success',
+                'success' => true,
                 'message' => 'Usuario desconectado exitosamente'
             ]);
         } catch (\Exception $e) {
             Log::error('Error en logoutExternal: ' . $e->getMessage());
             return response()->json([
-                'status' => 'error',
-                'message' => 'Error al cerrar sesión'
-            ], 500);
+                'success' => true,
+                'message' => 'Usuario desconectado exitosamente'
+            ]);
         }
     }
 
@@ -757,10 +833,10 @@ class AuthController extends Controller
             config(['auth.defaults.guard' => 'api-external']);
             $token = JWTAuth::refresh();
             return response()->json([
-                'status' => 'success',
+                'success' => true,
                 'token' => $token,
                 'token_type' => 'bearer',
-                'expires_in' => 24*config('jwt.ttl') * 60
+                'expires_in' => 24 * config('jwt.ttl') * 60
             ]);
         } catch (\Exception $e) {
             Log::error('Error en refreshExternal: ' . $e->getMessage());
@@ -768,6 +844,47 @@ class AuthController extends Controller
                 'status' => 'error',
                 'message' => 'Error al refrescar token'
             ], 500);
+        }
+    }
+    public function getUserCotizacionesByWhatsapp($whatsapp)
+    {
+        try {
+            // Limpiar el número de WhatsApp para la búsqueda
+            $cleanWhatsapp = trim($whatsapp);
+            $cleanWhatsapp = str_replace('+51', '', $cleanWhatsapp); // Remover código de país Perú
+            $cleanWhatsapp = preg_replace('/[^0-9]/', '', $cleanWhatsapp); // Solo números
+            
+            $trayectos = Cotizacion::where('estado_cotizador', 'CONFIRMADO')
+                ->whereNull('id_cliente_importacion')
+                ->whereNotNull('estado_cliente')
+                ->where(function($query) use ($cleanWhatsapp) {
+                    $query->where(DB::raw('TRIM(REPLACE(telefono, "+51", ""))'), 'like', '%' . $cleanWhatsapp . '%')
+                          ->orWhere(DB::raw('TRIM(telefono)'), 'like', '%' . $cleanWhatsapp . '%');
+                })
+                ->select('id', 'fob_final', 'fob', 'monto', 'id_contenedor')
+                ->get();
+            Log::info('Trayectos: ' . $trayectos);
+            // Calcular la suma de FOB
+            $sumFob = $trayectos->sum(function($cotizacion) {
+                return (float)($cotizacion->fob_final ?? $cotizacion->fob ?? 0);
+            });
+            //get trayectos with diferente id_contenedor
+            $containerCount = $trayectos->unique('id_contenedor')->count();
+
+            return [
+                'success' => true,
+                'sumFob' => $sumFob,
+                'count' => $containerCount
+            ];
+        } catch (\Exception $e) {
+            Log::error('Error en getUserCotizacionesByWhatsapp: ' . $e->getMessage());
+            return [
+                'success' => false,
+                'sumFob' => 0,
+                'count' => 0,
+                'message' => 'Error al obtener cotizaciones',
+                'error' => $e->getMessage()
+            ];
         }
     }
 }

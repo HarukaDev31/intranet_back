@@ -27,6 +27,7 @@ class RegisterRequest extends FormRequest
     {
         return [
             'nombre' => 'required|string|max:255',
+            'lastname' => 'nullable|string|max:255',
             'email' => 'required|string|email|max:255|unique:users',
             'password' => 'required|string|min:6',
             'whatsapp' => 'required|string|max:255|unique:users',
@@ -37,10 +38,14 @@ class RegisterRequest extends FormRequest
     {
         return [
             'nombre.required' => 'El nombre es requerido',
+            'lastname.string' => 'El apellido debe ser texto',
+            'lastname.max' => 'El apellido no puede exceder 255 caracteres',
             'email.required' => 'El email es requerido',
             'email.email' => 'El email no es válido',
             'email.unique' => 'El email ya está registrado',
-            'whatsapp.required' => 'El whatsapp es requerido',
+            'whatsapp.string' => 'El whatsapp debe ser texto',
+            'whatsapp.max' => 'El whatsapp no puede exceder 255 caracteres',
+            'whatsapp.unique' => 'El número de whatsapp ya está registrado',
             'password.required' => 'La contraseña es requerida',
             'password.min' => 'La contraseña debe tener al menos 6 caracteres',
         ];
