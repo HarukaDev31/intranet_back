@@ -400,31 +400,43 @@ class EntregaController extends Controller
     {
         // Lo obtiene de la tabla de clientes asociados al contenedor
         $query = DB::table('contenedor_consolidado_cotizacion as CC')
-            ->join('carga_consolidada_contenedor as C', 'C.id', '=', 'CC.id_contenedor')
-            ->select('C.*','CC.*')
+            ->join('contenedor_consolidado_tipo_cliente as TC', 'TC.id', '=', 'CC.id_tipo_cliente')
+            // Formularios (Lima y Provincia) asociados por id_cotizacion y mismo contenedor
+            ->leftJoin('consolidado_delivery_form_lima as L', function ($join) use ($idContenedor) {
+                $join->on('L.id_cotizacion', '=', 'CC.id')
+                     ->where('L.id_contenedor', '=', $idContenedor);
+            })
+            ->leftJoin('consolidado_delivery_form_province as P', function ($join) use ($idContenedor) {
+                $join->on('P.id_cotizacion', '=', 'CC.id')
+                     ->where('P.id_contenedor', '=', $idContenedor);
+            })
             ->where('CC.id_contenedor', $idContenedor)
             ->whereNotNull('CC.estado_cliente')
             ->whereNull('CC.id_cliente_importacion')
-            ->where('CC.estado_cotizador', 'CONFIRMADO');
-        // Aplicar filtro de estado si se proporciona
-        $page = $request->input('currentPage', 1);
-        $perPage = $request->input('itemsPerPage', 100);
-        $clientes = $query->paginate($perPage, ['*'], 'currentPage', $page);
-        // Aplicar filtros adicionales si se proporcionan
-        if ($request->has('search')) {
-            $search = $request->search;
+                        ->where('CC.estado_cotizador', 'CONFIRMADO')
+            ->select([
+                'CC.*',
+                'TC.name as name',
+                // Tipo de formulario: 0 = Provincia, 1 = Lima (prioriza Provincia si existen ambos)
+                DB::raw('CASE WHEN P.id IS NOT NULL THEN 0 WHEN L.id IS NOT NULL THEN 1 ELSE NULL END as type_form'),
+                // voucher_doc normalizado según type_form (0 Provincia, 1 Lima)
+                DB::raw('CASE WHEN P.id IS NOT NULL THEN P.voucher_doc WHEN L.id IS NOT NULL THEN L.voucher_doc ELSE NULL END as voucher_doc'),
+            ]);
+
+        // Filtros adicionales
+        if ($request->filled('search')) {
+            $search = $request->input('search');
             $query->where(function ($q) use ($search) {
                 $q->where('CC.nombre', 'LIKE', "%{$search}%")
-                    ->orWhere('CC.documento', 'LIKE', "%{$search}%")
-                    ->orWhere('CC.correo', 'LIKE', "%{$search}%");
+                  ->orWhere('CC.documento', 'LIKE', "%{$search}%")
+                  ->orWhere('CC.correo', 'LIKE', "%{$search}%");
             });
         }
-        // Ordenamiento
-        $sortField = $request->input('sort_by', 'CC.id');
-        $sortOrder = $request->input('sort_order', 'asc');
 
-        // Paginación
-        $data = $query->paginate($perPage, ['*'], 'page', $page);
+        // Orden y paginación
+        $page = (int) $request->input('currentPage', 1);
+        $perPage = (int) $request->input('itemsPerPage', 100);
+        $data = $query->orderBy('CC.id', 'asc')->paginate($perPage, ['*'], 'page', $page);
 
         return response()->json([
             'data' => $data->items(),
@@ -445,32 +457,120 @@ class EntregaController extends Controller
     }
     public function getEntregas(Request $request, $idContenedor)
     {
-        // Lo obtiene de la tabla de clientes asociados al contenedor
+        // Subconsulta: sumar cbm y qty por id_cotizacion (puede haber múltiples proveedores por cotización)
+        $proveedoresAgg = DB::table('contenedor_consolidado_cotizacion_proveedores as CP')
+            ->select(
+                'CP.id_cotizacion',
+                DB::raw('SUM(COALESCE(CP.cbm_total_china, CP.cbm_total, 0)) as sum_cbm_china'),
+                DB::raw('SUM(COALESCE(CP.qty_box_china, CP.qty_box, 0)) as sum_qty_box')
+            )
+            ->where('CP.id_contenedor', $idContenedor)
+            ->groupBy('CP.id_cotizacion');
+
+        // Subconsulta: asignación de rango/fecha por cotización (si hubiera varias, tomamos la última por id)
+        $asignacionAgg = DB::table('consolidado_user_range_delivery as UR')
+            ->select(
+                'UR.id_cotizacion',
+                DB::raw('MAX(UR.id_date) as id_date'),
+                DB::raw('MAX(UR.id_range_date) as id_range_date')
+            )
+            ->groupBy('UR.id_cotizacion');
+
         $query = DB::table('contenedor_consolidado_cotizacion as CC')
             ->join('carga_consolidada_contenedor as C', 'C.id', '=', 'CC.id_contenedor')
-            ->select('C.*','CC.*')
+            ->leftJoin('consolidado_delivery_form_lima as L', function ($join) use ($idContenedor) {
+                $join->on('L.id_cotizacion', '=', 'CC.id')
+                     ->where('L.id_contenedor', '=', $idContenedor);
+            })
+            ->leftJoin('consolidado_delivery_form_province as P', function ($join) use ($idContenedor) {
+                $join->on('P.id_cotizacion', '=', 'CC.id')
+                     ->where('P.id_contenedor', '=', $idContenedor);
+            })
+            // Departamento (solo aplica para formulario de provincia)
+            ->leftJoin('departamento as DPT', 'DPT.ID_Departamento', '=', 'P.id_department')
+            // Usuarios asociados a los formularios
+            ->leftJoin('users as UL', 'UL.id', '=', 'L.id_user')
+            ->leftJoin('users as UP', 'UP.id', '=', 'P.id_user')
+            // Sumas de proveedores por cotización
+            ->leftJoinSub($proveedoresAgg, 'CPA', function ($join) {
+                $join->on('CPA.id_cotizacion', '=', 'CC.id');
+            })
+            // Asignación de horario de entrega por cotización
+            ->leftJoinSub($asignacionAgg, 'UR2', function ($join) {
+                $join->on('UR2.id_cotizacion', '=', 'CC.id');
+            })
+            ->leftJoin('consolidado_delivery_date as D2', function ($join) use ($idContenedor) {
+                $join->on('D2.id', '=', 'UR2.id_date')
+                     ->where('D2.id_contenedor', '=', $idContenedor);
+            })
+            ->leftJoin('consolidado_delivery_range_date as R2', 'R2.id', '=', 'UR2.id_range_date')
             ->where('CC.id_contenedor', $idContenedor)
             ->whereNotNull('CC.estado_cliente')
             ->whereNull('CC.id_cliente_importacion')
-            ->where('CC.estado_cotizador', 'CONFIRMADO');
-        // Aplicar filtro de estado si se proporciona
-        $page = $request->input('currentPage', 1);
-        $perPage = $request->input('itemsPerPage', 100);
-        $clientes = $query->paginate($perPage, ['*'], 'currentPage', $page);
-        // Aplicar filtros adicionales si se proporcionan
+            ->where('CC.estado_cotizador', 'CONFIRMADO')
+            // Solo filas que tengan algún formulario asociado
+            ->where(function ($q) {
+                $q->whereNotNull('L.id')
+                  ->orWhereNotNull('P.id');
+            })
+            ->select([
+                'C.*',
+                'CC.*',
+                // Agregados por cotización desde proveedores
+                DB::raw('COALESCE(CPA.sum_cbm_china, 0) as cbm_total_china'),
+                DB::raw('COALESCE(CPA.sum_qty_box, 0) as qty_box_china'),
+                // Tipo de formulario 0 provincia / 1 lima
+                DB::raw('CASE WHEN P.id IS NOT NULL THEN 0 WHEN L.id IS NOT NULL THEN 1 ELSE NULL END as type_form'),
+                DB::raw('CASE WHEN P.id IS NOT NULL THEN P.voucher_doc WHEN L.id IS NOT NULL THEN L.voucher_doc ELSE NULL END as voucher_doc'),
+                // Usuario del formulario (normalizado)
+                DB::raw('CASE WHEN P.id IS NOT NULL THEN P.id_user WHEN L.id IS NOT NULL THEN L.id_user ELSE NULL END as form_user_id'),
+                DB::raw('CASE WHEN P.id IS NOT NULL THEN UP.name WHEN L.id IS NOT NULL THEN UL.name ELSE NULL END as form_user_name'),
+                DB::raw('CASE WHEN P.id IS NOT NULL THEN UP.email WHEN L.id IS NOT NULL THEN UL.email ELSE NULL END as form_user_email'),
+                // Nombre del departamento si es Provincia
+                DB::raw('CASE WHEN P.id IS NOT NULL THEN DPT.No_Departamento ELSE NULL END as department_name'),
+                // Ruc de la agencia si es de Provincia
+                DB::raw('CASE WHEN P.id IS NOT NULL THEN P.agency_ruc ELSE NULL END as agency_ruc'),
+                DB::raw('CASE WHEN P.id IS NOT NULL THEN P.agency_name ELSE NULL END as agency_name'),
+                // Pick doc si es de Lima
+                DB::raw('CASE WHEN L.id IS NOT NULL THEN L.pick_doc ELSE NULL END as pick_doc'),
+                DB::raw('CASE WHEN L.id IS NOT NULL THEN L.pick_name ELSE NULL END as pick_name'),
+                // Datos de entrega desde la asignación (fecha y hora)
+                DB::raw("CASE WHEN UR2.id_date IS NOT NULL THEN CONCAT(D2.year, '-', LPAD(D2.month, 2, '0'), '-', LPAD(D2.day, 2, '0')) ELSE NULL END as delivery_date"),
+                DB::raw('R2.start_time as delivery_start_time'),
+                DB::raw('R2.end_time as delivery_end_time'),
+                DB::raw('UR2.id_date as delivery_date_id'),
+                DB::raw('UR2.id_range_date as delivery_range_id'), 
+            ]);
+
+        // Búsqueda
         if ($request->has('search')) {
-            $search = $request->search;
+            $search = $request->input('search');
             $query->where(function ($q) use ($search) {
                 $q->where('CC.nombre', 'LIKE', "%{$search}%")
-                    ->orWhere('CC.documento', 'LIKE', "%{$search}%")
-                    ->orWhere('CC.correo', 'LIKE', "%{$search}%");
+                  ->orWhere('CC.documento', 'LIKE', "%{$search}%")
+                  ->orWhere('CC.correo', 'LIKE', "%{$search}%");
             });
         }
-        // Ordenamiento
-        $sortField = $request->input('sort_by', 'CC.id');
-        $sortOrder = $request->input('sort_order', 'asc');
 
-        // Paginación
+        // Orden: Provincia primero (type_form=0), luego por fecha/hora de entrega (asignadas primero), luego por ID
+        $page = (int) $request->input('currentPage', 1);
+        $perPage = (int) $request->input('itemsPerPage', 100);
+
+        $query
+            // Provincia (P) primero, luego Lima (L). Si ninguno, al final.
+            ->orderByRaw("CASE WHEN P.id IS NOT NULL THEN 0 WHEN L.id IS NOT NULL THEN 1 ELSE 2 END ASC")
+            // Con fecha asignada primero (no nulos), luego sin asignación
+            ->orderByRaw("CASE WHEN UR2.id_date IS NULL THEN 1 ELSE 0 END ASC")
+            // Por fecha concreta (año, mes, día)
+            ->orderBy('D2.year', 'asc')
+            ->orderBy('D2.month', 'asc')
+            ->orderBy('D2.day', 'asc')
+            // Con hora asignada primero, luego sin hora
+            ->orderByRaw("CASE WHEN R2.start_time IS NULL THEN 1 ELSE 0 END ASC")
+            ->orderBy('R2.start_time', 'asc')
+            // Estable para empates
+            ->orderBy('CC.id', 'asc');
+
         $data = $query->paginate($perPage, ['*'], 'page', $page);
 
         return response()->json([
@@ -529,15 +629,174 @@ class EntregaController extends Controller
             ]
         ]);
     }
-    public function getEntregasDetalle($idContenedor)
+    public function getEntregasDetalle($idCotizacion)
     {
-        // Lógica para obtener los detalles de una entrega específica
-        $entrega = DB::table('contenedor_consolidado_cotizacion')
-            ->where('id', $idContenedor)
+        // Subconsulta de asignación de rango/fecha por cotización (última asignación)
+        $asignacionAgg = DB::table('consolidado_user_range_delivery as UR')
+            ->select(
+                'UR.id_cotizacion',
+                DB::raw('MAX(UR.id_date) as id_date'),
+                DB::raw('MAX(UR.id_range_date) as id_range_date')
+            )
+            ->where('UR.id_cotizacion', $idCotizacion)
+            ->groupBy('UR.id_cotizacion');
+
+        $row = DB::table('contenedor_consolidado_cotizacion as CC')
+            ->leftJoin('consolidado_delivery_form_lima as L', 'L.id_cotizacion', '=', 'CC.id')
+            ->leftJoin('consolidado_delivery_form_province as P', 'P.id_cotizacion', '=', 'CC.id')
+            // Usuarios
+            ->leftJoin('users as UL', 'UL.id', '=', 'L.id_user')
+            ->leftJoin('users as UP', 'UP.id', '=', 'P.id_user')
+            // Geográficos (Provincia)
+            ->leftJoin('departamento as DPT', 'DPT.ID_Departamento', '=', 'P.id_department')
+            ->leftJoin('provincia as PROV', 'PROV.ID_Provincia', '=', 'P.id_province')
+            ->leftJoin('distrito as DIST', 'DIST.ID_Distrito', '=', 'P.id_district')
+            // Asignación
+            ->leftJoinSub($asignacionAgg, 'UR2', function ($join) {
+                $join->on('UR2.id_cotizacion', '=', 'CC.id');
+            })
+            ->leftJoin('consolidado_delivery_date as D2', 'D2.id', '=', 'UR2.id_date')
+            ->leftJoin('consolidado_delivery_range_date as R2', 'R2.id', '=', 'UR2.id_range_date')
+            // Fallback de Lima (si asignación no existe, usar el rango de L)
+            ->leftJoin('consolidado_delivery_range_date as RL', 'RL.id', '=', 'L.id_range_date')
+            ->leftJoin('consolidado_delivery_date as DL', 'DL.id', '=', 'RL.id_date')
+            ->where('CC.id', $idCotizacion)
+            ->select([
+                'CC.id as cotizacion_id',
+                'CC.id_contenedor',
+                // Determinación de tipo de formulario (0 Provincia / 1 Lima)
+                DB::raw('CASE WHEN P.id IS NOT NULL THEN 0 WHEN L.id IS NOT NULL THEN 1 ELSE NULL END as type_form'),
+                // Usuario
+                DB::raw('CASE WHEN P.id IS NOT NULL THEN P.id_user WHEN L.id IS NOT NULL THEN L.id_user ELSE NULL END as form_user_id'),
+                DB::raw('CASE WHEN P.id IS NOT NULL THEN UP.name WHEN L.id IS NOT NULL THEN UL.name ELSE NULL END as form_user_name'),
+                DB::raw('CASE WHEN P.id IS NOT NULL THEN UP.email WHEN L.id IS NOT NULL THEN UL.email ELSE NULL END as form_user_email'),
+                // Datos de entrega (preferir UR2; fallback a DL/RL si no existe asignación)
+                DB::raw("CASE 
+                            WHEN UR2.id_date IS NOT NULL THEN CONCAT(D2.year, '-', LPAD(D2.month, 2, '0'), '-', LPAD(D2.day, 2, '0'))
+                            WHEN DL.id IS NOT NULL THEN CONCAT(DL.year, '-', LPAD(DL.month, 2, '0'), '-', LPAD(DL.day, 2, '0'))
+                            ELSE NULL END as delivery_date"),
+                DB::raw("CASE WHEN R2.id IS NOT NULL THEN R2.start_time WHEN RL.id IS NOT NULL THEN RL.start_time ELSE NULL END as delivery_start_time"),
+                DB::raw("CASE WHEN R2.id IS NOT NULL THEN R2.end_time WHEN RL.id IS NOT NULL THEN RL.end_time ELSE NULL END as delivery_end_time"),
+                DB::raw('COALESCE(UR2.id_date, DL.id) as delivery_date_id'),
+                DB::raw('COALESCE(UR2.id_range_date, RL.id) as delivery_range_id'),
+
+                // Campos LIMA
+                'L.pick_name',
+                'L.pick_doc',
+                'L.import_name as lima_import_name',
+                'L.productos',
+                'L.voucher_doc as lima_voucher_doc',
+                'L.voucher_doc_type as lima_voucher_doc_type',
+                'L.voucher_name as lima_voucher_name',
+                'L.voucher_email as lima_voucher_email',
+                'L.drver_name', // nota: así está en la migración
+                'L.driver_doc_type',
+                'L.driver_doc',
+                'L.driver_license',
+                'L.driver_plate',
+                'L.final_destination_place',
+                'L.final_destination_district',
+
+                // Campos PROVINCIA
+                'P.import_name as province_import_name',
+                'P.voucher_doc as province_voucher_doc',
+                'P.voucher_doc_type as province_voucher_doc_type',
+                'P.voucher_name as province_voucher_name',
+                'P.voucher_email as province_voucher_email',
+                'P.id_agency',
+                'P.agency_ruc',
+                'P.agency_name',
+                'P.r_type',
+                'P.r_doc',
+                'P.r_name',
+                'P.r_phone',
+                'P.id_department',
+                'P.id_province',
+                'P.id_district',
+                'P.agency_address_initial_delivery',
+                'P.agency_address_final_delivery',
+                'P.home_adress_delivery',
+                'DPT.No_Departamento as department_name',
+                'PROV.No_Provincia as province_name',
+                'DIST.No_Distrito as district_name',
+            ])
             ->first();
-        if (!$entrega) {
-            return response()->json(['message' => 'Entrega no encontrada'], 404);
+
+        if (!$row) {
+            return response()->json(['message' => 'Detalle no encontrado'], 404);
         }
-        return response()->json(['data' => $entrega, 'success' => true]);
+
+        $typeForm = isset($row->type_form) ? (int) $row->type_form : null;
+        $delivery = [
+            'date' => $row->delivery_date,
+            'start_time' => $row->delivery_start_time,
+            'end_time' => $row->delivery_end_time,
+            'date_id' => $row->delivery_date_id ? (int)$row->delivery_date_id : null,
+            'range_id' => $row->delivery_range_id ? (int)$row->delivery_range_id : null,
+        ];
+
+        $formUser = [
+            'id' => $row->form_user_id ? (int)$row->form_user_id : null,
+            'name' => $row->form_user_name,
+            'email' => $row->form_user_email,
+        ];
+
+        $payload = [
+            'cotizacion_id' => (int) $row->cotizacion_id,
+            'id_contenedor' => (int) $row->id_contenedor,
+            'type_form' => $typeForm, // 0=Provincia, 1=Lima
+            'delivery' => $delivery,
+            'form_user' => $formUser,
+        ];
+
+        if ($typeForm === 1) { // Lima
+            $payload['lima'] = [
+                'pick_name' => $row->pick_name,
+                'pick_doc' => $row->pick_doc,
+                'import_name' => $row->lima_import_name,
+                'productos' => $row->productos,
+                'voucher_doc' => $row->lima_voucher_doc,
+                'voucher_doc_type' => $row->lima_voucher_doc_type,
+                'voucher_name' => $row->lima_voucher_name,
+                'voucher_email' => $row->lima_voucher_email,
+                'drver_name' => $row->drver_name,
+                'driver_doc_type' => $row->driver_doc_type,
+                'driver_doc' => $row->driver_doc,
+                'driver_license' => $row->driver_license,
+                'driver_plate' => $row->driver_plate,
+                'final_destination_place' => $row->final_destination_place,
+                'final_destination_district' => $row->final_destination_district,
+            ];
+        } elseif ($typeForm === 0) { // Provincia
+            $payload['province'] = [
+                'import_name' => $row->province_import_name,
+                'voucher_doc' => $row->province_voucher_doc,
+                'voucher_doc_type' => $row->province_voucher_doc_type,
+                'voucher_name' => $row->province_voucher_name,
+                'voucher_email' => $row->province_voucher_email,
+                'id_agency' => $row->id_agency ? (int)$row->id_agency : null,
+                'agency_ruc' => $row->agency_ruc,
+                'agency_name' => $row->agency_name,
+                'r_type' => $row->r_type,
+                'r_doc' => $row->r_doc,
+                'r_name' => $row->r_name,
+                'r_phone' => $row->r_phone,
+                'id_department' => $row->id_department ? (int)$row->id_department : null,
+                'id_province' => $row->id_province ? (int)$row->id_province : null,
+                'id_district' => $row->id_district ? (int)$row->id_district : null,
+                'department_name' => $row->department_name,
+                'province_name' => $row->province_name,
+                'district_name' => $row->district_name,
+                'agency_address_initial_delivery' => $row->agency_address_initial_delivery,
+                'agency_address_final_delivery' => $row->agency_address_final_delivery,
+                'home_adress_delivery' => $row->home_adress_delivery,
+            ];
+        } else {
+            // Sin formulario: devolver vacío pero consistente
+            $payload['lima'] = null;
+            $payload['province'] = null;
+        }
+
+        return response()->json(['data' => $payload, 'success' => true]);
     }
 }

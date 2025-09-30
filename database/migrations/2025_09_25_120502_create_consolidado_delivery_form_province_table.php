@@ -20,7 +20,7 @@ class CreateConsolidadoDeliveryFormProvinceTable extends Migration
            $table->unsignedInteger('id_contenedor');
            $table->unsignedBigInteger('id_user');
            $table->integer('id_cotizacion');
-           $table->string('importer_nmae');
+           $table->string('import_name');
            $table->string('voucher_doc');
            $table->enum('voucher_doc_type', ['BOLETA', 'FACTURA']);
            $table->string('voucher_name');
