@@ -79,9 +79,11 @@ class DeliveryAgency extends Model
         return $this->hasMany(\App\Models\CargaConsolidada\ConsolidadoDeliveryFormProvince::class, 'id_agency');
     }
 
-    // Relación con ConsolidadoDeliveryFormLima (se agregará cuando se cree el modelo)
-    // public function formulariosLima()
-    // {
-    //     return $this->hasMany(\App\Models\CargaConsolidada\ConsolidadoDeliveryFormLima::class, 'id_agency');
-    // }
+    /**
+     * Relación con ConsolidadoDeliveryFormLima
+     */
+    public function formulariosLima()
+    {
+        return $this->hasMany(\App\Models\CargaConsolidada\ConsolidadoDeliveryFormLima::class, 'id_agency');
+    }
 }
