@@ -62,7 +62,6 @@ class SendDeliveryConfirmationWhatsAppLimaJob implements ShouldQueue
                 return;
             }
 
-            $cotizacion->telefono = '51912705923';
             $telefono = $this->formatPhoneNumber($cotizacion->telefono);
 
             // Obtener información de fecha y hora usando Query Builder
