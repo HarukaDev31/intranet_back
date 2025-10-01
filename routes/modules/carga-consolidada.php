@@ -177,6 +177,8 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
             Route::post('/delivery/importe', [EntregaController::class, 'saveImporteDelivery']);
             Route::post('/delivery/pagos', [EntregaController::class, 'savePagosDelivery']);
             Route::post('/delivery/send-message/{idCotizacion}', [EntregaController::class, 'sendMessageDelivery']);
+            Route::get('/delivery/all', [EntregaController::class, 'getAllDelivery']);
+
             Route::get('/delivery/{idContenedor}', [EntregaController::class, 'getDelivery']);
         });
     });

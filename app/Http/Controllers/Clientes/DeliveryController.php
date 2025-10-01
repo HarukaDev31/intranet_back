@@ -63,11 +63,7 @@ class DeliveryController extends Controller
     {
         DB::beginTransaction();
         try {
-            $user = JWTAuth::user();
-            $user = User::find($user->id);
-            /**
-             {"importador":"72df7d85-f5c5-4053-bf38-a3e9dd314ba3","tipoComprobante":"boleta","tiposProductos":"213213","clienteDni":"21313213123","clienteNombre":"123213","clienteCorreo":"123123123","clienteRuc":"","clienteRazonSocial":"","tipoDestinatario":"persona","destinatarioDni":"123123","destinatarioNombre":"132321321312","destinatarioCelular":"312312312","destinatarioDepartamento":2,"destinatarioProvincia":2,"destinatarioDistrito":84,"destinatarioRuc":"","destinatarioRazonSocial":"","agenciaEnvio":5,"nombreAgencia":"213213","rucAgencia":"12321","direccionAgenciaLima":"312","direccionAgenciaDestino":"21321321","direccionDomicilio":"31313"}
-             */
+                
             $cotizacion = Cotizacion::where('uuid', $request->importador)->first();
             if (!$cotizacion) {
                 return response()->json(['message' => 'Cotizacion no encontrada', 'success' => false], 404);
@@ -85,12 +81,12 @@ class DeliveryController extends Controller
 
             $data = [
                 'id_cotizacion' => $cotizacion->id,
-                'id_user' => $user->id,
+                'id_user' => 1  ,
                 'id_contenedor' => $cotizacion->id_contenedor,
-                'importer_nmae' => $request->clienteNombre,
-                'voucher_doc' => $request->clienteDni,
+                'importer_nmae' => $request->clienteNombre??$request->clienteRazonSocial,
+                'voucher_doc' => $request->clienteDni??$request->clienteRuc,
                 'voucher_doc_type' => $request->tipoComprobante,
-                'voucher_name' => $request->clienteNombre,
+                'voucher_name' => $request->clienteNombre??$request->clienteRazonSocial,
                 'voucher_email' => $request->clienteCorreo,
                 'id_agency' => $request->agenciaEnvio,
                 'agency_ruc' => $request->rucAgencia,
@@ -148,14 +144,7 @@ class DeliveryController extends Controller
                 ], 404);
             }
 
-            // Validar que el usuario autenticado existe
-            $user = auth()->user();
-            if (!$user) {
-                return response()->json([
-                    'message' => 'Usuario no autenticado',
-                    'success' => false
-                ], 401);
-            }
+           
             //validate if exists other delivery form registered with same id_cotizacion on table province or lima
             $otherDeliveryForm = ConsolidadoDeliveryFormLima::where('id_cotizacion', $cotizacion->id)->first();
             if ($otherDeliveryForm) {
@@ -179,7 +168,7 @@ class DeliveryController extends Controller
             // Mapear los datos del request a los campos de la tabla
             $formData = [
                 'id_contenedor' => $cotizacion->id_contenedor,
-                'id_user' => $user->id,
+                'id_user' => 1,
                 'id_cotizacion' => $cotizacion->id,
                 'id_range_date' => $request->horarioSeleccionado['range_id'] ?? null,
                 'pick_name' => $request->nombreCompleto,

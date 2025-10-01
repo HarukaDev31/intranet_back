@@ -3,7 +3,7 @@
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
-
+use Illuminate\Support\Facades\DB;
 class CreateConsolidadoDeliveryFormProvinceTable extends Migration
 {
     /**
@@ -12,15 +12,17 @@ class CreateConsolidadoDeliveryFormProvinceTable extends Migration
      * @return void
      */
     public function up()
-    {
+    {   //disable foreign key checks and drop table if exists
+        DB::statement('SET FOREIGN_KEY_CHECKS = 0');
         Schema::dropIfExists('consolidado_delivery_form_province');
+        DB::statement('SET FOREIGN_KEY_CHECKS = 1');
         Schema::create('consolidado_delivery_form_province', function (Blueprint $table) {
             $table->id();
            //id_contenedor id_user id_cotizacion importer_nmae voucher_doc voucher_doc_type voucher_name voucher_email id_agency agency_ruc r_type r_doc r_name r_phone id_department id_province id_district agency_address_initial_delivery agency_address_final_delivery home_adress_delivery
            $table->unsignedInteger('id_contenedor');
            $table->unsignedBigInteger('id_user');
            $table->integer('id_cotizacion');
-           $table->string('import_name');
+           $table->string('importer_nmae');
            $table->string('voucher_doc');
            $table->enum('voucher_doc_type', ['BOLETA', 'FACTURA']);
            $table->string('voucher_name');

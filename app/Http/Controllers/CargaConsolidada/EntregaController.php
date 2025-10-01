@@ -603,6 +603,95 @@ class EntregaController extends Controller
             ]
         ]);
     }
+    public function getAllDelivery(Request $request)
+    {
+        // Lo obtiene de la tabla de clientes asociados al contenedor
+        $query = DB::table('contenedor_consolidado_cotizacion as CC')
+            ->join('carga_consolidada_contenedor as C', 'C.id', '=', 'CC.id_contenedor')
+            ->leftJoin('consolidado_delivery_form_lima as L', 'L.id_cotizacion', '=', 'CC.id')
+            ->leftJoin('consolidado_delivery_form_province as P', 'P.id_cotizacion', '=', 'CC.id')
+            ->leftJoin('distrito as DIST', 'DIST.ID_Distrito', '=', 'P.id_district')
+            ->select(
+                'C.*',
+                'CC.*',
+                DB::raw("CASE 
+                    WHEN L.id IS NOT NULL THEN 'LIMA'
+                    WHEN P.id IS NOT NULL THEN 'PROVINCIA'
+                    ELSE 'N/A'
+                END as entrega"),
+                // Si L.id no es nulo, usar final_destination_district, si no, usar id_district con join a distrito
+                DB::raw("CASE WHEN L.id IS NOT NULL THEN L.final_destination_district ELSE DIST.No_Distrito END as ciudad"),
+                // Para documento: usar r_doc para provincia y driver_doc para lima
+                DB::raw("CASE WHEN P.id IS NOT NULL THEN P.r_doc WHEN L.id IS NOT NULL THEN L.driver_doc ELSE NULL END as documento"),
+                // Para razón social: usar r_name para provincia y driver_name para lima
+                DB::raw("CASE WHEN P.id IS NOT NULL THEN P.r_name WHEN L.id IS NOT NULL THEN L.drver_name ELSE NULL END as razon_social"),
+                // Subquery para obtener pagos de DELIVERY
+                DB::raw("CC.total_pago_delivery as importe"),
+                DB::raw("(
+                    SELECT IFNULL(SUM(cccp.monto), 0)
+                    FROM {$this->table_contenedor_consolidado_cotizacion_coordinacion_pagos} cccp
+                    JOIN {$this->table_pagos_concept} ccp ON cccp.id_concept = ccp.id
+                    WHERE cccp.id_cotizacion = CC.id
+                    AND ccp.name = 'DELIVERY'
+                ) AS pagado"),
+                // Subquery para obtener detalles de pagos de DELIVERY
+                DB::raw("(
+                    SELECT JSON_ARRAYAGG(
+                        JSON_OBJECT(
+                            'id_pago', cccp.id,
+                            'monto', cccp.monto,
+                            'payment_date', cccp.payment_date,
+                            'status', cccp.status,
+                            'banco', cccp.banco,
+                            'is_confirmed', cccp.is_confirmed,
+                            'voucher_url', cccp.voucher_url
+                        )
+                    )
+                    FROM {$this->table_contenedor_consolidado_cotizacion_coordinacion_pagos} cccp
+                    JOIN {$this->table_pagos_concept} ccp ON cccp.id_concept = ccp.id
+                    WHERE cccp.id_cotizacion = CC.id
+                    AND ccp.name = 'DELIVERY'
+                    ORDER BY cccp.payment_date ASC, cccp.id ASC
+                ) AS pagos_details")
+            )
+
+            ->whereNotNull('CC.estado_cliente')
+            ->whereNull('CC.id_cliente_importacion')
+            ->where('CC.estado_cotizador', 'CONFIRMADO');
+
+
+        $page = $request->input('page', 1);
+        $perPage = $request->input('limit', 100);
+        $data = $query->paginate($perPage, ['*'], 'page', $page);
+        // Aplicar filtros adicionales si se proporcionan
+        if ($request->has('search')) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('CC.nombre', 'LIKE', "%{$search}%")
+                    ->orWhere('CC.documento', 'LIKE', "%{$search}%")
+                    ->orWhere('CC.correo', 'LIKE', "%{$search}%");
+            });
+        }
+        // Ordenamiento
+        $sortField = $request->input('sort_by', 'CC.id');
+        $sortOrder = $request->input('sort_order', 'asc');
+
+        // Paginación
+        $data = $query->paginate($perPage, ['*'], 'page', $page);
+
+        return response()->json([
+            'data' => $data->items(),
+            'success' => true,
+            'pagination' => [
+                'current_page' => $data->currentPage(),
+                'per_page' => $data->perPage(),
+                'total' => $data->total(),
+                'last_page' => $data->lastPage(),
+                'from' => $data->firstItem(),
+                'to' => $data->lastItem()
+            ]
+        ]);
+    }
     public function getDelivery(Request $request, $idContenedor)
     {
         // Lo obtiene de la tabla de clientes asociados al contenedor
@@ -843,10 +932,10 @@ class EntregaController extends Controller
         if ($typeForm !== null) {
             // type_form = 0 es Lima, type_form = 1 es Provincia
             $tableName = $typeForm === 1 ? 'consolidado_delivery_form_lima_conformidad' : 'consolidado_delivery_form_province_conformidad';
-            $formIdField = $typeForm === 1? 'consolidado_delivery_form_lima_id' : 'consolidado_delivery_form_province_id';
+            $formIdField = $typeForm === 1 ? 'consolidado_delivery_form_lima_id' : 'consolidado_delivery_form_province_id';
 
             // Obtener el ID del formulario correspondiente
-            $formId = $typeForm === 1? $row->lima_id ?? null : $row->province_id ?? null;
+            $formId = $typeForm === 1 ? $row->lima_id ?? null : $row->province_id ?? null;
 
             if ($formId) {
                 $confPhotos = DB::table($tableName)
@@ -934,8 +1023,8 @@ class EntregaController extends Controller
             'id_contenedor' => 'required|integer',
             'id_cotizacion' => 'required|integer',
             'type_form' => 'required|in:0,1',
-            'photo_1' => 'required|image|max:8192',
-            'photo_2' => 'required|image|max:8192',
+            'photo_1' => 'sometimes|image|max:8192',
+            'photo_2' => 'sometimes|image|max:8192',
         ]);
 
         $typeForm = (int) $request->input('type_form');
@@ -964,11 +1053,15 @@ class EntregaController extends Controller
         // Paths: usar 'public' disk (config/filesystems.php) y folder delivery_conformidad
         $disk = config('filesystems.default', 'public');
         $folder = 'delivery_conformidad/' . $idCotizacion;
-        $p1 = $request->file('photo_1');
-        $p2 = $request->file('photo_2');
+        if ($request->hasFile('photo_1')) {
+            $p1 = $request->file('photo_1');
 
-        $path1 = $p1->store($folder, $disk);
-        $path2 = $p2->store($folder, $disk);
+            $path1 = $p1->store($folder, $disk);
+        }
+        if ($request->hasFile('photo_2')) {
+            $p2 = $request->file('photo_2');
+            $path2 = $p2->store($folder, $disk);
+        }
 
         // Insertar ambas fotos en la tabla correspondiente
         $insertData = [
@@ -978,20 +1071,24 @@ class EntregaController extends Controller
         ];
 
         // Insertar primera foto
-        $insertData['file_path'] = $path1;
-        $insertData['file_type'] = $p1->getClientMimeType();
-        $insertData['file_size'] = $p1->getSize();
-        $insertData['file_original_name'] = $p1->getClientOriginalName();
-        $insertData['created_at'] = now();
+        if ($request->hasFile('photo_1')) {
+            $insertData['file_path'] = $path1;
+            $insertData['file_type'] = $p1->getClientMimeType();
+            $insertData['file_size'] = $p1->getSize();
+            $insertData['file_original_name'] = $p1->getClientOriginalName();
+            $insertData['created_at'] = now();
+        }
         $insertData['updated_at'] = now();
 
         $id1 = DB::table($tableName)->insertGetId($insertData);
 
         // Insertar segunda foto
-        $insertData['file_path'] = $path2;
-        $insertData['file_type'] = $p2->getClientMimeType();
-        $insertData['file_size'] = $p2->getSize();
-        $insertData['file_original_name'] = $p2->getClientOriginalName();
+        if ($request->hasFile('photo_2')) {
+            $insertData['file_path'] = $path2;
+            $insertData['file_type'] = $p2->getClientMimeType();
+            $insertData['file_size'] = $p2->getSize();
+            $insertData['file_original_name'] = $p2->getClientOriginalName();
+        }
 
         $id2 = DB::table($tableName)->insertGetId($insertData);
 
@@ -1114,7 +1211,7 @@ class EntregaController extends Controller
         ]);
 
         $typeForm = (int) $request->input('type_form');
-        
+
         // Determinar tabla según el tipo de formulario
         // type_form = 0 es Lima, type_form = 1 es Provincia
         $tableName = $typeForm === 1 ? 'consolidado_delivery_form_lima_conformidad' : 'consolidado_delivery_form_province_conformidad';
@@ -1163,7 +1260,7 @@ class EntregaController extends Controller
                 'voucher_doc' => 'sometimes|string',
                 'voucher_doc_type' => 'sometimes|in:BOLETA,FACTURA',
                 'voucher_name' => 'sometimes|string',
-                'voucher_email' => 'sometimes|email',
+                'voucher_email' => 'sometimes',
                 // Datos del conductor
                 'drver_name' => 'sometimes|string',
                 'driver_doc_type' => 'sometimes|in:DNI,PASAPORTE',
@@ -1202,9 +1299,12 @@ class EntregaController extends Controller
                 'voucher_doc' => 'sometimes|string',
                 'voucher_doc_type' => 'sometimes|in:BOLETA,FACTURA',
                 'voucher_name' => 'sometimes|string',
-                'voucher_email' => 'sometimes|email',
+                'voucher_email' => 'sometimes',
             ];
             $data = $request->validate($rules);
+            $data['importer_nmae'] = $request->import_name ?? $request->r_name;
+            //delet key import_name
+            unset($data['import_name']);
 
             $updated = DB::table('consolidado_delivery_form_province')
                 ->where('id_cotizacion', $idCotizacion)
