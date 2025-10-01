@@ -671,7 +671,7 @@ class EntregaController extends Controller
 
 
         $page = $request->input('page', 1);
-        $perPage = $request->input('limit', 100);
+        $perPage = $request->input('per_page', 100);
         $data = $query->paginate($perPage, ['*'], 'page', $page);
         // Aplicar filtros adicionales si se proporcionan
         if ($request->has('search')) {

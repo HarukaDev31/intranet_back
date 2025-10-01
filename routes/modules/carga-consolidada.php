@@ -101,6 +101,7 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
             Route::delete('/delete/{idFile}', [DocumentacionController::class, 'deleteFileDocumentation']);
             Route::post('/upload-file-documentation', [DocumentacionController::class, 'uploadFileDocumentation']);
             Route::post('/create-folder', [DocumentacionController::class, 'createDocumentacionFolder']);
+            Route::get('/download-zip-administracion/{idContenedor}', [DocumentacionController::class, 'downloadZipAdministracion']);
             Route::get('/{id}', [DocumentacionController::class, 'getDocumentationFolderFiles']);
             Route::get('/download-zip/{idContenedor}', [DocumentacionController::class, 'downloadDocumentacionZip']);
         });

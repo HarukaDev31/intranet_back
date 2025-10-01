@@ -146,7 +146,6 @@ class CotizacionProveedorController extends Controller
                 ->leftJoin('contenedor_consolidado_tipo_cliente AS TC', 'TC.id', '=', 'main.id_tipo_cliente')
                 ->leftJoin('usuario AS U', 'U.ID_Usuario', '=', 'main.id_usuario')
                 ->where('main.id_contenedor', $idContenedor);
-            Log::info('query: ' . $query->toSql());
 
             if (!empty($search)) {
                 Log::info('search: ' . $search);
