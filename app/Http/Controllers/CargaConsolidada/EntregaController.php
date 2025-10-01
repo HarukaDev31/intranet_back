@@ -10,9 +10,10 @@ use App\Models\CargaConsolidada\Pago;
 use App\Models\CargaConsolidada\PagoConcept;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
-
+use App\Traits\WhatsappTrait;
 class EntregaController extends Controller
 {
+    use WhatsappTrait;
     private $table_contenedor_consolidado_cotizacion_coordinacion_pagos = "contenedor_consolidado_cotizacion_coordinacion_pagos";
     private $table_pagos_concept = "cotizacion_coordinacion_pagos_concept";
 
@@ -1240,6 +1241,28 @@ class EntregaController extends Controller
             return response()->json(['message' => 'Pagos guardados correctamente', 'success' => true]);
         } catch (\Exception $e) {
             DB::rollBack();
+            return response()->json(['message' => $e->getMessage(), 'success' => false]);
+        }
+    }
+    public function sendMessageDelivery(Request $request, $idCotizacion)
+    {
+        try {
+            $cotizacion = Cotizacion::find($idCotizacion);
+            if (!$cotizacion) {
+                return response()->json(['message' => 'Cotización no encontrada', 'success' => false]);
+            }
+           
+            $idContenedor = $cotizacion->id_contenedor;
+            $urlClientes=env('APP_URL_CLIENTES');
+            $urlProvincia =$urlClientes.'/formulario-entrega/proincia/'.$idContenedor;
+            $urlLima =$urlClientes.'/formulario-entrega/lima/'.$idContenedor;
+
+            $message = "Hola " . $cotizacion->nombre_cliente . ", somos de Pro Business y este mensaje es para informarte que estamos esperando a que llene el formulario para entregar tu pedido\n\n Link Provincia: " . $urlProvincia . "\n\n Link Lima: " . $urlLima;
+            $telefono = preg_replace('/\s+/', '', $cotizacion->telefono);
+            $this->phoneNumberId = $telefono ? $telefono . '@c.us' : '';
+            $this->sendMessage($message);
+            return response()->json(['message' => 'Mensaje enviado correctamente', 'success' => true]);
+        } catch (\Exception $e) {
             return response()->json(['message' => $e->getMessage(), 'success' => false]);
         }
     }

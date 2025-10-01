@@ -61,7 +61,6 @@ class SendDeliveryConfirmationWhatsAppProvinceJob implements ShouldQueue
                 return;
             }
 
-            $cotizacion->telefono = '51912705923';
 
             // Formatear el teléfono (agregar código de país si es necesario)
             $telefono = $this->formatPhoneNumber($cotizacion->telefono);
