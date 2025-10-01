@@ -438,6 +438,14 @@ class EntregaController extends Controller
                 DB::raw('CASE WHEN P.id IS NOT NULL THEN 0 WHEN L.id IS NOT NULL THEN 1 ELSE NULL END as type_form'),
                 // voucher_doc normalizado según type_form (0 Provincia, 1 Lima)
                 DB::raw('CASE WHEN P.id IS NOT NULL THEN P.voucher_doc WHEN L.id IS NOT NULL THEN L.voucher_doc ELSE NULL END as voucher_doc'),
+                DB::raw('(CC.logistica_final + CC.impuestos_final) as total_logistica_impuestos'),
+                DB::raw("(
+                        SELECT IFNULL(SUM(cccp.monto), 0) 
+                        FROM {$this->table_contenedor_consolidado_cotizacion_coordinacion_pagos} cccp
+                        JOIN {$this->table_pagos_concept} ccp ON cccp.id_concept = ccp.id
+                        WHERE cccp.id_cotizacion = CC.id
+                        AND (ccp.name = 'LOGISTICA' OR ccp.name = 'IMPUESTOS')
+                    ) AS total_pagos"),
             ]);
 
         // Filtros adicionales
@@ -792,8 +800,9 @@ class EntregaController extends Controller
         $proveedoresAgg = DB::table('contenedor_consolidado_cotizacion_proveedores as CP')
             ->select(
                 'CP.id_cotizacion',
-                DB::raw('SUM(COALESCE(CP.cbm_total_china, CP.cbm_total, 0)) as sum_cbm_china'),
-                DB::raw('SUM(COALESCE(CP.qty_box_china, CP.qty_box, 0)) as sum_qty_box')
+                DB::raw('SUM(COALESCE(CP.cbm_total_china, 0)) as sum_cbm_china'),
+                DB::raw('SUM(COALESCE(CP.cbm_total, 0)) as sum_cbm_total'),
+                DB::raw('SUM(COALESCE(CP.qty_box_china, 0)) as sum_qty_box')
             )
             ->where('CP.id_cotizacion', $idCotizacion)
             ->groupBy('CP.id_cotizacion');
@@ -978,7 +987,7 @@ class EntregaController extends Controller
             ];
         } elseif ($typeForm === 0) { // Provincia
             $payload['province'] = [
-                'import_name' => $row->province_import_name,
+                'importer_nmae' => $row->province_import_name,
                 'voucher_doc' => $row->province_voucher_doc,
                 'voucher_doc_type' => $row->province_voucher_doc_type,
                 'voucher_name' => $row->province_voucher_name,
@@ -1284,11 +1293,15 @@ class EntregaController extends Controller
         } else { // Provincia
             $rules = [
                 // Facturación
-                'import_name' => 'sometimes|string',
+                'importer_nmae' => 'sometimes|string',
                 'r_type' => 'sometimes|in:PERSONA NATURAL,EMPRESA',
                 'r_doc' => 'sometimes|string',
                 'r_name' => 'sometimes|string',
                 'r_phone' => 'sometimes|string',
+                // Ubigeo
+                'id_department' => 'sometimes|integer|exists:departamento,ID_Departamento',
+                'id_province' => 'sometimes|integer|exists:provincia,ID_Provincia',
+                'id_district' => 'sometimes|integer|exists:distrito,ID_Distrito',
                 // Agencia
                 'id_agency' => 'sometimes|integer|exists:delivery_agencies,id',
                 'agency_ruc' => 'sometimes|string',
@@ -1412,5 +1425,66 @@ class EntregaController extends Controller
         } catch (\Exception $e) {
             return response()->json(['message' => $e->getMessage(), 'success' => false]);
         }
+    }
+
+    /**
+     * Lista agencias de delivery para selects.
+     * Tabla: delivery_agencies
+     * Query params opcionales:
+     * - search: texto a buscar (si existen columnas name/agency_name o ruc/agency_ruc)
+     * - ids: lista separada por coma para filtrar por IDs específicos
+     * - currentPage, itemsPerPage: paginación
+     */
+    public function getAgencias(Request $request)
+    {
+        $query = DB::table('delivery_agencies')->select('id', 'name', 'ruc');
+
+        // Filtro por IDs específicos (ids=1,2,3)
+        if ($request->filled('ids')) {
+            $ids = array_filter(array_map('intval', explode(',', (string)$request->input('ids'))));
+            if (!empty($ids)) {
+                $query->whereIn('id', $ids);
+            }
+        }
+
+        // Búsqueda por nombre o RUC
+        if ($request->filled('search')) {
+            $search = $request->input('search');
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'LIKE', "%{$search}%")
+                  ->orWhere('ruc', 'LIKE', "%{$search}%");
+            });
+        }
+
+        // Orden por nombre, luego por id
+        $query->orderBy('name', 'asc')->orderBy('id', 'asc');
+
+        $page = (int) $request->input('currentPage', 1);
+        $perPage = (int) $request->input('itemsPerPage', 100);
+        $data = $query->paginate($perPage, ['*'], 'page', $page);
+
+        // Formato para selects: { value, label, id, name, ruc }
+        $items = array_map(function ($row) {
+            return [
+                'id' => (int) $row->id,
+                'name' => $row->name,
+                'ruc' => $row->ruc,
+                'value' => (int) $row->id,
+                'label' => $row->name,
+            ];
+        }, $data->items());
+
+        return response()->json([
+            'data' => $items,
+            'success' => true,
+            'pagination' => [
+                'current_page' => $data->currentPage(),
+                'per_page' => $data->perPage(),
+                'total' => $data->total(),
+                'last_page' => $data->lastPage(),
+                'from' => $data->firstItem(),
+                'to' => $data->lastItem(),
+            ],
+        ]);
     }
 }
