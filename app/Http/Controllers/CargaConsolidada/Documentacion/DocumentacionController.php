@@ -160,10 +160,10 @@ class DocumentacionController extends Controller
         $baseUrl = rtrim($baseUrl, '/');
         $storagePath = ltrim($storagePath, '/');
         $ruta = ltrim($ruta, '/');
-        
+
         // Codificar toda la ruta incluyendo el nombre del archivo para caracteres especiales como #
         $rutaEncoded = rawurlencode($ruta);
-        
+
         return $baseUrl . '/' . $storagePath . '/' . $rutaEncoded;
     }
 
@@ -203,24 +203,21 @@ class DocumentacionController extends Controller
             // Procesar archivo comercial
             if ($request->hasFile('file_comercial')) {
                 $this->processFileUpload($proveedor, 'factura_comercial', $request->file('file_comercial'), $data);
-            }
-            else{
+            } else {
                 unset($data['file_comercial']);
             }
 
             // Procesar excel de confirmación
             if ($request->hasFile('excel_confirmacion')) {
                 $this->processFileUpload($proveedor, 'excel_confirmacion', $request->file('excel_confirmacion'), $data);
-            }
-            else{
+            } else {
                 unset($data['excel_confirmacion']);
             }
 
             // Procesar packing list
             if ($request->hasFile('packing_list')) {
                 $this->processFileUpload($proveedor, 'packing_list', $request->file('packing_list'), $data);
-            }
-            else{
+            } else {
                 unset($data['packing_list']);
             }
 
@@ -363,7 +360,7 @@ class DocumentacionController extends Controller
             // Validar extensión del archivo
             $fileExtension = strtolower($file->getClientOriginalExtension());
 
-           
+
 
             // Generar nombre único para el archivo
             $filename = time() . '_' . uniqid() . '.' . $fileExtension;
@@ -609,7 +606,6 @@ class DocumentacionController extends Controller
             ->whereNotNull('estado_cliente')
             ->whereNull('id_cliente_importacion')
             ->get();
-        
     }
 
     /**
@@ -645,14 +641,14 @@ class DocumentacionController extends Controller
     {
         $itemToClientMap = [];
         $sheetCount = $packingExcel->getSheetCount();
-        
+
         Log::info('Procesando packing list con ' . $sheetCount . ' hojas');
 
         // Procesar todas las hojas del packing list
         for ($sheetIndex = 0; $sheetIndex < $sheetCount; $sheetIndex++) {
             $sheet = $packingExcel->getSheet($sheetIndex);
             $highestRow = $sheet->getHighestRow();
-            
+
             Log::info('Procesando hoja ' . $sheetIndex . ' del packing list, filas: ' . $highestRow);
 
             for ($row = 26; $row <= $highestRow; $row++) {
@@ -665,23 +661,23 @@ class DocumentacionController extends Controller
                     if (stripos(trim($itemId), "TOTAL") === false && stripos(trim($client), "TOTAL") === false) {
                         $cleanItemId = trim($itemId);
                         $cleanClient = trim($client);
-                        
+
                         // Manejar duplicados: crear claves únicas para items duplicados
                         $originalKey = $cleanItemId;
                         $counter = 1;
-                        
+
                         // Si ya existe este itemId, crear una variación única
                         while (isset($itemToClientMap[$cleanItemId])) {
                             Log::info('ItemId duplicado encontrado: ' . $originalKey . ' (cliente existente: ' . $itemToClientMap[$originalKey] . ', nuevo cliente: ' . $cleanClient . ')');
                             $cleanItemId = $originalKey . '_' . $counter;
                             $counter++;
                         }
-                        
+
                         // Agregar múltiples variaciones del itemId para mayor compatibilidad
                         $itemToClientMap[$cleanItemId] = $cleanClient;
                         $itemToClientMap[strtoupper($cleanItemId)] = $cleanClient;
                         $itemToClientMap[strtolower($cleanItemId)] = $cleanClient;
-                        
+
                         // También mantener el original si es diferente
                         if ($cleanItemId !== $originalKey) {
                             // Crear array de clientes para el itemId original si no existe
@@ -693,7 +689,7 @@ class DocumentacionController extends Controller
                             }
                             $itemToClientMap[$originalKey . '_ALL'][] = $cleanClient;
                         }
-                        
+
                         Log::info('Mapeado: ' . $cleanItemId . ' -> ' . $cleanClient);
                     }
                 }
@@ -724,7 +720,7 @@ class DocumentacionController extends Controller
         $cleanItemN = trim($itemN);
         Log::info('🔍 BUSCANDO CLIENTE PARA ITEM: "' . $cleanItemN . '"');
         Log::info('📋 Total items en mapeo: ' . count($itemToClientMap));
-        
+
         // Estrategia 1: Búsqueda exacta
         if (isset($itemToClientMap[$cleanItemN])) {
             Log::info('✅ Cliente encontrado (exacto): ' . $cleanItemN . ' -> ' . $itemToClientMap[$cleanItemN]);
@@ -768,24 +764,24 @@ class DocumentacionController extends Controller
         }
 
         Log::warning('❌ Cliente no encontrado para itemId: ' . $cleanItemN);
-        
+
         // Mostrar items similares para debug
         $numericKeys = array_filter(array_keys($itemToClientMap), 'is_numeric');
         sort($numericKeys, SORT_NUMERIC);
         $nearbyItems = [];
         $targetNum = is_numeric($cleanItemN) ? intval($cleanItemN) : 0;
-        
+
         foreach ($numericKeys as $key) {
             $keyNum = intval($key);
             if (abs($keyNum - $targetNum) <= 3) { // Mostrar items ±3 del target
                 $nearbyItems[] = $key . ' -> ' . $itemToClientMap[$key];
             }
         }
-        
+
         if (!empty($nearbyItems)) {
             Log::warning('🔍 Items cercanos disponibles: ' . implode(', ', $nearbyItems));
         }
-        
+
         // Si no hay cliente, devolver cadena vacía en lugar de texto
         return '';
     }
@@ -815,7 +811,7 @@ class DocumentacionController extends Controller
 
         // Procesar filas de datos y obtener información del último cliente
         $lastClientInfo = $this->processDataRows($sheet, $itemToClientMap, $dataSystem, $listaPartidasExcel, 26);
-        
+
         return $lastClientInfo;
     }
 
@@ -853,8 +849,8 @@ class DocumentacionController extends Controller
 
             // Procesar datos válidos si no contiene TOTAL
             if (stripos(trim($itemN), "TOTAL") === false) {
-            // Obtener cliente - búsqueda mejorada
-            $client = $this->findClientForItem($itemToClientMap, $itemN);
+                // Obtener cliente - búsqueda mejorada
+                $client = $this->findClientForItem($itemToClientMap, $itemN);
 
                 // Solo procesar cliente y merge si hay un cliente válido
                 if (!empty($client)) {
@@ -883,7 +879,7 @@ class DocumentacionController extends Controller
 
         // Aplicar merges pendientes
         $this->applyPendingMerges($sheet, $pendingMerge, $currentClient, $clientStartRow, $clientEndRow);
-        
+
         // Retornar información del último cliente para continuidad entre hojas
         return [
             'lastClient' => $currentClient,
@@ -1025,7 +1021,7 @@ class DocumentacionController extends Controller
         try {
             // Obtener todas las celdas mergeadas
             $mergedCells = $sheet->getMergeCells();
-            
+
             foreach ($mergedCells as $mergedRange) {
                 // Si la celda está dentro del rango mergeado, desmergear
                 if ($this->isCellInRange($cellAddress, $mergedRange)) {
@@ -1039,7 +1035,7 @@ class DocumentacionController extends Controller
             Log::info('ℹ️ No se pudo desmergar ' . $cellAddress . ': ' . $e->getMessage());
         }
     }
-    
+
     /**
      * Verifica si una celda está dentro de un rango
      */
@@ -1050,22 +1046,22 @@ class DocumentacionController extends Controller
             $coordinate = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::coordinateFromString($cellAddress);
             $cellCol = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::columnIndexFromString($coordinate[0]);
             $cellRow = $coordinate[1];
-            
+
             // Parsear el rango (ej: "C5:C7" -> ["C5", "C7"])
             $rangeParts = explode(':', $range);
             if (count($rangeParts) !== 2) {
                 return false;
             }
-            
+
             // Parsear coordenadas de inicio y fin del rango
             $startCoordinate = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::coordinateFromString($rangeParts[0]);
             $endCoordinate = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::coordinateFromString($rangeParts[1]);
-            
+
             $startCol = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::columnIndexFromString($startCoordinate[0]);
             $startRow = $startCoordinate[1];
             $endCol = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::columnIndexFromString($endCoordinate[0]);
             $endRow = $endCoordinate[1];
-            
+
             // Verificar si la celda está dentro del rango
             return ($cellCol >= $startCol && $cellCol <= $endCol && $cellRow >= $startRow && $cellRow <= $endRow);
         } catch (\Exception $e) {
@@ -1091,19 +1087,19 @@ class DocumentacionController extends Controller
             if ($merge['start'] < $merge['end'] && $merge['start'] > 0 && $merge['end'] > 0) {
                 try {
                     Log::info('🔗 Procesando merge para cliente: ' . $merge['client'] . ' desde fila ' . $merge['start'] . ' hasta ' . $merge['end']);
-                    
+
                     // Primero desmergar todas las celdas en el rango para evitar conflictos
                     for ($row = $merge['start']; $row <= $merge['end']; $row++) {
                         $this->safeUnmergeCells($sheet, 'C' . $row);
-                        $this->safeUnmergeCells($sheet, 'D' . $row);  
+                        $this->safeUnmergeCells($sheet, 'D' . $row);
                         $this->safeUnmergeCells($sheet, 'T' . $row);
                     }
-                    
+
                     // Ahora aplicar los nuevos merges
                     $sheet->mergeCells('C' . $merge['start'] . ':C' . $merge['end']);
                     $sheet->mergeCells('D' . $merge['start'] . ':D' . $merge['end']);
                     $sheet->mergeCells('T' . $merge['start'] . ':T' . $merge['end']);
-                    
+
                     Log::info('✅ Merge aplicado exitosamente para cliente: ' . $merge['client']);
                 } catch (\Exception $e) {
                     Log::error('❌ Error merging cells for client ' . $merge['client'] . ': ' . $e->getMessage());
@@ -1146,7 +1142,7 @@ class DocumentacionController extends Controller
         Log::info('Fila más alta de la primera hoja: ' . $highestFirstSheetRow);
         Log::info('Total de hojas en factura comercial: ' . $sheetCount);
         Log::info('Elementos en itemToClientMap antes de procesar hojas adicionales: ' . count($itemToClientMap));
-        
+
         for ($i = 1; $i < $sheetCount; $i++) {
             $sheet = $facturaExcel->getSheet($i);
             Log::info('Procesando hoja adicional ' . $i . ' - Nombre: ' . $sheet->getTitle());
@@ -1166,13 +1162,13 @@ class DocumentacionController extends Controller
         for ($row = 26; $row <= $highestRow; $row++) {
             $itemN = $sheet0->getCell('B' . $row)->getValue();
             Log::info('Item N: ' . $itemN);
-            
+
             // Si encontramos TOTAL, la posición de inserción debe ser DESPUÉS del último elemento válido
             if (stripos(trim($itemN), "TOTAL") !== false) {
                 // Retornar la fila de TOTAL para insertar ANTES de ella
                 return $row;
             }
-            
+
             // Si no es TOTAL y tiene contenido, actualizar última fila válida
             if (!empty(trim($itemN))) {
                 $lastValidRow = $row + 1; // +1 para insertar después
@@ -1189,18 +1185,18 @@ class DocumentacionController extends Controller
     {
         $highestRow = $sheet->getHighestRow();
         $startIndex = 26;
-        
+
         // Variables para manejar merge de clientes - inicializar con info de hoja anterior
         $currentClient = $lastClientInfo['lastClient'] ?? "";
         $clientStartRow = $lastClientInfo['lastClientEndRow'] ?? 0;
         $clientEndRow = $lastClientInfo['lastClientEndRow'] ?? 0;
         $pendingMerge = [];
-        
+
         Log::info('🔗 Iniciando hoja adicional con último cliente: "' . $currentClient . '" en fila ' . $clientStartRow);
-        
+
         Log::info('=== INICIANDO PROCESAMIENTO DE HOJA ADICIONAL ===');
         Log::info('Hoja: ' . $sheet->getTitle() . ', Filas: ' . $highestRow);
-        
+
         // Primero, mostrar todos los itemIds que encuentra en esta hoja
         $itemsEncontrados = [];
         for ($row = $startIndex; $row <= $highestRow; $row++) {
@@ -1226,18 +1222,18 @@ class DocumentacionController extends Controller
                 Log::info('Procesando hoja adicional - Item: ' . $itemN . ' en fila: ' . $row . ' de hoja: ' . $sheet->getTitle());
                 $client = $this->findClientForItem($itemToClientMap, $itemN);
                 Log::info('Cliente encontrado para ' . $itemN . ': ' . $client);
-                
+
                 // Solo escribir cliente y procesar merge si hay un cliente válido
                 if (!empty($client)) {
                     // ESCRIBIR EL CLIENTE EN LA COLUMNA D
                     $sheet0->setCellValue('D' . $highestFirstSheetRow, $client);
-                    
+
                     // Procesar merge de cliente (similar a processClientMerge pero adaptado)
                     $this->processAdditionalClientMerge($sheet0, $highestFirstSheetRow, $client, $currentClient, $clientStartRow, $clientEndRow, $pendingMerge);
                 } else {
                     Log::info('Item ' . $itemN . ' no tiene cliente asociado en hoja adicional, se dejará vacío');
                 }
-                
+
                 $this->processSystemData($sheet0, $highestFirstSheetRow, $client, $dataSystem);
 
                 // Procesar información aduanera
@@ -1254,10 +1250,10 @@ class DocumentacionController extends Controller
                 break;
             }
         }
-        
+
         // Aplicar merges pendientes al final
         $this->applyPendingMerges($sheet0, $pendingMerge, $currentClient, $clientStartRow, $clientEndRow);
-        
+
         // Retornar información del último cliente para la siguiente hoja
         return [
             'lastClient' => $currentClient,
@@ -1376,15 +1372,15 @@ class DocumentacionController extends Controller
         // Normalizar ambos nombres
         $normalized1 = $this->normalizeClientName($name1);
         $normalized2 = $this->normalizeClientName($name2);
-        
+
         Log::info('Comparando clientes: "' . $name1 . '" (' . $normalized1 . ') vs "' . $name2 . '" (' . $normalized2 . ')');
-        
+
         // Comparación exacta
         if ($normalized1 === $normalized2) {
             Log::info('✅ Coincidencia exacta encontrada');
             return true;
         }
-        
+
         // Comparación de similitud (85% o más)
         $similarity = 0;
         similar_text($normalized1, $normalized2, $similarity);
@@ -1392,11 +1388,11 @@ class DocumentacionController extends Controller
             Log::info('✅ Coincidencia por similitud encontrada: ' . round($similarity, 2) . '%');
             return true;
         }
-        
+
         Log::info('❌ No hay coincidencia (similitud: ' . round($similarity, 2) . '%)');
         return false;
     }
-    
+
     /**
      * Normaliza un nombre de cliente para comparación
      */
@@ -1405,43 +1401,65 @@ class DocumentacionController extends Controller
         if (empty($name)) {
             return '';
         }
-        
+
         // Convertir a string si no lo es
         $name = (string) $name;
-        
+
         // Convertir a minúsculas
         $name = mb_strtolower($name, 'UTF-8');
-        
+
         // Remover acentos y caracteres especiales
         $name = $this->removeAccents($name);
-        
+
         // Remover caracteres que no sean letras, números o espacios
         $name = preg_replace('/[^a-z0-9\s]/', '', $name);
-        
+
         // Normalizar espacios (múltiples espacios a uno solo)
         $name = preg_replace('/\s+/', ' ', $name);
-        
+
         // Quitar espacios al inicio y final
         $name = trim($name);
-        
+
         return $name;
     }
-    
+
     /**
      * Remueve acentos de un texto
      */
     private function removeAccents($text)
     {
         $accents = [
-            'á' => 'a', 'à' => 'a', 'ä' => 'a', 'â' => 'a', 'ā' => 'a', 'ã' => 'a',
-            'é' => 'e', 'è' => 'e', 'ë' => 'e', 'ê' => 'e', 'ē' => 'e',
-            'í' => 'i', 'ì' => 'i', 'ï' => 'i', 'î' => 'i', 'ī' => 'i',
-            'ó' => 'o', 'ò' => 'o', 'ö' => 'o', 'ô' => 'o', 'ō' => 'o', 'õ' => 'o',
-            'ú' => 'u', 'ù' => 'u', 'ü' => 'u', 'û' => 'u', 'ū' => 'u',
+            'á' => 'a',
+            'à' => 'a',
+            'ä' => 'a',
+            'â' => 'a',
+            'ā' => 'a',
+            'ã' => 'a',
+            'é' => 'e',
+            'è' => 'e',
+            'ë' => 'e',
+            'ê' => 'e',
+            'ē' => 'e',
+            'í' => 'i',
+            'ì' => 'i',
+            'ï' => 'i',
+            'î' => 'i',
+            'ī' => 'i',
+            'ó' => 'o',
+            'ò' => 'o',
+            'ö' => 'o',
+            'ô' => 'o',
+            'ō' => 'o',
+            'õ' => 'o',
+            'ú' => 'u',
+            'ù' => 'u',
+            'ü' => 'u',
+            'û' => 'u',
+            'ū' => 'u',
             'ñ' => 'n',
             'ç' => 'c'
         ];
-        
+
         return strtr($text, $accents);
     }
     public function deleteFileDocumentation(Request $request, $idFile)
@@ -1835,6 +1853,75 @@ class DocumentacionController extends Controller
             ], 500);
         }
     }
+    public function downloadZipAdministracion($idContenedor)
+    {
+        try {
+            // Verificar que los archivos de plantilla existen
+            $templateFiles = [
+                'plantilla_precios.xlsx',
+                'plantilla_productos.xlsx', 
+                'plantilla_stock.xlsx'
+            ];
+            
+            $templatePath = public_path('assets/templates/');
+            $existingFiles = [];
+            
+            foreach ($templateFiles as $file) {
+                $fullPath = $templatePath . $file;
+                if (file_exists($fullPath)) {
+                    $existingFiles[] = $fullPath;
+                } else {
+                    Log::warning("Archivo de plantilla no encontrado: {$file}");
+                }
+            }
+            
+            if (empty($existingFiles)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No se encontraron archivos de plantilla para descargar'
+                ], 404);
+            }
+            
+            // Crear archivo ZIP temporal
+            $zipFileName = 'plantilla_precios_productos_stock_' . time() . '.zip';
+            $zipPath = storage_path('app/temp/' . $zipFileName);
+            
+            // Crear directorio temp si no existe
+            if (!file_exists(storage_path('app/temp'))) {
+                mkdir(storage_path('app/temp'), 0755, true);
+            }
+            
+            $zip = new \ZipArchive();
+            $result = $zip->open($zipPath, \ZipArchive::CREATE | \ZipArchive::OVERWRITE);
+            
+            if ($result !== TRUE) {
+                throw new \Exception("No se pudo crear el archivo ZIP. Código de error: {$result}");
+            }
+            
+            // Agregar archivos existentes al ZIP
+            foreach ($existingFiles as $filePath) {
+                $fileName = basename($filePath);
+                $zip->addFile($filePath, $fileName);
+            }
+            
+            $zip->close();
+            
+            // Verificar que el ZIP se creó correctamente
+            if (!file_exists($zipPath)) {
+                throw new \Exception("El archivo ZIP no se creó correctamente");
+            }
+            
+            // Descargar el archivo ZIP
+            return response()->download($zipPath, 'plantilla_precios_productos_stock.zip')->deleteFileAfterSend(true);
+            
+        } catch (\Exception $e) {
+            Log::error('Error en downloadZipAdministracion: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al descargar el zip: ' . $e->getMessage()
+            ], 500);
+        }
+    }
     /**
      * Crea una carpeta de documentación para proveedor
      */
@@ -1869,7 +1956,7 @@ class DocumentacionController extends Controller
             // Validar extensión del archivo
             $allowedExtensions = ['jpg', 'jpeg', 'png', 'gif', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'txt'];
             $fileExtension = strtolower($file->getClientOriginalExtension());
-            
+
             if (!in_array($fileExtension, $allowedExtensions)) {
                 return response()->json([
                     'success' => false,
@@ -1951,7 +2038,6 @@ class DocumentacionController extends Controller
                         'proveedor_documentacion' => $proveedorDocumentacion
                     ]
                 ]);
-
             } catch (\Exception $e) {
                 DB::rollback();
                 // Si hay error, eliminar el archivo subido
@@ -1960,7 +2046,6 @@ class DocumentacionController extends Controller
                 }
                 throw $e;
             }
-
         } catch (\Exception $e) {
             Log::error('Error en createProveedorDocumentacionFolder: ' . $e->getMessage());
             return response()->json([
