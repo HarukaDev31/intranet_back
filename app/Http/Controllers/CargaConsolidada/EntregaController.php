@@ -656,7 +656,12 @@ class EntregaController extends Controller
             ->where('CC.id_contenedor', $idContenedor)
             ->whereNotNull('CC.estado_cliente')
             ->whereNull('CC.id_cliente_importacion')
-            ->where('CC.estado_cotizador', 'CONFIRMADO');
+            ->where('CC.estado_cotizador', 'CONFIRMADO')
+            // Solo filas que tengan algún formulario asociado
+            ->where(function ($q) {
+                $q->whereNotNull('L.id')
+                    ->orWhereNotNull('P.id');
+            });
 
         $page = $request->input('currentPage', 1);
         $perPage = $request->input('itemsPerPage', 100);
@@ -692,6 +697,15 @@ class EntregaController extends Controller
     }
     public function getEntregasDetalle($idCotizacion)
     {
+        // Subconsulta: sumar cbm y qty por id_cotizacion (puede haber múltiples proveedores por cotización)
+        $proveedoresAgg = DB::table('contenedor_consolidado_cotizacion_proveedores as CP')
+            ->select(
+                'CP.id_cotizacion',
+                DB::raw('SUM(COALESCE(CP.cbm_total_china, CP.cbm_total, 0)) as sum_cbm_china'),
+                DB::raw('SUM(COALESCE(CP.qty_box_china, CP.qty_box, 0)) as sum_qty_box')
+            )
+            ->where('CP.id_cotizacion', $idCotizacion)
+            ->groupBy('CP.id_cotizacion');
         // Subconsulta de asignación de rango/fecha por cotización (última asignación)
         $asignacionAgg = DB::table('consolidado_user_range_delivery as UR')
             ->select(
@@ -712,6 +726,10 @@ class EntregaController extends Controller
             ->leftJoin('departamento as DPT', 'DPT.ID_Departamento', '=', 'P.id_department')
             ->leftJoin('provincia as PROV', 'PROV.ID_Provincia', '=', 'P.id_province')
             ->leftJoin('distrito as DIST', 'DIST.ID_Distrito', '=', 'P.id_district')
+            // Sumas de proveedores por cotización
+            ->leftJoinSub($proveedoresAgg, 'CPA', function ($join) {
+                $join->on('CPA.id_cotizacion', '=', 'CC.id');
+            })
             // Asignación
             ->leftJoinSub($asignacionAgg, 'UR2', function ($join) {
                 $join->on('UR2.id_cotizacion', '=', 'CC.id');
@@ -740,6 +758,9 @@ class EntregaController extends Controller
                 DB::raw("CASE WHEN R2.id IS NOT NULL THEN R2.end_time WHEN RL.id IS NOT NULL THEN RL.end_time ELSE NULL END as delivery_end_time"),
                 DB::raw('COALESCE(UR2.id_date, DL.id) as delivery_date_id'),
                 DB::raw('COALESCE(UR2.id_range_date, RL.id) as delivery_range_id'),
+                // Agregados por cotización desde proveedores
+                DB::raw('COALESCE(CPA.sum_cbm_china, 0) as cbm_total_china'),
+                DB::raw('COALESCE(CPA.sum_qty_box, 0) as qty_box_china'),
 
                 // Campos LIMA
                 'L.pick_name',
@@ -808,7 +829,34 @@ class EntregaController extends Controller
             'type_form' => $typeForm, // 0=Provincia, 1=Lima
             'delivery' => $delivery,
             'form_user' => $formUser,
+            'cbm_total_china' => (float) $row->cbm_total_china,
+            'qty_box_china' => (int) $row->qty_box_china,
         ];
+
+        // Conformidad (fotos): obtener por cotización y tipo de formulario
+        $payload['conformidad'] = null;
+        if ($typeForm !== null) {
+            $conf = DB::table('consolidado_delivery_conformidad')
+                ->where('id_cotizacion', $idCotizacion)
+                ->where('type_form', $typeForm)
+                ->orderByDesc('id')
+                ->first();
+            if ($conf) {
+                $payload['conformidad'] = [
+                    'id' => (int) $conf->id,
+                    'photo_1' => $conf->photo_1_path,
+                    'photo_2' => $conf->photo_2_path,
+                    'photo_1_url' => Storage::url($conf->photo_1_path),
+                    'photo_2_url' => Storage::url($conf->photo_2_path),
+                    'photo_1_mime' => $conf->photo_1_mime,
+                    'photo_2_mime' => $conf->photo_2_mime,
+                    'photo_1_size' => $conf->photo_1_size ? (int)$conf->photo_1_size : null,
+                    'photo_2_size' => $conf->photo_2_size ? (int)$conf->photo_2_size : null,
+                    'uploaded_by' => $conf->uploaded_by ? (int)$conf->uploaded_by : null,
+                    'uploaded_at' => $conf->uploaded_at,
+                ];
+            }
+        }
 
         if ($typeForm === 1) { // Lima
             $payload['lima'] = [
@@ -859,6 +907,292 @@ class EntregaController extends Controller
         }
 
         return response()->json(['data' => $payload, 'success' => true]);
+    }
+
+    /**
+     * Guarda 2 fotos de conformidad de entrega (para Lima o Provincia).
+     * Body (multipart/form-data):
+     *  - type_form: 0 (Provincia) | 1 (Lima)
+     *  - id_contenedor, id_cotizacion
+     *  - photo_1, photo_2 (files)
+     *  - optional: id_form_lima | id_form_province (si ya lo tienes)
+     */
+    public function uploadConformidad(Request $request)
+    {
+        $request->validate([
+            'id_contenedor' => 'required|integer',
+            'id_cotizacion' => 'required|integer',
+            'type_form' => 'required|in:0,1',
+            'photo_1' => 'required|image|max:8192',
+            'photo_2' => 'required|image|max:8192',
+        ]);
+
+        $typeForm = (int) $request->input('type_form');
+        $idContenedor = (int) $request->input('id_contenedor');
+        $idCotizacion = (int) $request->input('id_cotizacion');
+
+        // Resolver id del formulario si no viene
+        $idFormLima = $request->input('id_form_lima');
+        $idFormProvince = $request->input('id_form_province');
+        if ($typeForm === 1 && !$idFormLima) {
+            $idFormLima = DB::table('consolidado_delivery_form_lima')
+                ->where('id_cotizacion', $idCotizacion)
+                ->where('id_contenedor', $idContenedor)
+                ->value('id');
+        }
+        if ($typeForm === 0 && !$idFormProvince) {
+            $idFormProvince = DB::table('consolidado_delivery_form_province')
+                ->where('id_cotizacion', $idCotizacion)
+                ->where('id_contenedor', $idContenedor)
+                ->value('id');
+        }
+
+        // Paths: usar 'public' disk (config/filesystems.php) y folder delivery_conformidad
+        $disk = config('filesystems.default', 'public');
+        $folder = 'delivery_conformidad/' . $idCotizacion;
+        $p1 = $request->file('photo_1');
+        $p2 = $request->file('photo_2');
+
+        $path1 = $p1->store($folder, $disk);
+        $path2 = $p2->store($folder, $disk);
+
+        $id = DB::table('consolidado_delivery_conformidad')->insertGetId([
+            'id_contenedor' => $idContenedor,
+            'id_cotizacion' => $idCotizacion,
+            'type_form' => $typeForm,
+            'id_form_lima' => $typeForm === 1 ? ($idFormLima ?: null) : null,
+            'id_form_province' => $typeForm === 0 ? ($idFormProvince ?: null) : null,
+            'photo_1_path' => $path1,
+            'photo_2_path' => $path2,
+            'photo_1_mime' => $p1->getClientMimeType(),
+            'photo_2_mime' => $p2->getClientMimeType(),
+            'photo_1_size' => $p1->getSize(),
+            'photo_2_size' => $p2->getSize(),
+            'uploaded_by' => auth()->id(),
+            'uploaded_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return response()->json([
+            'data' => [ 'id' => $id, 'photo_1' => $path1, 'photo_2' => $path2 ],
+            'success' => true
+        ], 201);
+    }
+
+    // Alias para subir conformidad usando el id de cotización en la ruta
+    public function uploadConformidadForCotizacion(Request $request, $idCotizacion)
+    {
+        // Inyectar id_cotizacion desde la ruta al request
+        $request->merge(['id_cotizacion' => (int)$idCotizacion]);
+        return $this->uploadConformidad($request);
+    }
+
+    /**
+     * Obtiene las fotos de conformidad para una cotización y tipo de formulario.
+     * Query: ?type_form=0|1
+     */
+    public function getConformidad(Request $request, $idCotizacion)
+    {
+        $typeForm = (int) $request->query('type_form', 1);
+        $row = DB::table('consolidado_delivery_conformidad')
+            ->where('id_cotizacion', $idCotizacion)
+            ->where('type_form', $typeForm)
+            ->orderByDesc('id')
+            ->first();
+        if (!$row) {
+            return response()->json(['data' => null, 'success' => true]);
+        }
+        return response()->json([
+            'data' => [
+                'id' => (int)$row->id,
+                'photo_1' => $row->photo_1_path,
+                'photo_2' => $row->photo_2_path,
+                'uploaded_by' => $row->uploaded_by,
+                'uploaded_at' => $row->uploaded_at,
+            ],
+            'success' => true
+        ]);
+    }
+
+    /**
+     * Actualiza (reemplaza) una o ambas fotos de conformidad.
+     * Acepta photo_1 y/o photo_2 como archivos image.
+     */
+    public function updateConformidad(Request $request, $id)
+    {
+        $request->validate([
+            'photo_1' => 'nullable|image|max:8192',
+            'photo_2' => 'nullable|image|max:8192',
+        ]);
+
+        if (!$request->hasFile('photo_1') && !$request->hasFile('photo_2')) {
+            return response()->json(['message' => 'Debe enviar al menos una imagen para actualizar', 'success' => false], 422);
+        }
+
+        $row = DB::table('consolidado_delivery_conformidad')->where('id', $id)->first();
+        if (!$row) {
+            return response()->json(['message' => 'Conformidad no encontrada', 'success' => false], 404);
+        }
+
+        $disk = config('filesystems.default', 'public');
+        $folder = 'delivery_conformidad/' . $row->id_cotizacion;
+        $update = [ 'updated_at' => now(), 'uploaded_by' => auth()->id(), 'uploaded_at' => now() ];
+
+        if ($request->hasFile('photo_1')) {
+            // Eliminar archivo anterior si existe
+            if (!empty($row->photo_1_path)) {
+                try { Storage::disk($disk)->delete($row->photo_1_path); } catch (\Throwable $e) { /* ignore */ }
+            }
+            $p1 = $request->file('photo_1');
+            $path1 = $p1->store($folder, $disk);
+            $update['photo_1_path'] = $path1;
+            $update['photo_1_mime'] = $p1->getClientMimeType();
+            $update['photo_1_size'] = $p1->getSize();
+        }
+
+        if ($request->hasFile('photo_2')) {
+            if (!empty($row->photo_2_path)) {
+                try { Storage::disk($disk)->delete($row->photo_2_path); } catch (\Throwable $e) { /* ignore */ }
+            }
+            $p2 = $request->file('photo_2');
+            $path2 = $p2->store($folder, $disk);
+            $update['photo_2_path'] = $path2;
+            $update['photo_2_mime'] = $p2->getClientMimeType();
+            $update['photo_2_size'] = $p2->getSize();
+        }
+
+        DB::table('consolidado_delivery_conformidad')->where('id', $id)->update($update);
+
+        $refreshed = DB::table('consolidado_delivery_conformidad')->where('id', $id)->first();
+        return response()->json([
+            'data' => [
+                'id' => (int)$refreshed->id,
+                'photo_1' => $refreshed->photo_1_path,
+                'photo_2' => $refreshed->photo_2_path,
+                'uploaded_by' => $refreshed->uploaded_by,
+                'uploaded_at' => $refreshed->uploaded_at,
+            ],
+            'success' => true
+        ]);
+    }
+
+    /**
+     * Elimina un registro de conformidad y sus archivos asociados.
+     */
+    public function deleteConformidad($id)
+    {
+        $row = DB::table('consolidado_delivery_conformidad')->where('id', $id)->first();
+        if (!$row) {
+            return response()->json(['message' => 'Conformidad no encontrada', 'success' => false], 404);
+        }
+        $disk = config('filesystems.default', 'public');
+        try { if (!empty($row->photo_1_path)) Storage::disk($disk)->delete($row->photo_1_path); } catch (\Throwable $e) { /* ignore */ }
+        try { if (!empty($row->photo_2_path)) Storage::disk($disk)->delete($row->photo_2_path); } catch (\Throwable $e) { /* ignore */ }
+        DB::table('consolidado_delivery_conformidad')->where('id', $id)->delete();
+        return response()->json(['success' => true]);
+    }
+
+    /**
+     * Actualiza los datos del detalle de entrega (formulario Lima o Provincia) según type_form.
+     * Body: type_form=0|1 y solo los campos permitidos.
+     *
+     * Restricciones solicitadas:
+     *  - Lima (type_form=1): solo datos del conductor y destinos, además de comprobante.
+     *  - Provincia (type_form=0): datos de facturación (r_* e import_name), de agencia (id_agency/agency_* y direcciones) y de comprobante.
+     *  - Comprobante aplica para ambas tablas: voucher_doc, voucher_doc_type, voucher_name, voucher_email.
+     */
+    public function updateEntregasDetalle(Request $request, $idCotizacion)
+    {
+        $request->validate([
+            'type_form' => 'required|in:0,1',
+        ]);
+        $typeForm = (int) $request->input('type_form');
+
+        if ($typeForm === 1) { // Lima
+            $rules = [
+                // Comprobante (aplica a ambas tablas)
+                'voucher_doc' => 'sometimes|string',
+                'voucher_doc_type' => 'sometimes|in:BOLETA,FACTURA',
+                'voucher_name' => 'sometimes|string',
+                'voucher_email' => 'sometimes|email',
+                // Datos del conductor
+                'drver_name' => 'sometimes|string',
+                'driver_doc_type' => 'sometimes|in:DNI,PASAPORTE',
+                'driver_doc' => 'sometimes|string',
+                'driver_license' => 'sometimes|string',
+                'driver_plate' => 'sometimes|string',
+                // Destinos
+                'final_destination_place' => 'sometimes|string',
+                'final_destination_district' => 'sometimes|string',
+            ];
+            $data = $request->validate($rules);
+
+            $updated = DB::table('consolidado_delivery_form_lima')
+                ->where('id_cotizacion', $idCotizacion)
+                ->orderByDesc('id')
+                ->limit(1)
+                ->update(array_merge($data, ['updated_at' => now()]));
+            if (!$updated) {
+                return response()->json(['message' => 'Formulario Lima no encontrado para esta cotización', 'success' => false], 404);
+            }
+        } else { // Provincia
+            $rules = [
+                // Facturación
+                'import_name' => 'sometimes|string',
+                'r_type' => 'sometimes|in:PERSONA NATURAL,EMPRESA',
+                'r_doc' => 'sometimes|string',
+                'r_name' => 'sometimes|string',
+                'r_phone' => 'sometimes|string',
+                // Agencia
+                'id_agency' => 'sometimes|integer|exists:delivery_agencies,id',
+                'agency_ruc' => 'sometimes|string',
+                'agency_name' => 'sometimes|string',
+                'agency_address_initial_delivery' => 'sometimes|string',
+                'agency_address_final_delivery' => 'sometimes|string',
+                // Comprobante (aplica a ambas tablas)
+                'voucher_doc' => 'sometimes|string',
+                'voucher_doc_type' => 'sometimes|in:BOLETA,FACTURA',
+                'voucher_name' => 'sometimes|string',
+                'voucher_email' => 'sometimes|email',
+            ];
+            $data = $request->validate($rules);
+
+            $updated = DB::table('consolidado_delivery_form_province')
+                ->where('id_cotizacion', $idCotizacion)
+                ->orderByDesc('id')
+                ->limit(1)
+                ->update(array_merge($data, ['updated_at' => now()]));
+            if (!$updated) {
+                return response()->json(['message' => 'Formulario Provincia no encontrado para esta cotización', 'success' => false], 404);
+            }
+        }
+
+        return response()->json(['message' => 'Detalle actualizado correctamente', 'success' => true]);
+    }
+
+    /**
+     * Elimina los datos del detalle de entrega (formulario Lima o Provincia) según type_form.
+     * Si no se envía type_form, se intentará eliminar Lima y Provincia para la cotización.
+     */
+    public function deleteEntregasDetalle(Request $request, $idCotizacion)
+    {
+        $typeForm = $request->input('type_form');
+        $deleted = 0;
+
+        if ($typeForm === null) {
+            $deleted += DB::table('consolidado_delivery_form_lima')->where('id_cotizacion', $idCotizacion)->delete();
+            $deleted += DB::table('consolidado_delivery_form_province')->where('id_cotizacion', $idCotizacion)->delete();
+        } elseif ((int)$typeForm === 1) {
+            $deleted += DB::table('consolidado_delivery_form_lima')->where('id_cotizacion', $idCotizacion)->delete();
+        } else {
+            $deleted += DB::table('consolidado_delivery_form_province')->where('id_cotizacion', $idCotizacion)->delete();
+        }
+
+        if ($deleted === 0) {
+            return response()->json(['message' => 'No se encontró detalle para eliminar', 'success' => false], 404);
+        }
+        return response()->json(['message' => 'Detalle eliminado correctamente', 'success' => true]);
     }
     public function saveImporteDelivery(Request $request)
     {

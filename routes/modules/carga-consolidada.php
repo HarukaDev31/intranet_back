@@ -161,6 +161,17 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
             Route::post('/clientes/{idContenedor}/sendForm', [EntregaController::class, 'sendForm']);
             Route::get('/entregas/{idContenedor}', [EntregaController::class, 'getEntregas']);
             Route::get('/entregas/detalle/{idCotizacion}', [EntregaController::class, 'getEntregasDetalle']);
+            // Alias POST sin sufijo /update para compatibilidad con clientes existentes
+            Route::post('/entregas/detalle/{idCotizacion}', [EntregaController::class, 'updateEntregasDetalle']);
+            Route::post('/entregas/detalle/{idCotizacion}/update', [EntregaController::class, 'updateEntregasDetalle']);
+            Route::delete('/entregas/detalle/{idCotizacion}', [EntregaController::class, 'deleteEntregasDetalle']);
+            // Conformidad de entrega (fotos)
+            Route::post('/entregas/conformidad/upload', [EntregaController::class, 'uploadConformidad']);
+            // Alias: permitir POST con id de cotización en la URL (para clientes que no envían id_cotizacion en body)
+            Route::post('/entregas/conformidad/{idCotizacion}', [EntregaController::class, 'uploadConformidadForCotizacion']);
+            Route::get('/entregas/conformidad/{idCotizacion}', [EntregaController::class, 'getConformidad']);
+            Route::post('/entregas/conformidad/{id}/update', [EntregaController::class, 'updateConformidad']);
+            Route::delete('/entregas/conformidad/{id}', [EntregaController::class, 'deleteConformidad']);
             Route::post('/entregas/updateStatus/{idCotizacion}', [EntregaController::class, 'updateStatusEntrega']);
             Route::post('/delivery/importe', [EntregaController::class, 'saveImporteDelivery']);
             Route::post('/delivery/pagos', [EntregaController::class, 'savePagosDelivery']);
