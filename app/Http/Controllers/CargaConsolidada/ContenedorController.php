@@ -94,7 +94,6 @@ class ContenedorController extends Controller
             //where empresa is 1
             $query->where('empresa', '!=', 1);
             //filtrar por los que f_cierre no este vacio
-            $query->whereNotNull('f_cierre');
 
             //filtrar por buscador
             if ($request->has('search') && !empty($request->search)) {
