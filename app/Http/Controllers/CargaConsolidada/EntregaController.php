@@ -11,6 +11,7 @@ use App\Models\CargaConsolidada\PagoConcept;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use App\Traits\WhatsappTrait;
+
 class EntregaController extends Controller
 {
     use WhatsappTrait;
@@ -744,6 +745,9 @@ class EntregaController extends Controller
             ->select([
                 'CC.id as cotizacion_id',
                 'CC.id_contenedor',
+                // IDs de los formularios
+                'L.id as lima_id',
+                'P.id as province_id',
                 // Determinación de tipo de formulario (0 Provincia / 1 Lima)
                 DB::raw('CASE WHEN P.id IS NOT NULL THEN 0 WHEN L.id IS NOT NULL THEN 1 ELSE NULL END as type_form'),
                 // Usuario
@@ -772,7 +776,7 @@ class EntregaController extends Controller
                 'L.voucher_doc_type as lima_voucher_doc_type',
                 'L.voucher_name as lima_voucher_name',
                 'L.voucher_email as lima_voucher_email',
-                'L.drver_name', // nota: así está en la migración
+                'L.drver_name',
                 'L.driver_doc_type',
                 'L.driver_doc',
                 'L.driver_license',
@@ -781,7 +785,7 @@ class EntregaController extends Controller
                 'L.final_destination_district',
 
                 // Campos PROVINCIA
-                'P.import_name as province_import_name',
+                'P.importer_nmae as province_import_name',
                 'P.voucher_doc as province_voucher_doc',
                 'P.voucher_doc_type as province_voucher_doc_type',
                 'P.voucher_name as province_voucher_name',
@@ -834,28 +838,34 @@ class EntregaController extends Controller
             'qty_box_china' => (int) $row->qty_box_china,
         ];
 
-        // Conformidad (fotos): obtener por cotización y tipo de formulario
-        $payload['conformidad'] = null;
+        // Conformidad (fotos): obtener por cotización y tipo de formulario usando las nuevas tablas
+        $payload['conformidad'] = [];
         if ($typeForm !== null) {
-            $conf = DB::table('consolidado_delivery_conformidad')
-                ->where('id_cotizacion', $idCotizacion)
-                ->where('type_form', $typeForm)
-                ->orderByDesc('id')
-                ->first();
-            if ($conf) {
-                $payload['conformidad'] = [
-                    'id' => (int) $conf->id,
-                    'photo_1' => $conf->photo_1_path,
-                    'photo_2' => $conf->photo_2_path,
-                    'photo_1_url' => Storage::url($conf->photo_1_path),
-                    'photo_2_url' => Storage::url($conf->photo_2_path),
-                    'photo_1_mime' => $conf->photo_1_mime,
-                    'photo_2_mime' => $conf->photo_2_mime,
-                    'photo_1_size' => $conf->photo_1_size ? (int)$conf->photo_1_size : null,
-                    'photo_2_size' => $conf->photo_2_size ? (int)$conf->photo_2_size : null,
-                    'uploaded_by' => $conf->uploaded_by ? (int)$conf->uploaded_by : null,
-                    'uploaded_at' => $conf->uploaded_at,
-                ];
+            // type_form = 0 es Lima, type_form = 1 es Provincia
+            $tableName = $typeForm === 1 ? 'consolidado_delivery_form_lima_conformidad' : 'consolidado_delivery_form_province_conformidad';
+            $formIdField = $typeForm === 1? 'consolidado_delivery_form_lima_id' : 'consolidado_delivery_form_province_id';
+
+            // Obtener el ID del formulario correspondiente
+            $formId = $typeForm === 1? $row->lima_id ?? null : $row->province_id ?? null;
+
+            if ($formId) {
+                $confPhotos = DB::table($tableName)
+                    ->where('id_cotizacion', $idCotizacion)
+                    ->where('id_contenedor', $row->id_contenedor)
+                    ->orderByDesc('created_at')
+                    ->get();
+
+                $payload['conformidad'] = $confPhotos->map(function ($photo) {
+                    return [
+                        'id' => (int) $photo->id,
+                        'file_path' => $photo->file_path,
+                        'file_url' => Storage::url($photo->file_path),
+                        'file_type' => $photo->file_type,
+                        'file_size' => $photo->file_size ? (int)$photo->file_size : null,
+                        'file_original_name' => $photo->file_original_name,
+                        'created_at' => $photo->created_at,
+                    ];
+                })->toArray();
             }
         }
 
@@ -932,20 +942,23 @@ class EntregaController extends Controller
         $idContenedor = (int) $request->input('id_contenedor');
         $idCotizacion = (int) $request->input('id_cotizacion');
 
-        // Resolver id del formulario si no viene
-        $idFormLima = $request->input('id_form_lima');
-        $idFormProvince = $request->input('id_form_province');
-        if ($typeForm === 1 && !$idFormLima) {
-            $idFormLima = DB::table('consolidado_delivery_form_lima')
-                ->where('id_cotizacion', $idCotizacion)
-                ->where('id_contenedor', $idContenedor)
-                ->value('id');
-        }
-        if ($typeForm === 0 && !$idFormProvince) {
-            $idFormProvince = DB::table('consolidado_delivery_form_province')
-                ->where('id_cotizacion', $idCotizacion)
-                ->where('id_contenedor', $idContenedor)
-                ->value('id');
+        // Determinar tabla y campo según el tipo de formulario
+        // type_form = 0 es Lima, type_form = 1 es Provincia
+        $tableName = $typeForm === 1 ? 'consolidado_delivery_form_lima_conformidad' : 'consolidado_delivery_form_province_conformidad';
+        $formTableName = $typeForm === 1 ? 'consolidado_delivery_form_lima' : 'consolidado_delivery_form_province';
+        $formIdField = $typeForm === 1 ? 'consolidado_delivery_form_lima_id' : 'consolidado_delivery_form_province_id';
+
+        // Obtener el ID del formulario correspondiente
+        $formId = DB::table($formTableName)
+            ->where('id_cotizacion', $idCotizacion)
+            ->where('id_contenedor', $idContenedor)
+            ->value('id');
+
+        if (!$formId) {
+            return response()->json([
+                'message' => 'No se encontró el formulario de delivery correspondiente',
+                'success' => false
+            ], 404);
         }
 
         // Paths: usar 'public' disk (config/filesystems.php) y folder delivery_conformidad
@@ -957,26 +970,33 @@ class EntregaController extends Controller
         $path1 = $p1->store($folder, $disk);
         $path2 = $p2->store($folder, $disk);
 
-        $id = DB::table('consolidado_delivery_conformidad')->insertGetId([
-            'id_contenedor' => $idContenedor,
+        // Insertar ambas fotos en la tabla correspondiente
+        $insertData = [
+            $formIdField => $formId,
             'id_cotizacion' => $idCotizacion,
-            'type_form' => $typeForm,
-            'id_form_lima' => $typeForm === 1 ? ($idFormLima ?: null) : null,
-            'id_form_province' => $typeForm === 0 ? ($idFormProvince ?: null) : null,
-            'photo_1_path' => $path1,
-            'photo_2_path' => $path2,
-            'photo_1_mime' => $p1->getClientMimeType(),
-            'photo_2_mime' => $p2->getClientMimeType(),
-            'photo_1_size' => $p1->getSize(),
-            'photo_2_size' => $p2->getSize(),
-            'uploaded_by' => auth()->id(),
-            'uploaded_at' => now(),
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
+            'id_contenedor' => $idContenedor,
+        ];
+
+        // Insertar primera foto
+        $insertData['file_path'] = $path1;
+        $insertData['file_type'] = $p1->getClientMimeType();
+        $insertData['file_size'] = $p1->getSize();
+        $insertData['file_original_name'] = $p1->getClientOriginalName();
+        $insertData['created_at'] = now();
+        $insertData['updated_at'] = now();
+
+        $id1 = DB::table($tableName)->insertGetId($insertData);
+
+        // Insertar segunda foto
+        $insertData['file_path'] = $path2;
+        $insertData['file_type'] = $p2->getClientMimeType();
+        $insertData['file_size'] = $p2->getSize();
+        $insertData['file_original_name'] = $p2->getClientOriginalName();
+
+        $id2 = DB::table($tableName)->insertGetId($insertData);
 
         return response()->json([
-            'data' => [ 'id' => $id, 'photo_1' => $path1, 'photo_2' => $path2 ],
+            'message' => 'Fotos de conformidad subidas correctamente',
             'success' => true
         ], 201);
     }
@@ -1038,12 +1058,15 @@ class EntregaController extends Controller
 
         $disk = config('filesystems.default', 'public');
         $folder = 'delivery_conformidad/' . $row->id_cotizacion;
-        $update = [ 'updated_at' => now(), 'uploaded_by' => auth()->id(), 'uploaded_at' => now() ];
+        $update = ['updated_at' => now(), 'uploaded_by' => auth()->id(), 'uploaded_at' => now()];
 
         if ($request->hasFile('photo_1')) {
             // Eliminar archivo anterior si existe
             if (!empty($row->photo_1_path)) {
-                try { Storage::disk($disk)->delete($row->photo_1_path); } catch (\Throwable $e) { /* ignore */ }
+                try {
+                    Storage::disk($disk)->delete($row->photo_1_path);
+                } catch (\Throwable $e) { /* ignore */
+                }
             }
             $p1 = $request->file('photo_1');
             $path1 = $p1->store($folder, $disk);
@@ -1054,7 +1077,10 @@ class EntregaController extends Controller
 
         if ($request->hasFile('photo_2')) {
             if (!empty($row->photo_2_path)) {
-                try { Storage::disk($disk)->delete($row->photo_2_path); } catch (\Throwable $e) { /* ignore */ }
+                try {
+                    Storage::disk($disk)->delete($row->photo_2_path);
+                } catch (\Throwable $e) { /* ignore */
+                }
             }
             $p2 = $request->file('photo_2');
             $path2 = $p2->store($folder, $disk);
@@ -1081,16 +1107,37 @@ class EntregaController extends Controller
     /**
      * Elimina un registro de conformidad y sus archivos asociados.
      */
-    public function deleteConformidad($id)
+    public function deleteConformidad(Request $request, $id)
     {
-        $row = DB::table('consolidado_delivery_conformidad')->where('id', $id)->first();
+        $request->validate([
+            'type_form' => 'required|in:0,1',
+        ]);
+
+        $typeForm = (int) $request->input('type_form');
+        
+        // Determinar tabla según el tipo de formulario
+        // type_form = 0 es Lima, type_form = 1 es Provincia
+        $tableName = $typeForm === 1 ? 'consolidado_delivery_form_lima_conformidad' : 'consolidado_delivery_form_province_conformidad';
+
+        $row = DB::table($tableName)->where('id', $id)->first();
         if (!$row) {
             return response()->json(['message' => 'Conformidad no encontrada', 'success' => false], 404);
         }
+
         $disk = config('filesystems.default', 'public');
-        try { if (!empty($row->photo_1_path)) Storage::disk($disk)->delete($row->photo_1_path); } catch (\Throwable $e) { /* ignore */ }
-        try { if (!empty($row->photo_2_path)) Storage::disk($disk)->delete($row->photo_2_path); } catch (\Throwable $e) { /* ignore */ }
-        DB::table('consolidado_delivery_conformidad')->where('id', $id)->delete();
+
+        // Eliminar archivo físico
+        try {
+            if (!empty($row->file_path)) {
+                Storage::disk($disk)->delete($row->file_path);
+            }
+        } catch (\Throwable $e) {
+            // Ignorar errores de eliminación de archivos
+        }
+
+        // Eliminar registro de la base de datos
+        DB::table($tableName)->where('id', $id)->delete();
+
         return response()->json(['success' => true]);
     }
 
@@ -1251,11 +1298,11 @@ class EntregaController extends Controller
             if (!$cotizacion) {
                 return response()->json(['message' => 'Cotización no encontrada', 'success' => false]);
             }
-           
+
             $idContenedor = $cotizacion->id_contenedor;
-            $urlClientes=env('APP_URL_CLIENTES');
-            $urlProvincia =$urlClientes.'/formulario-entrega/proincia/'.$idContenedor;
-            $urlLima =$urlClientes.'/formulario-entrega/lima/'.$idContenedor;
+            $urlClientes = env('APP_URL_CLIENTES');
+            $urlProvincia = $urlClientes . '/formulario-entrega/proincia/' . $idContenedor;
+            $urlLima = $urlClientes . '/formulario-entrega/lima/' . $idContenedor;
 
             $message = "Hola " . $cotizacion->nombre_cliente . ", somos de Pro Business y este mensaje es para informarte que estamos esperando a que llene el formulario para entregar tu pedido\n\n Link Provincia: " . $urlProvincia . "\n\n Link Lima: " . $urlLima;
             $telefono = preg_replace('/\s+/', '', $cotizacion->telefono);
