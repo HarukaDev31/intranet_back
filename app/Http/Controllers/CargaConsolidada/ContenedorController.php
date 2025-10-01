@@ -106,7 +106,7 @@ class ContenedorController extends Controller
 
             //order by int(carga) desc
             $query->orderBy(DB::raw('CAST(carga AS UNSIGNED)'), 'desc');
-            $data = $query->paginate(10);
+            $data = $query->paginate(100);
 
             // Optimización: obtener todos los ids de la página y hacer agregaciones en lote.
             $pageIds = collect($data->items())->pluck('id')->all();
