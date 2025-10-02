@@ -688,6 +688,7 @@ class AuthController extends Controller
                         'importedAmount' => 0, // Campo no disponible en la estructura actual
                         'importedContainers' => 0, // Campo no disponible en la estructura actual
                         'goals' => $user->goals,
+                        'dni' => $user->dni,
                         'raw' => [
                             'grupo' => [
                                 'id' => 1,
@@ -796,6 +797,17 @@ export interface UserBusiness{
                     'importedAmount' => $importedAmount['sumFob'], // Campo no disponible en la estructura actual
                     'importedContainers' => $importedAmount['count'], // Campo no disponible en la estructura actual
                     'goals' => $user->goals,
+                    'dni' => $user->dni,
+                    'raw' => [
+                        'grupo' => [
+                            'id' => 1,
+                            'nombre' => "Cliente",
+                            'descripcion' => "Cliente",
+                            'tipo_privilegio' => 1,
+                            'estado' => 1,
+                            'notificacion' => 1
+                        ],
+                    ],
                 ],
                 'iCantidadAcessoUsuario' => 1,
                 'iIdEmpresa' => null,

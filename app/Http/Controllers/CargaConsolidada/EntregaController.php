@@ -1597,4 +1597,412 @@ class EntregaController extends Controller
             ],
         ]);
     }
+    public function storeHorarios(Request $request)
+    {
+        try {
+            Log::info('storeHorarios: ' . json_encode($request->all()));
+            
+            $request->validate([
+                'dayData' => 'required|array',
+                'dayData.*.day' => 'required|date',
+                'dayData.*.startTime' => 'required|date_format:H:i',
+                'dayData.*.endTime' => 'required|date_format:H:i',
+                'dayData.*.maxBookings' => 'required|integer|min:1',
+                'idContenedor' => 'required|integer|exists:carga_consolidada_contenedor,id'
+            ]);
+
+            $dayData = $request->input('dayData');
+            $idContenedor = $request->input('idContenedor');
+
+            DB::beginTransaction();
+
+            $createdDates = [];
+            $createdRanges = [];
+
+            foreach ($dayData as $day) {
+                $dayDate = $day['day'];
+                $startTime = $day['startTime'];
+                $endTime = $day['endTime'];
+                $maxBookings = $day['maxBookings'];
+
+                // Parsear fecha y extraer día, mes, año
+                $date = \Carbon\Carbon::parse($dayDate);
+                $dayNumber = $date->day;
+                $monthNumber = $date->month;
+                $yearNumber = $date->year;
+
+                // Crear o encontrar la fecha en consolidado_delivery_date
+                $deliveryDate = DB::table('consolidado_delivery_date')
+                    ->where('id_contenedor', $idContenedor)
+                    ->where('day', $dayNumber)
+                    ->where('month', $monthNumber)
+                    ->where('year', $yearNumber)
+                    ->first();
+
+                if (!$deliveryDate) {
+                    $dateId = DB::table('consolidado_delivery_date')->insertGetId([
+                        'id_contenedor' => $idContenedor,
+                        'day' => $dayNumber,
+                        'month' => $monthNumber,
+                        'year' => $yearNumber,
+                        'created_at' => now(),
+                        'updated_at' => now()
+                    ]);
+                    $createdDates[] = $dateId;
+                } else {
+                    $dateId = $deliveryDate->id;
+                }
+
+                // Crear rangos de 30 minutos
+                $start = \Carbon\Carbon::createFromFormat('H:i', $startTime);
+                $end = \Carbon\Carbon::createFromFormat('H:i', $endTime);
+
+                while ($start->lt($end)) {
+                    $rangeEnd = $start->copy()->addMinutes(30);
+                    
+                    // Asegurar que no exceda el tiempo final
+                    if ($rangeEnd->gt($end)) {
+                        $rangeEnd = $end;
+                    }
+
+                    // Verificar si ya existe este rango
+                    $existingRange = DB::table('consolidado_delivery_range_date')
+                        ->where('id_date', $dateId)
+                        ->where('start_time', $start->format('H:i:s'))
+                        ->where('end_time', $rangeEnd->format('H:i:s'))
+                        ->first();
+
+                    if (!$existingRange) {
+                        $rangeId = DB::table('consolidado_delivery_range_date')->insertGetId([
+                            'id_date' => $dateId,
+                            'start_time' => $start->format('H:i:s'),
+                            'end_time' => $rangeEnd->format('H:i:s'),
+                            'delivery_count' => $maxBookings,
+                            'created_at' => now(),
+                            'updated_at' => now()
+                        ]);
+                        $createdRanges[] = $rangeId;
+                    }
+
+                    $start->addMinutes(30);
+                }
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Horarios creados exitosamente',
+                'data' => [
+                    'created_dates' => count($createdDates),
+                    'created_ranges' => count($createdRanges),
+                    'total_days' => count($dayData)
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Error en storeHorarios: ' . $e->getMessage());
+            return response()->json([
+                'message' => 'Error al crear horarios: ' . $e->getMessage(), 
+                'success' => false
+            ], 500);
+        }
+    }
+    public function editHorarios(Request $request)
+    {
+        try {
+            Log::info('editHorarios: ' . json_encode($request->all()));
+            
+            $request->validate([
+                'days' => 'required|array',
+                'days.dayData' => 'required|array',
+                'days.dayData.*.day' => 'required|date',
+                'days.dayData.*.startTime' => 'required|date_format:H:i',
+                'days.dayData.*.endTime' => 'required|date_format:H:i',
+                'days.dayData.*.maxBookings' => 'required|integer|min:1',
+                'days.idContenedor' => 'required|integer|exists:carga_consolidada_contenedor,id',
+                'ranges' => 'required|array',
+                'ranges.*.id' => 'required|integer',
+                'ranges.*.time' => 'required|date_format:H:i:s',
+                'ranges.*.endTime' => 'required|date_format:H:i:s',
+                'ranges.*.isAvailable' => 'required|boolean',
+                'ranges.*.maxCapacity' => 'required|integer|min:1',
+                'ranges.*.currentBookings' => 'required|integer|min:0'
+            ]);
+
+            $days = $request->input('days');
+            $dayData = $days['dayData'];
+            $idContenedor = $days['idContenedor'];
+            $rangesExistentes = $request->input('ranges');
+
+            DB::beginTransaction();
+
+            $processedDays = [];
+            $deletedRanges = [];
+            $addedRanges = [];
+            $skippedRanges = [];
+            $deletedCount = 0;
+            $addedCount = 0;
+            $skippedCount = 0;
+
+            foreach ($dayData as $day) {
+                $dayDate = $day['day'];
+                $startTime = $day['startTime'];
+                $endTime = $day['endTime'];
+                $maxBookings = $day['maxBookings'];
+
+                // Parsear fecha y extraer día, mes, año
+                $date = \Carbon\Carbon::parse($dayDate);
+                $dayNumber = $date->day;
+                $monthNumber = $date->month;
+                $yearNumber = $date->year;
+
+                // Crear o encontrar la fecha en consolidado_delivery_date
+                $deliveryDate = DB::table('consolidado_delivery_date')
+                    ->where('id_contenedor', $idContenedor)
+                    ->where('day', $dayNumber)
+                    ->where('month', $monthNumber)
+                    ->where('year', $yearNumber)
+                    ->first();
+
+                if (!$deliveryDate) {
+                    $dateId = DB::table('consolidado_delivery_date')->insertGetId([
+                        'id_contenedor' => $idContenedor,
+                        'day' => $dayNumber,
+                        'month' => $monthNumber,
+                        'year' => $yearNumber,
+                        'created_at' => now(),
+                        'updated_at' => now()
+                    ]);
+                } else {
+                    $dateId = $deliveryDate->id;
+                }
+
+                // 1. Generar arreglo toInsert con rangos de 30 min según startTime y endTime
+                $start = \Carbon\Carbon::createFromFormat('H:i', $startTime);
+                $end = \Carbon\Carbon::createFromFormat('H:i', $endTime);
+                $toInsert = [];
+
+                while ($start->lt($end)) {
+                    $rangeEnd = $start->copy()->addMinutes(30);
+                    
+                    if ($rangeEnd->gt($end)) {
+                        $rangeEnd = $end;
+                    }
+
+                    $toInsert[] = [
+                        'start_time' => $start->format('H:i:s'),
+                        'end_time' => $rangeEnd->format('H:i:s')
+                    ];
+
+                    $start->addMinutes(30);
+                }
+
+                // 2. Obtener todos los rangos existentes de BD para esta fecha
+                $allDbRanges = DB::table('consolidado_delivery_range_date')
+                    ->where('id_date', $dateId)
+                    ->get()
+                    ->keyBy('id');
+
+                Log::info("Día: $dayDate, ID: $dateId, Rangos existentes en BD: " . $allDbRanges->count());
+                Log::info("Rangos a insertar: " . count($toInsert));
+
+                // 3. Por cada rango existente en BD, validar:
+                foreach ($allDbRanges as $dbRange) {
+                    Log::info("Procesando rango BD: {$dbRange->start_time} - {$dbRange->end_time} (ID: {$dbRange->id})");
+                    
+                    $existsInToInsert = collect($toInsert)->contains(function($range) use ($dbRange) {
+                        return $range['start_time'] === $dbRange->start_time && 
+                               $range['end_time'] === $dbRange->end_time;
+                    });
+
+                    if (!$existsInToInsert) {
+                        // Existe en ranges existentes pero NO en toInsert -> BORRAR (si no hay form asociado)
+                        $hasForms = DB::table('consolidado_user_range_delivery')
+                            ->where('id_range_date', $dbRange->id)
+                            ->exists();
+
+                        Log::info("Rango {$dbRange->start_time} - {$dbRange->end_time} NO está en toInsert. Tiene formularios: " . ($hasForms ? 'SÍ' : 'NO'));
+
+                        if (!$hasForms) {
+                            DB::table('consolidado_delivery_range_date')
+                                ->where('id', $dbRange->id)
+                                ->delete();
+                            $deletedRanges[] = $dbRange->id;
+                            $deletedCount++;
+                            Log::info("Rango {$dbRange->start_time} - {$dbRange->end_time} ELIMINADO");
+                        } else {
+                            Log::info("Rango {$dbRange->start_time} - {$dbRange->end_time} NO eliminado por tener formularios asociados");
+                        }
+                    } else {
+                        // Existe en ranges existentes Y en toInsert -> SKIPEAR
+                        $skippedRanges[] = $dbRange->id;
+                        $skippedCount++;
+                        Log::info("Rango {$dbRange->start_time} - {$dbRange->end_time} OMITIDO (existe en toInsert)");
+                    }
+                }
+
+                // 4. Por cada rango en toInsert, validar:
+                foreach ($toInsert as $rangeToInsert) {
+                    $existsInDb = $allDbRanges->contains(function($dbRange) use ($rangeToInsert) {
+                        return $dbRange->start_time === $rangeToInsert['start_time'] && 
+                               $dbRange->end_time === $rangeToInsert['end_time'];
+                    });
+
+                    if (!$existsInDb) {
+                        // Validar una vez más antes de insertar si existe un rango con el mismo start_time y end_time para el mismo día
+                        $duplicateExists = DB::table('consolidado_delivery_range_date')
+                            ->where('id_date', $dateId)
+                            ->where('start_time', $rangeToInsert['start_time'])
+                            ->where('end_time', $rangeToInsert['end_time'])
+                            ->exists();
+
+                        if (!$duplicateExists) {
+                            // NO existe en ranges existentes pero SÍ en toInsert -> INSERTAR
+                            $rangeId = DB::table('consolidado_delivery_range_date')->insertGetId([
+                                'id_date' => $dateId,
+                                'start_time' => $rangeToInsert['start_time'],
+                                'end_time' => $rangeToInsert['end_time'],
+                                'delivery_count' => $maxBookings,
+                                'created_at' => now(),
+                                'updated_at' => now()
+                            ]);
+                            $addedRanges[] = $rangeId;
+                            $addedCount++;
+                        } else {
+                            // Existe duplicado -> SKIPEAR
+                            $skippedCount++;
+                        }
+                    }
+                }
+
+                $processedDays[] = [
+                    'day' => $dayDate,
+                    'date_id' => $dateId,
+                    'to_insert_count' => count($toInsert)
+                ];
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Horarios editados exitosamente',
+                'data' => [
+                    'processed_days' => count($processedDays),
+                    'deleted_count' => $deletedCount,
+                    'added_count' => $addedCount,
+                    'skipped_count' => $skippedCount,
+                    'deleted_range_ids' => $deletedRanges,
+                    'added_range_ids' => $addedRanges,
+                    'skipped_range_ids' => $skippedRanges
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Error en editHorarios: ' . $e->getMessage());
+            return response()->json([
+                'message' => 'Error al editar horarios: ' . $e->getMessage(), 
+                'success' => false
+            ], 500);
+        }
+    }
+    public function deleteHorarios(Request $request)
+    {
+        try {
+            Log::info('deleteHorarios: ' . json_encode($request->all()));
+            
+            $request->validate([
+                'idContenedor' => 'required|integer|exists:carga_consolidada_contenedor,id',
+                'timeSlots' => 'required|array',
+                'timeSlots.*.id' => 'required|integer',
+                'timeSlots.*.time' => 'required|date_format:H:i:s',
+                'timeSlots.*.endTime' => 'required|date_format:H:i:s',
+                'timeSlots.*.isAvailable' => 'required|boolean',
+                'timeSlots.*.maxCapacity' => 'required|integer|min:1',
+                'timeSlots.*.currentBookings' => 'required|integer|min:0'
+            ]);
+
+            $idContenedor = $request->input('idContenedor');
+            $timeSlots = $request->input('timeSlots');
+
+            DB::beginTransaction();
+
+            $deletedRanges = [];
+            $skippedRanges = [];
+            $deletedCount = 0;
+            $skippedCount = 0;
+
+            foreach ($timeSlots as $timeSlot) {
+                $rangeId = $timeSlot['id'];
+                $startTime = $timeSlot['time'];
+                $endTime = $timeSlot['endTime'];
+
+                // Verificar si el rango existe en la BD
+                $dbRange = DB::table('consolidado_delivery_range_date')
+                    ->where('id', $rangeId)
+                    ->first();
+
+                if (!$dbRange) {
+                    Log::info("Rango ID $rangeId no encontrado en BD");
+                    continue;
+                }
+
+                // Verificar si el rango pertenece al contenedor correcto
+                $deliveryDate = DB::table('consolidado_delivery_date')
+                    ->where('id', $dbRange->id_date)
+                    ->where('id_contenedor', $idContenedor)
+                    ->first();
+
+                if (!$deliveryDate) {
+                    Log::info("Rango ID $rangeId no pertenece al contenedor $idContenedor");
+                    continue;
+                }
+
+                // Verificar si tiene clientes/formularios asociados
+                $hasForms = DB::table('consolidado_user_range_delivery')
+                    ->where('id_range_date', $rangeId)
+                    ->exists();
+
+                if (!$hasForms) {
+                    // No tiene formularios asociados -> BORRAR
+                    DB::table('consolidado_delivery_range_date')
+                        ->where('id', $rangeId)
+                        ->delete();
+                    
+                    $deletedRanges[] = $rangeId;
+                    $deletedCount++;
+                    Log::info("Rango $startTime - $endTime (ID: $rangeId) ELIMINADO");
+                } else {
+                    // Tiene formularios asociados -> NO BORRAR
+                    $skippedRanges[] = $rangeId;
+                    $skippedCount++;
+                    Log::info("Rango $startTime - $endTime (ID: $rangeId) NO eliminado por tener formularios asociados");
+                }
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Horarios eliminados exitosamente',
+                'data' => [
+                    'deleted_count' => $deletedCount,
+                    'skipped_count' => $skippedCount,
+                    'deleted_range_ids' => $deletedRanges,
+                    'skipped_range_ids' => $skippedRanges
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Error en deleteHorarios: ' . $e->getMessage());
+            return response()->json([
+                'message' => 'Error al eliminar horarios: ' . $e->getMessage(), 
+                'success' => false
+            ], 500);
+        }
+    }
 }

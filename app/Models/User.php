@@ -30,6 +30,7 @@ class User extends Authenticatable implements JWTSubject
         'country',
         'id_user_business',
         'api_token',
+        'dni',
     ];
 
     /**

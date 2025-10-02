@@ -31,6 +31,7 @@ class RegisterRequest extends FormRequest
             'email' => 'required|string|email|max:255|unique:users',
             'password' => 'required|string|min:6',
             'whatsapp' => 'required|string|max:255|unique:users',
+            'dni' => 'required|numeric|digits:8',
         ];
     }
 
@@ -48,6 +49,7 @@ class RegisterRequest extends FormRequest
             'whatsapp.unique' => 'El número de whatsapp ya está registrado',
             'password.required' => 'La contraseña es requerida',
             'password.min' => 'La contraseña debe tener al menos 6 caracteres',
+            'dni.required' => 'El DNI es requerido',
         ];
     }
     public function failedValidation(Validator $validator)
