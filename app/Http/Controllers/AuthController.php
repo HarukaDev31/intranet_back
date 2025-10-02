@@ -537,9 +537,9 @@ class AuthController extends Controller
                 'lastname' => $validatedData['lastname'] ?? null,
                 'email' => $validatedData['email'],
                 'whatsapp' => $validatedData['whatsapp'] ?? null,
-                'photo_url' => $this->generateImageUrl($validatedData['photo_url']) ?? null,
                 'goals' => $validatedData['goals'] ?? null,
                 'password' => Hash::make($validatedData['password']),
+                'dni' => $validatedData['dni'] ?? null,
             ]);
 
             $token = JWTAuth::fromUser($user);
@@ -591,8 +591,19 @@ class AuthController extends Controller
                     'importedAmount' => 0, // Campo no disponible en la estructura actual
                     'importedContainers' => 0, // Campo no disponible en la estructura actual
                     'goals' => $user->goals,
+                    'raw' => [
+                        'grupo' => [
+                            'id' => 1,
+                            'nombre' => "Cliente",
+                            'descripcion' => "Cliente",
+                            'tipo_privilegio' => 1,
+                            'estado' => 1,
+                            'notificacion' => 1
+                        ],
+                    ],
                 ],
                 'iCantidadAcessoUsuario' => 1,
+                
                 'iIdEmpresa' => null,
                 'menus' => $menus,
                 'success' => true
