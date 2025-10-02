@@ -728,7 +728,13 @@ class EntregaController extends Controller
 
         // Paginación
         $data = $query->paginate($perPage, ['*'], 'page', $page);
-
+        //foreach pago_details generate url
+        foreach ($data->items() as $item) {
+            $item->pagos_details = json_decode($item->pagos_details, true);
+            foreach ($item->pagos_details as $pago) {
+                $pago['voucher_url'] = $this->generateImageUrl($pago['voucher_url']);
+            }
+        }
         return response()->json([
             'data' => $data->items(),
             'success' => true,
