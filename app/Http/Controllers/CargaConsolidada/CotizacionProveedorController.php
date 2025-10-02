@@ -174,7 +174,7 @@ class CotizacionProveedorController extends Controller
 
             switch ($rol) {
                 case Usuario::ROL_COTIZADOR:
-                    if ($user->getIdUsuario() != 28791) {
+                    if ($user->getIdUsuario() != 28791 && $user->getIdUsuario() != 28911) {
                         $query->where('main.id_usuario', $user->getIdUsuario());
                     }
 
