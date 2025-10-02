@@ -1111,23 +1111,19 @@ class EntregaController extends Controller
         }
 
         // Definir disco y carpeta
-        $disk = config('filesystems.default', 'public');
+        $disk = 'public';
         $folder = 'delivery_conformidad/' . $idCotizacion;
-
-        // Preparar lista de archivos a procesar
-        $files = [];
-        if ($request->hasFile('photo_1')) {
-            $files[] = $request->file('photo_1');
-        }
-        if ($request->hasFile('photo_2')) {
-            $files[] = $request->file('photo_2');
-        }
 
         DB::beginTransaction();
         try {
             $inserted = [];
-            foreach ($files as $file) {
-                $storedPath = $file->store($folder, $disk);
+            
+            // Procesar photo_1 si existe
+            if ($request->hasFile('photo_1')) {
+                $file = $request->file('photo_1');
+                $filename = time() . '_1_' . $file->getClientOriginalName();
+                $storedPath = $file->storeAs($folder, $filename, $disk);
+                
                 $insert = [
                     $formIdField => $formId,
                     'id_cotizacion' => $idCotizacion,
@@ -1142,6 +1138,28 @@ class EntregaController extends Controller
                 $newId = DB::table($tableName)->insertGetId($insert);
                 $inserted[] = $newId;
             }
+            
+            // Procesar photo_2 si existe
+            if ($request->hasFile('photo_2')) {
+                $file = $request->file('photo_2');
+                $filename = time() . '_2_' . $file->getClientOriginalName();
+                $storedPath = $file->storeAs($folder, $filename, $disk);
+                
+                $insert = [
+                    $formIdField => $formId,
+                    'id_cotizacion' => $idCotizacion,
+                    'id_contenedor' => $idContenedor,
+                    'file_path' => $storedPath,
+                    'file_type' => $file->getClientMimeType(),
+                    'file_size' => $file->getSize(),
+                    'file_original_name' => $file->getClientOriginalName(),
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ];
+                $newId = DB::table($tableName)->insertGetId($insert);
+                $inserted[] = $newId;
+            }
+            
             DB::commit();
 
             return response()->json([

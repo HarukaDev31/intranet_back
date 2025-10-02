@@ -188,16 +188,23 @@ class DeliveryController extends Controller
                 'final_destination_district' => $request->distritoDestino,
             ];
 
-            // Crear el formulario de delivery
-            $deliveryForm = ConsolidadoDeliveryFormLima::create($formData);
+            // Crear el formulario de delivery}
+           $deliveryForm = ConsolidadoDeliveryFormLima::create($formData);
 
             // Actualizar la cotización para marcar que el formulario fue registrado
             $cotizacion->update([
                 'delivery_form_registered_at' => now()->toDateString()
             ]);
 
+            //insert in consolidado_user_range_delivery
+            DB::table('consolidado_user_range_delivery')->insert([
+                'id_date' => $request->horarioSeleccionado['range_id'],
+                'id_range_date' => $request->horarioSeleccionado['range_id'],
+                'id_cotizacion' => $cotizacion->id,
+                'id_user' => 1,
+            ]); 
             // Despachar job para enviar mensaje de WhatsApp
-            SendDeliveryConfirmationWhatsAppLimaJob::dispatch($deliveryForm->id);
+            //SendDeliveryConfirmationWhatsAppLimaJob::dispatch($deliveryForm->id);
             DB::commit();
 
             return response()->json([
