@@ -465,6 +465,47 @@ class EntregaController extends Controller
         $perPage = (int) $request->input('itemsPerPage', 100);
         $data = $query->orderBy('CC.id', 'asc')->paginate($perPage, ['*'], 'page', $page);
 
+
+        // Agregar fotos de conformidad (hasta 2) y el total por cada fila
+        $items = $data->items();
+        foreach ($items as $row) {
+            $row->conformidad = [];
+            $row->conformidad_count = 0;
+            $typeForm = isset($row->type_form) ? (int)$row->type_form : null;
+            if ($typeForm !== null) {
+                // type_form: 0 = Provincia, 1 = Lima
+                $tableName = $typeForm === 1
+                    ? 'consolidado_delivery_form_lima_conformidad'
+                    : 'consolidado_delivery_form_province_conformidad';
+
+                // Obtener total y hasta 2 últimas fotos
+                $total = DB::table($tableName)
+                    ->where('id_cotizacion', $row->id)
+                    ->where('id_contenedor', $row->id_contenedor)
+                    ->count();
+                $photos = DB::table($tableName)
+                    ->select('id', 'file_path', 'file_type', 'file_size', 'file_original_name', 'created_at')
+                    ->where('id_cotizacion', $row->id)
+                    ->where('id_contenedor', $row->id_contenedor)
+                    ->orderByDesc('created_at')
+                    ->limit(2)
+                    ->get();
+
+                $row->conformidad = $photos->map(function ($p) {
+                    return [
+                        'id' => (int)$p->id,
+                        'file_path' => $p->file_path,
+                        'file_url' => $this->generateImageUrl($p->file_path),
+                        'file_type' => $p->file_type,
+                        'file_size' => $p->file_size ? (int)$p->file_size : null,
+                        'file_original_name' => $p->file_original_name,
+                        'created_at' => $p->created_at,
+                    ];
+                })->toArray();
+                $row->conformidad_count = $total;
+            }
+        }
+
         return response()->json([
             'data' => $data->items(),
             'success' => true,
@@ -921,7 +962,7 @@ class EntregaController extends Controller
                 'CP.id_cotizacion',
                 DB::raw('SUM(COALESCE(CP.cbm_total_china, 0)) as sum_cbm_china'),
                 DB::raw('SUM(COALESCE(CP.cbm_total, 0)) as sum_cbm_total'),
-                DB::raw('SUM(COALESCE(CP.qty_box_china, 0)) as sum_qty_box')
+                DB::raw('SUM(COALESCE(CP.qty_box_china, CP.qty_box, 0)) as sum_qty_box')
             )
             ->where('CP.id_cotizacion', $idCotizacion)
             ->groupBy('CP.id_cotizacion');
@@ -1003,6 +1044,7 @@ class EntregaController extends Controller
 
                 // Campos PROVINCIA
                 'P.importer_nmae as province_import_name',
+                'P.productos as province_productos',
                 'P.voucher_doc as province_voucher_doc',
                 'P.voucher_doc_type as province_voucher_doc_type',
                 'P.voucher_name as province_voucher_name',
@@ -1108,6 +1150,7 @@ class EntregaController extends Controller
         } elseif ($typeForm === 0) { // Provincia
             $payload['province'] = [
                 'importer_nmae' => $row->province_import_name,
+                'productos' => $row->province_productos,
                 'voucher_doc' => $row->province_voucher_doc,
                 'voucher_doc_type' => $row->province_voucher_doc_type,
                 'voucher_name' => $row->province_voucher_name,
@@ -1416,6 +1459,7 @@ class EntregaController extends Controller
         if ($typeForm === 1) { // Lima
             $rules = [
                 // Comprobante (aplica a ambas tablas)
+                'productos' => 'sometimes|string',
                 'voucher_doc' => 'sometimes|string',
                 'voucher_doc_type' => 'sometimes|in:BOLETA,FACTURA',
                 'voucher_name' => 'sometimes|string',
@@ -1444,6 +1488,7 @@ class EntregaController extends Controller
             $rules = [
                 // Facturación
                 'importer_nmae' => 'sometimes|string',
+                'productos' => 'sometimes|string',
                 'r_type' => 'sometimes|in:PERSONA NATURAL,EMPRESA',
                 'r_doc' => 'sometimes|string',
                 'r_name' => 'sometimes|string',
@@ -1527,6 +1572,11 @@ class EntregaController extends Controller
                 }
             }
 
+            // 3) Actualizar la tabla contenedor_consolidado_cotizacion y hacer que delivery_form_registered_at sea NULL
+            DB::table('contenedor_consolidado_cotizacion')
+                ->where('id', $idCotizacion)
+                ->update(['delivery_form_registered_at' => null]);
+
             if ($deleted === 0 && $assignments->count() === 0) {
                 DB::rollBack();
                 return response()->json(['message' => 'No se encontró detalle para eliminar', 'success' => false], 404);
@@ -1598,7 +1648,7 @@ class EntregaController extends Controller
 
             $idContenedor = $cotizacion->id_contenedor;
             $urlClientes = env('APP_URL_CLIENTES');
-            $urlProvincia = $urlClientes . '/formulario-entrega/proincia/' . $idContenedor;
+            $urlProvincia = $urlClientes . '/formulario-entrega/provincia/' . $idContenedor;
             $urlLima = $urlClientes . '/formulario-entrega/lima/' . $idContenedor;
 
             $message = "Hola " . $cotizacion->nombre_cliente . ", somos de Pro Business y este mensaje es para informarte que estamos esperando a que llene el formulario para entregar tu pedido\n\n Link Provincia: " . $urlProvincia . "\n\n Link Lima: " . $urlLima;
