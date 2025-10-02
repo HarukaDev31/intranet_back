@@ -14,7 +14,6 @@ class MakeAgencyNameAndAgencyRucNullableInConsolidadoDeliveryFormProvinceTable e
     public function up()
     {
         Schema::table('consolidado_delivery_form_province', function (Blueprint $table) {
-            //
             $table->string('agency_name')->nullable()->change();
             $table->string('agency_ruc')->nullable()->change();
         });
@@ -28,7 +27,8 @@ class MakeAgencyNameAndAgencyRucNullableInConsolidadoDeliveryFormProvinceTable e
     public function down()
     {
         Schema::table('consolidado_delivery_form_province', function (Blueprint $table) {
-            //
+            $table->string('agency_name')->nullable(false)->change();
+            $table->string('agency_ruc')->nullable(false)->change();
         });
     }
 }

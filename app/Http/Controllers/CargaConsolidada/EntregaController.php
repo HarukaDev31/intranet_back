@@ -702,17 +702,26 @@ class EntregaController extends Controller
                     WHERE cccp.id_cotizacion = CC.id
                     AND ccp.name = 'DELIVERY'
                     ORDER BY cccp.payment_date ASC, cccp.id ASC
-                ) AS pagos_details")
+                ) AS pagos_details"),
+                // Campo calculado para el estado de pago
+                DB::raw("CASE 
+                    WHEN CC.total_pago_delivery > (
+                        SELECT IFNULL(SUM(cccp.monto), 0)
+                        FROM {$this->table_contenedor_consolidado_cotizacion_coordinacion_pagos} cccp
+                        JOIN {$this->table_pagos_concept} ccp ON cccp.id_concept = ccp.id
+                        WHERE cccp.id_cotizacion = CC.id
+                        AND ccp.name = 'DELIVERY'
+                    ) THEN 'PENDIENTE'
+                    ELSE 'PAGADO'
+                END as estado_pago")
             )
 
             ->whereNotNull('CC.estado_cliente')
+            ->where('CC.total_pago_delivery', '>', 0)
             ->whereNull('CC.id_cliente_importacion')
             ->where('CC.estado_cotizador', 'CONFIRMADO');
 
 
-        $page = $request->input('page', 1);
-        $perPage = $request->input('per_page', 100);
-        $data = $query->paginate($perPage, ['*'], 'page', $page);
         // Aplicar filtros adicionales si se proporcionan
         if ($request->has('search')) {
             $search = $request->search;
@@ -722,17 +731,59 @@ class EntregaController extends Controller
                     ->orWhere('CC.correo', 'LIKE', "%{$search}%");
             });
         }
+
+        // Filtro por estado (PENDIENTE/PAGADO)
+        if ($request->has('estado') && $request->estado) {
+            $estado = $request->estado;
+            if ($estado === 'PENDIENTE') {
+                $query->havingRaw('importe > pagado');
+            } elseif ($estado === 'PAGADO') {
+                $query->havingRaw('importe <= pagado');
+            }
+        }
+
+        // Filtro por tipo de entrega (LIMA/PROVINCIA)
+        if ($request->has('entrega') && $request->entrega) {
+            $entrega = $request->entrega;
+            if ($entrega === 'LIMA') {
+                $query->whereNotNull('L.id');
+            } elseif ($entrega === 'PROVINCIA') {
+                $query->whereNotNull('P.id');
+            }
+        }
+
+        // Filtro por contenedor específico
+        if ($request->has('carga') && $request->carga && $request->carga != 'todos') {
+            $query->where('C.id', $request->carga);
+        }
+
+        // Filtro por rango de fechas
+        if ($request->has('fecha_inicio') && $request->fecha_inicio) {
+            $query->whereDate('CC.fecha', '>=', $request->fecha_inicio);
+        }
+        if ($request->has('fecha_fin') && $request->fecha_fin) {
+            $query->whereDate('CC.fecha', '<=', $request->fecha_fin);
+        }
+
         // Ordenamiento
         $sortField = $request->input('sort_by', 'CC.id');
         $sortOrder = $request->input('sort_order', 'asc');
+        $query->orderBy($sortField, $sortOrder);
 
         // Paginación
+        $page = $request->input('page', 1);
+        $perPage = $request->input('per_page', 100);
         $data = $query->paginate($perPage, ['*'], 'page', $page);
+        Log::info('data: ' . json_encode($data));
         //foreach pago_details generate url
         foreach ($data->items() as $item) {
             $item->pagos_details = json_decode($item->pagos_details, true);
-            foreach ($item->pagos_details as $pago) {
-                $pago['voucher_url'] = $this->generateImageUrl($pago['voucher_url']);
+            if (is_array($item->pagos_details)) {
+                foreach ($item->pagos_details as $key => $pago) {
+                    if (isset($pago['voucher_url'])) {
+                        $item->pagos_details[$key]['voucher_url'] = $this->generateImageUrl($pago['voucher_url']);
+                    }
+                }
             }
         }
         return response()->json([
@@ -745,9 +796,32 @@ class EntregaController extends Controller
                 'last_page' => $data->lastPage(),
                 'from' => $data->firstItem(),
                 'to' => $data->lastItem()
-            ]
+            ],
+            'cargas_disponibles' => $this->getCargasDisponibles()
         ]);
     }
+    private function getCargasDisponibles()
+    {
+        try {
+            $cargas = DB::table('carga_consolidada_contenedor as cc')
+                ->select('cc.id', 'cc.carga')
+                ->distinct()
+                ->where('cc.empresa', '!=', '1')
+                ->orderBy('cc.carga')
+                ->get();
+            //carga is string number order by number
+            $cargas = $cargas->sortBy(function ($carga) {
+                return (int) $carga->carga;
+            });
+            return $cargas->values()->map(function($carga) {
+                return ['value' => (int) $carga->id, 'label' => "Contenedor #" . $carga->carga];
+            });
+        } catch (\Exception $e) {
+            Log::error('Error en getCargasDisponibles: ' . $e->getMessage());
+            return collect();
+        }
+    }
+
     public function getDelivery(Request $request, $idContenedor)
     {
         // Lo obtiene de la tabla de clientes asociados al contenedor
@@ -804,8 +878,8 @@ class EntregaController extends Controller
             ->whereNotNull('CC.estado_cliente')
             ->whereNull('CC.id_cliente_importacion')
             ->where('CC.estado_cotizador', 'CONFIRMADO');
-            // Solo filas que tengan algún formulario asociado
-            
+        // Solo filas que tengan algún formulario asociado
+
 
         $page = $request->input('currentPage', 1);
         $perPage = $request->input('itemsPerPage', 100);
@@ -1120,13 +1194,13 @@ class EntregaController extends Controller
         DB::beginTransaction();
         try {
             $inserted = [];
-            
+
             // Procesar photo_1 si existe
             if ($request->hasFile('photo_1')) {
                 $file = $request->file('photo_1');
                 $filename = time() . '_1_' . $file->getClientOriginalName();
                 $storedPath = $file->storeAs($folder, $filename, $disk);
-                
+
                 $insert = [
                     $formIdField => $formId,
                     'id_cotizacion' => $idCotizacion,
@@ -1141,13 +1215,13 @@ class EntregaController extends Controller
                 $newId = DB::table($tableName)->insertGetId($insert);
                 $inserted[] = $newId;
             }
-            
+
             // Procesar photo_2 si existe
             if ($request->hasFile('photo_2')) {
                 $file = $request->file('photo_2');
                 $filename = time() . '_2_' . $file->getClientOriginalName();
                 $storedPath = $file->storeAs($folder, $filename, $disk);
-                
+
                 $insert = [
                     $formIdField => $formId,
                     'id_cotizacion' => $idCotizacion,
@@ -1162,7 +1236,7 @@ class EntregaController extends Controller
                 $newId = DB::table($tableName)->insertGetId($insert);
                 $inserted[] = $newId;
             }
-            
+
             DB::commit();
 
             return response()->json([
@@ -1562,7 +1636,7 @@ class EntregaController extends Controller
             $search = $request->input('search');
             $query->where(function ($q) use ($search) {
                 $q->where('name', 'LIKE', "%{$search}%")
-                  ->orWhere('ruc', 'LIKE', "%{$search}%");
+                    ->orWhere('ruc', 'LIKE', "%{$search}%");
             });
         }
 
@@ -1601,7 +1675,7 @@ class EntregaController extends Controller
     {
         try {
             Log::info('storeHorarios: ' . json_encode($request->all()));
-            
+
             $request->validate([
                 'dayData' => 'required|array',
                 'dayData.*.day' => 'required|date',
@@ -1659,7 +1733,7 @@ class EntregaController extends Controller
 
                 while ($start->lt($end)) {
                     $rangeEnd = $start->copy()->addMinutes(30);
-                    
+
                     // Asegurar que no exceda el tiempo final
                     if ($rangeEnd->gt($end)) {
                         $rangeEnd = $end;
@@ -1699,12 +1773,11 @@ class EntregaController extends Controller
                     'total_days' => count($dayData)
                 ]
             ]);
-
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('Error en storeHorarios: ' . $e->getMessage());
             return response()->json([
-                'message' => 'Error al crear horarios: ' . $e->getMessage(), 
+                'message' => 'Error al crear horarios: ' . $e->getMessage(),
                 'success' => false
             ], 500);
         }
@@ -1713,7 +1786,7 @@ class EntregaController extends Controller
     {
         try {
             Log::info('editHorarios: ' . json_encode($request->all()));
-            
+
             $request->validate([
                 'days' => 'required|array',
                 'days.dayData' => 'required|array',
@@ -1786,7 +1859,7 @@ class EntregaController extends Controller
 
                 while ($start->lt($end)) {
                     $rangeEnd = $start->copy()->addMinutes(30);
-                    
+
                     if ($rangeEnd->gt($end)) {
                         $rangeEnd = $end;
                     }
@@ -1811,10 +1884,10 @@ class EntregaController extends Controller
                 // 3. Por cada rango existente en BD, validar:
                 foreach ($allDbRanges as $dbRange) {
                     Log::info("Procesando rango BD: {$dbRange->start_time} - {$dbRange->end_time} (ID: {$dbRange->id})");
-                    
-                    $existsInToInsert = collect($toInsert)->contains(function($range) use ($dbRange) {
-                        return $range['start_time'] === $dbRange->start_time && 
-                               $range['end_time'] === $dbRange->end_time;
+
+                    $existsInToInsert = collect($toInsert)->contains(function ($range) use ($dbRange) {
+                        return $range['start_time'] === $dbRange->start_time &&
+                            $range['end_time'] === $dbRange->end_time;
                     });
 
                     if (!$existsInToInsert) {
@@ -1845,9 +1918,9 @@ class EntregaController extends Controller
 
                 // 4. Por cada rango en toInsert, validar:
                 foreach ($toInsert as $rangeToInsert) {
-                    $existsInDb = $allDbRanges->contains(function($dbRange) use ($rangeToInsert) {
-                        return $dbRange->start_time === $rangeToInsert['start_time'] && 
-                               $dbRange->end_time === $rangeToInsert['end_time'];
+                    $existsInDb = $allDbRanges->contains(function ($dbRange) use ($rangeToInsert) {
+                        return $dbRange->start_time === $rangeToInsert['start_time'] &&
+                            $dbRange->end_time === $rangeToInsert['end_time'];
                     });
 
                     if (!$existsInDb) {
@@ -1899,12 +1972,11 @@ class EntregaController extends Controller
                     'skipped_range_ids' => $skippedRanges
                 ]
             ]);
-
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('Error en editHorarios: ' . $e->getMessage());
             return response()->json([
-                'message' => 'Error al editar horarios: ' . $e->getMessage(), 
+                'message' => 'Error al editar horarios: ' . $e->getMessage(),
                 'success' => false
             ], 500);
         }
@@ -1913,7 +1985,7 @@ class EntregaController extends Controller
     {
         try {
             Log::info('deleteHorarios: ' . json_encode($request->all()));
-            
+
             $request->validate([
                 'idContenedor' => 'required|integer|exists:carga_consolidada_contenedor,id',
                 'timeSlots' => 'required|array',
@@ -1971,7 +2043,7 @@ class EntregaController extends Controller
                     DB::table('consolidado_delivery_range_date')
                         ->where('id', $rangeId)
                         ->delete();
-                    
+
                     $deletedRanges[] = $rangeId;
                     $deletedCount++;
                     Log::info("Rango $startTime - $endTime (ID: $rangeId) ELIMINADO");
@@ -1995,12 +2067,11 @@ class EntregaController extends Controller
                     'skipped_range_ids' => $skippedRanges
                 ]
             ]);
-
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('Error en deleteHorarios: ' . $e->getMessage());
             return response()->json([
-                'message' => 'Error al eliminar horarios: ' . $e->getMessage(), 
+                'message' => 'Error al eliminar horarios: ' . $e->getMessage(),
                 'success' => false
             ], 500);
         }
