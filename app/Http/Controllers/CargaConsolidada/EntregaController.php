@@ -1412,21 +1412,55 @@ class EntregaController extends Controller
     public function deleteEntregasDetalle(Request $request, $idCotizacion)
     {
         $typeForm = $request->input('type_form');
-        $deleted = 0;
 
-        if ($typeForm === null) {
-            $deleted += DB::table('consolidado_delivery_form_lima')->where('id_cotizacion', $idCotizacion)->delete();
-            $deleted += DB::table('consolidado_delivery_form_province')->where('id_cotizacion', $idCotizacion)->delete();
-        } elseif ((int)$typeForm === 1) {
-            $deleted += DB::table('consolidado_delivery_form_lima')->where('id_cotizacion', $idCotizacion)->delete();
-        } else {
-            $deleted += DB::table('consolidado_delivery_form_province')->where('id_cotizacion', $idCotizacion)->delete();
-        }
+        DB::beginTransaction();
+        try {
+            $deleted = 0;
 
-        if ($deleted === 0) {
-            return response()->json(['message' => 'No se encontró detalle para eliminar', 'success' => false], 404);
+            // 1) Eliminar detalle de formularios según type_form
+            if ($typeForm === null) {
+                $deleted += DB::table('consolidado_delivery_form_lima')->where('id_cotizacion', $idCotizacion)->delete();
+                $deleted += DB::table('consolidado_delivery_form_province')->where('id_cotizacion', $idCotizacion)->delete();
+            } elseif ((int)$typeForm === 1) {
+                $deleted += DB::table('consolidado_delivery_form_lima')->where('id_cotizacion', $idCotizacion)->delete();
+            } else {
+                $deleted += DB::table('consolidado_delivery_form_province')->where('id_cotizacion', $idCotizacion)->delete();
+            }
+
+            // 2) Eliminar asignaciones de fecha/rango y sus fechas asociadas (1 a 1 por requerimiento)
+            $assignments = DB::table('consolidado_user_range_delivery')
+                ->where('id_cotizacion', $idCotizacion)
+                ->get(['id_date', 'id_range_date']);
+
+            if ($assignments->count() > 0) {
+                // Borrar todas las asignaciones del usuario para esta cotización
+                DB::table('consolidado_user_range_delivery')->where('id_cotizacion', $idCotizacion)->delete();
+
+                // Recolectar fechas únicas a eliminar
+                $dateIds = $assignments->pluck('id_date')->filter()->unique()->values();
+                foreach ($dateIds as $dateId) {
+                    // Si no quedan otras asignaciones para esta fecha, eliminar rangos y la fecha
+                    $hasOtherAssignments = DB::table('consolidado_user_range_delivery')
+                        ->where('id_date', $dateId)
+                        ->exists();
+                    if (!$hasOtherAssignments) {
+                        DB::table('consolidado_delivery_range_date')->where('id_date', $dateId)->delete();
+                        DB::table('consolidado_delivery_date')->where('id', $dateId)->delete();
+                    }
+                }
+            }
+
+            if ($deleted === 0 && $assignments->count() === 0) {
+                DB::rollBack();
+                return response()->json(['message' => 'No se encontró detalle para eliminar', 'success' => false], 404);
+            }
+
+            DB::commit();
+            return response()->json(['message' => 'Detalle eliminado correctamente', 'success' => true]);
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            return response()->json(['message' => 'Error al eliminar el detalle: ' . $e->getMessage(), 'success' => false], 500);
         }
-        return response()->json(['message' => 'Detalle eliminado correctamente', 'success' => true]);
     }
     public function saveImporteDelivery(Request $request)
     {
