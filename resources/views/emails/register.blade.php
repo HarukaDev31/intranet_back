@@ -152,7 +152,7 @@
                         <br>
                         <span>
                             <strong>Link de acceso:</strong>
-                            {{ $password }}
+                            <a href="https://clientes.probusiness.pe/">https://probusiness.com.pe/login</a>
                         </span>
                         <br>
                     </td>

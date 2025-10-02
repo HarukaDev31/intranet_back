@@ -557,7 +557,7 @@ class AuthController extends Controller
                 Mail::to($user['email'])->send(
                     new \App\Mail\RegisterConfirmationMail(
                         $user['email'],
-                        $user['password'],
+                        $validatedData['password'],
                         $user['nombre'],
                         public_path('storage/logo_header.png'),
                         public_path('storage/logo_footer.png')
