@@ -104,7 +104,7 @@ class CotizacionController extends Controller
             // Aplicar filtros según el rol del usuario
             switch ($rol) {
                 case Usuario::ROL_COTIZADOR:
-                    if ($user->getIdUsuario() != 28791) {
+                    if ($user->getIdUsuario() != 28791 && $user->getIdUsuario() != 28911) {
                         $query->where('id_usuario', $user->getIdUsuario());
                     }
                     break;
@@ -359,7 +359,7 @@ class CotizacionController extends Controller
             // Si el rol no está en el mapa, devolver todos los headers
             return $headersData;
         }
-        if ($userIdCheck == "28791") {
+        if ($userIdCheck == "28791" || $userIdCheck == "28911") {
             // CBM Vendido por usuario (estado CONFIRMADO)
             $vendidoRows = DB::table('contenedor_consolidado_cotizacion as c')
                 ->leftJoin('usuario as u', 'u.ID_Usuario', '=', 'c.id_usuario')
