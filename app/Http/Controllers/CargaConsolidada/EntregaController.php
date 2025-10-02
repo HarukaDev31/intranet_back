@@ -600,8 +600,48 @@ class EntregaController extends Controller
 
         $data = $query->paginate($perPage, ['*'], 'page', $page);
 
+        // Agregar fotos de conformidad (hasta 2) y el total por cada fila
+        $items = $data->items();
+        foreach ($items as $row) {
+            $row->conformidad = [];
+            $row->conformidad_count = 0;
+            $typeForm = isset($row->type_form) ? (int)$row->type_form : null;
+            if ($typeForm !== null) {
+                // type_form: 0 = Provincia, 1 = Lima
+                $tableName = $typeForm === 1
+                    ? 'consolidado_delivery_form_lima_conformidad'
+                    : 'consolidado_delivery_form_province_conformidad';
+
+                // Obtener total y hasta 2 últimas fotos
+                $total = DB::table($tableName)
+                    ->where('id_cotizacion', $row->id)
+                    ->where('id_contenedor', $row->id_contenedor)
+                    ->count();
+                $photos = DB::table($tableName)
+                    ->select('id', 'file_path', 'file_type', 'file_size', 'file_original_name', 'created_at')
+                    ->where('id_cotizacion', $row->id)
+                    ->where('id_contenedor', $row->id_contenedor)
+                    ->orderByDesc('created_at')
+                    ->limit(2)
+                    ->get();
+
+                $row->conformidad = $photos->map(function ($p) {
+                    return [
+                        'id' => (int)$p->id,
+                        'file_path' => $p->file_path,
+                        'file_url' => $this->generateImageUrl($p->file_path),
+                        'file_type' => $p->file_type,
+                        'file_size' => $p->file_size ? (int)$p->file_size : null,
+                        'file_original_name' => $p->file_original_name,
+                        'created_at' => $p->created_at,
+                    ];
+                })->toArray();
+                $row->conformidad_count = $total;
+            }
+        }
+
         return response()->json([
-            'data' => $data->items(),
+            'data' => $items,
             'success' => true,
             'pagination' => [
                 'current_page' => $data->currentPage(),
