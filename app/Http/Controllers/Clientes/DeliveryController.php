@@ -21,7 +21,10 @@ class DeliveryController extends Controller
     public function getClientesConsolidado($idConsolidado)
     {
         try {
-            $cotizaciones = Cotizacion::where('id_contenedor', $idConsolidado)->cotizacionesEnPasoClientes()->get();
+            $cotizaciones = Cotizacion::where('id_contenedor', $idConsolidado)
+                ->whereNull('delivery_form_registered_at')
+                ->cotizacionesEnPasoClientes()
+                ->get();
             $contenedor = Contenedor::find($idConsolidado);
             if (!$contenedor) {
                 return response()->json(['error' => 'Carga no encontrada'], 404);
@@ -84,6 +87,7 @@ class DeliveryController extends Controller
                 'id_user' => 1  ,
                 'id_contenedor' => $cotizacion->id_contenedor,
                 'importer_nmae' => $request->clienteNombre??$request->clienteRazonSocial,
+                'productos' => $request->tiposProductos,
                 'voucher_doc' => $request->clienteDni??$request->clienteRuc,
                 'voucher_doc_type' => $request->tipoComprobante,
                 'voucher_name' => $request->clienteNombre??$request->clienteRazonSocial,

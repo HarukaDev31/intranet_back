@@ -4,7 +4,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Clientes\Commons\LocationController;
 
 // Rutas protegidas para usuarios externos de importaciones
-Route::group(['prefix' => 'clientes/ubicacion', 'middleware' => 'jwt.external'], function () {
+Route::group(['prefix' => 'clientes/ubicacion' ], function () {
     //get department 
     Route::get('/departamentos', [LocationController::class, 'getDepartamentos']);
     //get provincias

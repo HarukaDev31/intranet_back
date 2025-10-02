@@ -31,6 +31,7 @@ class ConsolidadoDeliveryFormProvince extends Model
         'id_user',
         'id_cotizacion',
         'importer_nmae',
+        'productos',
         'voucher_doc',
         'voucher_doc_type',
         'voucher_name',
