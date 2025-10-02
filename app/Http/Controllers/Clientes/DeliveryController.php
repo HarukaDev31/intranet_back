@@ -115,7 +115,7 @@ class DeliveryController extends Controller
             ]);
 
             // Despachar job para enviar mensaje de WhatsApp
-            SendDeliveryConfirmationWhatsAppProvinceJob::dispatch($deliveryForm->id);
+            //SendDeliveryConfirmationWhatsAppProvinceJob::dispatch($deliveryForm->id);
 
             DB::commit();
             return response()->json([
