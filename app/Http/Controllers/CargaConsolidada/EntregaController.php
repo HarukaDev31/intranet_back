@@ -1001,6 +1001,7 @@ class EntregaController extends Controller
             ->leftJoin('consolidado_delivery_date as DL', 'DL.id', '=', 'RL.id_date')
             ->where('CC.id', $idCotizacion)
             ->select([
+                'CC.*',
                 'CC.id as cotizacion_id',
                 'CC.id_contenedor',
                 // IDs de los formularios
@@ -1089,6 +1090,7 @@ class EntregaController extends Controller
 
         $payload = [
             'cotizacion_id' => (int) $row->cotizacion_id,
+            'peso' => (float) $row->peso,
             'id_contenedor' => (int) $row->id_contenedor,
             'type_form' => $typeForm, // 0=Provincia, 1=Lima
             'delivery' => $delivery,
