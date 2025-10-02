@@ -154,11 +154,27 @@ class DeliveryController extends Controller
             if ($otherDeliveryFormProvince) {
                 return response()->json(['message' => 'Ya existe otro formulario de delivery registrado', 'success' => false], 400);
             }
+            // Obtener el rango de horario desde BD (fuente de la verdad)
+            $rangeId = $request->horarioSeleccionado['range_id'] ?? null;
+            if (!$rangeId) {
+                return response()->json(['message' => 'Falta el range_id en el horario seleccionado', 'success' => false], 422);
+            }
             $rangeDate = DB::table('consolidado_delivery_range_date')
-                ->where('id', $request->horarioSeleccionado['range_id'])
+                ->select('id', 'id_date', 'delivery_count')
+                ->where('id', $rangeId)
                 ->first();
+            if (!$rangeDate) {
+                return response()->json(['message' => 'Horario seleccionado no válido', 'success' => false], 400);
+            }
+            // Validar que el id_date referenciado exista para no romper la FK
+            $rangeDateExists = DB::table('consolidado_delivery_date')
+                ->where('id', $rangeDate->id_date)
+                ->exists();
+            if (!$rangeDateExists) {
+                return response()->json(['message' => 'Fecha de entrega no válida para el horario seleccionado', 'success' => false], 400);
+            }
             $existsDelivery = DB::table('consolidado_delivery_form_lima')
-                ->where('id_range_date', $request->horarioSeleccionado['range_id'])
+                ->where('id_range_date', $rangeDate->id)
                 ->count();
             Log::info($existsDelivery);
             Log::info($rangeDate->delivery_count);
@@ -198,11 +214,11 @@ class DeliveryController extends Controller
 
             //insert in consolidado_user_range_delivery
             DB::table('consolidado_user_range_delivery')->insert([
-                'id_date' => $request->horarioSeleccionado['range_id'],
-                'id_range_date' => $request->horarioSeleccionado['range_id'],
+                'id_date' => $rangeDate->id_date, // usar el id_date real del rango
+                'id_range_date' => $rangeDate->id,
                 'id_cotizacion' => $cotizacion->id,
                 'id_user' => 1,
-            ]); 
+            ]);
             // Despachar job para enviar mensaje de WhatsApp
             //SendDeliveryConfirmationWhatsAppLimaJob::dispatch($deliveryForm->id);
             DB::commit();
