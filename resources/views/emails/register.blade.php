@@ -152,7 +152,7 @@
                         <br>
                         <span>
                             <strong>Link de acceso:</strong>
-                            <a href="https://clientes.probusiness.pe/">https://probusiness.com.pe/login</a>
+                            <a href="https://clientes.probusiness.pe/">https://clientes.probusiness.com.pe/login</a>
                         </span>
                         <br>
                     </td>
