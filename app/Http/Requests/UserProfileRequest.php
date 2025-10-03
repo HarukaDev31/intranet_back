@@ -28,12 +28,11 @@ class UserProfileRequest extends FormRequest
         $userId = auth()->id();
         
         return [
-            'full_name' => 'nullable|string|max:255',
-            'email' => 'nullable|string|email|max:255|unique:users,email,' . $userId,
-            'age' => 'nullable|integer|min:1|max:120',
-            'country' => 'nullable|string|max:100',
-            'phone' => 'nullable|string|max:20|unique:users,whatsapp,' . $userId,
-            'photo' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:10240',
+            'email' => 'required|string|email|max:255|unique:users,email,' . $userId,
+            'age' => 'sometimes|integer|min:1|max:120',
+            'country' => 'sometimes|string|max:100',
+            'phone' => 'sometimes|string|max:20|unique:users,whatsapp,' . $userId,
+            'photo' => 'sometimes|image|mimes:jpeg,png,jpg,gif|max:10240',
         ];
     }
 

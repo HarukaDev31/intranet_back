@@ -52,15 +52,10 @@ class UserProfileController extends Controller
             }
 
             // Separar nombre completo en nombre y apellido
-            $fullName = $validatedData['full_name'];
-            $nameParts = explode(' ', $fullName, 2);
-            $firstName = $nameParts[0];
-            $lastName = isset($nameParts[1]) ? $nameParts[1] : '';
+        
 
             // Actualizar usuario
             $user->update([
-                'name' => $firstName,
-                'lastname' => $lastName,
                 'email' => $validatedData['email'],
                 'whatsapp' => $validatedData['phone'],
                 'photo_url' => $this->generateImageUrl($photoUrl),
