@@ -64,20 +64,20 @@ class UserBusinessController extends Controller
                 $socialAddress = $request->input('social_address');
             }
             
-            // Validar cada campo individualmente
-            if ($businessName !== null && $businessName !== '') {
+            // Validar cada campo individualmente - solo incluir si viene en la petición
+            if ($businessName !== null && $businessName !== '' && $request->has('business_name')) {
                 $validatedData['business_name'] = trim($businessName);
             }
-            if ($businessRuc !== null && $businessRuc !== '') {
+            if ($businessRuc !== null && $businessRuc !== '' && $request->has('business_ruc')) {
                 $validatedData['business_ruc'] = trim($businessRuc);
             }
-            if ($comercialCapacity !== null && $comercialCapacity !== '') {
+            if ($comercialCapacity !== null && $comercialCapacity !== '' && $request->has('comercial_capacity')) {
                 $validatedData['comercial_capacity'] = trim($comercialCapacity);
             }
-            if ($rubric !== null && $rubric !== '') {
+            if ($rubric !== null && $rubric !== '' && $request->has('rubric')) {
                 $validatedData['rubric'] = trim($rubric);
             }
-            if ($socialAddress !== null && $socialAddress !== '') {
+            if ($socialAddress !== null && $socialAddress !== '' && $request->has('social_address')) {
                 $validatedData['social_address'] = trim($socialAddress);
             }
             
@@ -124,24 +124,34 @@ class UserBusinessController extends Controller
                 $userBusiness->update($updateData);
                 $message = 'Empresa actualizada exitosamente';
             } else {
-                // Crear nueva empresa - requiere campos obligatorios
-                $requiredFields = ['business_name', 'business_ruc', 'comercial_capacity', 'rubric'];
-                $missingFields = [];
+                // Crear nueva empresa - solo con los campos que vienen en la petición
+                $createData = [];
                 
-                foreach ($requiredFields as $field) {
-                    if (!isset($validatedData[$field]) || empty(trim($validatedData[$field]))) {
-                        $missingFields[] = $field;
-                    }
+                if (isset($validatedData['business_name'])) {
+                    $createData['name'] = $validatedData['business_name'];
                 }
-                
+                if (isset($validatedData['business_ruc'])) {
+                    $createData['ruc'] = $validatedData['business_ruc'];
+                }
+                if (isset($validatedData['comercial_capacity'])) {
+                    $createData['comercial_capacity'] = $validatedData['comercial_capacity'];
+                }
+                if (isset($validatedData['rubric'])) {
+                    $createData['rubric'] = $validatedData['rubric'];
+                }
+                if (isset($validatedData['social_address'])) {
+                    $createData['social_address'] = $validatedData['social_address'];
+                }
 
-                $userBusiness = UserBusiness::create([
-                    'name' => trim($validatedData['business_name']),
-                    'ruc' => trim($validatedData['business_ruc']),
-                    'comercial_capacity' => trim($validatedData['comercial_capacity']),
-                    'rubric' => trim($validatedData['rubric']),
-                    'social_address' => isset($validatedData['social_address']) ? trim($validatedData['social_address']) : null,
-                ]);
+                // Solo crear si hay al menos un campo
+                if (empty($createData)) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'No se proporcionaron datos para crear la empresa'
+                    ], 400);
+                }
+
+                $userBusiness = UserBusiness::create($createData);
 
                 // Asociar la empresa al usuario
                 $user->update(['id_user_business' => $userBusiness->id]);
