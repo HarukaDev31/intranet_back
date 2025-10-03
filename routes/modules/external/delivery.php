@@ -9,7 +9,7 @@ Route::group(['prefix' => 'clientes/delivery', 'middleware' => 'jwt.external'], 
     Route::get('/agencies', [DeliveryController::class, 'getAgencies']);
     Route::post('/provincia', [DeliveryController::class, 'storeProvinciaForm']);
     Route::post('/lima', [DeliveryController::class, 'storeLimaForm']);
-    Route::get('/horarios-disponibles/{idConsolidado}', [EntregaController::class, 'getHorariosDisponibles']);
+    Route::get('/horarios-disponibles/{idConsolidado}', [EntregaController::class, 'getHorariosDisponiblesClientes']);
     Route::get('/{idConsolidado}', [DeliveryController::class, 'getClientesConsolidado']);
    
 });

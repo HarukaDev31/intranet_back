@@ -114,6 +114,91 @@ class EntregaController extends Controller
             ]
         ]);
     }
+    public function getHorariosDisponiblesClientes(Request $request, $idContenedor)
+    {
+        // Validar existencia de contenedor
+        $contenedor = DB::table('carga_consolidada_contenedor')
+            ->select('id', 'carga')
+            ->where('id', $idContenedor)
+            ->first();
+
+        if (!$contenedor) {
+            return response()->json(['message' => 'Contenedor no encontrado'], 404);
+        }
+
+        // Query base: fechas del contenedor + rangos por fecha (solo rangos sin formularios Lima asociados)
+        $rows = DB::table('consolidado_delivery_date as d')
+            ->join('consolidado_delivery_range_date as r', 'r.id_date', '=', 'd.id')
+            ->leftJoin(
+                DB::raw('(SELECT id_date, id_range_date, COUNT(*) as assigned_count
+                          FROM consolidado_user_range_delivery
+                          GROUP BY id_date, id_range_date) as a'),
+                function ($join) {
+                    $join->on('a.id_date', '=', 'd.id')
+                        ->on('a.id_range_date', '=', 'r.id');
+                }
+            )
+            ->leftJoin('consolidado_delivery_form_lima as lima', function ($join) use ($idContenedor) {
+                $join->on('lima.id_range_date', '=', 'r.id')
+                     ->where('lima.id_contenedor', '=', $idContenedor);
+            })
+            ->where('d.id_contenedor', $idContenedor)
+            ->whereNull('lima.id')
+            ->select([
+                'd.id as date_id',
+                'd.day',
+                'd.month',
+                'd.year',
+                'r.id as range_id',
+                'r.start_time',
+                'r.end_time',
+                'r.delivery_count',
+                DB::raw('COALESCE(a.assigned_count, 0) as assigned_count'),
+                DB::raw('(r.delivery_count - COALESCE(a.assigned_count, 0)) as available')
+            ])
+            ->orderBy('d.year')
+            ->orderBy('d.month')
+            ->orderBy('d.day')
+            ->orderBy('r.start_time')
+            ->get();
+
+        // Agrupar por fecha y formatear salida
+        $grouped = [];
+        foreach ($rows as $row) {
+            $dateKey = sprintf('%04d-%02d-%02d', (int)$row->year, (int)$row->month, (int)$row->day);
+            if (!isset($grouped[$dateKey])) {
+                $grouped[$dateKey] = [
+                    'date_id' => $row->date_id,
+                    'date' => $dateKey,
+                    'day' => (int)$row->day,
+                    'month' => (int)$row->month,
+                    'year' => (int)$row->year,
+                    'slots' => []
+                ];
+            }
+            $grouped[$dateKey]['slots'][] = [
+                'range_id' => $row->range_id,
+                'start_time' => $row->start_time,
+                'end_time' => $row->end_time,
+                'capacity' => (int)$row->delivery_count,
+                'assigned' => (int)$row->assigned_count,
+                'available' => (int)$row->available,
+            ];
+        }
+
+        // Reindexar para devolver una lista
+        $result = array_values($grouped);
+
+        return response()->json([
+            'data' => $result,
+            'success' => true,
+            'meta' => [
+                'total_dates' => count($result),
+                'total_available_slots' => $rows->sum('available'),
+                'filter' => 'rangos_sin_formularios_lima'
+            ]
+        ]);
+    }
 
     public function getHeaders($idContenedor)
     {
