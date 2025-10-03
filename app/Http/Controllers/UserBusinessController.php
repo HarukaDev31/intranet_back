@@ -134,13 +134,6 @@ class UserBusinessController extends Controller
                     }
                 }
                 
-                if (!empty($missingFields)) {
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'Para crear una empresa se requieren: ' . implode(', ', $missingFields),
-                        'received_data' => $validatedData // Para debug
-                    ], 422);
-                }
 
                 $userBusiness = UserBusiness::create([
                     'name' => trim($validatedData['business_name']),
