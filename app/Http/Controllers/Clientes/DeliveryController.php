@@ -23,6 +23,9 @@ class DeliveryController extends Controller
         try {
             $cotizaciones = Cotizacion::where('id_contenedor', $idConsolidado)
                 ->whereNull('delivery_form_registered_at')
+                ->whereNull('id_cliente_importacion')
+                ->where('estado_cotizador', 'CONFIRMADO')
+                ->whereNotNull('estado_cliente')
                 ->cotizacionesEnPasoClientes()
                 ->get();
             $contenedor = Contenedor::find($idConsolidado);
