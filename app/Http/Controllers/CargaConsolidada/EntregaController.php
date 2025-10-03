@@ -684,6 +684,9 @@ class EntregaController extends Controller
                 // Ruc de la agencia si es de Provincia
                 DB::raw('CASE WHEN P.id IS NOT NULL THEN P.agency_ruc ELSE NULL END as agency_ruc'),
                 DB::raw('CASE WHEN P.id IS NOT NULL THEN P.agency_name ELSE NULL END as agency_name'),
+                //R_docs si es de Provincia
+                DB::raw('CASE WHEN P.id IS NOT NULL THEN P.r_doc ELSE NULL END as r_doc'),
+                DB::raw('CASE WHEN P.id IS NOT NULL THEN P.r_name ELSE NULL END as r_name'),
                 // Pick doc si es de Lima
                 DB::raw('CASE WHEN L.id IS NOT NULL THEN L.pick_doc ELSE NULL END as pick_doc'),
                 DB::raw('CASE WHEN L.id IS NOT NULL THEN L.pick_name ELSE NULL END as pick_name'),
