@@ -11,4 +11,6 @@ Route::group(['prefix' => 'clientes/ubicacion' ], function () {
     Route::get('/provincias/{idDepartamento}', [LocationController::class, 'getProvincias']);
     //get distritos
     Route::get('/distritos/{idProvincia}', [LocationController::class, 'getDistritos']);
+    //get all provincias
+    Route::get('/provincias', [LocationController::class, 'getAllProvincias']);
 });

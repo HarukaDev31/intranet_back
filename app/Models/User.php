@@ -31,6 +31,10 @@ class User extends Authenticatable implements JWTSubject
         'id_user_business',
         'api_token',
         'dni',
+        'birth_date',
+        'pais_id',
+        'provincia_id',
+        'goals'
     ];
 
     /**
@@ -50,6 +54,7 @@ class User extends Authenticatable implements JWTSubject
      */
     protected $casts = [
         'email_verified_at' => 'datetime',
+        'birth_date' => 'date',
     ];
 
     /**
@@ -78,6 +83,14 @@ class User extends Authenticatable implements JWTSubject
     public function userBusiness()
     {
         return $this->belongsTo(UserBusiness::class, 'id_user_business');
+    }
+
+    /**
+     * Relación con Pais
+     */
+    public function pais()
+    {
+        return $this->belongsTo(Pais::class, 'ID_Pais', 'ID_Pais');
     }
 
     /**

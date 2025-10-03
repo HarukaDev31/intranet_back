@@ -32,6 +32,8 @@ class RegisterRequest extends FormRequest
             'password' => 'required|string|min:6',
             'whatsapp' => 'required|string|max:255|unique:users',
             'dni' => 'required|numeric|digits:8',
+            'fechaNacimiento' => 'nullable|date',
+            'goals' => 'nullable|string',
         ];
     }
 

@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use App\Traits\WhatsappTrait;
 use App\Traits\FileTrait;
+use App\Models\CargaConsolidada\Contenedor;
 
 class EntregaController extends Controller
 {
@@ -1737,11 +1738,16 @@ class EntregaController extends Controller
             }
 
             $idContenedor = $cotizacion->id_contenedor;
+            $contenedor = Contenedor::find($idContenedor);
+            if (!$contenedor) {
+                return response()->json(['message' => 'Contenedor no encontrada', 'success' => false]);
+            }
             $urlClientes = env('APP_URL_CLIENTES');
             $urlProvincia = $urlClientes . '/formulario-entrega/provincia/' . $idContenedor;
             $urlLima = $urlClientes . '/formulario-entrega/lima/' . $idContenedor;
-
-            $message = "Hola " . $cotizacion->nombre_cliente . ", somos de Pro Business y este mensaje es para informarte que estamos esperando a que llene el formulario para entregar tu pedido\n\n Link Provincia: " . $urlProvincia . "\n\n Link Lima: " . $urlLima;
+            $message = "Hola " . $cotizacion->nombre_cliente . ", somos de Pro Business y este mensaje es para informarte que estamos esperando a que llene el formulario para entregar tu pedido\n\n" .
+            "del consolidado #" . $contenedor->carga . "\n\n" .
+            "Link Provincia: " . $urlProvincia . "\n\n Link Lima: " . $urlLima;
             $telefono = preg_replace('/\s+/', '', $cotizacion->telefono);
             $this->phoneNumberId = $telefono ? $telefono . '@c.us' : '';
             $this->sendMessage($message);

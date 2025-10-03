@@ -114,7 +114,10 @@ class ImportacionesController extends Controller
                 //where telefono trim and remove +51 from db
                 ->where(DB::raw('TRIM(telefono)'), 'like', '%' . $whatsapp . '%')
                 ->whereNotNull('estado_cliente')
-                ->select('id', 'id_contenedor', 'qty_item', 'volumen_final', 'fob_final', 'logistica_final', 'fob', 'monto', 'estado_cliente', 'uuid')
+                //where not has any row in consolidado_delivery_form_lima_conformidad or consolidado_delivery_form_provincia_conformidad with id_cotizacion
+                ->where(DB::raw('(SELECT COUNT(*) FROM consolidado_delivery_form_lima_conformidad WHERE id_cotizacion = id)'), 0)
+                ->where(DB::raw('(SELECT COUNT(*) FROM consolidado_delivery_form_province_conformidad WHERE id_cotizacion = id)'), 0)
+                ->select('id', 'id_contenedor', 'qty_item', 'volumen_final', 'fob_final', 'logistica_final', 'fob', 'monto', 'estado_cliente', 'uuid', 'impuestos_final', 'impuestos')
                 ->orderBy('id', 'desc')
                 ->paginate($perPage);
 
@@ -131,6 +134,81 @@ class ImportacionesController extends Controller
                     'cbm' => $cotizacion->getSumCbmTotalChinaAttribute(),
                     'fob' => $cotizacion->fob_final ?? $cotizacion->fob,
                     'logistica' => $cotizacion->logistica_final ?? $cotizacion->monto,
+                    'impuestos' => $cotizacion->impuestos_final ?? $cotizacion->impuestos,
+                    'estado_cliente' => $cotizacion->estado_cliente,
+                    'seguimiento' => null, // Agregar lógica según tu modelo
+                    'inspecciones' => null // Agregar lógica según tu modelo
+                ];
+            });
+
+            return response()->json([
+                'success' => true,
+                'data' => $trayectosData,
+                'pagination' => [
+                    'total' => $trayectos->total(),
+                    'per_page' => $trayectos->perPage(),
+                    'current_page' => $trayectos->currentPage(),
+                    'last_page' => $trayectos->lastPage(),
+                    'from' => $trayectos->firstItem(),
+                    'to' => $trayectos->lastItem()
+                ]
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al obtener trayectos: ' . $e->getMessage(),
+                'data' => []
+            ], 500);
+        }
+    }
+    public function getEntregados(Request $request)
+    {
+        try {
+            //get current user whatsapp number from jwt
+            $user = JWTAuth::user();
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Usuario no encontrado'
+                ], 401);
+            }
+            $whatsapp = $user->whatsapp;
+            Log::info('Whatsapp: ' . $whatsapp);
+            $perPage = $request->input('per_page', 10);
+            $page = $request->input('page', 1);
+
+            $trayectos = Cotizacion::with(['contenedor' => function ($query) {
+                $query->select('id', 'carga', 'fecha_arribo', 'f_entrega', 'f_cierre');
+            }])
+                ->with(['proveedores' => function ($query) {
+                    $query->select('id_cotizacion', 'cbm_total', 'qty_box', 'qty_box_china', 'cbm_total_china', 'estados_proveedor');
+                }])
+                ->where('estado_cotizador', 'CONFIRMADO')
+                ->whereNull('id_cliente_importacion')
+                //where telefono trim and remove +51 from db
+                ->where(DB::raw('TRIM(telefono)'), 'like', '%' . $whatsapp . '%')
+                ->whereNotNull('estado_cliente')
+                //where  has any row in consolidado_delivery_form_lima_conformidad or consolidado_delivery_form_provincia_conformidad with id_cotizacion
+                ->where(DB::raw('(SELECT COUNT(*) FROM consolidado_delivery_form_lima_conformidad WHERE id_cotizacion = id)'), '>', 0)
+                ->where(DB::raw('(SELECT COUNT(*) FROM consolidado_delivery_form_province_conformidad WHERE id_cotizacion = id)'), '>', 0)
+                ->select('id', 'id_contenedor', 'qty_item', 'volumen_final', 'fob_final', 'logistica_final', 'fob', 'monto', 'estado_cliente', 'uuid', 'impuestos_final', 'impuestos')
+                ->orderBy('id', 'desc')
+                ->paginate($perPage);
+
+            // Transformar los datos para incluir la información del contenedor
+            $trayectosData = $trayectos->getCollection()->map(function ($cotizacion) {
+                return [
+                    'id' => $cotizacion->uuid,
+                    'id_contenedor' => $cotizacion->id_contenedor,
+                    'carga' => $cotizacion->contenedor ? $cotizacion->contenedor->carga : null,
+                    'fecha_cierre' => $cotizacion->contenedor ? $cotizacion->contenedor->f_cierre : null,
+                    'fecha_arribo' => $cotizacion->contenedor ? $cotizacion->contenedor->fecha_arribo : null,
+                    'fecha_entrega' => $cotizacion->contenedor ? $cotizacion->contenedor->f_entrega : null,
+                    'qty_box' => $cotizacion->getSumQtyBoxChinaAttribute(),
+                    'cbm' => $cotizacion->getSumCbmTotalChinaAttribute(),
+                    'fob' => $cotizacion->fob_final ?? $cotizacion->fob,
+                    'logistica' => $cotizacion->logistica_final ?? $cotizacion->monto,
+                    'impuestos' => $cotizacion->impuestos_final ?? $cotizacion->impuestos,
                     'estado_cliente' => $cotizacion->estado_cliente,
                     'seguimiento' => null, // Agregar lógica según tu modelo
                     'inspecciones' => null // Agregar lógica según tu modelo
@@ -288,7 +366,7 @@ class ImportacionesController extends Controller
                 // sum of qty_box_china and cbm_total_china and valor_doc from provideer
                 $this->pasosSeguimiento[0]['description'] = "Inspeccion en Yiwu \n Cajas: " . $cotizacion->getSumQtyBoxChinaAttribute();
                 $maxVol = max($cotizacion->getSumCbmTotalChinaAttribute(), $cotizacion->getSumVolumeDocAttribute());
-                $this->pasosSeguimiento[0]['description'] .= " \n Volumen: " . $maxVol." m3";
+                $this->pasosSeguimiento[0]['description'] .= " \n Volumen: " . $maxVol . " m3";
             }
             if ($contenedor->lista_embarque_url) {
                 $this->pasosSeguimiento[1]['status'] = $this->pasoCompleted;
@@ -316,7 +394,7 @@ class ImportacionesController extends Controller
                 }
                 $this->pasosSeguimiento[4]['date'] = $contenedor->fecha_declaracion;
                 //description canal control: $contenedor->canal_control
-                $this->pasosSeguimiento[4]['description'] = "Canal control: " . $contenedor->canal_control." Esperando Levante" ;
+                $this->pasosSeguimiento[4]['description'] = "Canal control: " . $contenedor->canal_control . " Esperando Levante";
             }
             if ($contenedor->fecha_arribo) {
                 if (date('Y-m-d') >= $contenedor->fecha_arribo) {
@@ -331,7 +409,6 @@ class ImportacionesController extends Controller
                 }
                 $this->pasosSeguimiento[6]['date'] = $contenedor->fecha_levante;
                 $this->pasosSeguimiento[6]['description'] = "Podemos retirar el contenedor de aduanas.";
-
             }
             //for pagos sum all pagos for this cotizacion and if sum >logistica_final + impuestos_final then pago is completed and date is last payment date from file
 
@@ -340,19 +417,33 @@ class ImportacionesController extends Controller
                 $totalPagos = $pagos->sum('monto');
                 if ($totalPagos >= $cotizacion->logistica_final + $cotizacion->impuestos_final) {
                     $this->pasosSeguimiento[7]['status'] = $this->pasoCompleted;
-                    if ($pagos->where('status','!=' ,'CONFIRMADO')->count() > 0) {
+                    if ($pagos->where('status', '!=', 'CONFIRMADO')->count() > 0) {
                         $this->pasosSeguimiento[7]['description'] = "Tu pago ha sido recibido, pero aún no ha sido confirmado";
                         $this->pasosSeguimiento[7]['date'] = $pagos->last()->payment_date;
-
                     } else {
                         $this->pasosSeguimiento[7]['description'] = "Tu pago ha sido confirmado exitosamente";
                         //confirm date is last payment date from file
-                        $this->pasosSeguimiento[7]['date'] = $pagos->last()->confirmation_date??$pagos->last()->payment_date;
+                        $this->pasosSeguimiento[7]['date'] = $pagos->last()->confirmation_date ?? $pagos->last()->payment_date;
                     }
                 }
             }
-
-
+            //FIRST CHECK IF container->carga to int >11
+            if ($contenedor->carga < 11) {
+                $this->pasosSeguimiento[8]['status'] = $this->pasoCompleted;
+                $this->pasosSeguimiento[8]['date'] = $contenedor->created_at;
+            } else {
+                //check if exists any row in consolidado_delivery_form_lima_conformidad or consolidado_delivery_form_provincia_conformidad with id_cotizacion
+                $deliveryFormLimaConformidad = DB::table('consolidado_delivery_form_lima_conformidad')->where('id_cotizacion', $idCotizacion)->first();
+                $deliveryFormProvinciaConformidad = DB::table('consolidado_delivery_form_province_conformidad')->where('id_cotizacion', $idCotizacion)->first();
+                if ($deliveryFormLimaConformidad) {
+                    $this->pasosSeguimiento[8]['status'] = $this->pasoCompleted;
+                    $this->pasosSeguimiento[8]['date'] = $deliveryFormLimaConformidad->created_at;
+                }
+                if ($deliveryFormProvinciaConformidad) {
+                    $this->pasosSeguimiento[8]['status'] = $this->pasoCompleted;
+                    $this->pasosSeguimiento[8]['date'] = $deliveryFormProvinciaConformidad->fecha_conformidad;
+                }
+            }
 
             return response()->json([
                 'success' => true,

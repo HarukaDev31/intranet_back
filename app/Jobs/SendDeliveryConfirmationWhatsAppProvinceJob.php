@@ -11,6 +11,7 @@ use App\Traits\WhatsappTrait;
 use App\Models\CargaConsolidada\ConsolidadoDeliveryFormProvince;
 use App\Models\CargaConsolidada\Cotizacion;
 use Illuminate\Support\Facades\Log;
+use App\Models\User;
 
 class SendDeliveryConfirmationWhatsAppProvinceJob implements ShouldQueue
 {
@@ -39,6 +40,8 @@ class SendDeliveryConfirmationWhatsAppProvinceJob implements ShouldQueue
         try {
             // Obtener el formulario de delivery
             $deliveryForm = ConsolidadoDeliveryFormProvince::with(['cotizacion'])->find($this->deliveryFormId);
+            $idUser = $deliveryForm->id_user;
+            $user = User::find($idUser);
             
             if (!$deliveryForm) {
                 Log::error('Formulario de delivery de provincia no encontrado', ['id' => $this->deliveryFormId]);
@@ -75,6 +78,20 @@ class SendDeliveryConfirmationWhatsAppProvinceJob implements ShouldQueue
 
             // Enviar el mensaje de WhatsApp
             $resultado = $this->sendMessage($mensaje, $telefono);
+            
+            // Enviar email de confirmación si el usuario tiene email
+            if ($user && $user->email) {
+                \Mail::to($user->email)->send(new \App\Mail\DeliveryConfirmationProvinceMail(
+                    $mensaje,
+                    $deliveryForm,
+                    $cotizacion,
+                    $user,
+                    $tipoDocumento,
+                    $nombreRazonSocial,
+                    public_path('storage/logo_header.png'),
+                    public_path('storage/logo_footer.png')
+                ));
+            }
 
             if ($resultado['status']) {
                 Log::info('Mensaje de WhatsApp enviado exitosamente a cliente de provincia', [

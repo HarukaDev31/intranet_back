@@ -66,7 +66,7 @@ class DeliveryController extends Controller
     {
         DB::beginTransaction();
         try {
-                
+            $idUser = JWTAuth::user()->id;
             $cotizacion = Cotizacion::where('uuid', $request->importador)->first();
             if (!$cotizacion) {
                 return response()->json(['message' => 'Cotizacion no encontrada', 'success' => false], 404);
@@ -84,7 +84,7 @@ class DeliveryController extends Controller
 
             $data = [
                 'id_cotizacion' => $cotizacion->id,
-                'id_user' => 1  ,
+                'id_user' => $idUser,
                 'id_contenedor' => $cotizacion->id_contenedor,
                 'importer_nmae' => $request->clienteNombre??$request->clienteRazonSocial,
                 'productos' => $request->tiposProductos,
@@ -185,10 +185,10 @@ class DeliveryController extends Controller
             if ($existsDelivery >= $rangeDate->delivery_count) {
                 return response()->json(['message' => 'El Horario ya no se encuentra disponible', 'success' => false], 400);
             }
-            // Mapear los datos del request a los campos de la tabla
+            $idUser = JWTAuth::user()->id;
             $formData = [
                 'id_contenedor' => $cotizacion->id_contenedor,
-                'id_user' => 1,
+                'id_user' => $idUser,
                 'id_cotizacion' => $cotizacion->id,
                 'id_range_date' => $request->horarioSeleccionado['range_id'] ?? null,
                 'pick_name' => $request->nombreCompleto,
@@ -221,7 +221,7 @@ class DeliveryController extends Controller
                 'id_date' => $rangeDate->id_date, // usar el id_date real del rango
                 'id_range_date' => $rangeDate->id,
                 'id_cotizacion' => $cotizacion->id,
-                'id_user' => 1,
+                'id_user' => $idUser,
             ]);
             // Despachar job para enviar mensaje de WhatsApp
             //SendDeliveryConfirmationWhatsAppLimaJob::dispatch($deliveryForm->id);

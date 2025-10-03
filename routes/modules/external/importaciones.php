@@ -10,4 +10,7 @@ Route::group(['prefix' => 'clientes/importaciones', 'middleware' => 'jwt.externa
         Route::get('/inspeccion/{uuid}', [ImportacionesController::class, 'getInspecciones']);
         Route::get('/seguimiento/{uuid}', [ImportacionesController::class, 'getSeguimiento']);
     });
+    Route::group(['prefix' => 'entregados'], function () {
+        Route::get('/', [ImportacionesController::class, 'getEntregados']);
+    });
 });

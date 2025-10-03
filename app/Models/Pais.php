@@ -20,4 +20,12 @@ class Pais extends Model
     {
         return $this->hasMany(Empresa::class, 'ID_Pais', 'ID_Pais');
     }
+
+    /**
+     * Relación con User
+     */
+    public function users()
+    {
+        return $this->hasMany(User::class, 'ID_Pais', 'ID_Pais');
+    }
 } 

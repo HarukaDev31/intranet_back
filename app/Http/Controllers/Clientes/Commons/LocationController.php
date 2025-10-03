@@ -7,7 +7,7 @@ use Illuminate\Http\Request;
 use App\Models\Departamento;
 use App\Models\Provincia;
 use App\Models\Distrito;
-    
+
 class LocationController extends Controller
 {
     /**
@@ -19,7 +19,7 @@ class LocationController extends Controller
             $departamentos = Departamento::select('ID_Departamento as id', 'No_Departamento as nombre')
                 ->orderBy('No_Departamento')
                 ->get();
-            
+
             return response()->json([
                 'success' => true,
                 'data' => $departamentos,
@@ -43,7 +43,7 @@ class LocationController extends Controller
                 ->select('ID_Provincia as id', 'No_Provincia as nombre', 'ID_Departamento as id_departamento')
                 ->orderBy('No_Provincia')
                 ->get();
-            
+
             return response()->json([
                 'success' => true,
                 'data' => $provincias,
@@ -67,7 +67,7 @@ class LocationController extends Controller
                 ->select('ID_Distrito as id', 'No_Distrito as nombre', 'ID_Provincia as id_provincia')
                 ->orderBy('No_Distrito')
                 ->get();
-            
+
             return response()->json([
                 'success' => true,
                 'data' => $distritos,
@@ -80,7 +80,17 @@ class LocationController extends Controller
             ], 500);
         }
     }
-
+    public function getAllProvincias()
+    {
+        $provincias = Provincia::all();
+        $provincias = $provincias->map(function ($provincia) {
+            return [
+                'value' => $provincia->ID_Provincia,
+                'label' => $provincia->No_Provincia
+            ];
+        });
+        return response()->json(['data' => $provincias, 'success' => true]);
+    }
     /**
      * Obtiene la estructura completa de ubicaciones (departamento -> provincia -> distrito)
      */
@@ -89,14 +99,14 @@ class LocationController extends Controller
         try {
             $distrito = Distrito::with(['provincia.departamento'])
                 ->find($idDistrito);
-            
+
             if (!$distrito) {
                 return response()->json([
                     'success' => false,
                     'error' => 'Distrito no encontrado'
                 ], 404);
             }
-            
+
             $ubicacion = [
                 'distrito' => [
                     'id' => $distrito->ID_Distrito,
@@ -111,7 +121,7 @@ class LocationController extends Controller
                     'nombre' => $distrito->provincia->departamento->No_Departamento
                 ]
             ];
-            
+
             return response()->json([
                 'success' => true,
                 'data' => $ubicacion,
@@ -132,22 +142,22 @@ class LocationController extends Controller
     {
         try {
             $termino = $request->get('q', '');
-            
+
             if (empty($termino)) {
                 return response()->json([
                     'success' => false,
                     'error' => 'Término de búsqueda requerido'
                 ], 400);
             }
-            
+
             $resultados = [];
-            
+
             // Buscar departamentos
             $departamentos = Departamento::where('No_Departamento', 'LIKE', "%{$termino}%")
                 ->select('ID_Departamento as id', 'No_Departamento as nombre')
                 ->limit(10)
                 ->get();
-            
+
             foreach ($departamentos as $departamento) {
                 $resultados[] = [
                     'tipo' => 'departamento',
@@ -156,14 +166,14 @@ class LocationController extends Controller
                     'ruta_completa' => $departamento->nombre
                 ];
             }
-            
+
             // Buscar provincias
             $provincias = Provincia::with('departamento')
                 ->where('No_Provincia', 'LIKE', "%{$termino}%")
                 ->select('ID_Provincia as id', 'No_Provincia as nombre', 'ID_Departamento')
                 ->limit(10)
                 ->get();
-            
+
             foreach ($provincias as $provincia) {
                 $resultados[] = [
                     'tipo' => 'provincia',
@@ -172,25 +182,25 @@ class LocationController extends Controller
                     'ruta_completa' => $provincia->departamento->No_Departamento . ' - ' . $provincia->nombre
                 ];
             }
-            
+
             // Buscar distritos
             $distritos = Distrito::with(['provincia.departamento'])
                 ->where('No_Distrito', 'LIKE', "%{$termino}%")
                 ->select('ID_Distrito as id', 'No_Distrito as nombre', 'ID_Provincia')
                 ->limit(10)
                 ->get();
-            
+
             foreach ($distritos as $distrito) {
                 $resultados[] = [
                     'tipo' => 'distrito',
                     'id' => $distrito->id,
                     'nombre' => $distrito->nombre,
-                    'ruta_completa' => $distrito->provincia->departamento->No_Departamento . ' - ' . 
-                                      $distrito->provincia->No_Provincia . ' - ' . 
-                                      $distrito->nombre
+                    'ruta_completa' => $distrito->provincia->departamento->No_Departamento . ' - ' .
+                        $distrito->provincia->No_Provincia . ' - ' .
+                        $distrito->nombre
                 ];
             }
-            
+
             return response()->json([
                 'success' => true,
                 'data' => $resultados,

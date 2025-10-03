@@ -12,6 +12,6 @@ use App\Http\Controllers\Commons\PaisController;
 |
 */
 
-Route::group(['prefix' => 'options', 'middleware' => 'jwt.auth'], function () {
+Route::group(['prefix' => 'options'], function () {
     Route::get('paises', [PaisController::class, 'getPaisDropdown']);
 });

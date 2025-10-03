@@ -57,10 +57,13 @@ class UserProfileController extends Controller
             // Actualizar usuario
             $user->update([
                 'email' => $validatedData['email'],
+                'phone' => $validatedData['phone'],
                 'whatsapp' => $validatedData['phone'],
                 'photo_url' => $this->generateImageUrl($photoUrl),
-                'age' => $validatedData['age'] ?? null,
-                'country' => $validatedData['country'] ?? null,
+                'birth_date' => $validatedData['fecha_nacimiento'] ?? null,
+                'pais_id' => $validatedData['country'] ?? null,
+                'provincia_id' => $validatedData['city'] ?? null,
+                'goals' => $validatedData['goals'] ?? null,
             ]);
 
             DB::commit();
@@ -70,12 +73,15 @@ class UserProfileController extends Controller
                 'message' => 'Perfil actualizado exitosamente',
                 'user' => [
                     'id' => $user->id,
-                    'fullName' => $user->full_name,
+                    'name' => $user->full_name,
                     'photoUrl' => $this->generateImageUrl($user->photo_url),
                     'email' => $user->email,
                     'phone' => $user->whatsapp,
-                    'age' => $user->age,
-                    'country' => $user->country,
+                    'fechaNacimiento' => $user->birth_date,
+                    'country' => $user->pais_id,
+                    'city' => $user->provincia_id,
+                    'goals' => $user->goals,
+                    'dni' => $user->dni,
                 ]
             ], 200);
 

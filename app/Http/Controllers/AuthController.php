@@ -531,6 +531,7 @@ class AuthController extends Controller
         DB::beginTransaction();
         Log::info('register', $request->all());
         $validatedData = $request->validated();
+
         try {
             $user = User::create([
                 'name' => $validatedData['nombre'],
@@ -540,6 +541,7 @@ class AuthController extends Controller
                 'goals' => $validatedData['goals'] ?? null,
                 'password' => Hash::make($validatedData['password']),
                 'dni' => $validatedData['dni'] ?? null,
+                'birth_date' => $validatedData['fechaNacimiento'] ?? null,
             ]);
 
             $token = JWTAuth::fromUser($user);
@@ -579,15 +581,15 @@ class AuthController extends Controller
                 'expires_in' => 24 * config('jwt.ttl') * 60,
                 'user' => [
                     'id' => $user->id,
-                    'fullName' => $user->full_name,
+                    'name' => $user->full_name,
                     'photoUrl' => $this->generateImageUrl($user->photo_url),
                     'email' => $user->email,
-                    'documentNumber' => null, // Campo no disponible en la estructura actual
-                    'age' => null, // Campo no disponible en la estructura actual
-                    'country' => null, // Campo no disponible en la estructura actual
-                    'city' => null, // Campo no disponible en la estructura actual
+                    'dni' => $user->dni, // Campo no disponible en la estructura actual
+                    'fechaNacimiento' => $user->birth_date, // Campo no disponible en la estructura actual
+                    'country' => $user->pais_id, // Campo no disponible en la estructura actual
+                    'city' => $user->provincia_id, // Campo no disponible en la estructura actual
                     'phone' => $user->whatsapp,
-                    'business' => null, // No hay negocio asociado al registrarse
+                    'empresa' => $user->userBusiness, // No hay negocio asociado al registrarse
                     'importedAmount' => 0, // Campo no disponible en la estructura actual
                     'importedContainers' => 0, // Campo no disponible en la estructura actual
                     'goals' => $user->goals,
@@ -676,19 +678,19 @@ class AuthController extends Controller
                     'expires_in' => 24 * config('jwt.ttl') * 60,
                     'user' => [
                         'id' => $user->id,
-                        'fullName' => $user->full_name,
+                        'name' => $user->full_name,
                         'photoUrl' => $this->generateImageUrl($user->photo_url),
                         'email' => $user->email,
-                        'documentNumber' => null, // Campo no disponible en la estructura actual
-                        'age' => null, // Campo no disponible en la estructura actual
-                        'country' => null, // Campo no disponible en la estructura actual
-                        'city' => null, // Campo no disponible en la estructura actual
+                        'dni' => $user->dni, // Campo no disponible en la estructura actual
+                        'fechaNacimiento' => $user->birth_date, // Campo no disponible en la estructura actual
+                        'country' => $user->pais_id, // Campo no disponible en la estructura actual
+                        'city' => $user->provincia_id, // Campo no disponible en la estructura actual
                         'phone' => $user->whatsapp,
                         'business' => $business,
                         'importedAmount' => 0, // Campo no disponible en la estructura actual
                         'importedContainers' => 0, // Campo no disponible en la estructura actual
                         'goals' => $user->goals,
-                        'dni' => $user->dni,
+                        'empresa' => $user->userBusiness,
                         'raw' => [
                             'grupo' => [
                                 'id' => 1,
@@ -794,7 +796,7 @@ export interface UserBusiness{
                     'city' => null, // Campo no disponible en la estructura actual
                     'phone' => $user->whatsapp,
                     'business' => $business,
-                    'importedAmount' => $importedAmount['sumFob'], // Campo no disponible en la estructura actual
+                    'importedAmount' => $importedAmount['sumFob'] + $importedAmount['sumImpuestos'] + $importedAmount['sumLogistica'], // Campo no disponible en la estructura actual
                     'importedContainers' => $importedAmount['count'], // Campo no disponible en la estructura actual
                     'goals' => $user->goals,
                     'dni' => $user->dni,
@@ -884,12 +886,18 @@ export interface UserBusiness{
                     $query->where(DB::raw('TRIM(REPLACE(telefono, "+51", ""))'), 'like', '%' . $cleanWhatsapp . '%')
                           ->orWhere(DB::raw('TRIM(telefono)'), 'like', '%' . $cleanWhatsapp . '%');
                 })
-                ->select('id', 'fob_final', 'fob', 'monto', 'id_contenedor')
+                ->select('id', 'fob_final', 'fob', 'monto', 'id_contenedor', 'impuestos_final', 'impuestos', 'logistica_final', 'monto')
                 ->get();
             Log::info('Trayectos: ' . $trayectos);
             // Calcular la suma de FOB
             $sumFob = $trayectos->sum(function($cotizacion) {
                 return (float)($cotizacion->fob_final ?? $cotizacion->fob ?? 0);
+            });
+            $sumImpuestos = $trayectos->sum(function($cotizacion) {
+                return (float)($cotizacion->impuestos_final ?? $cotizacion->impuestos ?? 0);
+            });
+            $sumLogistica = $trayectos->sum(function($cotizacion) {
+                return (float)($cotizacion->logistica_final ?? $cotizacion->monto ?? 0);
             });
             //get trayectos with diferente id_contenedor
             $containerCount = $trayectos->unique('id_contenedor')->count();
@@ -897,6 +905,8 @@ export interface UserBusiness{
             return [
                 'success' => true,
                 'sumFob' => $sumFob,
+                'sumImpuestos' => $sumImpuestos,
+                'sumLogistica' => $sumLogistica,
                 'count' => $containerCount
             ];
         } catch (\Exception $e) {
