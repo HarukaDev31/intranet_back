@@ -279,7 +279,13 @@ class PagosController extends Controller
             ], 500);
         }
     }
-
+    public function getConsolidadoDeliveryPagos(Request $request)
+    {
+        $request->validate([
+            'idCotizacion' => 'required|integer',
+        ]);
+        
+    }
     /**
      * Determinar estado de pago
      */
@@ -455,6 +461,26 @@ class PagosController extends Controller
             ];
         }
     }
+    private function getPagosCoordinationDelivery($idCotizacion)
+    {
+        try {
+            $pagos = Pago::with('concepto')
+                ->where('id_cotizacion', $idCotizacion)
+                ->whereIn('id_concept', [PagoConcept::CONCEPT_PAGO_DELIVERY])
+                ->orderBy('payment_date', 'asc')
+                ->get();
+            foreach ($pagos as $pago) {
+                $pago->voucher_url = $this->generateImageUrl($pago->voucher_url);
+            }
+            return $pagos;
+        } catch (\Exception $e) {
+            Log::error('Error en getPagosCoordinationDelivery: ' . $e->getMessage());
+            return [
+                'status' => "error",
+                'message' => 'Error al obtener los pagos: ' . $e->getMessage()
+            ];
+        }
+    }
     public function actualizarPagoCoordinacion(Request $request, $idPago)
     {
         $request->validate([
@@ -549,6 +575,41 @@ class PagosController extends Controller
             // Calcular monto a pagar usando la misma lógica del método principal
             $aPagar = ($cotizacion->logistica_final + $cotizacion->impuestos_final) == 0 ?
                 $cotizacion->monto : ($cotizacion->logistica_final + $cotizacion->impuestos_final);
+
+            // Calcular total pagado sumando todos los pagos
+            $totalPagado = $details->sum('monto');
+
+            return response()->json([
+                'success' => true,
+                'data' => $details,
+                'nota' => $cotizacion->note_administracion ?? '',
+                'cliente' => $cotizacion->nombre ?? '',
+                'cotizacion_inicial_url' => $cotizacion->cotizacion_file_url ?? '',
+                'cotizacion_final_url' => $cotizacion->cotizacion_final_url ?? '',
+                'total_a_pagar' => $aPagar,
+                'total_a_pagar_formateado' => number_format($aPagar, 2, '.', ''),
+                'total_pagado' => $totalPagado,
+                'total_pagado_formateado' => number_format($totalPagado, 2, '.', '')
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error en getDetailsPagosConsolidado: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al obtener los detalles de los pagos consolidados: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+    public function getDetailsPagosConsolidadoDelivery($idCotizacion)
+    {
+        try {
+            $details = $this->getPagosCoordinationDelivery($idCotizacion);
+
+            $cotizacion = Cotizacion::select('note_administracion','total_pago_delivery', 'nombre', 'cotizacion_file_url', 'cotizacion_final_url', 'monto', 'logistica_final', 'impuestos_final')
+                ->where('id', $idCotizacion)
+                ->first();
+
+            // Calcular monto a pagar usando la misma lógica del método principal
+            $aPagar = ($cotizacion->total_pago_delivery);
 
             // Calcular total pagado sumando todos los pagos
             $totalPagado = $details->sum('monto');
