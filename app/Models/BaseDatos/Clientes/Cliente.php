@@ -38,7 +38,11 @@ class Cliente extends Model
             ->where(function ($query) {
                 $query->where('e.Nu_Celular_Entidad', $this->telefono)
                     ->orWhere('e.Nu_Documento_Identidad', $this->documento)
-                    ->orWhere('e.Txt_Email_Entidad', $this->correo);
+                    ->orWhere(function($q) {
+                        $q->whereNotNull('e.Txt_Email_Entidad')
+                          ->where('e.Txt_Email_Entidad', '!=', '')
+                          ->where('e.Txt_Email_Entidad', $this->correo);
+                    });
             })
             ->orderBy('e.Fe_Registro', 'asc')
             ->first();
@@ -63,7 +67,11 @@ class Cliente extends Model
                     ->orWhere('telefono', 'LIKE', "%51" . str_replace(' ', '', $telefonoLimpio) . "%")
                     ->orWhere('telefono', 'LIKE', "%51 " . str_replace(' ', '', $telefonoLimpio) . "%")
                     ->orWhere('documento', $this->documento)
-                    ->orWhere('correo', $this->correo);
+                    ->orWhere(function($q) {
+                        $q->whereNotNull('correo')
+                          ->where('correo', '!=', '')
+                          ->where('correo', $this->correo);
+                    });
             })
             ->orderBy('fecha', 'asc')
             ->first();
@@ -93,8 +101,16 @@ class Cliente extends Model
             ->where('pc.Nu_Estado', 2) // Estado confirmado
             ->where(function ($query) {
                 $query->where(DB::raw('REPLACE(TRIM(e.Nu_Celular_Entidad), " ", "")'), 'LIKE', "%{$this->telefono}%")
-                    ->orWhere('e.Nu_Documento_Identidad', $this->documento)
-                    ->orWhere('e.Txt_Email_Entidad', $this->correo);
+                    ->orWhere(function($q) {
+                        $q->whereNotNull('e.Nu_Documento_Identidad')
+                          ->where('e.Nu_Documento_Identidad', '!=', '')
+                          ->where('e.Nu_Documento_Identidad', $this->documento);
+                    })
+                    ->orWhere(function($q) {
+                        $q->whereNotNull('e.Txt_Email_Entidad')
+                          ->where('e.Txt_Email_Entidad', '!=', '')
+                          ->where('e.Txt_Email_Entidad', $this->correo);
+                    });
             })
             ->where('pc.id_cliente', $this->id)
             ->orderBy('e.Fe_Registro', 'asc')
@@ -121,9 +137,18 @@ class Cliente extends Model
             ->where('estado_cotizador', 'CONFIRMADO')
             ->where(function ($query) {
                 $query->orWhere(DB::raw('REPLACE(TRIM(telefono), " ", "")'), 'LIKE', "%{$this->telefono}%")
-                    ->orWhere('documento', $this->documento)
-                    ->orWhere('correo', $this->correo);
+                    ->orWhere(function($q) {
+                        $q->whereNotNull('documento')
+                          ->where('documento', '!=', '')
+                          ->where('documento', $this->documento);
+                    })
+                    ->orWhere(function($q) {
+                        $q->whereNotNull('correo')
+                          ->where('correo', '!=', '')
+                          ->where('correo', $this->correo);
+                    });
             })
+       
             ->orderBy('fecha', 'asc')
             ->select('contenedor_consolidado_cotizacion.*', 'carga_consolidada_contenedor.carga', 'carga_consolidada_contenedor.id as id_contenedor')
             ->get();
@@ -156,8 +181,16 @@ class Cliente extends Model
             ->where('pc.Nu_Estado', 2) // Estado confirmado
             ->where(function ($query) {
                 $query->where(DB::raw('REPLACE(TRIM(e.Nu_Celular_Entidad), " ", "")'), 'LIKE', "%{$this->telefono}%")
-                    ->orWhere('e.Nu_Documento_Identidad', $this->documento)
-                    ->orWhere('e.Txt_Email_Entidad', $this->correo);
+                    ->orWhere(function($q) {
+                        $q->whereNotNull('e.Nu_Documento_Identidad')
+                          ->where('e.Nu_Documento_Identidad', '!=', '')
+                          ->where('e.Nu_Documento_Identidad', $this->documento);
+                    })
+                    ->orWhere(function($q) {
+                        $q->whereNotNull('e.Txt_Email_Entidad')
+                          ->where('e.Txt_Email_Entidad', '!=', '')
+                          ->where('e.Txt_Email_Entidad', $this->correo);
+                    });
             })
             ->where('pc.id_cliente', $this->id)
             ->orderBy('e.Fe_Registro', 'asc')
@@ -177,7 +210,11 @@ class Cliente extends Model
             ->where(function ($query) {
                 $query->where(DB::raw('REPLACE(TRIM(telefono), " ", "")'), 'LIKE', "%{$this->telefono}%")
                     ->orWhere('documento', $this->documento)
-                    ->orWhere('correo', $this->correo);
+                    ->orWhere(function($q) {
+                        $q->whereNotNull('correo')
+                          ->where('correo', '!=', '')
+                          ->where('correo', $this->correo);
+                    });
             })
             ->where('id_cliente', $this->id)
             ->orderBy('fecha', 'asc')
@@ -291,14 +328,14 @@ class Cliente extends Model
                      JOIN entidad e ON pc.ID_Entidad = e.ID_Entidad 
                      WHERE pc.Nu_Estado = 2 
                      AND (REPLACE(TRIM(e.Nu_Celular_Entidad), " ", "") = REPLACE(TRIM(clientes.telefono), " ", "") 
-                          OR e.Nu_Documento_Identidad = clientes.documento 
-                          OR e.Txt_Email_Entidad = clientes.correo)
+                          OR (e.Nu_Documento_Identidad IS NOT NULL AND e.Nu_Documento_Identidad != \'\' AND e.Nu_Documento_Identidad = clientes.documento)
+                          OR (e.Txt_Email_Entidad IS NOT NULL AND e.Txt_Email_Entidad != \'\' AND e.Txt_Email_Entidad = clientes.correo))
                     ) +
                     (SELECT COUNT(*) FROM contenedor_consolidado_cotizacion 
                      WHERE estado_cotizador = "CONFIRMADO" 
                      AND (REPLACE(TRIM(telefono), " ", "") = REPLACE(TRIM(clientes.telefono), " ", "") 
-                          OR documento = clientes.documento 
-                          OR correo = clientes.correo)
+                          OR (documento IS NOT NULL AND documento != \'\' AND documento = clientes.documento)
+                          OR (correo IS NOT NULL AND correo != \'\' AND correo = clientes.correo))
                     ) = 1
                 )');
             });
@@ -319,7 +356,7 @@ class Cliente extends Model
                         WHERE pc.Nu_Estado = 2 
                         AND (REPLACE(TRIM(e.Nu_Celular_Entidad), " ", "") = REPLACE(TRIM(clientes.telefono), " ", "") 
                              OR e.Nu_Documento_Identidad = clientes.documento 
-                             OR e.Txt_Email_Entidad = clientes.correo)
+                             OR (e.Txt_Email_Entidad IS NOT NULL AND e.Txt_Email_Entidad != \'\' AND e.Txt_Email_Entidad = clientes.correo))
                         
                         UNION ALL
                         
@@ -328,7 +365,7 @@ class Cliente extends Model
                         WHERE estado_cotizador = "CONFIRMADO" 
                         AND (REPLACE(TRIM(telefono), " ", "") = REPLACE(TRIM(clientes.telefono), " ", "") 
                              OR documento = clientes.documento 
-                             OR correo = clientes.correo)
+                             OR (correo IS NOT NULL AND correo != \'\' AND correo = clientes.correo))
                     ) servicios_combinados
                 ) stats
                 WHERE ? = (
