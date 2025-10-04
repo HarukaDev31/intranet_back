@@ -120,12 +120,7 @@ class Cliente extends Model
             ->whereNotNull('estado_cliente')
             ->where('estado_cotizador', 'CONFIRMADO')
             ->where(function ($query) {
-                $telefonoLimpio = preg_replace('/[^0-9]/', '', $this->telefono);
-                $query->where('telefono', 'LIKE', "%{$telefonoLimpio}%")
-                    ->orWhere('telefono', 'LIKE', "%" . str_replace(' ', '', $telefonoLimpio) . "%")
-                    ->orWhere('telefono', 'LIKE', "%51 {$telefonoLimpio}%")
-                    ->orWhere('telefono', 'LIKE', "%51" . str_replace(' ', '', $telefonoLimpio) . "%")
-                    ->orWhere('telefono', 'LIKE', "%51 " . str_replace(' ', '', $telefonoLimpio) . "%")
+                $query->orWhere(DB::raw('REPLACE(TRIM(telefono), " ", "")'), 'LIKE', "%{$this->telefono}%")
                     ->orWhere('documento', $this->documento)
                     ->orWhere('correo', $this->correo);
             })
