@@ -120,9 +120,7 @@ class Cliente extends Model
             ->whereNotNull('estado_cliente')
             ->where('estado_cotizador', 'CONFIRMADO')
             ->where(function ($query) {
-                $query->
-                where('id_cliente', $this->id)->
-                orWhere(DB::raw('REPLACE(TRIM(telefono), " ", "")'), 'LIKE', "%{$this->telefono}%")
+                $query->orWhere(DB::raw('REPLACE(TRIM(telefono), " ", "")'), 'LIKE', "%{$this->telefono}%")
                     ->orWhere('documento', $this->documento)
                     ->orWhere('correo', $this->correo);
                     
