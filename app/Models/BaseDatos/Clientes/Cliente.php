@@ -101,7 +101,7 @@ class Cliente extends Model
                     ->orWhere('e.Nu_Celular_Entidad', 'LIKE', "%51 {$telefonoLimpio}%")
                     ->orWhere('e.Nu_Celular_Entidad', 'LIKE', "%51" . str_replace(' ', '', $telefonoLimpio) . "%")
                     ->orWhere('e.Nu_Celular_Entidad', 'LIKE', "%51 " . str_replace(' ', '', $telefonoLimpio) . "%")
-                    ->orWhere('e.Txt_Nombre_Entidad', 'LIKE', "%{$this->nombre}%")
+                    ->orWhere('e.No_Entidad', 'LIKE', "%{$this->nombre}%")
                     ->orWhere('e.Nu_Documento_Identidad', $this->documento)
                     ->orWhere('e.Txt_Email_Entidad', $this->correo);
             })
@@ -179,7 +179,7 @@ class Cliente extends Model
                     ->orWhere('e.Nu_Celular_Entidad', 'LIKE', "%51 {$telefonoLimpio}%")
                     ->orWhere('e.Nu_Celular_Entidad', 'LIKE', "%51" . str_replace(' ', '', $telefonoLimpio) . "%")
                     ->orWhere('e.Nu_Celular_Entidad', 'LIKE', "%51 " . str_replace(' ', '', $telefonoLimpio) . "%")
-                    ->orWhere('e.Txt_Nombre_Entidad', 'LIKE', "%{$this->nombre}%")
+                    ->orWhere('e.No_Entidad', 'LIKE', "%{$this->nombre}%")
                     ->orWhere('e.Nu_Documento_Identidad', $this->documento)
                     ->orWhere('e.Txt_Email_Entidad', $this->correo);
             })
@@ -328,7 +328,7 @@ class Cliente extends Model
                      JOIN entidad e ON pc.ID_Entidad = e.ID_Entidad 
                      WHERE pc.Nu_Estado = 2 
                      AND (REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(e.Nu_Celular_Entidad, \' \', \'\'), \'-\', \'\'), \'(\', \'\'), \')\', \'\'), \'+\', \'\') LIKE CONCAT(\'%\', REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(clientes.telefono, \' \', \'\'), \'-\', \'\'), \'(\', \'\'), \')\', \'\'), \'+\', \'\'), \'%\')
-                          OR e.Txt_Nombre_Entidad LIKE CONCAT(\'%\', clientes.nombre, \'%\')
+                          OR e.No_Entidad LIKE CONCAT(\'%\', clientes.nombre, \'%\')
                           OR e.Nu_Documento_Identidad = clientes.documento 
                           OR e.Txt_Email_Entidad = clientes.correo)
                     ) +
@@ -361,7 +361,7 @@ class Cliente extends Model
                         JOIN entidad e ON pc.ID_Entidad = e.ID_Entidad 
                         WHERE pc.Nu_Estado = 2 
                         AND (REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(e.Nu_Celular_Entidad, \' \', \'\'), \'-\', \'\'), \'(\', \'\'), \')\', \'\'), \'+\', \'\') LIKE CONCAT(\'%\', REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(clientes.telefono, \' \', \'\'), \'-\', \'\'), \'(\', \'\'), \')\', \'\'), \'+\', \'\'), \'%\')
-                             OR e.Txt_Nombre_Entidad LIKE CONCAT(\'%\', clientes.nombre, \'%\')
+                             OR e.No_Entidad LIKE CONCAT(\'%\', clientes.nombre, \'%\')
                              OR e.Nu_Documento_Identidad = clientes.documento 
                              OR e.Txt_Email_Entidad = clientes.correo)
                         
