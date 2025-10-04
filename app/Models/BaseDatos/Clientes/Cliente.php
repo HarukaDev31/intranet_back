@@ -56,7 +56,7 @@ class Cliente extends Model
             ->whereNotNull('estado_cliente')
             ->where('estado_cotizador', 'CONFIRMADO')
             ->where(function ($query) {
-                $query->where('telefono', $this->telefono)
+                $query->where(DB::raw('REPLACE(TRIM(telefono), " ", "")'), 'LIKE', "%{$this->telefono}%")
                     ->orWhere('documento', $this->documento)
                     ->orWhere('correo', $this->correo);
             })
@@ -87,7 +87,7 @@ class Cliente extends Model
             ->leftJoin('campana_curso as cc', 'pc.ID_Campana', '=', 'cc.ID_Campana')
             ->where('pc.Nu_Estado', 2) // Estado confirmado
             ->where(function ($query) {
-                $query->where('e.Nu_Celular_Entidad', $this->telefono)
+                $query->where(DB::raw('REPLACE(TRIM(e.Nu_Celular_Entidad), " ", "")'), 'LIKE', "%{$this->telefono}%")
                     ->orWhere('e.Nu_Documento_Identidad', $this->documento)
                     ->orWhere('e.Txt_Email_Entidad', $this->correo);
             })
@@ -115,7 +115,8 @@ class Cliente extends Model
             ->whereNotNull('estado_cliente')
             ->where('estado_cotizador', 'CONFIRMADO')
             ->where(function ($query) {
-                $query->where('telefono', $this->telefono)
+                //trim
+                $query->where(DB::raw('REPLACE(TRIM(telefono), " ", "")'), 'LIKE', "%{$this->telefono}%")
                     ->orWhere('documento', $this->documento)
                     ->orWhere('correo', $this->correo);
             })
@@ -151,7 +152,7 @@ class Cliente extends Model
             ->join('entidad as e', 'pc.ID_Entidad', '=', 'e.ID_Entidad')
             ->where('pc.Nu_Estado', 2) // Estado confirmado
             ->where(function ($query) {
-                $query->where('e.Nu_Celular_Entidad', $this->telefono)
+                $query->where(DB::raw('REPLACE(TRIM(e.Nu_Celular_Entidad), " ", "")'), 'LIKE', "%{$this->telefono}%")
                     ->orWhere('e.Nu_Documento_Identidad', $this->documento)
                     ->orWhere('e.Txt_Email_Entidad', $this->correo);
             })
@@ -171,7 +172,7 @@ class Cliente extends Model
             ->whereNotNull('estado_cliente')
             ->where('estado_cotizador', 'CONFIRMADO')
             ->where(function ($query) {
-                $query->where('telefono', $this->telefono)
+                $query->where(DB::raw('REPLACE(TRIM(telefono), " ", "")'), 'LIKE', "%{$this->telefono}%")
                     ->orWhere('documento', $this->documento)
                     ->orWhere('correo', $this->correo);
             })
@@ -246,7 +247,7 @@ class Cliente extends Model
             $q->where('nombre', 'LIKE', "%{$termino}%")
                 ->orWhere('documento', 'LIKE', "%{$termino}%")
                 ->orWhere('correo', 'LIKE', "%{$termino}%")
-                ->orWhere('telefono', 'LIKE', "%{$termino}%");
+                ->orWhere(DB::raw('REPLACE(TRIM(telefono), " ", "")'), 'LIKE', "%{$termino}%");
         });
     }
 
@@ -286,13 +287,13 @@ class Cliente extends Model
                     (SELECT COUNT(*) FROM pedido_curso pc 
                      JOIN entidad e ON pc.ID_Entidad = e.ID_Entidad 
                      WHERE pc.Nu_Estado = 2 
-                     AND (e.Nu_Celular_Entidad = clientes.telefono 
+                     AND (REPLACE(TRIM(e.Nu_Celular_Entidad), " ", "") = REPLACE(TRIM(clientes.telefono), " ", "") 
                           OR e.Nu_Documento_Identidad = clientes.documento 
                           OR e.Txt_Email_Entidad = clientes.correo)
                     ) +
                     (SELECT COUNT(*) FROM contenedor_consolidado_cotizacion 
                      WHERE estado_cotizador = "CONFIRMADO" 
-                     AND (telefono = clientes.telefono 
+                     AND (REPLACE(TRIM(telefono), " ", "") = REPLACE(TRIM(clientes.telefono), " ", "") 
                           OR documento = clientes.documento 
                           OR correo = clientes.correo)
                     ) = 1
@@ -313,7 +314,7 @@ class Cliente extends Model
                         FROM pedido_curso pc 
                         JOIN entidad e ON pc.ID_Entidad = e.ID_Entidad 
                         WHERE pc.Nu_Estado = 2 
-                        AND (e.Nu_Celular_Entidad = clientes.telefono 
+                        AND (REPLACE(TRIM(e.Nu_Celular_Entidad), " ", "") = REPLACE(TRIM(clientes.telefono), " ", "") 
                              OR e.Nu_Documento_Identidad = clientes.documento 
                              OR e.Txt_Email_Entidad = clientes.correo)
                         
@@ -322,7 +323,7 @@ class Cliente extends Model
                         SELECT fecha as fecha_servicio
                         FROM contenedor_consolidado_cotizacion 
                         WHERE estado_cotizador = "CONFIRMADO" 
-                        AND (telefono = clientes.telefono 
+                        AND (REPLACE(TRIM(telefono), " ", "") = REPLACE(TRIM(clientes.telefono), " ", "") 
                              OR documento = clientes.documento 
                              OR correo = clientes.correo)
                     ) servicios_combinados
@@ -355,7 +356,7 @@ class Cliente extends Model
                     FROM pedido_curso pc 
                     JOIN entidad e ON pc.ID_Entidad = e.ID_Entidad 
                     WHERE pc.Nu_Estado = 2 
-                    AND (e.Nu_Celular_Entidad = clientes.telefono 
+                    AND (REPLACE(TRIM(e.Nu_Celular_Entidad), " ", "") = REPLACE(TRIM(clientes.telefono), " ", "") 
                          OR e.Nu_Documento_Identidad = clientes.documento 
                          OR e.Txt_Email_Entidad = clientes.correo)
                     
@@ -364,7 +365,7 @@ class Cliente extends Model
                     SELECT 1
                     FROM contenedor_consolidado_cotizacion 
                     WHERE estado_cotizador = "CONFIRMADO" 
-                    AND (telefono = clientes.telefono 
+                    AND (REPLACE(TRIM(telefono), " ", "") = REPLACE(TRIM(clientes.telefono), " ", "") 
                          OR documento = clientes.documento 
                          OR correo = clientes.correo)
                 ) servicios_combinados
