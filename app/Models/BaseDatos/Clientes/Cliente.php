@@ -74,6 +74,7 @@ class Cliente extends Model
                     });
             })
             ->orderBy('fecha', 'asc')
+            ->orderByRaw('CAST(contenedor_carga AS UNSIGNED)')
             ->first();
 
         if ($cotizacion) {
@@ -150,6 +151,7 @@ class Cliente extends Model
             })
        
             ->orderBy('fecha', 'asc')
+            ->orderByRaw('CAST(contenedor_carga AS UNSIGNED)')
             ->select('contenedor_consolidado_cotizacion.*', 'carga_consolidada_contenedor.carga', 'carga_consolidada_contenedor.id as id_contenedor')
             ->get();
 
@@ -218,6 +220,7 @@ class Cliente extends Model
             })
             ->where('id_cliente', $this->id)
             ->orderBy('fecha', 'asc')
+            ->orderByRaw('CAST(contenedor_carga AS UNSIGNED)')
             ->get();
 
         foreach ($cotizaciones as $cotizacion) {
