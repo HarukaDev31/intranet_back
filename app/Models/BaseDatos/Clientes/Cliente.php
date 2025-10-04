@@ -120,11 +120,12 @@ class Cliente extends Model
             ->whereNotNull('estado_cliente')
             ->where('estado_cotizador', 'CONFIRMADO')
             ->where(function ($query) {
-                $query->orWhere(DB::raw('REPLACE(TRIM(telefono), " ", "")'), 'LIKE', "%{$this->telefono}%")
+                $query->
+                where('id_cliente', $this->id)->
+                orWhere(DB::raw('REPLACE(TRIM(telefono), " ", "")'), 'LIKE', "%{$this->telefono}%")
                     ->orWhere('documento', $this->documento)
-                    ->orWhere('correo', $this->correo)
-                    ->orWhere('id_cliente', $this->id);
-
+                    ->orWhere('correo', $this->correo);
+                    
             })
             ->orderBy('fecha', 'asc')
             ->select('contenedor_consolidado_cotizacion.*', 'carga_consolidada_contenedor.carga', 'carga_consolidada_contenedor.id as id_contenedor')
