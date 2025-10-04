@@ -312,10 +312,7 @@ class Cliente extends Model
                     ) +
                     (SELECT COUNT(*) FROM contenedor_consolidado_cotizacion 
                      WHERE estado_cotizador = "CONFIRMADO" 
-                     AND (telefono LIKE CONCAT(\'%\', TRIM(REPLACE(clientes.telefono, \' \', \'\')), \'%\')
-                          OR telefono LIKE CONCAT(\'%51 \', TRIM(REPLACE(clientes.telefono, \' \', \'\')), \'%\')
-                          OR telefono LIKE CONCAT(\'%51\', TRIM(REPLACE(clientes.telefono, \' \', \'\')), \'%\')
-                          OR telefono LIKE CONCAT(\'%51 \', TRIM(clientes.telefono), \'%\')
+                     AND (REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(telefono, \' \', \'\'), \'-\', \'\'), \'(\', \'\'), \')\', \'\'), \'+\', \'\') LIKE CONCAT(\'%\', REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(clientes.telefono, \' \', \'\'), \'-\', \'\'), \'(\', \'\'), \')\', \'\'), \'+\', \'\'), \'%\')
                           OR documento = clientes.documento 
                           OR correo = clientes.correo)
                     ) = 1
@@ -345,10 +342,7 @@ class Cliente extends Model
                         SELECT fecha as fecha_servicio
                         FROM contenedor_consolidado_cotizacion 
                         WHERE estado_cotizador = "CONFIRMADO" 
-                        AND (telefono LIKE CONCAT(\'%\', TRIM(REPLACE(clientes.telefono, \' \', \'\')), \'%\')
-                             OR telefono LIKE CONCAT(\'%51 \', TRIM(REPLACE(clientes.telefono, \' \', \'\')), \'%\')
-                             OR telefono LIKE CONCAT(\'%51\', TRIM(REPLACE(clientes.telefono, \' \', \'\')), \'%\')
-                             OR telefono LIKE CONCAT(\'%51 \', TRIM(clientes.telefono), \'%\')
+                        AND (REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(telefono, \' \', \'\'), \'-\', \'\'), \'(\', \'\'), \')\', \'\'), \'+\', \'\') LIKE CONCAT(\'%\', REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(clientes.telefono, \' \', \'\'), \'-\', \'\'), \'(\', \'\'), \')\', \'\'), \'+\', \'\'), \'%\')
                              OR documento = clientes.documento 
                              OR correo = clientes.correo)
                     ) servicios_combinados
@@ -390,10 +384,7 @@ class Cliente extends Model
                     SELECT 1
                     FROM contenedor_consolidado_cotizacion 
                     WHERE estado_cotizador = "CONFIRMADO" 
-                    AND (telefono LIKE CONCAT(\'%\', TRIM(REPLACE(clientes.telefono, \' \', \'\')), \'%\')
-                         OR telefono LIKE CONCAT(\'%51 \', TRIM(REPLACE(clientes.telefono, \' \', \'\')), \'%\')
-                         OR telefono LIKE CONCAT(\'%51\', TRIM(REPLACE(clientes.telefono, \' \', \'\')), \'%\')
-                         OR telefono LIKE CONCAT(\'%51 \', TRIM(clientes.telefono), \'%\')
+                    AND (REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(telefono, \' \', \'\'), \'-\', \'\'), \'(\', \'\'), \')\', \'\'), \'+\', \'\') LIKE CONCAT(\'%\', REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(clientes.telefono, \' \', \'\'), \'-\', \'\'), \'(\', \'\'), \')\', \'\'), \'+\', \'\'), \'%\')
                          OR documento = clientes.documento 
                          OR correo = clientes.correo)
                 ) servicios_combinados
