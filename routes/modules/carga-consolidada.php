@@ -226,6 +226,7 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
     // Pagos
     Route::group(['prefix' => 'pagos'], function () {
         Route::get('consolidado', [PagosController::class, 'getConsolidadoPagos']);
+        Route::get('consolidado/delivery/{idCotizacion}', [PagosController::class, 'getDetailsPagosConsolidadoDelivery']);
         Route::get('consolidado/{idCotizacion}', [PagosController::class, 'getDetailsPagosConsolidado']);
         Route::put('consolidado/saveStatus/{idPago}', [PagosController::class, 'actualizarPagoCoordinacion']);
         Route::put('consolidado/updateNota/{idCotizacion}', [PagosController::class, 'updateNotaConsolidado']);
