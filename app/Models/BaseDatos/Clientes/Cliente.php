@@ -207,6 +207,7 @@ class Cliente extends Model
 
         // Buscar en contenedor_consolidado_cotizacion
         $cotizaciones = DB::table('contenedor_consolidado_cotizacion')
+            ->join('carga_consolidada_contenedor', 'contenedor_consolidado_cotizacion.id_contenedor', '=', 'carga_consolidada_contenedor.id')
             ->whereNotNull('estado_cliente')
             ->where('estado_cotizador', 'CONFIRMADO')
             ->where(function ($query) {
