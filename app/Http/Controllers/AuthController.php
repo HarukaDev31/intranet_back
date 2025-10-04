@@ -883,8 +883,11 @@ export interface UserBusiness{
                 ->whereNull('id_cliente_importacion')
                 ->whereNotNull('estado_cliente')
                 ->where(function($query) use ($cleanWhatsapp) {
-                    $query->where(DB::raw('TRIM(REPLACE(telefono, "+51", ""))'), 'like', '%' . $cleanWhatsapp . '%')
-                          ->orWhere(DB::raw('TRIM(telefono)'), 'like', '%' . $cleanWhatsapp . '%');
+                    $query->where('telefono', 'like', '%' . $cleanWhatsapp . '%')
+                          ->orWhere('telefono', 'like', '%' . str_replace(' ', '', $cleanWhatsapp) . '%')
+                          ->orWhere('telefono', 'like', '%51 ' . $cleanWhatsapp . '%')
+                          ->orWhere('telefono', 'like', '%51' . str_replace(' ', '', $cleanWhatsapp) . '%')
+                          ->orWhere('telefono', 'like', '%51 ' . str_replace(' ', '', $cleanWhatsapp) . '%');
                 })
                 ->select('id', 'fob_final', 'fob', 'monto', 'id_contenedor', 'impuestos_final', 'impuestos', 'logistica_final', 'monto')
                 ->get();
