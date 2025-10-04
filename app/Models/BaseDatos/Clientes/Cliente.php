@@ -60,8 +60,11 @@ class Cliente extends Model
                 $query->where('telefono', 'LIKE', "%{$telefonoLimpio}%")
                     ->orWhere('telefono', 'LIKE', "%" . str_replace(' ', '', $telefonoLimpio) . "%")
                     ->orWhere('telefono', 'LIKE', "%51 {$telefonoLimpio}%")
-                    ->orWhere('telefono', 'LIKE', "%51" . str_replace(' ', '', $telefonoLimpio) . "%")
-                    ->orWhere('telefono', 'LIKE', "%51 " . str_replace(' ', '', $telefonoLimpio) . "%")
+                    ->orWhere('telefono', 'LIKE', "%51" . $telefonoLimpio . "%")
+                    ->orWhere('telefono', 'LIKE', "%51 " . $telefonoLimpio . "%")
+                    ->orWhere('telefono', 'LIKE', "%+51 {$telefonoLimpio}%")
+                    ->orWhere('telefono', 'LIKE', "%+51" . $telefonoLimpio . "%")
+                    ->orWhere('telefono', 'LIKE', "%+51 " . $telefonoLimpio . "%")
                     ->orWhere('documento', $this->documento)
                     ->orWhere('correo', $this->correo);
             })
@@ -92,7 +95,13 @@ class Cliente extends Model
             ->leftJoin('campana_curso as cc', 'pc.ID_Campana', '=', 'cc.ID_Campana')
             ->where('pc.Nu_Estado', 2) // Estado confirmado
             ->where(function ($query) {
-                $query->where(DB::raw('REPLACE(TRIM(e.Nu_Celular_Entidad), " ", "")'), 'LIKE', "%{$this->telefono}%")
+                $telefonoLimpio = preg_replace('/[^0-9]/', '', $this->telefono);
+                $query->where('e.Nu_Celular_Entidad', 'LIKE', "%{$telefonoLimpio}%")
+                    ->orWhere('e.Nu_Celular_Entidad', 'LIKE', "%" . str_replace(' ', '', $telefonoLimpio) . "%")
+                    ->orWhere('e.Nu_Celular_Entidad', 'LIKE', "%51 {$telefonoLimpio}%")
+                    ->orWhere('e.Nu_Celular_Entidad', 'LIKE', "%51" . str_replace(' ', '', $telefonoLimpio) . "%")
+                    ->orWhere('e.Nu_Celular_Entidad', 'LIKE', "%51 " . str_replace(' ', '', $telefonoLimpio) . "%")
+                    ->orWhere('e.Txt_Nombre_Entidad', 'LIKE', "%{$this->nombre}%")
                     ->orWhere('e.Nu_Documento_Identidad', $this->documento)
                     ->orWhere('e.Txt_Email_Entidad', $this->correo);
             })
@@ -124,8 +133,11 @@ class Cliente extends Model
                 $query->where('telefono', 'LIKE', "%{$telefonoLimpio}%")
                     ->orWhere('telefono', 'LIKE', "%" . str_replace(' ', '', $telefonoLimpio) . "%")
                     ->orWhere('telefono', 'LIKE', "%51 {$telefonoLimpio}%")
-                    ->orWhere('telefono', 'LIKE', "%51" . str_replace(' ', '', $telefonoLimpio) . "%")
-                    ->orWhere('telefono', 'LIKE', "%51 " . str_replace(' ', '', $telefonoLimpio) . "%")
+                    ->orWhere('telefono', 'LIKE', "%51" . $telefonoLimpio . "%")
+                    ->orWhere('telefono', 'LIKE', "%51 " . $telefonoLimpio . "%")
+                    ->orWhere('telefono', 'LIKE', "%+51 {$telefonoLimpio}%")
+                    ->orWhere('telefono', 'LIKE', "%+51" . $telefonoLimpio . "%")
+                    ->orWhere('telefono', 'LIKE', "%+51 " . $telefonoLimpio . "%")
                     ->orWhere('documento', $this->documento)
                     ->orWhere('correo', $this->correo);
             })
@@ -161,7 +173,13 @@ class Cliente extends Model
             ->join('entidad as e', 'pc.ID_Entidad', '=', 'e.ID_Entidad')
             ->where('pc.Nu_Estado', 2) // Estado confirmado
             ->where(function ($query) {
-                $query->where(DB::raw('REPLACE(TRIM(e.Nu_Celular_Entidad), " ", "")'), 'LIKE', "%{$this->telefono}%")
+                $telefonoLimpio = preg_replace('/[^0-9]/', '', $this->telefono);
+                $query->where('e.Nu_Celular_Entidad', 'LIKE', "%{$telefonoLimpio}%")
+                    ->orWhere('e.Nu_Celular_Entidad', 'LIKE', "%" . str_replace(' ', '', $telefonoLimpio) . "%")
+                    ->orWhere('e.Nu_Celular_Entidad', 'LIKE', "%51 {$telefonoLimpio}%")
+                    ->orWhere('e.Nu_Celular_Entidad', 'LIKE', "%51" . str_replace(' ', '', $telefonoLimpio) . "%")
+                    ->orWhere('e.Nu_Celular_Entidad', 'LIKE', "%51 " . str_replace(' ', '', $telefonoLimpio) . "%")
+                    ->orWhere('e.Txt_Nombre_Entidad', 'LIKE', "%{$this->nombre}%")
                     ->orWhere('e.Nu_Documento_Identidad', $this->documento)
                     ->orWhere('e.Txt_Email_Entidad', $this->correo);
             })
@@ -185,8 +203,11 @@ class Cliente extends Model
                 $query->where('telefono', 'LIKE', "%{$telefonoLimpio}%")
                     ->orWhere('telefono', 'LIKE', "%" . str_replace(' ', '', $telefonoLimpio) . "%")
                     ->orWhere('telefono', 'LIKE', "%51 {$telefonoLimpio}%")
-                    ->orWhere('telefono', 'LIKE', "%51" . str_replace(' ', '', $telefonoLimpio) . "%")
-                    ->orWhere('telefono', 'LIKE', "%51 " . str_replace(' ', '', $telefonoLimpio) . "%")
+                    ->orWhere('telefono', 'LIKE', "%51" . $telefonoLimpio . "%")
+                    ->orWhere('telefono', 'LIKE', "%51 " . $telefonoLimpio . "%")
+                    ->orWhere('telefono', 'LIKE', "%+51 {$telefonoLimpio}%")
+                    ->orWhere('telefono', 'LIKE', "%+51" . $telefonoLimpio . "%")
+                    ->orWhere('telefono', 'LIKE', "%+51 " . $telefonoLimpio . "%")
                     ->orWhere('documento', $this->documento)
                     ->orWhere('correo', $this->correo);
             })
@@ -306,13 +327,19 @@ class Cliente extends Model
                     (SELECT COUNT(*) FROM pedido_curso pc 
                      JOIN entidad e ON pc.ID_Entidad = e.ID_Entidad 
                      WHERE pc.Nu_Estado = 2 
-                     AND (REPLACE(TRIM(e.Nu_Celular_Entidad), " ", "") = REPLACE(TRIM(clientes.telefono), " ", "") 
+                     AND (REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(e.Nu_Celular_Entidad, \' \', \'\'), \'-\', \'\'), \'(\', \'\'), \')\', \'\'), \'+\', \'\') LIKE CONCAT(\'%\', REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(clientes.telefono, \' \', \'\'), \'-\', \'\'), \'(\', \'\'), \')\', \'\'), \'+\', \'\'), \'%\')
+                          OR e.Txt_Nombre_Entidad LIKE CONCAT(\'%\', clientes.nombre, \'%\')
                           OR e.Nu_Documento_Identidad = clientes.documento 
                           OR e.Txt_Email_Entidad = clientes.correo)
                     ) +
                     (SELECT COUNT(*) FROM contenedor_consolidado_cotizacion 
                      WHERE estado_cotizador = "CONFIRMADO" 
-                     AND (REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(telefono, \' \', \'\'), \'-\', \'\'), \'(\', \'\'), \')\', \'\'), \'+\', \'\') LIKE CONCAT(\'%\', REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(clientes.telefono, \' \', \'\'), \'-\', \'\'), \'(\', \'\'), \')\', \'\'), \'+\', \'\'), \'%\')
+                     AND (telefono LIKE CONCAT(\'%\', REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(clientes.telefono, \' \', \'\'), \'-\', \'\'), \'(\', \'\'), \')\', \'\'), \'+\', \'\'), \'%\')
+                          OR telefono LIKE CONCAT(\'%51\', REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(clientes.telefono, \' \', \'\'), \'-\', \'\'), \'(\', \'\'), \')\', \'\'), \'+\', \'\'), \'%\')
+                          OR telefono LIKE CONCAT(\'%51 \', REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(clientes.telefono, \' \', \'\'), \'-\', \'\'), \'(\', \'\'), \')\', \'\'), \'+\', \'\'), \'%\')
+                          OR telefono LIKE CONCAT(\'%+51\', REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(clientes.telefono, \' \', \'\'), \'-\', \'\'), \'(\', \'\'), \')\', \'\'), \'+\', \'\'), \'%\')
+                          OR telefono LIKE CONCAT(\'%+51 \', REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(clientes.telefono, \' \', \'\'), \'-\', \'\'), \'(\', \'\'), \')\', \'\'), \'+\', \'\'), \'%\')
+                          OR nombre LIKE CONCAT(\'%\', clientes.nombre, \'%\')
                           OR documento = clientes.documento 
                           OR correo = clientes.correo)
                     ) = 1
@@ -333,7 +360,8 @@ class Cliente extends Model
                         FROM pedido_curso pc 
                         JOIN entidad e ON pc.ID_Entidad = e.ID_Entidad 
                         WHERE pc.Nu_Estado = 2 
-                        AND (REPLACE(TRIM(e.Nu_Celular_Entidad), " ", "") = REPLACE(TRIM(clientes.telefono), " ", "") 
+                        AND (REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(e.Nu_Celular_Entidad, \' \', \'\'), \'-\', \'\'), \'(\', \'\'), \')\', \'\'), \'+\', \'\') LIKE CONCAT(\'%\', REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(clientes.telefono, \' \', \'\'), \'-\', \'\'), \'(\', \'\'), \')\', \'\'), \'+\', \'\'), \'%\')
+                             OR e.Txt_Nombre_Entidad LIKE CONCAT(\'%\', clientes.nombre, \'%\')
                              OR e.Nu_Documento_Identidad = clientes.documento 
                              OR e.Txt_Email_Entidad = clientes.correo)
                         
@@ -342,7 +370,12 @@ class Cliente extends Model
                         SELECT fecha as fecha_servicio
                         FROM contenedor_consolidado_cotizacion 
                         WHERE estado_cotizador = "CONFIRMADO" 
-                        AND (REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(telefono, \' \', \'\'), \'-\', \'\'), \'(\', \'\'), \')\', \'\'), \'+\', \'\') LIKE CONCAT(\'%\', REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(clientes.telefono, \' \', \'\'), \'-\', \'\'), \'(\', \'\'), \')\', \'\'), \'+\', \'\'), \'%\')
+                        AND (telefono LIKE CONCAT(\'%\', REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(clientes.telefono, \' \', \'\'), \'-\', \'\'), \'(\', \'\'), \')\', \'\'), \'+\', \'\'), \'%\')
+                             OR telefono LIKE CONCAT(\'%51\', REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(clientes.telefono, \' \', \'\'), \'-\', \'\'), \'(\', \'\'), \')\', \'\'), \'+\', \'\'), \'%\')
+                             OR telefono LIKE CONCAT(\'%51 \', REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(clientes.telefono, \' \', \'\'), \'-\', \'\'), \'(\', \'\'), \')\', \'\'), \'+\', \'\'), \'%\')
+                             OR telefono LIKE CONCAT(\'%+51\', REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(clientes.telefono, \' \', \'\'), \'-\', \'\'), \'(\', \'\'), \')\', \'\'), \'+\', \'\'), \'%\')
+                             OR telefono LIKE CONCAT(\'%+51 \', REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(clientes.telefono, \' \', \'\'), \'-\', \'\'), \'(\', \'\'), \')\', \'\'), \'+\', \'\'), \'%\')
+                             OR nombre LIKE CONCAT(\'%\', clientes.nombre, \'%\')
                              OR documento = clientes.documento 
                              OR correo = clientes.correo)
                     ) servicios_combinados
@@ -375,7 +408,8 @@ class Cliente extends Model
                     FROM pedido_curso pc 
                     JOIN entidad e ON pc.ID_Entidad = e.ID_Entidad 
                     WHERE pc.Nu_Estado = 2 
-                    AND (REPLACE(TRIM(e.Nu_Celular_Entidad), " ", "") = REPLACE(TRIM(clientes.telefono), " ", "") 
+                    AND (REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(e.Nu_Celular_Entidad, \' \', \'\'), \'-\', \'\'), \'(\', \'\'), \')\', \'\'), \'+\', \'\') LIKE CONCAT(\'%\', REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(clientes.telefono, \' \', \'\'), \'-\', \'\'), \'(\', \'\'), \')\', \'\'), \'+\', \'\'), \'%\')
+                         OR e.Txt_Nombre_Entidad LIKE CONCAT(\'%\', clientes.nombre, \'%\')
                          OR e.Nu_Documento_Identidad = clientes.documento 
                          OR e.Txt_Email_Entidad = clientes.correo)
                     
@@ -384,7 +418,12 @@ class Cliente extends Model
                     SELECT 1
                     FROM contenedor_consolidado_cotizacion 
                     WHERE estado_cotizador = "CONFIRMADO" 
-                    AND (REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(telefono, \' \', \'\'), \'-\', \'\'), \'(\', \'\'), \')\', \'\'), \'+\', \'\') LIKE CONCAT(\'%\', REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(clientes.telefono, \' \', \'\'), \'-\', \'\'), \'(\', \'\'), \')\', \'\'), \'+\', \'\'), \'%\')
+                    AND (telefono LIKE CONCAT(\'%\', REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(clientes.telefono, \' \', \'\'), \'-\', \'\'), \'(\', \'\'), \')\', \'\'), \'+\', \'\'), \'%\')
+                         OR telefono LIKE CONCAT(\'%51\', REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(clientes.telefono, \' \', \'\'), \'-\', \'\'), \'(\', \'\'), \')\', \'\'), \'+\', \'\'), \'%\')
+                         OR telefono LIKE CONCAT(\'%51 \', REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(clientes.telefono, \' \', \'\'), \'-\', \'\'), \'(\', \'\'), \')\', \'\'), \'+\', \'\'), \'%\')
+                         OR telefono LIKE CONCAT(\'%+51\', REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(clientes.telefono, \' \', \'\'), \'-\', \'\'), \'(\', \'\'), \')\', \'\'), \'+\', \'\'), \'%\')
+                         OR telefono LIKE CONCAT(\'%+51 \', REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(clientes.telefono, \' \', \'\'), \'-\', \'\'), \'(\', \'\'), \')\', \'\'), \'+\', \'\'), \'%\')
+                         OR nombre LIKE CONCAT(\'%\', clientes.nombre, \'%\')
                          OR documento = clientes.documento 
                          OR correo = clientes.correo)
                 ) servicios_combinados
