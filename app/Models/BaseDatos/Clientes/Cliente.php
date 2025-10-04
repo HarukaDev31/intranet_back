@@ -123,8 +123,8 @@ class Cliente extends Model
                 $query->orWhere(DB::raw('REPLACE(TRIM(telefono), " ", "")'), 'LIKE', "%{$this->telefono}%")
                     ->orWhere('documento', $this->documento)
                     ->orWhere('correo', $this->correo);
-                    
             })
+            ->where('id_cliente', $this->id)
             ->orderBy('fecha', 'asc')
             ->select('contenedor_consolidado_cotizacion.*', 'carga_consolidada_contenedor.carga', 'carga_consolidada_contenedor.id as id_contenedor')
             ->get();
