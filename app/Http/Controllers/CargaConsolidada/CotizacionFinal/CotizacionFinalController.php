@@ -1539,7 +1539,8 @@ class CotizacionFinalController extends Controller
                         'impuestos_final' => $result['impuestos_final'],
                         'logistica_final' => $result['logistica_final'],
                         'fob_final' => $result['fob_final'],
-                        'estado_cotizacion_final' => 'PENDIENTE'
+                        'estado_cotizacion_final' => 'PENDIENTE',
+                        'peso_final' => $result['peso_final'],
                     ];
                     
                     Log::info('Actualizando cotización con datos:', [
@@ -3199,10 +3200,12 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
             
             // Verificar si hay antidumping
             $antidumpingSum = 0;
+            $sumPeso=0;
             foreach ($data['cliente']['productos'] as $producto) {
                 $antidumping = is_numeric($producto["antidumping"]) ? (float)$producto["antidumping"] : 0;
                 $cantidad = is_numeric($producto["cantidad"]) ? (float)$producto["cantidad"] : 0;
                 $antidumpingSum += $antidumping * $cantidad;
+                $sumPeso += $producto["peso"] ;
             }
             
             try {
@@ -3243,7 +3246,8 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
                 'estado' => 'PENDIENTE',
                 'excel_file_name' => $excelFileName,
                 'excel_file_path' => $excelFilePath,
-                'cotizacion_final_url' => 'assets/downloads/' . $excelFileName
+                'cotizacion_final_url' => 'assets/downloads/' . $excelFileName,
+                'peso_final' => $sumPeso,
             ];
             
         } catch (\Exception $e) {
