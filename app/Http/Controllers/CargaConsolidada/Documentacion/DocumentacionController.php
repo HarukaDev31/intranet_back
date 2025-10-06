@@ -18,14 +18,13 @@ use Illuminate\Support\Facades\DB;
 use Tymon\JWTAuth\Facades\JWTAuth;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Http\Controllers\BaseDatos\ProductosController;
-use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
-use PhpOffice\PhpSpreadsheet\IOFactory;
-use Illuminate\Http\Response;
 
 class DocumentacionController extends Controller
 {
@@ -1856,11 +1855,30 @@ class DocumentacionController extends Controller
     public function downloadZipAdministracion($idContenedor)
     {
         try {
+            // Obtener datos del contenedor
+            $contenedor = Contenedor::find($idContenedor);
+            if (!$contenedor) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No se encontró el contenedor'
+                ], 404);
+            }
+
+            // Extraer datos de la factura comercial
+            $productosData = $this->extractProductosFromFacturaComercial($idContenedor);
+            
+            if (empty($productosData)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No se encontraron productos en la factura comercial'
+                ], 404);
+            }
+
             // Verificar que los archivos de plantilla existen
             $templateFiles = [
-                'plantilla_precios.xlsx',
                 'plantilla_productos.xlsx', 
-                'plantilla_stock.xlsx'
+                'plantilla_stock.xlsx',
+                'plantilla_precios.xlsx',
             ];
             
             $templatePath = public_path('assets/templates/');
@@ -1883,7 +1901,7 @@ class DocumentacionController extends Controller
             }
             
             // Crear archivo ZIP temporal
-            $zipFileName = 'plantilla_precios_productos_stock_' . time() . '.zip';
+            $zipFileName = 'plantillas_pobladas_' . $contenedor->carga . '_' . time() . '.zip';
             $zipPath = storage_path('app/temp/' . $zipFileName);
             
             // Crear directorio temp si no existe
@@ -1898,8 +1916,11 @@ class DocumentacionController extends Controller
                 throw new \Exception("No se pudo crear el archivo ZIP. Código de error: {$result}");
             }
             
-            // Agregar archivos existentes al ZIP
-            foreach ($existingFiles as $filePath) {
+            // Generar plantillas pobladas
+            $poblatedFiles = $this->generatePoblatedTemplates($productosData, $contenedor->carga);
+            
+            // Agregar solo plantillas pobladas al ZIP
+            foreach ($poblatedFiles as $filePath) {
                 $fileName = basename($filePath);
                 $zip->addFile($filePath, $fileName);
             }
@@ -1911,8 +1932,15 @@ class DocumentacionController extends Controller
                 throw new \Exception("El archivo ZIP no se creó correctamente");
             }
             
+            // Limpiar archivos temporales
+            foreach ($poblatedFiles as $filePath) {
+                if (file_exists($filePath)) {
+                    unlink($filePath);
+                }
+            }
+            
             // Descargar el archivo ZIP
-            return response()->download($zipPath, 'plantilla_precios_productos_stock.zip')->deleteFileAfterSend(true);
+            return response()->download($zipPath, 'plantillas_pobladas_' . $contenedor->carga . '.zip')->deleteFileAfterSend(true);
             
         } catch (\Exception $e) {
             Log::error('Error en downloadZipAdministracion: ' . $e->getMessage());
@@ -2053,5 +2081,274 @@ class DocumentacionController extends Controller
                 'message' => 'Error al crear carpeta de documentación para proveedor: ' . $e->getMessage()
             ], 500);
         }
+    }
+
+    /**
+     * Extrae datos de productos de la factura comercial
+     */
+    private function extractProductosFromFacturaComercial($idContenedor)
+    {
+        try {
+            // Buscar archivo de factura comercial
+            $facturaComercial = $this->getDocumentacionFile($idContenedor, 'Factura Comercial');
+            if (!$facturaComercial || !$this->isExcelFile($facturaComercial->file_url)) {
+                return [];
+            }
+
+            // Cargar archivo Excel
+            $facturaPath = $this->getLocalPath($facturaComercial->file_url);
+            $objPHPExcel = IOFactory::load($facturaPath);
+            
+            $productos = [];
+            $sheetCount = $objPHPExcel->getSheetCount();
+            
+            // Procesar todas las hojas
+            for ($sheetIndex = 0; $sheetIndex < $sheetCount; $sheetIndex++) {
+                $sheet = $objPHPExcel->getSheet($sheetIndex);
+                $highestRow = $sheet->getHighestRow();
+                
+                // Buscar filas de datos (empezando desde la fila 26 como en el código original)
+                for ($row = 26; $row <= $highestRow; $row++) {
+                    $itemN = $sheet->getCell('B' . $row)->getValue();
+                    
+                    // Verificar si no es una fila de total
+                    if (!empty($itemN) && stripos(trim($itemN), "TOTAL") === false) {
+                        $nombreProducto = $sheet->getCell('D' . $row)->getValue();
+                        $cantidad = $sheet->getCell('L' . $row)->getValue();
+                        $precio = $sheet->getCell('N' . $row)->getValue();
+                        
+                        // Validar que tenemos datos válidos
+                        if (!empty($nombreProducto) && !empty($cantidad) && !empty($precio)) {
+                            $precioVenta = floatval($precio) * 1.18; // Aplicar IGV
+                            
+                            $productos[] = [
+                                'nombre' => trim($nombreProducto),
+                                'cantidad' => floatval($cantidad),
+                                'precio' => floatval($precio),
+                                'precio_venta' => round($precioVenta, 2),
+                                'codigo' => '' // Se generará después
+                            ];
+                        }
+                    }
+                }
+            }
+            
+            // Generar códigos únicos para cada producto
+            $productos = $this->generateProductCodes($productos, $idContenedor);
+            
+            return $productos;
+            
+        } catch (\Exception $e) {
+            Log::error('Error extrayendo productos de factura comercial: ' . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * Genera códigos únicos para los productos
+     */
+    private function generateProductCodes($productos, $idContenedor)
+    {
+        // Obtener carga del contenedor
+        $contenedor = Contenedor::find($idContenedor);
+        $carga = $contenedor ? $contenedor->carga : 'CONS';
+        
+        $codigosGenerados = [];
+        $productosConCodigo = [];
+        
+        foreach ($productos as $producto) {
+            $codigo = $this->generateUniqueCode($producto['nombre'], $carga, $codigosGenerados);
+            $codigosGenerados[] = $codigo;
+            
+            $productosConCodigo[] = array_merge($producto, ['codigo' => $codigo]);
+        }
+        
+        return $productosConCodigo;
+    }
+
+    /**
+     * Genera un código único para un producto
+     */
+    private function generateUniqueCode($nombreProducto, $carga, $codigosExistentes)
+    {
+        // Limpiar y obtener palabras del nombre
+        $palabras = preg_split('/\s+/', trim($nombreProducto));
+        $palabras = array_filter($palabras, function($palabra) {
+            return strlen(trim($palabra)) > 0;
+        });
+        
+        // Obtener año actual
+        $year = date('Y');
+        
+        $codigoBase = 'CONS' . $carga . '-' . $year;
+        $longitudInicial = min(10, max(1, count($palabras)));
+        
+        // Intentar con diferentes longitudes hasta encontrar un código único
+        for ($longitud = $longitudInicial; $longitud >= 1; $longitud--) {
+            $iniciales = '';
+            $caracteresUsados = 0;
+            
+            foreach ($palabras as $palabra) {
+                if ($caracteresUsados >= $longitud) break;
+                
+                $palabraLimpia = preg_replace('/[^a-zA-Z0-9]/', '', $palabra);
+                if (!empty($palabraLimpia)) {
+                    $iniciales .= strtoupper(substr($palabraLimpia, 0, 1));
+                    $caracteresUsados++;
+                }
+            }
+            
+            // Si no tenemos suficientes caracteres, usar más de las primeras palabras
+            if ($caracteresUsados < $longitud) {
+                foreach ($palabras as $palabra) {
+                    if ($caracteresUsados >= $longitud) break;
+                    
+                    $palabraLimpia = preg_replace('/[^a-zA-Z0-9]/', '', $palabra);
+                    for ($i = 1; $i < strlen($palabraLimpia) && $caracteresUsados < $longitud; $i++) {
+                        $iniciales .= strtoupper(substr($palabraLimpia, $i, 1));
+                        $caracteresUsados++;
+                    }
+                }
+            }
+            
+            $codigoCompleto = $codigoBase . $iniciales;
+            
+            if (!in_array($codigoCompleto, $codigosExistentes)) {
+                return $codigoCompleto;
+            }
+        }
+        
+        // Si no se puede generar un código único, agregar un número
+        $contador = 1;
+        do {
+            $codigoCompleto = $codigoBase . 'PROD' . $contador;
+            $contador++;
+        } while (in_array($codigoCompleto, $codigosExistentes));
+        
+        return $codigoCompleto;
+    }
+
+    /**
+     * Genera las plantillas pobladas
+     */
+    private function generatePoblatedTemplates($productosData, $carga)
+    {
+        $templatePath = public_path('assets/templates/');
+        $tempPath = storage_path('app/temp/');
+        $poblatedFiles = [];
+        
+        try {
+            // Plantilla de productos
+            $productosTemplate = $templatePath . 'plantilla_productos.xlsx';
+            if (file_exists($productosTemplate)) {
+                $productosPoblado = $this->populateProductosTemplate($productosTemplate, $productosData);
+                $productosPath = $tempPath . '1_Laesystems_Plantilla_Productos.xlsx';
+                $writer = new Xlsx($productosPoblado);
+                $writer->save($productosPath);
+                $poblatedFiles[] = $productosPath;
+            }
+            
+            // Plantilla de stock
+            $stockTemplate = $templatePath . 'plantilla_stock.xlsx';
+            if (file_exists($stockTemplate)) {
+                $stockPoblado = $this->populateStockTemplate($stockTemplate, $productosData);
+                $stockPath = $tempPath . '1_Laesystems_Plantilla_Stock.xlsx';
+                $writer = new Xlsx($stockPoblado);
+                $writer->save($stockPath);
+                $poblatedFiles[] = $stockPath;
+            }
+            
+            // Plantilla de precios
+            $preciosTemplate = $templatePath . 'plantilla_precios.xlsx';
+            if (file_exists($preciosTemplate)) {
+                $preciosPoblado = $this->populatePreciosTemplate($preciosTemplate, $productosData);
+                $preciosPath = $tempPath . '1_Laesystems_Plantilla_Precios.xlsx';
+                $writer = new Xlsx($preciosPoblado);
+                $writer->save($preciosPath);
+                $poblatedFiles[] = $preciosPath;
+            }
+            
+        } catch (\Exception $e) {
+            Log::error('Error generando plantillas pobladas: ' . $e->getMessage());
+        }
+        
+        return $poblatedFiles;
+    }
+
+    /**
+     * Pobla la plantilla de productos
+     */
+    private function populateProductosTemplate($templatePath, $productosData)
+    {
+        $excel = IOFactory::load($templatePath);
+        $sheet = $excel->getActiveSheet();
+        
+        $row = 2; // Empezar en la fila 2
+        foreach ($productosData as $producto) {
+            $sheet->setCellValue('A' . $row, 1);
+            $sheet->setCellValue('B' . $row, ''); // VACIO
+            $sheet->setCellValue('C' . $row, $producto['codigo']);
+            $sheet->setCellValue('D' . $row, ''); // VACIO
+            $sheet->setCellValue('E' . $row, $producto['nombre']);
+            $sheet->setCellValue('F' . $row, 'Gravado - Operación Onerosa');
+            $sheet->setCellValue('G' . $row, 'UNIDAD (BIENES)');
+            $sheet->setCellValue('H' . $row, ''); // VACIO
+            $sheet->setCellValue('I' . $row, 'GENERAL');
+            $sheet->setCellValue('J' . $row, ''); // VACIO
+            $sheet->setCellValue('K' . $row, ''); // VACIO
+            $sheet->setCellValue('L' . $row, ''); // VACIO
+            $sheet->setCellValue('M' . $row, ''); // VACIO
+            $sheet->setCellValue('N' . $row, $producto['precio_venta']);
+            // O-P...AA -> VACIO (se dejan vacías por defecto)
+            
+            $row++;
+        }
+        
+        return $excel;
+    }
+
+    /**
+     * Pobla la plantilla de stock
+     */
+    private function populateStockTemplate($templatePath, $productosData)
+    {
+        $excel = IOFactory::load($templatePath);
+        $sheet = $excel->getActiveSheet();
+        
+        $row = 2; // Empezar en la fila 2
+        foreach ($productosData as $producto) {
+            $sheet->setCellValue('A' . $row, $producto['codigo']);
+            $sheet->setCellValue('B' . $row, $producto['nombre']);
+            $sheet->setCellValue('C' . $row, 'Gravado - Operación Onerosa');
+            $sheet->setCellValue('D' . $row, ''); // VACIO
+            $sheet->setCellValue('E' . $row, $producto['cantidad']);
+            $sheet->setCellValue('F' . $row, ''); // VACIO
+            $sheet->setCellValue('G' . $row, ''); // VACIO
+            
+            $row++;
+        }
+        
+        return $excel;
+    }
+
+    /**
+     * Pobla la plantilla de precios
+     */
+    private function populatePreciosTemplate($templatePath, $productosData)
+    {
+        $excel = IOFactory::load($templatePath);
+        $sheet = $excel->getActiveSheet();
+        
+        $row = 2; // Empezar en la fila 2
+        foreach ($productosData as $producto) {
+            $sheet->setCellValue('A' . $row, $producto['codigo']);
+            $sheet->setCellValue('B' . $row, ''); // VACIO
+            $sheet->setCellValue('C' . $row, ''); // VACIO
+            $sheet->setCellValue('D' . $row, $producto['precio_venta']);
+            
+            $row++;
+        }
+        
+        return $excel;
     }
 }

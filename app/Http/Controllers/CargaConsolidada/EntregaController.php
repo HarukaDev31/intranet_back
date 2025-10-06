@@ -835,14 +835,28 @@ class EntregaController extends Controller
                 ) AS pagos_details"),
                 // Campo calculado para el estado de pago
                 DB::raw("CASE 
-                    WHEN CC.total_pago_delivery > (
+                    WHEN (
                         SELECT IFNULL(SUM(cccp.monto), 0)
                         FROM {$this->table_contenedor_consolidado_cotizacion_coordinacion_pagos} cccp
                         JOIN {$this->table_pagos_concept} ccp ON cccp.id_concept = ccp.id
                         WHERE cccp.id_cotizacion = CC.id
                         AND ccp.name = 'DELIVERY'
-                    ) THEN 'PENDIENTE'
-                    ELSE 'PAGADO'
+                    ) = 0 THEN 'PENDIENTE'
+                    WHEN (
+                        SELECT IFNULL(SUM(cccp.monto), 0)
+                        FROM {$this->table_contenedor_consolidado_cotizacion_coordinacion_pagos} cccp
+                        JOIN {$this->table_pagos_concept} ccp ON cccp.id_concept = ccp.id
+                        WHERE cccp.id_cotizacion = CC.id
+                        AND ccp.name = 'DELIVERY'
+                    ) < CC.total_pago_delivery THEN 'ADELANTO'
+                    WHEN (
+                        SELECT IFNULL(SUM(cccp.monto), 0)
+                        FROM {$this->table_contenedor_consolidado_cotizacion_coordinacion_pagos} cccp
+                        JOIN {$this->table_pagos_concept} ccp ON cccp.id_concept = ccp.id
+                        WHERE cccp.id_cotizacion = CC.id
+                        AND ccp.name = 'DELIVERY'
+                    ) = CC.total_pago_delivery THEN 'PAGADO'
+                    ELSE 'SOBREPAGO'
                 END as estado_pago")
             )
 
@@ -862,13 +876,17 @@ class EntregaController extends Controller
             });
         }
 
-        // Filtro por estado (PENDIENTE/PAGADO)
+        // Filtro por estado (PENDIENTE/ADELANTO/PAGADO/SOBREPAGO)
         if ($request->has('estado') && $request->estado) {
             $estado = $request->estado;
             if ($estado === 'PENDIENTE') {
-                $query->havingRaw('importe > pagado');
+                $query->havingRaw('pagado = 0');
+            } elseif ($estado === 'ADELANTO') {
+                $query->havingRaw('pagado > 0 AND pagado < importe');
             } elseif ($estado === 'PAGADO') {
-                $query->havingRaw('importe <= pagado');
+                $query->havingRaw('pagado = importe');
+            } elseif ($estado === 'SOBREPAGO') {
+                $query->havingRaw('pagado > importe');
             }
         }
 
