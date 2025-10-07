@@ -217,7 +217,7 @@ class CursoController extends Controller
                     'pagos_count' => $curso->pagos_count,
                     'total_pagos' => $curso->total_pagos,
                     'estado_pago' => $estado,
-                    'puede_constancia' => ($tipoCurso == 1 && $fechaFin && strtotime($fechaHoy) > strtotime($fechaFin)),
+                    'puede_constancia' => $curso->send_constancia=='SENDED'?true:false,
                     // Información adicional del cliente
                     'Fe_Nacimiento' => DateHelper::formatDate($curso->Fe_Nacimiento, '-', 0),
                     'Fe_Nacimiento_Original' => $curso->Fe_Nacimiento,
