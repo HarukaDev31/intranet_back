@@ -36,9 +36,25 @@ class CalculadoraImportacionController extends Controller
         try {
             // Obtener clientes con teléfono
             $whatsapp = $request->whatsapp;
+            
+            // Normalizar el número de búsqueda
+            $telefonoNormalizado = preg_replace('/[\s\-\(\)\.\+]/', '', $whatsapp);
+            
+            // Si empieza con 51 y tiene más de 9 dígitos, remover prefijo
+            if (preg_match('/^51(\d{9})$/', $telefonoNormalizado, $matches)) {
+                $telefonoNormalizado = $matches[1];
+            }
+            
             $clientes = Cliente::where('telefono', '!=', null)
                 ->where('telefono', '!=', '')
-                ->where('telefono', 'like', '%' . $whatsapp . '%')
+                ->where(function($query) use ($whatsapp, $telefonoNormalizado) {
+                    $query->where('telefono', 'like', '%' . $whatsapp . '%');
+                    
+                    if (!empty($telefonoNormalizado)) {
+                        $query->orWhereRaw('REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(telefono, " ", ""), "-", ""), "(", ""), ")", ""), "+", "") LIKE ?', ["%{$telefonoNormalizado}%"])
+                            ->orWhereRaw('REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(telefono, " ", ""), "-", ""), "(", ""), ")", ""), "+", "") LIKE ?', ["%51{$telefonoNormalizado}%"]);
+                    }
+                })
                 ->limit(50)
                 ->get();
 

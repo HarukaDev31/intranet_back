@@ -291,8 +291,33 @@ class Cliente extends Model
         return $query->where(function ($q) use ($termino) {
             $q->where('nombre', 'LIKE', "%{$termino}%")
                 ->orWhere('documento', 'LIKE', "%{$termino}%")
-                ->orWhere('correo', 'LIKE', "%{$termino}%")
-                ->orWhere(DB::raw('REPLACE(TRIM(telefono), " ", "")'), 'LIKE', "%{$termino}%");
+                ->orWhere('correo', 'LIKE', "%{$termino}%");
+                
+            // Si el término parece ser un teléfono (contiene solo números, espacios, guiones, etc.)
+            if (preg_match('/^[\d\s\-\(\)\.\+]+$/', $termino)) {
+                // Normalizar el término de búsqueda (función inline)
+                $telefonoNormalizado = preg_replace('/[\s\-\(\)\.\+]/', '', $termino);
+                
+                // Si empieza con 51 y tiene más de 9 dígitos, remover prefijo
+                if (preg_match('/^51(\d{9})$/', $telefonoNormalizado, $matches)) {
+                    $telefonoNormalizado = $matches[1];
+                }
+                
+                if (!empty($telefonoNormalizado)) {
+                    // Buscar coincidencias flexibles
+                    $q->orWhere(function($subQuery) use ($telefonoNormalizado, $termino) {
+                        // Búsqueda por teléfono normalizado
+                        $subQuery->whereRaw('REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(telefono, " ", ""), "-", ""), "(", ""), ")", ""), "+", "") LIKE ?', ["%{$telefonoNormalizado}%"])
+                            // Búsqueda con prefijo 51
+                            ->orWhereRaw('REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(telefono, " ", ""), "-", ""), "(", ""), ")", ""), "+", "") LIKE ?', ["%51{$telefonoNormalizado}%"])
+                            // Búsqueda del término original también
+                            ->orWhere('telefono', 'LIKE', "%{$termino}%");
+                    });
+                }
+            } else {
+                // Si no parece teléfono, hacer búsqueda normal en teléfono
+                $q->orWhere('telefono', 'LIKE', "%{$termino}%");
+            }
         });
     }
 

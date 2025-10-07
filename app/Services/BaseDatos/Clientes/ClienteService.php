@@ -138,7 +138,9 @@ class ClienteService
                     'categoria' => $primerServicio['categoria']
                 ] : null,
                 'total_servicios' => count($servicios),
-                'servicios' => collect($servicios)->map(function ($servicio) {
+                'servicios' => collect($servicios)->sortByDesc(function ($servicio) {
+                    return Carbon::parse($servicio['fecha']);
+                })->values()->map(function ($servicio) {
                     return [
                         'is_imported' => $servicio['is_imported'],
                         'id' => $servicio['id'],

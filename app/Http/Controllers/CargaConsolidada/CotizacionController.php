@@ -75,8 +75,27 @@ class CotizacionController extends Controller
                 $search = $request->search;
                 $query->where(function ($q) use ($search) {
                     $q->where('nombre', 'LIKE', "%{$search}%")
-                        ->orWhere('documento', 'LIKE', "%{$search}%")
-                        ->orWhere('telefono', 'LIKE', "%{$search}%");
+                        ->orWhere('documento', 'LIKE', "%{$search}%");
+                    
+                    // Mejorar búsqueda de teléfono
+                    if (preg_match('/^[\d\s\-\(\)\.\+]+$/', $search)) {
+                        $telefonoNormalizado = preg_replace('/[\s\-\(\)\.\+]/', '', $search);
+                        
+                        // Si empieza con 51 y tiene más de 9 dígitos, remover prefijo
+                        if (preg_match('/^51(\d{9})$/', $telefonoNormalizado, $matches)) {
+                            $telefonoNormalizado = $matches[1];
+                        }
+                        
+                        if (!empty($telefonoNormalizado)) {
+                            $q->orWhere(function($subQuery) use ($telefonoNormalizado, $search) {
+                                $subQuery->whereRaw('REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(telefono, " ", ""), "-", ""), "(", ""), ")", ""), "+", "") LIKE ?', ["%{$telefonoNormalizado}%"])
+                                    ->orWhereRaw('REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(telefono, " ", ""), "-", ""), "(", ""), ")", ""), "+", "") LIKE ?', ["%51{$telefonoNormalizado}%"])
+                                    ->orWhere('telefono', 'LIKE', "%{$search}%");
+                            });
+                        }
+                    } else {
+                        $q->orWhere('telefono', 'LIKE', "%{$search}%");
+                    }
                 });
             }
 

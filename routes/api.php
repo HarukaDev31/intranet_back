@@ -2,6 +2,7 @@
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use App\Models\BaseDatos\Clientes\Cliente;
 
 /*
 |--------------------------------------------------------------------------
@@ -13,6 +14,33 @@ use Illuminate\Support\Facades\Route;
 | is assigned to the "api" middleware group. Enjoy building your API!
 |
 */
+
+// Test route for phone search
+Route::get('/test-phone-search/{termino}', function ($termino) {
+    try {
+        $clientes = Cliente::buscar($termino)->limit(5)->get();
+        
+        return response()->json([
+            'termino_busqueda' => $termino,
+            'termino_normalizado' => preg_replace('/[\s\-\(\)\.\+]/', '', $termino),
+            'total_encontrados' => $clientes->count(),
+            'clientes' => $clientes->map(function($cliente) {
+                return [
+                    'id' => $cliente->id,
+                    'nombre' => $cliente->nombre,
+                    'telefono' => $cliente->telefono,
+                    'documento' => $cliente->documento
+                ];
+            })
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'error' => $e->getMessage(),
+            'line' => $e->getLine(),
+            'file' => $e->getFile()
+        ], 500);
+    }
+});
 
 /*
 |--------------------------------------------------------------------------
