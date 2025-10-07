@@ -1874,7 +1874,7 @@ class DocumentacionController extends Controller
                 ], 404);
             }
 
-            // Verificar que los archivos de plantilla existen
+            // Verificar que los archivos de plantilla existen (locales o URLs)
             $templateFiles = [
                 'plantilla_productos.xlsx', 
                 'plantilla_stock.xlsx',
@@ -2088,6 +2088,8 @@ class DocumentacionController extends Controller
      */
     private function extractProductosFromFacturaComercial($idContenedor)
     {
+        $tempFile = null; // Para rastrear archivos temporales
+        
         try {
             // Buscar archivo de factura comercial
             $facturaComercial = $this->getDocumentacionFile($idContenedor, 'Factura Comercial');
@@ -2097,6 +2099,12 @@ class DocumentacionController extends Controller
 
             // Cargar archivo Excel
             $facturaPath = $this->getLocalPath($facturaComercial->file_url);
+            
+            // Si es un archivo temporal (descargado desde URL), marcarlo para limpieza
+            if (filter_var($facturaComercial->file_url, FILTER_VALIDATE_URL)) {
+                $tempFile = $facturaPath;
+            }
+            
             $objPHPExcel = IOFactory::load($facturaPath);
             
             $productos = [];
@@ -2141,6 +2149,12 @@ class DocumentacionController extends Controller
         } catch (\Exception $e) {
             Log::error('Error extrayendo productos de factura comercial: ' . $e->getMessage());
             return [];
+        } finally {
+            // Limpiar archivo temporal si existe
+            if ($tempFile && file_exists($tempFile)) {
+                unlink($tempFile);
+                Log::info("Archivo temporal limpiado: {$tempFile}");
+            }
         }
     }
 
