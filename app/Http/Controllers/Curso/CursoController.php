@@ -446,7 +446,7 @@ class CursoController extends Controller
             12 => 'Diciembre'
         ];
         $data = (array)$data;
-        $data['url_constancia'] = $this->generateImageUrl($data['url_constancia']);
+        $data['url_constancia'] = $this->generateImageUrlRedisProyect($data['url_constancia']);
 
         $data['mes_nombre'] = isset($data['mes_numero']) ? ($meses_es[(int)$data['mes_numero']] ?? '') : '';
         $data['password_moodle'] = $this->ciDecrypt($data['password_moodle']);
