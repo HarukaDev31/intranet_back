@@ -431,7 +431,6 @@ class CursoController extends Controller
             ")
             ->first();
             //get url constancia and use filetrait generate file
-            $data['url_constancia'] = $this->generateImageUrl($data['url_constancia']);
         $meses_es = [
             1 => 'Enero',
             2 => 'Febrero',
@@ -447,6 +446,8 @@ class CursoController extends Controller
             12 => 'Diciembre'
         ];
         $data = (array)$data;
+        $data['url_constancia'] = $this->generateImageUrl($data['url_constancia']);
+
         $data['mes_nombre'] = isset($data['mes_numero']) ? ($meses_es[(int)$data['mes_numero']] ?? '') : '';
         $data['password_moodle'] = $this->ciDecrypt($data['password_moodle']);
         return response()->json(['status' => 'success', 'data' => $data]);
