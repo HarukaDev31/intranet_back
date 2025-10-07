@@ -30,8 +30,8 @@ trait FileTrait
             return $ruta;
         }
         //remote /public/ from ruta
-        $ruta = str_replace('/public/', '', $ruta);
+        $ruta = str_replace('public/', '', $ruta);
         // Generar URL completa desde storage
-        return env('APP_URL').'/'.$ruta;
+        return env('APP_URL_REDIS').'/'.$ruta;
     }
 }
