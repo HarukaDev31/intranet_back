@@ -17,10 +17,11 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use App\Traits\CodeIgniterEncryption;
 use App\Traits\MoodleRestProTrait;
+use App\Traits\FileTrait;
 
 class CursoController extends Controller
 {
-    use CodeIgniterEncryption, MoodleRestProTrait;
+    use CodeIgniterEncryption, MoodleRestProTrait, FileTrait;
     public $table_pedido_curso_pagos = 'pedido_curso_pagos';
     public function index(Request $request)
     {
@@ -217,7 +218,7 @@ class CursoController extends Controller
                     'pagos_count' => $curso->pagos_count,
                     'total_pagos' => $curso->total_pagos,
                     'estado_pago' => $estado,
-                    'puede_constancia' => ($tipoCurso == 1 && $fechaFin && strtotime($fechaHoy) > strtotime($fechaFin)),
+                    'puede_constancia' => $curso->send_constancia=='SENDED'?true:false,
                     // Información adicional del cliente
                     'Fe_Nacimiento' => DateHelper::formatDate($curso->Fe_Nacimiento, '-', 0),
                     'Fe_Nacimiento_Original' => $curso->Fe_Nacimiento,
@@ -429,7 +430,7 @@ class CursoController extends Controller
                 MONTH(CC.Fe_Inicio) as mes_numero
             ")
             ->first();
-
+            //get url constancia and use filetrait generate file
         $meses_es = [
             1 => 'Enero',
             2 => 'Febrero',
@@ -445,6 +446,8 @@ class CursoController extends Controller
             12 => 'Diciembre'
         ];
         $data = (array)$data;
+        $data['url_constancia'] = $this->generateImageUrlRedisProyect($data['url_constancia']);
+
         $data['mes_nombre'] = isset($data['mes_numero']) ? ($meses_es[(int)$data['mes_numero']] ?? '') : '';
         $data['password_moodle'] = $this->ciDecrypt($data['password_moodle']);
         return response()->json(['status' => 'success', 'data' => $data]);
