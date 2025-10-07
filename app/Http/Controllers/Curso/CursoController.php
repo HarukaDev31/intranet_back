@@ -17,10 +17,11 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use App\Traits\CodeIgniterEncryption;
 use App\Traits\MoodleRestProTrait;
+use App\Traits\FileTrait;
 
 class CursoController extends Controller
 {
-    use CodeIgniterEncryption, MoodleRestProTrait;
+    use CodeIgniterEncryption, MoodleRestProTrait, FileTrait;
     public $table_pedido_curso_pagos = 'pedido_curso_pagos';
     public function index(Request $request)
     {
@@ -429,7 +430,8 @@ class CursoController extends Controller
                 MONTH(CC.Fe_Inicio) as mes_numero
             ")
             ->first();
-
+            //get url constancia and use filetrait generate file
+            $data['url_constancia'] = $this->generateImageUrl($data['url_constancia']);
         $meses_es = [
             1 => 'Enero',
             2 => 'Febrero',
