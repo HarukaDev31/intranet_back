@@ -2101,7 +2101,9 @@ class DocumentacionController extends Controller
             $facturaPath = $this->getLocalPath($facturaComercial->file_url);
             
             // Si es un archivo temporal (descargado desde URL), marcarlo para limpieza
-            if (filter_var($facturaComercial->file_url, FILTER_VALIDATE_URL)) {
+            // Verificamos si el path contiene el directorio temp y un timestamp
+            if (strpos($facturaPath, storage_path('app/temp')) !== false && 
+                preg_match('/\d+_\w+\.xlsx?$/', basename($facturaPath))) {
                 $tempFile = $facturaPath;
             }
             

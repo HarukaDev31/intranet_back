@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Str;
 use Tymon\JWTAuth\Facades\JWTAuth;
 use Tymon\JWTAuth\Exceptions\JWTException;
 use App\Models\Usuario;
@@ -30,7 +31,7 @@ class AuthController extends Controller
      */
     public function __construct()
     {
-        $this->middleware('auth:api', ['except' => ['login', 'register', 'loginCliente', 'meExternal', 'logoutExternal', 'refreshExternal']]);
+        $this->middleware('auth:api', ['except' => ['login', 'register', 'loginCliente', 'meExternal', 'logoutExternal', 'refreshExternal', 'forgotPassword', 'resetPassword']]);
     }
 
     /**
@@ -921,6 +922,193 @@ export interface UserBusiness{
                 'message' => 'Error al obtener cotizaciones',
                 'error' => $e->getMessage()
             ];
+        }
+    }
+
+    /**
+     * Generar token de recuperación de contraseña y enviar correo
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function forgotPassword(Request $request)
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'email' => 'required|email'
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Email inválido',
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+
+            $email = $request->email;
+
+            // Buscar usuario por email en la tabla users (clientes)
+            $user = User::where('email', $email)->first();
+
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No se encontró ningún usuario con ese correo electrónico'
+                ], 404);
+            }
+
+            // Generar token único
+            $token = Str::random(64);
+
+            // Guardar o actualizar en password_resets
+            DB::table('password_resets')->updateOrInsert(
+                ['email' => $email],
+                [
+                    'email' => $email,
+                    'token' => Hash::make($token),
+                    'created_at' => now()
+                ]
+            );
+
+            // Construir URL de reset (viene del frontend)
+            $frontendUrl = env('APP_URL_CLIENTES','http://localhost:3001');
+            $resetUrl = $frontendUrl . '/reset-password?token=' . $token;
+
+            // Despachar job para enviar email
+            \App\Jobs\SendForgotPasswordEmailJob::dispatch($email, $token, $resetUrl);
+
+            Log::info('Token de recuperación de contraseña generado y correo enviado', [
+                'email' => $email,
+                'user_id' => $user->id
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Se ha enviado un correo con las instrucciones para recuperar tu contraseña'
+            ], 200);
+
+        } catch (\Exception $e) {
+            Log::error('Error en forgotPassword: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al procesar la solicitud de recuperación de contraseña'
+            ], 500);
+        }
+    }
+
+    /**
+     * Restablecer contraseña con token
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function resetPassword(Request $request)
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'token' => 'required|string',
+                'password' => 'required|string|min:8|confirmed',
+                'password_confirmation' => 'required|string'
+            ], [
+                'password.min' => 'La contraseña debe tener al menos 8 caracteres',
+                'password.confirmed' => 'Las contraseñas no coinciden',
+                'token.required' => 'El token es requerido',
+                'password.required' => 'La contraseña es requerida',
+                'password_confirmation.required' => 'La confirmación de contraseña es requerida'
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Error de validación',
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+
+            $token = $request->token;
+            $password = $request->password;
+
+            // Buscar el token en password_resets
+            $passwordReset = DB::table('password_resets')
+                ->where('email', function($query) use ($token) {
+                    $query->select('email')
+                        ->from('password_resets')
+                        ->whereRaw('1=1');
+                })
+                ->get();
+
+            // Buscar el registro correcto comparando el token hasheado
+            $resetRecord = null;
+            foreach ($passwordReset as $record) {
+                if (Hash::check($token, $record->token)) {
+                    $resetRecord = $record;
+                    break;
+                }
+            }
+
+            if (!$resetRecord) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'El token de recuperación es inválido o ha expirado'
+                ], 404);
+            }
+
+            // Verificar que el token no haya expirado (60 minutos)
+            $createdAt = \Carbon\Carbon::parse($resetRecord->created_at);
+            if ($createdAt->addMinutes(60)->isPast()) {
+                // Eliminar token expirado
+                DB::table('password_resets')
+                    ->where('email', $resetRecord->email)
+                    ->delete();
+
+                return response()->json([
+                    'success' => false,
+                    'message' => 'El token de recuperación ha expirado. Por favor, solicita uno nuevo.'
+                ], 410);
+            }
+
+            // Buscar usuario por email
+            $user = User::where('email', $resetRecord->email)->first();
+
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Usuario no encontrado'
+                ], 404);
+            }
+
+            // Actualizar contraseña
+            $user->password = Hash::make($password);
+            $user->save();
+
+            // Eliminar el token usado
+            DB::table('password_resets')
+                ->where('email', $resetRecord->email)
+                ->delete();
+
+            Log::info('Contraseña restablecida exitosamente', [
+                'email' => $user->email,
+                'user_id' => $user->id
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => '¡Contraseña restablecida exitosamente! Ahora puedes iniciar sesión con tu nueva contraseña.'
+            ], 200);
+
+        } catch (\Exception $e) {
+            Log::error('Error en resetPassword: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al restablecer la contraseña'
+            ], 500);
         }
     }
 }

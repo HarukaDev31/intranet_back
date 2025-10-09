@@ -7,9 +7,19 @@ use Illuminate\Http\Request;
 use App\Models\Departamento;
 use App\Models\Provincia;
 use App\Models\Distrito;
+use App\Models\Pais;
 
 class LocationController extends Controller
 {
+    /**
+     * Obtiene todos los países
+     */
+    public function getPaises()
+    {
+        $paises = Pais::all();
+        return response()->json(['data' => $paises, 'success' => true]);
+    }
+
     /**
      * Obtiene todos los departamentos
      */
@@ -36,7 +46,7 @@ class LocationController extends Controller
     /**
      * Obtiene todas las provincias de un departamento específico
      */
-    public function     getProvincias($idDepartamento)
+    public function  getProvincias($idDepartamento)
     {
         try {
             $provincias = Provincia::where('ID_Departamento', $idDepartamento)

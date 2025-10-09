@@ -1423,10 +1423,10 @@ class CursoController extends Controller
         }
     }
 
-    public function actualizarDatosCliente(Request $request)
+    public function actualizarDatosCliente(Request $request,$id)
     {
         try {
-            $id_entidad = $request->input('ID_Entidad');
+            $id_entidad = $id;
             $data = [
                 'No_Entidad'             => $request->input('No_Entidad'),
                 'Nu_Documento_Identidad' => $request->input('Nu_Documento_Identidad'),
