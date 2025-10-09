@@ -16,8 +16,6 @@ trait WhatsappTrait
             if (strpos($envUrl, 'localhost') !== false) {
                 $data['phoneNumberId'] = '51931629529@c.us';
             }
-            $data['phoneNumberId'] = '51931629529@c.us';
-
             Log::info('Llamando API de WhatsApp', [
                 'endpoint' => $endpoint,
                 'url' => $url,
