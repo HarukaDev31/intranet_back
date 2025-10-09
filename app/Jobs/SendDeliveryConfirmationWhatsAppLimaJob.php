@@ -9,6 +9,7 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use App\Traits\WhatsappTrait;
 use App\Models\CargaConsolidada\ConsolidadoDeliveryFormLima;
+use App\Models\CargaConsolidada\Contenedor;
 use App\Models\CargaConsolidada\Cotizacion;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
@@ -50,8 +51,15 @@ class SendDeliveryConfirmationWhatsAppLimaJob implements ShouldQueue
 
             // Obtener la cotización
             $cotizacion = $deliveryForm->cotizacion;
+            //Obtener la carga del contenedor
+            $contenedor = Contenedor::find($cotizacion->id_contenedor);
+            $carga = $contenedor->carga;
             if (!$cotizacion) {
                 Log::error('Cotización no encontrada para el formulario de Lima', ['form_id' => $this->deliveryFormId]);
+                return;
+            }
+            if (!$contenedor) {
+                Log::error('Contenedor no encontrado para la cotización del formulario de Lima', ['cotizacion_id' => $cotizacion->id]);
                 return;
             }
 
@@ -78,8 +86,11 @@ class SendDeliveryConfirmationWhatsAppLimaJob implements ShouldQueue
             $horaRecojo = $rangeInfo ? sprintf('%s - %s', $rangeInfo->start_time, $rangeInfo->end_time) : 'Hora no especificada';
 
             // Construir el mensaje con fecha y hora
-            $mensaje = "Tu reserva se realizó exitosamente, tu fecha de recojo es \"{$fechaRecojo}\" en el horario \"{$horaRecojo}\".\n";
-            $mensaje .= "La persona que recogerá su pedido es {$deliveryForm->pick_name} - DNI {$deliveryForm->pick_doc}.";
+            $mensaje = "Consolidado #{$carga}\n\n";
+            $mensaje .= "Tu reserva se realizó exitosamente, tu fecha de recojo es \"{$fechaRecojo}\" en el horario \"{$horaRecojo}\".\n";
+            $mensaje .= "La persona que recogerá su pedido es {$deliveryForm->pick_name} - DNI {$deliveryForm->pick_doc}.\n\n";
+            $mensaje .= "🏢 Dirección de recojo: Calle Rio Nazca 243- San Luis. Ref. Al costado de la Agencia Antezana\n\n";
+            $mensaje .= "🗺️ Ver ubicación: https://maps.app.goo.gl/5raLmkX65nNHB2Fr9";
 
             // Enviar el mensaje de WhatsApp
             $resultado = $this->sendMessage($mensaje, $telefono);

@@ -15,6 +15,7 @@ class RegisterConfirmationMail extends Mailable
     public $name;
     public $logo_header;
     public $logo_footer;
+    public $social_icons;
 
     /**
      * Create a new message instance.
@@ -26,6 +27,12 @@ class RegisterConfirmationMail extends Mailable
         $this->name = $name;
         $this->logo_header = $logo_header;
         $this->logo_footer = $logo_footer;
+        $this->social_icons = [
+            'facebook' => public_path('storage/facebook.png'),
+            'instagram' => public_path('storage/instagram.png'),
+            'tiktok' => public_path('storage/tiktok.png'),
+            'youtube' => public_path('storage/youtube.png'),
+        ];
     }
 
     /**

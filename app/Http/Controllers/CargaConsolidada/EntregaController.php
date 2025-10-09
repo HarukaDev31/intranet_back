@@ -1667,18 +1667,6 @@ class EntregaController extends Controller
                 // Borrar todas las asignaciones del usuario para esta cotización
                 DB::table('consolidado_user_range_delivery')->where('id_cotizacion', $idCotizacion)->delete();
 
-                // Recolectar fechas únicas a eliminar
-                $dateIds = $assignments->pluck('id_date')->filter()->unique()->values();
-                foreach ($dateIds as $dateId) {
-                    // Si no quedan otras asignaciones para esta fecha, eliminar rangos y la fecha
-                    $hasOtherAssignments = DB::table('consolidado_user_range_delivery')
-                        ->where('id_date', $dateId)
-                        ->exists();
-                    if (!$hasOtherAssignments) {
-                        DB::table('consolidado_delivery_range_date')->where('id_date', $dateId)->delete();
-                        DB::table('consolidado_delivery_date')->where('id', $dateId)->delete();
-                    }
-                }
             }
 
             // 3) Actualizar la tabla contenedor_consolidado_cotizacion y hacer que delivery_form_registered_at sea NULL
