@@ -250,11 +250,7 @@ class CotizacionController extends Controller
                 DB::raw('(
                     SELECT COALESCE(SUM(volumen), 0)
                     FROM contenedor_consolidado_cotizacion
-                    WHERE id IN (
-                        SELECT DISTINCT id_cotizacion
-                        FROM contenedor_consolidado_cotizacion_proveedores
-                        WHERE id_contenedor = ' . $idContenedor . '
-                    )
+                    WHERE id_contenedor = ' . $idContenedor . '
                     AND estado_cotizador = "CONFIRMADO"
                 ) as cbm_total_peru'),
                 DB::raw('(
@@ -380,6 +376,8 @@ class CotizacionController extends Controller
         }
         if ($userIdCheck == "28791" || $userIdCheck == "28911") {
             // CBM Vendido por usuario (estado CONFIRMADO)
+            //remove cbm_vendido 
+            unset($headersData['cbm_vendido']);
             $vendidoRows = DB::table('contenedor_consolidado_cotizacion as c')
                 ->leftJoin('usuario as u', 'u.ID_Usuario', '=', 'c.id_usuario')
                 ->where('c.id_contenedor', $idContenedor)
@@ -448,11 +446,11 @@ class CotizacionController extends Controller
                 $embarcadoMapFormatted[$nombre] = number_format((float)$valor, 2, '.', '');
             }
             // Adjuntar el desglose por usuario dentro de los mismos headersData
-            if (isset($headersData['cbm_vendido'])) {
-                $headersData['cbm_vendido']['por_usuario'] = $vendidoMapFormatted;
-                $headersData['cbm_vendido']['value'] = number_format(array_sum($vendidoMap), 2, '.', '');
+            if (isset($headersData['cbm_total_peru'])) {
+                $headersData['cbm_total_peru']['por_usuario'] = $vendidoMapFormatted;
+                $headersData['cbm_total_peru']['value'] = number_format(array_sum($vendidoMap), 2, '.', '');
             } else {
-                $headersData['cbm_vendido'] = [
+                $headersData['cbm_total_peru'] = [
                     'value' => number_format(array_sum($vendidoMap), 2, '.', ''),
                     'label' => 'CBM Vendido',
                     'icon' => 'i-heroicons-currency-dollar',
