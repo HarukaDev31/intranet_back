@@ -73,7 +73,8 @@ class SendDeliveryConfirmationWhatsAppProvinceJob implements ShouldQueue
             $nombreRazonSocial = $deliveryForm->r_name;
 
             // Construir el mensaje
-            $mensaje = "Tu reserva se realizó exitosamente.\n";
+            $mensaje = "Consolidado #{$cotizacion->carga}\n\n";
+            $mensaje .= "Tu reserva se realizó exitosamente.\n";
             $mensaje .= "El cosignatario a quien se enviará la carga es: {$tipoDocumento}: {$deliveryForm->r_doc} - Nombre {$nombreRazonSocial}.";
 
             // Enviar el mensaje de WhatsApp

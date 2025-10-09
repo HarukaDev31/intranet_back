@@ -34,7 +34,7 @@ class UserProfileRequest extends FormRequest
             'city' => 'sometimes|string|exists:provincia,ID_Provincia',
             'phone' => 'sometimes|string|max:20|unique:users,whatsapp,' . $userId,
             'photo' => 'sometimes|image|mimes:jpeg,png,jpg,gif|max:10240',
-            'goals' => 'sometimes|string'
+            'goals' => 'sometimes|nullable|string'
         ];
     }
 

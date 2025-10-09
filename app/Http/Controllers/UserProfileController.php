@@ -57,8 +57,8 @@ class UserProfileController extends Controller
             // Actualizar usuario
             $user->update([
                 'email' => $validatedData['email'],
-                'phone' => $validatedData['phone'],
-                'whatsapp' => $validatedData['phone'],
+                'phone' => $validatedData['phone'] ?? null,
+                'whatsapp' => $validatedData['phone'] ?? null,
                 'photo_url' => $this->generateImageUrl($photoUrl),
                 'birth_date' => $validatedData['fecha_nacimiento'] ?? null,
                 'pais_id' => $validatedData['country'] ?? null,
