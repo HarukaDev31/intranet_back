@@ -8,7 +8,8 @@ use Illuminate\Support\Facades\Http;
 trait MoodleRestProTrait
 {
     /**
-     * CORREGIDO: Ahora usa correctamente todos los parámetros enviados
+     * CORREGIDO: Crea usuario según documentación oficial de Moodle
+     * Documentación: https://docs.moodle.org/dev/Web_service_API_functions#core_user_create_users
      */
     private function make_test_user($arrPost)
     {
@@ -26,17 +27,57 @@ trait MoodleRestProTrait
             }
         }
 
-        $user = new \stdClass();
-        $user->username = strtolower($arrPost['username']);
-        $user->password = $arrPost['password'];
-        $user->firstname = $arrPost['firstname'];
-        $user->lastname = $arrPost['lastname']; 
-        $user->email = strtolower($arrPost['email']);
-        $user->auth = isset($arrPost['auth']) ? $arrPost['auth'] : 'manual';
-        $user->lang = isset($arrPost['lang']) ? $arrPost['lang'] : 'es';
-        $user->calendartype = isset($arrPost['calendartype']) ? $arrPost['calendartype'] : 'gregorian';
+        // Crear usuario según formato exacto de Moodle
+        $user = [
+            'username' => strtolower(trim($arrPost['username'])),
+            'password' => trim($arrPost['password']),
+            'firstname' => trim($arrPost['firstname']),
+            'lastname' => trim($arrPost['lastname']),
+            'email' => strtolower(trim($arrPost['email'])),
+            'auth' => isset($arrPost['auth']) ? $arrPost['auth'] : 'manual',
+            'lang' => isset($arrPost['lang']) ? $arrPost['lang'] : 'es',
+            'calendartype' => isset($arrPost['calendartype']) ? $arrPost['calendartype'] : 'gregorian',
+        ];
+
+        // Campos opcionales según documentación
+        if (isset($arrPost['city'])) {
+            $user['city'] = trim($arrPost['city']);
+        }
+        if (isset($arrPost['country'])) {
+            $user['country'] = strtoupper(trim($arrPost['country']));
+        }
+        if (isset($arrPost['timezone'])) {
+            $user['timezone'] = $arrPost['timezone'];
+        }
+        if (isset($arrPost['description'])) {
+            $user['description'] = $arrPost['description'];
+        }
+        if (isset($arrPost['idnumber'])) {
+            $user['idnumber'] = $arrPost['idnumber'];
+        }
+        if (isset($arrPost['institution'])) {
+            $user['institution'] = $arrPost['institution'];
+        }
+        if (isset($arrPost['department'])) {
+            $user['department'] = $arrPost['department'];
+        }
+        if (isset($arrPost['phone1'])) {
+            $user['phone1'] = $arrPost['phone1'];
+        }
+        if (isset($arrPost['phone2'])) {
+            $user['phone2'] = $arrPost['phone2'];
+        }
+        if (isset($arrPost['address'])) {
+            $user['address'] = $arrPost['address'];
+        }
+        if (isset($arrPost['mailformat'])) {
+            $user['mailformat'] = (int)$arrPost['mailformat'];
+        }
+        if (isset($arrPost['maildisplay'])) {
+            $user['maildisplay'] = (int)$arrPost['maildisplay'];
+        }
         
-        Log::info('Usuario Moodle creado exitosamente: ' . json_encode($user));
+        Log::info('Usuario Moodle preparado: ' . json_encode($user));
         return $user;
     }
 
@@ -51,6 +92,7 @@ trait MoodleRestProTrait
  
     private function create_user($user, $token)
     {
+        try {
         $users = array($user);
         $params = array('users' => $users);
         $response = $this->call_moodle('core_user_create_users', $params, $token);
@@ -68,6 +110,11 @@ trait MoodleRestProTrait
                 'user_id' => $user_id // ✅ AGREGADO: Retornar el ID para facilitar uso
             );
         }
+        } catch (\Exception $e) {
+            Log::error('Error de Moodle: ' . $e->getMessage());
+            Log::error('Error de Moodle: ' . $e->getTraceAsString());
+            throw new \Exception('Error de Moodle: ' . $e->getMessage());
+        }
     }
 
     private function get_user($user_id, $token)
@@ -79,7 +126,7 @@ trait MoodleRestProTrait
 
         $user = $this->xmlresponse_to_user($response);
 
-        if (array_key_exists('id', $user))
+        if (is_array($user) && array_key_exists('id', $user))
             return $user;
         else
             return null;
@@ -119,7 +166,7 @@ trait MoodleRestProTrait
 
         $course = $this->xmlresponse_to_course($response);
 
-        if (array_key_exists('id', $course))
+        if (is_array($course) && array_key_exists('id', $course))
             return $course;
         else
             return null;
@@ -169,7 +216,7 @@ trait MoodleRestProTrait
 
         $user = $this->xmlresponse_to_user_all($response);
         
-        if (array_key_exists('id', $user)) {
+        if (is_array($user) && array_key_exists('id', $user)) {
             return array(
                 'status' => 'success',
                 'message' => "Existe usuario",
@@ -190,8 +237,16 @@ trait MoodleRestProTrait
         $serverurl = $domain . '/webservice/rest/server.php'. '?wstoken=' . $token . '&wsfunction='.$function_name;
 
         // Usar Laravel HTTP Client en lugar de curl.php
+        // Enviar como form data (application/x-www-form-urlencoded) que es lo que espera Moodle REST
         try {
-            $response = Http::timeout(30)->post($serverurl, $params);
+            Log::info("Llamando a Moodle: {$function_name}");
+            Log::info("Parámetros enviados a Moodle: " . json_encode($params));
+            
+            $response = Http::timeout(30)
+                ->asForm()
+                ->post($serverurl, $params);
+                
+            Log::info("Respuesta de Moodle: " . $response->body());
             return $response->body();
         } catch (\Exception $e) {
             Log::error('Error en call_moodle: ' . $e->getMessage());
@@ -243,13 +298,13 @@ trait MoodleRestProTrait
     {
         $xml_tree = new \SimpleXMLElement($xml_string); 
         
-        $struct = new \StdClass();
+        $struct = [];
 
         if(!empty($xml_tree->SINGLE->KEY->MULTIPLE->SINGLE->KEY)) {
             foreach ($xml_tree->SINGLE->KEY->MULTIPLE->SINGLE->KEY as $key) {
-                $name = $key['name'];
+                $name = (string)$key['name'];
                 $value = (string)$key->VALUE;
-                $struct->$name = $value;
+                $struct[$name] = $value;
             }
         }
 
@@ -262,10 +317,76 @@ trait MoodleRestProTrait
 
         $is_exception = $xml_tree->getName() == 'EXCEPTION';
         return $is_exception;
+    }
+
+    /**
+     * Obtener usuario por campo específico (email, username, etc)
+     */
+    private function get_user_by_field($field, $value, $token)
+    {
+        $params = [
+            'field' => $field,
+            'values' => [$value]
+        ];
+
+        $response = $this->call_moodle('core_user_get_users_by_field', $params, $token);
+
+        try {
+            $xml_tree = new \SimpleXMLElement($response);
+            
+            // Verificar si hay resultados
+            if ($xml_tree->MULTIPLE && $xml_tree->MULTIPLE->SINGLE) {
+                $user = [];
+                foreach ($xml_tree->MULTIPLE->SINGLE->KEY as $key) {
+                    $name = (string)$key['name'];
+                    $value = (string)$key->VALUE;
+                    $user[$name] = $value;
+                }
+                
+                return [
+                    'status' => 'success',
+                    'message' => 'Usuario encontrado',
+                    'response' => $user
+                ];
+            }
+            
+            return [
+                'status' => 'error',
+                'message' => 'Usuario no encontrado'
+            ];
+        } catch (\Exception $e) {
+            return [
+                'status' => 'error',
+                'message' => 'Error al parsear respuesta: ' . $e->getMessage()
+            ];
+        }
+    }
+
+    /**
+     * Actualizar usuario en Moodle
+     */
+    private function update_user($user_data, $token)
+    {
+        $users = [$user_data];
+        $params = ['users' => $users];
+        
+        $response = $this->call_moodle('core_user_update_users', $params, $token);
+
+        if ($this->xmlresponse_is_exception($response)) {
+            return [
+                'status' => 'error',
+                'message' => "Error al actualizar: " . $response
+            ];
+        }
+        
+        return [
+            'status' => 'success',
+            'message' => "Usuario actualizado exitosamente"
+        ];
     }  
 
     /**
-     * ✅ CORREGIDO: Removido echo y mejorado manejo de errores
+     * ✅ CORREGIDO: Intenta crear usuario, si existe lo actualiza con nueva contraseña
      */
     public function createUser($arrPost)
     {
@@ -282,15 +403,44 @@ trait MoodleRestProTrait
                 );
             }
             
+            // Primero intentar encontrar el usuario por email
+            $existing_user = $this->get_user_by_field('email', $arrPost['email'], $token);
+            
+            if ($existing_user['status'] == 'success') {
+                // Usuario existe, actualizarlo con nueva contraseña
+                Log::info('Usuario ya existe en Moodle, actualizando contraseña: ' . $arrPost['email']);
+                
+                $user_id = $existing_user['response']['id'];
+                $update_data = [
+                    'id' => (int)$user_id,
+                    'password' => $arrPost['password']
+                ];
+                
+                $update_result = $this->update_user($update_data, $token);
+                
+                if ($update_result['status'] == 'success') {
+                    return [
+                        'status' => 'success',
+                        'message' => 'Usuario existente actualizado',
+                        'user_id' => $user_id
+                    ];
+                }
+                
+                return $update_result;
+            }
+            
+            // Usuario no existe, crearlo
             $user_data_1 = $this->make_test_user($arrPost);
             
             // Log para debug
-            Log::info('Creando usuario Moodle: ' . json_encode($user_data_1));
+            Log::info('Creando nuevo usuario Moodle: ' . json_encode($user_data_1));
             
             $user_id_1 = $this->create_user($user_data_1, $token);
             return $user_id_1;
         } 
         catch (\Exception $e) {
+            Log::error('Error de Moodle: ' . $e->getMessage());
+            Log::error('Error de Moodle: ' . $e->getTraceAsString());
             return array(
                 'status' => 'error',
                 'message' => "Error de Moodle: " . $e->getMessage()

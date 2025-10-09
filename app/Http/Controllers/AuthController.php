@@ -782,7 +782,7 @@ export interface UserBusiness{
                     'socialAddress' => $user->userBusiness->social_address,
                 ];
             }
-            $importedAmount = $this->getUserCotizacionesByWhatsapp($user->whatsapp);
+            $importedAmount = $this->getUserCotizacionesByWhatsapp($user->whatsapp,$user->dni);
 
             return response()->json([
                 'success' => true,
@@ -872,7 +872,7 @@ export interface UserBusiness{
             ], 500);
         }
     }
-    public function getUserCotizacionesByWhatsapp($whatsapp)
+    public function getUserCotizacionesByWhatsapp($whatsapp,$dni=null)
     {
         try {
             // Limpiar el número de WhatsApp para la búsqueda
@@ -883,12 +883,13 @@ export interface UserBusiness{
             $trayectos = Cotizacion::where('estado_cotizador', 'CONFIRMADO')
                 ->whereNull('id_cliente_importacion')
                 ->whereNotNull('estado_cliente')
-                ->where(function($query) use ($cleanWhatsapp) {
-                    $query->where('telefono', 'like', '%' . $cleanWhatsapp . '%')
-                          ->orWhere('telefono', 'like', '%' . str_replace(' ', '', $cleanWhatsapp) . '%')
-                          ->orWhere('telefono', 'like', '%51 ' . $cleanWhatsapp . '%')
-                          ->orWhere('telefono', 'like', '%51' . str_replace(' ', '', $cleanWhatsapp) . '%')
-                          ->orWhere('telefono', 'like', '%51 ' . str_replace(' ', '', $cleanWhatsapp) . '%');
+                ->where(function($query) use ($cleanWhatsapp, $dni) {
+                    $query->where(DB::raw('TRIM(telefono)'), 'like', '%' . $cleanWhatsapp . '%');
+                    
+                    if (!empty($cleanWhatsapp)) {
+                        $query->orWhereRaw('REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(telefono, " ", ""), "-", ""), "(", ""), ")", ""), "+", "") LIKE ?', ["%{$cleanWhatsapp}%"])
+                            ->orWhereRaw('REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(telefono, " ", ""), "-", ""), "(", ""), ")", ""), "+", "") LIKE ?', ["%51{$cleanWhatsapp}%"]);
+                    }
                 })
                 ->select('id', 'fob_final', 'fob', 'monto', 'id_contenedor', 'impuestos_final', 'impuestos', 'logistica_final', 'monto')
                 ->get();

@@ -1024,7 +1024,8 @@ class CursoController extends Controller
                     $username = 'user' . rand(1000, 9999);
                 }
                 if (empty($cleaned_password)) {
-                    $cleaned_password = 'TempPass' . rand(1000, 9999) . '!';
+                    // Generar contraseña que cumpla requisitos de Moodle: al menos 8 caracteres, 1 número, 1 mayúscula, 1 minúscula, 1 especial
+                    $cleaned_password = 'TempPass#' . rand(1000, 9999) . '!';
                 }
                 if (empty($firstname)) {
                     $firstname = 'Usuario';
@@ -1044,7 +1045,8 @@ class CursoController extends Controller
                     $lastname = 'Usuario';
                 }
                 if (strlen($cleaned_password) < 8) {
-                    $cleaned_password = 'TempPass' . rand(1000, 9999) . '!';
+                    // Generar contraseña que cumpla requisitos de Moodle
+                    $cleaned_password = 'TempPass#' . rand(1000, 9999) . '!';
                 }
 
                 $arrPost = [
@@ -1095,7 +1097,7 @@ class CursoController extends Controller
                     // Set No_Usuario to $username
                     $this->setUsuarioModdle(
                         $username,
-                        $this->encrypt($cleaned_password),
+                        $this->ciEncrypt($cleaned_password),
                         $id
                     );
                     
@@ -1103,7 +1105,7 @@ class CursoController extends Controller
 
                     if ($response_usuario['status'] == 'success') {
                         $result_usuario = $response_usuario['response'];
-                        $id_usuario = $result_usuario->id;
+                        $id_usuario = $result_usuario['id'];
 
                         $arrParamsCurso = [
                             'id_usuario' => $id_usuario,
@@ -1122,12 +1124,14 @@ class CursoController extends Controller
                             $this->actualizarPedido(['ID_Pedido_Curso' => $id_pedido_curso], ['Nu_Estado_Usuario_Externo' => '2']);
 
                             return response()->json([
+                                'success' => true,
                                 'status' => 'success',
                                 'message' => 'Usuario y curso creados exitosamente',
                                 'data' => [
                                     'original_username' => $original_username,
                                     'moodle_username' => $username,
                                     'moodle_id' => $id_usuario,
+                                    'moodle_password' => $cleaned_password, // Contraseña sin encriptar para el admin
                                 ]
                             ]);
                         }
@@ -1231,9 +1235,14 @@ class CursoController extends Controller
         // Primero intentar limpiar la contraseña original
         $clean = preg_replace('/[<>"\'\\\]/', '', $password);
 
-        // Si es muy corta o tiene caracteres problemáticos, generar nueva
+        // Si es muy corta o tiene caracteres problemáticos, generar nueva que cumpla requisitos de Moodle
         if (strlen($clean) < 8 || preg_match('/[^\w\d!@#%&*]/', $clean)) {
-            return 'TempPass' . rand(1000, 9999) . '!';
+            return 'TempPass#' . rand(1000, 9999) . '!';
+        }
+
+        // Verificar que tenga al menos un caracter especial
+        if (!preg_match('/[!@#$%^&*(),.?":{}|<>]/', $clean)) {
+            return $clean . '#' . rand(10, 99) . '!';
         }
 
         return $clean;
@@ -1428,21 +1437,22 @@ class CursoController extends Controller
         try {
             $id_entidad = $id;
             $data = [
-                'No_Entidad'             => $request->input('No_Entidad'),
-                'Nu_Documento_Identidad' => $request->input('Nu_Documento_Identidad'),
-                'Nu_Tipo_Sexo'           => $request->input('Nu_Tipo_Sexo'),
-                'Nu_Como_Entero_Empresa' => $request->input('Nu_Como_Entero_Empresa'),
-                'Txt_Email_Entidad'      => $request->input('Txt_Email_Entidad'),
-                'ID_Pais'                => $request->input('ID_Pais'),
-                'Nu_Celular_Entidad'     => $request->input('Nu_Celular_Entidad'),
-                'ID_Departamento'        => $request->input('ID_Departamento'),
-                'Fe_Nacimiento'          => $request->input('Fe_Nacimiento'),
-                'ID_Provincia'           => $request->input('ID_Provincia'),
-                'ID_Distrito'            => $request->input('ID_Distrito'),
+                'No_Entidad'             => $request->input('nombres'),
+                'Nu_Documento_Identidad' => $request->input('dni'),
+                'Nu_Tipo_Sexo'           => $request->input('sexo'),
+                'Nu_Como_Entero_Empresa' => $request->input('red_social'),
+                'Txt_Email_Entidad'      => $request->input('correo'),
+                'ID_Pais'                => $request->input('id_pais'),
+                'Nu_Celular_Entidad'     => $request->input('whatsapp'),
+                'ID_Departamento'        => $request->input('id_departamento'),
+                'Fe_Nacimiento'          => $request->input('nacimiento'),
+                'ID_Provincia'           => $request->input('id_provincia'),
+                'ID_Distrito'            => $request->input('id_distrito'),
             ];
             
-            Log::error('ID_Entidad: ' . print_r($id_entidad, true));
-            Log::error('DATA: ' . print_r($data, true));
+            Log::info('ID_Entidad: ' . $id_entidad);
+            Log::info('Datos recibidos del frontend: ' . json_encode($request->all()));
+            Log::info('Datos mapeados para actualizar: ' . json_encode($data));
             
             $result = $this->actualizarDatosClienteModel($id_entidad, $data);
             return response()->json($result);
