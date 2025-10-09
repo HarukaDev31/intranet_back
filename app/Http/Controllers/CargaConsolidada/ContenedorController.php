@@ -121,12 +121,11 @@ class ContenedorController extends Controller
                         'cccp.id_contenedor',
                         DB::raw('COALESCE(SUM(IF(cc.estado_cotizador = "CONFIRMADO", cccp.cbm_total_china, 0)),0) as cbm_total_china'),
                         DB::raw('(
-                                SELECT COALESCE(SUM(volumen),0) FROM contenedor_consolidado_cotizacion
-                                WHERE id IN (
-                                    SELECT DISTINCT id_cotizacion FROM contenedor_consolidado_cotizacion_proveedores
-                                    WHERE id_contenedor = cccp.id_contenedor
-                                ) AND estado_cotizador = "CONFIRMADO"
-                            ) as cbm_total_peru')
+                            SELECT COALESCE(SUM(volumen), 0)
+                            FROM contenedor_consolidado_cotizacion
+                            WHERE id_contenedor = p.id_contenedor
+                            AND estado_cotizador = "CONFIRMADO"
+                        ) as sum_peru')
                     ])
                     ->groupBy('cccp.id_contenedor')
                     ->get();
@@ -143,14 +142,16 @@ class ContenedorController extends Controller
                     ->select([
                         'p.id_contenedor',
                         // China: sólo confirmados
-                   
                         DB::raw('SUM(IF(cc.estado_cotizador = "CONFIRMADO", p.cbm_total_china, 0)) as sum_china'),
-                        DB::raw('(
-                            SELECT COALESCE(SUM(volumen), 0)
-                            FROM contenedor_consolidado_cotizacion
-                            WHERE id_contenedor = p.id_contenedor
-                            AND estado_cotizador = "CONFIRMADO"
-                        ) as sum_peru')
+                        // Perú: confirmados y embarcados (LOADED)
+                        DB::raw('(SELECT COALESCE(SUM(cc2.volumen), 0)
+                                    FROM contenedor_consolidado_cotizacion cc2
+                                    WHERE cc2.id IN (
+                                        SELECT DISTINCT p2.id_cotizacion
+                                        FROM contenedor_consolidado_cotizacion_proveedores p2
+                                        WHERE p2.id_contenedor = p.id_contenedor
+                                    )
+                                    AND cc2.estado_cotizador = "CONFIRMADO") as sum_peru')
                     ])
                     ->whereNull('cc.id_cliente_importacion')
                     ->groupBy('p.id_contenedor')
