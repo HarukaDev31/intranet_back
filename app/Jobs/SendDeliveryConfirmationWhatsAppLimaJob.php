@@ -90,7 +90,6 @@ class SendDeliveryConfirmationWhatsAppLimaJob implements ShouldQueue
             $mensaje .= "Tu reserva se realizó exitosamente, tu fecha de recojo es \"{$fechaRecojo}\" en el horario \"{$horaRecojo}\".\n";
             $mensaje .= "La persona que recogerá su pedido es {$deliveryForm->pick_name} - DNI {$deliveryForm->pick_doc}.\n\n";
             $mensaje .= "🏢 Dirección de recojo: Calle Rio Nazca 243- San Luis. Ref. Al costado de la Agencia Antezana\n\n";
-            $mensaje .= "🗺️ Ver ubicación: https://maps.app.goo.gl/5raLmkX65nNHB2Fr9";
 
             // Enviar el mensaje de WhatsApp
             $resultado = $this->sendMessage($mensaje, $telefono);
