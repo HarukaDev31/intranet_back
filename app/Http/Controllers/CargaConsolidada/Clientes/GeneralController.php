@@ -86,8 +86,12 @@ class GeneralController extends Controller
             ->where('CC.id_contenedor', $idContenedor)
             ->whereNotNull('CC.estado_cliente')
             ->whereNull('CC.id_cliente_importacion')
-            ->where('CC.estado_cotizador', 'CONFIRMADO');
-
+            ->where('CC.estado_cotizador', 'CONFIRMADO')
+            ->whereExists(function ($query) {
+                $query->select(DB::raw(1))
+                    ->from('contenedor_consolidado_cotizacion_proveedores')
+                    ->whereColumn('contenedor_consolidado_cotizacion_proveedores.id_cotizacion', 'CC.id');
+            });
         // Aplicar filtro de estado si se proporciona
         $page = $request->input('currentPage', 1);
         $perPage = $request->input('itemsPerPage', 10);

@@ -66,10 +66,8 @@ class CotizacionController extends Controller
     {
         try {
             $user = JWTAuth::parseToken()->authenticate();
-            Log::info($user);
             $query = Cotizacion::where('id_contenedor', $idContenedor)->whereNull('id_cliente_importacion');
             $rol = $user->getNombreGrupo();
-            Log::info($query->toSql());
             // Aplicar filtros básicos
             if ($request->has('search')) {
                 $search = $request->search;
