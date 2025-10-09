@@ -72,7 +72,7 @@ class PagosController extends Controller
                         ->whereColumn('contenedor_consolidado_cotizacion_proveedores.id_cotizacion', 'CC.id');
                 })
                 ->where('CC.estado_cotizador', 'CONFIRMADO')
-                ->where('CC.estado_cliente', 'CONFIRMADO')
+                ->whereNotNull('CC.estado_cliente')
                 ->orderBy('CC.id', 'asc');
             // Si el usuario es "Cotizador", filtrar por el id del usuario actual
             if ($user->getNombreGrupo() == Usuario::ROL_COTIZADOR && $user->ID_Usuario != 28791) {
