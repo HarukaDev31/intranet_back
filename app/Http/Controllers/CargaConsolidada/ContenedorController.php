@@ -123,9 +123,9 @@ class ContenedorController extends Controller
                         DB::raw('(
                             SELECT COALESCE(SUM(volumen), 0)
                             FROM contenedor_consolidado_cotizacion
-                            WHERE id_contenedor = p.id_contenedor
+                            WHERE id_contenedor = cccp.id_contenedor
                             AND estado_cotizador = "CONFIRMADO"
-                        ) as sum_peru')
+                        ) as cbm_total_peru')
                     ])
                     ->groupBy('cccp.id_contenedor')
                     ->get();
