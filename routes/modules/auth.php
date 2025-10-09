@@ -32,7 +32,7 @@ Route::group(['prefix' => 'auth/clientes'], function () {
     Route::post('register', [AuthController::class, 'register'])->middleware('throttle:5,1');
     Route::post('login', [AuthController::class, 'loginCliente'])->middleware('throttle:5,1');
     Route::post('forgot-password', [AuthController::class, 'forgotPassword'])->middleware('throttle:3,1');
-    Route::post('reset-password', [AuthController::class, 'resetPassword'])->middleware('throttle:3,1');
+    Route::post('reset-password', [AuthController::class, 'resetPassword'])->middleware('throttle:10,1');
     
     // Rutas protegidas para usuarios externos
     Route::group(['middleware' => 'jwt.external'], function () {
