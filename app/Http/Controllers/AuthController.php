@@ -15,6 +15,9 @@ use App\Models\Usuario;
 use App\Models\Empresa;
 use App\Models\Organizacion;
 use App\Models\Almacen;
+use App\Models\Departamento;
+use App\Models\Distrito;
+use App\Models\Provincia;
 use App\Helpers\CodeIgniterEncryption;
 use App\Http\Controllers\MenuController;
 use App\Http\Requests\RegisterRequest;
@@ -532,6 +535,7 @@ class AuthController extends Controller
         DB::beginTransaction();
         Log::info('register', $request->all());
         $validatedData = $request->validated();
+        Log::info('validated data', $validatedData);
 
         try {
             $user = User::create([
@@ -543,7 +547,12 @@ class AuthController extends Controller
                 'password' => Hash::make($validatedData['password']),
                 'dni' => $validatedData['dni'] ?? null,
                 'birth_date' => $validatedData['fechaNacimiento'] ?? null,
+                'provincia_id' => $validatedData['provincia_id'] ?? null,
+                'departamento_id' => $validatedData['departamento_id'] ?? null,
+                'distrito_id' => $validatedData['distrito_id'] ?? null,
             ]);
+            
+            Log::info('user created', $user->toArray());
 
             $token = JWTAuth::fromUser($user);
 
@@ -593,9 +602,10 @@ class AuthController extends Controller
                     'dni' => $user->dni, // Campo no disponible en la estructura actual
                     'fechaNacimiento' => $user->birth_date, // Campo no disponible en la estructura actual
                     'country' => $user->pais_id, // Campo no disponible en la estructura actual
-                    'city' => $user->provincia_id, // Campo no disponible en la estructura actual
-                    'department' => $user->departamento_id, // Campo no disponible en la estructura actual
-                    'district' => $user->distrito_id, // Campo no disponible en la estructura actual
+                    'city' => $user->provincia ? $user->provincia->No_Provincia : null,
+                    'department' => $user->departamento ? $user->departamento->No_Departamento : null,
+                    'province' => $user->provincia ? $user->provincia->No_Provincia : null,
+                    'district' => $user->distrito ? $user->distrito->No_Distrito : null,
                     'phone' => $user->whatsapp,
                     'empresa' => $user->userBusiness, // No hay negocio asociado al registrarse
                     'importedAmount' => 0, // Campo no disponible en la estructura actual
@@ -776,8 +786,8 @@ export interface UserBusiness{
             // Obtener menús del usuario externo
             $menus = $this->obtenerMenusUsuarioExterno($user);
 
-            // Cargar la relación con userBusiness
-            $user->load('userBusiness');
+            // Cargar la relación con userBusiness y relaciones de ubicación
+            $user->load(['userBusiness', 'departamento', 'distrito', 'provincia']);
 
             // Preparar información del negocio
             $business = null;
@@ -803,9 +813,10 @@ export interface UserBusiness{
                     'documentNumber' => null, // Campo no disponible en la estructura actual
                     'age' => null, // Campo no disponible en la estructura actual
                     'country' => null, // Campo no disponible en la estructura actual
-                    'city' => $user->distrito_id,
-                    'department' => $user->departamento_id,
-                    'district' => $user->distrito_id,
+                    'city' => $user->distrito ? $user->distrito->No_Distrito : null,
+                    'department' => $user->departamento ? $user->departamento->No_Departamento : null,
+                    'province' => $user->provincia ? $user->provincia->No_Provincia : null,
+                    'district' => $user->distrito ? $user->distrito->No_Distrito : null,
                     'phone' => $user->whatsapp,
                     'business' => $business,
                     'importedAmount' => $importedAmount['sumFob'] + $importedAmount['sumImpuestos'] + $importedAmount['sumLogistica'], // Campo no disponible en la estructura actual

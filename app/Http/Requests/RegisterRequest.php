@@ -34,6 +34,9 @@ class RegisterRequest extends FormRequest
             'dni' => 'required|numeric|digits:8',
             'fechaNacimiento' => 'nullable|date',
             'goals' => 'nullable|string',
+            'provincia_id' => 'nullable|integer|exists:provincia,ID_Provincia',
+            'departamento_id' => 'nullable|integer|exists:departamento,ID_Departamento',
+            'distrito_id' => 'nullable|integer|exists:distrito,ID_Distrito',
         ];
     }
 
@@ -52,6 +55,12 @@ class RegisterRequest extends FormRequest
             'password.required' => 'La contraseña es requerida',
             'password.min' => 'La contraseña debe tener al menos 6 caracteres',
             'dni.required' => 'El DNI es requerido',
+            'provincia_id.integer' => 'La provincia debe ser un número válido',
+            'provincia_id.exists' => 'La provincia seleccionada no es válida',
+            'departamento_id.integer' => 'El departamento debe ser un número válido',
+            'departamento_id.exists' => 'El departamento seleccionado no es válido',
+            'distrito_id.integer' => 'El distrito debe ser un número válido',
+            'distrito_id.exists' => 'El distrito seleccionado no es válido',
         ];
     }
     public function failedValidation(Validator $validator)

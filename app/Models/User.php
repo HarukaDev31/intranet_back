@@ -104,6 +104,14 @@ class User extends Authenticatable implements JWTSubject
     }
 
     /**
+     * Relación con Provincia
+     */
+    public function provincia()
+    {
+        return $this->belongsTo(Provincia::class, 'provincia_id', 'ID_Provincia');
+    }
+
+    /**
      * Relación con Distrito
      */
     public function distrito()
