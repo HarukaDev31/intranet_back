@@ -602,7 +602,6 @@ class ClienteService
         $clientes = count($clientesFiltrados);
         $index = 0;
         foreach ($clientesFiltrados as $cliente) {
-            $index++;
             Log::info("Procesando cliente {$index} de {$totalClientes}");
             $servicios = $serviciosPorCliente[$cliente->id] ?? [];
             Log::info("Servicios del cliente {$cliente->id}: " . json_encode($servicios));
@@ -613,9 +612,13 @@ class ClienteService
                 if (strpos(strtolower($primerServicio['servicio']), 'curso') !== false) {
                     Log::info("Cliente {$cliente->id} es cliente curso");
                     $clientesCurso++;
+                    $index++;
+
                 } elseif (strpos(strtolower($primerServicio['servicio']), 'consolidado') !== false) {
                     Log::info("Cliente {$cliente->id} es cliente consolidado");
                     $clientesConsolidado++;
+                    $index++;
+                    
                 }
             }
 
