@@ -623,7 +623,7 @@ class ClienteService
 
         return [
             'total_clientes' => [
-                'value' => $totalClientes,
+                'value' => $index,
                 'label' => 'Total Clientes'
             ],
             'total_clientes_curso' => [
