@@ -103,13 +103,6 @@ class ImportacionesController extends Controller
             $perPage = $request->input('per_page', 10);
             $page = $request->input('page', 1);
 
-            $telefonoNormalizado = preg_replace('/[\s\-\(\)\.\+]/', '', $whatsapp);
-            
-            // Si empieza con 51 y tiene más de 9 dígitos, remover prefijo
-            if (preg_match('/^51(\d{9})$/', $telefonoNormalizado, $matches)) {
-                $telefonoNormalizado = $matches[1];
-            }
-
             $trayectos = Cotizacion::with(['contenedor' => function ($query) {
                 $query->select('id', 'carga', 'fecha_arribo', 'f_entrega', 'f_cierre');
             }])
@@ -118,14 +111,8 @@ class ImportacionesController extends Controller
                 }])
                 ->where('estado_cotizador', 'CONFIRMADO')
                 ->whereNull('id_cliente_importacion')
-                ->where(function($query) use ($whatsapp, $telefonoNormalizado) {
-                    $query->where(DB::raw('TRIM(telefono)'), 'like', '%' . $whatsapp . '%');
-                    
-                    if (!empty($telefonoNormalizado)) {
-                        $query->orWhereRaw('REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(telefono, " ", ""), "-", ""), "(", ""), ")", ""), "+", "") LIKE ?', ["%{$telefonoNormalizado}%"])
-                            ->orWhereRaw('REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(telefono, " ", ""), "-", ""), "(", ""), ")", ""), "+", "") LIKE ?', ["%51{$telefonoNormalizado}%"]);
-                    }
-                })
+                //where telefono trim and remove +51 from db
+                ->where(DB::raw('TRIM(telefono)'), 'like', '%' . $whatsapp . '%')
                 ->whereNotNull('estado_cliente')
                 //where not has any row in consolidado_delivery_form_lima_conformidad or consolidado_delivery_form_provincia_conformidad with id_cotizacion
                 ->where(DB::raw('(SELECT COUNT(*) FROM consolidado_delivery_form_lima_conformidad WHERE id_cotizacion = id)'), 0)
@@ -190,13 +177,6 @@ class ImportacionesController extends Controller
             $perPage = $request->input('per_page', 10);
             $page = $request->input('page', 1);
 
-            $telefonoNormalizado = preg_replace('/[\s\-\(\)\.\+]/', '', $whatsapp);
-            
-            // Si empieza con 51 y tiene más de 9 dígitos, remover prefijo
-            if (preg_match('/^51(\d{9})$/', $telefonoNormalizado, $matches)) {
-                $telefonoNormalizado = $matches[1];
-            }
-
             $trayectos = Cotizacion::with(['contenedor' => function ($query) {
                 $query->select('id', 'carga', 'fecha_arribo', 'f_entrega', 'f_cierre');
             }])
@@ -205,14 +185,8 @@ class ImportacionesController extends Controller
                 }])
                 ->where('estado_cotizador', 'CONFIRMADO')
                 ->whereNull('id_cliente_importacion')
-                ->where(function($query) use ($whatsapp, $telefonoNormalizado) {
-                    $query->where(DB::raw('TRIM(telefono)'), 'like', '%' . $whatsapp . '%');
-                    
-                    if (!empty($telefonoNormalizado)) {
-                        $query->orWhereRaw('REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(telefono, " ", ""), "-", ""), "(", ""), ")", ""), "+", "") LIKE ?', ["%{$telefonoNormalizado}%"])
-                            ->orWhereRaw('REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(telefono, " ", ""), "-", ""), "(", ""), ")", ""), "+", "") LIKE ?', ["%51{$telefonoNormalizado}%"]);
-                    }
-                })
+                //where telefono trim and remove +51 from db
+                ->where(DB::raw('TRIM(telefono)'), 'like', '%' . $whatsapp . '%')
                 ->whereNotNull('estado_cliente')
                 //where  has any row in consolidado_delivery_form_lima_conformidad or consolidado_delivery_form_provincia_conformidad with id_cotizacion
                 ->where(DB::raw('(SELECT COUNT(*) FROM consolidado_delivery_form_lima_conformidad WHERE id_cotizacion = id)'), '>', 0)
