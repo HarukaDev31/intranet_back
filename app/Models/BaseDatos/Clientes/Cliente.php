@@ -353,18 +353,29 @@ class Cliente extends Model
     }
 
     /**
-     * Scope para buscar clientes por término
+     * Scope para buscar clientes por término (número, correo, documento o teléfono)
+     * Trim tanto de BD como del request y usa LIKE
      */
     public function scopeBuscar($query, $termino)
     {
+        // Trim del término de búsqueda
+        $termino = trim($termino);
+        
+        if (empty($termino)) {
+            return $query;
+        }
+        
         return $query->where(function ($q) use ($termino) {
-            $q->where('nombre', 'LIKE', "%{$termino}%")
-                ->orWhere('documento', 'LIKE', "%{$termino}%")
-                ->orWhere('correo', 'LIKE', "%{$termino}%");
+            // Búsqueda en nombre (con TRIM de BD)
+            $q->whereRaw('TRIM(nombre) LIKE ?', ["%{$termino}%"])
+                // Búsqueda en documento (con TRIM de BD)
+                ->orWhereRaw('TRIM(documento) LIKE ?', ["%{$termino}%"])
+                // Búsqueda en correo (con TRIM de BD)
+                ->orWhereRaw('TRIM(correo) LIKE ?', ["%{$termino}%"]);
                 
             // Si el término parece ser un teléfono (contiene solo números, espacios, guiones, etc.)
             if (preg_match('/^[\d\s\-\(\)\.\+]+$/', $termino)) {
-                // Normalizar el término de búsqueda (función inline)
+                // Normalizar el término de búsqueda (remover espacios, guiones, paréntesis, puntos y +)
                 $telefonoNormalizado = preg_replace('/[\s\-\(\)\.\+]/', '', $termino);
                 
                 // Si empieza con 51 y tiene más de 9 dígitos, remover prefijo
@@ -373,19 +384,19 @@ class Cliente extends Model
                 }
                 
                 if (!empty($telefonoNormalizado)) {
-                    // Buscar coincidencias flexibles
+                    // Buscar coincidencias flexibles en teléfono
                     $q->orWhere(function($subQuery) use ($telefonoNormalizado, $termino) {
-                        // Búsqueda por teléfono normalizado
-                        $subQuery->whereRaw('REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(telefono, " ", ""), "-", ""), "(", ""), ")", ""), "+", "") LIKE ?', ["%{$telefonoNormalizado}%"])
+                        // Búsqueda por teléfono normalizado (eliminar espacios, guiones, etc. de BD)
+                        $subQuery->whereRaw('REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(TRIM(telefono), " ", ""), "-", ""), "(", ""), ")", ""), "+", "") LIKE ?', ["%{$telefonoNormalizado}%"])
                             // Búsqueda con prefijo 51
-                            ->orWhereRaw('REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(telefono, " ", ""), "-", ""), "(", ""), ")", ""), "+", "") LIKE ?', ["%51{$telefonoNormalizado}%"])
-                            // Búsqueda del término original también
-                            ->orWhere('telefono', 'LIKE', "%{$termino}%");
+                            ->orWhereRaw('REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(TRIM(telefono), " ", ""), "-", ""), "(", ""), ")", ""), "+", "") LIKE ?', ["%51{$telefonoNormalizado}%"])
+                            // Búsqueda del término original también (con TRIM)
+                            ->orWhereRaw('TRIM(telefono) LIKE ?', ["%{$termino}%"]);
                     });
                 }
             } else {
-                // Si no parece teléfono, hacer búsqueda normal en teléfono
-                $q->orWhere('telefono', 'LIKE', "%{$termino}%");
+                // Si no parece teléfono, hacer búsqueda normal en teléfono (con TRIM)
+                $q->orWhereRaw('TRIM(telefono) LIKE ?', ["%{$termino}%"]);
             }
         });
     }

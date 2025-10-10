@@ -95,13 +95,43 @@ class GeneralController extends Controller
         // Aplicar filtro de estado si se proporciona
         $page = $request->input('currentPage', 1);
         $perPage = $request->input('itemsPerPage', 10);
-        // Aplicar filtros adicionales si se proporcionan
-        if ($request->has('search')) {
-            $search = $request->search;
+        // Aplicar filtros adicionales si se proporcionan (con TRIM y búsqueda mejorada)
+        if ($request->has('search') && !empty($request->search)) {
+            $search = trim($request->search); // TRIM del request
+            
             $query->where(function ($q) use ($search) {
-                $q->where('CC.nombre', 'LIKE', "%{$search}%")
-                    ->orWhere('CC.documento', 'LIKE', "%{$search}%")
-                    ->orWhere('CC.correo', 'LIKE', "%{$search}%");
+                // Búsqueda en nombre (con TRIM de BD)
+                $q->whereRaw('TRIM(CC.nombre) LIKE ?', ["%{$search}%"])
+                    // Búsqueda en documento (con TRIM de BD)
+                    ->orWhereRaw('TRIM(CC.documento) LIKE ?', ["%{$search}%"])
+                    // Búsqueda en correo (con TRIM de BD)
+                    ->orWhereRaw('TRIM(CC.correo) LIKE ?', ["%{$search}%"]);
+                    
+                // Si el término parece ser un teléfono (contiene solo números, espacios, guiones, etc.)
+                if (preg_match('/^[\d\s\-\(\)\.\+]+$/', $search)) {
+                    // Normalizar el término de búsqueda (remover espacios, guiones, paréntesis, puntos y +)
+                    $telefonoNormalizado = preg_replace('/[\s\-\(\)\.\+]/', '', $search);
+                    
+                    // Si empieza con 51 y tiene más de 9 dígitos, remover prefijo
+                    if (preg_match('/^51(\d{9})$/', $telefonoNormalizado, $matches)) {
+                        $telefonoNormalizado = $matches[1];
+                    }
+                    
+                    if (!empty($telefonoNormalizado)) {
+                        // Buscar coincidencias flexibles en teléfono
+                        $q->orWhere(function($subQuery) use ($telefonoNormalizado, $search) {
+                            // Búsqueda por teléfono normalizado (eliminar espacios, guiones, etc. de BD)
+                            $subQuery->whereRaw('REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(TRIM(CC.telefono), " ", ""), "-", ""), "(", ""), ")", ""), "+", "") LIKE ?', ["%{$telefonoNormalizado}%"])
+                                // Búsqueda con prefijo 51
+                                ->orWhereRaw('REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(TRIM(CC.telefono), " ", ""), "-", ""), "(", ""), ")", ""), "+", "") LIKE ?', ["%51{$telefonoNormalizado}%"])
+                                // Búsqueda del término original también (con TRIM)
+                                ->orWhereRaw('TRIM(CC.telefono) LIKE ?', ["%{$search}%"]);
+                        });
+                    }
+                } else {
+                    // Si no parece teléfono, hacer búsqueda normal en teléfono (con TRIM)
+                    $q->orWhereRaw('TRIM(CC.telefono) LIKE ?', ["%{$search}%"]);
+                }
             });
         }
 
@@ -247,8 +277,6 @@ class GeneralController extends Controller
                         AND estado_cotizador = "CONFIRMADO"
                         AND estado_cliente IS NOT NULL
                         AND id_cliente_importacion IS NULL
-                        AND (id_contenedor_pago =' .$idContenedor. ' OR id_contenedor_pago is null)
-
                     ) as total_logistica'),
 
                     // Subconsulta para total_fob_loaded

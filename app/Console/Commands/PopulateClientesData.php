@@ -50,8 +50,8 @@ class PopulateClientesData extends Command
             // 1. Insertar datos de contenedor_consolidado_cotizacion
             $this->insertFromContenedorCotizacion();
 
-            // 2. Insertar datos de entidad
-            $this->insertFromEntidad();
+            // 2. Insertar datos desde pedido_curso
+            $this->insertFromPedidoCurso();
 
             // 3. Actualizar referencias en pedido_curso
             $this->updatePedidoCurso();
@@ -94,29 +94,27 @@ class PopulateClientesData extends Command
 
     /**
      * Insertar datos desde contenedor_consolidado_cotizacion
+     * (usando las mismas condiciones del modelo Cliente)
      */
     private function insertFromContenedorCotizacion()
     {
         $this->info('=== INICIANDO INSERCIÓN DESDE contenedor_consolidado_cotizacion ===');
         
-        $cotizaciones = DB::table('contenedor_consolidado_cotizacion')
-            ->whereNotNull('estado_cliente')
-            ->where('estado_cotizador', 'CONFIRMADO')
-            ->whereNotNull('nombre')
-            ->where('nombre', '!=', '')
-            ->whereRaw('LENGTH(TRIM(nombre)) >= 2')
-            ->where(function ($query) {
-                $query->whereNotNull('telefono')
-                    ->where('telefono', '!=', '')
-                    ->whereRaw('LENGTH(TRIM(telefono)) >= 7')
-                    ->orWhereNotNull('documento')
-                    ->where('documento', '!=', '')
-                    ->whereRaw('LENGTH(TRIM(documento)) >= 5')
-                    ->orWhereNotNull('correo')
-                    ->where('correo', '!=', '')
-                    ->whereRaw('correo REGEXP "^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$"');
+        // Mismas validaciones que en el modelo Cliente
+        $cotizaciones = DB::table('contenedor_consolidado_cotizacion as cot')
+            ->whereNotNull('cot.estado_cliente') // Validación del modelo Cliente
+            ->where('cot.estado_cotizador', 'CONFIRMADO') // Validación del modelo Cliente
+            ->whereNotNull('cot.telefono')
+            ->where('cot.telefono', '!=', '')
+            ->whereRaw('LENGTH(TRIM(cot.telefono)) >= 7')
+            // Validar que tenga al menos un proveedor con estado "LOADED"
+            ->whereExists(function($query) {
+                $query->select(DB::raw(1))
+                    ->from('contenedor_consolidado_cotizacion_proveedores as prov')
+                    ->whereColumn('prov.id_cotizacion', 'cot.id')
+                    ->where('prov.estados_proveedor', 'LOADED');
             })
-            ->select('telefono', 'fecha', 'nombre', 'documento', 'correo')
+            ->select('cot.id', 'cot.telefono', 'cot.fecha', 'cot.nombre', 'cot.documento', 'cot.correo')
             ->get();
 
         $this->info("Total de cotizaciones encontradas: " . $cotizaciones->count());
@@ -144,6 +142,10 @@ class PopulateClientesData extends Command
                 $clienteId = $this->insertOrGetCliente($clienteObj, 'contenedor_consolidado_cotizacion');
                 if ($clienteId) {
                     $insertados++;
+                    // Actualizar id_cliente en la cotización
+                    DB::table('contenedor_consolidado_cotizacion')
+                        ->where('id', $cotizacion->id)
+                        ->update(['id_cliente' => $clienteId]);
                 }
             }
             
@@ -162,15 +164,15 @@ class PopulateClientesData extends Command
     }
 
     /**
-     * Insertar datos desde entidad
+     * Insertar datos desde pedido_curso (con las mismas condiciones del modelo Cliente)
      */
-    private function insertFromEntidad()
+    private function insertFromPedidoCurso()
     {
-        $this->info('=== INICIANDO INSERCIÓN DESDE entidad ===');
+        $this->info('=== INICIANDO INSERCIÓN DESDE pedido_curso ===');
         
-        $entidades = DB::table('entidad as e')
-            ->join('pedido_curso as pc', 'e.ID_Entidad', '=', 'pc.ID_Entidad')
-            ->where('pc.Nu_Estado', 2)
+        $pedidos = DB::table('pedido_curso as pc')
+            ->join('entidad as e', 'pc.ID_Entidad', '=', 'e.ID_Entidad')
+            ->where('pc.Nu_Estado', 2) // Estado confirmado
             ->whereNotNull('e.No_Entidad')
             ->where('e.No_Entidad', '!=', '')
             ->where(function ($query) {
@@ -184,6 +186,7 @@ class PopulateClientesData extends Command
                     ->where('e.Txt_Email_Entidad', '!=', '');
             })
             ->select(
+                'pc.ID_Pedido_Curso',
                 'e.Fe_Registro as fecha',
                 'e.No_Entidad as nombre',
                 'e.Nu_Documento_Identidad as documento',
@@ -193,21 +196,20 @@ class PopulateClientesData extends Command
             ->distinct()
             ->get();
 
-        $this->info("Total de entidades encontradas: " . $entidades->count());
+        $this->info("Total de pedidos encontrados: " . $pedidos->count());
         $insertados = 0;
         $validados = 0;
 
-        $progressBar = $this->output->createProgressBar($entidades->count());
+        $progressBar = $this->output->createProgressBar($pedidos->count());
         $progressBar->start();
 
-        foreach ($entidades as $entidad) {
-            // Convertir el objeto stdClass a array para evitar problemas de acceso
+        foreach ($pedidos as $pedido) {
             $clienteData = [
-                'fecha' => $entidad->fecha,
-                'nombre' => $entidad->nombre,
-                'documento' => $entidad->documento,
-                'correo' => $entidad->correo,
-                'telefono' => $entidad->telefono
+                'fecha' => $pedido->fecha,
+                'nombre' => $pedido->nombre,
+                'documento' => $pedido->documento,
+                'correo' => $pedido->correo,
+                'telefono' => $pedido->telefono
             ];
 
             $clienteObj = (object)$clienteData;
@@ -215,9 +217,13 @@ class PopulateClientesData extends Command
             // Validar datos antes de insertar
             if ($this->validateClienteData($clienteObj)) {
                 $validados++;
-                $clienteId = $this->insertOrGetCliente($clienteObj, 'entidad');
+                $clienteId = $this->insertOrGetCliente($clienteObj, 'pedido_curso');
                 if ($clienteId) {
                     $insertados++;
+                    // Actualizar id_cliente en pedido_curso
+                    DB::table('pedido_curso')
+                        ->where('ID_Pedido_Curso', $pedido->ID_Pedido_Curso)
+                        ->update(['id_cliente' => $clienteId]);
                 }
             }
             
@@ -227,9 +233,9 @@ class PopulateClientesData extends Command
         $progressBar->finish();
         $this->newLine();
 
-        $this->info("=== RESUMEN entidad ===");
+        $this->info("=== RESUMEN pedido_curso ===");
         $this->table(['Métrica', 'Valor'], [
-            ['Total procesados', $entidades->count()],
+            ['Total procesados', $pedidos->count()],
             ['Validados', $validados],
             ['Insertados', $insertados]
         ]);
@@ -346,15 +352,16 @@ class PopulateClientesData extends Command
     }
 
     /**
-     * Actualizar referencias en pedido_curso
+     * Actualizar referencias en pedido_curso (usando las mismas condiciones del modelo Cliente)
      */
     private function updatePedidoCurso()
     {
-        $this->info('=== ACTUALIZANDO REFERENCIAS EN pedido_curso ===');
+        $this->info('=== ACTUALIZANDO REFERENCIAS FALTANTES EN pedido_curso ===');
         
         $pedidos = DB::table('pedido_curso as pc')
             ->join('entidad as e', 'pc.ID_Entidad', '=', 'e.ID_Entidad')
             ->whereNull('pc.id_cliente')
+            ->where('pc.Nu_Estado', 2) // Solo pedidos confirmados
             ->select('pc.ID_Pedido_Curso', 'e.No_Entidad', 'e.Nu_Celular_Entidad', 'e.Nu_Documento_Identidad', 'e.Txt_Email_Entidad')
             ->get();
 
@@ -369,16 +376,18 @@ class PopulateClientesData extends Command
             
             $cliente = null;
             
-            // Buscar cliente por teléfono
+            // Buscar cliente por teléfono (normalizado y con REPLACE)
             if (!empty($telefonoNormalizado)) {
                 $cliente = DB::table('clientes')
-                    ->where('telefono', 'like', $telefonoNormalizado)
+                    ->whereRaw('REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(telefono, " ", ""), "-", ""), "(", ""), ")", ""), "+", "") LIKE ?', ["%{$telefonoNormalizado}%"])
                     ->first();
             }
             
             // Si no se encuentra por teléfono, buscar por documento
             if (!$cliente && !empty($pedido->Nu_Documento_Identidad)) {
                 $cliente = DB::table('clientes')
+                    ->whereNotNull('documento')
+                    ->where('documento', '!=', '')
                     ->where('documento', $pedido->Nu_Documento_Identidad)
                     ->first();
             }
@@ -386,6 +395,8 @@ class PopulateClientesData extends Command
             // Si no se encuentra por documento, buscar por correo
             if (!$cliente && !empty($pedido->Txt_Email_Entidad)) {
                 $cliente = DB::table('clientes')
+                    ->whereNotNull('correo')
+                    ->where('correo', '!=', '')
                     ->where('correo', $pedido->Txt_Email_Entidad)
                     ->first();
             }
@@ -403,7 +414,7 @@ class PopulateClientesData extends Command
         $progressBar->finish();
         $this->newLine();
 
-        $this->info("=== RESUMEN pedido_curso ===");
+        $this->info("=== RESUMEN ACTUALIZACIÓN pedido_curso ===");
         $this->table(['Métrica', 'Valor'], [
             ['Total procesados', $pedidos->count()],
             ['Actualizados', $actualizados]
