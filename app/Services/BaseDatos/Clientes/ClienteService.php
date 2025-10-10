@@ -598,19 +598,26 @@ class ClienteService
         $totalClientes = count($clientesFiltrados);
         $clientesCurso = 0;
         $clientesConsolidado = 0;
-
+        ///count clientes
+        $clientes = count($clientesFiltrados);
+        $index = 0;
         foreach ($clientesFiltrados as $cliente) {
+            $index++;
+            Log::info("Procesando cliente {$index} de {$totalClientes}");
             $servicios = $serviciosPorCliente[$cliente->id] ?? [];
             $primerServicio = !empty($servicios) ? $servicios[0] : null;
 
             if ($primerServicio) {
                 // Determinar tipo basado en el primer servicio
                 if (strpos(strtolower($primerServicio['servicio']), 'curso') !== false) {
+                    Log::info("Cliente {$cliente->id} es cliente curso");
                     $clientesCurso++;
                 } elseif (strpos(strtolower($primerServicio['servicio']), 'consolidado') !== false) {
+                    Log::info("Cliente {$cliente->id} es cliente consolidado");
                     $clientesConsolidado++;
                 }
             }
+
         }
 
         return [
