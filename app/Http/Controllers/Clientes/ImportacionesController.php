@@ -115,13 +115,17 @@ class ImportacionesController extends Controller
                 ->whereNotNull('estado_cliente')
                 ->whereNull('id_cliente_importacion')
                 ->where(function ($query) use ($whatsapp, $documento, $correo) {
-                    $telefonoLimpio = preg_replace('/[^0-9]/', '', $whatsapp);
-                    $query->where('telefono', 'LIKE', "%{$telefonoLimpio}%")
-                        ->orWhere('telefono', 'LIKE', "%" . str_replace(' ', '', $telefonoLimpio) . "%")
-                        ->orWhere('telefono', 'LIKE', "%51 {$telefonoLimpio}%")
-                        ->orWhere('telefono', 'LIKE', "%51" . str_replace(' ', '', $telefonoLimpio) . "%")
-                        ->orWhere('telefono', 'LIKE', "%51 " . str_replace(' ', '', $telefonoLimpio) . "%")
-                        ->orWhere(function($q) use ($documento) {
+                    // Validar que el teléfono no sea nulo o vacío antes de procesar
+                    if (!empty($whatsapp) && $whatsapp !== null) {
+                        $telefonoLimpio = preg_replace('/[^0-9]/', '', $whatsapp);
+                        $query->where('telefono', 'LIKE', "%{$telefonoLimpio}%")
+                            ->orWhere('telefono', 'LIKE', "%" . str_replace(' ', '', $telefonoLimpio) . "%")
+                            ->orWhere('telefono', 'LIKE', "%51 {$telefonoLimpio}%")
+                            ->orWhere('telefono', 'LIKE', "%51" . str_replace(' ', '', $telefonoLimpio) . "%")
+                            ->orWhere('telefono', 'LIKE', "%51 " . str_replace(' ', '', $telefonoLimpio) . "%");
+                    }
+                    
+                    $query->orWhere(function($q) use ($documento) {
                             $q->whereNotNull('documento')
                               ->where('documento', '!=', '')
                               ->where('documento', $documento);

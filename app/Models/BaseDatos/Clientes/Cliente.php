@@ -36,8 +36,12 @@ class Cliente extends Model
             ->join('entidad as e', 'pc.ID_Entidad', '=', 'e.ID_Entidad')
             ->where('pc.Nu_Estado', 2) // Estado confirmado
             ->where(function ($query) {
-                $query->where('e.Nu_Celular_Entidad', $this->telefono)
-                    ->orWhere('e.Nu_Documento_Identidad', $this->documento)
+                // Validar que el teléfono no sea nulo o vacío antes de procesar
+                if (!empty($this->telefono) && $this->telefono !== null) {
+                    $query->where('e.Nu_Celular_Entidad', $this->telefono);
+                }
+                
+                $query->orWhere('e.Nu_Documento_Identidad', $this->documento)
                     ->orWhere(function($q) {
                         $q->whereNotNull('e.Txt_Email_Entidad')
                           ->where('e.Txt_Email_Entidad', '!=', '')
@@ -61,13 +65,17 @@ class Cliente extends Model
             ->whereNotNull('estado_cliente')
             ->where('estado_cotizador', 'CONFIRMADO')
             ->where(function ($query) {
-                $telefonoLimpio = preg_replace('/[^0-9]/', '', $this->telefono);
-                $query->where('telefono', 'LIKE', "%{$telefonoLimpio}%")
-                    ->orWhere('telefono', 'LIKE', "%" . str_replace(' ', '', $telefonoLimpio) . "%")
-                    ->orWhere('telefono', 'LIKE', "%51 {$telefonoLimpio}%")
-                    ->orWhere('telefono', 'LIKE', "%51" . str_replace(' ', '', $telefonoLimpio) . "%")
-                    ->orWhere('telefono', 'LIKE', "%51 " . str_replace(' ', '', $telefonoLimpio) . "%")
-                    ->orWhere('documento', $this->documento)
+                // Validar que el teléfono no sea nulo o vacío antes de procesar
+                if (!empty($this->telefono) && $this->telefono !== null) {
+                    $telefonoLimpio = preg_replace('/[^0-9]/', '', $this->telefono);
+                    $query->where('telefono', 'LIKE', "%{$telefonoLimpio}%")
+                        ->orWhere('telefono', 'LIKE', "%" . str_replace(' ', '', $telefonoLimpio) . "%")
+                        ->orWhere('telefono', 'LIKE', "%51 {$telefonoLimpio}%")
+                        ->orWhere('telefono', 'LIKE', "%51" . str_replace(' ', '', $telefonoLimpio) . "%")
+                        ->orWhere('telefono', 'LIKE', "%51 " . str_replace(' ', '', $telefonoLimpio) . "%");
+                }
+                
+                $query->orWhere('documento', $this->documento)
                     ->orWhere(function($q) {
                         $q->whereNotNull('correo')
                           ->where('correo', '!=', '')
