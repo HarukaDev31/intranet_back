@@ -306,68 +306,59 @@ class CotizacionFinalController extends Controller
             $originalUrl = $cotizacion->cotizacion_final_url;
             Log::info("URL original: " . $originalUrl);
             
-            // Primero intentar decodificar la URL para validarla
-            $decodedUrl = urldecode($originalUrl);
-            Log::info("URL decodificada: " . $decodedUrl);
+            // Intentar diferentes ubicaciones
+            $possiblePaths = [];
             
-            // Luego codificar solo los espacios y caracteres especiales para la descarga
-            $fileUrl = str_replace(' ', '%20', $originalUrl);
-            Log::info("URL para descarga: " . $fileUrl);
+            // Nueva ubicación: storage/app/cargaconsolidada/cotizacionfinal/{idContenedor}
+            $possiblePaths[] = storage_path('app/' . $originalUrl);
             
-            // Verificar si es una URL válida usando la versión decodificada
-            $isValidUrl = filter_var($decodedUrl, FILTER_VALIDATE_URL);
+            // Verificar si es una URL completa
+            $isValidUrl = filter_var($originalUrl, FILTER_VALIDATE_URL) || preg_match('/^https?:\/\//', $originalUrl);
             
-            // Si la decodificada no funciona, probar con la original
-            if (!$isValidUrl) {
-                $isValidUrl = filter_var($originalUrl, FILTER_VALIDATE_URL);
-                Log::info("Probando validación con URL original");
+            if ($isValidUrl) {
+                Log::info("URL externa detectada");
+                $fileUrl = str_replace(' ', '%20', $originalUrl);
+                $possiblePaths[] = $fileUrl; // Agregar URL completa
+            } else {
+                // Ubicaciones legacy
+                $possiblePaths[] = storage_path('app/public/' . $originalUrl);
+                $possiblePaths[] = storage_path($originalUrl);
+                $possiblePaths[] = public_path($originalUrl);
+                $possiblePaths[] = $originalUrl;
             }
             
-            // Si aún no funciona, verificar manualmente si parece una URL HTTP/HTTPS
-            if (!$isValidUrl) {
-                $isValidUrl = preg_match('/^https?:\/\//', $originalUrl);
-                Log::info("Validación manual con regex: " . ($isValidUrl ? 'true' : 'false'));
-            }
-            
-            Log::info("Validación de URL", [
-                'url_original' => $originalUrl,
-                'url_decodificada' => $decodedUrl,
-                'url_para_descarga' => $fileUrl,
-                'is_valid_url' => $isValidUrl ? 'true' : 'false'
+            Log::info("Intentando leer archivo desde múltiples ubicaciones", [
+                'total_paths' => count($possiblePaths)
             ]);
             
-            // Verificar si es una URL o ruta local
-            if ($isValidUrl) {
-                Log::info("URL externa detectada: " . $fileUrl);
-                // Manejar URL externa con cURL para mayor control
-                $fileContent = $this->downloadFileFromUrl($fileUrl);
-                
-                if ($fileContent === false) {
-                    Log::error("downloadFileFromUrl retornó false");
-                } else {
-                    Log::info("Archivo descargado exitosamente, tamaño: " . strlen($fileContent) . " bytes");
+            // Buscar el archivo en las ubicaciones posibles
+            $fileContent = false;
+            $foundPath = null;
+            
+            foreach ($possiblePaths as $path) {
+                if (strpos($path, 'http') === 0) {
+                    // Es una URL, usar downloadFileFromUrl
+                    Log::info("Intentando descargar desde URL: " . $path);
+                    $fileContent = $this->downloadFileFromUrl($path);
+                } else if (file_exists($path)) {
+                    // Es un archivo local
+                    Log::info("Intentando leer archivo local: " . $path);
+                    $fileContent = file_get_contents($path);
+                    $foundPath = $path;
                 }
-            } else {
-                Log::info("URL NO válida, intentando como ruta local: " . $fileUrl);
-                // Si es ruta local, intentar diferentes rutas
-                $possiblePaths = [
-                    storage_path('app/public/' . $fileUrl),
-                    storage_path($fileUrl),
-                    public_path($fileUrl),
-                    $fileUrl
-                ];
-
-                $fileContent = false;
-                foreach ($possiblePaths as $path) {
-                    if (file_exists($path)) {
-                        $fileContent = file_get_contents($path);
-                        break;
-                    }
+                
+                if ($fileContent !== false) {
+                    Log::info("Archivo encontrado y leído exitosamente desde: " . $path . " (tamaño: " . strlen($fileContent) . " bytes)");
+                    break;
                 }
             }
 
             if ($fileContent === false) {
-                throw new \Exception("No se pudo leer el archivo Excel.");
+                Log::error('No se pudo leer el archivo desde ninguna ubicación', [
+                    'cotizacion_final_url' => $originalUrl,
+                    'rutas_intentadas' => $possiblePaths
+                ]);
+                throw new \Exception("No se pudo leer el archivo Excel desde ninguna ubicación.");
             }
 
             // Crear archivo temporal
@@ -2510,18 +2501,38 @@ class CotizacionFinalController extends Controller
             // Obtener la ruta del archivo
             $fileUrl = $cotizacion->cotizacion_final_url;
             
-            // Si es una URL completa, extraer la ruta local
+            // Intentar diferentes ubicaciones
+            $possiblePaths = [];
+            
+            // Nueva ubicación: storage/app/cargaconsolidada/cotizacionfinal/{idContenedor}
+            $possiblePaths[] = storage_path('app/' . $fileUrl);
+            
+            // Ubicación legacy: public/assets/downloads
             if (strpos($fileUrl, 'http') === 0) {
                 $pathParts = parse_url($fileUrl);
-                $filePath = storage_path('app/public' . $pathParts['path']);
+                $possiblePaths[] = storage_path('app/public' . $pathParts['path']);
+                $possiblePaths[] = public_path($pathParts['path']);
             } else {
-                // Si es una ruta relativa, construir la ruta completa
-                $filePath = storage_path('app/public/' . $fileUrl);
+                $possiblePaths[] = storage_path('app/public/' . $fileUrl);
+                $possiblePaths[] = public_path($fileUrl);
+            }
+            
+            // Buscar el archivo en las ubicaciones posibles
+            $filePath = null;
+            foreach ($possiblePaths as $path) {
+                if (file_exists($path)) {
+                    $filePath = $path;
+                    Log::info('Archivo encontrado en: ' . $path);
+                    break;
+                }
             }
 
             // Verificar que el archivo existe
-            if (!file_exists($filePath)) {
-                Log::error('Archivo de cotización final no encontrado: ' . $filePath);
+            if (!$filePath || !file_exists($filePath)) {
+                Log::error('Archivo de cotización final no encontrado en ninguna ubicación', [
+                    'cotizacion_final_url' => $fileUrl,
+                    'rutas_intentadas' => $possiblePaths
+                ]);
                 return response()->json([
                     'success' => false,
                     'message' => 'Archivo no encontrado en el servidor'
@@ -2558,11 +2569,48 @@ class CotizacionFinalController extends Controller
             }
 
             $cotizacionFinalUrl = $cotizacion->cotizacion_final_url;
-            $fileUrl = str_replace(' ', '%20', $cotizacionFinalUrl);
-
-            $fileContent = file_get_contents($fileUrl);
+            
+            // Intentar diferentes ubicaciones
+            $possiblePaths = [];
+            
+            // Nueva ubicación: storage/app/cargaconsolidada/cotizacionfinal/{idContenedor}
+            $possiblePaths[] = storage_path('app/' . $cotizacionFinalUrl);
+            
+            // Ubicación legacy
+            if (strpos($cotizacionFinalUrl, 'http') === 0) {
+                $fileUrl = str_replace(' ', '%20', $cotizacionFinalUrl);
+                $possiblePaths[] = $fileUrl; // URL completa
+            } else {
+                $possiblePaths[] = storage_path('app/public/' . $cotizacionFinalUrl);
+                $possiblePaths[] = public_path($cotizacionFinalUrl);
+            }
+            
+            // Buscar el archivo en las ubicaciones posibles
+            $fileContent = false;
+            $foundPath = null;
+            
+            foreach ($possiblePaths as $path) {
+                if (strpos($path, 'http') === 0) {
+                    // Es una URL, usar file_get_contents
+                    $fileContent = @file_get_contents($path);
+                } else if (file_exists($path)) {
+                    // Es un archivo local
+                    $fileContent = file_get_contents($path);
+                    $foundPath = $path;
+                }
+                
+                if ($fileContent !== false) {
+                    Log::info('Archivo encontrado y leído desde: ' . $path);
+                    break;
+                }
+            }
+            
             if ($fileContent === false) {
-                throw new \Exception("No se pudo leer el archivo Excel.");
+                Log::error('No se pudo leer el archivo desde ninguna ubicación', [
+                    'cotizacion_final_url' => $cotizacionFinalUrl,
+                    'rutas_intentadas' => $possiblePaths
+                ]);
+                throw new \Exception("No se pudo leer el archivo Excel desde ninguna ubicación.");
             }
             
             $tempFile = tempnam(sys_get_temp_dir(), 'cotizacion_') . '.xlsx';
@@ -3233,12 +3281,14 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
             
             // Generar archivo Excel
             $excelFileName = 'Cotizacion' . $data['cliente']['nombre'] . '.xlsx';
-            $excelFilePath = public_path('assets/downloads/' . $excelFileName);
+            $storagePath = 'cargaconsolidada/cotizacionfinal/' . $idContenedor;
+            $excelFilePath = storage_path('app/' . $storagePath . '/' . $excelFileName);
             
             // Asegurar que el directorio existe
-            $directory = dirname($excelFilePath);
-            if (!file_exists($directory)) {
-                mkdir($directory, 0755, true);
+            $directoryPath = storage_path('app/' . $storagePath);
+            if (!file_exists($directoryPath)) {
+                mkdir($directoryPath, 0755, true);
+                Log::info('Directorio creado: ' . $directoryPath);
             }
             
             $writer = new Xlsx($spreadsheet);
@@ -3307,7 +3357,7 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
                 'estado' => 'PENDIENTE',
                 'excel_file_name' => $excelFileName,
                 'excel_file_path' => $excelFilePath,
-                'cotizacion_final_url' => 'assets/downloads/' . $excelFileName,
+                'cotizacion_final_url' => $storagePath . '/' . $excelFileName,
                 'peso_final' => $sumPeso,
             ];
             
