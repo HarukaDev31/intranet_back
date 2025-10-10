@@ -110,8 +110,12 @@ class Cliente extends Model
             ->leftJoin('campana_curso as cc', 'pc.ID_Campana', '=', 'cc.ID_Campana')
             ->where('pc.Nu_Estado', 2) // Estado confirmado
             ->where(function ($query) {
-                $query->where(DB::raw('REPLACE(TRIM(e.Nu_Celular_Entidad), " ", "")'), 'LIKE', "%{$this->telefono}%")
-                    ->orWhere(function($q) {
+                // Validar que el teléfono no sea nulo o vacío antes de procesar
+                if (!empty($this->telefono) && $this->telefono !== null) {
+                    $query->where(DB::raw('REPLACE(TRIM(e.Nu_Celular_Entidad), " ", "")'), 'LIKE', "%{$this->telefono}%");
+                }
+                
+                $query->orWhere(function($q) {
                         $q->whereNotNull('e.Nu_Documento_Identidad')
                           ->where('e.Nu_Documento_Identidad', '!=', '')
                           ->where('e.Nu_Documento_Identidad', $this->documento);
@@ -146,8 +150,12 @@ class Cliente extends Model
             ->whereNotNull('estado_cliente')
             ->where('estado_cotizador', 'CONFIRMADO')
             ->where(function ($query) {
-                $query->orWhere(DB::raw('REPLACE(TRIM(telefono), " ", "")'), 'LIKE', "%{$this->telefono}%")
-                    ->orWhere(function($q) {
+                // Validar que el teléfono no sea nulo o vacío antes de procesar
+                if (!empty($this->telefono) && $this->telefono !== null) {
+                    $query->where(DB::raw('REPLACE(TRIM(telefono), " ", "")'), 'LIKE', "%{$this->telefono}%");
+                }
+                
+                $query->orWhere(function($q) {
                         $q->whereNotNull('documento')
                           ->where('documento', '!=', '')
                           ->where('documento', $this->documento);
@@ -191,8 +199,12 @@ class Cliente extends Model
             ->join('entidad as e', 'pc.ID_Entidad', '=', 'e.ID_Entidad')
             ->where('pc.Nu_Estado', 2) // Estado confirmado
             ->where(function ($query) {
-                $query->where(DB::raw('REPLACE(TRIM(e.Nu_Celular_Entidad), " ", "")'), 'LIKE', "%{$this->telefono}%")
-                    ->orWhere(function($q) {
+                // Validar que el teléfono no sea nulo o vacío antes de procesar
+                if (!empty($this->telefono) && $this->telefono !== null) {
+                    $query->where(DB::raw('REPLACE(TRIM(e.Nu_Celular_Entidad), " ", "")'), 'LIKE', "%{$this->telefono}%");
+                }
+                
+                $query->orWhere(function($q) {
                         $q->whereNotNull('e.Nu_Documento_Identidad')
                           ->where('e.Nu_Documento_Identidad', '!=', '')
                           ->where('e.Nu_Documento_Identidad', $this->documento);
@@ -220,8 +232,12 @@ class Cliente extends Model
             ->whereNotNull('estado_cliente')
             ->where('estado_cotizador', 'CONFIRMADO')
             ->where(function ($query) {
-                $query->where(DB::raw('REPLACE(TRIM(telefono), " ", "")'), 'LIKE', "%{$this->telefono}%")
-                    ->orWhere('documento', $this->documento)
+                // Validar que el teléfono no sea nulo o vacío antes de procesar
+                if (!empty($this->telefono) && $this->telefono !== null) {
+                    $query->where(DB::raw('REPLACE(TRIM(telefono), " ", "")'), 'LIKE', "%{$this->telefono}%");
+                }
+                
+                $query->orWhere('documento', $this->documento)
                     ->orWhere(function($q) {
                         $q->whereNotNull('correo')
                           ->where('correo', '!=', '')
