@@ -211,7 +211,10 @@ class Cliente extends Model
                 'categoria' => $this->determinarCategoria($cotizacion->fecha)
             ];
         }
-
+        //order by fecha asc
+        usort($servicios, function ($a, $b) {
+            return strtotime($a['fecha']) - strtotime($b['fecha']);
+        });
         return $servicios;
     }
 
