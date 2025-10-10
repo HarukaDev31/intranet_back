@@ -1055,18 +1055,12 @@ export interface UserBusiness{
             $token = $request->token;
             $password = $request->password;
 
-            // Buscar el token en password_resets
-            $passwordReset = DB::table('password_resets')
-                ->where('email', function($query) use ($token) {
-                    $query->select('email')
-                        ->from('password_resets')
-                        ->whereRaw('1=1');
-                })
-                ->get();
-
+            // Obtener todos los registros de password_resets
+            $passwordResets = DB::table('password_resets')->get();
+                
             // Buscar el registro correcto comparando el token hasheado
             $resetRecord = null;
-            foreach ($passwordReset as $record) {
+            foreach ($passwordResets as $record) {
                 if (Hash::check($token, $record->token)) {
                     $resetRecord = $record;
                     break;
