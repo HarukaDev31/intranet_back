@@ -56,7 +56,7 @@ return [
 
     'prefix' => env(
         'HORIZON_PREFIX',
-        Str::slug(env('APP_NAME', 'laravel'), '_').'_horizon:'
+        Str::slug(env('APP_NAME', 'laravel'), '_') . '_horizon:'
     ),
 
     /*
@@ -165,7 +165,7 @@ return [
     */
 
     'defaults' => [
-        
+
         'supervisor-importaciones' => [
             'connection' => 'redis',
             'queue' => ['importaciones'],
@@ -196,26 +196,48 @@ return [
 
     'environments' => [
         'production' => [
-           
             'supervisor-importaciones' => [
+                'connection' => 'redis',
+                'queue' => ['importaciones'],  // ← FALTABA ESTO
+                'balance' => 'auto',
                 'maxProcesses' => 5,
+                'maxTime' => 0,
+                'maxJobs' => 0,
+                'memory' => 128,
+                'tries' => 1,
+                'timeout' => 180,
                 'balanceMaxShift' => 1,
                 'balanceCooldown' => 3,
             ],
             'supervisor-emails' => [
+                'connection' => 'redis',
+                'queue' => ['emails'],  // ← FALTABA ESTO
+                'balance' => 'auto',
                 'maxProcesses' => 3,
+                'maxTime' => 0,
+                'maxJobs' => 0,
+                'memory' => 128,
+                'tries' => 1,
+                'timeout' => 180,
                 'balanceMaxShift' => 1,
                 'balanceCooldown' => 3,
             ],
             'supervisor-notificaciones' => [
+                'connection' => 'redis',
+                'queue' => ['notificaciones'],  // ← FALTABA ESTO
+                'balance' => 'auto',
                 'maxProcesses' => 2,
+                'maxTime' => 0,
+                'maxJobs' => 0,
+                'memory' => 128,
+                'tries' => 2,
+                'timeout' => 180,
                 'balanceMaxShift' => 1,
                 'balanceCooldown' => 3,
             ],
         ],
-
         'local' => [
-            
+
             'supervisor-importaciones' => [
                 'maxProcesses' => 2,
             ],

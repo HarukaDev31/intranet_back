@@ -122,7 +122,7 @@ class DeliveryController extends Controller
             ]);
 
             // Despachar job para enviar mensaje de WhatsApp
-            SendDeliveryConfirmationWhatsAppProvinceJob::dispatch($deliveryForm->id);
+            SendDeliveryConfirmationWhatsAppProvinceJob::dispatch($deliveryForm->id)->onQueue('emails');
 
             DB::commit();
             return response()->json([
@@ -227,7 +227,7 @@ class DeliveryController extends Controller
                 'id_user' => $idUser,
             ]);
             // Despachar job para enviar mensaje de WhatsApp
-            SendDeliveryConfirmationWhatsAppLimaJob::dispatch($deliveryForm->id);
+            SendDeliveryConfirmationWhatsAppLimaJob::dispatch($deliveryForm->id)->onQueue('emails');
             DB::commit();
 
             return response()->json([

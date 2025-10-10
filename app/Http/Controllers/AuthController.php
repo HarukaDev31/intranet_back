@@ -981,7 +981,7 @@ export interface UserBusiness{
             $resetUrl = $frontendUrl . '/reset-password?token=' . $token;
 
             // Despachar job para enviar email
-            \App\Jobs\SendForgotPasswordEmailJob::dispatch($email, $token, $resetUrl);
+            \App\Jobs\SendForgotPasswordEmailJob::dispatch($email, $token, $resetUrl)->onQueue('emails');
 
             Log::info('Token de recuperación de contraseña generado y correo enviado', [
                 'email' => $email,

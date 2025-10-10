@@ -1903,7 +1903,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                     $idCotizacion,
                     $idsProveedores,
                     $user->ID_Usuario
-                );
+                )->onQueue('importaciones');
 
                 Log::info("Job de inspección despachado", [
                     'id_proveedor' => $idProveedor,
@@ -2145,7 +2145,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
             ]);
 
             // Despachar el job para procesar en segundo plano
-            ForceSendRotuladoJob::dispatch($idCotizacion, $idsProveedores, $idContainer);
+            ForceSendRotuladoJob::dispatch($idCotizacion, $idsProveedores, $idContainer)->onQueue('importaciones');
 
             Log::info("Job ForceSendRotuladoJob despachado", [
                 'id_cotizacion' => $idCotizacion,
