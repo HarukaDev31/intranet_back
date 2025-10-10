@@ -26,10 +26,10 @@ use ZipArchive;
 use Dompdf\Dompdf;
 use Dompdf\Options;
 use Tymon\JWTAuth\Facades\JWTAuth;
-
+use App\Traits\FileTrait;
 class CotizacionFinalController extends Controller
 {
-    use WhatsappTrait;
+    use WhatsappTrait, FileTrait;
     private $table_cliente = 'entidad';
     private $table_usuario = 'usuario';
     private $table = "carga_consolidada_contenedor";
@@ -140,7 +140,7 @@ class CotizacionFinalController extends Controller
                     'tarifa_final' => $row->tarifa_final_formateado ?? $row->tarifa_final,
                     'estado_cotizacion_final' => $this->cleanUtf8String($row->estado_cotizacion_final),
                     'id_cotizacion' => $row->id_cotizacion,
-                    'cotizacion_final_url' => $row->cotizacion_final_url
+                    'cotizacion_final_url' =>$this->generateImageUrl($row->cotizacion_final_url)
                 ];
 
                 $transformedData[] = $subdata;
@@ -304,32 +304,26 @@ class CotizacionFinalController extends Controller
 
             // Procesar URL y obtener contenido
             $originalUrl = $cotizacion->cotizacion_final_url;
-            Log::info("URL original: " . $originalUrl);
             
             // Intentar diferentes ubicaciones
             $possiblePaths = [];
             
-            // Nueva ubicación: storage/app/cargaconsolidada/cotizacionfinal/{idContenedor}
-            $possiblePaths[] = storage_path('app/' . $originalUrl);
+            // Nueva ubicación: storage/app/public/CargaConsolidada/cotizacionfinal/{idContenedor}
+            $possiblePaths[] = storage_path('app/public/' . $originalUrl);
             
             // Verificar si es una URL completa
             $isValidUrl = filter_var($originalUrl, FILTER_VALIDATE_URL) || preg_match('/^https?:\/\//', $originalUrl);
             
             if ($isValidUrl) {
-                Log::info("URL externa detectada");
                 $fileUrl = str_replace(' ', '%20', $originalUrl);
                 $possiblePaths[] = $fileUrl; // Agregar URL completa
             } else {
                 // Ubicaciones legacy
-                $possiblePaths[] = storage_path('app/public/' . $originalUrl);
-                $possiblePaths[] = storage_path($originalUrl);
+                $possiblePaths[] = public_path('assets/downloads/' . basename($originalUrl));
                 $possiblePaths[] = public_path($originalUrl);
+                $possiblePaths[] = storage_path($originalUrl);
                 $possiblePaths[] = $originalUrl;
             }
-            
-            Log::info("Intentando leer archivo desde múltiples ubicaciones", [
-                'total_paths' => count($possiblePaths)
-            ]);
             
             // Buscar el archivo en las ubicaciones posibles
             $fileContent = false;
@@ -338,26 +332,20 @@ class CotizacionFinalController extends Controller
             foreach ($possiblePaths as $path) {
                 if (strpos($path, 'http') === 0) {
                     // Es una URL, usar downloadFileFromUrl
-                    Log::info("Intentando descargar desde URL: " . $path);
                     $fileContent = $this->downloadFileFromUrl($path);
                 } else if (file_exists($path)) {
                     // Es un archivo local
-                    Log::info("Intentando leer archivo local: " . $path);
                     $fileContent = file_get_contents($path);
                     $foundPath = $path;
                 }
                 
                 if ($fileContent !== false) {
-                    Log::info("Archivo encontrado y leído exitosamente desde: " . $path . " (tamaño: " . strlen($fileContent) . " bytes)");
                     break;
                 }
             }
 
             if ($fileContent === false) {
-                Log::error('No se pudo leer el archivo desde ninguna ubicación', [
-                    'cotizacion_final_url' => $originalUrl,
-                    'rutas_intentadas' => $possiblePaths
-                ]);
+                Log::error('No se pudo leer el archivo de cotización final');
                 throw new \Exception("No se pudo leer el archivo Excel desde ninguna ubicación.");
             }
 
@@ -1665,46 +1653,32 @@ class CotizacionFinalController extends Controller
             // Método 1: getRealPath()
             if (method_exists($excelFile, 'getRealPath') && $excelFile->getRealPath()) {
                 $filePath = $excelFile->getRealPath();
-                Log::info('Path obtenido usando getRealPath(): ' . $filePath);
             }
             
             // Método 2: getPathname()
             if (!$filePath && method_exists($excelFile, 'getPathname') && $excelFile->getPathname()) {
                 $filePath = $excelFile->getPathname();
-                Log::info('Path obtenido usando getPathname(): ' . $filePath);
             }
             
             // Método 3: path()
             if (!$filePath && method_exists($excelFile, 'path') && $excelFile->path()) {
                 $filePath = $excelFile->path();
-                Log::info('Path obtenido usando path(): ' . $filePath);
             }
             
             if (!$filePath || !file_exists($filePath)) {
-                Log::error('No se pudo obtener el path del archivo o el archivo no existe', [
-                    'filePath' => $filePath,
-                    'file_exists' => $filePath ? file_exists($filePath) : false
-                ]);
+                Log::error('No se pudo obtener el path del archivo o el archivo no existe');
                 throw new \Exception('No se pudo acceder al archivo Excel subido');
             }
             
-            Log::info('Cargando archivo Excel desde: ' . $filePath);
             $excel = IOFactory::load($filePath);
             $worksheet = $excel->getActiveSheet();
-            Log::info('Archivo Excel cargado exitosamente');
 
             // Obtener el rango total de datos válidos
             $highestRow = $worksheet->getHighestRow();
             $highestColumn = $worksheet->getHighestColumn();
-            
-            Log::info('Rango del Excel', [
-                'highestRow' => $highestRow,
-                'highestColumn' => $highestColumn
-            ]);
 
             // Obtener todas las celdas combinadas
             $mergedCells = $worksheet->getMergeCells();
-            Log::info('Total de celdas combinadas: ' . count($mergedCells));
 
             // Función para obtener el valor real de una celda (considerando combinadas)
             $getCellValue = function ($col, $row) use ($worksheet, $mergedCells) {
@@ -1761,8 +1735,6 @@ class CotizacionFinalController extends Controller
 
             $clients = [];
             $processedRows = [];
-
-            Log::info('Iniciando procesamiento de filas desde fila 2 hasta ' . $highestRow);
             
             // Recorrer todas las filas buscando clientes (empezar desde fila 2 para saltar headers)
             for ($row = 2; $row <= $highestRow; $row++) {
@@ -1772,10 +1744,6 @@ class CotizacionFinalController extends Controller
                 }
 
                 $clientName = $getCellValue('A', $row);
-                
-                if ($row <= 5) { // Log primeras filas para diagnóstico
-                    Log::info("Fila {$row} - Valor columna A: '" . $clientName . "' (length: " . strlen($clientName) . ")");
-                }
 
                 // Verificar si hay un nombre de cliente válido o si es una fila de header
                 if (empty($clientName) || $this->isHeaderRow($clientName)) {
@@ -1829,20 +1797,8 @@ class CotizacionFinalController extends Controller
                 }
 
                 $clients[] = ['cliente' => $client];
-                Log::info("Cliente agregado: {$clientName} con " . count($client['productos']) . " productos");
             }
-
-            Log::info('Total de clientes procesados: ' . count($clients));
             
-            if (empty($clients)) {
-                Log::warning('No se encontraron clientes en el Excel. Revisar formato del archivo.');
-                Log::info('Mostrando primeras 10 filas de la columna A para diagnóstico:');
-                for ($r = 1; $r <= min(10, $highestRow); $r++) {
-                    $val = $worksheet->getCell('A' . $r)->getValue();
-                    Log::info("Fila {$r}, Columna A: '" . $val . "'");
-                }
-            }
-
             return $clients;
         } catch (\Exception $e) {
             Log::error('Error en getMassiveExcelData: ' . $e->getMessage());
@@ -2504,8 +2460,8 @@ class CotizacionFinalController extends Controller
             // Intentar diferentes ubicaciones
             $possiblePaths = [];
             
-            // Nueva ubicación: storage/app/cargaconsolidada/cotizacionfinal/{idContenedor}
-            $possiblePaths[] = storage_path('app/' . $fileUrl);
+            // Nueva ubicación: storage/app/public/CargaConsolidada/cotizacionfinal/{idContenedor}
+            $possiblePaths[] = storage_path('app/public/' . $fileUrl);
             
             // Ubicación legacy: public/assets/downloads
             if (strpos($fileUrl, 'http') === 0) {
@@ -2513,7 +2469,7 @@ class CotizacionFinalController extends Controller
                 $possiblePaths[] = storage_path('app/public' . $pathParts['path']);
                 $possiblePaths[] = public_path($pathParts['path']);
             } else {
-                $possiblePaths[] = storage_path('app/public/' . $fileUrl);
+                $possiblePaths[] = public_path('assets/downloads/' . basename($fileUrl));
                 $possiblePaths[] = public_path($fileUrl);
             }
             
@@ -2522,17 +2478,13 @@ class CotizacionFinalController extends Controller
             foreach ($possiblePaths as $path) {
                 if (file_exists($path)) {
                     $filePath = $path;
-                    Log::info('Archivo encontrado en: ' . $path);
                     break;
                 }
             }
 
             // Verificar que el archivo existe
             if (!$filePath || !file_exists($filePath)) {
-                Log::error('Archivo de cotización final no encontrado en ninguna ubicación', [
-                    'cotizacion_final_url' => $fileUrl,
-                    'rutas_intentadas' => $possiblePaths
-                ]);
+                Log::error('Archivo de cotización final no encontrado');
                 return response()->json([
                     'success' => false,
                     'message' => 'Archivo no encontrado en el servidor'
@@ -2573,21 +2525,20 @@ class CotizacionFinalController extends Controller
             // Intentar diferentes ubicaciones
             $possiblePaths = [];
             
-            // Nueva ubicación: storage/app/cargaconsolidada/cotizacionfinal/{idContenedor}
-            $possiblePaths[] = storage_path('app/' . $cotizacionFinalUrl);
+            // Nueva ubicación: storage/app/public/CargaConsolidada/cotizacionfinal/{idContenedor}
+            $possiblePaths[] = storage_path('app/public/' . $cotizacionFinalUrl);
             
             // Ubicación legacy
             if (strpos($cotizacionFinalUrl, 'http') === 0) {
                 $fileUrl = str_replace(' ', '%20', $cotizacionFinalUrl);
                 $possiblePaths[] = $fileUrl; // URL completa
             } else {
-                $possiblePaths[] = storage_path('app/public/' . $cotizacionFinalUrl);
+                $possiblePaths[] = public_path('assets/downloads/' . basename($cotizacionFinalUrl));
                 $possiblePaths[] = public_path($cotizacionFinalUrl);
             }
             
             // Buscar el archivo en las ubicaciones posibles
             $fileContent = false;
-            $foundPath = null;
             
             foreach ($possiblePaths as $path) {
                 if (strpos($path, 'http') === 0) {
@@ -2596,20 +2547,15 @@ class CotizacionFinalController extends Controller
                 } else if (file_exists($path)) {
                     // Es un archivo local
                     $fileContent = file_get_contents($path);
-                    $foundPath = $path;
                 }
                 
                 if ($fileContent !== false) {
-                    Log::info('Archivo encontrado y leído desde: ' . $path);
                     break;
                 }
             }
             
             if ($fileContent === false) {
-                Log::error('No se pudo leer el archivo desde ninguna ubicación', [
-                    'cotizacion_final_url' => $cotizacionFinalUrl,
-                    'rutas_intentadas' => $possiblePaths
-                ]);
+                Log::error('No se pudo leer el archivo de cotización final para PDF');
                 throw new \Exception("No se pudo leer el archivo Excel desde ninguna ubicación.");
             }
             
@@ -3279,19 +3225,23 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
                 $spreadsheet->getActiveSheet()->setTitle('2');
             }
             
-            // Generar archivo Excel
+            // Generar archivo Excel usando Storage
             $excelFileName = 'Cotizacion' . $data['cliente']['nombre'] . '.xlsx';
-            $storagePath = 'cargaconsolidada/cotizacionfinal/' . $idContenedor;
-            $excelFilePath = storage_path('app/' . $storagePath . '/' . $excelFileName);
+            $storagePath = 'CargaConsolidada/cotizacionfinal/' . $idContenedor;
+            $relativeFilePath = $storagePath . '/' . $excelFileName;
+            
+            // Guardar usando Writer de PhpSpreadsheet
+            $writer = new Xlsx($spreadsheet);
+            
+            // Crear ruta completa en storage/app/public
+            $excelFilePath = storage_path('app/public/' . $relativeFilePath);
             
             // Asegurar que el directorio existe
-            $directoryPath = storage_path('app/' . $storagePath);
+            $directoryPath = dirname($excelFilePath);
             if (!file_exists($directoryPath)) {
                 mkdir($directoryPath, 0755, true);
-                Log::info('Directorio creado: ' . $directoryPath);
             }
             
-            $writer = new Xlsx($spreadsheet);
             $writer->save($excelFilePath);
             
             // Obtener valores calculados para la respuesta
@@ -3357,7 +3307,7 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
                 'estado' => 'PENDIENTE',
                 'excel_file_name' => $excelFileName,
                 'excel_file_path' => $excelFilePath,
-                'cotizacion_final_url' => $storagePath . '/' . $excelFileName,
+                'cotizacion_final_url' => $relativeFilePath, // Ruta relativa para storage/app/public
                 'peso_final' => $sumPeso,
             ];
             
