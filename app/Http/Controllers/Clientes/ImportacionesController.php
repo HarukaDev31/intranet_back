@@ -113,6 +113,9 @@ class ImportacionesController extends Controller
                 ->whereNull('id_cliente_importacion')
                 //where telefono trim and remove +51 from db
                 ->where(DB::raw('TRIM(telefono)'), 'like', '%' . $whatsapp . '%')
+                //where telefono is not null or not empty
+                ->whereNotNull('telefono')
+                ->where('telefono', '!=', '')
                 ->whereNotNull('estado_cliente')
                 //where not has any row in consolidado_delivery_form_lima_conformidad or consolidado_delivery_form_provincia_conformidad with id_cotizacion
                 ->where(DB::raw('(SELECT COUNT(*) FROM consolidado_delivery_form_lima_conformidad WHERE id_cotizacion = id)'), 0)
