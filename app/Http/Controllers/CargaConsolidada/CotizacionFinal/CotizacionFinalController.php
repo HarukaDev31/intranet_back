@@ -1662,15 +1662,58 @@ class CotizacionFinalController extends Controller
     public function getMassiveExcelData($excelFile)
     {
         try {
-            $excel = IOFactory::load($excelFile->getPathname());
+            // Validar que el archivo exista
+            if (!$excelFile) {
+                Log::error('Archivo Excel no proporcionado');
+                throw new \Exception('Archivo Excel no proporcionado');
+            }
+
+            // Obtener el path del archivo - intentar diferentes métodos
+            $filePath = null;
+            
+            // Método 1: getRealPath()
+            if (method_exists($excelFile, 'getRealPath') && $excelFile->getRealPath()) {
+                $filePath = $excelFile->getRealPath();
+                Log::info('Path obtenido usando getRealPath(): ' . $filePath);
+            }
+            
+            // Método 2: getPathname()
+            if (!$filePath && method_exists($excelFile, 'getPathname') && $excelFile->getPathname()) {
+                $filePath = $excelFile->getPathname();
+                Log::info('Path obtenido usando getPathname(): ' . $filePath);
+            }
+            
+            // Método 3: path()
+            if (!$filePath && method_exists($excelFile, 'path') && $excelFile->path()) {
+                $filePath = $excelFile->path();
+                Log::info('Path obtenido usando path(): ' . $filePath);
+            }
+            
+            if (!$filePath || !file_exists($filePath)) {
+                Log::error('No se pudo obtener el path del archivo o el archivo no existe', [
+                    'filePath' => $filePath,
+                    'file_exists' => $filePath ? file_exists($filePath) : false
+                ]);
+                throw new \Exception('No se pudo acceder al archivo Excel subido');
+            }
+            
+            Log::info('Cargando archivo Excel desde: ' . $filePath);
+            $excel = IOFactory::load($filePath);
             $worksheet = $excel->getActiveSheet();
+            Log::info('Archivo Excel cargado exitosamente');
 
             // Obtener el rango total de datos válidos
             $highestRow = $worksheet->getHighestRow();
             $highestColumn = $worksheet->getHighestColumn();
+            
+            Log::info('Rango del Excel', [
+                'highestRow' => $highestRow,
+                'highestColumn' => $highestColumn
+            ]);
 
             // Obtener todas las celdas combinadas
             $mergedCells = $worksheet->getMergeCells();
+            Log::info('Total de celdas combinadas: ' . count($mergedCells));
 
             // Función para obtener el valor real de una celda (considerando combinadas)
             $getCellValue = function ($col, $row) use ($worksheet, $mergedCells) {
@@ -1728,6 +1771,8 @@ class CotizacionFinalController extends Controller
             $clients = [];
             $processedRows = [];
 
+            Log::info('Iniciando procesamiento de filas desde fila 2 hasta ' . $highestRow);
+            
             // Recorrer todas las filas buscando clientes (empezar desde fila 2 para saltar headers)
             for ($row = 2; $row <= $highestRow; $row++) {
                 // Saltar filas ya procesadas
@@ -1736,6 +1781,10 @@ class CotizacionFinalController extends Controller
                 }
 
                 $clientName = $getCellValue('A', $row);
+                
+                if ($row <= 5) { // Log primeras filas para diagnóstico
+                    Log::info("Fila {$row} - Valor columna A: '" . $clientName . "' (length: " . strlen($clientName) . ")");
+                }
 
                 // Verificar si hay un nombre de cliente válido o si es una fila de header
                 if (empty($clientName) || $this->isHeaderRow($clientName)) {
@@ -1789,6 +1838,18 @@ class CotizacionFinalController extends Controller
                 }
 
                 $clients[] = ['cliente' => $client];
+                Log::info("Cliente agregado: {$clientName} con " . count($client['productos']) . " productos");
+            }
+
+            Log::info('Total de clientes procesados: ' . count($clients));
+            
+            if (empty($clients)) {
+                Log::warning('No se encontraron clientes en el Excel. Revisar formato del archivo.');
+                Log::info('Mostrando primeras 10 filas de la columna A para diagnóstico:');
+                for ($r = 1; $r <= min(10, $highestRow); $r++) {
+                    $val = $worksheet->getCell('A' . $r)->getValue();
+                    Log::info("Fila {$r}, Columna A: '" . $val . "'");
+                }
             }
 
             return $clients;
