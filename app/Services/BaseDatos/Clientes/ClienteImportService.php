@@ -194,7 +194,8 @@ class ClienteImportService
             $whatsappLimpio = preg_replace('/\D+/', '', $data['whatsapp'] ?? '');
 
             // Buscar secuencialmente: primero por teléfono (normalizado), luego por DNI, luego por RUC
-            if (!empty($whatsappLimpio)) {
+            // Validar que el teléfono no sea nulo o vacío antes de procesar
+            if (!empty($whatsappLimpio) && $whatsappLimpio !== null) {
                 // Usar whereRaw para comparar con la columna telefono eliminando espacios y caracteres comunes
                 $clienteExistente = Cliente::whereRaw(
                     "REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(telefono, ' ', ''), '-', ''), '(', ''), ')', ''), '+', '') LIKE ?",
@@ -203,12 +204,14 @@ class ClienteImportService
             }
 
             // Si no encontró por teléfono, buscar por DNI
-            if (!$clienteExistente && !empty(trim($data['dni'] ?? ''))) {
+            // Validar que el documento no sea nulo o vacío antes de procesar
+            if (!$clienteExistente && !empty(trim($data['dni'] ?? '')) && trim($data['dni'] ?? '') !== null) {
                 $clienteExistente = Cliente::where('documento', trim($data['dni']))->first();
             }
 
             // Si no encontró por DNI, buscar por RUC
-            if (!$clienteExistente && !empty(trim($data['ruc'] ?? ''))) {
+            // Validar que el RUC no sea nulo o vacío antes de procesar
+            if (!$clienteExistente && !empty(trim($data['ruc'] ?? '')) && trim($data['ruc'] ?? '') !== null) {
                 $clienteExistente = Cliente::where('ruc', trim($data['ruc']))->first();
             }
 
@@ -227,20 +230,25 @@ class ClienteImportService
                 if ($data['servicio'] == 'CONSOLIDADO') {
                     $carga = $data['carga'];
                     $carga = explode('#', $carga)[1];
-                    $consolidado = Contenedor::where('carga', $carga)->first();
-                    $cotizacion = Cotizacion::create([
-                        'id_contenedor' => $consolidado->id,
-                        'id_tipo_cliente' => 1,
-                        'id_cliente' => $clienteExistente->id,
-                        'fecha' => $this->convertirFechaExcel($data['fecha']),
-                        'nombre' => $data['cliente'],
-                        'documento' => $data['dni'],
-                        'correo' => $data['correo'],
-                        'telefono' => $data['whatsapp'],
-                        'id_cliente_importacion' => $importId,
-                        'estado_cliente' => 'NO RESERVADO',
-                        'estado_cotizador' => 'CONFIRMADO',
-                    ]);
+                    // Validar que la carga no sea nula o vacía antes de procesar
+                    if (!empty($carga) && $carga !== null) {
+                        $consolidado = Contenedor::where('carga', $carga)->first();
+                        if ($consolidado) {
+                            $cotizacion = Cotizacion::create([
+                                'id_contenedor' => $consolidado->id,
+                                'id_tipo_cliente' => 1,
+                                'id_cliente' => $clienteExistente->id,
+                                'fecha' => $this->convertirFechaExcel($data['fecha']),
+                                'nombre' => $data['cliente'],
+                                'documento' => $data['dni'],
+                                'correo' => $data['correo'],
+                                'telefono' => $data['whatsapp'],
+                                'id_cliente_importacion' => $importId,
+                                'estado_cliente' => 'NO RESERVADO',
+                                'estado_cotizador' => 'CONFIRMADO',
+                            ]);
+                        }
+                    }
                 } else {
                     PedidoCurso::create([
                         'id_cliente' => $clienteExistente->id,
@@ -268,32 +276,35 @@ class ClienteImportService
                     $carga = $data['carga'];
                     $carga = explode('#', $carga)[1];
                     Log::info('Carga: ' . $carga);
-                    $consolidado = Contenedor::where('carga', $carga)->first();
-                    if (!$consolidado) {
-                        $consolidado = Contenedor::create([
-                            'carga' => $carga,
-                            'empresa' => 1,
-                            'estado' => 'PENDIENTE',
-                            'mes' => 'ENERO',
-                            'id_pais' => 1, // Perú por defecto
-                            'tipo_carga' => 'CARGA CONSOLIDADA',
-                            'estado_china' => 'COMPLETADO',
+                    // Validar que la carga no sea nula o vacía antes de procesar
+                    if (!empty($carga) && $carga !== null) {
+                        $consolidado = Contenedor::where('carga', $carga)->first();
+                        if (!$consolidado) {
+                            $consolidado = Contenedor::create([
+                                'carga' => $carga,
+                                'empresa' => 1,
+                                'estado' => 'PENDIENTE',
+                                'mes' => 'ENERO',
+                                'id_pais' => 1, // Perú por defecto
+                                'tipo_carga' => 'CARGA CONSOLIDADA',
+                                'estado_china' => 'COMPLETADO',
+                            ]);
+                        }
+                        Log::info('Contenedor: ' . $consolidado->id);
+                        $cotizacion = Cotizacion::create([
+                            'id_contenedor' => $consolidado->id,
+                            'id_tipo_cliente' => 1,
+                            'id_cliente' => $cliente->id,
+                            'fecha' => $this->convertirFechaExcel($data['fecha']),
+                            'nombre' => $data['cliente'],
+                            'documento' => $data['dni'],
+                            'correo' => $data['correo'],
+                            'telefono' => $data['whatsapp'],
+                            'id_cliente_importacion' => $importId,
+                            'estado_cliente' => 'NO RESERVADO',
+                            'estado_cotizador' => 'CONFIRMADO',
                         ]);
                     }
-                    Log::info('Contenedor: ' . $consolidado->id);
-                    $cotizacion = Cotizacion::create([
-                        'id_contenedor' => $consolidado->id,
-                        'id_tipo_cliente' => 1,
-                        'id_cliente' => $cliente->id,
-                        'fecha' => $this->convertirFechaExcel($data['fecha']),
-                        'nombre' => $data['cliente'],
-                        'documento' => $data['dni'],
-                        'correo' => $data['correo'],
-                        'telefono' => $data['whatsapp'],
-                        'id_cliente_importacion' => $importId,
-                        'estado_cliente' => 'NO RESERVADO',
-                        'estado_cotizador' => 'CONFIRMADO',
-                    ]);
                 } else {
                     PedidoCurso::create([
                         'id_cliente' => $cliente->id,
@@ -445,8 +456,13 @@ class ClienteImportService
         try {
             PedidoCurso::where('id_cliente_importacion', $id)->delete();
             Cotizacion::where('id_cliente_importacion', $id)->delete();
-            Cliente::where('id_cliente_importacion', $id)->delete();
-
+            $clientes = Cliente::where('id_cliente_importacion', $id)->delete();
+            foreach ($clientes as $cliente) {
+                //set cotizaciones where id_cliente = $cliente->id set id_cliente=null
+                Cotizacion::where('id_cliente', $cliente->id)->update(['id_cliente' => null]);
+                PedidoCurso::where('id_cliente', $cliente->id)->update(['id_cliente' => null]);
+            }
+            $clientes = Cliente::where('id_cliente_importacion', $id)->delete();
             $import = ImportCliente::findOrFail($id);
 
             // Eliminar clientes asociados a esta importación
