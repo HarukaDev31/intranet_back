@@ -125,16 +125,23 @@ class ImportacionesController extends Controller
                             ->orWhere('telefono', 'LIKE', "%51 " . str_replace(' ', '', $telefonoLimpio) . "%");
                     }
                     
-                    $query->orWhere(function($q) use ($documento) {
+                    // Validar que el documento no sea nulo o vacío antes de procesar
+                    if (!empty($documento) && $documento !== null) {
+                        $query->orWhere(function($q) use ($documento) {
                             $q->whereNotNull('documento')
                               ->where('documento', '!=', '')
                               ->where('documento', $documento);
-                        })
-                        ->orWhere(function($q) use ($correo) {
+                        });
+                    }
+                    
+                    // Validar que el correo no sea nulo o vacío antes de procesar
+                    if (!empty($correo) && $correo !== null) {
+                        $query->orWhere(function($q) use ($correo) {
                             $q->whereNotNull('correo')
                               ->where('correo', '!=', '')
                               ->where('correo', $correo);
                         });
+                    }
                 })
                 //where not has any row in consolidado_delivery_form_lima_conformidad or consolidado_delivery_form_provincia_conformidad with id_cotizacion
                 ->where(DB::raw('(SELECT COUNT(*) FROM consolidado_delivery_form_lima_conformidad WHERE id_cotizacion = id)'), 0)

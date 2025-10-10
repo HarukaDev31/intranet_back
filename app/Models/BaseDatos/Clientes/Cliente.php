@@ -129,16 +129,23 @@ class Cliente extends Model
                     $query->where(DB::raw('REPLACE(TRIM(e.Nu_Celular_Entidad), " ", "")'), 'LIKE', "%{$this->telefono}%");
                 }
                 
-                $query->orWhere(function($q) {
+                // Validar que el documento no sea nulo o vacío antes de procesar
+                if (!empty($this->documento) && $this->documento !== null) {
+                    $query->orWhere(function($q) {
                         $q->whereNotNull('e.Nu_Documento_Identidad')
                           ->where('e.Nu_Documento_Identidad', '!=', '')
                           ->where('e.Nu_Documento_Identidad', $this->documento);
-                    })
-                    ->orWhere(function($q) {
+                    });
+                }
+                
+                // Validar que el correo no sea nulo o vacío antes de procesar
+                if (!empty($this->correo) && $this->correo !== null) {
+                    $query->orWhere(function($q) {
                         $q->whereNotNull('e.Txt_Email_Entidad')
                           ->where('e.Txt_Email_Entidad', '!=', '')
                           ->where('e.Txt_Email_Entidad', $this->correo);
                     });
+                }
             })
             ->where('pc.id_cliente', $this->id)
             ->orderBy('e.Fe_Registro', 'asc')
@@ -169,16 +176,23 @@ class Cliente extends Model
                     $query->where(DB::raw('REPLACE(TRIM(telefono), " ", "")'), 'LIKE', "%{$this->telefono}%");
                 }
                 
-                $query->orWhere(function($q) {
+                // Validar que el documento no sea nulo o vacío antes de procesar
+                if (!empty($this->documento) && $this->documento !== null) {
+                    $query->orWhere(function($q) {
                         $q->whereNotNull('documento')
                           ->where('documento', '!=', '')
                           ->where('documento', $this->documento);
-                    })
-                    ->orWhere(function($q) {
+                    });
+                }
+                
+                // Validar que el correo no sea nulo o vacío antes de procesar
+                if (!empty($this->correo) && $this->correo !== null) {
+                    $query->orWhere(function($q) {
                         $q->whereNotNull('correo')
                           ->where('correo', '!=', '')
                           ->where('correo', $this->correo);
                     });
+                }
             })
        
             ->orderBy('fecha', 'asc')
@@ -218,16 +232,23 @@ class Cliente extends Model
                     $query->where(DB::raw('REPLACE(TRIM(e.Nu_Celular_Entidad), " ", "")'), 'LIKE', "%{$this->telefono}%");
                 }
                 
-                $query->orWhere(function($q) {
+                // Validar que el documento no sea nulo o vacío antes de procesar
+                if (!empty($this->documento) && $this->documento !== null) {
+                    $query->orWhere(function($q) {
                         $q->whereNotNull('e.Nu_Documento_Identidad')
                           ->where('e.Nu_Documento_Identidad', '!=', '')
                           ->where('e.Nu_Documento_Identidad', $this->documento);
-                    })
-                    ->orWhere(function($q) {
+                    });
+                }
+                
+                // Validar que el correo no sea nulo o vacío antes de procesar
+                if (!empty($this->correo) && $this->correo !== null) {
+                    $query->orWhere(function($q) {
                         $q->whereNotNull('e.Txt_Email_Entidad')
                           ->where('e.Txt_Email_Entidad', '!=', '')
                           ->where('e.Txt_Email_Entidad', $this->correo);
                     });
+                }
             })
             ->where('pc.id_cliente', $this->id)
             ->orderBy('e.Fe_Registro', 'asc')
@@ -251,12 +272,19 @@ class Cliente extends Model
                     $query->where(DB::raw('REPLACE(TRIM(telefono), " ", "")'), 'LIKE', "%{$this->telefono}%");
                 }
                 
-                $query->orWhere('documento', $this->documento)
-                    ->orWhere(function($q) {
+                // Validar que el documento no sea nulo o vacío antes de procesar
+                if (!empty($this->documento) && $this->documento !== null) {
+                    $query->orWhere('documento', $this->documento);
+                }
+                
+                // Validar que el correo no sea nulo o vacío antes de procesar
+                if (!empty($this->correo) && $this->correo !== null) {
+                    $query->orWhere(function($q) {
                         $q->whereNotNull('correo')
                           ->where('correo', '!=', '')
                           ->where('correo', $this->correo);
                     });
+                }
             })
             ->where('id_cliente', $this->id)
             ->orderBy('fecha', 'asc')
