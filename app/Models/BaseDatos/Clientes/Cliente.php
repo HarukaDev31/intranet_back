@@ -41,12 +41,19 @@ class Cliente extends Model
                     $query->where('e.Nu_Celular_Entidad', $this->telefono);
                 }
                 
-                $query->orWhere('e.Nu_Documento_Identidad', $this->documento)
-                    ->orWhere(function($q) {
+                // Validar que el documento no sea nulo o vacío antes de procesar
+                if (!empty($this->documento) && $this->documento !== null) {
+                    $query->orWhere('e.Nu_Documento_Identidad', $this->documento);
+                }
+                
+                // Validar que el correo no sea nulo o vacío antes de procesar
+                if (!empty($this->correo) && $this->correo !== null) {
+                    $query->orWhere(function($q) {
                         $q->whereNotNull('e.Txt_Email_Entidad')
                           ->where('e.Txt_Email_Entidad', '!=', '')
                           ->where('e.Txt_Email_Entidad', $this->correo);
                     });
+                }
             })
             ->orderBy('e.Fe_Registro', 'asc')
             ->first();
@@ -75,12 +82,19 @@ class Cliente extends Model
                         ->orWhere('telefono', 'LIKE', "%51 " . str_replace(' ', '', $telefonoLimpio) . "%");
                 }
                 
-                $query->orWhere('documento', $this->documento)
-                    ->orWhere(function($q) {
+                // Validar que el documento no sea nulo o vacío antes de procesar
+                if (!empty($this->documento) && $this->documento !== null) {
+                    $query->orWhere('documento', $this->documento);
+                }
+                
+                // Validar que el correo no sea nulo o vacío antes de procesar
+                if (!empty($this->correo) && $this->correo !== null) {
+                    $query->orWhere(function($q) {
                         $q->whereNotNull('correo')
                           ->where('correo', '!=', '')
                           ->where('correo', $this->correo);
                     });
+                }
             })
             ->orderBy('fecha', 'asc')
             ->orderByRaw('CAST(carga_consolidada_contenedor.carga AS UNSIGNED)')
