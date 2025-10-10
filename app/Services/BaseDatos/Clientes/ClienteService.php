@@ -605,6 +605,7 @@ class ClienteService
             $index++;
             Log::info("Procesando cliente {$index} de {$totalClientes}");
             $servicios = $serviciosPorCliente[$cliente->id] ?? [];
+            Log::info("Servicios del cliente {$cliente->id}: " . json_encode($servicios));
             $primerServicio = !empty($servicios) ? $servicios[0] : null;
 
             if ($primerServicio) {
