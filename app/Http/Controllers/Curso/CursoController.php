@@ -427,7 +427,8 @@ class CursoController extends Controller
                 PC.Nu_Estado_Usuario_Externo as Nu_Estado_Usuario_Externo,
                 PC.ID_Pedido_Curso as id_pedido_curso,
                 PC.url_constancia as url_constancia,
-                MONTH(CC.Fe_Inicio) as mes_numero
+                MONTH(CC.Fe_Inicio) as mes_numero,
+                PC.from_intranet as from_intranet
             ")
             ->first();
             //get url constancia and use filetrait generate file
