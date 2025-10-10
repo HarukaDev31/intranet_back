@@ -562,6 +562,7 @@ class AuthController extends Controller
                         $user['email'],
                         $validatedData['password'],
                         $user['nombre'],
+                        public_path('storage/logo_header_white.png'),
                         public_path('storage/logo_header.png'),
                         public_path('storage/logo_footer.png'),
                         public_path('storage/facebook.png'),
@@ -593,6 +594,8 @@ class AuthController extends Controller
                     'fechaNacimiento' => $user->birth_date, // Campo no disponible en la estructura actual
                     'country' => $user->pais_id, // Campo no disponible en la estructura actual
                     'city' => $user->provincia_id, // Campo no disponible en la estructura actual
+                    'department' => $user->departamento_id, // Campo no disponible en la estructura actual
+                    'district' => $user->distrito_id, // Campo no disponible en la estructura actual
                     'phone' => $user->whatsapp,
                     'empresa' => $user->userBusiness, // No hay negocio asociado al registrarse
                     'importedAmount' => 0, // Campo no disponible en la estructura actual
@@ -690,6 +693,8 @@ class AuthController extends Controller
                         'fechaNacimiento' => $user->birth_date, // Campo no disponible en la estructura actual
                         'country' => $user->pais_id, // Campo no disponible en la estructura actual
                         'city' => $user->provincia_id, // Campo no disponible en la estructura actual
+                        'department' => $user->departamento_id, // Campo no disponible en la estructura actual
+                        'district' => $user->distrito_id, // Campo no disponible en la
                         'phone' => $user->whatsapp,
                         'business' => $business,
                         'importedAmount' => 0, // Campo no disponible en la estructura actual
@@ -798,7 +803,9 @@ export interface UserBusiness{
                     'documentNumber' => null, // Campo no disponible en la estructura actual
                     'age' => null, // Campo no disponible en la estructura actual
                     'country' => null, // Campo no disponible en la estructura actual
-                    'city' => null, // Campo no disponible en la estructura actual
+                    'city' => $user->distrito_id,
+                    'department' => $user->departamento_id,
+                    'district' => $user->distrito_id,
                     'phone' => $user->whatsapp,
                     'business' => $business,
                     'importedAmount' => $importedAmount['sumFob'] + $importedAmount['sumImpuestos'] + $importedAmount['sumLogistica'], // Campo no disponible en la estructura actual

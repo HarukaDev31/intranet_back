@@ -83,7 +83,15 @@ class SendDeliveryConfirmationWhatsAppLimaJob implements ShouldQueue
 
             // Formatear fecha y hora
             $fechaRecojo = $rangeInfo ? sprintf('%02d/%02d/%04d', $rangeInfo->day, $rangeInfo->month, $rangeInfo->year) : 'Fecha no especificada';
-            $horaRecojo = $rangeInfo ? sprintf('%s - %s', $rangeInfo->start_time, $rangeInfo->end_time) : 'Hora no especificada';
+            
+            // Formatear hora sin segundos
+            if ($rangeInfo) {
+                $startTime = substr($rangeInfo->start_time, 0, 5); // Tomar solo HH:MM
+                $endTime = substr($rangeInfo->end_time, 0, 5);     // Tomar solo HH:MM
+                $horaRecojo = sprintf('%s - %s', $startTime, $endTime);
+            } else {
+                $horaRecojo = 'Hora no especificada';
+            }
 
             // Construir el mensaje con fecha y hora
             $mensaje = "Consolidado #{$carga}\n\n";

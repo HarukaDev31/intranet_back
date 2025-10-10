@@ -9,6 +9,7 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use App\Traits\WhatsappTrait;
 use App\Models\CargaConsolidada\ConsolidadoDeliveryFormProvince;
+use App\Models\CargaConsolidada\Contenedor;
 use App\Models\CargaConsolidada\Cotizacion;
 use Illuminate\Support\Facades\Log;
 use App\Models\User;
@@ -55,6 +56,14 @@ class SendDeliveryConfirmationWhatsAppProvinceJob implements ShouldQueue
                 return;
             }
 
+            //Obtener la carga del contenedor
+            $contenedor = Contenedor::find($cotizacion->id_contenedor);
+            $carga = $contenedor->carga;
+            if (!$contenedor) {
+                Log::error('Contenedor no encontrado para la cotización', ['cotizacion_id' => $cotizacion->id]);
+                return;
+            }
+
             // Verificar que la cotización tenga teléfono
             if (empty($cotizacion->telefono)) {
                 Log::warning('La cotización no tiene teléfono para enviar WhatsApp', [
@@ -73,7 +82,7 @@ class SendDeliveryConfirmationWhatsAppProvinceJob implements ShouldQueue
             $nombreRazonSocial = $deliveryForm->r_name;
 
             // Construir el mensaje
-            $mensaje = "Consolidado #{$cotizacion->carga}\n\n";
+            $mensaje = "Consolidado #{$carga}\n\n";
             $mensaje .= "Tu reserva se realizó exitosamente.\n";
             $mensaje .= "El cosignatario a quien se enviará la carga es: {$tipoDocumento}: {$deliveryForm->r_doc} - Nombre {$nombreRazonSocial}.";
 

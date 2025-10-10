@@ -34,6 +34,8 @@ class User extends Authenticatable implements JWTSubject
         'birth_date',
         'pais_id',
         'provincia_id',
+        'departamento_id',
+        'distrito_id',
         'goals'
     ];
 
@@ -92,6 +94,23 @@ class User extends Authenticatable implements JWTSubject
     {
         return $this->belongsTo(Pais::class, 'ID_Pais', 'ID_Pais');
     }
+
+    /**
+     * Relación con Departamento
+     */
+    public function departamento()
+    {
+        return $this->belongsTo(Departamento::class, 'departamento_id', 'ID_Departamento');
+    }
+
+    /**
+     * Relación con Distrito
+     */
+    public function distrito()
+    {
+        return $this->belongsTo(Distrito::class, 'distrito_id', 'ID_Distrito');
+    }
+    
 
     /**
      * Obtener el nombre completo del usuario
