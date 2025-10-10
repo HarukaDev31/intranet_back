@@ -446,7 +446,11 @@ class CursoController extends Controller
             12 => 'Diciembre'
         ];
         $data = (array)$data;
-        $data['url_constancia'] = $this->generateImageUrlRedisProyect($data['url_constancia']);
+        if($data['from_intranet'] == 1){
+            $data['url_constancia'] = $this->generateImageUrl($data['url_constancia']);
+        }else{
+            $data['url_constancia'] = $this->generateImageUrlRedisProyect($data['url_constancia']);
+        }
 
         $data['mes_nombre'] = isset($data['mes_numero']) ? ($meses_es[(int)$data['mes_numero']] ?? '') : '';
         $data['password_moodle'] = $this->ciDecrypt($data['password_moodle']);
@@ -1548,6 +1552,76 @@ class CursoController extends Controller
             return ['status' => 'success', 'message' => 'Datos actualizados correctamente'];
         } catch (\Exception $e) {
             return ['status' => 'error', 'message' => 'Error al actualizar: ' . $e->getMessage()];
+        }
+    }
+
+    /**
+     * Genera y envía la constancia de un pedido de curso
+     */
+    public function generarConstanciaPedido($idPedidoCurso)
+    {
+        try {
+            
+            $idPedidoCurso = $idPedidoCurso;
+
+            // Obtener datos del pedido de curso
+            $pedidoCurso = DB::table('pedido_curso as pc')
+                ->join('entidad as e', 'pc.ID_Entidad', '=', 'e.ID_Entidad')
+                ->where('pc.ID_Pedido_Curso', $idPedidoCurso)
+                ->select(
+                    'pc.*',
+                    'e.No_Entidad',
+                    'e.Nu_Celular_Entidad',
+                    'e.Txt_Email_Entidad'
+                )
+                ->first();
+
+            if (!$pedidoCurso) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Pedido de curso no encontrado'
+                ], 404);
+            }
+
+            // Validar que el pedido esté confirmado
+            if ($pedidoCurso->Nu_Estado != 2) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'El pedido de curso debe estar confirmado para generar la constancia'
+                ], 400);
+            }
+
+            // Validar que tenga teléfono
+            if (empty($pedidoCurso->Nu_Celular_Entidad)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'El pedido no tiene un número de teléfono registrado'
+                ], 400);
+            }
+
+            // Despachar el job
+            \App\Jobs\SendConstanciaCurso::dispatch(
+                $pedidoCurso->Nu_Celular_Entidad,
+                $pedidoCurso
+            )->onQueue('emails');
+
+            return response()->json([
+                'success' => true,
+                'message' => 'La constancia se está generando y enviando. Recibirás una notificación cuando esté lista.'
+            ]);
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error de validación',
+                'errors' => $e->errors()
+            ], 422);
+        } catch (\Exception $e) {
+            Log::error('Error en generarConstanciaPedido: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al generar la constancia: ' . $e->getMessage()
+            ], 500);
         }
     }
 }

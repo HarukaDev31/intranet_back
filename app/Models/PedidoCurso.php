@@ -27,7 +27,8 @@ class PedidoCurso extends Model
         'impuestos_final',
         'note_administracion',
         'Nu_Estado',
-        'id_cliente_importacion'
+        'id_cliente_importacion',
+        'from_intranet'
     ];
 
     protected $casts = [
