@@ -99,7 +99,7 @@ class ImportacionesController extends Controller
                 ], 401);
             }
             $whatsapp = $user->whatsapp;
-            $documento = $user->documento;
+            $documento = $user->dni;
             $correo = $user->email;
             Log::info('Whatsapp: ' . $whatsapp);
             $perPage = $request->input('per_page', 10);
@@ -120,9 +120,11 @@ class ImportacionesController extends Controller
                         ->orWhere('telefono', 'LIKE', "%51 {$telefonoLimpio}%")
                         ->orWhere('telefono', 'LIKE', "%51" . str_replace(' ', '', $telefonoLimpio) . "%")
                         ->orWhere('telefono', 'LIKE', "%51 " . str_replace(' ', '', $telefonoLimpio) . "%")
-                        ->orWhere('documento', $documento)
-                        ->orWhereNotNull('documento')
-                        ->where('documento', '!=', '')
+                        ->orWhere(function($q) use ($documento) {
+                            $q->whereNotNull('documento')
+                              ->where('documento', '!=', '')
+                              ->where('documento', $documento);
+                        })
                         ->orWhere(function($q) use ($correo) {
                             $q->whereNotNull('correo')
                               ->where('correo', '!=', '')
