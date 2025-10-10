@@ -456,13 +456,17 @@ class ClienteImportService
         try {
             PedidoCurso::where('id_cliente_importacion', $id)->delete();
             Cotizacion::where('id_cliente_importacion', $id)->delete();
-            $clientes = Cliente::where('id_cliente_importacion', $id)->delete();
+            
+            // Primero obtener los clientes antes de eliminarlos
+            $clientes = Cliente::where('id_cliente_importacion', $id)->get();
             foreach ($clientes as $cliente) {
-                //set cotizaciones where id_cliente = $cliente->id set id_cliente=null
+                // Actualizar cotizaciones y pedidos para desasociar el cliente
                 Cotizacion::where('id_cliente', $cliente->id)->update(['id_cliente' => null]);
                 PedidoCurso::where('id_cliente', $cliente->id)->update(['id_cliente' => null]);
             }
-            $clientes = Cliente::where('id_cliente_importacion', $id)->delete();
+            
+            // Ahora eliminar los clientes
+            Cliente::where('id_cliente_importacion', $id)->delete();
             $import = ImportCliente::findOrFail($id);
 
             // Eliminar clientes asociados a esta importación
