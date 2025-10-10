@@ -121,6 +121,8 @@ class ImportacionesController extends Controller
                         ->orWhere('telefono', 'LIKE', "%51" . str_replace(' ', '', $telefonoLimpio) . "%")
                         ->orWhere('telefono', 'LIKE', "%51 " . str_replace(' ', '', $telefonoLimpio) . "%")
                         ->orWhere('documento', $documento)
+                        ->orWhereNotNull('documento')
+                        ->where('documento', '!=', '')
                         ->orWhere(function($q) use ($correo) {
                             $q->whereNotNull('correo')
                               ->where('correo', '!=', '')
