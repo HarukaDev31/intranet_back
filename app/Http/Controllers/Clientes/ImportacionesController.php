@@ -99,6 +99,8 @@ class ImportacionesController extends Controller
                 ], 401);
             }
             $whatsapp = $user->whatsapp;
+            $documento = $user->documento;
+            $correo = $user->email;
             Log::info('Whatsapp: ' . $whatsapp);
             $perPage = $request->input('per_page', 10);
             $page = $request->input('page', 1);
@@ -111,12 +113,20 @@ class ImportacionesController extends Controller
                 }])
                 ->where('estado_cotizador', 'CONFIRMADO')
                 ->whereNull('id_cliente_importacion')
-                //where telefono trim and remove +51 from db
-                ->where(DB::raw('TRIM(telefono)'), 'like', '%' . $whatsapp . '%')
-                //where telefono is not null or not empty
-                ->whereNotNull('telefono')
-                ->where('telefono', '!=', '')
-                ->whereNotNull('estado_cliente')
+                ->where(function ($query) use ($whatsapp, $documento, $correo) {
+                    $telefonoLimpio = preg_replace('/[^0-9]/', '', $whatsapp);
+                    $query->where('telefono', 'LIKE', "%{$telefonoLimpio}%")
+                        ->orWhere('telefono', 'LIKE', "%" . str_replace(' ', '', $telefonoLimpio) . "%")
+                        ->orWhere('telefono', 'LIKE', "%51 {$telefonoLimpio}%")
+                        ->orWhere('telefono', 'LIKE', "%51" . str_replace(' ', '', $telefonoLimpio) . "%")
+                        ->orWhere('telefono', 'LIKE', "%51 " . str_replace(' ', '', $telefonoLimpio) . "%")
+                        ->orWhere('documento', $documento)
+                        ->orWhere(function($q) use ($correo) {
+                            $q->whereNotNull('correo')
+                              ->where('correo', '!=', '')
+                              ->where('correo', $correo);
+                        });
+                })
                 //where not has any row in consolidado_delivery_form_lima_conformidad or consolidado_delivery_form_provincia_conformidad with id_cotizacion
                 ->where(DB::raw('(SELECT COUNT(*) FROM consolidado_delivery_form_lima_conformidad WHERE id_cotizacion = id)'), 0)
                 ->where(DB::raw('(SELECT COUNT(*) FROM consolidado_delivery_form_province_conformidad WHERE id_cotizacion = id)'), 0)
