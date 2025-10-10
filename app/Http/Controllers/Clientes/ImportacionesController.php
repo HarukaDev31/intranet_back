@@ -112,6 +112,7 @@ class ImportacionesController extends Controller
                     $query->select('id_cotizacion', 'cbm_total', 'qty_box', 'qty_box_china', 'cbm_total_china', 'estados_proveedor');
                 }])
                 ->where('estado_cotizador', 'CONFIRMADO')
+                ->whereNotNull('estado_cliente')
                 ->whereNull('id_cliente_importacion')
                 ->where(function ($query) use ($whatsapp, $documento, $correo) {
                     $telefonoLimpio = preg_replace('/[^0-9]/', '', $whatsapp);
