@@ -217,6 +217,11 @@ class VariacionController extends Controller
                     $file['file_url'] = $this->generateImageUrl($file['file_url']);
                 }
             }
+            foreach ($cotizacion->files as &$file) {
+                if (isset($file['file_url'])) {
+                    $file['file_url'] = $this->generateImageUrl($file['file_url']);
+                }
+            }
 
             // Procesar documentos de proveedores
             foreach ($cotizacion->providers as &$provider) {
