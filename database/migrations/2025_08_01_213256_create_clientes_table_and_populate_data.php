@@ -16,25 +16,9 @@ class CreateClientesTableAndPopulateData extends Migration
     {
         Log::info('🚀 INICIANDO MIGRACIÓN: CreateClientesTableAndPopulateData');
         
-        // Limpiar datos existentes para permitir re-ejecución
-        $this->cleanupExistingData();
 
         // 1. Crear tabla clientes
-        Schema::create('clientes', function (Blueprint $table) {
-            $table->id();
-            $table->string('nombre');
-            $table->string('documento')->nullable();
-            $table->string('correo')->nullable();
-            $table->string('telefono')->nullable();
-            $table->date('fecha')->nullable();
-            $table->timestamps();
-
-            // Índices para optimizar búsquedas
-            $table->index('telefono');
-            $table->index('documento');
-            $table->index('correo');
-        });
-        Log::info("✅ Tabla clientes creada exitosamente");
+      
 
         // 2. Insertar datos de contenedor_consolidado_cotizacion
         $this->insertFromContenedorCotizacion();
@@ -45,11 +29,6 @@ class CreateClientesTableAndPopulateData extends Migration
         // 4. Actualizar referencias en pedido_curso
         $this->updatePedidoCurso();
 
-        // 5. Actualizar referencias en contenedor_consolidado_cotizacion
-        $this->updateContenedorCotizacion();
-
-        // 6. Crear triggers
-        $this->createTriggers();
         
         Log::info('🎉 MIGRACIÓN COMPLETADA: CreateClientesTableAndPopulateData');
     }
@@ -59,28 +38,7 @@ class CreateClientesTableAndPopulateData extends Migration
      */
     private function cleanupExistingData()
     {
-        // Eliminar triggers si existe
-       
-        DB::unprepared('DROP TRIGGER IF EXISTS after_pedido_curso_insert');
-        DB::unprepared('DROP TRIGGER IF EXISTS after_contenedor_cotizacion_insert');
-
-        // Eliminar columnas id_cliente si existen
-        if (Schema::hasColumn('pedido_curso', 'id_cliente')) {
-            Schema::table('pedido_curso', function (Blueprint $table) {
-                $table->dropForeign(['id_cliente']);
-                $table->dropColumn('id_cliente');
-            });
-        }
-
-        if (Schema::hasColumn('contenedor_consolidado_cotizacion', 'id_cliente')) {
-            Schema::table('contenedor_consolidado_cotizacion', function (Blueprint $table) {
-                $table->dropForeign(['id_cliente']);
-                $table->dropColumn('id_cliente');
-            });
-        }
-
-        // Eliminar tabla clientes si existe
-        Schema::dropIfExists('clientes');
+        
     }
 
     /**
@@ -316,7 +274,7 @@ class CreateClientesTableAndPopulateData extends Migration
         $cliente = null;
         if (!empty($telefonoNormalizado)) {
             $cliente = DB::table('clientes')
-                ->where('telefono', $telefonoNormalizado)
+                ->where('telefono', 'like', $telefonoNormalizado)
                 ->first();
             
             if ($cliente) {
@@ -534,30 +492,30 @@ class CreateClientesTableAndPopulateData extends Migration
         Log::info("Total de cotizaciones a actualizar: " . $cotizaciones->count());
         $actualizadas = 0;
 
-        foreach ($cotizaciones as $cotizacion) {
-            $clienteId = $this->insertOrGetCliente($cotizacion, 'contenedor_cotizacion_update');
-            
-            if ($clienteId) {
-                // Usar la clave primaria correcta
-                $primaryKey = $this->getPrimaryKeyColumn('contenedor_consolidado_cotizacion');
-
-                DB::table('contenedor_consolidado_cotizacion')
-                    ->where($primaryKey, $cotizacion->$primaryKey)
-                    ->update(['id_cliente' => $clienteId]);
+            foreach ($cotizaciones as $cotizacion) {
+                $clienteId = $this->insertOrGetCliente($cotizacion, 'contenedor_cotizacion_update');
                 
-                $actualizadas++;
-                Log::info("✅ Cotización actualizada con cliente", [
-                    'cotizacion_id' => $cotizacion->$primaryKey,
-                    'cliente_id' => $clienteId,
-                    'nombre' => $cotizacion->nombre ?? 'N/A'
-                ]);
-            } else {
-                Log::warning("❌ No se pudo obtener cliente para cotización", [
-                    'cotizacion_id' => $cotizacion->id ?? 'N/A',
-                    'nombre' => $cotizacion->nombre ?? 'N/A'
-                ]);
+                if ($clienteId) {
+                    // Usar la clave primaria correcta
+                    $primaryKey = $this->getPrimaryKeyColumn('contenedor_consolidado_cotizacion');
+
+                    DB::table('contenedor_consolidado_cotizacion')
+                        ->where($primaryKey, $cotizacion->$primaryKey)
+                        ->update(['id_cliente' => $clienteId]);
+                    
+                    $actualizadas++;
+                    Log::info("✅ Cotización actualizada con cliente", [
+                        'cotizacion_id' => $cotizacion->$primaryKey,
+                        'cliente_id' => $clienteId,
+                        'nombre' => $cotizacion->nombre ?? 'N/A'
+                    ]);
+                } else {
+                    Log::warning("❌ No se pudo obtener cliente para cotización", [
+                        'cotizacion_id' => $cotizacion->id ?? 'N/A',
+                        'nombre' => $cotizacion->nombre ?? 'N/A'
+                    ]);
+                }
             }
-        }
 
         Log::info("=== RESUMEN actualización contenedor_consolidado_cotizacion ===", [
             'total_cotizaciones' => $cotizaciones->count(),

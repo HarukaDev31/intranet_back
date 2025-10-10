@@ -219,14 +219,7 @@ class ClienteImportService
 
             if ($clienteExistente) {
                 // Actualizar cliente existente (guardar teléfono normalizado si hay)
-                $clienteExistente->update([
-                    'nombre' => $data['cliente'],
-                    'ruc' => $data['ruc'],
-                    'empresa' => $data['razon_social'],
-                    'correo' => $data['correo'],
-                    'telefono' => $whatsappLimpio ?: $data['whatsapp'],
-                    'fecha' => $this->convertirFechaExcel($data['fecha']),
-                ]);
+               
                 if ($data['servicio'] == 'CONSOLIDADO') {
                     $carga = $data['carga'];
                     $carga = explode('#', $carga)[1];
