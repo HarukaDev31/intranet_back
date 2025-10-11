@@ -1585,7 +1585,7 @@ class CursoController extends Controller
             }
 
             // Validar que el pedido esté confirmado
-            if ($pedidoCurso->Nu_Estado != 2) {
+            if ($pedidoCurso->Nu_Estado_Usuario_Externo != 2) {
                 return response()->json([
                     'success' => false,
                     'message' => 'El pedido de curso debe estar confirmado para generar la constancia'
