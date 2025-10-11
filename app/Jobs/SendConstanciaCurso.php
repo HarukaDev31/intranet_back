@@ -137,8 +137,10 @@ class SendConstanciaCurso implements ShouldQueue
             // Guardar la URL del PDF si se generó
             if ($pdfPath && file_exists($pdfPath)) {
                 try {
-                    // Extraer la ruta relativa para storage/app/public/
-                    $relativePath = str_replace(storage_path('app/public/'), '', $pdfPath);
+                    // Usar solo la ruta relativa definida en generatePDF
+                    // Formato: Cursos/constancias/constancia_nombre_timestamp.pdf
+                    $fileName = basename($pdfPath);
+                    $relativePath = 'Cursos/constancias/' . $fileName;
                     
                     DB::table($this->table)
                         ->where('ID_Pedido_Curso', $this->pedidoCurso->ID_Pedido_Curso)
