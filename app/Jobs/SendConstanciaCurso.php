@@ -134,17 +134,19 @@ class SendConstanciaCurso implements ShouldQueue
 
             $this->fail($e);
         } finally {
-            // Guardar el PDF temporal si se generó
+            // Guardar la URL del PDF si se generó
             if ($pdfPath && file_exists($pdfPath)) {
                 try {
-                    $fileName = basename($pdfPath);
+                    // Extraer la ruta relativa para storage/app/public/
+                    $relativePath = str_replace(storage_path('app/public/'), '', $pdfPath);
+                    
                     DB::table($this->table)
                         ->where('ID_Pedido_Curso', $this->pedidoCurso->ID_Pedido_Curso)
                         ->update([
-                            'url_constancia' => 'storage/public/' . $fileName,
+                            'url_constancia' => $relativePath, // Ruta relativa para usar con generateImageUrl
                         ]);
                 } catch (\Exception $e) {
-                    Log::error('Error al guardar el PDF: ' . $e->getMessage(), [
+                    Log::error('Error al guardar la URL del PDF: ' . $e->getMessage(), [
                         'pdfPath' => $pdfPath,
                     ]);
                 }
@@ -204,18 +206,22 @@ class SendConstanciaCurso implements ShouldQueue
             $dompdf->loadHtml($html);
 
             $fileName = 'constancia_' . Str::slug($nombre) . '_' . time() . '.pdf';
-            //SAVE IN STORAGE APP  PUBLIC INSTAD TO DOWNLOAD PDF
-            $pdfPath = storage_path('app/public/' . $fileName);
+            $storagePath = 'Cursos/constancias';
+            $relativeFilePath = $storagePath . '/' . $fileName;
+            
+            // SAVE IN STORAGE APP PUBLIC para que funcione con generateImageUrl
+            $pdfPath = storage_path('app/public/' . $relativeFilePath);
+            
             // Asegurar que el directorio existe
-            if (! file_exists(dirname($pdfPath))) {
-                mkdir(dirname($pdfPath), 0755, true);
+            $directoryPath = dirname($pdfPath);
+            if (! file_exists($directoryPath)) {
+                mkdir($directoryPath, 0755, true);
             }
-            file_put_contents($pdfPath, $dompdf->output());
 
             //set dpi 150
             $dompdf->set_option('dpi', 150);
             $dompdf->setPaper('letter', 'landscape');
-            // Guardar el PDF
+            // Renderizar y guardar el PDF
             $dompdf->render();
             file_put_contents($pdfPath, $dompdf->output());
 

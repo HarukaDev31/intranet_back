@@ -115,31 +115,27 @@ class ImportacionesController extends Controller
                 ->whereNotNull('estado_cliente')
                 ->whereNull('id_cliente_importacion')
                 ->where(function ($query) use ($whatsapp, $documento, $correo) {
+                    // Usar la misma validación del modelo Cliente (getServiciosAttribute)
                     // Validar que el teléfono no sea nulo o vacío antes de procesar
                     if (!empty($whatsapp) && $whatsapp !== null) {
-                        $telefonoLimpio = preg_replace('/[^0-9]/', '', $whatsapp);
-                        $query->where('telefono', 'LIKE', "%{$telefonoLimpio}%")
-                            ->orWhere('telefono', 'LIKE', "%" . str_replace(' ', '', $telefonoLimpio) . "%")
-                            ->orWhere('telefono', 'LIKE', "%51 {$telefonoLimpio}%")
-                            ->orWhere('telefono', 'LIKE', "%51" . str_replace(' ', '', $telefonoLimpio) . "%")
-                            ->orWhere('telefono', 'LIKE', "%51 " . str_replace(' ', '', $telefonoLimpio) . "%");
+                        $query->where(DB::raw('REPLACE(TRIM(telefono), " ", "")'), 'LIKE', "%{$whatsapp}%");
                     }
-                    
+
                     // Validar que el documento no sea nulo o vacío antes de procesar
                     if (!empty($documento) && $documento !== null) {
-                        $query->orWhere(function($q) use ($documento) {
+                        $query->orWhere(function ($q) use ($documento) {
                             $q->whereNotNull('documento')
-                              ->where('documento', '!=', '')
-                              ->where('documento', $documento);
+                                ->where('documento', '!=', '')
+                                ->where('documento', $documento);
                         });
                     }
-                    
+
                     // Validar que el correo no sea nulo o vacío antes de procesar
                     if (!empty($correo) && $correo !== null) {
-                        $query->orWhere(function($q) use ($correo) {
+                        $query->orWhere(function ($q) use ($correo) {
                             $q->whereNotNull('correo')
-                              ->where('correo', '!=', '')
-                              ->where('correo', $correo);
+                                ->where('correo', '!=', '')
+                                ->where('correo', $correo);
                         });
                     }
                 })
@@ -206,6 +202,9 @@ class ImportacionesController extends Controller
             $perPage = $request->input('per_page', 10);
             $page = $request->input('page', 1);
 
+            $documento = $user->dni;
+            $correo = $user->email;
+
             $trayectos = Cotizacion::with(['contenedor' => function ($query) {
                 $query->select('id', 'carga', 'fecha_arribo', 'f_entrega', 'f_cierre');
             }])
@@ -213,18 +212,32 @@ class ImportacionesController extends Controller
                     $query->select('id_cotizacion', 'cbm_total', 'qty_box', 'qty_box_china', 'cbm_total_china', 'estados_proveedor');
                 }])
                 ->where('estado_cotizador', 'CONFIRMADO')
-                ->whereNull('id_cliente_importacion')
-                //where telefono trim and remove +51 from db
-                ->where(DB::raw('TRIM(telefono)'), 'like', '%' . $whatsapp . '%')
                 ->whereNotNull('estado_cliente')
-                //where  has any row in consolidado_delivery_form_lima_conformidad or consolidado_delivery_form_provincia_conformidad with id_cotizacion
+                ->whereNull('id_cliente_importacion')
+                ->where(function ($query) use ($whatsapp, $documento, $correo) {
+                    if (!empty($whatsapp) && $whatsapp !== null) {
+                        $query->where(DB::raw('REPLACE(TRIM(telefono), " ", "")'), 'LIKE', "%{$whatsapp}%");
+                    }
+                    if (!empty($documento) && $documento !== null) {
+                        $query->orWhere(function ($q) use ($documento) {
+                            $q->whereNotNull('documento')
+                                ->where('documento', '!=', '')
+                                ->where('documento', $documento);
+                        });
+                    }
+                    if (!empty($correo) && $correo !== null) {
+                        $query->orWhere(function ($q) use ($correo) {
+                            $q->whereNotNull('correo')
+                                ->where('correo', '!=', '')
+                                ->where('correo', $correo);
+                        });
+                    }
+                })
                 ->where(DB::raw('(SELECT COUNT(*) FROM consolidado_delivery_form_lima_conformidad WHERE id_cotizacion = id)'), '>', 0)
                 ->where(DB::raw('(SELECT COUNT(*) FROM consolidado_delivery_form_province_conformidad WHERE id_cotizacion = id)'), '>', 0)
                 ->select('id', 'id_contenedor', 'qty_item', 'volumen_final', 'fob_final', 'logistica_final', 'fob', 'monto', 'estado_cliente', 'uuid', 'impuestos_final', 'impuestos')
                 ->orderBy('id', 'desc')
                 ->paginate($perPage);
-
-            // Transformar los datos para incluir la información del contenedor
             $trayectosData = $trayectos->getCollection()->map(function ($cotizacion) {
                 return [
                     'id' => $cotizacion->uuid,
