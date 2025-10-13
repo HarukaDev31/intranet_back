@@ -3180,7 +3180,7 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
             $data = $this->validateAndSanitizeData($data);
             
             // Cargar plantilla base desde public/assets/templates
-            $templatePath = public_path('assets/templates/PLANTILLA_COTIZACION_INICIAL.xlsx');
+            $templatePath = public_path('assets/templates/Boleta_Template.xlsx');
             
             if (!file_exists($templatePath)) {
                 Log::error('Plantilla no encontrada: ' . $templatePath);

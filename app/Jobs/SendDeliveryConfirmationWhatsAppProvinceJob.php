@@ -12,6 +12,7 @@ use App\Models\CargaConsolidada\ConsolidadoDeliveryFormProvince;
 use App\Models\CargaConsolidada\Contenedor;
 use App\Models\CargaConsolidada\Cotizacion;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use App\Models\User;
 
 class SendDeliveryConfirmationWhatsAppProvinceJob implements ShouldQueue
@@ -39,8 +40,14 @@ class SendDeliveryConfirmationWhatsAppProvinceJob implements ShouldQueue
     public function handle()
     {
         try {
-            // Obtener el formulario de delivery
-            $deliveryForm = ConsolidadoDeliveryFormProvince::with(['cotizacion'])->find($this->deliveryFormId);
+            // Obtener el formulario de delivery con las relaciones necesarias
+            $deliveryForm = ConsolidadoDeliveryFormProvince::with([
+                'cotizacion',
+                'departamento',
+                'provincia',
+                'distrito'
+            ])->find($this->deliveryFormId);
+            
             $idUser = $deliveryForm->id_user;
             $user = User::find($idUser);
             
@@ -73,7 +80,6 @@ class SendDeliveryConfirmationWhatsAppProvinceJob implements ShouldQueue
                 return;
             }
 
-
             // Formatear el teléfono (agregar código de país si es necesario)
             $telefono = $this->formatPhoneNumber($cotizacion->telefono);
 
@@ -81,23 +87,38 @@ class SendDeliveryConfirmationWhatsAppProvinceJob implements ShouldQueue
             $tipoDocumento = $deliveryForm->r_type === 'PERSONA NATURAL' ? 'DNI' : 'RUC';
             $nombreRazonSocial = $deliveryForm->r_name;
 
+            // Obtener información de ubicación
+            $departamento = $deliveryForm->departamento ? $deliveryForm->departamento->No_Departamento : 'N/A';
+            $provincia = $deliveryForm->provincia ? $deliveryForm->provincia->No_Provincia : 'N/A';
+            $distrito = $deliveryForm->distrito ? $deliveryForm->distrito->No_Distrito : 'N/A';
+
             // Construir el mensaje
             $mensaje = "Consolidado #{$carga}\n\n";
-            $mensaje .= "Tu reserva se realizó exitosamente.\n";
-            $mensaje .= "El cosignatario a quien se enviará la carga es: {$tipoDocumento}: {$deliveryForm->r_doc} - Nombre {$nombreRazonSocial}.";
+            $mensaje .= "Tu reserva se realizó exitosamente.\n\n";
+            $mensaje .= "El cosignatario a quien se enviará la carga es:\n";
+            $mensaje .= "{$tipoDocumento}: {$deliveryForm->r_doc}\n";
+            $mensaje .= "Nombre: {$nombreRazonSocial}\n\n";
+            $mensaje .= "📍 *Ubicación:*\n";
+            $mensaje .= "Departamento: {$departamento}\n";
+            $mensaje .= "Provincia: {$provincia}\n";
+            $mensaje .= "Distrito: {$distrito}";
 
             // Enviar el mensaje de WhatsApp
             $resultado = $this->sendMessage($mensaje, $telefono);
             
             // Enviar email de confirmación si el usuario tiene email
             if ($user && $user->email) {
-                \Mail::to($user->email)->send(new \App\Mail\DeliveryConfirmationProvinceMail(
+                Mail::to($user->email)->send(new \App\Mail\DeliveryConfirmationProvinceMail(
                     $mensaje,
                     $deliveryForm,
                     $cotizacion,
                     $user,
                     $tipoDocumento,
                     $nombreRazonSocial,
+                    $carga,
+                    $departamento,
+                    $provincia,
+                    $distrito,
                     public_path('storage/logo_header.png'),
                     public_path('storage/logo_footer.png')
                 ));

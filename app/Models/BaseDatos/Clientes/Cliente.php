@@ -160,6 +160,8 @@ class Cliente extends Model
                 'detalle' => $mes,
                 'monto' => $pedido->Ss_Total,
                 'servicio' => 'Curso',
+                'carga' => null,
+                'empresa' => null,
                 'fecha' => $pedido->Fe_Registro,
                 'categoria' => $this->determinarCategoria($pedido->Fe_Registro)
             ];
@@ -197,7 +199,12 @@ class Cliente extends Model
        
             ->orderBy('fecha', 'asc')
             ->orderByRaw('CAST(carga_consolidada_contenedor.carga AS UNSIGNED)')
-            ->select('contenedor_consolidado_cotizacion.*', 'carga_consolidada_contenedor.carga', 'carga_consolidada_contenedor.id as id_contenedor')
+            ->select(
+                'contenedor_consolidado_cotizacion.*', 
+                'carga_consolidada_contenedor.carga', 
+                'carga_consolidada_contenedor.empresa',
+                'carga_consolidada_contenedor.id as id_contenedor'
+            )
             ->get();
 
         foreach ($cotizaciones as $cotizacion) {
@@ -207,14 +214,65 @@ class Cliente extends Model
                 'is_imported' => $cotizacion->id_cliente_importacion ? 1 : 0,
                 'servicio' => 'Consolidado',
                 'detalle' => $cotizacion->carga,
+                'carga' => $cotizacion->carga,
+                'empresa' => $cotizacion->empresa,
                 'fecha' => $cotizacion->fecha,
                 'categoria' => $this->determinarCategoria($cotizacion->fecha)
             ];
         }
-        //order by fecha asc
+        
+        // Ordenamiento personalizado
         usort($servicios, function ($a, $b) {
-            return strtotime($a['fecha']) - strtotime($b['fecha']);
+            $esConsolidadoA = $a['servicio'] === 'Consolidado';
+            $esConsolidadoB = $b['servicio'] === 'Consolidado';
+            
+            // Determinar si es consolidado 2025 con carga >= 6
+            $esConsolidado2025CargaAltaA = false;
+            $esConsolidado2025CargaAltaB = false;
+            
+            if ($esConsolidadoA) {
+                $cargaA = intval($a['carga'] ?? 0);
+                $anioA = date('Y', strtotime($a['fecha']));
+                $esConsolidado2025CargaAltaA = ($anioA == '2025' && $cargaA >= 6);
+            }
+            
+            if ($esConsolidadoB) {
+                $cargaB = intval($b['carga'] ?? 0);
+                $anioB = date('Y', strtotime($b['fecha']));
+                $esConsolidado2025CargaAltaB = ($anioB == '2025' && $cargaB >= 6);
+            }
+            
+            // Si ambos son consolidados 2025 con carga >= 6, ordenar por carga DESC
+            if ($esConsolidado2025CargaAltaA && $esConsolidado2025CargaAltaB) {
+                $cargaA = intval($a['carga'] ?? 0);
+                $cargaB = intval($b['carga'] ?? 0);
+                
+                if ($cargaA != $cargaB) {
+                    return $cargaB - $cargaA; // DESC: carga mayor primero
+                }
+                
+                // Si tienen la misma carga, ordenar por fecha DESC
+                $fechaA = strtotime($a['fecha']);
+                $fechaB = strtotime($b['fecha']);
+                return $fechaB - $fechaA;
+            }
+            
+            // Si solo A es consolidado 2025 con carga >= 6, va primero
+            if ($esConsolidado2025CargaAltaA && !$esConsolidado2025CargaAltaB) {
+                return -1;
+            }
+            
+            // Si solo B es consolidado 2025 con carga >= 6, va primero
+            if (!$esConsolidado2025CargaAltaA && $esConsolidado2025CargaAltaB) {
+                return 1;
+            }
+            
+            // Todo lo demás (cursos, consolidados con carga < 6, consolidados de otros años), ordenar por fecha DESC
+            $fechaA = strtotime($a['fecha']);
+            $fechaB = strtotime($b['fecha']);
+            return $fechaB - $fechaA;
         });
+        
         return $servicios;
     }
 

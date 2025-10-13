@@ -138,9 +138,7 @@ class ClienteService
                     'categoria' => $primerServicio['categoria']
                 ] : null,
                 'total_servicios' => count($servicios),
-                'servicios' => collect($servicios)->sortByDesc(function ($servicio) {
-                    return Carbon::parse($servicio['fecha']);
-                })->values()->map(function ($servicio) {
+                'servicios' => collect($servicios)->map(function ($servicio) {
                     return [
                         'is_imported' => $servicio['is_imported'],
                         'id' => $servicio['id'],
@@ -148,9 +146,11 @@ class ClienteService
                         'servicio' => $servicio['servicio'],
                         'fecha' => Carbon::parse($servicio['fecha'])->format('d/m/Y'),
                         'categoria' => $servicio['categoria'],
-                        'monto' => $servicio['monto']
+                        'monto' => $servicio['monto'],
+                        'carga' => $servicio['carga'] ?? null,
+                        'empresa' => $servicio['empresa'] ?? null
                     ];
-                })
+                })->values()
             ];
 
             return [
@@ -296,7 +296,6 @@ class ClienteService
             $fechaFin = Carbon::createFromFormat('d/m/Y', $request->fecha_fin)->endOfDay();
             $query->where('fecha', '<=', $fechaFin);
         }
-        $query->whereNull('id_cliente_importacion');
 
         // Ordenar por fecha de creación
         $query->orderBy('created_at', 'desc');
@@ -309,9 +308,7 @@ class ClienteService
     {
         $todosLosClientes = $query->get();
         //filter clientes where id_cliente_importacion es nulo
-        $todosLosClientes = $todosLosClientes->filter(function ($cliente) {
-            return is_null($cliente->id_cliente_importacion ?? null);
-        });
+       
         $todosLosIds = $todosLosClientes->pluck('id')->toArray();
         $serviciosPorCliente = $this->obtenerServiciosEnLote($todosLosIds);
 
@@ -367,7 +364,6 @@ class ClienteService
      */
     private function obtenerClientesSinFiltroCategoria($query, $page, $perPage)
     {
-        $query->whereNull('id_cliente_importacion');
         $clientes = $query->paginate($perPage, ['*'], 'page', $page);
         $clienteIds = $clientes->pluck('id')->toArray();
         $serviciosPorCliente = $this->obtenerServiciosEnLote($clienteIds);

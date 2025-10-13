@@ -18,10 +18,12 @@ use Illuminate\Support\Facades\Mail;
 use App\Traits\CodeIgniterEncryption;
 use App\Traits\MoodleRestProTrait;
 use App\Traits\FileTrait;
+use App\Traits\WhatsappTrait;
+use App\Mail\MoodleCredentialsMail;
 
 class CursoController extends Controller
 {
-    use CodeIgniterEncryption, MoodleRestProTrait, FileTrait;
+    use CodeIgniterEncryption, MoodleRestProTrait, FileTrait, WhatsappTrait;
     public $table_pedido_curso_pagos = 'pedido_curso_pagos';
     public function index(Request $request)
     {
@@ -948,11 +950,18 @@ class CursoController extends Controller
             $id = $request->input('id_usuario');
             $id_pedido_curso = $request->input('id_pedido');
             
-            // Buscar usuario
+            // Buscar usuario y obtener datos completos incluyendo teléfono
             $response_usuario_bd = $this->getUsuario($id);
             if ($response_usuario_bd['status'] == 'success') {
                 $result = $response_usuario_bd['result'][0];
                 Log::error('result: ' . print_r($result, true));
+
+                // Obtener datos adicionales del usuario (teléfono)
+                $usuarioCompleto = DB::table('entidad')
+                    ->where('ID_Entidad', $id)
+                    ->first();
+                
+                $phoneNumber = $usuarioCompleto->Nu_Celular_Entidad ?? null;
 
                 // Validar y limpiar datos antes de enviar a Moodle
                 $original_username = trim($result->No_Nombres_Apellidos);
@@ -1128,10 +1137,19 @@ class CursoController extends Controller
                         } else {
                             $this->actualizarPedido(['ID_Pedido_Curso' => $id_pedido_curso], ['Nu_Estado_Usuario_Externo' => '2']);
 
+                            // Enviar credenciales por email y WhatsApp
+                            $this->enviarCredencialesMoodle(
+                                $username,
+                                $cleaned_password,
+                                $email,
+                                $nombres,
+                                $phoneNumber
+                            );
+
                             return response()->json([
                                 'success' => true,
                                 'status' => 'success',
-                                'message' => 'Usuario y curso creados exitosamente',
+                                'message' => 'Usuario y curso creados exitosamente. Credenciales enviadas por email y WhatsApp.',
                                 'data' => [
                                     'original_username' => $original_username,
                                     'moodle_username' => $username,
@@ -1167,10 +1185,19 @@ class CursoController extends Controller
                         'email' => $email ?? 'No disponible'
                     ];
 
+                    // Enviar credenciales por email y WhatsApp (usuario ya existe)
+                    $this->enviarCredencialesMoodle(
+                        $username,
+                        $cleaned_password,
+                        $email,
+                        $nombres,
+                        $phoneNumber
+                    );
+
                     return response()->json([
                         'status' => 'error',
                         'success' => true,
-                        'message' => "El usuario ya existe en Moodle o hubo un error al crearlo: $error_message",
+                        'message' => "El usuario ya existe en Moodle. Credenciales enviadas por email y WhatsApp.",
                         'data' => $debugData,
                         'moodle_response' => $response_usuario_moodle
                     ], 200);
@@ -1623,6 +1650,94 @@ class CursoController extends Controller
                 'success' => false,
                 'message' => 'Error al generar la constancia: ' . $e->getMessage()
             ], 500);
+        }
+    }
+
+    /**
+     * Envía las credenciales de Moodle por email y WhatsApp
+     * 
+     * @param string $username Usuario de Moodle
+     * @param string $password Contraseña de Moodle
+     * @param string $email Email del usuario
+     * @param string $nombre Nombre completo del usuario
+     * @param string $phoneNumber Número de teléfono para WhatsApp
+     * @return void
+     */
+    private function enviarCredencialesMoodle($username, $password, $email, $nombre, $phoneNumber = null)
+    {
+        try {
+            // URL de Moodle desde configuración o variable de entorno
+            $moodleUrl = env('MOODLE_URL', 'https://aulavirtualprobusiness.com/login/index.php');
+            
+            // Rutas de los logos
+            $logo_header = public_path('storage/logo_header.png');
+            $logo_footer = public_path('storage/logo_footer.png');
+
+            // Enviar email con las credenciales
+            try {
+                Mail::to($email)->send(
+                    new MoodleCredentialsMail(
+                        $username,
+                        $password,
+                        $email,
+                        $nombre,
+                        $moodleUrl,
+                        $logo_header,
+                        $logo_footer
+                    )
+                );
+                $whatsappMessage = "🎓 *Hola {$nombre}!*\n\n";
+                $whatsappMessage .= "Te damos la bienvenida a nuestra plataforma de cursos Moodle.\n\n";
+                $whatsappMessage .= "📋 *Tus credenciales de acceso:*\n\n";
+                $whatsappMessage .= "👤 *Usuario:* {$username}\n";
+                $whatsappMessage .= "🔑 *Contraseña:* {$password}\n";
+                $whatsappMessage .= "🌐 *Plataforma:* {$moodleUrl}\n\n";
+                $whatsappMessage .= "⚠️ _Por seguridad, te recomendamos cambiar tu contraseña al primer ingreso._\n\n";
+                $whatsappMessage .= "¡Éxitos en tu aprendizaje! 🚀\n\n";
+                $whatsappMessage .= "_Equipo Probusiness_";
+                //send whatsapp
+                $this->sendMessage($whatsappMessage, $phoneNumber);
+                Log::info('Email de credenciales Moodle enviado exitosamente', [
+                    'email' => $email,
+                    'username' => $username
+                ]);
+            } catch (\Exception $e) {
+                Log::error('Error al enviar email de credenciales Moodle: ' . $e->getMessage(), [
+                    'email' => $email,
+                    'trace' => $e->getTraceAsString()
+                ]);
+            }
+
+            // Enviar WhatsApp si hay número de teléfono
+            if (!empty($phoneNumber)) {
+                try {
+                    $whatsappMessage = "🎓 *Hola {$nombre}!*\n\n";
+                    $whatsappMessage .= "Te damos la bienvenida a nuestra plataforma de cursos Moodle.\n\n";
+                    $whatsappMessage .= "📋 *Tus credenciales de acceso:*\n\n";
+                    $whatsappMessage .= "👤 *Usuario:* {$username}\n";
+                    $whatsappMessage .= "🔑 *Contraseña:* {$password}\n";
+                    $whatsappMessage .= "🌐 *Plataforma:* {$moodleUrl}\n\n";
+                    $whatsappMessage .= "⚠️ _Por seguridad, te recomendamos cambiar tu contraseña al primer ingreso._\n\n";
+                    $whatsappMessage .= "¡Éxitos en tu aprendizaje! 🚀\n\n";
+                    $whatsappMessage .= "_Equipo Probusiness_";
+
+                    $this->sendMessage($whatsappMessage, $phoneNumber);
+                    
+                    Log::info('WhatsApp de credenciales Moodle enviado exitosamente', [
+                        'phone' => $phoneNumber,
+                        'username' => $username
+                    ]);
+                } catch (\Exception $e) {
+                    Log::error('Error al enviar WhatsApp de credenciales Moodle: ' . $e->getMessage(), [
+                        'phone' => $phoneNumber,
+                        'trace' => $e->getTraceAsString()
+                    ]);
+                }
+            }
+        } catch (\Exception $e) {
+            Log::error('Error general al enviar credenciales Moodle: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString()
+            ]);
         }
     }
 }

@@ -137,15 +137,11 @@
         <div class="header">
             <img src="{{ $message->embed($logo_header) }}" alt="probusiness" class="logo">
         </div>
-        <div class="banner" style="text-align:center;">¡Confirmación de Recojo - Lima!</div>
+        <div class="banner" style="text-align:center;">Consolidado #{{ $carga }}</div>
         <div class="content">
-            <div class="title">¡Tu reserva se realizó exitosamente!</div>
+            <div class="title">¡Confirmación de Recojo - Lima!</div>
             <div class="subtitle">
-                Hemos recibido tu solicitud de recojo para Lima. A continuación te proporcionamos los detalles de tu reserva.
-            </div>
-
-            <div class="highlight">
-                <strong>{{ $mensaje }}</strong>
+                Tu reserva se realizó exitosamente. A continuación te proporcionamos los detalles de tu recojo.
             </div>
 
             <div class="delivery-info">
@@ -170,27 +166,7 @@
                 </table>
             </div>
 
-            <div class="delivery-info">
-                <div class="delivery-title">Información de la Cotización</div>
-                <table class="info-table">
-                    <tr>
-                        <td class="info-label">UUID:</td>
-                        <td><strong>{{ $cotizacion->uuid }}</strong></td>
-                    </tr>
-                    <tr>
-                        <td class="info-label">Cliente:</td>
-                        <td><strong>{{ $cotizacion->nombre_cliente ?? 'N/A' }}</strong></td>
-                    </tr>
-                    <tr>
-                        <td class="info-label">Teléfono:</td>
-                        <td><strong>{{ $cotizacion->telefono ?? 'N/A' }}</strong></td>
-                    </tr>
-                    <tr>
-                        <td class="info-label">Email:</td>
-                        <td><strong>{{ $cotizacion->email ?? 'N/A' }}</strong></td>
-                    </tr>
-                </table>
-            </div>
+         
 
             <div class="footer">
                 <strong>¡Importante!</strong><br>

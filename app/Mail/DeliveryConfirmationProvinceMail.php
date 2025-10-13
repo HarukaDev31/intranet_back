@@ -16,13 +16,17 @@ class DeliveryConfirmationProvinceMail extends Mailable
     public $user;
     public $tipoDocumento;
     public $nombreRazonSocial;
+    public $carga;
+    public $departamento;
+    public $provincia;
+    public $distrito;
     public $logo_header;
     public $logo_footer;
 
     /**
      * Create a new message instance.
      */
-    public function __construct($mensaje, $deliveryForm, $cotizacion, $user, $tipoDocumento, $nombreRazonSocial, $logo_header, $logo_footer)
+    public function __construct($mensaje, $deliveryForm, $cotizacion, $user, $tipoDocumento, $nombreRazonSocial, $carga, $departamento, $provincia, $distrito, $logo_header, $logo_footer)
     {
         $this->mensaje = $mensaje;
         $this->deliveryForm = $deliveryForm;
@@ -30,6 +34,10 @@ class DeliveryConfirmationProvinceMail extends Mailable
         $this->user = $user;
         $this->tipoDocumento = $tipoDocumento;
         $this->nombreRazonSocial = $nombreRazonSocial;
+        $this->carga = $carga;
+        $this->departamento = $departamento;
+        $this->provincia = $provincia;
+        $this->distrito = $distrito;
         $this->logo_header = $logo_header;
         $this->logo_footer = $logo_footer;
     }
@@ -39,7 +47,7 @@ class DeliveryConfirmationProvinceMail extends Mailable
      */
     public function build()
     {
-        return $this->subject('Confirmación de Envío - Provincia')
+        return $this->subject('Confirmación de Envío - Provincia - Consolidado #' . $this->carga)
             ->view('emails.delivery_confirmation_province')
             ->with([
                 'mensaje' => $this->mensaje,
@@ -48,6 +56,10 @@ class DeliveryConfirmationProvinceMail extends Mailable
                 'user' => $this->user,
                 'tipoDocumento' => $this->tipoDocumento,
                 'nombreRazonSocial' => $this->nombreRazonSocial,
+                'carga' => $this->carga,
+                'departamento' => $this->departamento,
+                'provincia' => $this->provincia,
+                'distrito' => $this->distrito,
                 'logo_header' => $this->logo_header,
                 'logo_footer' => $this->logo_footer,
             ]);

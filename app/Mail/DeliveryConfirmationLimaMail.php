@@ -16,13 +16,14 @@ class DeliveryConfirmationLimaMail extends Mailable
     public $user;
     public $fechaRecojo;
     public $horaRecojo;
+    public $carga;
     public $logo_header;
     public $logo_footer;
 
     /**
      * Create a new message instance.
      */
-    public function __construct($mensaje, $deliveryForm, $cotizacion, $user, $fechaRecojo, $horaRecojo, $logo_header, $logo_footer)
+    public function __construct($mensaje, $deliveryForm, $cotizacion, $user, $fechaRecojo, $horaRecojo, $carga, $logo_header, $logo_footer)
     {
         $this->mensaje = $mensaje;
         $this->deliveryForm = $deliveryForm;
@@ -30,6 +31,7 @@ class DeliveryConfirmationLimaMail extends Mailable
         $this->user = $user;
         $this->fechaRecojo = $fechaRecojo;
         $this->horaRecojo = $horaRecojo;
+        $this->carga = $carga;
         $this->logo_header = $logo_header;
         $this->logo_footer = $logo_footer;
     }
@@ -39,7 +41,7 @@ class DeliveryConfirmationLimaMail extends Mailable
      */
     public function build()
     {
-        return $this->subject('Confirmación de Recojo - Lima')
+        return $this->subject('Confirmación de Recojo - Lima - Consolidado #' . $this->carga)
             ->view('emails.delivery_confirmation_lima')
             ->with([
                 'mensaje' => $this->mensaje,
@@ -48,6 +50,7 @@ class DeliveryConfirmationLimaMail extends Mailable
                 'user' => $this->user,
                 'fechaRecojo' => $this->fechaRecojo,
                 'horaRecojo' => $this->horaRecojo,
+                'carga' => $this->carga,
                 'logo_header' => $this->logo_header,
                 'logo_footer' => $this->logo_footer,
             ]);

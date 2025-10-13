@@ -13,6 +13,7 @@ use App\Models\CargaConsolidada\Contenedor;
 use App\Models\CargaConsolidada\Cotizacion;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
 use App\Models\User;
 
 class SendDeliveryConfirmationWhatsAppLimaJob implements ShouldQueue
@@ -104,13 +105,14 @@ class SendDeliveryConfirmationWhatsAppLimaJob implements ShouldQueue
             
             // Enviar email de confirmación si el usuario tiene email
             if ($user && $user->email) {
-                \Mail::to($user->email)->send(new \App\Mail\DeliveryConfirmationLimaMail(
+                Mail::to($user->email)->send(new \App\Mail\DeliveryConfirmationLimaMail(
                     $mensaje,
                     $deliveryForm,
                     $cotizacion,
                     $user,
                     $fechaRecojo,
                     $horaRecojo,
+                    $carga,
                     public_path('storage/logo_header.png'),
                     public_path('storage/logo_footer.png')
                 ));

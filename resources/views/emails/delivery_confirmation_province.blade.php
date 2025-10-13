@@ -137,26 +137,18 @@
         <div class="header">
             <img src="{{ $message->embed($logo_header) }}" alt="probusiness" class="logo">
         </div>
-        <div class="banner" style="text-align:center;">¡Confirmación de Envío - Provincia!</div>
+        <div class="banner" style="text-align:center;">Consolidado #{{ $carga }}</div>
         <div class="content">
-            <div class="title">¡Tu reserva se realizó exitosamente!</div>
+            <div class="title">¡Confirmación de Envío - Provincia!</div>
             <div class="subtitle">
-                Hemos recibido tu solicitud de envío a provincia. A continuación te proporcionamos los detalles de tu reserva.
-            </div>
-
-            <div class="highlight">
-                <strong>{{ $mensaje }}</strong>
+                Tu reserva se realizó exitosamente. A continuación te proporcionamos los detalles de tu envío.
             </div>
 
             <div class="delivery-info">
                 <div class="delivery-title">Información del Consignatario</div>
                 <table class="info-table">
                     <tr>
-                        <td class="info-label">Tipo:</td>
-                        <td><strong>{{ $tipoDocumento }}</strong></td>
-                    </tr>
-                    <tr>
-                        <td class="info-label">Número:</td>
+                        <td class="info-label">{{ $tipoDocumento }}:</td>
                         <td><strong>{{ $deliveryForm->r_doc }}</strong></td>
                     </tr>
                     <tr>
@@ -164,57 +156,14 @@
                         <td><strong>{{ $nombreRazonSocial }}</strong></td>
                     </tr>
                     <tr>
-                        <td class="info-label">Tipo de Persona:</td>
-                        <td><strong>{{ $deliveryForm->r_type }}</strong></td>
+                        <td class="info-label">Destino:</td>
+                        <td><strong>{{ $departamento }} - {{ $provincia }} - {{ $distrito }}</strong></td>
                     </tr>
                 </table>
             </div>
 
-            <div class="delivery-info">
-                <div class="delivery-title">Información de la Cotización</div>
-                <table class="info-table">
-                    <tr>
-                        <td class="info-label">UUID:</td>
-                        <td><strong>{{ $cotizacion->uuid }}</strong></td>
-                    </tr>
-                    <tr>
-                        <td class="info-label">Cliente:</td>
-                        <td><strong>{{ $cotizacion->nombre_cliente ?? 'N/A' }}</strong></td>
-                    </tr>
-                    <tr>
-                        <td class="info-label">Teléfono:</td>
-                        <td><strong>{{ $cotizacion->telefono ?? 'N/A' }}</strong></td>
-                    </tr>
-                    <tr>
-                        <td class="info-label">Email:</td>
-                        <td><strong>{{ $cotizacion->email ?? 'N/A' }}</strong></td>
-                    </tr>
-                </table>
-            </div>
-
-            <div class="delivery-info">
-                <div class="delivery-title">Información Adicional del Formulario</div>
-                <table class="info-table">
-                    @if(isset($deliveryForm->r_address))
-                    <tr>
-                        <td class="info-label">Dirección:</td>
-                        <td><strong>{{ $deliveryForm->r_address }}</strong></td>
-                    </tr>
-                    @endif
-                    @if(isset($deliveryForm->r_phone))
-                    <tr>
-                        <td class="info-label">Teléfono:</td>
-                        <td><strong>{{ $deliveryForm->r_phone }}</strong></td>
-                    </tr>
-                    @endif
-                    @if(isset($deliveryForm->r_email))
-                    <tr>
-                        <td class="info-label">Email:</td>
-                        <td><strong>{{ $deliveryForm->r_email }}</strong></td>
-                    </tr>
-                    @endif
-                </table>
-            </div>
+     
+           
 
             <div class="footer">
                 <strong>¡Importante!</strong><br>
