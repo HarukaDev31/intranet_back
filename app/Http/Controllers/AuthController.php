@@ -574,6 +574,7 @@ class AuthController extends Controller
                         public_path('storage/logo_header_white.png'),
                         public_path('storage/logo_header.png'),
                         public_path('storage/logo_footer.png'),
+                        public_path('storage/logo_footer_white.png'),
                         public_path('storage/facebook.png'),
                         public_path('storage/instagram.png'),
                         public_path('storage/tiktok.png'),

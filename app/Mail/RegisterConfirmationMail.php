@@ -14,19 +14,19 @@ class RegisterConfirmationMail extends Mailable
     public $password;
     public $name;
     public $logo_header_white;
-    public $logo_footer;
+    public $logo_footer_white;
     public $social_icons;
 
     /**
      * Create a new message instance.
      */
-    public function __construct($email, $password, $name, $logo_header_white, $logo_footer)
+    public function __construct($email, $password, $name, $logo_header_white, $logo_footer_white)
     {
         $this->email = $email;
         $this->password = $password;
         $this->name = $name;
         $this->logo_header_white = $logo_header_white;
-        $this->logo_footer = $logo_footer;
+        $this->logo_footer_white = $logo_footer_white;
         $this->social_icons = [
             'facebook' => public_path('storage/facebook.png'),
             'instagram' => public_path('storage/instagram.png'),
@@ -46,7 +46,7 @@ class RegisterConfirmationMail extends Mailable
                 'email' => $this->email,
                 'password' => $this->password,
                 'logo_header' => $this->logo_header_white,
-                'logo_footer' => $this->logo_footer,
+                'logo_footer' => $this->logo_footer_white,
             ]);
     }
 }

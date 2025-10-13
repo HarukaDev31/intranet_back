@@ -10,17 +10,17 @@ class DeliveryConfirmationProvinceMail extends Mailable
 {
     use Queueable, SerializesModels;
 
+    public $carga;
     public $mensaje;
     public $deliveryForm;
     public $cotizacion;
     public $user;
     public $tipoDocumento;
     public $nombreRazonSocial;
-    public $carga;
     public $departamento;
     public $provincia;
     public $distrito;
-    public $logo_header;
+    public $logo_header_white;
     public $logo_footer;
 
     /**
@@ -38,7 +38,7 @@ class DeliveryConfirmationProvinceMail extends Mailable
         $this->departamento = $departamento;
         $this->provincia = $provincia;
         $this->distrito = $distrito;
-        $this->logo_header = $logo_header;
+        $this->logo_header_white = $logo_header;
         $this->logo_footer = $logo_footer;
     }
 
@@ -50,6 +50,7 @@ class DeliveryConfirmationProvinceMail extends Mailable
         return $this->subject('Confirmación de Envío - Provincia - Consolidado #' . $this->carga)
             ->view('emails.delivery_confirmation_province')
             ->with([
+                'carga' => $this->carga,
                 'mensaje' => $this->mensaje,
                 'deliveryForm' => $this->deliveryForm,
                 'cotizacion' => $this->cotizacion,
@@ -60,7 +61,7 @@ class DeliveryConfirmationProvinceMail extends Mailable
                 'departamento' => $this->departamento,
                 'provincia' => $this->provincia,
                 'distrito' => $this->distrito,
-                'logo_header' => $this->logo_header,
+                'logo_header' => $this->logo_header_white,
                 'logo_footer' => $this->logo_footer,
             ]);
     }
