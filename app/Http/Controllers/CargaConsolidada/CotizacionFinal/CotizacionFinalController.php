@@ -3695,19 +3695,13 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
                 $JCellVal = $objPHPExcel->getActiveSheet()->getCell('J' . $row)->getValue();
                 $objPHPExcel->getActiveSheet()->setCellValue('K' . $row, "='3'!" . $InitialColumn . 47);
                 
-                // Merge cells
+                // Merge cells PRIMERO
                 $objPHPExcel->getActiveSheet()->mergeCells('C' . $row . ':E' . $row);
                 $objPHPExcel->getActiveSheet()->mergeCells('G' . $row . ':H' . $row);
                 $objPHPExcel->getActiveSheet()->mergeCells('K' . $row . ':L' . $row);
                 
-                $style = $objPHPExcel->getActiveSheet()->getStyle('K' . $row);
-                $style->getFill()->setFillType(Fill::FILL_SOLID);
-                $style->getFill()->getStartColor()->setARGB($greenColor);
-                $style->getFont()->getColor()->setARGB(Color::COLOR_WHITE);
-                
+                // Aplicar estilos de fuente y alineación
                 $columnsToApply = ['B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K'];
-                $objPHPExcel->getActiveSheet()->getStyle('B' . $row . ':L' . $row)->applyFromArray($borders);
-                
                 foreach ($columnsToApply as $column) {
                     $objPHPExcel->getActiveSheet()->getStyle($column . $row)->getFont()->setName('Calibri');
                     $objPHPExcel->getActiveSheet()->getStyle($column . $row)->getFont()->setSize(11);
@@ -3716,6 +3710,21 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
                     if ($column == 'K') {
                         $objPHPExcel->getActiveSheet()->getStyle($column . $row)->getNumberFormat()->setFormatCode('"S/." #,##0.00_-');
                     }
+                }
+                
+                // Aplicar color de fondo a la columna K
+                $style = $objPHPExcel->getActiveSheet()->getStyle('K' . $row);
+                $style->getFill()->setFillType(Fill::FILL_SOLID);
+                $style->getFill()->getStartColor()->setARGB($greenColor);
+                $style->getFont()->getColor()->setARGB(Color::COLOR_WHITE);
+                
+                // Aplicar bordes AL FINAL (después de merges y estilos)
+                $objPHPExcel->getActiveSheet()->getStyle('B' . $row . ':L' . $row)->applyFromArray($borders);
+                
+                // Asegurar bordes en todas las celdas individuales (incluso las mergeadas)
+                $allColumns = ['B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L'];
+                foreach ($allColumns as $col) {
+                    $objPHPExcel->getActiveSheet()->getStyle($col . $row)->applyFromArray($borders);
                 }
                 
                 $InitialColumn = $this->incrementColumn($InitialColumn);
@@ -3755,21 +3764,21 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
             
             $objPHPExcel->getActiveSheet()->setCellValue('B' . $lastRow, "TOTAL");
             $objPHPExcel->getActiveSheet()->getStyle('B' . $lastRow)->getFont()->setBold(true);
-            $objPHPExcel->getActiveSheet()->getStyle('B' . $lastRow . ':E' . $lastRow)->applyFromArray($borders);
             $objPHPExcel->getActiveSheet()->getStyle('B' . $lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
             
             $objPHPExcel->getActiveSheet()->setCellValue('F' . $lastRow, "=SUM(F36:F" . ($lastRow - 1) . ")");
-            $objPHPExcel->getActiveSheet()->getStyle('F' . $lastRow)->applyFromArray($borders);
             $objPHPExcel->getActiveSheet()->getStyle('F' . $lastRow)->getFont()->setBold(true);
             $objPHPExcel->getActiveSheet()->getStyle('F' . $lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
             
             $objPHPExcel->getActiveSheet()->setCellValue('J' . $lastRow, "=SUM(J36:J" . ($lastRow - 1) . ")");
             $objPHPExcel->getActiveSheet()->getStyle('J' . $lastRow)->getFont()->setBold(true);
-            $objPHPExcel->getActiveSheet()->getStyle('J' . $lastRow)->applyFromArray($borders);
             $objPHPExcel->getActiveSheet()->getStyle('J' . $lastRow)->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_CURRENCY_USD_SIMPLE);
             $objPHPExcel->getActiveSheet()->getStyle('J' . $lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
             
-            $objPHPExcel->getActiveSheet()->getStyle('B' . $lastRow . ':L' . $lastRow)->applyFromArray(array());
+            // Aplicar bordes a toda la fila de TOTAL
+            $objPHPExcel->getActiveSheet()->getStyle('B' . $lastRow . ':L' . $lastRow)->applyFromArray($borders);
+            
+            // Establecer tamaño de fuente
             $objPHPExcel->getActiveSheet()->getStyle('B' . $lastRow . ':L' . ($lastRow + 1))->getFont()->setSize(11);
             
             $cellToCheck = 'I22';
