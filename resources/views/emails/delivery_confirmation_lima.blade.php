@@ -190,10 +190,6 @@
                 Hemos recibido tu solicitud de recojo para Lima. Por favor asegúrate de estar disponible en la fecha y hora programada para el recojo de tu pedido.
             </div>
 
-            <div class="highlight">
-                <strong>Resumen de tu solicitud:</strong><br>
-                {{ $mensaje }}
-            </div>
 
             <div class="access-section">
                 <div class="access-title">Información de Recojo</div>
