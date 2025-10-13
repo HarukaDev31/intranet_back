@@ -17,7 +17,7 @@ class DeliveryConfirmationLimaMail extends Mailable
     public $fechaRecojo;
     public $horaRecojo;
     public $carga;
-    public $logo_header;
+    public $logo_header_white;
     public $logo_footer;
 
     /**
@@ -32,7 +32,7 @@ class DeliveryConfirmationLimaMail extends Mailable
         $this->fechaRecojo = $fechaRecojo;
         $this->horaRecojo = $horaRecojo;
         $this->carga = $carga;
-        $this->logo_header = $logo_header;
+        $this->logo_header_white = $logo_header;
         $this->logo_footer = $logo_footer;
     }
 
@@ -51,7 +51,7 @@ class DeliveryConfirmationLimaMail extends Mailable
                 'fechaRecojo' => $this->fechaRecojo,
                 'horaRecojo' => $this->horaRecojo,
                 'carga' => $this->carga,
-                'logo_header' => $this->logo_header,
+                'logo_header' => $this->logo_header_white,
                 'logo_footer' => $this->logo_footer,
             ]);
     }
