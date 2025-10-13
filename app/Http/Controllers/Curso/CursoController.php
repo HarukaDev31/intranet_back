@@ -957,12 +957,16 @@ class CursoController extends Controller
                 Log::error('result: ' . print_r($result, true));
 
                 // Obtener datos adicionales del usuario (teléfono)
-                $usuarioCompleto = DB::table('entidad')
-                    ->where('ID_Entidad', $id)
+                ///get ID_Entidad from pedido_curso where ID_Pedido_Curso = $id_pedido_curso
+                $ID_Entidad = DB::table('pedido_curso')
+                    ->where('ID_Pedido_Curso', $id_pedido_curso)
                     ->first();
-                
+                $usuarioCompleto = DB::table('entidad')
+                    ->where('ID_Entidad', $ID_Entidad->ID_Entidad)
+                    ->first();
+                Log::error('usuarioCompleto: ' . print_r($usuarioCompleto, true));
                 $phoneNumber = $usuarioCompleto->Nu_Celular_Entidad ?? $usuarioCompleto->Nu_Celular_Contacto;
-
+                Log::error('phoneNumber: ' . $phoneNumber);
                 // Validar y limpiar datos antes de enviar a Moodle
                 $original_username = trim($result->No_Nombres_Apellidos);
                 $password = $this->ciDecrypt($result->No_Password);

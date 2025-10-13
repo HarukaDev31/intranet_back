@@ -198,12 +198,12 @@
             <div class="title">Hola {{ $nombre }}, tus credenciales están listas</div>
             
             <div class="subtitle">
-                Nos complace informarte que tu cuenta en nuestra plataforma de cursos Moodle ha sido configurada exitosamente.<br><br>
+                Nos complace informarte que tu cuenta en nuestra plataforma ha sido configurada exitosamente.<br><br>
                 A continuación encontrarás tus credenciales de acceso para comenzar tu aprendizaje.
             </div>
 
             <div class="access-section">
-                <div class="access-title">Datos de acceso a Moodle</div>
+                <div class="access-title">Datos de acceso </div>
                 
                 <table class="info-table">
                     <tr>
@@ -227,19 +227,7 @@
                 </table>
             </div>
 
-            <div class="button-container">
-                <a href="{{ $moodleUrl }}" class="access-button">Acceder a Moodle</a>
-            </div>
-
-            <div class="highlight-box">
-                <strong>⚠️ Importante:</strong>
-                <ul style="margin: 8px 0 0 0; padding-left: 20px;">
-                    <li>Guarda estas credenciales en un lugar seguro</li>
-                    <li>Te recomendamos cambiar tu contraseña al primer ingreso</li>
-                    <li>No compartas tus credenciales con terceros</li>
-                </ul>
-            </div>
-
+           
             <div class="support-text">
                 Si tienes alguna duda o necesitas asistencia para acceder a la plataforma, nuestro equipo de soporte estará encantado de ayudarte.
             </div>
