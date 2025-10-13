@@ -191,10 +191,6 @@
                 Te mantendremos informado sobre el estado de tu envío.
             </div>
 
-            <div class="highlight">
-                <strong>Resumen de tu solicitud:</strong><br>
-                {{ $mensaje }}
-            </div>
 
             <div class="access-section">
                 <div class="access-title">Información del Consignatario</div>
