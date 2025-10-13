@@ -3630,7 +3630,7 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
             $objPHPExcel->setActiveSheetIndex(2)->setCellValue($InitialColumn . '44', "=SUM(C44:" . $InitialColumnLetter . "44)");
             $objPHPExcel->getActiveSheet()->getStyle($InitialColumn . '44')->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_CURRENCY_USD_SIMPLE);
             
-            $columnaIndex = Coordinate::stringFromColumnIndex($productsCount + 2);
+            $columnaIndex = Coordinate::stringFromColumnIndex($productsCount + 3);
             
             $objPHPExcel->setActiveSheetIndex(0);
             $objPHPExcel->getActiveSheet()->setCellValue('K14', "='3'!" . $columnaIndex . "11");
