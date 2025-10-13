@@ -961,7 +961,7 @@ class CursoController extends Controller
                     ->where('ID_Entidad', $id)
                     ->first();
                 
-                $phoneNumber = $usuarioCompleto->Nu_Celular_Entidad ?? null;
+                $phoneNumber = $usuarioCompleto->Nu_Celular_Entidad ?? $usuarioCompleto->Nu_Celular_Contacto;
 
                 // Validar y limpiar datos antes de enviar a Moodle
                 $original_username = trim($result->No_Nombres_Apellidos);
@@ -1708,32 +1708,7 @@ class CursoController extends Controller
                 ]);
             }
 
-            // Enviar WhatsApp si hay número de teléfono
-            if (!empty($phoneNumber)) {
-                try {
-                    $whatsappMessage = "🎓 *Hola {$nombre}!*\n\n";
-                    $whatsappMessage .= "Te damos la bienvenida a nuestra plataforma de cursos Moodle.\n\n";
-                    $whatsappMessage .= "📋 *Tus credenciales de acceso:*\n\n";
-                    $whatsappMessage .= "👤 *Usuario:* {$username}\n";
-                    $whatsappMessage .= "🔑 *Contraseña:* {$password}\n";
-                    $whatsappMessage .= "🌐 *Plataforma:* {$moodleUrl}\n\n";
-                    $whatsappMessage .= "⚠️ _Por seguridad, te recomendamos cambiar tu contraseña al primer ingreso._\n\n";
-                    $whatsappMessage .= "¡Éxitos en tu aprendizaje! 🚀\n\n";
-                    $whatsappMessage .= "_Equipo Probusiness_";
-
-                    $this->sendMessage($whatsappMessage, $phoneNumber);
-                    
-                    Log::info('WhatsApp de credenciales Moodle enviado exitosamente', [
-                        'phone' => $phoneNumber,
-                        'username' => $username
-                    ]);
-                } catch (\Exception $e) {
-                    Log::error('Error al enviar WhatsApp de credenciales Moodle: ' . $e->getMessage(), [
-                        'phone' => $phoneNumber,
-                        'trace' => $e->getTraceAsString()
-                    ]);
-                }
-            }
+          
         } catch (\Exception $e) {
             Log::error('Error general al enviar credenciales Moodle: ' . $e->getMessage(), [
                 'trace' => $e->getTraceAsString()
