@@ -3344,6 +3344,9 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
             $InitialColumnLetter = $this->incrementColumn($InitialColumn, -1);
             $LastColumnLetter = $InitialColumn;
             
+            // Asegurarse de que la hoja 2 (tributos) esté activa antes de aplicar los bordes
+            $objPHPExcel->setActiveSheetIndex(2);
+            
             $objPHPExcel->getActiveSheet()->getStyle('B5:' . $InitialColumn . '19')->applyFromArray($borders);
             $objPHPExcel->getActiveSheet()->getStyle('B28:' . $InitialColumn . '32')->applyFromArray($borders);
             $objPHPExcel->getActiveSheet()->getStyle('B40:' . $InitialColumn . '40')->applyFromArray($borders);
@@ -3627,7 +3630,7 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
             $objPHPExcel->setActiveSheetIndex(2)->setCellValue($InitialColumn . '44', "=SUM(C44:" . $InitialColumnLetter . "44)");
             $objPHPExcel->getActiveSheet()->getStyle($InitialColumn . '44')->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_CURRENCY_USD_SIMPLE);
             
-            $columnaIndex = Coordinate::stringFromColumnIndex($productsCount + 2);
+            $columnaIndex = Coordinate::stringFromColumnIndex($productsCount + 3);
             
             $objPHPExcel->setActiveSheetIndex(0);
             $objPHPExcel->getActiveSheet()->setCellValue('K14', "='3'!" . $columnaIndex . "11");
@@ -3666,12 +3669,25 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
                     $objPHPExcel->getActiveSheet()->getStyle('B' . $row . ':L' . $row)->applyFromArray(array());
                 }
             }
-            
+            // Guardar los estilos de la fila 36 del template (SIN bordes) para aplicarlos a todas las filas de productos
+            $templateRowStyles = [];
+            foreach (range('B', 'L') as $col) {
+                $styleArray = $objPHPExcel->getActiveSheet()->getStyle($col . '36')->exportArray();
+                // Eliminar los bordes del array de estilos para no sobrescribirlos
+                unset($styleArray['borders']);
+                $templateRowStyles[$col] = $styleArray;
+            }
+
             for ($index = 0; $index < $productsCount; $index++) {
                 $row = 36 + $index;
-                if ($index >= 7 && $index != $productsCount) {
+                if ($index >= 3 && $index != $productsCount) {
                     $sheet = $objPHPExcel->getActiveSheet();
                     $sheet->insertNewRowBefore($row, 1);
+                    
+                    // Aplicar los estilos del template a la nueva fila (sin bordes)
+                    foreach (range('B', 'L') as $col) {
+                        $sheet->getStyle($col . $row)->applyFromArray($templateRowStyles[$col]);
+                    }
                 }
                 
                 $objPHPExcel->getActiveSheet()->setCellValue('B' . $row, $index + 1);
@@ -3718,31 +3734,41 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
                 $style->getFill()->getStartColor()->setARGB($greenColor);
                 $style->getFont()->getColor()->setARGB(Color::COLOR_WHITE);
                 
-                // Aplicar bordes AL FINAL (después de merges y estilos)
-                $objPHPExcel->getActiveSheet()->getStyle('B' . $row . ':L' . $row)->applyFromArray($borders);
-                
-                // Asegurar bordes en todas las celdas individuales (incluso las mergeadas)
-                $allColumns = ['B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L'];
-                foreach ($allColumns as $col) {
-                    $objPHPExcel->getActiveSheet()->getStyle($col . $row)->applyFromArray($borders);
-                }
-                
                 $InitialColumn = $this->incrementColumn($InitialColumn);
                 $lastRow = $row;
             }
             
+            // Aplicar bordes a TODAS las filas de productos DESPUÉS del loop
+            // Esto asegura que todas las filas tengan bordes sin importar si fueron insertadas o ya existían
+            for ($index = 0; $index < $productsCount; $index++) {
+                $row = 36 + $index;
+                
+                // Aplicar bordes directamente usando getBorders() para cada celda
+                $allColumns = ['B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L'];
+                foreach ($allColumns as $col) {
+                    $cellStyle = $objPHPExcel->getActiveSheet()->getStyle($col . $row);
+                    $cellStyle->getBorders()->getTop()->setBorderStyle(Border::BORDER_THIN);
+                    $cellStyle->getBorders()->getBottom()->setBorderStyle(Border::BORDER_THIN);
+                    $cellStyle->getBorders()->getLeft()->setBorderStyle(Border::BORDER_THIN);
+                    $cellStyle->getBorders()->getRight()->setBorderStyle(Border::BORDER_THIN);
+                }
+            }
+            
+            // Limpiar filas no usadas del template (solo cuando hay menos de 3 productos)
+            // El template tiene 3 filas por defecto (36, 37, 38)
             $notUsedDefaultRows = 3 - $productsCount;
-            if ($notUsedDefaultRows >= 0) {
-                for ($i = 0; $i <= $notUsedDefaultRows; $i++) {
+            if ($notUsedDefaultRows > 0) {
+                for ($i = 0; $i < $notUsedDefaultRows; $i++) {
                     $row = 36 + $productsCount + $i;
+                    // Limpiar todos los estilos y bordes de las filas no usadas
                     $objPHPExcel->getActiveSheet()->getStyle('B' . $row . ':L' . $row)->applyFromArray(array(
                         'borders' => array(
                             'allborders' => array(
                                 'style' => Border::BORDER_NONE,
-                                'color' => array('rgb' => '000000'),
                             ),
                         ),
                     ));
+                    // Limpiar fondo de columna K
                     $style = $objPHPExcel->getActiveSheet()->getStyle('K' . $row);
                     $style->getFill()->setFillType(Fill::FILL_SOLID);
                     $style->getFill()->getStartColor()->setARGB($whiteColor);
@@ -3751,11 +3777,7 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
             
             $lastRow++;
             
-            // Total row configuration
-            if ($productsCount >= 7) {
-                $objPHPExcel->getActiveSheet()->unmergeCells('B' . $lastRow . ':L' . $lastRow);
-                $objPHPExcel->getActiveSheet()->mergeCells('B' . $lastRow . ':E' . $lastRow);
-            }
+          
             if ($notUsedDefaultRows >= 0) {
                 $objPHPExcel->getActiveSheet()->mergeCells('C' . $lastRow . ':E' . $lastRow);
                 $objPHPExcel->getActiveSheet()->unmergeCells('C' . $lastRow . ':E' . $lastRow);
@@ -3775,11 +3797,14 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
             $objPHPExcel->getActiveSheet()->getStyle('J' . $lastRow)->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_CURRENCY_USD_SIMPLE);
             $objPHPExcel->getActiveSheet()->getStyle('J' . $lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
             
-            // Aplicar bordes a toda la fila de TOTAL
-            $objPHPExcel->getActiveSheet()->getStyle('B' . $lastRow . ':L' . $lastRow)->applyFromArray($borders);
+            // Aplicar bordes solo a las columnas B, F y J de la fila TOTAL
+            $objPHPExcel->getActiveSheet()->getStyle('B' . $lastRow . ':E' . $lastRow)->applyFromArray($borders);
+            $objPHPExcel->getActiveSheet()->getStyle('F' . $lastRow)->applyFromArray($borders);
+            $objPHPExcel->getActiveSheet()->getStyle('J' . $lastRow)->applyFromArray($borders);
             
             // Establecer tamaño de fuente
             $objPHPExcel->getActiveSheet()->getStyle('B' . $lastRow . ':L' . ($lastRow + 1))->getFont()->setSize(11);
+            //apply for total row=lastRow+1
             
             $cellToCheck = 'I22';
             $rowToCheck = 23;
@@ -3817,9 +3842,9 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
                     $impuestos = is_numeric($sheet1->getCell('K32')->getCalculatedValue()) ? $sheet1->getCell('K32')->getCalculatedValue() : 0;
                 } catch (\Exception $e) {
                     Log::warning('Error calculando valores con antidumping: ' . $e->getMessage());
-                    $fob = 0;
-                    $logistica = 0;
-                    $impuestos = 0;
+            $fob = 0;
+            $logistica = 0;
+            $impuestos = 0;
                 }
             } else {
                 try {
@@ -3855,9 +3880,6 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
             $objPHPExcel->getActiveSheet()->setCellValue('L10', "");
             
             $objPHPExcel->getActiveSheet()->setCellValue('F11', $tipoCliente);
-            if ($productsCount < 3) {
-                $objPHPExcel->getActiveSheet()->getStyle('B39:L39')->applyFromArray(array());
-            }
             
             $ClientName = $objPHPExcel->getActiveSheet()->getCell('C8')->getValue();
             $objPHPExcel->getActiveSheet()->getStyle('C8')->getAlignment()->setWrapText(true);
@@ -3910,7 +3932,7 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
                 try {
                     $montoFinal = is_numeric($objPHPExcel->getActiveSheet()->getCell('K31')->getCalculatedValue()) 
                         ? $objPHPExcel->getActiveSheet()->getCell('K31')->getCalculatedValue() : 0;
-                } catch (\Exception $e) {
+            } catch (\Exception $e) {
                     Log::warning('Error calculando K31 con antidumping: ' . $e->getMessage());
                     $montoFinal = 0;
                 }
@@ -3923,7 +3945,7 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
                     $impuestos = is_numeric($sheet1->getCell('K32')->getCalculatedValue()) ? $sheet1->getCell('K32')->getCalculatedValue() : 0;
                 } catch (\Exception $e) {
                     Log::warning('Error en valores finales con antidumping: ' . $e->getMessage());
-                    $fob = 0;
+                $fob = 0;
                     $logistica = 0;
                     $impuestos = 0;
                 }

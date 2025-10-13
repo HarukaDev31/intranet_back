@@ -895,41 +895,67 @@ export interface UserBusiness{
             ], 500);
         }
     }
-    public function getUserCotizacionesByWhatsapp($whatsapp,$dni=null)
+    public function getUserCotizacionesByWhatsapp($whatsapp, $dni = null)
     {
         try {
-            // Limpiar el número de WhatsApp para la búsqueda
-            $cleanWhatsapp = trim($whatsapp);
-            $cleanWhatsapp = str_replace('+51', '', $cleanWhatsapp); // Remover código de país Perú
-            $cleanWhatsapp = preg_replace('/[^0-9]/', '', $cleanWhatsapp); // Solo números
+            // Limpiar whatsapp para búsqueda (remover espacios, guiones, etc)
+            $cleanWhatsapp = preg_replace('/[\s\-\(\)\.\+]/', '', trim($whatsapp));
             
+            // Obtener correo del usuario si está disponible
+            $correo = null;
+            if ($dni) {
+                $user = User::where('dni', $dni)->first();
+                $correo = $user ? $user->email : null;
+            }
+      
             $trayectos = Cotizacion::where('estado_cotizador', 'CONFIRMADO')
                 ->whereNull('id_cliente_importacion')
                 ->whereNotNull('estado_cliente')
-                ->where(function($query) use ($cleanWhatsapp, $dni) {
-                    $query->where(DB::raw('TRIM(telefono)'), 'like', '%' . $cleanWhatsapp . '%');
-                    
-                    if (!empty($cleanWhatsapp)) {
-                        $query->orWhereRaw('REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(telefono, " ", ""), "-", ""), "(", ""), ")", ""), "+", "") LIKE ?', ["%{$cleanWhatsapp}%"])
-                            ->orWhereRaw('REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(telefono, " ", ""), "-", ""), "(", ""), ")", ""), "+", "") LIKE ?', ["%51{$cleanWhatsapp}%"]);
+                ->where(function ($query) use ($cleanWhatsapp, $dni, $correo) {
+                    // Usar la misma validación del modelo Cliente (getServiciosAttribute)
+                    // Validar que el teléfono no sea nulo o vacío antes de procesar
+                    if (!empty($cleanWhatsapp) && $cleanWhatsapp !== null) {
+                        $query->where(DB::raw('REPLACE(TRIM(telefono), " ", "")'), 'LIKE', "%{$cleanWhatsapp}%");
+                    }
+
+                    // Validar que el documento no sea nulo o vacío antes de procesar
+                    if (!empty($dni) && $dni !== null) {
+                        $query->orWhere(function ($q) use ($dni) {
+                            $q->whereNotNull('documento')
+                                ->where('documento', '!=', '')
+                                ->where('documento', $dni);
+                        });
+                    }
+
+                    // Validar que el correo no sea nulo o vacío antes de procesar
+                    if (!empty($correo) && $correo !== null) {
+                        $query->orWhere(function ($q) use ($correo) {
+                            $q->whereNotNull('correo')
+                                ->where('correo', '!=', '')
+                                ->where('correo', $correo);
+                        });
                     }
                 })
-                ->select('id', 'fob_final', 'fob', 'monto', 'id_contenedor', 'impuestos_final', 'impuestos', 'logistica_final', 'monto')
+                ->select('id', 'fob_final', 'fob', 'monto', 'id_contenedor', 'impuestos_final', 'impuestos', 'logistica_final')
                 ->get();
-            Log::info('Trayectos: ' . $trayectos);
+                
+            Log::info('Trayectos encontrados: ' . $trayectos->count());
+            
             // Calcular la suma de FOB
             $sumFob = $trayectos->sum(function($cotizacion) {
                 return (float)($cotizacion->fob_final ?? $cotizacion->fob ?? 0);
             });
+            
             $sumImpuestos = $trayectos->sum(function($cotizacion) {
                 return (float)($cotizacion->impuestos_final ?? $cotizacion->impuestos ?? 0);
             });
+            
             $sumLogistica = $trayectos->sum(function($cotizacion) {
                 return (float)($cotizacion->logistica_final ?? $cotizacion->monto ?? 0);
             });
-            //get trayectos with diferente id_contenedor
-            $containerCount = $trayectos->unique('id_contenedor')->count();
-
+            
+            // Contar contenedores totales aun no sean unicos
+            $containerCount = $trayectos->count();
             return [
                 'success' => true,
                 'sumFob' => $sumFob,
@@ -942,6 +968,8 @@ export interface UserBusiness{
             return [
                 'success' => false,
                 'sumFob' => 0,
+                'sumImpuestos' => 0,
+                'sumLogistica' => 0,
                 'count' => 0,
                 'message' => 'Error al obtener cotizaciones',
                 'error' => $e->getMessage()
