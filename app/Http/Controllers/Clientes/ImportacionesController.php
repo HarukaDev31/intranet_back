@@ -101,7 +101,13 @@ class ImportacionesController extends Controller
             $whatsapp = $user->whatsapp;
             $documento = $user->dni;
             $correo = $user->email;
-            Log::info('Whatsapp: ' . $whatsapp);
+            
+            // Limpiar whatsapp para búsqueda (remover espacios, guiones, etc)
+            $cleanWhatsapp = preg_replace('/[\s\-\(\)\.\+]/', '', trim($whatsapp));
+            
+            Log::info('Whatsapp original: ' . $whatsapp);
+            Log::info('Whatsapp limpio: ' . $cleanWhatsapp);
+            
             $perPage = $request->input('per_page', 10);
             $page = $request->input('page', 1);
 
@@ -114,11 +120,11 @@ class ImportacionesController extends Controller
                 ->where('estado_cotizador', 'CONFIRMADO')
                 ->whereNotNull('estado_cliente')
                 ->whereNull('id_cliente_importacion')
-                ->where(function ($query) use ($whatsapp, $documento, $correo) {
+                ->where(function ($query) use ($cleanWhatsapp, $documento, $correo) {
                     // Usar la misma validación del modelo Cliente (getServiciosAttribute)
                     // Validar que el teléfono no sea nulo o vacío antes de procesar
-                    if (!empty($whatsapp) && $whatsapp !== null) {
-                        $query->where(DB::raw('REPLACE(TRIM(telefono), " ", "")'), 'LIKE', "%{$whatsapp}%");
+                    if (!empty($cleanWhatsapp) && $cleanWhatsapp !== null) {
+                        $query->where(DB::raw('REPLACE(TRIM(telefono), " ", "")'), 'LIKE', "%{$cleanWhatsapp}%");
                     }
 
                     // Validar que el documento no sea nulo o vacío antes de procesar
@@ -139,6 +145,7 @@ class ImportacionesController extends Controller
                         });
                     }
                 })
+                //a where carga >11
                 //where not has any row in consolidado_delivery_form_lima_conformidad or consolidado_delivery_form_provincia_conformidad with id_cotizacion
                 ->where(DB::raw('(SELECT COUNT(*) FROM consolidado_delivery_form_lima_conformidad WHERE id_cotizacion = id)'), 0)
                 ->where(DB::raw('(SELECT COUNT(*) FROM consolidado_delivery_form_province_conformidad WHERE id_cotizacion = id)'), 0)
@@ -198,12 +205,17 @@ class ImportacionesController extends Controller
                 ], 401);
             }
             $whatsapp = $user->whatsapp;
-            Log::info('Whatsapp: ' . $whatsapp);
-            $perPage = $request->input('per_page', 10);
-            $page = $request->input('page', 1);
-
             $documento = $user->dni;
             $correo = $user->email;
+            
+            // Limpiar whatsapp para búsqueda (remover espacios, guiones, etc)
+            $cleanWhatsapp = preg_replace('/[\s\-\(\)\.\+]/', '', trim($whatsapp));
+            
+            Log::info('Whatsapp original: ' . $whatsapp);
+            Log::info('Whatsapp limpio: ' . $cleanWhatsapp);
+            
+            $perPage = $request->input('per_page', 10);
+            $page = $request->input('page', 1);
 
             $trayectos = Cotizacion::with(['contenedor' => function ($query) {
                 $query->select('id', 'carga', 'fecha_arribo', 'f_entrega', 'f_cierre');
@@ -214,9 +226,9 @@ class ImportacionesController extends Controller
                 ->where('estado_cotizador', 'CONFIRMADO')
                 ->whereNotNull('estado_cliente')
                 ->whereNull('id_cliente_importacion')
-                ->where(function ($query) use ($whatsapp, $documento, $correo) {
-                    if (!empty($whatsapp) && $whatsapp !== null) {
-                        $query->where(DB::raw('REPLACE(TRIM(telefono), " ", "")'), 'LIKE', "%{$whatsapp}%");
+                ->where(function ($query) use ($cleanWhatsapp, $documento, $correo) {
+                    if (!empty($cleanWhatsapp) && $cleanWhatsapp !== null) {
+                        $query->where(DB::raw('REPLACE(TRIM(telefono), " ", "")'), 'LIKE', "%{$cleanWhatsapp}%");
                     }
                     if (!empty($documento) && $documento !== null) {
                         $query->orWhere(function ($q) use ($documento) {
@@ -289,6 +301,9 @@ class ImportacionesController extends Controller
             }
 
             $whatsapp = $user->whatsapp;
+            
+            // Limpiar whatsapp para búsqueda (remover espacios, guiones, etc)
+            $cleanWhatsapp = preg_replace('/[\s\-\(\)\.\+]/', '', trim($whatsapp));
 
             // Validar que la cotización pertenece al cliente actual
             $cotizacion = DB::table('contenedor_consolidado_cotizacion as main')
@@ -350,7 +365,7 @@ class ImportacionesController extends Controller
                     ) as files_almacen_inspection")
                 ])
                 ->where('main.uuid', $uuid) // Validar ID específico
-                ->where(DB::raw('TRIM(main.telefono)'), 'like', '%' . $whatsapp . '%') // Validar que pertenece al cliente
+                ->where(DB::raw('REPLACE(TRIM(main.telefono), " ", "")'), 'like', '%' . $cleanWhatsapp . '%') // Validar que pertenece al cliente
                 ->where('main.estado_cotizador', 'CONFIRMADO')
                 ->whereNull('main.id_cliente_importacion')
                 ->whereNotNull('main.estado_cliente')

@@ -3344,6 +3344,9 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
             $InitialColumnLetter = $this->incrementColumn($InitialColumn, -1);
             $LastColumnLetter = $InitialColumn;
             
+            // Asegurarse de que la hoja 2 (tributos) esté activa antes de aplicar los bordes
+            $objPHPExcel->setActiveSheetIndex(2);
+            
             $objPHPExcel->getActiveSheet()->getStyle('B5:' . $InitialColumn . '19')->applyFromArray($borders);
             $objPHPExcel->getActiveSheet()->getStyle('B28:' . $InitialColumn . '32')->applyFromArray($borders);
             $objPHPExcel->getActiveSheet()->getStyle('B40:' . $InitialColumn . '40')->applyFromArray($borders);
@@ -3666,12 +3669,22 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
                     $objPHPExcel->getActiveSheet()->getStyle('B' . $row . ':L' . $row)->applyFromArray(array());
                 }
             }
-            
+            //get style from row 36  an duplicate for new rows
+
             for ($index = 0; $index < $productsCount; $index++) {
                 $row = 36 + $index;
-                if ($index >= 7 && $index != $productsCount) {
+                if ($index >= 3 && $index != $productsCount) {
                     $sheet = $objPHPExcel->getActiveSheet();
                     $sheet->insertNewRowBefore($row, 1);
+                    
+                    // Copiar estilos de la fila anterior a la nueva fila
+                    $previousRow = $row - 1;
+                    foreach (range('A', 'L') as $col) {
+                        $sheet->duplicateStyle(
+                            $sheet->getStyle($col . $previousRow),
+                            $col . $row
+                        );
+                    }
                 }
                 
                 $objPHPExcel->getActiveSheet()->setCellValue('B' . $row, $index + 1);
@@ -3726,7 +3739,7 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
                 foreach ($allColumns as $col) {
                     $objPHPExcel->getActiveSheet()->getStyle($col . $row)->applyFromArray($borders);
                 }
-                
+                //co
                 $InitialColumn = $this->incrementColumn($InitialColumn);
                 $lastRow = $row;
             }
@@ -3746,16 +3759,14 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
                     $style = $objPHPExcel->getActiveSheet()->getStyle('K' . $row);
                     $style->getFill()->setFillType(Fill::FILL_SOLID);
                     $style->getFill()->getStartColor()->setARGB($whiteColor);
+                    //clear borders
+                    $objPHPExcel->getActiveSheet()->getStyle('B' . $row . ':L' . $row)->applyFromArray(array());
                 }
             }
             
             $lastRow++;
             
-            // Total row configuration
-            if ($productsCount >= 7) {
-                $objPHPExcel->getActiveSheet()->unmergeCells('B' . $lastRow . ':L' . $lastRow);
-                $objPHPExcel->getActiveSheet()->mergeCells('B' . $lastRow . ':E' . $lastRow);
-            }
+          
             if ($notUsedDefaultRows >= 0) {
                 $objPHPExcel->getActiveSheet()->mergeCells('C' . $lastRow . ':E' . $lastRow);
                 $objPHPExcel->getActiveSheet()->unmergeCells('C' . $lastRow . ':E' . $lastRow);
@@ -3775,11 +3786,14 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
             $objPHPExcel->getActiveSheet()->getStyle('J' . $lastRow)->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_CURRENCY_USD_SIMPLE);
             $objPHPExcel->getActiveSheet()->getStyle('J' . $lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
             
-            // Aplicar bordes a toda la fila de TOTAL
-            $objPHPExcel->getActiveSheet()->getStyle('B' . $lastRow . ':L' . $lastRow)->applyFromArray($borders);
+            // Aplicar bordes solo a las columnas B, F y J de la fila TOTAL
+            $objPHPExcel->getActiveSheet()->getStyle('B' . $lastRow . ':E' . $lastRow)->applyFromArray($borders);
+            $objPHPExcel->getActiveSheet()->getStyle('F' . $lastRow)->applyFromArray($borders);
+            $objPHPExcel->getActiveSheet()->getStyle('J' . $lastRow)->applyFromArray($borders);
             
             // Establecer tamaño de fuente
             $objPHPExcel->getActiveSheet()->getStyle('B' . $lastRow . ':L' . ($lastRow + 1))->getFont()->setSize(11);
+            //apply for total row=lastRow+1
             
             $cellToCheck = 'I22';
             $rowToCheck = 23;
@@ -3857,6 +3871,11 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
             $objPHPExcel->getActiveSheet()->setCellValue('F11', $tipoCliente);
             if ($productsCount < 3) {
                 $objPHPExcel->getActiveSheet()->getStyle('B39:L39')->applyFromArray(array());
+            }else{
+                $objPHPExcel->getActiveSheet()->getStyle('B'.($productsCount+36))->applyFromArray(array());
+                //f and j
+                $objPHPExcel->getActiveSheet()->getStyle('F'.($productsCount+36))->applyFromArray(array());
+                $objPHPExcel->getActiveSheet()->getStyle('J'.($productsCount+36))->applyFromArray(array());
             }
             
             $ClientName = $objPHPExcel->getActiveSheet()->getCell('C8')->getValue();
