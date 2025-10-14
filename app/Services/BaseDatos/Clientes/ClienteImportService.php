@@ -219,13 +219,13 @@ class ClienteImportService
 
             if ($clienteExistente) {
                 // Actualizar cliente existente (guardar teléfono normalizado si hay)
-               
+                Log::info('Cliente existente: ' . json_encode($clienteExistente));
                 if ($data['servicio'] == 'CONSOLIDADO') {
                     $carga = $data['carga'];
                     $carga = explode('#', $carga)[1];
                     // Validar que la carga no sea nula o vacía antes de procesar
                     if (!empty($carga) && $carga !== null) {
-                        $consolidado = Contenedor::where('carga', $carga)->first();
+                        $consolidado = Contenedor::where('carga', $carga)->where('empresa', 1)->first();
                         if ($consolidado) {
                             $cotizacion = Cotizacion::create([
                                 'id_contenedor' => $consolidado->id,
@@ -240,6 +240,32 @@ class ClienteImportService
                                 'estado_cliente' => 'NO RESERVADO',
                                 'estado_cotizador' => 'CONFIRMADO',
                             ]);
+                            Log::info('Contenedor: ' . $consolidado->id);
+                            Log::info('Cotizacion: ' . $cotizacion->id);
+                            //lo creando cotizacion para un nuevo contenedor
+                            Log::info('Creando cotizacion para un contenedo existente');
+                        } else {
+                            //crea el contenedor y la cotizacion
+                            $consolidado = Contenedor::create([
+                                'carga' => $carga,
+                                'empresa' => 1,
+                                'estado' => 'PENDIENTE',
+                                'mes' => 'ENERO',
+                            ]);
+                            $cotizacion = Cotizacion::create([
+                                'id_contenedor' => $consolidado->id,
+                                'id_tipo_cliente' => 1,
+                                'id_cliente' => $clienteExistente->id,
+                                'fecha' => $this->convertirFechaExcel($data['fecha']),
+                                'nombre' => $data['cliente'],
+                                'documento' => $data['dni'],
+                                'correo' => $data['correo'],
+                                'telefono' => $data['whatsapp'],
+                                'id_cliente_importacion' => $importId,
+                                'estado_cliente' => 'NO RESERVADO',
+                                'estado_cotizador' => 'CONFIRMADO',
+                            ]);
+                            Log::info('Creando cotizacion para un nuevo contenedor');
                         }
                     }
                 } else {
@@ -283,7 +309,6 @@ class ClienteImportService
                                 'estado_china' => 'COMPLETADO',
                             ]);
                         }
-                        Log::info('Contenedor: ' . $consolidado->id);
                         $cotizacion = Cotizacion::create([
                             'id_contenedor' => $consolidado->id,
                             'id_tipo_cliente' => 1,
@@ -449,7 +474,7 @@ class ClienteImportService
         try {
             PedidoCurso::where('id_cliente_importacion', $id)->delete();
             Cotizacion::where('id_cliente_importacion', $id)->delete();
-            
+
             // Primero obtener los clientes antes de eliminarlos
             $clientes = Cliente::where('id_cliente_importacion', $id)->get();
             foreach ($clientes as $cliente) {
@@ -457,7 +482,7 @@ class ClienteImportService
                 Cotizacion::where('id_cliente', $cliente->id)->update(['id_cliente' => null]);
                 PedidoCurso::where('id_cliente', $cliente->id)->update(['id_cliente' => null]);
             }
-            
+
             // Ahora eliminar los clientes
             Cliente::where('id_cliente_importacion', $id)->delete();
             $import = ImportCliente::findOrFail($id);

@@ -1691,7 +1691,7 @@ class CursoController extends Controller
                     )
                 );
                 $whatsappMessage = "🎓 *Hola {$nombre}!*\n\n";
-                $whatsappMessage .= "Te damos la bienvenida a nuestra plataforma de cursos Moodle.\n\n";
+                $whatsappMessage .= "Te damos la bienvenida a nuestra plataforma de cursos.\n\n";
                 $whatsappMessage .= "📋 *Tus credenciales de acceso:*\n\n";
                 $whatsappMessage .= "👤 *Usuario:* {$username}\n";
                 $whatsappMessage .= "🔑 *Contraseña:* {$password}\n";

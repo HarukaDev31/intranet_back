@@ -5,6 +5,7 @@ namespace App\Models\BaseDatos\Clientes;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class Cliente extends Model
 {
@@ -173,9 +174,19 @@ class Cliente extends Model
             ->whereNotNull('estado_cliente')
             ->where('estado_cotizador', 'CONFIRMADO')
             ->where(function ($query) {
+                Log::info('Telefono: ' . $this->telefono);
                 // Validar que el teléfono no sea nulo o vacío antes de procesar
                 if (!empty($this->telefono) && $this->telefono !== null) {
-                    $query->where(DB::raw('REPLACE(TRIM(telefono), " ", "")'), 'LIKE', "%{$this->telefono}%");
+                    $telefonoLimpio = preg_replace('/[^0-9]/', '', $this->telefono);
+                    
+                    // Remover el código de país "51" si existe al inicio
+                    $telefonoSinCodigo = preg_replace('/^51/', '', $telefonoLimpio);
+                    
+                    // Buscar por teléfono completo o sin código de país
+                    $query->where(function($q) use ($telefonoLimpio, $telefonoSinCodigo) {
+                        $q->where(DB::raw('REPLACE(REPLACE(telefono, " ", ""), "-", "")'), 'LIKE', "%{$telefonoLimpio}%")
+                          ->orWhere(DB::raw('REPLACE(REPLACE(telefono, " ", ""), "-", "")'), 'LIKE', "%{$telefonoSinCodigo}%");
+                    });
                 }
                 
                 // Validar que el documento no sea nulo o vacío antes de procesar
@@ -220,30 +231,36 @@ class Cliente extends Model
                 'categoria' => $this->determinarCategoria($cotizacion->fecha)
             ];
         }
+        Log::info('Servicios: ' . json_encode($servicios));
         
         // Ordenamiento personalizado
         usort($servicios, function ($a, $b) {
             $esConsolidadoA = $a['servicio'] === 'Consolidado';
             $esConsolidadoB = $b['servicio'] === 'Consolidado';
             
-            // Determinar si es consolidado 2025 con carga >= 6
-            $esConsolidado2025CargaAltaA = false;
-            $esConsolidado2025CargaAltaB = false;
+            // Determinar si es consolidado NO importado (empresa != 1) de 2025 con carga >= 6
+            $esNoImportado2025CargaAltaA = false;
+            $esNoImportado2025CargaAltaB = false;
             
             if ($esConsolidadoA) {
                 $cargaA = intval($a['carga'] ?? 0);
                 $anioA = date('Y', strtotime($a['fecha']));
-                $esConsolidado2025CargaAltaA = ($anioA == '2025' && $cargaA >= 6);
+                $empresaA = $a['empresa'] ?? null;
+                // NO importado: empresa != 1
+                $esNoImportado2025CargaAltaA = ($anioA == '2025' && $cargaA >= 6 && $empresaA != 1);
             }
             
             if ($esConsolidadoB) {
                 $cargaB = intval($b['carga'] ?? 0);
                 $anioB = date('Y', strtotime($b['fecha']));
-                $esConsolidado2025CargaAltaB = ($anioB == '2025' && $cargaB >= 6);
+                $empresaB = $b['empresa'] ?? null;
+                // NO importado: empresa != 1
+                $esNoImportado2025CargaAltaB = ($anioB == '2025' && $cargaB >= 6 && $empresaB != 1);
             }
             
-            // Si ambos son consolidados 2025 con carga >= 6, ordenar por carga DESC
-            if ($esConsolidado2025CargaAltaA && $esConsolidado2025CargaAltaB) {
+            // PRIORIDAD 1: Consolidados NO importados 2025 con carga >= 6
+            // Ordenar por carga DESC
+            if ($esNoImportado2025CargaAltaA && $esNoImportado2025CargaAltaB) {
                 $cargaA = intval($a['carga'] ?? 0);
                 $cargaB = intval($b['carga'] ?? 0);
                 
@@ -257,20 +274,28 @@ class Cliente extends Model
                 return $fechaB - $fechaA;
             }
             
-            // Si solo A es consolidado 2025 con carga >= 6, va primero
-            if ($esConsolidado2025CargaAltaA && !$esConsolidado2025CargaAltaB) {
+            // Si solo A es NO importado 2025 con carga >= 6, va primero
+            if ($esNoImportado2025CargaAltaA && !$esNoImportado2025CargaAltaB) {
                 return -1;
             }
             
-            // Si solo B es consolidado 2025 con carga >= 6, va primero
-            if (!$esConsolidado2025CargaAltaA && $esConsolidado2025CargaAltaB) {
+            // Si solo B es NO importado 2025 con carga >= 6, va primero
+            if (!$esNoImportado2025CargaAltaA && $esNoImportado2025CargaAltaB) {
                 return 1;
             }
             
-            // Todo lo demás (cursos, consolidados con carga < 6, consolidados de otros años), ordenar por fecha DESC
+            // PRIORIDAD 2: Todo lo demás ordenado por fecha DESC y luego por carga DESC
             $fechaA = strtotime($a['fecha']);
             $fechaB = strtotime($b['fecha']);
-            return $fechaB - $fechaA;
+            
+            if ($fechaA != $fechaB) {
+                return $fechaB - $fechaA; // DESC: fecha más reciente primero
+            }
+            
+            // Si tienen la misma fecha, ordenar por carga DESC
+            $cargaA = intval($a['carga'] ?? 0);
+            $cargaB = intval($b['carga'] ?? 0);
+            return $cargaB - $cargaA;
         });
         
         return $servicios;

@@ -104,7 +104,10 @@ class ImportacionesController extends Controller
             
             // Limpiar whatsapp para búsqueda (remover espacios, guiones, etc)
             $cleanWhatsapp = preg_replace('/[\s\-\(\)\.\+]/', '', trim($whatsapp));
-            
+            //if lenght is 9 remove 51 to cleanWhatsapp
+            if (strlen($cleanWhatsapp) == 9) {
+                $cleanWhatsapp = preg_replace('/^51/', '', $cleanWhatsapp);
+            }
             Log::info('Whatsapp original: ' . $whatsapp);
             Log::info('Whatsapp limpio: ' . $cleanWhatsapp);
             
@@ -120,6 +123,7 @@ class ImportacionesController extends Controller
                 ->where('estado_cotizador', 'CONFIRMADO')
                 ->whereNotNull('estado_cliente')
                 ->whereNull('id_cliente_importacion')
+                ->where(DB::raw('CAST(carga AS UNSIGNED)'), '>=', 13)
                 ->where(function ($query) use ($cleanWhatsapp, $documento, $correo) {
                     // Usar la misma validación del modelo Cliente (getServiciosAttribute)
                     // Validar que el teléfono no sea nulo o vacío antes de procesar
@@ -211,7 +215,10 @@ class ImportacionesController extends Controller
             
             // Limpiar whatsapp para búsqueda (remover espacios, guiones, etc)
             $cleanWhatsapp = preg_replace('/[\s\-\(\)\.\+]/', '', trim($whatsapp));
-            
+            //if lenght is 9 remove 51 to cleanWhatsapp
+            if (strlen($cleanWhatsapp) == 9) {
+                $cleanWhatsapp = preg_replace('/^51/', '', $cleanWhatsapp);
+            }
             Log::info('Whatsapp original: ' . $whatsapp);
             Log::info('Whatsapp limpio: ' . $cleanWhatsapp);
             
@@ -246,8 +253,17 @@ class ImportacionesController extends Controller
                         });
                     }
                 })
-                ->where(DB::raw('(SELECT COUNT(*) FROM consolidado_delivery_form_lima_conformidad WHERE id_cotizacion = id)'), '>', 0)
-                ->where(DB::raw('(SELECT COUNT(*) FROM consolidado_delivery_form_province_conformidad WHERE id_cotizacion = id)'), '>', 0)
+                ->where(function ($query) {
+                    $query->where(function ($q) {
+                        // Condición 1: Tiene conformidades de Lima y Provincia
+                        $q->where(DB::raw('(SELECT COUNT(*) FROM consolidado_delivery_form_lima_conformidad WHERE id_cotizacion = id)'), '>', 0)
+                          ->where(DB::raw('(SELECT COUNT(*) FROM consolidado_delivery_form_province_conformidad WHERE id_cotizacion = id)'), '>', 0);
+                    })
+                    ->orWhereHas('contenedor', function ($q) {
+                        // Condición 2: La carga es menor a 13
+                        $q->whereRaw('CAST(carga AS UNSIGNED) < 13');
+                    });
+                })
                 ->select('id', 'id_contenedor', 'qty_item', 'volumen_final', 'fob_final', 'logistica_final', 'fob', 'monto', 'estado_cliente', 'uuid', 'impuestos_final', 'impuestos')
                 ->orderBy('id', 'desc')
                 ->paginate($perPage);
