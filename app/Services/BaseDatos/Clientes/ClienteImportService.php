@@ -191,8 +191,10 @@ class ClienteImportService
             $clienteExistente = null;
 
             // Normalizar/limpiar whatsapp: quitar todo lo que no sea dígito
-            $whatsappLimpio = preg_replace('/\D+/', '', $data['whatsapp'] ?? '');
-
+            $whatsappLimpio = preg_replace('/\D+/', '', trim($data['whatsapp'] ?? ''));
+            if (strlen($whatsappLimpio) == 9) {
+                $whatsappLimpio = preg_replace('/^51/', '', $whatsappLimpio);
+            }
             // Buscar secuencialmente: primero por teléfono (normalizado), luego por DNI, luego por RUC
             // Validar que el teléfono no sea nulo o vacío antes de procesar
             if (!empty($whatsappLimpio) && $whatsappLimpio !== null) {
