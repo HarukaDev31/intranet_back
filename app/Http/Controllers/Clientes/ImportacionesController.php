@@ -155,14 +155,7 @@ class ImportacionesController extends Controller
 
             // Transformar los datos para incluir la información del contenedor
             $trayectosData = $trayectos->getCollection()->map(function ($cotizacion) {
-                Log::error('cotizacion: ' . $cotizacion->fob_final);
-                Log::error('cotizacion: ' . $cotizacion->fob);
-                Log::error('cotizacion: ' . $cotizacion->logistica_final);
-                Log::error('cotizacion: ' . $cotizacion->monto);
-                Log::error('cotizacion: ' . $cotizacion->impuestos_final);
-                Log::error('cotizacion: ' . $cotizacion->impuestos);
-                Log::error('cotizacion: ' . $cotizacion->estado_cliente);
-                Log::error('cotizacion: ' . $cotizacion->uuid);
+
                 return [
                     'id' => $cotizacion->uuid,
                     'id_contenedor' => $cotizacion->id_contenedor,
