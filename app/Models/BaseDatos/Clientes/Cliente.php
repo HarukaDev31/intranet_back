@@ -174,7 +174,6 @@ class Cliente extends Model
             ->whereNotNull('contenedor_consolidado_cotizacion.estado_cliente')
             ->where('contenedor_consolidado_cotizacion.estado_cotizador', 'CONFIRMADO')
             //has one provider at least
-            ->where(DB::raw('(SELECT COUNT(*) FROM contenedor_consolidado_cotizacion_proveedores WHERE id_cotizacion = contenedor_consolidado_cotizacion.id)'), '>', 0)
             ->where(function ($query) {
                 Log::info('Telefono: ' . $this->telefono);
                 // Validar que el teléfono no sea nulo o vacío antes de procesar
