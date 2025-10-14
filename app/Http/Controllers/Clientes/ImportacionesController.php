@@ -172,9 +172,9 @@ class ImportacionesController extends Controller
                     'fecha_entrega' => $cotizacion->contenedor ? $cotizacion->contenedor->f_entrega : null,
                     'qty_box' => $cotizacion->getSumQtyBoxChinaAttribute(),
                     'cbm' => $cotizacion->getSumCbmTotalChinaAttribute(),
-                    'fob' => $cotizacion->fob_final ?? $cotizacion->fob,
-                    'logistica' => $cotizacion->logistica_final ?? $cotizacion->monto,
-                    'impuestos' => $cotizacion->impuestos_final ?? $cotizacion->impuestos,
+                    'fob' => $cotizacion->fob_final==0||$cotizacion->fob_final==null ? $cotizacion->fob : $cotizacion->fob_final,
+                    'logistica' => $cotizacion->logistica_final==0||$cotizacion->logistica_final==null ? $cotizacion->monto : $cotizacion->logistica_final,
+                    'impuestos' => $cotizacion->impuestos_final==0||$cotizacion->impuestos_final==null ? $cotizacion->impuestos : $cotizacion->impuestos_final,
                     'estado_cliente' => $cotizacion->estado_cliente,
                     'seguimiento' => null, // Agregar lógica según tu modelo
                     'inspecciones' => null // Agregar lógica según tu modelo
