@@ -1700,9 +1700,13 @@ class CursoController extends Controller
                 $whatsappMessage .= "¡Éxitos en tu aprendizaje! 🚀\n\n";
                 $whatsappMessage .= "_Equipo Probusiness_";
                 //send whatsapp
+                //trim phone number
+                $phoneNumber = trim($phoneNumber);
                 //format number if not has 51
-                if (strpos($phoneNumber, '51') !== 0) {
-                    $phoneNumber = '51' . $phoneNumber;
+                if (strlen($phoneNumber) == 9) {
+                    $phoneNumber = '51' . $phoneNumber.'@c.us';
+                } else {
+                    $phoneNumber = $phoneNumber.'@c.us';
                 }
                 $this->sendMessage($whatsappMessage, $phoneNumber);
                 Log::info('Email de credenciales Moodle enviado exitosamente', [
