@@ -527,7 +527,8 @@ class ImportacionesController extends Controller
 
             return response()->json([
                 'success' => true,
-                'data' => $this->pasosSeguimiento
+                'data' => $this->pasosSeguimiento,
+                'carga' => $contenedor->carga
             ]);
         } catch (\Exception $e) {
             return response()->json([

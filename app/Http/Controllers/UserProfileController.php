@@ -63,10 +63,16 @@ class UserProfileController extends Controller
                 'birth_date' => $validatedData['fecha_nacimiento'] ?? null,
                 'pais_id' => $validatedData['country'] ?? null,
                 'provincia_id' => $validatedData['city'] ?? null,
+                'departamento_id' => $validatedData['departamento'] ?? null,
+                'distrito_id' => $validatedData['distrito'] ?? null,
+                'dni' => $validatedData['dni'] ?? null,
                 'goals' => $validatedData['goals'] ?? null,
             ]);
 
             DB::commit();
+
+            // Cargar las relaciones para devolver los nombres
+            $user->load(['pais', 'provincia', 'departamento', 'distrito']);
 
             return response()->json([
                 'success' => true,
@@ -78,8 +84,14 @@ class UserProfileController extends Controller
                     'email' => $user->email,
                     'phone' => $user->whatsapp,
                     'fechaNacimiento' => $user->birth_date,
-                    'country' => $user->pais_id,
-                    'city' => $user->provincia_id,
+                    'country' => $user->pais_id, // ID para el modo editar
+                    'countryName' => $user->pais ? $user->pais->No_Pais : null, // Nombre para mostrar
+                    'city' => $user->provincia_id, // ID para el modo editar
+                    'cityName' => $user->provincia ? $user->provincia->No_Provincia : null, // Nombre para mostrar
+                    'departamento' => $user->departamento_id, // ID para el modo editar
+                    'departamentoName' => $user->departamento ? $user->departamento->No_Departamento : null, // Nombre para mostrar
+                    'distrito' => $user->distrito_id, // ID para el modo editar
+                    'distritoName' => $user->distrito ? $user->distrito->No_Distrito : null, // Nombre para mostrar
                     'goals' => $user->goals,
                     'dni' => $user->dni,
                 ]
@@ -114,16 +126,28 @@ class UserProfileController extends Controller
                 ], 401);
             }
 
+            // Cargar las relaciones para devolver los nombres
+            $user->load(['pais', 'provincia', 'departamento', 'distrito']);
+
             return response()->json([
                 'success' => true,
                 'user' => [
                     'id' => $user->id,
                     'fullName' => $user->full_name,
-                    'photoUrl' => $user->photo_url,
+                    'photoUrl' => $this->generateImageUrl($user->photo_url),
                     'email' => $user->email,
                     'phone' => $user->whatsapp,
-                    'age' => $user->age,
-                    'country' => $user->country,
+                    'fechaNacimiento' => $user->birth_date,
+                    'country' => $user->pais_id, // ID para el modo editar
+                    'countryName' => $user->pais ? $user->pais->No_Pais : null, // Nombre para mostrar
+                    'city' => $user->provincia_id, // ID para el modo editar
+                    'cityName' => $user->provincia ? $user->provincia->No_Provincia : null, // Nombre para mostrar
+                    'departamento' => $user->departamento_id, // ID para el modo editar
+                    'departamentoName' => $user->departamento ? $user->departamento->No_Departamento : null, // Nombre para mostrar
+                    'distrito' => $user->distrito_id, // ID para el modo editar
+                    'distritoName' => $user->distrito ? $user->distrito->No_Distrito : null, // Nombre para mostrar
+                    'goals' => $user->goals,
+                    'dni' => $user->dni,
                 ]
             ], 200);
 
