@@ -1708,7 +1708,7 @@ class CursoController extends Controller
                 } else {
                     $phoneNumber = $phoneNumber.'@c.us';
                 }
-                $this->sendMessage($whatsappMessage, $phoneNumber);
+                $this->sendMessageCurso($whatsappMessage, $phoneNumber);
                 Log::info('Email de credenciales Moodle enviado exitosamente', [
                     'email' => $email,
                     'username' => $username

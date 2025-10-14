@@ -152,6 +152,16 @@ trait WhatsappTrait
             'sleep' => $sleep
         ]);
     }
+    public function sendMessageCurso($message, $phoneNumberId = null, $sleep = 0): array
+    {
+        $phoneNumberId = $phoneNumberId ? $phoneNumberId : $this->phoneNumberId;
+
+        return $this->_callApi('/message-curso', [
+            'message' => $message,
+            'phoneNumberId' => $phoneNumberId,
+            'sleep' => $sleep
+        ]);
+    }
     public function sendMedia($filePath, $mimeType = null, $message = null, $phoneNumberId = null, $sleep = 0)
     {
         try {
