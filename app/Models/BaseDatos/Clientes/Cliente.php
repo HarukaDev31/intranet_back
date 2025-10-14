@@ -173,6 +173,8 @@ class Cliente extends Model
             ->join('carga_consolidada_contenedor', 'contenedor_consolidado_cotizacion.id_contenedor', '=', 'carga_consolidada_contenedor.id')
             ->whereNotNull('estado_cliente')
             ->where('estado_cotizador', 'CONFIRMADO')
+            //has one provider at least
+            ->where(DB::raw('(SELECT COUNT(*) FROM contenedor_consolidado_cotizacion_proveedores WHERE id_cotizacion = id)'), '>', 0)
             ->where(function ($query) {
                 Log::info('Telefono: ' . $this->telefono);
                 // Validar que el teléfono no sea nulo o vacío antes de procesar
