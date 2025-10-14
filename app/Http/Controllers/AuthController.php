@@ -936,6 +936,8 @@ export interface UserBusiness{
                         });
                     }
                 })
+                // Verificar que tenga al menos un proveedor
+                ->whereHas('proveedores')
                 ->select('id', 'fob_final', 'fob', 'monto', 'id_contenedor', 'impuestos_final', 'impuestos', 'logistica_final')
                 ->get();
                 

@@ -108,9 +108,7 @@ class ImportacionesController extends Controller
             if (strlen($cleanWhatsapp) == 9) {
                 $cleanWhatsapp = preg_replace('/^51/', '', $cleanWhatsapp);
             }
-            Log::info('Whatsapp original: ' . $whatsapp);
-            Log::info('Whatsapp limpio: ' . $cleanWhatsapp);
-            
+           
             $perPage = $request->input('per_page', 10);
             $page = $request->input('page', 1);
 
@@ -123,9 +121,17 @@ class ImportacionesController extends Controller
                 ->where('estado_cotizador', 'CONFIRMADO')
                 ->whereNotNull('estado_cliente')
                 ->whereNull('id_cliente_importacion')
-                ->where(DB::raw('CAST(carga AS UNSIGNED)'), '>=', 13)
+                ->whereHas('contenedor', function ($query) {
+                    $query->whereRaw('CAST(carga AS UNSIGNED) >= 13');
+                })
+                ->whereHas('proveedores', function ($query) {
+                    $query->where(DB::raw('(SELECT COUNT(*) FROM contenedor_consolidado_cotizacion_proveedores WHERE id_cotizacion = id)'), '>', 0);
+                })
                 ->where(function ($query) use ($cleanWhatsapp, $documento, $correo) {
                     // Usar la misma validación del modelo Cliente (getServiciosAttribute)
+                    Log::info('CleanWhatsapp: ' . $cleanWhatsapp);
+                    Log::info('Documento: ' . $documento);
+                    Log::info('Correo: ' . $correo);
                     // Validar que el teléfono no sea nulo o vacío antes de procesar
                     if (!empty($cleanWhatsapp) && $cleanWhatsapp !== null) {
                         $query->where(DB::raw('REPLACE(TRIM(telefono), " ", "")'), 'LIKE', "%{$cleanWhatsapp}%");
