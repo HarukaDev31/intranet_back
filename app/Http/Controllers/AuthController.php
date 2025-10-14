@@ -811,13 +811,16 @@ export interface UserBusiness{
                     'fullName' => $user->full_name,
                     'photoUrl' => $this->generateImageUrl($user->photo_url),
                     'email' => $user->email,
-                    'documentNumber' => null, // Campo no disponible en la estructura actual
-                    'age' => null, // Campo no disponible en la estructura actual
-                    'country' => null, // Campo no disponible en la estructura actual
-                    'city' => $user->distrito ? $user->distrito->No_Distrito : null,
-                    'department' => $user->departamento ? $user->departamento->No_Departamento : null,
+                    'country' => $user->pais ? $user->pais->No_Pais : null, // Campo no disponible en la estructura actual
+                    'birth_date' => $user->birth_date,
+                    'id_country' => $user->pais_id,
+                    'city' => $user->provincia_id ? $user->provincia->No_Provincia : null,
+                    'department' => $user->departamento_id ? $user->departamento->No_Departamento : null,
+                    'id_department' => $user->departamento_id,
                     'province' => $user->provincia ? $user->provincia->No_Provincia : null,
+                    'id_province' => $user->provincia_id,
                     'district' => $user->distrito ? $user->distrito->No_Distrito : null,
+                    'id_district' => $user->distrito_id,
                     'phone' => $user->whatsapp,
                     'business' => $business,
                     'importedAmount' => $importedAmount['sumFob'] + $importedAmount['sumImpuestos'] + $importedAmount['sumLogistica'], // Campo no disponible en la estructura actual
@@ -834,6 +837,7 @@ export interface UserBusiness{
                             'notificacion' => 1
                         ],
                     ],
+                    'cbm' => $importedAmount['cbm'] ?? 0
                 ],
                 'iCantidadAcessoUsuario' => 1,
                 'iIdEmpresa' => null,
@@ -936,7 +940,7 @@ export interface UserBusiness{
                         });
                     }
                 })
-                ->select('id', 'fob_final', 'fob', 'monto', 'id_contenedor', 'impuestos_final', 'impuestos', 'logistica_final')
+                ->select('id', 'fob_final', 'fob', 'monto', 'id_contenedor', 'impuestos_final', 'impuestos', 'logistica_final', 'volumen_doc', 'volumen_final')
                 ->get();
                 
             Log::info('Trayectos encontrados: ' . $trayectos->count());
@@ -953,6 +957,11 @@ export interface UserBusiness{
             $sumLogistica = $trayectos->sum(function($cotizacion) {
                 return (float)($cotizacion->logistica_final ?? $cotizacion->monto ?? 0);
             });
+
+            //Calcular la suma cbm
+            $volumen_final = $trayectos->sum(function($cotizacion) {
+                return (float)($cotizacion->volumen_final ?? $cotizacion->volumen_doc ?? 0);
+            });
             
             // Contar contenedores totales aun no sean unicos
             $containerCount = $trayectos->count();
@@ -961,7 +970,8 @@ export interface UserBusiness{
                 'sumFob' => $sumFob,
                 'sumImpuestos' => $sumImpuestos,
                 'sumLogistica' => $sumLogistica,
-                'count' => $containerCount
+                'count' => $containerCount,
+                'cbm' => $volumen_final
             ];
         } catch (\Exception $e) {
             Log::error('Error en getUserCotizacionesByWhatsapp: ' . $e->getMessage());
