@@ -116,35 +116,7 @@ class CotizacionProveedorController extends Controller
             $query = DB::table('contenedor_consolidado_cotizacion AS main')
                 ->select([
                     'main.*',
-                    'U.No_Nombres_Apellidos',
-                    DB::raw('(
-                        SELECT COALESCE(
-                            JSON_ARRAYAGG(
-                                JSON_OBJECT(
-                                    "id", proveedores.id,
-                                    "qty_box", proveedores.qty_box,
-                                    "peso", proveedores.peso,
-                                    "id_cotizacion", proveedores.id_cotizacion,
-                                    "cbm_total", proveedores.cbm_total,
-                                    "supplier", proveedores.supplier,
-                                    "code_supplier", proveedores.code_supplier,
-                                    "estados_proveedor", proveedores.estados_proveedor,
-                                    "estados", proveedores.estados,
-                                    "supplier_phone", proveedores.supplier_phone,
-                                    "cbm_total_china", proveedores.cbm_total_china,
-                                    "qty_box_china", proveedores.qty_box_china,
-                                    "id_proveedor", proveedores.id,
-                                    "products", proveedores.products,
-                                    "estado_china", proveedores.estado_china,
-                                    "arrive_date_china", proveedores.arrive_date_china,
-                                    "send_rotulado_status", proveedores.send_rotulado_status
-                                )
-                            ),
-                            JSON_ARRAY()
-                        )
-                        FROM contenedor_consolidado_cotizacion_proveedores proveedores
-                        WHERE proveedores.id_cotizacion = main.id
-                    ) as proveedores')
+                    'U.No_Nombres_Apellidos'
                 ])
                 ->leftJoin('contenedor_consolidado_tipo_cliente AS TC', 'TC.id', '=', 'main.id_tipo_cliente')
                 ->leftJoin('usuario AS U', 'U.ID_Usuario', '=', 'main.id_usuario')
@@ -206,13 +178,36 @@ class CotizacionProveedorController extends Controller
 
             // Procesar datos para el frontend
             $dataProcessed = collect($data->items())->map(function ($item) use ($user, $estadoChina, $rol, $search) {
-                Log::info($item->proveedores . "proveedores");
-                $proveedores = json_decode($item->proveedores, true) ?: [];
-                
-                // Asegurar que siempre sea un array
-                if (!is_array($proveedores)) {
-                    $proveedores = [$proveedores];
-                }
+                // Obtener proveedores por separado para garantizar que siempre sea un array
+                $proveedoresQuery = DB::table('contenedor_consolidado_cotizacion_proveedores')
+                    ->where('id_cotizacion', $item->id)
+                    ->select([
+                        'id',
+                        'qty_box',
+                        'peso',
+                        'id_cotizacion',
+                        'cbm_total',
+                        'supplier',
+                        'code_supplier',
+                        'estados_proveedor',
+                        'estados',
+                        'supplier_phone',
+                        'cbm_total_china',
+                        'qty_box_china',
+                        'products',
+                        'estado_china',
+                        'arrive_date_china',
+                        'send_rotulado_status'
+                    ])
+                    ->get()
+                    ->toArray();
+
+                // Convertir a array asociativo y agregar id_proveedor
+                $proveedores = array_map(function($proveedor) {
+                    $proveedorArray = (array)$proveedor;
+                    $proveedorArray['id_proveedor'] = $proveedorArray['id'];
+                    return $proveedorArray;
+                }, $proveedoresQuery);
 
                 // Filtrar proveedores por estado_china si es necesario
                 if ($rol == Usuario::ROL_ALMACEN_CHINA && $estadoChina != "todos") {
@@ -220,7 +215,6 @@ class CotizacionProveedorController extends Controller
                         return ($proveedor['estados_proveedor'] ?? '') === $estadoChina;
                     });
                 }
-
 
                 $cbmTotalChina = 0;
                 $cbmTotalPeru = 0;
