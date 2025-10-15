@@ -176,7 +176,6 @@ class Cliente extends Model
             //has one provider at least
             ->where(function ($query) {
                 Log::info('Telefono: ' . $this->telefono);
-                // Validar que el teléfono no sea nulo o vacío antes de procesar
                 if (!empty($this->telefono) && $this->telefono !== null) {
                     $telefonoLimpio = preg_replace('/[^0-9]/', '', $this->telefono);
                     

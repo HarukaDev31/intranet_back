@@ -232,7 +232,7 @@ class ImportacionesController extends Controller
             $page = $request->input('page', 1);
 
             $trayectos = Cotizacion::with(['contenedor' => function ($query) {
-                $query->select('id', 'carga', 'fecha_arribo', 'f_entrega', 'f_cierre');
+                $query->select('id', 'carga', 'fecha_arribo', 'f_entrega', 'f_cierre', 'f_puerto');
             }])
                 ->with(['proveedores' => function ($query) {
                     $query->select('id_cotizacion', 'cbm_total', 'qty_box', 'qty_box_china', 'cbm_total_china', 'estados_proveedor');
@@ -279,7 +279,7 @@ class ImportacionesController extends Controller
                     'id_contenedor' => $cotizacion->id_contenedor,
                     'carga' => $cotizacion->contenedor ? $cotizacion->contenedor->carga : null,
                     'fecha_cierre' => $cotizacion->contenedor ? $cotizacion->contenedor->f_cierre : null,
-                    'fecha_arribo' => $cotizacion->contenedor ? $cotizacion->contenedor->fecha_arribo : null,
+                    'fecha_arribo' => $cotizacion->contenedor ? $cotizacion->contenedor->f_puerto : null,
                     'fecha_entrega' => $cotizacion->contenedor ? $cotizacion->contenedor->f_entrega : null,
                     'qty_box' => $cotizacion->getSumQtyBoxChinaAttribute(),
                     'cbm' => $cotizacion->getSumCbmTotalChinaAttribute(),

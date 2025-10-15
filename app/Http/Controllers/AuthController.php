@@ -904,7 +904,10 @@ export interface UserBusiness{
         try {
             // Limpiar whatsapp para búsqueda (remover espacios, guiones, etc)
             $cleanWhatsapp = preg_replace('/[\s\-\(\)\.\+]/', '', trim($whatsapp));
-            
+            //if lenght is 9 remove 51 to cleanWhatsapp
+            if (strlen($cleanWhatsapp) == 9) {
+                $cleanWhatsapp = preg_replace('/^51/', '', $cleanWhatsapp);
+            }
             // Obtener correo del usuario si está disponible
             $correo = null;
             if ($dni) {

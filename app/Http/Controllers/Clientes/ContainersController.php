@@ -116,9 +116,9 @@ class ContainersController extends Controller
                     'status' => $status,
                     'userIsPresent' => isset($cotizacionesPorContenedor[$contenedor->id]),
                     'closeDate' => $contenedor->f_cierre ? Carbon::parse($contenedor->f_cierre)->format('Y-m-d') : null,
-                    'shipDate' => $contenedor->f_zarpe ? Carbon::parse($contenedor->f_zarpe)->format('Y-m-d') : null,
-                    'arrivalDate' => $contenedor->f_llegada ? Carbon::parse($contenedor->f_llegada)->format('Y-m-d') : null,
-                    'deliveryDate' => $contenedor->f_nacionalizacion ? Carbon::parse($contenedor->f_nacionalizacion)->format('Y-m-d') : null,
+                    'shipDate' => $contenedor->lista_embarque_uploaded_at ? Carbon::parse($contenedor->lista_embarque_uploaded_at)->format('Y-m-d') : null,
+                    'arrivalDate' => $contenedor->f_puerto ? Carbon::parse($contenedor->f_puerto)->format('Y-m-d') : null,
+                    'deliveryDate' => $contenedor->f_entrega ? Carbon::parse($contenedor->f_entrega)->format('Y-m-d') : null,
                     'createdAt' => $contenedor->created_at ? Carbon::parse($contenedor->created_at)->toIso8601String() : null,
                 ];
             });
