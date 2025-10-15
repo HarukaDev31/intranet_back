@@ -46,9 +46,12 @@ class AddUuidsToCotizaciones extends Command
                 return 1;
             }
 
-            // Contar cotizaciones sin UUID
+            // Contar cotizaciones sin UUID (NULL o string vacío)
             $totalSinUuid = DB::table('contenedor_consolidado_cotizacion')
-                ->whereNull('uuid')
+                ->where(function($query) {
+                    $query->whereNull('uuid')
+                          ->orWhere('uuid', '');
+                })
                 ->count();
 
             if ($totalSinUuid === 0) {
@@ -62,9 +65,12 @@ class AddUuidsToCotizaciones extends Command
             $lote = 1;
 
             do {
-                // Obtener lote de cotizaciones sin UUID
+                // Obtener lote de cotizaciones sin UUID (NULL o string vacío)
                 $cotizaciones = DB::table('contenedor_consolidado_cotizacion')
-                    ->whereNull('uuid')
+                    ->where(function($query) {
+                        $query->whereNull('uuid')
+                              ->orWhere('uuid', '');
+                    })
                     ->select('id', 'nombre')
                     ->limit($batchSize)
                     ->get();
@@ -110,7 +116,10 @@ class AddUuidsToCotizaciones extends Command
 
                 // Verificar resultado final
                 $restantesSinUuid = DB::table('contenedor_consolidado_cotizacion')
-                    ->whereNull('uuid')
+                    ->where(function($query) {
+                        $query->whereNull('uuid')
+                              ->orWhere('uuid', '');
+                    })
                     ->count();
 
                 if ($restantesSinUuid === 0) {
