@@ -111,7 +111,7 @@ class UpdateEstadosProveedor extends Command
 
         // Si no tiene qty_box_china ni cbm_total_china (o están en 0)
         // Verificar si tiene supplier y supplier_phone
-        if ($supplier && $supplierPhone) {
+        if ($supplier || $supplierPhone) {
             // Si tiene arrive_date_china, poner en C
             if ($arriveDateChina) {
                 return 'C';
