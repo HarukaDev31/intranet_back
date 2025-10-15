@@ -352,7 +352,7 @@ class CotizacionProveedorController extends Controller
                 DB::table($this->table_contenedor_cotizacion_proveedores)
                     ->where('id_cotizacion', $idCotizacion)
                     ->where('id', $idProveedor)
-                    ->update(['estados' => $estado,'estados_proveedor' => $estado]);
+                    ->update(['estados' => $estado]);
             }
             // Manejo del estado LOADED
             else if ($estado == "LOADED") {
@@ -858,6 +858,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                 $estadoProveedorOrder = $this->providerCoordinacionOrderStatus[$estadoProveedor] ?? 0;
                 if ($estadoProveedorOrder < $statusToUpdate) {
                     $proveedor->estados = $this->STATUS_DATOS_PROVEEDOR;
+                    $proveedor->estados_proveedor = $this->STATUS_NOT_CONTACTED;
                     $proveedor->supplier_phone = $data['supplier_phone'] ?? null;
                     $proveedor->supplier = $data['supplier'] ?? null;
                     $proveedor->save();
