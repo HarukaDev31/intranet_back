@@ -31,6 +31,7 @@ class UpdateEstadosProveedor extends Command
         // Obtener todos los registros con estado 'R'
         $proveedores = DB::table('contenedor_consolidado_cotizacion_proveedores')
             ->where('estados_proveedor', 'R')
+            ->where('id_contenedor', '>=', 130)
             ->get();
 
         $this->info("Encontrados {$proveedores->count()} proveedores con estado 'R'");
