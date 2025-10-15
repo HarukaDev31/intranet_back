@@ -118,52 +118,30 @@ class CotizacionProveedorController extends Controller
                     'main.*',
                     'U.No_Nombres_Apellidos',
                     DB::raw('(
-                        SELECT CASE 
-                            WHEN COUNT(*) = 1 THEN 
-                                JSON_ARRAY(
-                                    JSON_OBJECT(
-                                        "id", proveedores.id,
-                                        "qty_box", proveedores.qty_box,
-                                        "peso", proveedores.peso,
-                                        "id_cotizacion", proveedores.id_cotizacion,
-                                        "cbm_total", proveedores.cbm_total,
-                                        "supplier", proveedores.supplier,
-                                        "code_supplier", proveedores.code_supplier,
-                                        "estados_proveedor", proveedores.estados_proveedor,
-                                        "estados", proveedores.estados,
-                                        "supplier_phone", proveedores.supplier_phone,
-                                        "cbm_total_china", proveedores.cbm_total_china,
-                                        "qty_box_china", proveedores.qty_box_china,
-                                        "id_proveedor", proveedores.id,
-                                        "products", proveedores.products,
-                                        "estado_china", proveedores.estado_china,
-                                        "arrive_date_china", proveedores.arrive_date_china,
-                                        "send_rotulado_status", proveedores.send_rotulado_status
-                                    )
+                        SELECT COALESCE(
+                            JSON_ARRAYAGG(
+                                JSON_OBJECT(
+                                    "id", proveedores.id,
+                                    "qty_box", proveedores.qty_box,
+                                    "peso", proveedores.peso,
+                                    "id_cotizacion", proveedores.id_cotizacion,
+                                    "cbm_total", proveedores.cbm_total,
+                                    "supplier", proveedores.supplier,
+                                    "code_supplier", proveedores.code_supplier,
+                                    "estados_proveedor", proveedores.estados_proveedor,
+                                    "estados", proveedores.estados,
+                                    "supplier_phone", proveedores.supplier_phone,
+                                    "cbm_total_china", proveedores.cbm_total_china,
+                                    "qty_box_china", proveedores.qty_box_china,
+                                    "id_proveedor", proveedores.id,
+                                    "products", proveedores.products,
+                                    "estado_china", proveedores.estado_china,
+                                    "arrive_date_china", proveedores.arrive_date_china,
+                                    "send_rotulado_status", proveedores.send_rotulado_status
                                 )
-                            ELSE 
-                                JSON_ARRAYAGG(
-                                    JSON_OBJECT(
-                                        "id", proveedores.id,
-                                        "qty_box", proveedores.qty_box,
-                                        "peso", proveedores.peso,
-                                        "id_cotizacion", proveedores.id_cotizacion,
-                                        "cbm_total", proveedores.cbm_total,
-                                        "supplier", proveedores.supplier,
-                                        "code_supplier", proveedores.code_supplier,
-                                        "estados_proveedor", proveedores.estados_proveedor,
-                                        "estados", proveedores.estados,
-                                        "supplier_phone", proveedores.supplier_phone,
-                                        "cbm_total_china", proveedores.cbm_total_china,
-                                        "qty_box_china", proveedores.qty_box_china,
-                                        "id_proveedor", proveedores.id,
-                                        "products", proveedores.products,
-                                        "estado_china", proveedores.estado_china,
-                                        "arrive_date_china", proveedores.arrive_date_china,
-                                        "send_rotulado_status", proveedores.send_rotulado_status
-                                    )
-                                )
-                        END
+                            ),
+                            JSON_ARRAY()
+                        )
                         FROM contenedor_consolidado_cotizacion_proveedores proveedores
                         WHERE proveedores.id_cotizacion = main.id
                     ) as proveedores')
