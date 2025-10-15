@@ -943,7 +943,7 @@ export interface UserBusiness{
                 })
                 ->whereHas('proveedores')
 
-                ->select('id', 'fob_final', 'fob', 'monto', 'id_contenedor', 'impuestos_final', 'impuestos', 'logistica_final', 'volumen_doc', 'volumen_final')
+                ->select('id', 'fob_final', 'volumen', 'fob', 'monto', 'id_contenedor', 'impuestos_final', 'impuestos', 'logistica_final', 'volumen_doc', 'volumen_final')
                 ->get();
                 
             Log::info('Trayectos encontrados: ' . $trayectos->count());
@@ -963,7 +963,7 @@ export interface UserBusiness{
 
             //Calcular la suma cbm
             $volumen_final = $trayectos->sum(function($cotizacion) {
-                return (float)(($cotizacion->volumen_final==0 || $cotizacion->volumen_final==null) ? $cotizacion->volumen_doc : $cotizacion->volumen_final);
+                return (float)(($cotizacion->volumen_final==0 || $cotizacion->volumen_final==null) ? $cotizacion->volumen : $cotizacion->volumen_final);
             });
             
             // Contar contenedores totales aun no sean unicos

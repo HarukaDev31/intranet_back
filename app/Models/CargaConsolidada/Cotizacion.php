@@ -426,6 +426,10 @@ class Cotizacion extends Model
     {
         return $this->proveedores->where('estados_proveedor', 'LOADED')->sum('volume_doc');
     }
+    public function getSumVolumeFinalAttribute(){
+        //IF COTIZACION HAS VOLUME FINAL, RETURN VOLUME FINAL, ELSE RETURN VOLUME DOC
+        return $this->volumen_final==0 || $this->volumen_final==null ? $this->volumen : $this->volumen_final;
+    }
     //return cotizaciones en paso clientes, deben tewer estado_cotizacion CONFIRMADO y estado_cliente !=null
     public function scopeCotizacionesEnPasoClientes($query){
             return $query->where('estado_cotizador', 'CONFIRMADO')
