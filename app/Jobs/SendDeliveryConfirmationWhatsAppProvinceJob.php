@@ -45,7 +45,8 @@ class SendDeliveryConfirmationWhatsAppProvinceJob implements ShouldQueue
                 'cotizacion',
                 'departamento',
                 'provincia',
-                'distrito'
+                'distrito',
+                'agency'
             ])->find($this->deliveryFormId);
             
             $idUser = $deliveryForm->id_user;
@@ -92,6 +93,17 @@ class SendDeliveryConfirmationWhatsAppProvinceJob implements ShouldQueue
             $provincia = $deliveryForm->provincia ? $deliveryForm->provincia->No_Provincia : 'N/A';
             $distrito = $deliveryForm->distrito ? $deliveryForm->distrito->No_Distrito : 'N/A';
 
+            //Obtener información del tipo de agencia
+            if ($deliveryForm->id_agency) {
+                $agencyModel = \App\Models\DeliveryAgency::find($deliveryForm->id_agency);
+                if ($agencyModel && $agencyModel->name) {
+                    $tipoAgencia = $agencyModel->name;
+                }
+            } else {
+                $tipoAgencia = 'N/A';
+            }
+            
+
             // Construir el mensaje
             $mensaje = "Consolidado #{$carga}\n\n";
             $mensaje .= "Tu reserva se realizó exitosamente.\n\n";
@@ -101,8 +113,14 @@ class SendDeliveryConfirmationWhatsAppProvinceJob implements ShouldQueue
             $mensaje .= "📍 *Ubicación:*\n";
             $mensaje .= "Departamento: {$departamento}\n";
             $mensaje .= "Provincia: {$provincia}\n";
-            $mensaje .= "Distrito: {$distrito}";
-
+            $mensaje .= "Distrito: {$distrito}\n\n";
+            $mensaje .= "Tipo de agencia: {$tipoAgencia}\n\n";
+            if ($deliveryForm->id_agency == 3) {
+                $agencyName = $deliveryForm->agency_name ?? '';
+                $agencyRuc = $deliveryForm->agency_ruc ?? '';
+                $mensaje .= "Agencia: {$agencyName}\n";
+                $mensaje .= "RUC Agencia: {$agencyRuc}\n\n";
+            }
             // Enviar el mensaje de WhatsApp
             $resultado = $this->sendMessage($mensaje, $telefono);
             
