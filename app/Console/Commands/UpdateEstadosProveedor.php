@@ -119,7 +119,9 @@ class UpdateEstadosProveedor extends Command
             // Si no tiene arrive_date_china, poner en NC
             return 'NC';
         }
-
+        if ($arriveDateChina) {
+            return 'C';
+        }
         // Si no tiene supplier ni supplier_phone, poner en WAIT
         return 'WAIT';
     }
