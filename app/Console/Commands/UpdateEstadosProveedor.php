@@ -30,7 +30,7 @@ class UpdateEstadosProveedor extends Command
 
         // Obtener todos los registros con estado 'R'
         $proveedores = DB::table('contenedor_consolidado_cotizacion_proveedores')
-            ->where('estados_proveedor', 'R')
+            ->whereIn('estados_proveedor', ['R', 'C', 'NC',  'WAIT'])
             ->where('id_contenedor', '>=', 130)
             ->get();
 
