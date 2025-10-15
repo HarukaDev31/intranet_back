@@ -572,8 +572,6 @@ class AuthController extends Controller
                         $validatedData['password'],
                         $user['nombre'],
                         public_path('storage/logo_header_white.png'),
-                        public_path('storage/logo_header.png'),
-                        public_path('storage/logo_footer.png'),
                         public_path('storage/logo_footer_white.png'),
                         public_path('storage/facebook.png'),
                         public_path('storage/instagram.png'),
@@ -787,8 +785,8 @@ export interface UserBusiness{
             // Obtener menús del usuario externo
             $menus = $this->obtenerMenusUsuarioExterno($user);
 
-            // Cargar la relación con userBusiness y relaciones de ubicación
-            $user->load(['userBusiness', 'departamento', 'distrito', 'provincia']);
+            // Cargar la relación con userBusiness y relaciones de ubicación, incluyendo pais
+            $user->load(['userBusiness', 'departamento', 'distrito', 'provincia', 'pais']);
 
             // Preparar información del negocio
             $business = null;
@@ -811,7 +809,7 @@ export interface UserBusiness{
                     'fullName' => $user->full_name,
                     'photoUrl' => $this->generateImageUrl($user->photo_url),
                     'email' => $user->email,
-                    'country' => $user->pais ? $user->pais->No_Pais : null, // Campo no disponible en la estructura actual
+                    'country' => $user->pais_id ? $user->pais->No_Pais : null, // Campo no disponible en la estructura actual
                     'birth_date' => $user->birth_date,
                     'id_country' => $user->pais_id,
                     'city' => $user->provincia_id ? $user->provincia->No_Provincia : null,

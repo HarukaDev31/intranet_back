@@ -92,7 +92,7 @@ class User extends Authenticatable implements JWTSubject
      */
     public function pais()
     {
-        return $this->belongsTo(Pais::class, 'pais_id', 'ID_Pais');
+    return $this->belongsTo(Pais::class, 'pais_id', 'ID_Pais');
     }
 
     /**
