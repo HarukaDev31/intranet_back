@@ -495,7 +495,7 @@ class ImportacionesController extends Controller
             $pagos = Pago::where('id_cotizacion', $idCotizacion)->get();
             if ($pagos->count() > 0) {
                 $totalPagos = $pagos->sum('monto');
-                if ($totalPagos >= $cotizacion->logistica_final + $cotizacion->impuestos_final) {
+                if (round($totalPagos, 2) >= round($cotizacion->logistica_final + $cotizacion->impuestos_final, 2)) {
                     $this->pasosSeguimiento[7]['status'] = $this->pasoCompleted;
                     if ($pagos->where('status', '!=', 'CONFIRMADO')->count() > 0) {
                         $this->pasosSeguimiento[7]['description'] = "Tu pago ha sido recibido, pero aún no ha sido confirmado";
@@ -508,7 +508,7 @@ class ImportacionesController extends Controller
                 }
             }
             //FIRST CHECK IF container->carga to int >11
-            if ($contenedor->carga < 11) {
+            if ($contenedor->carga < 13) {
                 $this->pasosSeguimiento[8]['status'] = $this->pasoCompleted;
                 $this->pasosSeguimiento[8]['date'] = $contenedor->created_at;
             } else {
