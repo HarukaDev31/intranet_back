@@ -352,7 +352,7 @@ class CotizacionProveedorController extends Controller
                 DB::table($this->table_contenedor_cotizacion_proveedores)
                     ->where('id_cotizacion', $idCotizacion)
                     ->where('id', $idProveedor)
-                    ->update(['estados' => $estado]);
+                    ->update(['estados' => $estado,'estados_proveedor' => $estado]);
             }
             // Manejo del estado LOADED
             else if ($estado == "LOADED") {
