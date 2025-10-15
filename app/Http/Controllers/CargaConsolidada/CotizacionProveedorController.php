@@ -205,6 +205,11 @@ class CotizacionProveedorController extends Controller
             $dataProcessed = collect($data->items())->map(function ($item) use ($user, $estadoChina, $rol, $search) {
                 Log::info($item->proveedores . "proveedores");
                 $proveedores = json_decode($item->proveedores, true) ?: [];
+                
+                // Asegurar que siempre sea un array
+                if (!is_array($proveedores)) {
+                    $proveedores = [$proveedores];
+                }
 
                 // Filtrar proveedores por estado_china si es necesario
                 if ($rol == Usuario::ROL_ALMACEN_CHINA && $estadoChina != "todos") {
