@@ -208,6 +208,9 @@ class CotizacionProveedorController extends Controller
                     $proveedorArray['id_proveedor'] = $proveedorArray['id'];
                     return $proveedorArray;
                 }, $proveedoresQuery);
+                
+                // Forzar que siempre sea un array indexado numéricamente
+                $proveedores = array_values($proveedores);
 
                 // Filtrar proveedores por estado_china si es necesario
                 if ($rol == Usuario::ROL_ALMACEN_CHINA && $estadoChina != "todos") {
