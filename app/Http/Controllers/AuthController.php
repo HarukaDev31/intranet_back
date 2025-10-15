@@ -952,20 +952,20 @@ export interface UserBusiness{
             
             // Calcular la suma de FOB
             $sumFob = $trayectos->sum(function($cotizacion) {
-                return (float)($cotizacion->fob_final ?? $cotizacion->fob ?? 0);
+                return (float)(($cotizacion->fob_final==0 || $cotizacion->fob_final==null) ? $cotizacion->fob : $cotizacion->fob_final);
             });
             
             $sumImpuestos = $trayectos->sum(function($cotizacion) {
-                return (float)($cotizacion->impuestos_final ?? $cotizacion->impuestos ?? 0);
+                return (float)(($cotizacion->impuestos_final==0 || $cotizacion->impuestos_final==null) ? $cotizacion->impuestos : $cotizacion->impuestos_final);
             });
             
             $sumLogistica = $trayectos->sum(function($cotizacion) {
-                return (float)($cotizacion->logistica_final ?? $cotizacion->monto ?? 0);
+                return (float)(($cotizacion->logistica_final==0 || $cotizacion->logistica_final==null) ? $cotizacion->monto : $cotizacion->logistica_final);
             });
 
             //Calcular la suma cbm
             $volumen_final = $trayectos->sum(function($cotizacion) {
-                return (float)($cotizacion->volumen_final ?? $cotizacion->volumen_doc ?? 0);
+                return (float)(($cotizacion->volumen_final==0 || $cotizacion->volumen_final==null) ? $cotizacion->volumen_doc : $cotizacion->volumen_final);
             });
             
             // Contar contenedores totales aun no sean unicos
