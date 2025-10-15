@@ -217,6 +217,8 @@ class CotizacionProveedorController extends Controller
                     $proveedores = array_filter($proveedores, function ($proveedor) use ($estadoChina) {
                         return ($proveedor['estados_proveedor'] ?? '') === $estadoChina;
                     });
+                    // Reindexar después del filtro para mantener índices secuenciales
+                    $proveedores = array_values($proveedores);
                 }
 
                 $cbmTotalChina = 0;
