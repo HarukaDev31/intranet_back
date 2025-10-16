@@ -247,6 +247,11 @@ class CotizacionFinalController extends Controller
             $index = 1;
 
             foreach ($data->items() as $row) {
+                $pagos = json_decode($row->pagos??'[]', true);
+                $pagos = array_map(function($pago) {
+                    $pago['voucher_url'] = $this->generateImageUrl($pago['voucher_url']);
+                    return $pago;
+                }, $pagos);
                 $subdata = [
                     'index' => $index,
                     'id_contenedor' => $row->id_contenedor,
@@ -258,7 +263,7 @@ class CotizacionFinalController extends Controller
                     'total_pagos' => $row->total_pagos == 0 ? "0.00" : $row->total_pagos,
                     'pagos_count' => $row->pagos_count,
                     'id_cotizacion' => $row->id_cotizacion,
-                    'pagos' => $row->pagos
+                    'pagos' => json_encode($pagos)
                 ];
 
                 $transformedData[] = $subdata;
