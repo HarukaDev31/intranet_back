@@ -13,6 +13,8 @@ use App\Http\Controllers\Curso\CursoController;
 */
 
 Route::group(['prefix' => 'cursos', 'middleware' => 'jwt.auth'], function () {
+    //post exportar excel
+    Route::post('export', [CursoController::class, 'exportarExcel']);
     Route::post('change-estado-usuario-externo', [CursoController::class, 'crearUsuarioCursosMoodle']);
     Route::get('filters/options', [CursoController::class, 'filterOptions']);
     Route::get('/', [CursoController::class, 'index']);
