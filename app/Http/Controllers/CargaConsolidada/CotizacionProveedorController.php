@@ -28,7 +28,7 @@ use Dompdf\Options;
 use ZipArchive;
 use Exception;
 use App\Models\CargaConsolidada\Contenedor;
-
+use Illuminate\Support\Str;
 class CotizacionProveedorController extends Controller
 {
     use WhatsappTrait;
@@ -2234,8 +2234,9 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
 
     public function forceSendMove(Request $request)
     {
+        DB::beginTransaction();
+
         try {
-            DB::beginTransaction();
             $user = JWTAuth::parseToken()->authenticate();
             if (!$user) {
                 return response()->json([
@@ -2256,6 +2257,9 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
             $cotizacionDestino = $cotizacion->replicate();
             $cotizacion->id_contenedor_pago=$idContainerDestino;
             $cotizacion->save();
+                    //generate new uuid
+            $uuid = Str::uuid()->toString();
+            $cotizacionDestino->uuid = $uuid;
             $cotizacionDestino->id_contenedor = $idContainerDestino;
             $cotizacionDestino->save();
             foreach($proveedores as $proveedor){
