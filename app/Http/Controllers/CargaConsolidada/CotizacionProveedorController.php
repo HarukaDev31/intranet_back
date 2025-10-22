@@ -20,6 +20,7 @@ use App\Models\ContenedorCotizacionProveedor;
 use App\Jobs\SendInspectionMediaJob;
 use App\Jobs\ForceSendCobrandoJob;
 use App\Jobs\ForceSendRotuladoJob;
+use App\Jobs\SendRecordatorioDatosProveedorJob;
 use App\Models\ContenedorCotizacion;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
@@ -2300,6 +2301,42 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
             ], 500);
         } finally {
            
+        }
+    }
+    public function forceSendRecordatorioDatosProveedor(Request $request){
+        $idCotizacion = $request->idCotizacion;
+        $idContainer = $request->idContainer;
+        $proveedores = $request->proveedores;
+        
+        try {
+            $user = JWTAuth::parseToken()->authenticate();
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Usuario no autenticado'
+                ], 401);
+            }
+            
+            // Despachar el Job para procesar el envío de manera asíncrona
+            SendRecordatorioDatosProveedorJob::dispatch($idCotizacion, $idContainer, $proveedores);
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Recordatorio de datos de proveedor programado para envío',
+                'data' => [
+                    'id_cotizacion' => $idCotizacion,
+                    'id_container' => $idContainer,
+                    'proveedores' => $proveedores
+                ]
+            ]);
+        }
+        catch(\Exception $e){
+            Log::error('Error en forceSendRecordatorioDatosProveedor: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al procesar envío de recordatorio de datos de proveedor',
+                'error' => $e->getMessage()
+            ], 500);
         }
     }
 }

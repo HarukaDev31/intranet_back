@@ -34,6 +34,7 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
         Route::post('/force-send-rotulado', [CotizacionProveedorController::class, 'forceSendRotulado']);
         Route::post('/force-send-cobranza', [CotizacionProveedorController::class, 'forceSendCobrando']);
         Route::post('/force-send-move', [CotizacionProveedorController::class, 'forceSendMove']);
+        Route::post('/force-send-recordatorio-datos-proveedor', [CotizacionProveedorController::class, 'forceSendRecordatorioDatosProveedor']);
     });
 
     // Dashboard ventas

@@ -14,9 +14,9 @@ trait WhatsappTrait
             $url = 'https://redis.probusiness.pe/api/whatsapp' . $endpoint;
             $envUrl = env('APP_URL');
             if (strpos($envUrl, 'localhost') !== false) {
-                $data['phoneNumberId'] = '51931629529@c.us';
+                $data['phoneNumberId'] = '51912705923@c.us';
             }
-
+            
             Log::info('Llamando API de WhatsApp', [
                 'endpoint' => $endpoint,
                 'url' => $url,
