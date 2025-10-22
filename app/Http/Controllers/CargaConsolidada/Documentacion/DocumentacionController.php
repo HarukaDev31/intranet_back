@@ -96,17 +96,28 @@ class DocumentacionController extends Controller
 
                 // Agregar la URL de lista de embarque
                 $folderData['lista_embarque_url'] = $listaEmbarqueUrl;
-
+                Log::info('lista_embarque_url: ' . $listaEmbarqueUrl);
+                Log::info('folder->id: ' . $folder->id);
+                // Si el folder id es 1, establecer file_url con la URL de lista de embarque
+                if ($folder->id == 1) {
+                    $folderData['file_url'] = $listaEmbarqueUrl;
+                }
+                
                 // Procesar los archivos de la carpeta
                 if ($folder->files->count() > 0) {
                     foreach ($folder->files as $file) {
                         $fileData = [
                             'id' => $folder->id,
                             'id_file' => $file->id,
-                            'file_url' => $this->generateImageUrl($file->file_url),
                             'type' => $file->file_type,
                             'lista_embarque_url' => $listaEmbarqueUrl
                         ];
+                        if ($folder->id == 1) {
+                            $fileData['file_url'] = $listaEmbarqueUrl;
+                        }else{
+                            $fileData['file_url'] = $this->generateImageUrl($file->file_url);
+                        }
+                      
 
                         // Combinar datos de la carpeta con datos del archivo
                         $result[] = array_merge($folderData, $fileData);
@@ -115,6 +126,9 @@ class DocumentacionController extends Controller
                     // Carpeta sin archivos
                     $folderData['id_file'] = null;
                     $folderData['file_url'] = null;
+                    if ($folder->id == 1) {
+                        $folderData['file_url'] = $listaEmbarqueUrl;
+                    }
                     $folderData['type'] = null;
                     $result[] = $folderData;
                 }
