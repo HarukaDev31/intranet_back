@@ -100,7 +100,7 @@ class DocumentacionController extends Controller
                 Log::info('folder->id: ' . $folder->id);
                 // Si el folder id es 1, establecer file_url con la URL de lista de embarque
                 if ($folder->id == 1) {
-                    $folderData['file_url'] = $listaEmbarqueUrl;
+                    $folderData['file_url'] = $this->generateImageUrl($listaEmbarqueUrl);
                 }
                 
                 // Procesar los archivos de la carpeta
@@ -113,7 +113,7 @@ class DocumentacionController extends Controller
                             'lista_embarque_url' => $listaEmbarqueUrl
                         ];
                         if ($folder->id == 1) {
-                            $fileData['file_url'] = $listaEmbarqueUrl;
+                            $fileData['file_url'] = $this->generateImageUrl($listaEmbarqueUrl);
                         }else{
                             $fileData['file_url'] = $this->generateImageUrl($file->file_url);
                         }
@@ -127,7 +127,7 @@ class DocumentacionController extends Controller
                     $folderData['id_file'] = null;
                     $folderData['file_url'] = null;
                     if ($folder->id == 1) {
-                        $folderData['file_url'] = $listaEmbarqueUrl;
+                        $folderData['file_url'] = $this->generateImageUrl($listaEmbarqueUrl);
                     }
                     $folderData['type'] = null;
                     $result[] = $folderData;
