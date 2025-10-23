@@ -218,24 +218,57 @@ class CotizacionController extends Controller
             return null;
         }
 
-        // Si ya es una URL completa, devolverla tal como está
+        // Si ya es una URL completa, verificar si tiene doble storage y corregirlo
         if (filter_var($ruta, FILTER_VALIDATE_URL)) {
+            // Corregir URLs con doble storage
+            if (strpos($ruta, '/storage//storage/') !== false) {
+                $ruta = str_replace('/storage//storage/', '/storage/', $ruta);
+            }
             return $ruta;
         }
 
         // Limpiar la ruta de barras iniciales para evitar doble slash
         $ruta = ltrim($ruta, '/');
 
+        // Corregir rutas con doble storage
+        if (strpos($ruta, 'storage//storage/') !== false) {
+            $ruta = str_replace('storage//storage/', 'storage/', $ruta);
+        }
+
+        // Si la ruta ya contiene 'storage/', no agregar otro 'storage/'
+        if (strpos($ruta, 'storage/') === 0) {
+            $baseUrl = config('app.url');
+            return rtrim($baseUrl, '/') . '/' . $ruta;
+        }
+
+        // Si la ruta empieza con 'contratos/', usar ruta con CORS para desarrollo
+        if (strpos($ruta, 'contratos/') === 0) {
+            $baseUrl = config('app.url');
+            // En desarrollo, usar /files/ para que pase por el FileController con CORS
+            if (config('app.env') === 'local') {
+                return rtrim($baseUrl, '/') . '/files/' . $ruta;
+            }
+            // En producción, usar /storage/ directamente
+            return rtrim($baseUrl, '/') . '/storage/' . $ruta;
+        }
+
+        // Si la ruta empieza con 'public/', remover 'public/' y agregar 'storage/'
+        if (strpos($ruta, 'public/') === 0) {
+            $ruta = substr($ruta, 7); // Remover 'public/'
+            $baseUrl = config('app.url');
+            return rtrim($baseUrl, '/') . '/storage/' . $ruta;
+        }
+
         // Construir URL manualmente para evitar problemas con Storage::url()
         $baseUrl = config('app.url');
-        $storagePath = '/storage/';
+        $storagePath = 'storage/';
 
         // Asegurar que no haya doble slash
         $baseUrl = rtrim($baseUrl, '/');
         $storagePath = ltrim($storagePath, '/');
         $ruta = ltrim($ruta, '/');
 
-        return $baseUrl . '/'  . $ruta;
+        return $baseUrl . '/' . $storagePath . $ruta;
     }
     public function getHeadersData($idContenedor)
     {
@@ -557,11 +590,6 @@ class CotizacionController extends Controller
             // Copiar el archivo al directorio temporal
             copy($file->getRealPath(), $tempFilePath);
 
-            Log::info('Archivo temporal creado:', [
-                'original_path' => $file->getRealPath(),
-                'temp_path' => $tempFilePath,
-                'exists' => file_exists($tempFilePath)
-            ]);
 
             $cotizacion = [
                 'name' => $file->getClientOriginalName(),
@@ -1839,11 +1867,17 @@ class CotizacionController extends Controller
                     try {
                         $oldContract = $cotizacion->cotizacion_contrato_url ?? null;
                         if ($oldContract) {
-                            $oldPath = parse_url($oldContract, PHP_URL_PATH) ?: $oldContract;
-                            $oldPath = preg_replace('#^/storage/#', '', $oldPath);
-                            $oldPath = ltrim($oldPath, '/');
-                            if (!empty($oldPath)) {
-                                Storage::disk('public')->delete($oldPath);
+                            // Si la ruta empieza con 'contratos/', agregar 'storage/' para la ruta completa
+                            if (strpos($oldContract, 'contratos/') === 0) {
+                                $oldPath = public_path('storage/' . $oldContract);
+                            } else {
+                                $oldPath = parse_url($oldContract, PHP_URL_PATH) ?: $oldContract;
+                                $oldPath = preg_replace('#^/storage/#', '', $oldPath);
+                                $oldPath = public_path('storage/' . ltrim($oldPath, '/'));
+                            }
+                            
+                            if (file_exists($oldPath)) {
+                                unlink($oldPath);
                             }
                         }
                     } catch (Exception $e) {
@@ -1852,11 +1886,18 @@ class CotizacionController extends Controller
 
                     $safeName = preg_replace('/[^A-Za-z0-9_\-]/', '_', $cotizacion->nombre);
                     $filename = 'contrato_cotizacion_' . $cotizacion->id . '_' . time() . '_' . $safeName . '.pdf';
-                    $storageRelative = 'contratos/' . $filename;
+                    
+                    // Guardar directamente en public/storage/contratos/
+                    $publicPath = public_path('storage/contratos/' . $filename);
+                    
+                    // Crear directorio si no existe
+                    if (!file_exists(dirname($publicPath))) {
+                        mkdir(dirname($publicPath), 0755, true);
+                    }
+                    
+                    file_put_contents($publicPath, $pdfContent);
 
-                    Storage::disk('public')->put($storageRelative, $pdfContent);
-
-                    $publicUrl = Storage::url('public/' . $storageRelative);
+                    $publicUrl = 'contratos/' . $filename;
 
                     try {
                         $cotizacion->update(['cotizacion_contrato_url' => $publicUrl]);

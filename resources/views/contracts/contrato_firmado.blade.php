@@ -288,6 +288,7 @@
             <p class="small">• En caso de discrepancia entre este contrato y cualquier otro documento, prevalecerá el presente acuerdo. Las comunicaciones electrónicas complementan, pero no sustituyen lo pactado en este contrato.</p>
         </div>
         @php
+            // Try to load Patricia's signature image from public/storage and embed as base64 for Dompdf
             $firmaPatSrc = null;
             $firmaPath = public_path('storage/firma_patricia.png');
             $firmaPathNorm = str_replace('\\', DIRECTORY_SEPARATOR, $firmaPath);
@@ -305,7 +306,10 @@
                     <tr class="sig-row-images">
                         <td style="width:50%; text-align:center;">
                             <div class="sig-container">
-                                {{-- left side: no signature image for client by default (keeps space) --}}
+                                {{-- left side: client signature image --}}
+                                @if(!empty($signature_base64))
+                                    <img src="{{ $signature_base64 }}" alt="firma cliente" class="firma" />
+                                @endif
                             </div>
                         </td>
                         <td style="width:50%; text-align:center;">

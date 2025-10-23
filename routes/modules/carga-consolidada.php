@@ -202,6 +202,8 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
 
     // Cotizaciones con proveedores
     Route::group(['prefix' => 'cotizaciones-proveedores'], function () {
+        //send-rotulado
+        Route::post('proveedor/send-rotulado', [CotizacionProveedorController::class, 'sendRotulado']);
         Route::get('proveedor/cotizacion/{idCotizacion}', [CotizacionProveedorController::class, 'getCotizacionProveedorByIdCotizacion']);
         Route::get('contenedor/{idContenedor}', [CotizacionProveedorController::class, 'getContenedorCotizacionProveedores']);
         Route::patch('proveedor/{idProveedor}/arrive-date', [CotizacionProveedorController::class, 'updateArriveDate']);

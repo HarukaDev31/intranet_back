@@ -33,6 +33,7 @@ use Illuminate\Support\Str;
 use App\Traits\UserGroupsTrait;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Exports\EmbarqueExport;
+use App\Jobs\SendRotuladoJob;
 
 class CotizacionProveedorController extends Controller
 {
@@ -963,6 +964,50 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
             DB::rollBack();
             Log::error('Error en procesarEstadoRotulado: ' . $e->getMessage());
             throw $e;
+        }
+    }
+
+    /**
+     * Procesar estado de rotulado usando Job asíncrono
+     *
+     * @param string $cliente
+     * @param string $carga
+     * @param array $proveedores
+     * @param int $idCotizacion
+     * @return \Illuminate\Http\Response
+     * @throws Exception
+     */
+    protected function procesarEstadoRotuladoJob($cliente, $carga, $proveedores, $idCotizacion)
+    {
+        try {
+           $idContenedor = Cotizacion::where('id', $idCotizacion)->first()->id_contenedor;
+           $carga = Contenedor::where('id', $idContenedor)->first()->carga;
+
+            // Dispatch del Job para procesamiento asíncrono
+            SendRotuladoJob::dispatch($cliente, $carga, $proveedores, $idCotizacion);
+
+            Log::info('SendRotuladoJob dispatchado exitosamente');
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Procesamiento de rotulado iniciado',
+                'data' => [
+                    'cliente' => $cliente,
+                    'carga' => $carga,
+                    'proveedores_count' => count($proveedores)
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error en procesarEstadoRotuladoJob: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString()
+            ]);
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al procesar rotulado',
+                'error' => $e->getMessage()
+            ], 500);
         }
     }
 
@@ -1957,23 +2002,57 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
             return null;
         }
 
-        // Si ya es una URL completa, devolverla tal como está
+        // Si ya es una URL completa, verificar si tiene doble storage y corregirlo
         if (filter_var($ruta, FILTER_VALIDATE_URL)) {
+            // Corregir URLs con doble storage
+            if (strpos($ruta, '/storage//storage/') !== false) {
+                $ruta = str_replace('/storage//storage/', '/storage/', $ruta);
+            }
             return $ruta;
         }
 
         // Limpiar la ruta de barras iniciales para evitar doble slash
         $ruta = ltrim($ruta, '/');
 
+        // Corregir rutas con doble storage
+        if (strpos($ruta, 'storage//storage/') !== false) {
+            $ruta = str_replace('storage//storage/', 'storage/', $ruta);
+        }
+
+        // Si la ruta ya contiene 'storage/', no agregar otro 'storage/'
+        if (strpos($ruta, 'storage/') === 0) {
+            $baseUrl = config('app.url');
+            return rtrim($baseUrl, '/') . '/' . $ruta;
+        }
+
+        // Si la ruta empieza con 'contratos/', usar ruta con CORS para desarrollo
+        if (strpos($ruta, 'contratos/') === 0) {
+            $baseUrl = config('app.url');
+            // En desarrollo, usar /files/ para que pase por el FileController con CORS
+            if (config('app.env') === 'local') {
+                return rtrim($baseUrl, '/') . '/files/' . $ruta;
+            }
+            // En producción, usar /storage/ directamente
+            return rtrim($baseUrl, '/') . '/storage/' . $ruta;
+        }
+
+        // Si la ruta empieza con 'public/', remover 'public/' y agregar 'storage/'
+        if (strpos($ruta, 'public/') === 0) {
+            $ruta = substr($ruta, 7); // Remover 'public/'
+            $baseUrl = config('app.url');
+            return rtrim($baseUrl, '/') . '/storage/' . $ruta;
+        }
+
         // Construir URL manualmente para evitar problemas con Storage::url()
         $baseUrl = config('app.url');
-        $storagePath = '/storage/';
+        $storagePath = 'storage/';
 
         // Asegurar que no haya doble slash
         $baseUrl = rtrim($baseUrl, '/');
         $storagePath = ltrim($storagePath, '/');
         $ruta = ltrim($ruta, '/');
-        return $baseUrl . '/' . $storagePath . '/' . $ruta;
+
+        return $baseUrl . '/' . $storagePath . $ruta;
     }
 
     /**
@@ -2934,17 +3013,14 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                 'message' => 'Cotización no encontrada'
             ], 404);
         }
-        $proveedores = CotizacionProveedor::where('id_cotizacion', $idCotizacion)->get();
+       
         if (!$proveedores) {
             return response()->json([
                 'success' => false,
                 'message' => 'Proveedores no encontrados'
             ], 404);
         }
-        foreach ($proveedores as $proveedor) {
-            $proveedor->tipo_rotulado = $proveedor->tipo_rotulado;
-            $proveedor->save();
-        }
+        $this->procesarEstadoRotuladoJob($cotizacion->nombre, $cotizacion->carga, $proveedores, $idCotizacion);
         return response()->json([
             'success' => true,
             'message' => 'Rotulado enviado correctamente'
@@ -2963,28 +3039,168 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
             'success' => true,
             'message' => 'Contrato de servicio no firmado',
             'data' => [
-                'cotizacion_contrato_url' => $cotizacion->cotizacion_contrato_url,
+                'cotizacion_contrato_url' => $this->generateImageUrl($cotizacion->cotizacion_contrato_url),
+                'cotizacion_contrato_firmado_url' => $this->generateImageUrl($cotizacion->cotizacion_contrato_firmado_url),
                 'uuid' => $cotizacion->uuid
             ]
         ]);
     }
-    public function signServiceContract($uuid,Request $request)
+    public function signServiceContract($uuid, Request $request)
     {
-        $cotizacion = Cotizacion::where('uuid', $uuid)->first();
-        if (!$cotizacion) {
+        try {
+            $cotizacion = Cotizacion::where('uuid', $uuid)->first();
+            if (!$cotizacion) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Cotización no encontrada'
+                ], 404);
+            }
+
+            // Validar que se haya enviado el archivo firmado
+            if (!$request->hasFile('signed_file')) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Archivo firmado requerido'
+                ], 400);
+            }
+
+            $signedFile = $request->file('signed_file');
+            
+            // Validar que sea un archivo válido
+            if (!$signedFile->isValid()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Archivo inválido'
+                ], 400);
+            }
+            // Crear directorio si no existe
+            $contratosDir = public_path('storage/contratos');
+            if (!file_exists($contratosDir)) {
+                mkdir($contratosDir, 0755, true);
+            }
+
+            // Verificar si es una imagen para generar contrato con firma
+            $mimeType = $signedFile->getMimeType();
+            $isImage = in_array($mimeType, ['image/png', 'image/jpeg', 'image/jpg', 'image/gif']);
+            
+            if ($isImage) {
+                // Generar contrato completo con firma
+                $pdfFilename = $uuid . '_signed_contract.pdf';
+                $pdfPath = $contratosDir . '/' . $pdfFilename;
+                
+                // Eliminar archivo anterior si existe
+                if (file_exists($pdfPath)) {
+                    unlink($pdfPath);
+                }
+                
+                // Obtener información del contenedor para el contrato
+                $contenedor = \App\Models\CargaConsolidada\Contenedor::find($cotizacion->id_contenedor);
+                $carga = $contenedor ? $contenedor->carga : 'N/A';
+                
+                // Convertir firma a base64
+                $imagePath = $signedFile->getPathname();
+                $imageData = base64_encode(file_get_contents($imagePath));
+                $signatureBase64 = 'data:' . $mimeType . ';base64,' . $imageData;
+                
+                // Datos para la vista del contrato firmado
+                $viewData = [
+                    'fecha' => date('d-m-Y'),
+                    'cliente_nombre' => $cotizacion->nombre,
+                    'cliente_documento' => $cotizacion->documento,
+                    'cliente_domicilio' => $cotizacion->direccion ?? null,
+                    'carga' => $carga,
+                    'logo_contrato_url' => public_path('storage/logo_contrato.png'),
+                    'signature_base64' => $signatureBase64,
+                ];
+
+                // Renderizar vista del contrato con firma
+                $contractHtml = view('contracts.contrato_firmado', $viewData)->render();
+
+                // Configurar DomPDF
+                if (function_exists('set_time_limit')) {
+                    @set_time_limit(120);
+                }
+                ini_set('memory_limit', '512M');
+
+                $options = new \Dompdf\Options();
+                $options->set('isHtml5ParserEnabled', true);
+                $options->set('defaultFont', 'DejaVu Sans');
+
+                $dompdf = new \Dompdf\Dompdf($options);
+                $dompdf->loadHtml($contractHtml);
+                $dompdf->setPaper('A4', 'portrait');
+
+                Log::info('Iniciando renderizado PDF firmado para cotizacion ' . $cotizacion->id);
+                $start = microtime(true);
+                $dompdf->render();
+                $duration = microtime(true) - $start;
+                Log::info('Renderizado PDF firmado completado en ' . round($duration, 2) . 's para cotizacion ' . $cotizacion->id);
+
+                $pdfContent = $dompdf->output();
+                
+                // Guardar PDF
+                file_put_contents($pdfPath, $pdfContent);
+                
+                // Usar el nombre del PDF
+                $filename = $pdfFilename;
+                $relativePath = 'contratos/' . $filename;
+            } else {
+                // Si ya es PDF, mover directamente
+                $filename = $uuid . '_signed_contract.pdf';
+                $filePath = $contratosDir . '/' . $filename;
+                
+                // Eliminar archivo anterior si existe
+                if (file_exists($filePath)) {
+                    unlink($filePath);
+                }
+                
+                $signedFile->move($contratosDir, $filename);
+                $relativePath = 'contratos/' . $filename;
+            }
+
+            // Guardar ruta relativa en la base de datos
+            $cotizacion->cotizacion_contrato_firmado_url = $relativePath;
+            $cotizacion->save();
+            // Enviar mensaje de WhatsApp con el contrato firmado
+            $telefono = $cotizacion->telefono;
+            $telefono = preg_replace('/\s+/', '', $telefono);
+            $telefono = $telefono ? $telefono . '@c.us' : '';
+            
+            $message = 'Hola ' . $cotizacion->nombre . ', te envío el contrato de servicio firmado.';
+            
+            // Usar la ruta correcta del archivo (PDF generado o archivo movido)
+            $finalFilePath = $contratosDir . '/' . $filename;
+            $this->sendMedia($finalFilePath, 'application/pdf', $message, $telefono, 10);
+
+            Log::info('Contrato firmado guardado exitosamente', [
+                'uuid' => $uuid,
+                'filename' => $filename,
+                'cotizacion_id' => $cotizacion->id,
+                'mime_type' => $mimeType,
+                'is_image' => $isImage,
+                'relative_path' => $relativePath,
+                'final_file_path' => $finalFilePath
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Contrato de servicio firmado correctamente',
+                'data' => [
+                    'signed_contract_url' => $this->generateImageUrl($relativePath)
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error al firmar contrato: ' . $e->getMessage(), [
+                'uuid' => $uuid,
+                'trace' => $e->getTraceAsString()
+            ]);
+
             return response()->json([
                 'success' => false,
-                'message' => 'Cotización no encontrada'
-            ], 404);
+                'message' => 'Error al procesar el contrato firmado',
+                'error' => $e->getMessage()
+            ], 500);
         }
-        $file = $request->file('file');
-        $file->move(public_path('uploads'), $file->getClientOriginalName());
-        $cotizacion->cotizacion_contrato_firmado_url = $file->getClientOriginalName();
-        $cotizacion->save();
-        return response()->json([
-            'success' => true,
-            'message' => 'Contrato de servicio firmado correctamente'
-        ]);
-        //retu
     }
 }
