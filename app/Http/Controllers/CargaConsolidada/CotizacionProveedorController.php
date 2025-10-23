@@ -1239,7 +1239,8 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                 return response()->json(['success' => false, 'message' => 'Formato de fecha inválido. Usa dd/mm/YYYY o YYYY-mm-dd'], 422);
             }
 
-            $normalized = $dateTime->format('Y-m-d H:i:s');
+            // Store only the date portion (YYYY-MM-DD) — drop time component
+            $normalized = $dateTime->format('Y-m-d');
             $proveedor->arrive_date = $normalized;
             $proveedor->save();
 
