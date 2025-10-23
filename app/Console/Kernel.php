@@ -15,7 +15,8 @@ class Kernel extends ConsoleKernel
      */
     protected function schedule(Schedule $schedule)
     {
-        // $schedule->command('inspire')->hourly();
+        // Ejecutar la notificación diaria a las 02:00
+        $schedule->command('notify:arrive-date-today')->dailyAt('02:00');
     }
 
     /**

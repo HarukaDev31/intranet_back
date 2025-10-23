@@ -8,6 +8,7 @@ use App\Http\Controllers\CargaConsolidada\PagosController;
 use App\Http\Controllers\CargaConsolidada\ImportController;
 use App\Http\Controllers\CargaConsolidada\CotizacionProveedorController;
 use App\Http\Controllers\CargaConsolidada\Clientes\GeneralController;
+use App\Http\Controllers\CargaConsolidada\Clientes\EmbarcadosController;
 use App\Http\Controllers\CargaConsolidada\Clientes\VariacionController;
 use App\Http\Controllers\CargaConsolidada\Documentacion\DocumentacionController;
 use App\Http\Controllers\CargaConsolidada\CotizacionFinal\CotizacionFinalController;
@@ -83,6 +84,7 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
             Route::get('/general/{idContenedor}', [GeneralController::class, 'index']);
             Route::post('/general/estado-cliente', [GeneralController::class, 'updateEstadoCliente']);
             Route::post('/general/status-cliente-doc', [GeneralController::class, 'updateStatusCliente']);
+            Route::get('/embarcados/{idContenedor}', [EmbarcadosController::class, 'getEmbarcados']);
             Route::get('/variacion/{idContenedor}', [VariacionController::class, 'index']);
             Route::post('/variacion/vol-selected', [VariacionController::class, 'updateVolSelected']);
             Route::post('/variacion/documentacion/proveedor/{idProveedor}/create', [DocumentacionController::class, 'createProveedorDocumentacionFolder']);
