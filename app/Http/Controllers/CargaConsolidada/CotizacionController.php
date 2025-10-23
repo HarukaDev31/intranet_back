@@ -1778,96 +1778,102 @@ class CotizacionController extends Controller
 
                 $this->crearNotificacionCotizacionConfirmada($cotizacion);
 
-                $wspMessage = "Hola {$cotizacion->nombre} gracias por formar parte de nuestra comunidad de importadores; antes de derivarte con el equipo de Coordinaciones por favor recuerda lo siguiente:\n\n" .
-                    "1. Envío el contrato para formalizar el servicio de importación. Tiene dos (2) días hábiles para enviar observaciones. De no recibirlas, daremos el contrato por aceptado.\n" .
-                    "2. Si el producto tiene marca, logo y/o contiene una imagen de una marca o personaje conocido o patentado en INDECOPI no se podrá transportar.\n" .
-                    "3. Igualmente si el producto tiene alguna restricción de importación (Como juguetes, llantas, productos con conexión a Internet, etc.) se necesita gestionar el permiso con anticipación.\n" .
-                    "4. Recuerda que las tarifas que te brindé son válidas solo para esta importación.\n" .
-                    "5. Te recuerdo que en el escenario en el que llegue menor y/o mayor carga a lo cotizado, existirá un ajuste en el precio final.\n" .
-                    "6. Al mismo tiempo si deseas una nueva importación, no dudes en comunicarte conmigo.";
+                $envUrl = env('APP_URL');
+                if (strpos($envUrl, 'localhost') !== false) {
+                    $data['phoneNumberId'] = '51931629529@c.us';
 
-                $telefonoCliente = preg_replace('/\s+/', '', $cotizacion->telefono);
-                $telefonoCliente = $telefonoCliente ? $telefonoCliente . '@c.us' : '';
-                try {
-                    $signUrl = rtrim(env('APP_URL_CLIENTES', 'http://localhost:3001'), '/') . '/firma-acuerdo-servicio/' . ($cotizacion->uuid ?? '');
-                    $wspMessage .= "\n\nPara firmar el acuerdo ve a este enlace: \n" . $signUrl;
+                    $wspMessage = "Hola {$cotizacion->nombre} gracias por formar parte de nuestra comunidad de importadores; antes de derivarte con el equipo de Coordinaciones por favor recuerda lo siguiente:\n\n" .
+                        "1. Envío el contrato para formalizar el servicio de importación. Tiene dos (2) días hábiles para enviar observaciones. De no recibirlas, daremos el contrato por aceptado.\n" .
+                        "2. Si el producto tiene marca, logo y/o contiene una imagen de una marca o personaje conocido o patentado en INDECOPI no se podrá transportar.\n" .
+                        "3. Igualmente si el producto tiene alguna restricción de importación (Como juguetes, llantas, productos con conexión a Internet, etc.) se necesita gestionar el permiso con anticipación.\n" .
+                        "4. Recuerda que las tarifas que te brindé son válidas solo para esta importación.\n" .
+                        "5. Te recuerdo que en el escenario en el que llegue menor y/o mayor carga a lo cotizado, existirá un ajuste en el precio final.\n" .
+                        "6. Al mismo tiempo si deseas una nueva importación, no dudes en comunicarte conmigo.";
 
-                    $wspMessageData = $this->sendMessage($wspMessage, $telefonoCliente);
-                    if (!(is_array($wspMessageData) && isset($wspMessageData['status']) && $wspMessageData['status'] === true)) {
-                        Log::warning('Respuesta inesperada al enviar texto por WhatsApp al cliente confirmado: ' . json_encode($wspMessageData));
-                    }
-                } catch (\Throwable $ex) {
-                    Log::warning('Error enviando texto WhatsApp al cliente confirmado: ' . $ex->getMessage());
-                }
-
-                try {
-                    $contenedor = isset($cotizacion->contenedor) ? $cotizacion->contenedor : Contenedor::find($cotizacion->id_contenedor);
-                    $carga = $contenedor ? $contenedor->carga : '';
-
-                    $viewData = [
-                        'fecha' => date('d-m-Y'),
-                        'cliente_nombre' => $cotizacion->nombre,
-                        'cliente_documento' => $cotizacion->documento,
-                        'cliente_domicilio' => $cotizacion->direccion ?? null,
-                        'carga' => $carga,
-                        'logo_contrato_url' => public_path('storage/logo_contrato.png'),
-                    ];
-
-                    $contractHtml = view('contracts.contrato', $viewData)->render();
-
-                    if (function_exists('set_time_limit')) {
-                        @set_time_limit(120);
-                    }
-                    ini_set('memory_limit', '512M');
-
-                    $options = new Options();
-                    $options->set('isHtml5ParserEnabled', true);
-                    $options->set('defaultFont', 'DejaVu Sans');
-
-                    $dompdf = new Dompdf($options);
-                    $dompdf->loadHtml($contractHtml);
-                    $dompdf->setPaper('A4', 'portrait');
-
-                    Log::info('Iniciando renderizado PDF para cotizacion ' . $cotizacion->id);
-                    $start = microtime(true);
-                    $dompdf->render();
-                    $duration = microtime(true) - $start;
-                    Log::info('Renderizado PDF completado en ' . round($duration, 2) . 's para cotizacion ' . $cotizacion->id);
-
-                    $pdfContent = $dompdf->output();
-
+                    $telefonoCliente = preg_replace('/\s+/', '', $cotizacion->telefono);
+                    $telefonoCliente = $telefonoCliente ? $telefonoCliente . '@c.us' : '';
                     try {
-                        $oldContract = $cotizacion->cotizacion_contrato_url ?? null;
-                        if ($oldContract) {
-                            $oldPath = parse_url($oldContract, PHP_URL_PATH) ?: $oldContract;
-                            $oldPath = preg_replace('#^/storage/#', '', $oldPath);
-                            $oldPath = ltrim($oldPath, '/');
-                            if (!empty($oldPath)) {
-                                Storage::disk('public')->delete($oldPath);
-                            }
+                        $signUrl = rtrim(env('APP_URL_CLIENTES', 'http://localhost:3001'), '/') . '/firma-acuerdo-servicio/' . ($cotizacion->uuid ?? '');
+                        $wspMessage .= "\n\nPara firmar el acuerdo ve a este enlace: \n" . $signUrl;
+                        
+                        $wspMessageData = $this->sendMessage($wspMessage, $telefonoCliente);
+                        if (!(is_array($wspMessageData) && isset($wspMessageData['status']) && $wspMessageData['status'] === true)) {
+                            Log::warning('Respuesta inesperada al enviar texto por WhatsApp al cliente confirmado: ' . json_encode($wspMessageData));
                         }
-                    } catch (Exception $e) {
-                        Log::warning('Error eliminando contrato anterior: ' . $e->getMessage());
+                    } catch (\Throwable $ex) {
+                        Log::warning('Error enviando texto WhatsApp al cliente confirmado: ' . $ex->getMessage());
                     }
-
-                    $safeName = preg_replace('/[^A-Za-z0-9_\-]/', '_', $cotizacion->nombre);
-                    $filename = 'contrato_cotizacion_' . $cotizacion->id . '_' . time() . '_' . $safeName . '.pdf';
-                    $storageRelative = 'contratos/' . $filename;
-
-                    Storage::disk('public')->put($storageRelative, $pdfContent);
-
-                    $publicUrl = Storage::url('public/' . $storageRelative);
 
                     try {
-                        $cotizacion->update(['cotizacion_contrato_url' => $publicUrl]);
-                        Log::info('Contrato guardado en storage: ' . $publicUrl);
-                    } catch (Exception $e) {
-                        Log::error('No se pudo actualizar cotizacion_contrato_url: ' . $e->getMessage());
+                        $contenedor = isset($cotizacion->contenedor) ? $cotizacion->contenedor : Contenedor::find($cotizacion->id_contenedor);
+                        $carga = $contenedor ? $contenedor->carga : '';
+
+                        $viewData = [
+                            'fecha' => date('d-m-Y'),
+                            'cliente_nombre' => $cotizacion->nombre,
+                            'cliente_documento' => $cotizacion->documento,
+                            'cliente_domicilio' => $cotizacion->direccion ?? null,
+                            'carga' => $carga,
+                            'logo_contrato_url' => public_path('storage/logo_contrato.png'),
+                        ];
+
+                        $contractHtml = view('contracts.contrato', $viewData)->render();
+
+                        if (function_exists('set_time_limit')) {
+                            @set_time_limit(120);
+                        }
+                        ini_set('memory_limit', '512M');
+
+                        $options = new Options();
+                        $options->set('isHtml5ParserEnabled', true);
+                        $options->set('defaultFont', 'DejaVu Sans');
+
+                        $dompdf = new Dompdf($options);
+                        $dompdf->loadHtml($contractHtml);
+                        $dompdf->setPaper('A4', 'portrait');
+
+                        Log::info('Iniciando renderizado PDF para cotizacion ' . $cotizacion->id);
+                        $start = microtime(true);
+                        $dompdf->render();
+                        $duration = microtime(true) - $start;
+                        Log::info('Renderizado PDF completado en ' . round($duration, 2) . 's para cotizacion ' . $cotizacion->id);
+
+                        $pdfContent = $dompdf->output();
+
+                        try {
+                            $oldContract = $cotizacion->cotizacion_contrato_url ?? null;
+                            if ($oldContract) {
+                                $oldPath = parse_url($oldContract, PHP_URL_PATH) ?: $oldContract;
+                                $oldPath = preg_replace('#^/storage/#', '', $oldPath);
+                                $oldPath = ltrim($oldPath, '/');
+                                if (!empty($oldPath)) {
+                                    Storage::disk('public')->delete($oldPath);
+                                }
+                            }
+                        } catch (Exception $e) {
+                            Log::warning('Error eliminando contrato anterior: ' . $e->getMessage());
+                        }
+
+                        $safeName = preg_replace('/[^A-Za-z0-9_\-]/', '_', $cotizacion->nombre);
+                        $filename = 'contrato_cotizacion_' . $cotizacion->id . '_' . time() . '_' . $safeName . '.pdf';
+                        $storageRelative = 'contratos/' . $filename;
+
+                        Storage::disk('public')->put($storageRelative, $pdfContent);
+
+                        $publicUrl = Storage::url('public/' . $storageRelative);
+
+                        try {
+                            $cotizacion->update(['cotizacion_contrato_url' => $publicUrl]);
+                            Log::info('Contrato guardado en storage: ' . $publicUrl);
+                        } catch (Exception $e) {
+                            Log::error('No se pudo actualizar cotizacion_contrato_url: ' . $e->getMessage());
+                        }
+                    } catch (\Throwable $ex) {
+                        Log::error('Excepción al generar/enviar PDF por WhatsApp: ' . $ex->getMessage(), ['cotizacion_id' => $cotizacion->id]);
                     }
-                } catch (\Throwable $ex) {
-                    Log::error('Excepción al generar/enviar PDF por WhatsApp: ' . $ex->getMessage(), ['cotizacion_id' => $cotizacion->id]);
-                }
             }
+
+        }
 
             return response()->json([
                 'status' => 'success',
