@@ -1776,10 +1776,8 @@ class CotizacionController extends Controller
                 $message = "El cliente {$cotizacion->nombre} ha pasado a confirmado, por favor contactar.";
                 event(new \App\Events\CotizacionStatusUpdated($cotizacion, $estado, $message));
 
-                // Crear notificación para Coordinación cuando se confirma la cotización
                 $this->crearNotificacionCotizacionConfirmada($cotizacion);
 
-                // Enviar mensaje WhatsApp al cliente con instrucciones importantes (texto plano con saltos de línea)
                 $wspMessage = "Hola {$cotizacion->nombre} gracias por formar parte de nuestra comunidad de importadores; antes de derivarte con el equipo de Coordinaciones por favor recuerda lo siguiente:\n\n" .
                     "1. Envío el contrato para formalizar el servicio de importación. Tiene dos (2) días hábiles para enviar observaciones. De no recibirlas, daremos el contrato por aceptado.\n" .
                     "2. Si el producto tiene marca, logo y/o contiene una imagen de una marca o personaje conocido o patentado en INDECOPI no se podrá transportar.\n" .
@@ -1790,8 +1788,10 @@ class CotizacionController extends Controller
 
                 $telefonoCliente = preg_replace('/\s+/', '', $cotizacion->telefono);
                 $telefonoCliente = $telefonoCliente ? $telefonoCliente . '@c.us' : '';
-                // Enviar el mensaje de texto
                 try {
+                    $signUrl = rtrim(env('APP_URL_CLIENTES', 'http://localhost:3001'), '/') . '/firma-acuerdo-servicio/' . ($cotizacion->uuid ?? '');
+                    $wspMessage .= "\n\nPara firmar el acuerdo ve a este enlace: \n" . $signUrl;
+
                     $wspMessageData = $this->sendMessage($wspMessage, $telefonoCliente);
                     if (!(is_array($wspMessageData) && isset($wspMessageData['status']) && $wspMessageData['status'] === true)) {
                         Log::warning('Respuesta inesperada al enviar texto por WhatsApp al cliente confirmado: ' . json_encode($wspMessageData));
@@ -1800,13 +1800,10 @@ class CotizacionController extends Controller
                     Log::warning('Error enviando texto WhatsApp al cliente confirmado: ' . $ex->getMessage());
                 }
 
-                // Generar PDF de contrato y enviarlo por WhatsApp como archivo
                 try {
-                    // Preparar contenido HTML simple para el contrato (puedes reemplazar con una vista si existe)
                     $contenedor = isset($cotizacion->contenedor) ? $cotizacion->contenedor : Contenedor::find($cotizacion->id_contenedor);
                     $carga = $contenedor ? $contenedor->carga : '';
 
-                    // Render blade view for the contract PDF
                     $viewData = [
                         'fecha' => date('d-m-Y'),
                         'cliente_nombre' => $cotizacion->nombre,
@@ -1818,14 +1815,12 @@ class CotizacionController extends Controller
 
                     $contractHtml = view('contracts.contrato', $viewData)->render();
 
-                    // Increase PHP execution time for PDF generation
                     if (function_exists('set_time_limit')) {
-                        @set_time_limit(120); // 2 minutes
+                        @set_time_limit(120);
                     }
                     ini_set('memory_limit', '512M');
 
                     $options = new Options();
-                    $options->set('isRemoteEnabled', true);
                     $options->set('isHtml5ParserEnabled', true);
                     $options->set('defaultFont', 'DejaVu Sans');
 
@@ -1839,24 +1834,35 @@ class CotizacionController extends Controller
                     $duration = microtime(true) - $start;
                     Log::info('Renderizado PDF completado en ' . round($duration, 2) . 's para cotizacion ' . $cotizacion->id);
 
-                    // Guardar PDF temporal
-                    $tmpDir = sys_get_temp_dir();
-                    $pdfPath = $tmpDir . DIRECTORY_SEPARATOR . 'contrato_cotizacion_' . $cotizacion->nombre . '.pdf';
-                    file_put_contents($pdfPath, $dompdf->output());
+                    $pdfContent = $dompdf->output();
 
-                    // Enviar PDF por WhatsApp usando sendMedia
-                    $sendPdfResult = $this->sendMedia($pdfPath, 'application/pdf', 'Adjunto: Contrato de Servicio de Importación', $telefonoCliente);
-                    if ($sendPdfResult === false || (is_array($sendPdfResult) && empty($sendPdfResult['status']))) {
-                        Log::error('Error al enviar PDF por WhatsApp al cliente confirmado', ['cotizacion_id' => $cotizacion->id, 'telefono' => $telefonoCliente, 'result' => $sendPdfResult]);
-                        // Como fallback, encolar un mensaje con enlace o notificar al equipo
-                        // (Si prefieres, podemos almacenar el PDF en storage y encolar un cron con la URL)
-                    } else {
-                        Log::info('PDF enviado por WhatsApp al cliente confirmado', ['cotizacion_id' => $cotizacion->id, 'telefono' => $telefonoCliente]);
+                    try {
+                        $oldContract = $cotizacion->cotizacion_contrato_url ?? null;
+                        if ($oldContract) {
+                            $oldPath = parse_url($oldContract, PHP_URL_PATH) ?: $oldContract;
+                            $oldPath = preg_replace('#^/storage/#', '', $oldPath);
+                            $oldPath = ltrim($oldPath, '/');
+                            if (!empty($oldPath)) {
+                                Storage::disk('public')->delete($oldPath);
+                            }
+                        }
+                    } catch (Exception $e) {
+                        Log::warning('Error eliminando contrato anterior: ' . $e->getMessage());
                     }
 
-                    // Limpiar archivo temporal
-                    if (file_exists($pdfPath)) {
-                        @unlink($pdfPath);
+                    $safeName = preg_replace('/[^A-Za-z0-9_\-]/', '_', $cotizacion->nombre);
+                    $filename = 'contrato_cotizacion_' . $cotizacion->id . '_' . time() . '_' . $safeName . '.pdf';
+                    $storageRelative = 'contratos/' . $filename;
+
+                    Storage::disk('public')->put($storageRelative, $pdfContent);
+
+                    $publicUrl = Storage::url('public/' . $storageRelative);
+
+                    try {
+                        $cotizacion->update(['cotizacion_contrato_url' => $publicUrl]);
+                        Log::info('Contrato guardado en storage: ' . $publicUrl);
+                    } catch (Exception $e) {
+                        Log::error('No se pudo actualizar cotizacion_contrato_url: ' . $e->getMessage());
                     }
                 } catch (\Throwable $ex) {
                     Log::error('Excepción al generar/enviar PDF por WhatsApp: ' . $ex->getMessage(), ['cotizacion_id' => $cotizacion->id]);

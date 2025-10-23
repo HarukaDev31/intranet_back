@@ -36,6 +36,8 @@ class Cotizacion extends Model
         'telefono',
         'volumen',
         'cotizacion_file_url',
+        'cotizacion_contrato_url',
+        'cotizacion_contrato_firmado_url',
         'cotizacion_final_file_url',
         'estado',
         'volumen_doc',

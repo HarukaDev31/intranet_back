@@ -204,6 +204,7 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
     Route::group(['prefix' => 'cotizaciones-proveedores'], function () {
         Route::get('proveedor/cotizacion/{idCotizacion}', [CotizacionProveedorController::class, 'getCotizacionProveedorByIdCotizacion']);
         Route::get('contenedor/{idContenedor}', [CotizacionProveedorController::class, 'getContenedorCotizacionProveedores']);
+        Route::patch('proveedor/{idProveedor}/arrive-date', [CotizacionProveedorController::class, 'updateArriveDate']);
         Route::post('proveedor', [CotizacionProveedorController::class, 'updateProveedorData']);
         Route::delete('{idCotizacion}/proveedor/{idProveedor}', [CotizacionProveedorController::class, 'deleteCotizacion']);
         Route::post('proveedor/estado', [CotizacionProveedorController::class, 'updateEstadoCotizacionProveedor']);

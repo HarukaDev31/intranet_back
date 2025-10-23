@@ -22,6 +22,7 @@ class CotizacionProveedor extends Model
         'packing_list',
         'qty_box_china',
         'arrive_date_china',
+        'arrive_date',
         'cbm_total_china',
         'estados_proveedor',
         'peso',

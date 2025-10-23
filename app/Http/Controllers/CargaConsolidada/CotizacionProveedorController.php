@@ -203,6 +203,7 @@ class CotizacionProveedorController extends Controller
                         'products',
                         'estado_china',
                         'arrive_date_china',
+                        'arrive_date',
                         'send_rotulado_status'
                     ])
                     ->get()
@@ -325,6 +326,7 @@ class CotizacionProveedorController extends Controller
                     'products',
                     'estado_china',
                     'arrive_date_china',
+                    'arrive_date',
                     'send_rotulado_status'
                 ])
                 ->get()
@@ -1194,6 +1196,57 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                 'message' => 'Error al actualizar datos',
                 'error' => $e->getMessage()
             ], 500);
+        }
+    }
+
+    /**
+     * Actualiza únicamente el arrive_date de un proveedor.
+     * Solo roles Cotizador y Coordinación pueden hacerlo.
+     */
+    public function updateArriveDate(Request $request, $idProveedor)
+    {
+        try {
+            $user = JWTAuth::parseToken()->authenticate();
+            if (!$user) {
+                return response()->json(['success' => false, 'message' => 'Usuario no autenticado'], 401);
+            }
+
+            $allowedRoles = [Usuario::ROL_COTIZADOR, Usuario::ROL_COORDINACION];
+            if (!in_array($user->getNombreGrupo(), $allowedRoles)) {
+                return response()->json(['success' => false, 'message' => 'No tienes permisos para realizar esta acción'], 403);
+            }
+
+            $proveedor = CotizacionProveedor::find($idProveedor);
+            if (!$proveedor) {
+                return response()->json(['success' => false, 'message' => 'Proveedor no encontrado'], 404);
+            }
+
+            $arriveDate = $request->input('arrive_date');
+            if (empty($arriveDate)) {
+                return response()->json(['success' => false, 'message' => 'arrive_date es requerido'], 422);
+            }
+
+            // Intentar parsear varias formas: d/m/Y, Y-m-d, Y-m-d H:i:s
+            $dateTime = null;
+            // dd/mm/YYYY
+            $dateTime = \DateTime::createFromFormat('d/m/Y', $arriveDate);
+            if (!$dateTime) {
+                // YYYY-mm-dd or datetime
+                $dateTime = \DateTime::createFromFormat('Y-m-d', $arriveDate) ?: \DateTime::createFromFormat('Y-m-d H:i:s', $arriveDate);
+            }
+
+            if (!$dateTime) {
+                return response()->json(['success' => false, 'message' => 'Formato de fecha inválido. Usa dd/mm/YYYY o YYYY-mm-dd'], 422);
+            }
+
+            $normalized = $dateTime->format('Y-m-d H:i:s');
+            $proveedor->arrive_date = $normalized;
+            $proveedor->save();
+
+            return response()->json(['success' => true, 'message' => 'arrive_date actualizado', 'data' => $proveedor]);
+        } catch (\Exception $e) {
+            Log::error('Error en updateArriveDate: ' . $e->getMessage());
+            return response()->json(['success' => false, 'message' => 'Error al actualizar arrive_date', 'error' => $e->getMessage()], 500);
         }
     }
 
