@@ -149,7 +149,8 @@ class VariacionController extends Controller
                                 'valor_doc', prov.valor_doc,
                                 'factura_comercial', prov.factura_comercial,
                                 'excel_confirmacion', prov.excel_confirmacion,
-                                'packing_list', prov.packing_list
+                                'packing_list', prov.packing_list,
+                                'products', prov.products
                             )
                         )
                         FROM contenedor_consolidado_cotizacion_proveedores prov

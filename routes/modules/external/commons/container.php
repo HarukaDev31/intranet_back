@@ -7,4 +7,6 @@ use App\Http\Controllers\CargaConsolidada\CotizacionProveedorController;
 Route::group(['prefix' => 'contenedor/external' ], function () {
     Route::get('cotizacion-proveedor/{uuid}', [CotizacionProveedorController::class, 'getContenedorCotizacionProveedoresByUuid']);
     Route::put('cotizacion-proveedor/{uuid}', [CotizacionProveedorController::class, 'updateContenedorCotizacionProveedoresByUuid']);
+    Route::post('cotizacion/sign-service-contract/{uuid}', [CotizacionProveedorController::class, 'signServiceContract']);
+    Route::get('cotizacion/get-unsigned-service-contract/{uuid}', [CotizacionProveedorController::class, 'getUnsignedServiceContract']);
 });

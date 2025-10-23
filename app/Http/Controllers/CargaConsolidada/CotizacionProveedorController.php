@@ -2950,4 +2950,41 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
             'message' => 'Rotulado enviado correctamente'
         ]);
     }
+    public function getUnsignedServiceContract($uuid)
+    {
+        $cotizacion = Cotizacion::where('uuid', $uuid)->first();
+        if (!$cotizacion) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Cotización no encontrada'
+            ], 404);
+        }
+        return response()->json([
+            'success' => true,
+            'message' => 'Contrato de servicio no firmado',
+            'data' => [
+                'cotizacion_contrato_url' => $cotizacion->cotizacion_contrato_url,
+                'uuid' => $cotizacion->uuid
+            ]
+        ]);
+    }
+    public function signServiceContract($uuid,Request $request)
+    {
+        $cotizacion = Cotizacion::where('uuid', $uuid)->first();
+        if (!$cotizacion) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Cotización no encontrada'
+            ], 404);
+        }
+        $file = $request->file('file');
+        $file->move(public_path('uploads'), $file->getClientOriginalName());
+        $cotizacion->cotizacion_contrato_firmado_url = $file->getClientOriginalName();
+        $cotizacion->save();
+        return response()->json([
+            'success' => true,
+            'message' => 'Contrato de servicio firmado correctamente'
+        ]);
+        //retu
+    }
 }
