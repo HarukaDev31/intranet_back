@@ -30,9 +30,14 @@ use ZipArchive;
 use Exception;
 use App\Models\CargaConsolidada\Contenedor;
 use Illuminate\Support\Str;
+use App\Traits\UserGroupsTrait;
+use Maatwebsite\Excel\Facades\Excel;
+use App\Exports\EmbarqueExport;
+
 class CotizacionProveedorController extends Controller
 {
     use WhatsappTrait;
+    use UserGroupsTrait;
     const DOCUMENTATION_PATH = 'documentation';
     const INSPECTION_PATH = 'inspection';
     private $providerOrderStatus = [
@@ -134,7 +139,7 @@ class CotizacionProveedorController extends Controller
                     $sub->select(DB::raw(1))
                         ->from('contenedor_consolidado_cotizacion_proveedores as proveedores')
                         ->whereRaw('proveedores.id_cotizacion = main.id');
-                    
+
                     // Usar OR en lugar de AND para que coincida con la lógica del CotizacionController
                     $sub->where(function ($q) use ($request) {
                         if ($request->has('estado_coordinacion') && $request->estado_coordinacion != 'todos') {
@@ -204,12 +209,12 @@ class CotizacionProveedorController extends Controller
                     ->toArray();
 
                 // Convertir a array asociativo y agregar id_proveedor
-                $proveedores = array_map(function($proveedor) {
+                $proveedores = array_map(function ($proveedor) {
                     $proveedorArray = (array)$proveedor;
                     $proveedorArray['id_proveedor'] = $proveedorArray['id'];
                     return $proveedorArray;
                 }, $proveedoresQuery);
-                
+
                 // Forzar que siempre sea un array indexado numéricamente
                 $proveedores = array_values($proveedores);
 
@@ -238,7 +243,7 @@ class CotizacionProveedorController extends Controller
                     'id' => $item->id,
                     'id_contenedor' => $item->id_contenedor,
                     'id_usuario' => $item->id_usuario,
-                    'id_contenedor_pago'=>$item->id_contenedor_pago,
+                    'id_contenedor_pago' => $item->id_contenedor_pago,
                     'id_tipo_cliente' => $item->id_tipo_cliente,
                     'nombre' => $item->nombre,
                     'telefono' => $item->telefono,
@@ -279,7 +284,218 @@ class CotizacionProveedorController extends Controller
             ], 500);
         }
     }
+    public function getContenedorCotizacionProveedoresByUuid($uuid)
+    {
+        try {
+            Log::info('uuid: ' . $uuid);
+            // Buscar la cotización por UUID
+            $cotizacion = DB::table('contenedor_consolidado_cotizacion AS main')
+                ->select([
+                    'main.*',
+                    'U.No_Nombres_Apellidos'
+                ])
+                ->leftJoin('contenedor_consolidado_tipo_cliente AS TC', 'TC.id', '=', 'main.id_tipo_cliente')
+                ->leftJoin('usuario AS U', 'U.ID_Usuario', '=', 'main.id_usuario')
+                ->where('main.uuid', $uuid)
+                ->first();
 
+            if (!$cotizacion) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Cotización no encontrada'
+                ], 404);
+            }
+
+            // Obtener proveedores de la cotización
+            $proveedoresQuery = DB::table('contenedor_consolidado_cotizacion_proveedores')
+                ->where('id_cotizacion', $cotizacion->id)
+                ->select([
+                    'id',
+                    'qty_box',
+                    'peso',
+                    'id_cotizacion',
+                    'cbm_total',
+                    'supplier',
+                    'code_supplier',
+                    'estados_proveedor',
+                    'estados',
+                    'supplier_phone',
+                    'cbm_total_china',
+                    'qty_box_china',
+                    'products',
+                    'estado_china',
+                    'arrive_date_china',
+                    'send_rotulado_status'
+                ])
+                ->get()
+                ->toArray();
+
+            // Convertir a array asociativo y agregar id_proveedor
+            $proveedores = array_map(function ($proveedor) {
+                $proveedorArray = (array)$proveedor;
+                $proveedorArray['id_proveedor'] = $proveedorArray['id'];
+                return $proveedorArray;
+            }, $proveedoresQuery);
+
+            // Forzar que siempre sea un array indexado numéricamente
+            $proveedores = array_values($proveedores);
+
+            $cbmTotalChina = 0;
+            $cbmTotalPeru = 0;
+
+            foreach ($proveedores as $proveedor) {
+                if (is_numeric($proveedor['cbm_total_china'] ?? null)) {
+                    $cbmTotalChina += $proveedor['cbm_total_china'];
+                }
+                if (is_numeric($proveedor['cbm_total'] ?? null)) {
+                    $cbmTotalPeru += $proveedor['cbm_total'];
+                }
+            }
+
+            $dataProcessed = [
+                'id' => $cotizacion->id,
+                'id_contenedor' => $cotizacion->id_contenedor,
+                'id_usuario' => $cotizacion->id_usuario,
+                'id_contenedor_pago' => $cotizacion->id_contenedor_pago,
+                'id_tipo_cliente' => $cotizacion->id_tipo_cliente,
+                'nombre' => $cotizacion->nombre,
+                'telefono' => $cotizacion->telefono,
+                'estado_cotizador' => $cotizacion->estado_cotizador,
+                'fecha_confirmacion' => $cotizacion->fecha_confirmacion,
+                'No_Nombres_Apellidos' => $cotizacion->No_Nombres_Apellidos,
+                'uuid' => $cotizacion->uuid,
+                'proveedores' => $proveedores,
+                'totales' => [
+                    'cbm_total_china' => $cbmTotalChina,
+                    'cbm_total_peru' => $cbmTotalPeru
+                ],
+            ];
+
+            return response()->json([
+                'success' => true,
+                'data' => $dataProcessed
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al obtener cotización por UUID',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function updateContenedorCotizacionProveedoresByUuid($uuid, Request $request)
+    {
+        /**{"proveedores":[{"id":1226,"supplier_phone":"21321321312","supplier":"3213"}]} */
+        //find cotizacin by uuid and update proveedores only if providers with id have id_cotizacion= id of cotizacion with uuid
+        //only one can be updated 
+        try {
+            $cotizacion = DB::table('contenedor_consolidado_cotizacion')
+                ->where('uuid', $uuid)
+                ->first();
+            if (!$cotizacion) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Cotización no encontrada'
+                ], 404);
+            }
+
+            // Obtener todos los proveedores de la cotización para verificar el estado
+            $todosProveedores = DB::table('contenedor_consolidado_cotizacion_proveedores')
+                ->where('id_cotizacion', $cotizacion->id)
+                ->get();
+
+            $proveedoresActualizados = [];
+            $proveedoresPendientes = [];
+
+            foreach ($request->proveedores as $proveedorData) {
+                $proveedor = DB::table('contenedor_consolidado_cotizacion_proveedores')
+                    ->where('id', $proveedorData['id'])
+                    ->where('id_cotizacion', $cotizacion->id)
+                    ->first();
+                if (!$proveedor) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Proveedor no encontrado'
+                    ], 404);
+                }
+
+                // Actualizar usando update() en lugar de save() para consultas de tabla
+                DB::table('contenedor_consolidado_cotizacion_proveedores')
+                    ->where('id', $proveedor->id)
+                    ->update([
+                        'supplier_phone' => $proveedorData['supplier_phone'],
+                        'supplier' => $proveedorData['supplier'],
+                        'estados' => $this->STATUS_DATOS_PROVEEDOR
+                    ]);
+
+                $proveedoresActualizados[] = $proveedor->id;
+            }
+
+            // Verificar qué proveedores quedan pendientes
+            foreach ($todosProveedores as $proveedor) {
+                if ($proveedor->estados !== $this->STATUS_DATOS_PROVEEDOR) {
+                    $proveedoresPendientes[] = [
+                        'id' => $proveedor->id,
+                        'code_supplier' => $proveedor->code_supplier
+                    ];
+                }
+            }
+
+            // Preparar mensaje de WhatsApp
+            $telefono = $this->formatPhoneNumber($cotizacion->telefono);
+            $mensaje = "";
+            $tipoMensaje = "";
+
+            if (count($proveedoresPendientes) > 0) {
+                // Guardar1: Hay proveedores pendientes
+                $mensaje = "Se registró exitosamente los datos de tu proveedor.\n";
+                $mensaje .= "Queda pendiente los datos del proveedor:\n";
+
+                foreach ($proveedoresPendientes as $pendiente) {
+                    $mensaje .= "• #" . $pendiente['code_supplier'] . "\n";
+                }
+                $mensaje .= "\nContacta al proveedor y sube los datos faltantes.";
+
+                $tipoMensaje = "guardar1";
+            } else {
+                // Guardar2: Todos los proveedores completos
+                $mensaje = "Se registró exitosamente los datos de tu proveedor.\n";
+                $mensaje .= "Gracias por ayudarnos a hacer mejor nuestro trabajo, el equipo de China se contactará pronto con tu proveedor.";
+
+                $tipoMensaje = "guardar2";
+            }
+
+            // Enviar mensaje de WhatsApp
+            $resultadoWhatsApp = $this->sendMessage($mensaje, $telefono);
+
+            Log::info('Mensaje de WhatsApp enviado para actualización de proveedores', [
+                'cotizacion_id' => $cotizacion->id,
+                'uuid' => $uuid,
+                'telefono' => $telefono,
+                'tipo_mensaje' => $tipoMensaje,
+                'proveedores_actualizados' => count($proveedoresActualizados),
+                'proveedores_pendientes' => count($proveedoresPendientes),
+                'resultado_whatsapp' => $resultadoWhatsApp
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Proveedores actualizados correctamente',
+                'popup_message' => $mensaje,
+                'tipo_mensaje' => $tipoMensaje,
+                'proveedores_actualizados' => count($proveedoresActualizados),
+                'proveedores_pendientes' => count($proveedoresPendientes),
+                'whatsapp_enviado' => $resultadoWhatsApp['status']
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al actualizar proveedores',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
     public function updateEstadoProveedor(Request $request, $idCotizacion, $idProveedor)
     {
         try {
@@ -936,8 +1152,6 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                     $proveedor->save();
 
 
-                    $proveedor->estados = $this->STATUS_RECIVED;
-                    $proveedor->save();
 
                     $usuariosAlmacen = $this->getUsersByGrupo(Usuario::ROL_COORDINACION);
                     $ids = array_column($usuariosAlmacen, 'ID_Usuario');
@@ -962,6 +1176,12 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
             $cotizacion->volumen_china = $volumenChina;
             $cotizacion->save();
             $this->verifyContainerIsCompleted($idContenedor);
+
+            //just if current roles is almacen china
+            if ($user->getNombreGrupo() == Usuario::ROL_ALMACEN_CHINA) {
+                $this->sendAlertDifferenceCbmMessage($idCotizacion);
+            }
+
             return response()->json([
                 'success' => true,
                 'message' => 'Datos actualizados correctamente',
@@ -974,6 +1194,59 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                 'message' => 'Error al actualizar datos',
                 'error' => $e->getMessage()
             ], 500);
+        }
+    }
+
+    public function sendAlertDifferenceCbmMessage($idCotizacion)
+    {
+        try {
+            Log::info('sendAlertDifferenceCbmMessage: ' . $idCotizacion);
+            $cotizacion = Cotizacion::find($idCotizacion);
+            $proveedores = CotizacionProveedor::where('id_cotizacion', $idCotizacion)->where('estados_proveedor', '!=', 'NO LOADED')->get();
+            $telefono = $cotizacion->telefono;
+            $telefono = preg_replace('/\s+/', '', $telefono);
+            $this->phoneNumberId = $telefono ? $telefono . '@c.us' : '';
+            //validate if all providers have cbm_total_china and cbm_total
+            $sendMessage = false;
+            foreach ($proveedores as $proveedor) {
+               
+                //if difference is greater than 0.50, send message
+                if ($proveedor->cbm_total_china - $proveedor->cbm_total > 0.50) {
+                    $sendMessage = true;
+                    break;
+                }
+            }
+            if ($sendMessage) {
+
+                $totalDiferencia = 0;
+                $message = "";
+                foreach ($proveedores as $proveedor) {
+                    $cbmTotalChina = $proveedor->cbm_total_china ?? 0;
+                    $cbmTotal = $proveedor->cbm_total ?? 0;
+                    $diferencia = $cbmTotalChina - $cbmTotal;
+                    if ($diferencia > 0.50) {
+                        $message .= "Proveedor codigo " . $proveedor->code_supplier . "\nCbm China: " . $cbmTotalChina . "\nCbm cliente: " . $cbmTotal . "\nDiferencia: " . $diferencia . "\n\n";
+                        $totalDiferencia += $diferencia;
+                    }
+                }
+                $message .= "Total diferencia: " . $totalDiferencia;
+                $message .= "\n📦 Las variaciones en el cubicaje se cobrará la diferencia en la cotización final.";
+                if ($cotizacion->send_alert_difference_cbm_status == 'PENDING') {
+                    $response = $this->sendMessage($message);
+                    if ($response && isset($response['status']) && $response['status'] === true) {
+                        //update cotizacion set send_alert_difference_cbm_status = 'PENDING'
+                        Log::info('sendAlertDifferenceCbmMessage sent: ' . $message);
+                        $cotizacion->send_alert_difference_cbm_status = 'SENDED';
+                        $cotizacion->save();
+                    }
+                }else{
+                    Log::info('sendAlertDifferenceCbmMessage already sent: ' . $message);
+                    return true;
+                }
+            }
+        } catch (\Exception $e) {
+            Log::error('Error en sendAlertDifferenceCbm: ' . $e->getMessage());
+            return false;
         }
     }
 
@@ -1233,164 +1506,255 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
     /**
      * Validar y enviar mensaje de inspección
      */
-    public function validateToSendInspectionMessage($idProveedor)
+    public function validateToSendInspectionMessage($idProveedor, $idCotizacion)
     {
         try {
+            // Validar autenticación
             $user = JWTAuth::parseToken()->authenticate();
             if (!$user) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Usuario no autenticado'
-                ], 401);
+                return $this->jsonResponse(false, 'Usuario no autenticado', [], 401);
             }
 
-            Log::info("validateToSendInspectionMessage: " . $idProveedor);
-
-            // Obtener imágenes del proveedor
-            $imagesUrls = AlmacenInspection::where('id_proveedor', $idProveedor)
-                ->whereIn('file_type', ['image/jpeg', 'image/png', 'image/jpg'])
-                ->select(['id', 'file_path', 'file_type', 'send_status'])
-                ->get();
-
-            // Obtener videos del proveedor
-            $videosUrls = AlmacenInspection::where('id_proveedor', $idProveedor)
-                ->where('file_type', 'video/mp4')
-                ->select(['id', 'file_path', 'file_type', 'send_status'])
-                ->get();
-
-            // Obtener datos del proveedor
-            $proveedor = CotizacionProveedor::where('id', $idProveedor)
-                ->select(['estados_proveedor', 'code_supplier', 'qty_box_china', 'qty_box', 'id_cotizacion'])
-                ->first();
-
+            // Obtener datos necesarios
+            $proveedor = $this->getProveedorData($idProveedor);
             if (!$proveedor) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Proveedor no encontrado'
-                ], 404);
+                return $this->jsonResponse(false, 'Proveedor no encontrado', [], 404);
             }
 
-            // Obtener datos de la cotización
-            $cotizacion = Cotizacion::where('id', $proveedor->id_cotizacion)
-                ->select(['volumen', 'monto', 'id_contenedor', 'nombre', 'telefono'])
-                ->first();
-
+            $cotizacion = $this->getCotizacionData($proveedor->id_cotizacion);
             if (!$cotizacion) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Cotización no encontrada'
-                ], 404);
-            }
-
-            // Obtener fecha de cierre del contenedor
-            $contenedor = DB::table('carga_consolidada_contenedor')->where('id', $cotizacion->id_contenedor)->first();
-            $fCierre = $contenedor ? $contenedor->f_cierre : null;
-
-            // Formatear fecha de cierre
-            if ($fCierre) {
-                $fCierre = Carbon::parse($fCierre)->format('d F');
-                $meses = [
-                    'January' => 'Enero',
-                    'February' => 'Febrero',
-                    'March' => 'Marzo',
-                    'April' => 'Abril',
-                    'May' => 'Mayo',
-                    'June' => 'Junio',
-                    'July' => 'Julio',
-                    'August' => 'Agosto',
-                    'September' => 'Septiembre',
-                    'October' => 'Octubre',
-                    'November' => 'Noviembre',
-                    'December' => 'Diciembre'
-                ];
-                $fCierre = str_replace(array_keys($meses), array_values($meses), $fCierre);
+                return $this->jsonResponse(false, 'Cotización no encontrada', [], 404);
             }
 
             // Actualizar estado del proveedor
-            $proveedorUpdate = CotizacionProveedor::find($idProveedor);
-            $proveedorUpdate->estados_proveedor = 'INSPECTION';
-            $proveedorUpdate->estados = 'INSPECCIONADO';
-            $proveedorUpdate->save();
+            $this->updateProveedorStatus($idProveedor);
 
-            $message = "Se ha actualizado el proveedor con código de proveedor " . $proveedor->code_supplier . " a estado INSPECCIONADO";
+            // Obtener archivos de inspección
+            $inspectionFiles = $this->getInspectionFiles($idProveedor);
 
-            // Preparar datos para el mensaje
-            $cliente = $cotizacion->nombre;
-            $telefono = $cotizacion->telefono;
-            $telefono = preg_replace('/\s+/', '', $telefono);
-            $telefono .= $telefono ? '@c.us' : '';
+            // Preparar datos para mensajes
+            $telefono = $this->formatPhoneNumber($cotizacion->telefono);
+            $qtyBox = $proveedor->qty_box_china ?? $proveedor->qty_box;
 
-            // Verificar si se puede enviar mensaje
-            $sendStatus = true;
-            foreach ($imagesUrls as $image) {
-                if ($image->send_status == 'SENDED') {
-                    $sendStatus = false;
-                }
-            }
-            foreach ($videosUrls as $video) {
-                if ($video->send_status == 'SENDED') {
-                    $sendStatus = false;
-                }
+            // Enviar mensaje inicial de inspección
+            $inspectionMessage = $this->buildInspectionMessage($cotizacion->nombre, $proveedor->code_supplier, $qtyBox);
+            $this->sendMessage($inspectionMessage, $telefono);
+
+            // Enviar archivos de inspección
+            $sentFiles = $this->sendInspectionFiles($inspectionFiles, $inspectionMessage, $telefono);
+
+            // Verificar si debe enviar mensaje de reserva (primer proveedor inspeccionado y más de 1 proveedor)
+            if ($this->shouldSendReservationMessage($idCotizacion)) {
+                $this->sendReservationMessage($cotizacion, $telefono);
             }
 
-            if ($sendStatus) {
-                $qtyBox = $proveedor->qty_box_china ?? $proveedor->qty_box;
-                $message = $cliente . '----' . $proveedor->code_supplier . '----' . $qtyBox . ' boxes. ' . "\n\n" .
-                    '📦 Tu carga llegó a nuestro almacén de Yiwu, te comparto las fotos y videos. ' . "\n\n";
-
-                // Aquí se simularía el envío del mensaje principal
-                $this->sendMessage($message, $telefono);
-            }
-
-            // Filtrar archivos pendientes de envío
-            $imagesPendientes = $imagesUrls->where('send_status', 'PENDING');
-            $videosPendientes = $videosUrls->where('send_status', 'PENDING');
-
-            // Simular envío de medios de inspección
-            foreach ($imagesPendientes as $image) {
-                // Usar la ruta del sistema de archivos, no la URL
-                $fileSystemPath = storage_path('app/public/' . $image->file_path);
-                Log::info('Enviando imagen de inspección. Ruta del sistema: ' . $fileSystemPath);
-
-                // Verificar que el archivo existe
-                if (file_exists($fileSystemPath)) {
-                    $this->sendMediaInspection($fileSystemPath, $image->file_type, $message, $telefono, 0, $image->id);
-                } else {
-                    Log::error('Archivo no encontrado en el sistema: ' . $fileSystemPath);
-                }
-            }
-
-            foreach ($videosPendientes as $video) {
-                // Usar la ruta del sistema de archivos, no la URL
-                $fileSystemPath = storage_path('app/public/' . $video->file_path);
-                Log::info('Enviando video de inspección. Ruta del sistema: ' . $fileSystemPath);
-
-                // Verificar que el archivo existe
-                if (file_exists($fileSystemPath)) {
-                    $this->sendMediaInspection($fileSystemPath, $video->file_type, $message, $telefono, 0, $video->id);
-                } else {
-                    Log::error('Archivo no encontrado en el sistema: ' . $fileSystemPath);
-                }
-            }
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Proceso de inspección completado correctamente',
-                'data' => [
-                    'proveedor_actualizado' => true,
-                    'imagenes_enviadas' => $imagesPendientes->count(),
-                    'videos_enviados' => $videosPendientes->count(),
-                    'mensaje_enviado' => $sendStatus
-                ]
+            return $this->jsonResponse(true, 'Proceso de inspección completado correctamente', [
+                'proveedor_actualizado' => true,
+                'imagenes_enviadas' => $sentFiles['images'],
+                'videos_enviados' => $sentFiles['videos'],
+                'mensaje_enviado' => true
             ]);
         } catch (\Exception $e) {
             Log::error('Error en validateToSendInspectionMessage: ' . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'message' => 'Error al procesar la inspección',
-                'error' => $e->getMessage()
-            ], 500);
+            return $this->jsonResponse(false, 'Error al procesar la inspección', ['error' => $e->getMessage()], 500);
         }
+    }
+
+    /**
+     * Obtener datos del proveedor
+     */
+    private function getProveedorData($idProveedor)
+    {
+        return CotizacionProveedor::where('id', $idProveedor)
+            ->select(['estados_proveedor', 'code_supplier', 'qty_box_china', 'qty_box', 'id_cotizacion'])
+            ->first();
+    }
+
+    /**
+     * Obtener datos de la cotización
+     */
+    private function getCotizacionData($idCotizacion)
+    {
+        return Cotizacion::where('id', $idCotizacion)
+            ->select(['volumen', 'monto', 'id_contenedor', 'nombre', 'telefono'])
+            ->first();
+    }
+
+    /**
+     * Actualizar estado del proveedor a inspeccionado
+     */
+    private function updateProveedorStatus($idProveedor)
+    {
+        CotizacionProveedor::where('id', $idProveedor)
+            ->update([
+                'estados_proveedor' => 'INSPECTION',
+                'estados' => 'INSPECCIONADO'
+            ]);
+    }
+
+    /**
+     * Obtener archivos de inspección del proveedor
+     */
+    private function getInspectionFiles($idProveedor)
+    {
+        return [
+            'images' => AlmacenInspection::where('id_proveedor', $idProveedor)
+                ->whereIn('file_type', ['image/jpeg', 'image/png', 'image/jpg'])
+                ->where('send_status', 'PENDING')
+                ->select(['id', 'file_path', 'file_type', 'send_status'])
+                ->get(),
+            'videos' => AlmacenInspection::where('id_proveedor', $idProveedor)
+                ->where('file_type', 'video/mp4')
+                ->where('send_status', 'PENDING')
+                ->select(['id', 'file_path', 'file_type', 'send_status'])
+                ->get()
+        ];
+    }
+
+    /**
+     * Construir mensaje de inspección
+     */
+    private function buildInspectionMessage($cliente, $codeSupplier, $qtyBox)
+    {
+        return $cliente . '----' . $codeSupplier . '----' . $qtyBox . ' boxes.' . "\n\n" .
+            '📦 Tu carga llegó a nuestro almacén de Yiwu, te comparto las fotos y videos.' . "\n\n";
+    }
+
+    /**
+     * Enviar archivos de inspección
+     */
+    private function sendInspectionFiles($inspectionFiles, $message, $telefono)
+    {
+        $sentFiles = ['images' => 0, 'videos' => 0];
+
+        // Enviar imágenes
+        foreach ($inspectionFiles['images'] as $image) {
+            if ($this->sendSingleInspectionFile($image, $message, $telefono)) {
+                $sentFiles['images']++;
+            }
+        }
+
+        // Enviar videos
+        foreach ($inspectionFiles['videos'] as $video) {
+            if ($this->sendSingleInspectionFile($video, $message, $telefono)) {
+                $sentFiles['videos']++;
+            }
+        }
+
+        return $sentFiles;
+    }
+
+    /**
+     * Enviar un archivo individual de inspección
+     */
+    private function sendSingleInspectionFile($file, $message, $telefono)
+    {
+        $fileSystemPath = storage_path('app/public/' . $file->file_path);
+
+        if (!file_exists($fileSystemPath)) {
+            Log::error('Archivo no encontrado: ' . $fileSystemPath);
+            return false;
+        }
+
+        $response = $this->sendMediaInspection($fileSystemPath, $file->file_type, $message, $telefono, 0, $file->id);
+
+        // Verificar que la respuesta sea exitosa antes de actualizar el estado
+        if ($response && isset($response['status']) && $response['status'] === true) {
+            $file->update(['send_status' => 'SENDED']);
+            Log::info('Archivo de inspección enviado exitosamente', [
+                'file_id' => $file->id,
+                'file_path' => $file->file_path
+            ]);
+            return true;
+        } else {
+            Log::warning('Error al enviar archivo de inspección', [
+                'file_id' => $file->id,
+                'file_path' => $file->file_path,
+                'response' => $response
+            ]);
+        }
+
+        return false;
+    }
+
+    /**
+     * Verificar si debe enviar mensaje de reserva
+     * Solo se envía si es el primer proveedor inspeccionado y la cotización tiene más de 1 proveedor
+     */
+    private function shouldSendReservationMessage($idCotizacion)
+    {
+        $totalProviders = CotizacionProveedor::where('id_cotizacion', $idCotizacion)->count();
+        $inspectedProviders = CotizacionProveedor::where('id_cotizacion', $idCotizacion)
+            ->where('estados_proveedor', 'INSPECTION')
+            ->count();
+
+        // Solo enviar si es el primer proveedor inspeccionado y hay más de 1 proveedor en total
+        return $inspectedProviders === 1 && $totalProviders > 1;
+    }
+
+    /**
+     * Enviar mensaje de reserva de espacio
+     */
+    private function sendReservationMessage($cotizacion, $telefono)
+    {
+        $contenedor = Contenedor::where('id', $cotizacion->id_contenedor)->first();
+        if (!$contenedor) {
+            return;
+        }
+
+        $fechaCierre = $this->formatFechaCierre($contenedor->f_cierre);
+
+        $message = "Reserva de espacio:\n" .
+            "*Consolidado #{$contenedor->carga}-2025*\n\n" .
+            "Ahora tienes que hacer el pago del CBM preliminar para poder subir su carga en nuestro contenedor.\n\n" .
+            "☑ CBM Preliminar: {$cotizacion->volumen} cbm\n" .
+            "☑ Costo CBM: \${$cotizacion->monto}\n" .
+            "☑ Fecha Limite de pago: {$fechaCierre}\n\n" .
+            "⚠ Nota: Realizar el pago antes del llenado del contenedor.\n\n" .
+            "📦 En caso hubiera variaciones en el cubicaje se cobrará la diferencia en la cotización final.\n\n" .
+            "Apenas haga el pago, envíe por este medio para hacer la reserva.";
+
+        $this->sendMessage($message, $telefono, 4);
+    }
+
+    /**
+     * Formatear fecha de cierre
+     */
+    private function formatFechaCierre($fecha)
+    {
+        if (!$fecha) {
+            return 'Fecha no especificada';
+        }
+
+        $fechaFormateada = Carbon::parse($fecha)->format('d F');
+        $meses = [
+            'January' => 'Enero',
+            'February' => 'Febrero',
+            'March' => 'Marzo',
+            'April' => 'Abril',
+            'May' => 'Mayo',
+            'June' => 'Junio',
+            'July' => 'Julio',
+            'August' => 'Agosto',
+            'September' => 'Septiembre',
+            'October' => 'Octubre',
+            'November' => 'Noviembre',
+            'December' => 'Diciembre'
+        ];
+
+        return str_replace(array_keys($meses), array_values($meses), $fechaFormateada);
+    }
+
+    /**
+     * Método auxiliar para respuestas JSON
+     */
+    private function jsonResponse($success, $message, $data = [], $status = 200)
+    {
+        return response()->json([
+            'success' => $success,
+            'message' => $message,
+            'data' => $data
+        ], $status);
     }
 
     /**
@@ -1626,7 +1990,6 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                 $files = [$files];
             }
 
-            Log::info('Archivos de inspección recibidos:', ['cantidad' => count($files)]);
 
             $archivosGuardados = [];
 
@@ -1674,7 +2037,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                     'message' => 'No se pudo guardar ningún archivo de inspección'
                 ], 400);
             }
-            $this->validateToSendInspectionMessage($idProveedor);
+            $this->validateToSendInspectionMessage($idProveedor, $idCotizacion);
             return response()->json([
                 'success' => true,
                 'message' => 'Inspección guardada correctamente',
@@ -2254,16 +2617,16 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
             $proveedores = $request->proveedores;
             //busca la cotizacion con ese id , clona su datos pero con el id_contenedor de idContainerDestino y luego mueve los proveedores con los id des proveedores([1,2,3]) a la nueva cotizacion cambiando el id_cotizacion  a la nueva cotizacion y tambien cambia el id_contenedor de los proveedores a idContainerDestino y id_contenedor_pago  a idContainerPagoDestino y luego actualiza los datos de la nueva cotizacion y los proveedores
             $cotizacion = Cotizacion::find($idCotizacion);
-            
+
             $cotizacionDestino = $cotizacion->replicate();
-            $cotizacion->id_contenedor_pago=$idContainerDestino;
+            $cotizacion->id_contenedor_pago = $idContainerDestino;
             $cotizacion->save();
-                    //generate new uuid
+            //generate new uuid
             $uuid = Str::uuid()->toString();
             $cotizacionDestino->uuid = $uuid;
             $cotizacionDestino->id_contenedor = $idContainerDestino;
             $cotizacionDestino->save();
-            foreach($proveedores as $proveedor){
+            foreach ($proveedores as $proveedor) {
                 $proveedor = CotizacionProveedor::find($proveedor);
                 $proveedor->id_cotizacion = $cotizacionDestino->id;
                 $proveedor->id_contenedor = $idContainerDestino;
@@ -2289,8 +2652,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                     'id_container_pago_destino' => $idContainerPagoDestino,
                     'proveedores' => $proveedores
                 ]
-            ]); 
-           
+            ]);
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('Error en forceSendMove: ' . $e->getMessage());
@@ -2300,14 +2662,14 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                 'error' => $e->getMessage()
             ], 500);
         } finally {
-           
         }
     }
-    public function forceSendRecordatorioDatosProveedor(Request $request){
+    public function forceSendRecordatorioDatosProveedor(Request $request)
+    {
         $idCotizacion = $request->idCotizacion;
         $idContainer = $request->idContainer;
         $proveedores = $request->proveedores;
-        
+
         try {
             $user = JWTAuth::parseToken()->authenticate();
             if (!$user) {
@@ -2316,10 +2678,10 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                     'message' => 'Usuario no autenticado'
                 ], 401);
             }
-            
+
             // Despachar el Job para procesar el envío de manera asíncrona
             SendRecordatorioDatosProveedorJob::dispatch($idCotizacion, $idContainer, $proveedores);
-            
+
             return response()->json([
                 'success' => true,
                 'message' => 'Recordatorio de datos de proveedor programado para envío',
@@ -2329,8 +2691,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                     'proveedores' => $proveedores
                 ]
             ]);
-        }
-        catch(\Exception $e){
+        } catch (\Exception $e) {
             Log::error('Error en forceSendRecordatorioDatosProveedor: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
@@ -2338,5 +2699,202 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                 'error' => $e->getMessage()
             ], 500);
         }
+    }
+
+    /**
+     * Formatear número de teléfono para WhatsApp
+     *
+     * @param string $telefono
+     * @return string
+     */
+    private function formatPhoneNumber($telefono)
+    {
+        // Remover espacios y caracteres especiales
+        $telefono = preg_replace('/[^0-9]/', '', $telefono);
+
+        // Si no tiene código de país, agregar +51 (Perú)
+        if (strlen($telefono) === 9) {
+            $telefono = '51' . $telefono;
+        } elseif (strlen($telefono) === 10 && substr($telefono, 0, 1) === '0') {
+            $telefono = '51' . substr($telefono, 1);
+        }
+
+        return $telefono . '@c.us';
+    }
+    public function downloadEmbarque($idContenedor, Request $request)
+    {
+        try {
+            // Obtener usuario autenticado
+            $user = JWTAuth::parseToken()->authenticate();
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Usuario no autenticado'
+                ], 401);
+            }
+
+            $rol = $user->getNombreGrupo();
+
+            $estadoChina = $request->estado_china ?? 'todos';
+            $search = $request->search ?? '';
+            
+            // Usar la misma lógica de filtros que getContenedorCotizacionProveedores
+            $query = DB::table('contenedor_consolidado_cotizacion AS main')
+                ->select([
+                    'main.*',
+                    'U.No_Nombres_Apellidos'
+                ])
+                ->leftJoin('contenedor_consolidado_tipo_cliente AS TC', 'TC.id', '=', 'main.id_tipo_cliente')
+                ->leftJoin('usuario AS U', 'U.ID_Usuario', '=', 'main.id_usuario')
+                ->where('main.id_contenedor', $idContenedor);
+
+            if (!empty($search)) {
+                Log::info('search: ' . $search);
+                $query->where('main.nombre', 'LIKE', '%' . $search . '%');
+            }
+            
+            if ($request->has('estado_coordinacion') || $request->has('estado_china')) {
+                $query->whereExists(function ($sub) use ($request) {
+                    $sub->select(DB::raw(1))
+                        ->from('contenedor_consolidado_cotizacion_proveedores as proveedores')
+                        ->whereRaw('proveedores.id_cotizacion = main.id');
+
+                    $sub->where(function ($q) use ($request) {
+                        if ($request->has('estado_coordinacion') && $request->estado_coordinacion != 'todos') {
+                            $q->where('proveedores.estados', $request->estado_coordinacion);
+                        }
+                        if ($request->has('estado_china') && $request->estado_china != 'todos') {
+                            $q->orWhere('proveedores.estados_proveedor', $request->estado_china);
+                        }
+                    });
+                });
+            }
+
+            // Aplicar filtros de rol
+            switch ($rol) {
+                case Usuario::ROL_COTIZADOR:
+                    if ($user->getIdUsuario() != 28791 && $user->getIdUsuario() != 28911) {
+                        $query->where('main.id_usuario', $user->getIdUsuario());
+                    }
+                    break;
+
+                case Usuario::ROL_DOCUMENTACION:
+                    $query->where('main.estado_cotizador', 'CONFIRMADO');
+                    break;
+
+                case Usuario::ROL_COORDINACION:
+                    $query->where('main.estado_cotizador', 'CONFIRMADO');
+                    break;
+                    
+                case Usuario::ROL_ALMACEN_CHINA:
+                    $query->where('main.estado_cotizador', 'CONFIRMADO');
+                    break;
+            }
+
+            // Aplicar filtro whereNull después de los filtros de rol
+            $query->whereNull('main.id_cliente_importacion');
+            $query->orderBy('main.id', 'asc');
+            
+            // Obtener todas las cotizaciones sin paginación para el export
+            $cotizaciones = $query->get();
+
+            // Procesar datos igual que en getContenedorCotizacionProveedores
+            $dataProcessed = collect($cotizaciones)->map(function ($item) use ($user, $estadoChina, $rol, $search) {
+                // Obtener proveedores por separado
+                $proveedoresQuery = DB::table('contenedor_consolidado_cotizacion_proveedores')
+                    ->where('id_cotizacion', $item->id)
+                    ->select([
+                        'id',
+                        'qty_box',
+                        'peso',
+                        'id_cotizacion',
+                        'cbm_total',
+                        'supplier',
+                        'code_supplier',
+                        'estados_proveedor',
+                        'estados',
+                        'supplier_phone',
+                        'cbm_total_china',
+                        'qty_box_china',
+                        'products',
+                        'estado_china',
+                        'arrive_date_china',
+                        'send_rotulado_status'
+                    ])
+                    ->get()
+                    ->toArray();
+
+                // Convertir a array asociativo y agregar id_proveedor
+                $proveedores = array_map(function ($proveedor) {
+                    $proveedorArray = (array)$proveedor;
+                    $proveedorArray['id_proveedor'] = $proveedorArray['id'];
+                    return $proveedorArray;
+                }, $proveedoresQuery);
+
+                // Forzar que siempre sea un array indexado numéricamente
+                $proveedores = array_values($proveedores);
+
+                // Filtrar proveedores por estado_china si es necesario
+                if ($rol == Usuario::ROL_ALMACEN_CHINA && $estadoChina != "todos") {
+                    $proveedores = array_filter($proveedores, function ($proveedor) use ($estadoChina) {
+                        return ($proveedor['estados_proveedor'] ?? '') === $estadoChina;
+                    });
+                    // Reindexar después del filtro para mantener índices secuenciales
+                    $proveedores = array_values($proveedores);
+                }
+
+                return [
+                    'id' => $item->id,
+                    'id_contenedor' => $item->id_contenedor,
+                    'id_usuario' => $item->id_usuario,
+                    'id_contenedor_pago' => $item->id_contenedor_pago,
+                    'id_tipo_cliente' => $item->id_tipo_cliente,
+                    'nombre' => $item->nombre,
+                    'telefono' => $item->telefono,
+                    'estado_cotizador' => $item->estado_cotizador,
+                    'fecha_confirmacion' => $item->fecha_confirmacion,
+                    'No_Nombres_Apellidos' => $item->No_Nombres_Apellidos,
+                    'proveedores' => $proveedores,
+                ];
+            })->filter()->values();
+
+            // Generar el Excel usando la clase Export
+            return Excel::download(new EmbarqueExport($dataProcessed->toArray()), 'embarque_' . $idContenedor . '_' . date('Y-m-d_H-i-s') . '.xlsx');
+
+        } catch (\Exception $e) {
+            Log::error('Error en downloadEmbarque: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al generar el archivo de embarque',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+    public function sendRotulado(Request $request){
+        
+        $idCotizacion = $request->idCotizacion;
+        $proveedores = $request->proveedores;
+        $cotizacion = Cotizacion::find($idCotizacion);
+        if (!$cotizacion) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Cotización no encontrada'
+            ], 404);
+        }
+        $proveedores = CotizacionProveedor::where('id_cotizacion', $idCotizacion)->get();
+        if (!$proveedores) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Proveedores no encontrados'
+            ], 404);
+        }
+        foreach ($proveedores as $proveedor) {
+            $proveedor->tipo_rotulado = $proveedor->tipo_rotulado;
+            $proveedor->save();
+        }
+        return response()->json([
+            'success' => true,
+            'message' => 'Rotulado enviado correctamente'
+        ]);
     }
 }

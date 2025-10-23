@@ -16,10 +16,11 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use App\Models\CalculadoraImportacion;
 use App\Models\Notificacion;
-
+use App\Traits\WhatsappTrait;
 
 class ContenedorController extends Controller
 {
+    use WhatsappTrait;
     private $defaultAgenteSteps = [];
 
     private $defautlAgenteChinaSteps = [];
@@ -493,7 +494,7 @@ class ContenedorController extends Controller
             $cotizacion->estado_cotizador = 'CONFIRMADO';
             $cotizacion->updated_at = date('Y-m-d H:i:s');
             $cotizacion->save();
-
+            $contenedorDestino=Contenedor::find($idContenedorDestino);
             // Actualiza los proveedores asociados
             $proveedores = CotizacionProveedor::where('id_cotizacion', $idCotizacion)->get();
             if (!$proveedores || $proveedores->isEmpty()) {
@@ -507,7 +508,12 @@ class ContenedorController extends Controller
 
             // Crear notificaciones para Coordinación y Jefe de Ventas
             $this->crearNotificacionesMovimientoConsolidado($cotizacion, $idContenedorDestino);
-
+          
+            $message = "Hola @nombrecliente, segun lo conversado estamos pasando su carga para el consolidado @contenedorDestino.
+Le estaré informando cualquier avance 🫡.";
+            $message = str_replace('@nombrecliente', $cotizacion->nombre, $message);
+            $message = str_replace('@contenedorDestino', '#'.$contenedorDestino->carga, $message);
+            $this->sendMessage($message, null, 3);
             return response()->json(['message' => 'Cotización movida a consolidado correctamente', 'success' => true]);
         } catch (\Exception $e) {
             return response()->json(['message' => 'Error al mover cotización a consolidado: ' . $e->getMessage(), 'success' => false], 500);

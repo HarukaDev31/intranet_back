@@ -88,3 +88,5 @@ require __DIR__.'/modules/external/importaciones.php';
 require __DIR__.'/modules/external/containers.php';
 // Módulo de Location
 require __DIR__.'/modules/external/commons/location.php';
+// Módulo de Contenedores
+require __DIR__.'/modules/external/commons/container.php';

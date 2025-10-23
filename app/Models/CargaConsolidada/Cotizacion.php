@@ -72,7 +72,8 @@ class Cotizacion extends Model
         'qty_item',
         'id_cliente_importacion',
         'delivery_form_registered_at',
-        'total_pago_delivery'
+        'total_pago_delivery',
+        'send_alert_difference_cbm_status'
     ];
 
     /**
@@ -174,6 +175,16 @@ class Cotizacion extends Model
         'Pendiente' => 'Pendiente',
         'Incompleto' => 'Incompleto',
         'Completado' => 'Completado'
+    ];
+
+    /**
+     * Estados para el envío de alerta de diferencia CBM
+     *
+     * @var array
+     */
+    public const SEND_ALERT_DIFFERENCE_CBM_STATUS = [
+        'PENDING' => 'PENDING',
+        'SENDED' => 'SENDED'
     ];
 
     /**

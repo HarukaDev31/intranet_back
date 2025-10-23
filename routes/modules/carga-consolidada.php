@@ -207,6 +207,7 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
         Route::post('proveedor', [CotizacionProveedorController::class, 'updateProveedorData']);
         Route::delete('{idCotizacion}/proveedor/{idProveedor}', [CotizacionProveedorController::class, 'deleteCotizacion']);
         Route::post('proveedor/estado', [CotizacionProveedorController::class, 'updateEstadoCotizacionProveedor']);
+        Route::get('proveedor/download-embarque/{idContenedor}', [CotizacionProveedorController::class, 'downloadEmbarque']);
         Route::post('proveedor/refresh-rotulado-status/{id}', [CotizacionProveedorController::class, 'refreshRotuladoStatus']);
         Route::delete('proveedor/documento/{idFile}', [CotizacionProveedorController::class, 'deleteFileDocumentation']);
         Route::delete('proveedor/inspeccion/{idFile}', [CotizacionProveedorController::class, 'deleteFileInspection']);
