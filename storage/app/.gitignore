@@ -1,3 +1,7 @@
-*
-!public/
+# Ignore all files in storage except the 'public' folder and this .gitignore file
+!*/public/
+delivery_conformidad/
+public/profiles
+public/regulaciones
+public/vouchers
 !.gitignore
