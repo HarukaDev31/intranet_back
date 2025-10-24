@@ -82,6 +82,38 @@ class SheetController extends Controller
         }
     }
     
+    // Obtener rangos mergeados de una columna específica
+    public function getMergedRangesInColumn(Request $request)
+    {
+        try {
+            $column = $request->get('column');
+            $range = $request->get('range'); // Opcional: limitar búsqueda
+            
+            if (!$column) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Se requiere el parámetro column'
+                ], 400);
+            }
+            
+            $mergedRanges = $this->getMergedRangesInColumn($column, $range);
+            
+            return response()->json([
+                'success' => true,
+                'data' => $mergedRanges,
+                'count' => count($mergedRanges),
+                'column' => $column
+            ]);
+            
+        } catch (\Exception $e) {
+            Log::error('Merged Ranges Column Error: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+    
     // Insertar valor en celda específica
     public function insertValue(Request $request)
     {

@@ -41,9 +41,10 @@ trait GoogleSheetsHelper
      * Obtener todos los rangos mergeados en un rango específico de columnas
      * 
      * @param string $range Rango en notación A1 (ej: "A1:Z100")
+     * @param string $column Columna específica a filtrar (ej: "B")
      * @return array Array de rangos mergeados con información detallada
      */
-    public function getMergedRangesInRange($range = null)
+    public function getMergedRangesInRange($range = null, $column = null)
     {
         try {
             if (!$this->initializeGoogleSheets()) {
@@ -71,13 +72,21 @@ trait GoogleSheetsHelper
                                 'column_count' => $merge->getEndColumnIndex() - $merge->getStartColumnIndex()
                             ];
 
-                            // Si se especifica un rango, filtrar solo los que están dentro
-                            if ($range) {
-                                if ($this->isMergeInRange($mergeInfo, $range)) {
+                            // Filtrar por columna específica si se especifica
+                            if ($column) {
+                                $columnIndex = $this->letterToColumnIndex($column);
+                                if ($mergeInfo['start_column'] <= $columnIndex && $mergeInfo['end_column'] > $columnIndex) {
                                     $mergedRanges[] = $mergeInfo;
                                 }
                             } else {
-                                $mergedRanges[] = $mergeInfo;
+                                // Si se especifica un rango, filtrar solo los que están dentro
+                                if ($range) {
+                                    if ($this->isMergeInRange($mergeInfo, $range)) {
+                                        $mergedRanges[] = $mergeInfo;
+                                    }
+                                } else {
+                                    $mergedRanges[] = $mergeInfo;
+                                }
                             }
                         }
                     }
@@ -90,6 +99,69 @@ trait GoogleSheetsHelper
 
         } catch (\Exception $e) {
             Log::error('Error obteniendo rangos mergeados: ' . $e->getMessage());
+            throw $e;
+        }
+    }
+
+    /**
+     * Obtener todos los rangos mergeados de una columna específica
+     * 
+     * @param string $column Columna específica (ej: "B")
+     * @param string $range Rango opcional para limitar la búsqueda (ej: "B1:B1000")
+     * @return array Array de rangos mergeados de la columna especificada
+     */
+    public function getMergedRangesInColumn($column, $range = null)
+    {
+        try {
+            if (!$this->initializeGoogleSheets()) {
+                throw new \Exception('No se pudo inicializar Google Sheets');
+            }
+
+            $spreadsheet = $this->googleService->spreadsheets->get($this->spreadsheetId);
+            $mergedRanges = [];
+            $columnIndex = $this->letterToColumnIndex($column);
+
+            foreach ($spreadsheet->getSheets() as $sheet) {
+                if ($sheet->getProperties()->getTitle() == $this->sheetName) {
+                    $merges = $sheet->getMerges();
+                    
+                    if ($merges) {
+                        foreach ($merges as $merge) {
+                            // Verificar si el merge incluye la columna especificada
+                            if ($merge->getStartColumnIndex() <= $columnIndex && $merge->getEndColumnIndex() > $columnIndex) {
+                                $mergeInfo = [
+                                    'start_row' => $merge->getStartRowIndex(),
+                                    'end_row' => $merge->getEndRowIndex(),
+                                    'start_column' => $merge->getStartColumnIndex(),
+                                    'end_column' => $merge->getEndColumnIndex(),
+                                    'range' => $this->convertToA1Notation($merge),
+                                    'start_cell' => $this->convertToA1Notation($merge, 'start'),
+                                    'end_cell' => $this->convertToA1Notation($merge, 'end'),
+                                    'row_count' => $merge->getEndRowIndex() - $merge->getStartRowIndex(),
+                                    'column_count' => $merge->getEndColumnIndex() - $merge->getStartColumnIndex(),
+                                    'column' => $column
+                                ];
+
+                                // Si se especifica un rango, verificar si está dentro
+                                if ($range) {
+                                    if ($this->isMergeInRange($mergeInfo, $range)) {
+                                        $mergedRanges[] = $mergeInfo;
+                                    }
+                                } else {
+                                    $mergedRanges[] = $mergeInfo;
+                                }
+                            }
+                        }
+                    }
+                    break;
+                }
+            }
+
+            Log::info("Rangos mergeados encontrados en columna {$column}: " . count($mergedRanges));
+            return $mergedRanges;
+
+        } catch (\Exception $e) {
+            Log::error("Error obteniendo rangos mergeados de columna {$column}: " . $e->getMessage());
             throw $e;
         }
     }
