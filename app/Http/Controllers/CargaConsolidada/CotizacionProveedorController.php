@@ -134,8 +134,6 @@ class CotizacionProveedorController extends Controller
                 $query->where('main.nombre', 'LIKE', '%' . $search . '%');
             }
             if ($request->has('estado_coordinacion') || $request->has('estado_china')) {
-                // Como estamos usando el constructor de consultas de Laravel (DB::table), no se puede usar whereHas directamente.
-                // En su lugar, hacemos un whereExists para filtrar cotizaciones que tengan al menos un proveedor con el estado requerido.
                 $query->whereExists(function ($sub) use ($request) {
                     $sub->select(DB::raw(1))
                         ->from('contenedor_consolidado_cotizacion_proveedores as proveedores')
@@ -1776,10 +1774,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
         return false;
     }
 
-    /**
-     * Verificar si debe enviar mensaje de reserva
-     * Solo se envía si es el primer proveedor inspeccionado y la cotización tiene más de 1 proveedor
-     */
+
     private function shouldSendReservationMessage($idCotizacion)
     {
         $totalProviders = CotizacionProveedor::where('id_cotizacion', $idCotizacion)->count();
@@ -1791,9 +1786,6 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
         return $inspectedProviders === 1 && $totalProviders > 1;
     }
 
-    /**
-     * Enviar mensaje de reserva de espacio
-     */
     private function sendReservationMessage($cotizacion, $telefono)
     {
         $contenedor = Contenedor::where('id', $cotizacion->id_contenedor)->first();

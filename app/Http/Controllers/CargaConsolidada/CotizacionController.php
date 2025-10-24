@@ -2071,7 +2071,7 @@ class CotizacionController extends Controller
                             'excel_confirmacion' => '',
                             'packing_list' => '',
                             'supplier_phone' => '',
-                            'estados_proveedor' => 'NC',
+                            'estados_proveedor' => 'WAIT',
                             'estado_china' => 'PENDIENTE',
                             'qty_box_china' => 0,
                             'cbm_total_china' => 0,
