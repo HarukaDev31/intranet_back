@@ -17,6 +17,7 @@ use App\Http\Controllers\CargaConsolidada\CotizacionPagosController;
 use App\Http\Controllers\CargaConsolidada\AduanaController;
 use App\Http\Controllers\CargaConsolidada\Clientes\PagosController as ClientesPagosController;
 use App\Http\Controllers\CargaConsolidada\EntregaController;
+use App\Http\Controllers\Commons\Google\SheetController;
 
 /*
 |--------------------------------------------------------------------------
@@ -206,6 +207,7 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
     Route::group(['prefix' => 'cotizaciones-proveedores'], function () {
         //send-rotulado
         Route::post('proveedor/send-rotulado', [CotizacionProveedorController::class, 'sendRotulado']);
+        Route::get('proveedor/get-google-sheet-values', [SheetController::class, 'getMergedRanges']);
         Route::get('proveedor/cotizacion/{idCotizacion}', [CotizacionProveedorController::class, 'getCotizacionProveedorByIdCotizacion']);
         Route::get('contenedor/{idContenedor}', [CotizacionProveedorController::class, 'getContenedorCotizacionProveedores']);
         Route::patch('proveedor/{idProveedor}/arrive-date', [CotizacionProveedorController::class, 'updateArriveDate']);

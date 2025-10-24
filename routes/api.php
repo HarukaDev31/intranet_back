@@ -90,3 +90,13 @@ require __DIR__.'/modules/external/containers.php';
 require __DIR__.'/modules/external/commons/location.php';
 // Módulo de Contenedores
 require __DIR__.'/modules/external/commons/container.php';
+
+// Google Sheets API Routes
+Route::prefix('google-sheets')->group(function () {
+    Route::get('/test-connection', [SheetController::class, 'testConnection']);
+    Route::get('/values', [SheetController::class, 'getGoogleSheetValues']);
+    Route::get('/merged-ranges', [SheetController::class, 'getMergedRanges']);
+    Route::get('/range-values', [SheetController::class, 'getRangeValues']);
+    Route::post('/insert-value', [SheetController::class, 'insertValue']);
+    Route::post('/merge-cells', [SheetController::class, 'mergeCells']);
+});

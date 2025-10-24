@@ -387,9 +387,7 @@ class CotizacionProveedorController extends Controller
 
     public function updateContenedorCotizacionProveedoresByUuid($uuid, Request $request)
     {
-        /**{"proveedores":[{"id":1226,"supplier_phone":"21321321312","supplier":"3213"}]} */
-        //find cotizacin by uuid and update proveedores only if providers with id have id_cotizacion= id of cotizacion with uuid
-        //only one can be updated 
+   
         try {
             $cotizacion = DB::table('contenedor_consolidado_cotizacion')
                 ->where('uuid', $uuid)

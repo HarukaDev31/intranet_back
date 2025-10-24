@@ -209,7 +209,7 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                     $this->sendRotuladoByType($tipoRotulado, $supplierCode, $products, $sleepSendMedia);
 
                     // Actualizar estado del proveedor
-                    $proveedorDB->update(["send_rotulado_status" => "SENDED"]);
+                    $proveedorDB->update(["send_rotulado_status" => "SENDED",'estados' => 'ROTULADO']);
 
                     $processedProviders++;
                 } catch (\Exception $e) {
