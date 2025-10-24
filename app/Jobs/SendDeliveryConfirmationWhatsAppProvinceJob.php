@@ -137,8 +137,8 @@ class SendDeliveryConfirmationWhatsAppProvinceJob implements ShouldQueue
                     $departamento,
                     $provincia,
                     $distrito,
-                    public_path('storage/logo_header_white.png'),
-                    public_path('storage/logo_footer.png')
+                    public_path('storage/logo_icons/logo_header_white.png'),
+                    public_path('storage/logo_icons/logo_footer.png')
                 ));
             }
 
