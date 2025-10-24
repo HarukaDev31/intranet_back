@@ -2813,7 +2813,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
             }
 
             // Despachar el Job para procesar el envío de manera asíncrona
-            SendRecordatorioDatosProveedorJob::dispatch($idCotizacion, $idContainer, $proveedores);
+            SendRecordatorioDatosProveedorJob::dispatch($idCotizacion, $idContainer, $proveedores)->onQueue('importaciones');
 
             return response()->json([
                 'success' => true,
