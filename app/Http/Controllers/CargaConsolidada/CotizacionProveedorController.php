@@ -984,7 +984,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
            $carga = Contenedor::where('id', $idContenedor)->first()->carga;
 
             // Dispatch del Job para procesamiento asíncrono
-            SendRotuladoJob::dispatch($cliente, $carga, $proveedores, $idCotizacion);
+            SendRotuladoJob::dispatch($cliente, $carga, $proveedores, $idCotizacion)->onQueue('importaciones');
 
             Log::info('SendRotuladoJob dispatchado exitosamente');
 
