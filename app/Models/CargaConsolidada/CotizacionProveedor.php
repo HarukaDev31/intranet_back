@@ -15,6 +15,7 @@ class CotizacionProveedor extends Model
         'code_supplier',
         'products',
         'estado',
+        'estados',
         'volumen_doc',
         'valor_doc',
         'factura_comercial',
