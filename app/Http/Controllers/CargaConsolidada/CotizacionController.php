@@ -1803,7 +1803,7 @@ class CotizacionController extends Controller
             if ($estado == 'CONFIRMADO'  && 
             (str_contains($cotizacion->telefono, '931629529') || 
             str_contains($cotizacion->telefono, '912705923')
-            || str_contains($cotizacion->telefono, '934 958 839')
+            || str_contains($cotizacion->telefono, '934958839')
             )) {
              
                 
