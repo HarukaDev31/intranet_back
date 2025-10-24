@@ -79,9 +79,10 @@ class EmbarcadosController extends Controller
                             'code_supplier' => $p->code_supplier,
                             'vol_peru' => $p->vol_peru,
                             'vol_china' => $p->vol_china,
-                            'factura_comercial' => $p->factura_comercial,
-                            'packing_list' => $p->packing_list,
-                            'excel_confirmacion' => $p->excel_confirmacion,
+                            // Devolver URLs completas para los archivos si existen
+                            'factura_comercial' => $this->generateImageUrl($p->factura_comercial),
+                            'packing_list' => $this->generateImageUrl($p->packing_list),
+                            'excel_confirmacion' => $this->generateImageUrl($p->excel_confirmacion),
                         ];
                     })->values();
                 }
@@ -125,5 +126,33 @@ class EmbarcadosController extends Controller
             'data' => $headers,
             'success' => true
         ]);
+    }
+
+    /**
+     * Convierte una ruta relativa de archivo en una URL completa.
+     * Copiado del comportamiento usado en otros controllers para mantener consistencia.
+     */
+    private function generateImageUrl($ruta)
+    {
+        if (empty($ruta)) {
+            return null;
+        }
+
+        // Si ya es una URL completa, devolverla tal como está
+        if (filter_var($ruta, FILTER_VALIDATE_URL)) {
+            return $ruta;
+        }
+
+        // Limpiar partes y unir sin producir dobles slashes
+        $baseUrl = config('app.url') ?? '';
+        $storagePath = '/storage/';
+
+        // Normalizar para que no queden slashes extras
+        $baseUrl = rtrim($baseUrl, '/');
+        $storagePath = trim($storagePath, '/');
+        $ruta = ltrim($ruta, '/');
+
+        // Unir con '/' garantizando una sola barra entre segmentos
+        return implode('/', array_filter([$baseUrl, $storagePath, $ruta], fn($s) => $s !== ''));
     }
 }
