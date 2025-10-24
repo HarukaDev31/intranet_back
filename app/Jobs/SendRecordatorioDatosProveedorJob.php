@@ -67,8 +67,8 @@ class SendRecordatorioDatosProveedorJob implements ShouldQueue
             }
             
             $message .= "Quedo atenta.";
-            $telefono = preg_replace('/\s+/', '', $cotizacion->telefono);
-            $this->sendMessage($message, $telefono . '@c.us');
+            $this->phoneNumberId = $telefono ? $telefono . '@c.us' : '';
+            $this->sendMessage($message, $this->phoneNumberId);
             
             Log::info('Recordatorio de datos de proveedor enviado correctamente', [
                 'id_cotizacion' => $this->idCotizacion,
