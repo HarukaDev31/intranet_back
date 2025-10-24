@@ -425,7 +425,8 @@ class CotizacionProveedorController extends Controller
                     ->update([
                         'supplier_phone' => $proveedorData['supplier_phone'],
                         'supplier' => $proveedorData['supplier'],
-                        'estados' => $this->STATUS_DATOS_PROVEEDOR
+                        'estados' => $this->STATUS_DATOS_PROVEEDOR,
+                        'estados_proveedor'=>$this->STATUS_NOT_CONTACTED
                     ]);
 
                 $proveedoresActualizados[] = $proveedor->id;
