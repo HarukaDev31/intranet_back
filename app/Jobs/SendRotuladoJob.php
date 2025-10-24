@@ -540,7 +540,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
      */
     private function sendRotuladoRopa($supplierCode, $products, $sleepSendMedia)
     {
-        $message = "⚠ Atención ⚠\n\nEtiqueta especial: Prendas de Vestir\n\nSegún la regulación de Aduanas - Perú todo producto textil, requiere tener un etiqueta Cosida o Sublimada de manera obligatoria. \n\nPor lo tanto, dile a tu proveedor #{$supplierCode} que le ponga la etiqueta.\n\n⛔ No aceptamos cargas sin el etiquetado correcto ya que la aduana lo puede decomisar.\n🚫 El rotulado NO puede estar en Chino deberá ser en ESPAÑOL.\n📝Aquí tienes un ejemplo de como tu proveedor debe colocar las etiquetas👇🏼";
+        $message = "👆🏻 ⚠ Atención ⚠\n\nEtiqueta especial: Prendas de Vestir\n\nSegún la regulación de Aduanas - Perú todo producto textil, requiere tener un etiqueta Cosida o Sublimada de manera obligatoria. \n\nPor lo tanto, dile a tu proveedor #{$supplierCode} que le ponga la etiqueta.\n\n⛔ No aceptamos cargas sin el etiquetado correcto ya que la aduana lo puede decomisar.\n🚫 El rotulado NO puede estar en Chino deberá ser en ESPAÑOL.\n📝Aquí tienes un ejemplo de como tu proveedor debe colocar las etiquetas";
 
         // Enviar PDF específico para ropa
         $ropaPdfPath = $this->getRotuladoPdfPath('ropa');
@@ -556,7 +556,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
      */
     private function sendRotuladoRopaInterior($supplierCode, $products, $sleepSendMedia)
     {
-        $message = "⚠ Atención ⚠\n\nEtiqueta especial: Ropa interior/ Accesorios de Vestir\n\nSegún la regulación de Aduanas - Perú todo producto textil, requiere tener un etiqueta Cosida o Colgante de manera obligatoria. \n\nPor lo tanto, dile a tu proveedor #{$supplierCode} que le ponga la etiqueta.\n\n⛔ No aceptamos cargas sin el etiquetado correcto ya que la aduana lo puede decomisar.\n🚫 El rotulado NO puede estar en Chino deberá ser en ESPAÑOL.\n📝 Aquí tienes un ejemplo de como tu proveedor debe colocar las etiquetas👇🏼";
+        $message = "👆🏻 ⚠ Atención ⚠\n\nEtiqueta especial: Ropa interior/ Accesorios de Vestir\n\nSegún la regulación de Aduanas - Perú todo producto textil, requiere tener un etiqueta Cosida o Colgante de manera obligatoria. \n\nPor lo tanto, dile a tu proveedor #{$supplierCode} que le ponga la etiqueta.\n\n⛔ No aceptamos cargas sin el etiquetado correcto ya que la aduana lo puede decomisar.\n🚫 El rotulado NO puede estar en Chino deberá ser en ESPAÑOL.\n📝 Aquí tienes un ejemplo de como tu proveedor debe colocar las etiquetas";
 
         // Enviar PDF específico para ropa interior
         $ropaInteriorPdfPath = $this->getRotuladoPdfPath('ropa_interior');
@@ -572,7 +572,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
      */
     private function sendRotuladoMaquinaria($supplierCode, $products, $sleepSendMedia)
     {
-        $message = "⚠ Atención ⚠\n\nEtiqueta especial: Maquinaria\n\nSegún la regulación de Aduanas - Perú todas maquinaria domestico o industrial que contengan un motor eléctrico, requiere tener una placa Irremovible y visible de manera obligatoria. \n\nPor lo tanto, dile a tu proveedor #{$supplierCode} que le ponga la etiqueta.\n\n⛔ No aceptamos cargas sin la placa ya que la aduana lo puede observar o decomisar.\n🚫 El rotulado del producto NO puede estar en Chino deberá ser en ESPAÑOL.\n📝 Aquí tienes un ejemplo de como tu proveedor debe colocar la placa👇🏼";
+        $message = "👆🏻 ⚠ Atención ⚠\n\nEtiqueta especial: Maquinaria\n\nSegún la regulación de Aduanas - Perú todas maquinaria domestico o industrial que contengan un motor eléctrico, requiere tener una placa Irremovible y visible de manera obligatoria. \n\nPor lo tanto, dile a tu proveedor #{$supplierCode} que le ponga la etiqueta.\n\n⛔ No aceptamos cargas sin la placa ya que la aduana lo puede observar o decomisar.\n🚫 El rotulado del producto NO puede estar en Chino deberá ser en ESPAÑOL.\n📝 Aquí tienes un ejemplo de como tu proveedor debe colocar la placa";
 
         // Enviar PDF específico para maquinaria
         $maquinariaPdfPath = $this->getRotuladoPdfPath('maquinaria');
@@ -633,7 +633,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
             $excelPath = $this->processVimTemplate($cotizacionInfo->nombre, $codes);
 
             // Enviar archivo por WhatsApp
-            $message = "⚠ Atención ⚠
+            $message = "👆🏻 ⚠ Atención ⚠
 Etiqueta especial: Movilidad Personal
 
 Según la regulación de Aduanas - Perú todos los Scooters / Monociclos /Bicimotos / Trimotos requiere tener código VIN y Motor grabado en el producto de manera obligatoria.
@@ -641,7 +641,7 @@ Según la regulación de Aduanas - Perú todos los Scooters / Monociclos /Bicimo
 Por lo tanto, dile a tu proveedor #{$supplierCode} que le ponga la etiqueta.
 
 ⛔ No aceptamos cargas sin código VIN o Motor ya que la aduana lo puede observar o decomisar.
-📝 Aquí tienes el archivo con los códigos generados👇🏼";
+📝 Aquí tienes el archivo con los códigos generados";
 
             if (file_exists($excelPath)) {
                 $this->sendMedia($excelPath, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', $message, null, $sleepSendMedia);
