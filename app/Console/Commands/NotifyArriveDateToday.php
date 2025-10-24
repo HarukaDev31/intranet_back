@@ -7,7 +7,7 @@ use App\Models\CargaConsolidada\CotizacionProveedor;
 use App\Models\CargaConsolidada\Cotizacion;
 use Carbon\Carbon;
 use App\Http\Controllers\CargaConsolidada\CotizacionProveedorController;
-
+use Illuminate\Support\Facades\Log;
 class NotifyArriveDateToday extends Command
 {
     /**
