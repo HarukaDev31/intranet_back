@@ -1800,12 +1800,13 @@ class CotizacionController extends Controller
                 ]);
             }
 
-            if ($estado == 'CONFIRMADO') {
+            if ($estado == 'CONFIRMADO'  && !str_contains(env('APP_URL'), 'localhost')) {
+               
                 $message = "El cliente {$cotizacion->nombre} ha pasado a confirmado, por favor contactar.";
                 event(new \App\Events\CotizacionStatusUpdated($cotizacion, $estado, $message));
 
                 $this->crearNotificacionCotizacionConfirmada($cotizacion);
-
+                //if current env not is production, send message to whatsapp
                 $wspMessage = "Hola {$cotizacion->nombre} gracias por formar parte de nuestra comunidad de importadores; antes de derivarte con el equipo de Coordinaciones por favor recuerda lo siguiente:\n\n" .
                     "1. Envío el contrato para formalizar el servicio de importación. Tiene dos (2) días hábiles para enviar observaciones. De no recibirlas, daremos el contrato por aceptado.\n" .
                     "2. Si el producto tiene marca, logo y/o contiene una imagen de una marca o personaje conocido o patentado en INDECOPI no se podrá transportar.\n" .
@@ -1817,6 +1818,7 @@ class CotizacionController extends Controller
                 $telefonoCliente = preg_replace('/\s+/', '', $cotizacion->telefono);
                 $telefonoCliente = $telefonoCliente ? $telefonoCliente . '@c.us' : '';
                 try {
+
                     $signUrl = rtrim(env('APP_URL_CLIENTES', 'http://localhost:3001'), '/') . '/firma-acuerdo-servicio/' . ($cotizacion->uuid ?? '');
                     $wspMessage .= "\n\nPara firmar el acuerdo ve a este enlace: \n" . $signUrl;
 
