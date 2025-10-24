@@ -14,10 +14,23 @@ use Dompdf\Options;
 use App\Models\CargaConsolidada\CotizacionProveedor;
 use App\Models\CargaConsolidada\Cotizacion;
 use App\Traits\WhatsappTrait;
+use App\Traits\GoogleSheetsHelper;
+use Maatwebsite\Excel\Facades\Excel;
+use Maatwebsite\Excel\Concerns\FromCollection;
+use Maatwebsite\Excel\Concerns\WithHeadings;
+use Maatwebsite\Excel\Concerns\WithMapping;
+use Maatwebsite\Excel\Concerns\WithStyles;
+use Maatwebsite\Excel\Concerns\WithColumnWidths;
+use Maatwebsite\Excel\Concerns\WithEvents;
+use Maatwebsite\Excel\Events\AfterSheet;
+use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
+use PhpOffice\PhpSpreadsheet\Style\Alignment;
+use PhpOffice\PhpSpreadsheet\Style\Border;
+use PhpOffice\PhpSpreadsheet\IOFactory;
 
 class SendRotuladoJob implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, WhatsappTrait;
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, WhatsappTrait, GoogleSheetsHelper;
 
     protected $cliente;
     protected $carga;
@@ -70,7 +83,7 @@ class SendRotuladoJob implements ShouldQueue
             $proveedorIds = collect($proveedores)->filter(function ($proveedor) {
                 return isset($proveedor['id']) && !empty($proveedor['id']);
             })->pluck('id')->toArray();
-            
+
             $proveedoresFromDB = collect();
             if (!empty($proveedorIds)) {
                 $proveedoresFromDB = CotizacionProveedor::whereIn('id', $proveedorIds)
@@ -86,13 +99,11 @@ class SendRotuladoJob implements ShouldQueue
             foreach ($proveedores as $proveedor) {
                 // Verificar que el proveedor tenga id
                 if (!isset($proveedor['id']) || empty($proveedor['id'])) {
-                    Log::warning('Proveedor sin ID válido: ' . json_encode($proveedor));
                     $providersHasNoSended[] = $proveedor;
                     continue;
                 }
-                
+
                 $proveedorDB = $proveedoresFromDB->get($proveedor['id']);
-                Log::info('Proveedor DB: ' . json_encode($proveedorDB));
                 if ($proveedorDB && $proveedorDB->send_rotulado_status === 'SENDED') {
                     $providersHasSended[] = $proveedor;
                 } else {
@@ -104,7 +115,6 @@ class SendRotuladoJob implements ShouldQueue
                 Log::warning('No hay proveedores pendientes de envío');
                 return;
             }
-            Log::info('Providers has sended: ' . json_encode($providersHasSended));
             // Enviar mensaje de bienvenida si es necesario
             if (count($providersHasSended) == 0) {
                 Log::info('Enviando mensaje de bienvenida - no hay proveedores enviados previamente');
@@ -209,7 +219,7 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                     $this->sendRotuladoByType($tipoRotulado, $supplierCode, $products, $sleepSendMedia);
 
                     // Actualizar estado del proveedor
-                    $proveedorDB->update(["send_rotulado_status" => "SENDED",'estados' => 'ROTULADO']);
+                    $proveedorDB->update(["send_rotulado_status" => "SENDED", 'estados' => 'ROTULADO']);
 
                     $processedProviders++;
                 } catch (\Exception $e) {
@@ -258,20 +268,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
      */
     private function generateRotuladoByType($tipoRotulado, $supplierCode, $products)
     {
-        switch ($tipoRotulado) {
-            case 'rotulado':
-                return $this->generateRotuladoGeneral($supplierCode, $products);
-            case 'calzado':
-                return $this->generateRotuladoCalzado($supplierCode, $products);
-            case 'ropa':
-                return $this->generateRotuladoRopa($supplierCode, $products);
-            case 'ropa_interior':
-                return $this->generateRotuladoRopaInterior($supplierCode, $products);
-            case 'maquinaria':
-                return $this->generateRotuladoMaquinaria($supplierCode, $products);
-            default:
-                return $this->generateRotuladoGeneral($supplierCode, $products);
-        }
+        return $this->generateRotuladoGeneral($supplierCode, $products);
     }
 
     /**
@@ -295,6 +292,9 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
             case 'maquinaria':
                 $this->sendRotuladoMaquinaria($supplierCode, $products, $sleepSendMedia);
                 break;
+            case 'movilidad_personal':
+                $this->sendRotuladoMovilidadPersonal($supplierCode, $products, $sleepSendMedia);
+                break;
             default:
                 $this->sendRotuladoGeneral($supplierCode, $products, $sleepSendMedia);
         }
@@ -306,7 +306,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
     private function getRotuladoPdfPath($tipoRotulado)
     {
         $basePath = storage_path('app/public/templates/rotulado');
-        
+
         switch ($tipoRotulado) {
             case 'rotulado':
                 return $basePath . '/rotulado.pdf';
@@ -465,7 +465,30 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
 
         return $this->generatePDF($htmlContent);
     }
+    private function generateRotuladoMovilidadPersonal($supplierCode, $products)
+    {
+        $htmlFilePath = public_path('assets/templates/Rotulado_MovilidadPersonal_Template.html');
+        if (!file_exists($htmlFilePath)) {
+            return $this->generateRotuladoGeneral($supplierCode, $products);
+        }
 
+        $htmlContent = file_get_contents($htmlFilePath);
+        $htmlContent = mb_convert_encoding($htmlContent, 'UTF-8', mb_detect_encoding($htmlContent));
+
+        $headerImagePath = public_path('assets/templates/ROTULADO_MOVILIDAD_PERSONAL_HEADER.png');
+        $headerImageBase64 = '';
+        if (file_exists($headerImagePath)) {
+            $imageData = file_get_contents($headerImagePath);
+            $headerImageBase64 = 'data:image/png;base64,' . base64_encode($imageData);
+        }
+
+        $htmlContent = str_replace('{{cliente}}', $this->cliente, $htmlContent);
+        $htmlContent = str_replace('{{supplier_code}}', $supplierCode, $htmlContent);
+        $htmlContent = str_replace('{{carga}}', $this->carga, $htmlContent);
+        $htmlContent = str_replace('{{base_url}}/assets/templates/ROTULADO_MOVILIDAD_PERSONAL_HEADER.png', $headerImageBase64, $htmlContent);
+
+        return $this->generatePDF($htmlContent);
+    }
     /**
      * Generar PDF desde HTML
      */
@@ -502,7 +525,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
     private function sendRotuladoCalzado($supplierCode, $products, $sleepSendMedia)
     {
         $message = "⚠ Atención ⚠\n\nEtiqueta especial: Calzado\n\nSegún la regulación de Aduanas Perú todo calzado requiere tener una etiqueta Irremovible (Cosida a la lengüeta) de manera obligatoria. \n\nPor lo tanto, dile a tu proveedor #{$supplierCode} que le ponga la etiqueta.\n\n⛔ No aceptamos cargas sin el etiquetado correcto ya que la aduana lo puede decomisar.\n🚫 El rotulado NO puede estar en Chino deberá ser en ESPAÑOL.\n📝 Aquí tienes un ejemplo de como debes colocar las etiquetas👇🏼";
-        
+
         // Enviar PDF específico para calzado
         $calzadoPdfPath = $this->getRotuladoPdfPath('calzado');
         if (file_exists($calzadoPdfPath)) {
@@ -557,6 +580,409 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
             $this->sendMedia($maquinariaPdfPath, 'application/pdf', $message, null, $sleepSendMedia);
         } else {
             Log::warning('No se encontró PDF específico para maquinaria: ' . $maquinariaPdfPath);
+        }
+    }
+
+    private function sendRotuladoMovilidadPersonal($supplierCode, $products, $sleepSendMedia)
+    {
+        try {
+            // Obtener información de la cotización
+            $cotizacionInfo = Cotizacion::where('id', $this->idCotizacion)->first();
+            if (!$cotizacionInfo) {
+                Log::error('No se encontró la cotización con ID: ' . $this->idCotizacion);
+                return;
+            }
+
+            // Obtener qty_box del proveedor desde la base de datos
+            $proveedorDB = CotizacionProveedor::where('code_supplier', $supplierCode)
+                ->where('id_cotizacion', $this->idCotizacion)
+                ->first();
+            
+            if (!$proveedorDB) {
+                Log::error('No se encontró el proveedor en BD: ' . $supplierCode);
+                return;
+            }
+
+            $qtyBox = (int) $proveedorDB->qty_box;
+            if ($qtyBox <= 0) {
+                Log::warning('qty_box no válido para movilidad personal: ' . $qtyBox);
+                return;
+            }
+
+            Log::info("Procesando movilidad personal - qty_box: {$qtyBox}, cliente: {$cotizacionInfo->nombre}");
+
+            // Obtener la última fila con datos y el código de la columna F
+            $lastRowData = $this->getLastRowWithData();
+            if (!$lastRowData || !isset($lastRowData['code'])) {
+                Log::error('No se pudo obtener la última fila con datos');
+                return;
+            }
+
+            $lastCode = $lastRowData['code'];
+            $lastRowNumber = $lastRowData['row'];
+            
+            Log::info("Código base encontrado: {$lastCode} en fila: {$lastRowNumber}");
+
+            // Generar códigos correlativos
+            $codes = $this->generateCorrelativeCodes($lastCode, $qtyBox);
+            
+            // Agregar filas al Google Sheet debajo de la última fila con datos
+            $this->addRowsToGoogleSheet($cotizacionInfo->nombre, $codes, $qtyBox, $lastRowNumber);
+
+            // Procesar plantilla VIM
+            $excelPath = $this->processVimTemplate($cotizacionInfo->nombre, $codes);
+
+            // Enviar archivo por WhatsApp
+            $message = "⚠ Atención ⚠
+Etiqueta especial: Movilidad Personal
+
+Según la regulación de Aduanas - Perú todos los Scooters / Monociclos /Bicimotos / Trimotos requiere tener código VIN y Motor grabado en el producto de manera obligatoria.
+
+Por lo tanto, dile a tu proveedor #{$supplierCode} que le ponga la etiqueta.
+
+⛔ No aceptamos cargas sin código VIN o Motor ya que la aduana lo puede observar o decomisar.
+📝 Aquí tienes el archivo con los códigos generados👇🏼";
+
+            if (file_exists($excelPath)) {
+                $this->sendMedia($excelPath, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', $message, null, $sleepSendMedia);
+                Log::info('Archivo VIM enviado por WhatsApp exitosamente');
+            } else {
+                Log::error('No se pudo crear el archivo VIM: ' . $excelPath);
+            }
+
+        } catch (\Exception $e) {
+            Log::error('Error en sendRotuladoMovilidadPersonal: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Obtener la última fila con datos y el código de la columna F
+     */
+    private function getLastRowWithData()
+    {
+        try {
+            // Obtener valores de toda la hoja para encontrar la última fila con datos
+            $values = $this->getRangeValues('A1:Z1000');
+            
+            if (empty($values)) {
+                return null;
+            }
+
+            // Buscar la última fila que tenga datos en cualquier columna
+            $lastRowIndex = 0;
+            $lastRowData = null;
+            
+            foreach ($values as $rowIndex => $row) {
+                // Verificar si la fila tiene algún dato
+                $hasData = false;
+                foreach ($row as $cell) {
+                    if (!empty($cell)) {
+                        $hasData = true;
+                        break;
+                    }
+                }
+                
+                if ($hasData) {
+                    $lastRowIndex = $rowIndex;
+                    $lastRowData = $row;
+                }
+            }
+
+            $lastRowNumber = $lastRowIndex + 1; // +1 porque Google Sheets usa índice base 1
+            
+            // Obtener el código de la columna F de la última fila
+            $lastCode = isset($lastRowData[5]) ? $lastRowData[5] : null; // Columna F es índice 5
+            
+            Log::info("Última fila con datos: {$lastRowNumber}, código en columna F: {$lastCode}");
+            
+            return [
+                'row' => $lastRowNumber,
+                'code' => $lastCode,
+                'rowData' => $lastRowData
+            ];
+
+        } catch (\Exception $e) {
+            Log::error('Error obteniendo última fila con datos: ' . $e->getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Generar códigos correlativos basados en el código base
+     */
+    private function generateCorrelativeCodes($baseCode, $qtyBox, $lastCodeRow = null)
+    {
+        try {
+            // Extraer el número del código base (ej: L7NES211MSG083495 -> 083495)
+            if (!preg_match('/^L7NES(\d+)MSG(\d+)$/', $baseCode, $matches)) {
+                throw new \Exception('Formato de código base inválido: ' . $baseCode);
+            }
+
+            $baseNumber = (int) $matches[2];
+            $codes = [];
+
+            // Siempre usar el número del código base + 1, no el número de fila
+            $startNumber = $baseNumber + 1;
+
+            for ($i = 0; $i < $qtyBox; $i++) {
+                $newNumber = $startNumber + $i;
+                $newCode = sprintf('L7NES%sMSG%06d', $matches[1], $newNumber);
+                $codes[] = $newCode;
+            }
+
+            Log::info('Códigos generados: ' . implode(', ', $codes));
+            return $codes;
+
+        } catch (\Exception $e) {
+            Log::error('Error generando códigos correlativos: ' . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * Agregar filas al Google Sheet con el nombre del cliente en columna B, índice en columna C y códigos en columna F
+     */
+    private function addRowsToGoogleSheet($clienteNombre, $codes, $qtyBox, $lastRowWithData)
+    {
+        try {
+            // Empezar desde la fila siguiente a la última fila con datos
+            $startRow = $lastRowWithData + 1;
+
+            // Insertar nombre del cliente en la columna B
+            $bData = [];
+            for ($i = 0; $i < $qtyBox; $i++) {
+                $bData[] = [$clienteNombre];
+            }
+            $bRange = "B{$startRow}:B" . ($startRow + $qtyBox - 1);
+            $this->insertRangeValues($bRange, $bData);
+
+            // Insertar índice en la columna C (1, 2, 3, etc.)
+            $cData = [];
+            for ($i = 0; $i < $qtyBox; $i++) {
+                $cData[] = [$i + 1]; // Empezar desde 1
+            }
+            $cRange = "C{$startRow}:C" . ($startRow + $qtyBox - 1);
+            $this->insertRangeValues($cRange, $cData);
+
+            // Insertar códigos en la columna F
+            $fData = [];
+            for ($i = 0; $i < $qtyBox; $i++) {
+                $fData[] = [$codes[$i]];
+            }
+            $fRange = "F{$startRow}:F" . ($startRow + $qtyBox - 1);
+            $this->insertRangeValues($fRange, $fData);
+
+            // Mergear celdas de la columna B para el nombre del cliente
+            if ($qtyBox > 1) {
+                $this->mergeCells("B{$startRow}", "B" . ($startRow + $qtyBox - 1));
+            }
+
+            // Aplicar bordes desde columna B hasta G
+            $this->applyBordersToRows($startRow, $startRow + $qtyBox - 1, 'B', 'G');
+
+            Log::info("Filas agregadas al Google Sheet: {$qtyBox} filas desde la fila {$startRow} - Nombre en columna B, índice en columna C, códigos en columna F");
+
+        } catch (\Exception $e) {
+            Log::error('Error agregando filas al Google Sheet: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Obtener el número de la última fila ocupada
+     */
+    private function getLastRowNumber()
+    {
+        try {
+            $values = $this->getRangeValues('A1:A1000');
+            $lastRow = 0;
+            
+            foreach ($values as $index => $row) {
+                if (!empty($row[0])) {
+                    $lastRow = $index + 1;
+                }
+            }
+            
+            return $lastRow;
+        } catch (\Exception $e) {
+            Log::error('Error obteniendo última fila: ' . $e->getMessage());
+            return 0;
+        }
+    }
+
+    /**
+     * Obtener la letra de la última columna ocupada
+     */
+    private function getLastColumnLetter()
+    {
+        try {
+            // Obtener valores de la primera fila para detectar la última columna ocupada
+            $values = $this->getRangeValues('A1:ZZ1');
+            
+            if (empty($values) || empty($values[0])) {
+                return 'A'; // Si no hay datos, empezar desde A
+            }
+
+            $lastColumnIndex = 0;
+            $firstRow = $values[0];
+            
+            // Buscar la última columna con datos
+            foreach ($firstRow as $index => $value) {
+                if (!empty($value)) {
+                    $lastColumnIndex = $index;
+                }
+            }
+            
+            $lastColumn = $this->columnIndexToLetter($lastColumnIndex);
+            Log::info("Última columna ocupada: {$lastColumn}");
+            return $lastColumn;
+
+        } catch (\Exception $e) {
+            Log::error('Error obteniendo última columna: ' . $e->getMessage());
+            return 'A'; // Fallback a columna A
+        }
+    }
+
+    /**
+     * Obtener la siguiente letra de columna
+     */
+    private function getNextColumnLetter($currentColumn)
+    {
+        $index = $this->letterToColumnIndex($currentColumn);
+        return $this->columnIndexToLetter($index + 1);
+    }
+
+    /**
+     * Procesar la plantilla VIM y agregar los datos
+     */
+    private function processVimTemplate($clienteNombre, $codes)
+    {
+        try {
+            $templatePath = public_path('assets/templates/PlantillaVim.xlsx');
+            
+            if (!file_exists($templatePath)) {
+                throw new \Exception('Plantilla VIM no encontrada: ' . $templatePath);
+            }
+
+            // Crear directorio temporal si no existe
+            $tempDir = storage_path('app/temp');
+            if (!file_exists($tempDir)) {
+                mkdir($tempDir, 0755, true);
+            }
+
+            // Crear una copia temporal
+            $tempPath = $tempDir . '/vim_' . time() . '.xlsx';
+            copy($templatePath, $tempPath);
+
+            // Usar PhpSpreadsheet para modificar el archivo
+            $reader = IOFactory::createReader('Xlsx');
+            $spreadsheet = $reader->load($tempPath);
+            $worksheet = $spreadsheet->getActiveSheet();
+
+            // Empezar desde la fila 3
+            $startRow = 3;
+            
+            // Agregar datos en las columnas B y F
+            foreach ($codes as $index => $code) {
+                $row = $startRow + $index;
+                
+                // Columna B: Nombre del cliente
+                $worksheet->setCellValue("B{$row}", $clienteNombre);
+                
+                // Columna F: Código
+                $worksheet->setCellValue("F{$row}", $code);
+            }
+
+            // Guardar el archivo modificado
+            $writer = IOFactory::createWriter($spreadsheet, 'Xlsx');
+            $writer->save($tempPath);
+
+            Log::info('Plantilla VIM procesada exitosamente: ' . $tempPath);
+            return $tempPath;
+
+        } catch (\Exception $e) {
+            Log::error('Error procesando plantilla VIM: ' . $e->getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Aplicar bordes a un rango de filas en el Google Sheet
+     */
+    private function applyBordersToRows($startRow, $endRow, $startColumn = 'A', $endColumn = null)
+    {
+        try {
+            if (!$this->initializeGoogleSheets()) {
+                throw new \Exception('No se pudo inicializar Google Sheets');
+            }
+
+            // Obtener el ID de la hoja
+            $sheetId = $this->getSheetId();
+            
+            // Si no se especifica columna final, usar la última columna ocupada
+            if (!$endColumn) {
+                $lastColumn = $this->getLastColumnLetter();
+                $endColumnIndex = $this->letterToColumnIndex($lastColumn) + 1;
+            } else {
+                $endColumnIndex = $this->letterToColumnIndex($endColumn) + 1;
+            }
+
+            $startColumnIndex = $this->letterToColumnIndex($startColumn);
+
+            // Crear el rango para aplicar bordes
+            $range = new \Google\Service\Sheets\GridRange([
+                'sheetId' => $sheetId,
+                'startRowIndex' => $startRow - 1, // Convertir a índice base 0
+                'endRowIndex' => $endRow, // Ya está en índice base 0
+                'startColumnIndex' => $startColumnIndex,
+                'endColumnIndex' => $endColumnIndex
+            ]);
+
+            // Crear el estilo de borde
+            $borderStyle = new \Google\Service\Sheets\Border([
+                'style' => 'SOLID',
+                'width' => 1,
+                'color' => new \Google\Service\Sheets\Color([
+                    'red' => 0.0,
+                    'green' => 0.0,
+                    'blue' => 0.0
+                ])
+            ]);
+
+            // Crear los bordes para todas las direcciones
+            $borders = new \Google\Service\Sheets\Borders([
+                'top' => $borderStyle,
+                'bottom' => $borderStyle,
+                'left' => $borderStyle,
+                'right' => $borderStyle
+            ]);
+
+            // Crear el estilo de celda
+            $cellFormat = new \Google\Service\Sheets\CellFormat([
+                'borders' => $borders
+            ]);
+
+            // Crear la solicitud de formato
+            $formatRequest = new \Google\Service\Sheets\Request([
+                'repeatCell' => new \Google\Service\Sheets\RepeatCellRequest([
+                    'range' => $range,
+                    'cell' => new \Google\Service\Sheets\CellData([
+                        'userEnteredFormat' => $cellFormat
+                    ]),
+                    'fields' => 'userEnteredFormat.borders'
+                ])
+            ]);
+
+            // Ejecutar la solicitud
+            $batchRequest = new \Google\Service\Sheets\BatchUpdateSpreadsheetRequest([
+                'requests' => [$formatRequest]
+            ]);
+
+            $result = $this->googleService->spreadsheets->batchUpdate($this->spreadsheetId, $batchRequest);
+
+            Log::info("Bordes aplicados a las filas {$startRow}-{$endRow} desde columna {$startColumn} hasta {$endColumn}");
+
+        } catch (\Exception $e) {
+            Log::error("Error aplicando bordes a filas {$startRow}-{$endRow}: " . $e->getMessage());
         }
     }
 }
