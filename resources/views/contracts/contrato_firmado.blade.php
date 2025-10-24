@@ -69,7 +69,7 @@
     @php
         // We know the filename is exactly 'logo_contrato.png'. Check common locations sequentially and embed the first found file as base64 (Dompdf-friendly).
         $filename = 'logo_contrato.png';
-        $logoSrc = asset('storage/' . $filename); // default public URL fallback
+        $logoSrc = asset('storage/logo_icons/' . $filename); // default public URL fallback
 
         //If controller passed an absolute path, try it first
         if (!empty($logo_contrato_url)) {
@@ -99,7 +99,7 @@
 
         // base_path public/storage (alternative)
         if (strpos($logoSrc, 'data:') !== 0) {
-            $p = base_path('public/storage/' . $filename);
+            $p = base_path('public/storage/logo_icons/' . $filename);
             $pNorm = str_replace('\\', DIRECTORY_SEPARATOR, $p);
             if (@file_exists($pNorm) && is_readable($pNorm)) {
                 $ext = pathinfo($pNorm, PATHINFO_EXTENSION) ?: 'png';
@@ -290,7 +290,7 @@
         @php
             // Try to load Patricia's signature image from public/storage and embed as base64 for Dompdf
             $firmaPatSrc = null;
-            $firmaPath = public_path('storage/firma_patricia.png');
+            $firmaPath = public_path('storage/social_icons/firma_patricia.png');
             $firmaPathNorm = str_replace('\\', DIRECTORY_SEPARATOR, $firmaPath);
             if (@file_exists($firmaPathNorm) && is_readable($firmaPathNorm)) {
                 $ext = pathinfo($firmaPathNorm, PATHINFO_EXTENSION) ?: 'png';

@@ -28,10 +28,10 @@ class RegisterConfirmationMail extends Mailable
         $this->logo_header_white = $logo_header_white;
         $this->logo_footer_white = $logo_footer_white;
         $this->social_icons = [
-            'facebook' => public_path('storage/facebook.png'),
-            'instagram' => public_path('storage/instagram.png'),
-            'tiktok' => public_path('storage/tiktok.png'),
-            'youtube' => public_path('storage/youtube.png'),
+            'facebook' => public_path('storage/social_icons/facebook.png'),
+            'instagram' => public_path('storage/social_icons/instagram.png'),
+            'tiktok' => public_path('storage/social_icons/tiktok.png'),
+            'youtube' => public_path('storage/social_icons/youtube.png'),
         ];
     }
 

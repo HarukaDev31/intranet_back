@@ -1841,7 +1841,7 @@ class CotizacionController extends Controller
                         'cliente_documento' => $cotizacion->documento,
                         'cliente_domicilio' => $cotizacion->direccion ?? null,
                         'carga' => $carga,
-                        'logo_contrato_url' => public_path('storage/logo_contrato.png'),
+                        'logo_contrato_url' => public_path('storage/logo_icons/logo_contrato.png'),
                     ];
 
                     $contractHtml = view('contracts.contrato', $viewData)->render();

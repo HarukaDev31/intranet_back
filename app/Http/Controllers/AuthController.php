@@ -571,12 +571,12 @@ class AuthController extends Controller
                         $user['email'],
                         $validatedData['password'],
                         $user['nombre'],
-                        public_path('storage/logo_header_white.png'),
-                        public_path('storage/logo_footer_white.png'),
-                        public_path('storage/facebook.png'),
-                        public_path('storage/instagram.png'),
-                        public_path('storage/tiktok.png'),
-                        public_path('storage/youtube.png')
+                        public_path('storage/logo_icons/logo_header_white.png'),
+                        public_path('storage/logo_icons/logo_footer_white.png'),
+                        public_path('storage/social_icons/facebook.png'),
+                        public_path('storage/social_icons/instagram.png'),
+                        public_path('storage/social_icons/tiktok.png'),
+                        public_path('storage/social_icons/youtube.png')
                     )
                 );
             } catch (\Exception $mailException) {
