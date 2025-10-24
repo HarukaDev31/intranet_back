@@ -1800,8 +1800,9 @@ class CotizacionController extends Controller
                 ]);
             }
 
-            if ($estado == 'CONFIRMADO'  && str_contains(env('APP_URL'), 'localhost')) {
-               
+            if ($estado == 'CONFIRMADO'  && str_contains($cotizacion->telefono, '912705923')) {
+             
+                
                 $message = "El cliente {$cotizacion->nombre} ha pasado a confirmado, por favor contactar.";
                 event(new \App\Events\CotizacionStatusUpdated($cotizacion, $estado, $message));
 
