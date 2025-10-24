@@ -485,7 +485,6 @@ class ContenedorController extends Controller
             $data = $request->all();
             $idCotizacion = $data['idCotizacion'];
             $idContenedorDestino = $data['idContenedorDestino'];
-            // Actualiza la cotización principal
             $cotizacion = Cotizacion::find($idCotizacion);
             if (!$cotizacion) {
                 return response()->json(['message' => 'Cotización no encontrada', 'success' => false], 404);

@@ -77,18 +77,18 @@ class CotizacionController extends Controller
                 $query->where(function ($q) use ($search) {
                     $q->where('nombre', 'LIKE', "%{$search}%")
                         ->orWhere('documento', 'LIKE', "%{$search}%");
-                    
+
                     // Mejorar búsqueda de teléfono
                     if (preg_match('/^[\d\s\-\(\)\.\+]+$/', $search)) {
                         $telefonoNormalizado = preg_replace('/[\s\-\(\)\.\+]/', '', $search);
-                        
+
                         // Si empieza con 51 y tiene más de 9 dígitos, remover prefijo
                         if (preg_match('/^51(\d{9})$/', $telefonoNormalizado, $matches)) {
                             $telefonoNormalizado = $matches[1];
                         }
-                        
+
                         if (!empty($telefonoNormalizado)) {
-                            $q->orWhere(function($subQuery) use ($telefonoNormalizado, $search) {
+                            $q->orWhere(function ($subQuery) use ($telefonoNormalizado, $search) {
                                 $subQuery->whereRaw('REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(telefono, " ", ""), "-", ""), "(", ""), ")", ""), "+", "") LIKE ?', ["%{$telefonoNormalizado}%"])
                                     ->orWhereRaw('REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(telefono, " ", ""), "-", ""), "(", ""), ")", ""), "+", "") LIKE ?', ["%51{$telefonoNormalizado}%"])
                                     ->orWhere('telefono', 'LIKE', "%{$search}%");
@@ -113,7 +113,7 @@ class CotizacionController extends Controller
             }
             // Siempre filtrar cotizaciones que tengan al menos un proveedor
             $query->whereHas('proveedores');
-            
+
             //if request has estado_coordinacion or estado_china  then query with  proveedores  and just get cotizaciones with at least one proveedor with the state
             if ($request->has('estado_coordinacion') || $request->has('estado_china')) {
                 $query->whereHas('proveedores', function ($query) use ($request) {
@@ -318,7 +318,7 @@ class CotizacionController extends Controller
                         WHERE id_contenedor = ' . $idContenedor . '
                     )
                     AND estado_cotizador = "CONFIRMADO"
-                    AND (id_contenedor_pago =' .$idContenedor. ' OR id_contenedor_pago is null)
+                    AND (id_contenedor_pago =' . $idContenedor . ' OR id_contenedor_pago is null)
 
                 ) as total_logistica'),
                 DB::raw('(
@@ -1405,7 +1405,12 @@ class CotizacionController extends Controller
 
             CotizacionProveedor::where('id_cotizacion', $idCotizacion)
                 ->update(['id_contenedor' => $idContenedorDestino]);
-
+            $contenedorDestino=Contenedor::find($idContenedorDestino);
+            $message = "Hola @nombrecliente, segun lo conversado estamos pasando su carga para el consolidado @contenedorDestino.
+                Le estaré informando cualquier avance 🫡.";
+            $message = str_replace('@nombrecliente', $cotizacion->nombre, $message);
+            $message = str_replace('@contenedorDestino', '#' . $contenedorDestino->carga, $message);
+            $this->sendMessage($message, null, 3);
             DB::commit();
             return true;
         } catch (Exception $e) {
@@ -1800,13 +1805,15 @@ class CotizacionController extends Controller
                 ]);
             }
 
-            if ($estado == 'CONFIRMADO'  && 
-            (str_contains($cotizacion->telefono, '931629529') || 
-            str_contains($cotizacion->telefono, '912705923')
-            || str_contains($cotizacion->telefono, '934958839')
-            )) {
-             
-                
+            if (
+                $estado == 'CONFIRMADO'  &&
+                (str_contains($cotizacion->telefono, '931629529') ||
+                    str_contains($cotizacion->telefono, '912705923')
+                    || str_contains($cotizacion->telefono, '934958839')
+                )
+            ) {
+
+
                 $message = "El cliente {$cotizacion->nombre} ha pasado a confirmado, por favor contactar.";
                 event(new \App\Events\CotizacionStatusUpdated($cotizacion, $estado, $message));
 
