@@ -289,7 +289,7 @@
         </div>
         @php
             $firmaPatSrc = null;
-            $firmaPath = public_path('storage/firma_patricia.png');
+            $firmaPath = public_path('storage/social_icons/firma_patricia.png');
             $firmaPathNorm = str_replace('\\', DIRECTORY_SEPARATOR, $firmaPath);
             if (@file_exists($firmaPathNorm) && is_readable($firmaPathNorm)) {
                 $ext = pathinfo($firmaPathNorm, PATHINFO_EXTENSION) ?: 'png';
