@@ -1800,7 +1800,11 @@ class CotizacionController extends Controller
                 ]);
             }
 
-            if ($estado == 'CONFIRMADO'  && (str_contains($cotizacion->telefono, '931629529') || str_contains($cotizacion->telefono, '912705923'))) {
+            if ($estado == 'CONFIRMADO'  && 
+            (str_contains($cotizacion->telefono, '931629529') || 
+            str_contains($cotizacion->telefono, '912705923')
+            || str_contains($cotizacion->telefono, '934958839')
+            )) {
              
                 
                 $message = "El cliente {$cotizacion->nombre} ha pasado a confirmado, por favor contactar.";
