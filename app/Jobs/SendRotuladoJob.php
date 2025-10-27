@@ -218,8 +218,18 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                     // Enviar mensaje e imagen específicos por tipo
                     $this->sendRotuladoByType($tipoRotulado, $supplierCode, $products, $sleepSendMedia);
 
-                    // Actualizar estado del proveedor
-                    $proveedorDB->update(["send_rotulado_status" => "SENDED", 'estados' => 'ROTULADO']);
+                    // Actualizar estado del proveedor y tipo de rotulado
+                    $updateData = [
+                        "send_rotulado_status" => "SENDED", 
+                        'tipo_rotulado' => $tipoRotulado
+                    ];
+
+                    // Solo actualizar estados a 'ROTULADO' si el estado actual es 'DATOS PROVEEDOR'
+                    if ($proveedorDB->estados === 'DATOS PROVEEDOR') {
+                        $updateData['estados'] = 'ROTULADO';
+                    }
+
+                    $proveedorDB->update($updateData);
 
                     $processedProviders++;
                 } catch (\Exception $e) {

@@ -203,7 +203,8 @@ class CotizacionProveedorController extends Controller
                         'estado_china',
                         'arrive_date_china',
                         'arrive_date',
-                        'send_rotulado_status'
+                        'send_rotulado_status',
+                        'tipo_rotulado'
                     ])
                     ->get()
                     ->toArray();
@@ -432,8 +433,13 @@ class CotizacionProveedorController extends Controller
                 $proveedoresActualizados[] = $proveedor->id;
             }
 
-            // Verificar qué proveedores quedan pendientes
-            foreach ($todosProveedores as $proveedor) {
+            // Verificar qué proveedores quedan pendientes DESPUÉS de actualizar
+            // Necesitamos obtener los proveedores actualizados de la base de datos
+            $proveedoresActualizadosDB = DB::table('contenedor_consolidado_cotizacion_proveedores')
+                ->where('id_cotizacion', $cotizacion->id)
+                ->get();
+
+            foreach ($proveedoresActualizadosDB as $proveedor) {
                 if ($proveedor->estados !== $this->STATUS_DATOS_PROVEEDOR) {
                     $proveedoresPendientes[] = [
                         'id' => $proveedor->id,
@@ -486,7 +492,7 @@ class CotizacionProveedorController extends Controller
                 'tipo_mensaje' => $tipoMensaje,
                 'proveedores_actualizados' => count($proveedoresActualizados),
                 'proveedores_pendientes' => count($proveedoresPendientes),
-                'whatsapp_enviado' => $resultadoWhatsApp['status']
+                'whatsapp_enviado' => $resultadoWhatsApp['success'] ?? false
             ]);
         } catch (\Exception $e) {
             return response()->json([

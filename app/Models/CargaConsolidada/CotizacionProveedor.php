@@ -34,7 +34,8 @@ class CotizacionProveedor extends Model
         'id_proveedor',
         'id_contenedor_pago',
         'estado_china',
-        'send_rotulado_status'
+        'send_rotulado_status',
+        'tipo_rotulado'
     ];
 
     /**

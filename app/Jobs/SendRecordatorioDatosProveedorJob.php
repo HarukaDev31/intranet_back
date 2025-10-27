@@ -32,6 +32,9 @@ class SendRecordatorioDatosProveedorJob implements ShouldQueue
         $this->idCotizacion = $idCotizacion;
         $this->idContainer = $idContainer;
         $this->proveedores = $proveedores;
+        
+        // ✅ Delay de 3 segundos para asegurar que los datos estén actualizados en BD
+        $this->delay(now()->addSeconds(3));
     }
 
     /**
