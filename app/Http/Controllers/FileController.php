@@ -45,10 +45,21 @@ class FileController extends Controller
                 'file_size' => strlen($file)
             ]);
             
+            // ✅ Permitir dinámicamente subdominios de probusiness.pe y localhost
+            $origin = request()->header('origin');
+            $allowedOrigin = '*';
+            
+            if ($origin) {
+                if (preg_match('#^https?://(.*\.)?probusiness\.pe(:\d+)?$#i', $origin) ||
+                    preg_match('#^http://localhost(:\d+)?$#i', $origin)) {
+                    $allowedOrigin = $origin;
+                }
+            }
+            
             return response($file, 200)
                 ->header('Content-Type', $mimeType)
                 ->header('Content-Disposition', 'inline; filename="' . $fileName . '"')
-                ->header('Access-Control-Allow-Origin', 'http://localhost:3001')
+                ->header('Access-Control-Allow-Origin', $allowedOrigin)
                 ->header('Access-Control-Allow-Methods', 'GET, OPTIONS')
                 ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With')
                 ->header('Access-Control-Allow-Credentials', 'true')
