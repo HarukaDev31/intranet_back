@@ -187,7 +187,7 @@ class CotizacionController extends Controller
                     'impuestos' => $cotizacion->impuestos,
                     'tipo_cliente' => $cotizacion->tipoCliente->name,
                     'bl_file_url' => $files->bl_file_url ? $files->bl_file_url : null,
-                    'lista_embarque_url' => $files->lista_embarque_url ? $files->lista_embarque_url : null,
+                    'lista_embarque_url' => $this->generateImageUrl($files->lista_embarque_url) ? $this->generateImageUrl($files->lista_embarque_url) : null,
                 ];
             });
 
