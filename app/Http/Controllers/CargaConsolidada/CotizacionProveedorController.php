@@ -1682,11 +1682,23 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
      */
     private function updateProveedorStatus($idProveedor)
     {
+        try {   
+        $user = JWTAuth::parseToken()->authenticate();
+        //log updated by user id
+        Log::info('updated by user id: ' . $user->id, ['idProveedor' => $idProveedor]);
+        if (!$user) {
+            Log::error('Usuario no autenticado', ['idProveedor' => $idProveedor]);
+            return;
+        }
         CotizacionProveedor::where('id', $idProveedor)
             ->update([
                 'estados_proveedor' => 'INSPECTION',
                 'estados' => 'INSPECCIONADO'
             ]);
+        } catch (\Exception $e) {
+            Log::error('Error en updateProveedorStatus: ' . $e->getMessage(), ['idProveedor' => $idProveedor]);
+            return;
+        }
     }
 
     /**
