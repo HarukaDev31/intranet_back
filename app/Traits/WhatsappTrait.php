@@ -87,7 +87,7 @@ trait WhatsappTrait
         ]);
     }
 
-    public function sendDataItem($message, $filePath, $phoneNumberId = null, $sleep = 0): array
+    public function sendDataItem($message, $filePath, $phoneNumberId = null, $sleep = 0, $fileName = null): array
     {
         try {
             $phoneNumberId = $phoneNumberId ? $phoneNumberId : $this->phoneNumberId;
@@ -111,10 +111,13 @@ trait WhatsappTrait
             
             $fileContent = base64_encode($fileContent);
 
+            // Usar el nombre personalizado si se proporciona, de lo contrario usar basename
+            $finalFileName = $fileName ?? basename($filePath);
+
             return $this->_callApi('/data-item', [
                 'message' => $message,
                 'fileContent' => $fileContent,
-                'fileName' => basename($filePath),
+                'fileName' => $finalFileName,
                 'phoneNumberId' => $phoneNumberId,
                 'sleep' => $sleep
             ]);

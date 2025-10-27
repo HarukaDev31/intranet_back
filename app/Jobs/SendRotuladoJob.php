@@ -209,10 +209,19 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                         continue;
                     }
 
-                    // Enviar documento principal al proveedor
-                    $this->sendDataItem(
+                    // Crear copia del archivo con el nombre adecuado para el envío
+                    $fileName = "Rotulado_{$supplierCode}.pdf";
+                    $tempFileForSend = storage_path("app/{$fileName}");
+                    if (file_exists($tempFileForSend)) {
+                        unlink($tempFileForSend);
+                    }
+                    copy($tempFilePath, $tempFileForSend);
+
+                    // Enviar documento principal al proveedor con nombre personalizado
+                    $this->sendMedia(
+                        $tempFileForSend,
+                        'application/pdf',
                         "Producto: {$products}\nCódigo de proveedor: {$supplierCode}",
-                        $tempFilePath
                     );
 
                     // Enviar mensaje e imagen específicos por tipo
@@ -224,8 +233,8 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                         'tipo_rotulado' => $tipoRotulado
                     ];
 
-                    // Solo actualizar estados a 'ROTULADO' si el estado actual es 'DATOS PROVEEDOR'
-                    if ($proveedorDB->estados === 'DATOS PROVEEDOR') {
+                    // Solo actualizar estados a 'ROTULADO' si el estado actual es 'DATOS PROVEEDOR' or null or ''
+                    if ($proveedorDB->estados === 'DATOS PROVEEDOR' || $proveedorDB->estados === null || $proveedorDB->estados === '') {
                         $updateData['estados'] = 'ROTULADO';
                     }
 
