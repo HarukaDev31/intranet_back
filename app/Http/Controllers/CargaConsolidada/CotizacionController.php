@@ -544,7 +544,7 @@ class CotizacionController extends Controller
             'success' => true,
             'data' => $headersData,
             'carga' => $contenedor->carga,
-            'lista_embarque_url' => $contenedor->lista_embarque_url
+            'lista_embarque_url' => $this->generateImageUrl($contenedor->lista_embarque_url) ? $this->generateImageUrl($contenedor->lista_embarque_url) : null
         ]);
     }
     public function store(Request $request)
