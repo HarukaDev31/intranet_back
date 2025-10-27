@@ -619,6 +619,8 @@ class CotizacionController extends Controller
 
                 // Convertir la ruta de storage a URL pública
                 $fileUrl = Storage::url($fileUrl);
+                // Convertir a ruta con CORS habilitado
+                $fileUrl = route('storage.file', ['path' => str_replace('public/', '', $fileUrl)]);
                 Log::info('Cotizacion: ' . json_encode($cotizacion));
                 Log::info('Data: ' . $fileUrl);
 
@@ -1568,6 +1570,8 @@ class CotizacionController extends Controller
 
                 // Convertir a URL pública
                 $fileUrl = Storage::url($fileUrl);
+                // Convertir a ruta con CORS habilitado
+                $fileUrl = route('storage.file', ['path' => str_replace('public/', '', $fileUrl)]);
                 Log::info('Nuevo archivo subido exitosamente:', ['url' => $fileUrl]);
             } catch (\Exception $e) {
                 Log::error('Error al procesar el archivo: ' . $e->getMessage());
@@ -1903,6 +1907,8 @@ class CotizacionController extends Controller
                     Storage::disk('public')->put($storageRelative, $pdfContent);
 
                     $publicUrl = Storage::url('public/' . $storageRelative);
+                    // Convertir URL de Storage a ruta con CORS habilitado
+                    $publicUrl = route('storage.file', ['path' => $storageRelative]);
 
                     try {
                         $cotizacion->update(['cotizacion_contrato_url' => $publicUrl]);

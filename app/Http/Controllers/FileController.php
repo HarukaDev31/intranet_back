@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Log;
 
 class FileController extends Controller
 {
@@ -13,9 +14,9 @@ class FileController extends Controller
         try {
             // Intentar múltiples ubicaciones posibles
             $possiblePaths = [
-                public_path('storage/' . $path),           // Para archivos en public/storage/
-                storage_path('app/public/' . $path),       // Para archivos en storage/app/public/
-                public_path($path),                        // Para archivos directamente en public/
+                storage_path('app/public/' . $path),           // Para archivos en storage/app/public/
+                public_path('storage/' . $path),              // Para archivos en public/storage/
+                public_path($path),                            // Para archivos directamente en public/
             ];
             
             $filePath = null;
@@ -27,7 +28,7 @@ class FileController extends Controller
             }
             
             if (!$filePath) {
-                \Log::error('Archivo no encontrado en ninguna ubicación', [
+                Log::error('Archivo no encontrado en ninguna ubicación', [
                     'path' => $path,
                     'attempted_paths' => $possiblePaths
                 ]);
@@ -38,7 +39,7 @@ class FileController extends Controller
             $mimeType = mime_content_type($filePath);
             $fileName = basename($filePath);
             
-            \Log::info('Sirviendo archivo con CORS', [
+            Log::info('Sirviendo archivo con CORS', [
                 'file_path' => $filePath,
                 'mime_type' => $mimeType,
                 'file_size' => strlen($file)
@@ -48,13 +49,13 @@ class FileController extends Controller
                 ->header('Content-Type', $mimeType)
                 ->header('Content-Disposition', 'inline; filename="' . $fileName . '"')
                 ->header('Access-Control-Allow-Origin', 'http://localhost:3001')
-                ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+                ->header('Access-Control-Allow-Methods', 'GET, OPTIONS')
                 ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With')
                 ->header('Access-Control-Allow-Credentials', 'true')
                 ->header('Cache-Control', 'public, max-age=3600');
                 
         } catch (\Exception $e) {
-            \Log::error('Error al servir archivo: ' . $e->getMessage(), [
+            Log::error('Error al servir archivo: ' . $e->getMessage(), [
                 'path' => $path,
                 'trace' => $e->getTraceAsString()
             ]);
