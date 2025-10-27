@@ -62,7 +62,14 @@ return [
                 PDO::MYSQL_ATTR_SSL_CA => env('MYSQL_ATTR_SSL_CA'),
             ]) : [],
         ],
-
+        'mysql_qa' => [
+            'driver' => 'mysql',
+            'host' => env('DB_HOST_QA', 'localhost'),
+            'database' => env('DB_DATABASE_QA', 'db_probusiness_qa'),
+            'username' => env('DB_USERNAME_QA', 'root'),
+            'password' => env('DB_PASSWORD_QA', ''),
+            // ...
+        ],
         'pgsql' => [
             'driver' => 'pgsql',
             'url' => env('DATABASE_URL'),
@@ -123,7 +130,7 @@ return [
 
         'options' => [
             'cluster' => env('REDIS_CLUSTER', 'redis'),
-            'prefix' => env('REDIS_PREFIX', Str::slug(env('APP_NAME', 'laravel'), '_').'_database_'),
+            'prefix' => env('REDIS_PREFIX', Str::slug(env('APP_NAME', 'laravel'), '_') . '_database_'),
         ],
 
         'default' => [
