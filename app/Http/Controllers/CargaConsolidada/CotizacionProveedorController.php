@@ -1739,29 +1739,24 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
     private function sendInspectionFiles($inspectionFiles, $message, $telefono)
     {
         $sentFiles = ['images' => 0, 'videos' => 0];
-        $messageSent = false;
+        
+        // Contar total de archivos a enviar
+        $totalFiles = count($inspectionFiles['images']) + count($inspectionFiles['videos']);
+        
+        // Solo enviar mensaje si hay archivos para enviar
+        if ($totalFiles > 0) {
+            $this->sendMessage($message, $telefono);
+        }
 
-        // Enviar imágenes
-        foreach ($inspectionFiles['images'] as $index => $image) {
-            // Enviar mensaje solo la primera vez si hay archivos
-            if (!$messageSent && count($inspectionFiles['images']) > 0) {
-                $this->sendMessage($message, $telefono);
-                $messageSent = true;
-            }
-            
+        // Enviar imágenes sin mensaje adicional
+        foreach ($inspectionFiles['images'] as $image) {
             if ($this->sendSingleInspectionFile($image, $message, $telefono)) {
                 $sentFiles['images']++;
             }
         }
 
-        // Enviar videos (solo enviar mensaje si no se envió antes)
-        foreach ($inspectionFiles['videos'] as $index => $video) {
-            // Enviar mensaje solo la primera vez si hay videos y no se envió con imágenes
-            if (!$messageSent && count($inspectionFiles['images']) === 0) {
-                $this->sendMessage($message, $telefono);
-                $messageSent = true;
-            }
-            
+        // Enviar videos sin mensaje adicional
+        foreach ($inspectionFiles['videos'] as $video) {
             if ($this->sendSingleInspectionFile($video, $message, $telefono)) {
                 $sentFiles['videos']++;
             }
@@ -1782,7 +1777,8 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
             return false;
         }
 
-        $response = $this->sendMediaInspection($fileSystemPath, $file->file_type, $message, $telefono, 0, $file->id);
+        // No enviar mensaje con los archivos, solo el archivo
+        $response = $this->sendMediaInspection($fileSystemPath, $file->file_type, '', $telefono, 0, $file->id);
 
         // Verificar que la respuesta sea exitosa antes de actualizar el estado
         if ($response && isset($response['status']) && $response['status'] === true) {
