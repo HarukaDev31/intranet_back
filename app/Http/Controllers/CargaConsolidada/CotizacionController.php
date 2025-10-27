@@ -1815,7 +1815,11 @@ class CotizacionController extends Controller
 
 
                 $message = "El cliente {$cotizacion->nombre} ha pasado a confirmado, por favor contactar.";
-                event(new \App\Events\CotizacionStatusUpdated($cotizacion, $estado, $message));
+                try {
+                    event(new \App\Events\CotizacionStatusUpdated($cotizacion, $estado, $message));
+                } catch (\Exception $e) {
+                    Log::error('Error en updateEstadoCotizacion: Pusher error: ' . $e->getMessage());
+                }
 
                 $this->crearNotificacionCotizacionConfirmada($cotizacion);
                 //if current env not is production, send message to whatsapp

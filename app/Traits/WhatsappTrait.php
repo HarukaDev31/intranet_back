@@ -13,8 +13,9 @@ trait WhatsappTrait
         try {
             $url = 'https://redis.probusiness.pe/api/whatsapp' . $endpoint;
             $envUrl = env('APP_URL');
+            $defaultWhatsapNumber=env('DEFAULT_WHATSAPP_NUMBER','912705923@c.us');
             if (strpos($envUrl, 'localhost') !== false) {
-                $data['phoneNumberId'] = '931629529@c.us';
+                $data['phoneNumberId'] = $defaultWhatsapNumber;
             }
            
             $ch = curl_init();
