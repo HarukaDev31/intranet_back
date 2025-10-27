@@ -603,7 +603,7 @@ class CotizacionProveedorController extends Controller
                     ->update(['volumen_china' => $volumenChina]);
             }
             // Manejo de estados específicos
-            else if (in_array($estado, ["NC", "C", "R", "NS", "NO LOADED", "INSPECTION"])) {
+            else if (in_array($estado, ["NC", "C", "R", "NS", "NO LOADED", "INSPECTION",'WAIT'])) {
                 DB::table($this->table_contenedor_cotizacion_proveedores)
                     ->where('id_cotizacion', $idCotizacion)
                     ->where('id', $idProveedor)
@@ -1546,6 +1546,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                 Storage::delete($file->file_path);
             }
             $file->delete();
+            Log::info('Inspección archivo eliminado correctamente', ['idFile' => $idFile]);
             return response()->json([
                 'success' => true,
                 'message' => 'Archivo eliminado correctamente'
@@ -2161,6 +2162,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                     'message' => 'No se pudo guardar ningún archivo de inspección'
                 ], 400);
             }
+            Log::info('Inspección guardada correctamente', ['idProveedor' => $idProveedor, 'idCotizacion' => $idCotizacion]);
             $this->validateToSendInspectionMessage($idProveedor, $idCotizacion);
             return response()->json([
                 'success' => true,
