@@ -1,0 +1,194 @@
+╔════════════════════════════════════════════════════════════════════════╗
+║                  CONFIGURACIÓN MÚLTIPLES DOMINIOS                      ║
+║                    ProBusiness Backend - Nginx                         ║
+╚════════════════════════════════════════════════════════════════════════╝
+
+📋 ESCENARIO: Tienes 2 o más frontends que necesitan acceso a tu API
+
+Ejemplo:
+  • https://app.probusiness.com.pe (Frontend principal)
+  • https://admin.probusiness.com.pe (Panel administrativo)
+  • http://localhost:3001 (Desarrollo local)
+
+═══════════════════════════════════════════════════════════════════════════
+
+✅ OPCIÓN 1: NGINX CON VARIABLES (RECOMENDADO - MÁS RÁPIDO)
+
+Ubicación: /etc/nginx/sites-available/probusiness
+
+Código:
+set $cors_origin "";
+
+if ($http_origin ~* ^(https?://(
+    app\.probusiness\.com\.pe|
+    admin\.probusiness\.com\.pe|
+    localhost:3001
+))?$) {
+    set $cors_origin $http_origin;
+}
+
+add_header 'Access-Control-Allow-Origin' $cors_origin always;
+
+Ventajas:
+  ✓ Rápido (procesamiento en Nginx)
+  ✓ No requiere cambios en PHP
+  ✓ Controla exactamente qué dominios acceden
+
+Pasos:
+  1. Edita el archivo nginx.conf
+  2. Busca "CORS HEADERS - Múltiples dominios"
+  3. Reemplaza los dominios con los tuyos (separados por |)
+  4. Prueba: sudo nginx -t
+  5. Recarga: sudo systemctl reload nginx
+
+═══════════════════════════════════════════════════════════════════════════
+
+✅ OPCIÓN 2: PATRÓN COMODÍN (SI TODOS TIENEN MISMO DOMINIO RAÍZ)
+
+Si tus dominios son todos subdominios de probusiness.com.pe:
+
+set $cors_origin "";
+
+# Permite CUALQUIER subdominio de probusiness.com.pe
+if ($http_origin ~* ^https?://(.*\.)?probusiness\.com\.pe$) {
+    set $cors_origin $http_origin;
+}
+
+# También permite localhost para desarrollo
+if ($http_origin ~* ^http://localhost) {
+    set $cors_origin $http_origin;
+}
+
+add_header 'Access-Control-Allow-Origin' $cors_origin always;
+
+Ventajas:
+  ✓ Flexible: nuevos subdominios funcionan automáticamente
+  ✓ No necesitas actualizar Nginx para cada nuevo dominio
+
+═══════════════════════════════════════════════════════════════════════════
+
+✅ OPCIÓN 3: LARAVEL CONFIG/CORS.PHP (ALTERNATIVA)
+
+Ubicación: config/cors.php
+
+return [
+    'paths' => ['api/*', 'files/*', 'storage/*'],
+    
+    'allowed_origins' => [
+        'https://app.probusiness.com.pe',
+        'https://admin.probusiness.com.pe',
+        'http://localhost:3001',
+    ],
+    
+    'allowed_origins_patterns' => [
+        '#^https://.*\.probusiness\.com\.pe$#',
+    ],
+    
+    'supports_credentials' => true,
+];
+
+Ventajas:
+  ✓ Centralizado en código
+  ✓ Fácil de modificar
+  ✓ Se puede usar con variables .env
+
+Desventajas:
+  ✗ Más lento que Nginx
+  ✗ Requiere procesamiento PHP en cada request
+
+═══════════════════════════════════════════════════════════════════════════
+
+🔍 COMPARACIÓN RÁPIDA
+
+             | Nginx Simple | Nginx Patrón | Laravel
+─────────────┼──────────────┼──────────────┼─────────
+Velocidad    | ⭐⭐⭐⭐⭐   | ⭐⭐⭐⭐⭐   | ⭐⭐⭐
+Flexibilidad | ⭐⭐         | ⭐⭐⭐⭐⭐   | ⭐⭐⭐⭐
+Seguridad    | ⭐⭐⭐⭐     | ⭐⭐⭐       | ⭐⭐⭐⭐
+Mantenimiento| ⭐⭐⭐       | ⭐⭐⭐⭐     | ⭐⭐⭐⭐
+
+═══════════════════════════════════════════════════════════════════════════
+
+🧪 CÓMO PROBAR DESDE LÍNEA DE COMANDOS
+
+# Probar con dominio 1
+curl -H "Origin: https://app.probusiness.com.pe" \
+  -X OPTIONS https://api.probusiness.com.pe/files/test.pdf -v
+
+# Probar con dominio 2
+curl -H "Origin: https://admin.probusiness.com.pe" \
+  -X OPTIONS https://api.probusiness.com.pe/files/test.pdf -v
+
+# Probar con dominio NO permitido (debe fallar)
+curl -H "Origin: https://otro-sitio.com" \
+  -X OPTIONS https://api.probusiness.com.pe/files/test.pdf -v
+
+Resultado esperado:
+  ✅ Dominios permitidos: Access-Control-Allow-Origin: https://dominio.com
+  ❌ Dominios rechazados: NO incluye header de CORS
+
+═══════════════════════════════════════════════════════════════════════════
+
+📁 ARCHIVOS CREADOS
+
+1. nginx.conf
+   └─ Configuración base con soporte para múltiples dominios
+
+2. NGINX_CONFIGURATION.md
+   └─ Guía completa de instalación
+
+3. setup-nginx.sh
+   └─ Script automatizado que te pide los dominios
+
+4. CORS_MULTIPLES_DOMINIOS.md
+   └─ Guía especializada en múltiples dominios
+
+5. RESUMEN_MULTIPLES_DOMINIOS.txt
+   └─ Este archivo (resumen visual)
+
+═══════════════════════════════════════════════════════════════════════════
+
+🚀 RECOMENDACIÓN PARA TI
+
+Dado que tienes 2 dominios principales:
+
+1. Usa OPCIÓN 1 (Nginx Simple)
+
+2. En nginx.conf, en la sección CORS HEADERS, reemplaza:
+
+    if ($http_origin ~* ^(https?://(app\.probusiness\.com\.pe|panel\.probusiness\.com\.pe|localhost:3001))?$) {
+        set $cors_origin $http_origin;
+    }
+
+3. Con TUS dominios reales:
+
+    if ($http_origin ~* ^(https?://(
+        tu-dominio-1.com|
+        tu-dominio-2.com|
+        localhost:3001
+    ))?$) {
+        set $cors_origin $http_origin;
+    }
+
+4. Prueba y listo! ✅
+
+═══════════════════════════════════════════════════════════════════════════
+
+❓ PREGUNTAS FRECUENTES
+
+P: ¿Qué pasa si agrego un nuevo dominio frontend?
+R: Simplemente lo agregas a la lista separado por | en la expresión regular
+
+P: ¿Los dominios deben ser siempre HTTPS?
+R: En desarrollo puedes usar HTTP (localhost:PORT), en producción SÍ debe ser HTTPS
+
+P: ¿Puedo permitir TODOS los dominios?
+R: NO - Es inseguro. Solo permite dominios específicos que necesites
+
+P: ¿Cuál es más seguro?
+R: Nginx es más seguro porque procesa en el servidor, no en PHP
+
+P: ¿Necesito cambios en el código Laravel?
+R: Generalmente no, pero es recomendable actualizar config/cors.php también
+
+═══════════════════════════════════════════════════════════════════════════

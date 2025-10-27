@@ -15,13 +15,29 @@ return [
     |
     */
 
-    'paths' => ['api/*', 'sanctum/csrf-cookie'],
+    // ============================================
+    // IMPORTANTE: CORS se configura en Nginx
+    // ============================================
+    // Desactivamos CORS aquí porque ya está configurado en Nginx
+    // con subdominios de probusiness.pe
+    
+    'paths' => ['api/*', 'sanctum/csrf-cookie', 'files/*', 'storage/*'],
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => ['*'],
+    // ✅ Usar patrón para subdominios en lugar de *
+    'allowed_origins' => [
+        // Dejamos vacío porque nginx lo maneja
+        // pero incluimos localhost para desarrollo
+        'http://localhost:3000',
+        'http://localhost:3001',
+        'http://localhost:8000',
+    ],
 
-    'allowed_origins_patterns' => [],
+    'allowed_origins_patterns' => [
+        // Permite CUALQUIER subdominio de probusiness.pe
+        '#^https?://(.*\.)?probusiness\.pe(:\d+)?$#',
+    ],
 
     'allowed_headers' => ['*'],
 
@@ -29,6 +45,6 @@ return [
 
     'max_age' => 0,
 
-    'supports_credentials' => false,
+    'supports_credentials' => true,
 
 ];
