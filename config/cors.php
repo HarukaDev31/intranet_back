@@ -25,18 +25,21 @@ return [
 
     'allowed_methods' => ['*'],
 
-    // ✅ Usar patrón para subdominios en lugar de *
+    // ✅ Permitir EXPLÍCITAMENTE los dominios que necesitas
     'allowed_origins' => [
-        // Dejamos vacío porque nginx lo maneja
-        // pero incluimos localhost para desarrollo
+        'https://clientes.probusiness.pe',
+        'https://app.probusiness.pe',
+        'https://admin.probusiness.pe',
+        'https://intranetback.probusiness.pe',
         'http://localhost:3000',
         'http://localhost:3001',
         'http://localhost:8000',
     ],
 
+    // ✅ También permitir cualquier subdominio de probusiness.pe
     'allowed_origins_patterns' => [
-        // Permite CUALQUIER subdominio de probusiness.pe
-        '#^https?://(.*\.)?probusiness\.pe(:\d+)?$#',
+        '#^https?://.*\.probusiness\.pe(:\d+)?$#',
+        '#^http://localhost(:\d+)?$#',
     ],
 
     'allowed_headers' => ['*'],
