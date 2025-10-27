@@ -1638,11 +1638,10 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
             $telefono = $this->formatPhoneNumber($cotizacion->telefono);
             $qtyBox = $proveedor->qty_box_china ?? $proveedor->qty_box;
 
-            // Enviar mensaje inicial de inspección
+            // Preparar mensaje inicial de inspección (se enviará solo una vez en sendInspectionFiles)
             $inspectionMessage = $this->buildInspectionMessage($cotizacion->nombre, $proveedor->code_supplier, $qtyBox);
-            $this->sendMessage($inspectionMessage, $telefono);
 
-            // Enviar archivos de inspección
+            // Enviar archivos de inspección (el mensaje se envía una sola vez dentro de esta función)
             $sentFiles = $this->sendInspectionFiles($inspectionFiles, $inspectionMessage, $telefono);
 
             // Verificar si debe enviar mensaje de reserva (primer proveedor inspeccionado y más de 1 proveedor)
@@ -1740,16 +1739,29 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
     private function sendInspectionFiles($inspectionFiles, $message, $telefono)
     {
         $sentFiles = ['images' => 0, 'videos' => 0];
+        $messageSent = false;
 
         // Enviar imágenes
-        foreach ($inspectionFiles['images'] as $image) {
+        foreach ($inspectionFiles['images'] as $index => $image) {
+            // Enviar mensaje solo la primera vez si hay archivos
+            if (!$messageSent && count($inspectionFiles['images']) > 0) {
+                $this->sendMessage($message, $telefono);
+                $messageSent = true;
+            }
+            
             if ($this->sendSingleInspectionFile($image, $message, $telefono)) {
                 $sentFiles['images']++;
             }
         }
 
-        // Enviar videos
-        foreach ($inspectionFiles['videos'] as $video) {
+        // Enviar videos (solo enviar mensaje si no se envió antes)
+        foreach ($inspectionFiles['videos'] as $index => $video) {
+            // Enviar mensaje solo la primera vez si hay videos y no se envió con imágenes
+            if (!$messageSent && count($inspectionFiles['images']) === 0) {
+                $this->sendMessage($message, $telefono);
+                $messageSent = true;
+            }
+            
             if ($this->sendSingleInspectionFile($video, $message, $telefono)) {
                 $sentFiles['videos']++;
             }
