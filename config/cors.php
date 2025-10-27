@@ -30,6 +30,7 @@ return [
         'https://clientes.probusiness.pe',
         'https://app.probusiness.pe',
         'https://admin.probusiness.pe',
+        'https://qaintranet.probusiness.pe',
         'https://intranetback.probusiness.pe',
         'http://localhost:3000',
         'http://localhost:3001',
