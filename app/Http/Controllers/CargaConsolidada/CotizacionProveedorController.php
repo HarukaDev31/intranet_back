@@ -387,7 +387,7 @@ class CotizacionProveedorController extends Controller
 
     public function updateContenedorCotizacionProveedoresByUuid($uuid, Request $request)
     {
-   
+
         try {
             $cotizacion = DB::table('contenedor_consolidado_cotizacion')
                 ->where('uuid', $uuid)
@@ -426,7 +426,7 @@ class CotizacionProveedorController extends Controller
                         'supplier_phone' => $proveedorData['supplier_phone'],
                         'supplier' => $proveedorData['supplier'],
                         'estados' => $this->STATUS_DATOS_PROVEEDOR,
-                        'estados_proveedor'=>$this->STATUS_NOT_CONTACTED
+                        'estados_proveedor' => $this->STATUS_NOT_CONTACTED
                     ]);
 
                 $proveedoresActualizados[] = $proveedor->id;
@@ -603,7 +603,7 @@ class CotizacionProveedorController extends Controller
                     ->update(['volumen_china' => $volumenChina]);
             }
             // Manejo de estados específicos
-            else if (in_array($estado, ["NC", "C", "R", "NS", "NO LOADED", "INSPECTION",'WAIT'])) {
+            else if (in_array($estado, ["NC", "C", "R", "NS", "NO LOADED", "INSPECTION", 'WAIT'])) {
                 DB::table($this->table_contenedor_cotizacion_proveedores)
                     ->where('id_cotizacion', $idCotizacion)
                     ->where('id', $idProveedor)
@@ -977,8 +977,8 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
     protected function procesarEstadoRotuladoJob($cliente, $carga, $proveedores, $idCotizacion)
     {
         try {
-           $idContenedor = Cotizacion::where('id', $idCotizacion)->first()->id_contenedor;
-           $carga = Contenedor::where('id', $idContenedor)->first()->carga;
+            $idContenedor = Cotizacion::where('id', $idCotizacion)->first()->id_contenedor;
+            $carga = Contenedor::where('id', $idContenedor)->first()->carga;
 
             // Dispatch del Job para procesamiento asíncrono
             SendRotuladoJob::dispatch($cliente, $carga, $proveedores, $idCotizacion)->onQueue('importaciones');
@@ -994,12 +994,11 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                     'proveedores_count' => count($proveedores)
                 ]
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error en procesarEstadoRotuladoJob: ' . $e->getMessage(), [
                 'trace' => $e->getTraceAsString()
             ]);
-            
+
             return response()->json([
                 'success' => false,
                 'message' => 'Error al procesar rotulado',
@@ -1305,7 +1304,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
             //validate if all providers have cbm_total_china and cbm_total
             $sendMessage = false;
             foreach ($proveedores as $proveedor) {
-               
+
                 //if difference is greater than 0.50, send message
                 if ($proveedor->cbm_total_china - $proveedor->cbm_total > 0.50) {
                     $sendMessage = true;
@@ -1335,7 +1334,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                         $cotizacion->send_alert_difference_cbm_status = 'SENDED';
                         $cotizacion->save();
                     }
-                }else{
+                } else {
                     Log::info('sendAlertDifferenceCbmMessage already sent: ' . $message);
                     return true;
                 }
@@ -1682,19 +1681,19 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
      */
     private function updateProveedorStatus($idProveedor)
     {
-        try {   
-        $user = JWTAuth::parseToken()->authenticate();
-        //log updated by user id
-        Log::info('updated by user id: ' . $user->id, ['idProveedor' => $idProveedor]);
-        if (!$user) {
-            Log::error('Usuario no autenticado', ['idProveedor' => $idProveedor]);
-            return;
-        }
-        CotizacionProveedor::where('id', $idProveedor)
-            ->update([
-                'estados_proveedor' => 'INSPECTION',
-                'estados' => 'INSPECCIONADO'
-            ]);
+        try {
+            $user = JWTAuth::parseToken()->authenticate();
+            //log updated by user id
+            Log::info('updated by user id: ' . $user->id, ['idProveedor' => $idProveedor]);
+            if (!$user) {
+                Log::error('Usuario no autenticado', ['idProveedor' => $idProveedor]);
+                return;
+            }
+            CotizacionProveedor::where('id', $idProveedor)
+                ->update([
+                    'estados_proveedor' => 'INSPECTION',
+                    'estados' => 'INSPECCIONADO'
+                ]);
         } catch (\Exception $e) {
             Log::error('Error en updateProveedorStatus: ' . $e->getMessage(), ['idProveedor' => $idProveedor]);
             return;
@@ -2875,7 +2874,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
 
             $estadoChina = $request->estado_china ?? 'todos';
             $search = $request->search ?? '';
-            
+
             // Usar la misma lógica de filtros que getContenedorCotizacionProveedores
             $query = DB::table('contenedor_consolidado_cotizacion AS main')
                 ->select([
@@ -2890,7 +2889,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                 Log::info('search: ' . $search);
                 $query->where('main.nombre', 'LIKE', '%' . $search . '%');
             }
-            
+
             if ($request->has('estado_coordinacion') || $request->has('estado_china')) {
                 $query->whereExists(function ($sub) use ($request) {
                     $sub->select(DB::raw(1))
@@ -2923,7 +2922,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                 case Usuario::ROL_COORDINACION:
                     $query->where('main.estado_cotizador', 'CONFIRMADO');
                     break;
-                    
+
                 case Usuario::ROL_ALMACEN_CHINA:
                     $query->where('main.estado_cotizador', 'CONFIRMADO');
                     break;
@@ -2932,7 +2931,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
             // Aplicar filtro whereNull después de los filtros de rol
             $query->whereNull('main.id_cliente_importacion');
             $query->orderBy('main.id', 'asc');
-            
+
             // Obtener todas las cotizaciones sin paginación para el export
             $cotizaciones = $query->get();
 
@@ -2998,7 +2997,6 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
 
             // Generar el Excel usando la clase Export
             return Excel::download(new EmbarqueExport($dataProcessed->toArray()), 'embarque_' . $idContenedor . '_' . date('Y-m-d_H-i-s') . '.xlsx');
-
         } catch (\Exception $e) {
             Log::error('Error en downloadEmbarque: ' . $e->getMessage());
             return response()->json([
@@ -3008,8 +3006,9 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
             ], 500);
         }
     }
-    public function sendRotulado(Request $request){
-        
+    public function sendRotulado(Request $request)
+    {
+
         $idCotizacion = $request->idCotizacion;
         $proveedores = $request->proveedores;
         $cotizacion = Cotizacion::find($idCotizacion);
@@ -3019,7 +3018,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                 'message' => 'Cotización no encontrada'
             ], 404);
         }
-       
+
         if (!$proveedores) {
             return response()->json([
                 'success' => false,
@@ -3071,7 +3070,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
             }
 
             $signedFile = $request->file('signed_file');
-            
+
             // Validar que sea un archivo válido
             if (!$signedFile->isValid()) {
                 return response()->json([
@@ -3088,26 +3087,26 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
             // Verificar si es una imagen para generar contrato con firma
             $mimeType = $signedFile->getMimeType();
             $isImage = in_array($mimeType, ['image/png', 'image/jpeg', 'image/jpg', 'image/gif']);
-            
+
             if ($isImage) {
                 // Generar contrato completo con firma
                 $pdfFilename = $uuid . '_signed_contract.pdf';
                 $pdfPath = $contratosDir . '/' . $pdfFilename;
-                
+
                 // Eliminar archivo anterior si existe
                 if (file_exists($pdfPath)) {
                     unlink($pdfPath);
                 }
-                
+
                 // Obtener información del contenedor para el contrato
                 $contenedor = \App\Models\CargaConsolidada\Contenedor::find($cotizacion->id_contenedor);
                 $carga = $contenedor ? $contenedor->carga : 'N/A';
-                
+
                 // Convertir firma a base64
                 $imagePath = $signedFile->getPathname();
                 $imageData = base64_encode(file_get_contents($imagePath));
                 $signatureBase64 = 'data:' . $mimeType . ';base64,' . $imageData;
-                
+
                 // Datos para la vista del contrato firmado
                 $viewData = [
                     'fecha' => date('d-m-Y'),
@@ -3143,10 +3142,10 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                 Log::info('Renderizado PDF firmado completado en ' . round($duration, 2) . 's para cotizacion ' . $cotizacion->id);
 
                 $pdfContent = $dompdf->output();
-                
+
                 // Guardar PDF
                 file_put_contents($pdfPath, $pdfContent);
-                
+
                 // Usar el nombre del PDF
                 $filename = $pdfFilename;
                 $relativePath = 'contratos/' . $filename;
@@ -3154,12 +3153,12 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                 // Si ya es PDF, mover directamente
                 $filename = $uuid . '_signed_contract.pdf';
                 $filePath = $contratosDir . '/' . $filename;
-                
+
                 // Eliminar archivo anterior si existe
                 if (file_exists($filePath)) {
                     unlink($filePath);
                 }
-                
+
                 $signedFile->move($contratosDir, $filename);
                 $relativePath = 'contratos/' . $filename;
             }
@@ -3171,9 +3170,9 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
             $telefono = $cotizacion->telefono;
             $telefono = preg_replace('/\s+/', '', $telefono);
             $telefono = $telefono ? $telefono . '@c.us' : '';
-            
+
             $message = 'Hola ' . $cotizacion->nombre . ', te envío el contrato de servicio firmado.';
-            
+
             // Usar la ruta correcta del archivo (PDF generado o archivo movido)
             $finalFilePath = $contratosDir . '/' . $filename;
             $this->sendMedia($finalFilePath, 'application/pdf', $message, $telefono, 10);
@@ -3195,7 +3194,6 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                     'signed_contract_url' => $this->generateImageUrl($relativePath)
                 ]
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error al firmar contrato: ' . $e->getMessage(), [
                 'uuid' => $uuid,
