@@ -994,7 +994,6 @@ class CotizacionFinalController extends Controller
             $cotizacion->estado_cotizacion_final = $request->estado;
             $cotizacion->save();
             if ($request->estado == 'COTIZADO') {
-                //get phone from cotizacion table where id=idCotizacionFinal
                 $cotizacion = DB::table($this->table_contenedor_cotizacion . ' as CC')
                     ->select([
                         'CC.telefono',
@@ -1019,11 +1018,9 @@ class CotizacionFinalController extends Controller
                 if (!$cotizacion) {
                     throw new \Exception('Cotización no encontrada');
                 }
-
                 $telefono = preg_replace('/\s+/', '', $cotizacion->telefono);
                 $phoneNumberId = $telefono ? $telefono . '@c.us' : '';
                 $totalPagos = $cotizacion->total_pagos;
-
                 $volumen = $cotizacion->volumen_final;
                 $nombre = $cotizacion->nombre;
                 $logisticaFinal = $cotizacion->logistica_final;
@@ -1039,12 +1036,10 @@ class CotizacionFinalController extends Controller
                 if (!$contenedor) {
                     throw new \Exception('Contenedor no encontrado');
                 }
-
                 $carga = $contenedor->carga;
                 $fechaArribo = $contenedor->fecha_arribo;
                 $telefono = preg_replace('/\s+/', '', $cotizacion->telefono);
                 $this->phoneNumberId = $telefono ? $telefono . '@c.us' : '';
-    
                 $message = "📦 *Consolidado #" . $carga . "*\n" .
                     "Hola " . $nombre . " 😁 un gusto saludarte! \n" .
                     "A continuación te envio la cotización final de tu importación📋📦.\n" .
@@ -1056,7 +1051,6 @@ class CotizacionFinalController extends Controller
                     "Último día de pago: " . date('d/m/Y', strtotime($fechaArribo)) . "\n";
                 $this->sendMessage($message);
                 $pathCotizacionFinalPDF = $this->getBoletaForSend($request->idCotizacion);
-                Log::info('Path cotización final: ' . $pathCotizacionFinalPDF);
                 $this->sendMedia($pathCotizacionFinalPDF, null, null, null, 3);
                 $message = "Resumen de Pago\n" .
                     "✅Cotización final: $" . number_format($total, 2) . "\n" .
@@ -1131,7 +1125,6 @@ class CotizacionFinalController extends Controller
                 "✅ Adelanto: $" . number_format($totalPagos, 2, '.', '') . "\n" .
                 "✅ Pendiente de pago: $" . number_format($pendiente, 2, '.', '') . "\n\n" .
                 "Por favor debe enviar el comprobante de pago a la brevedad.";
-
             // Preparar número y enviar (normalizar como en otros lugares del proyecto)
             $rawTelefono = $cotizacion->telefono ?? '';
             // Remover todo lo que no sea dígito
@@ -1284,14 +1277,11 @@ class CotizacionFinalController extends Controller
             $inserted = DB::table($this->table_contenedor_consolidado_cotizacion_coordinacion_pagos)->insert($data);
 
             if ($inserted) {
-                // Obtener información del cliente y contenedor para la notificación
                 $cotizacionInfo = DB::table($this->table_contenedor_cotizacion . ' as CC')
                     ->join('carga_consolidada_contenedor as C', 'C.id', '=', 'CC.id_contenedor')
                     ->select('CC.nombre as cliente_nombre', 'CC.documento as cliente_documento', 'C.carga as contenedor_nombre')
                     ->where('CC.id', $request->idCotizacion)
                     ->first();
-
-                // Crear notificación para el perfil Administración
                 if ($cotizacionInfo) {
                     Notificacion::create([
                         'titulo' => 'Nuevo Pago de Impuestos Registrado',
@@ -1320,7 +1310,6 @@ class CotizacionFinalController extends Controller
                         ]
                     ]);
                 }
-
                 return response()->json([
                     'success' => true,
                     'message' => 'Pago guardado exitosamente',

@@ -62,6 +62,14 @@ return [
                 PDO::MYSQL_ATTR_SSL_CA => env('MYSQL_ATTR_SSL_CA'),
             ]) : [],
         ],
+        'mysql_local' => [
+            'driver' => 'mysql',
+            'host' => env('DB_HOST_LOCAL', 'localhost'),
+            'database' => env('DB_DATABASE_LOCAL', 'db_probusiness_local'),
+            'username' => env('DB_USERNAME_LOCAL', 'root'),
+            'password' => env('DB_PASSWORD_LOCAL', ''),
+            // ...
+        ],
         'mysql_qa' => [
             'driver' => 'mysql',
             'host' => env('DB_HOST_QA', 'localhost'),

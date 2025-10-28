@@ -20,16 +20,15 @@ class DatabaseSelectionMiddleware
      * Mapeo de dominios a nombres de conexiones de base de datos
      */
     private $domainDatabaseMap = [
-        'intranetv2.probusiness.pe' => 'mysql', // Base de datos principal (PROD)
-        'clientes.probusiness.pe' => 'mysql', // Base de datos principal (PROD)
-        'curso.probusiness.pe' => 'mysql', // Base de datos principal (PROD)
-        'datosprovedor.probusiness.pe' => 'mysql', // Base de datos principal (PROD)
-        'tiendas.probusiness.pe' => 'mysql', // Base de datos principal (PROD)
-        'agentecompras.probusiness.pe' => 'mysql', // Base de datos principal (PROD)
-        'cargaconsolidada.probusiness.pe' => 'mysql', // Base de datos principal (PROD)
-        'qaintranet.probusiness.pe' => 'mysql_qa', // Base de datos de QA
-        'localhost' => 'mysql_local', // Para desarrollo
-        // Agrega más dominios según necesites
+        'intranetv2.probusiness.pe' => 'mysql', 
+        'clientes.probusiness.pe' => 'mysql', 
+        'datosprovedor.probusiness.pe' => 'mysql', 
+        'tienda.probusiness.pe' => 'mysql', 
+        'agentecompras.probusiness.pe' => 'mysql',
+        'cargaconsolidada.probusiness.pe' => 'mysql', 
+        'qaintranet.probusiness.pe' => 'mysql_qa', 
+        'localhost' => 'mysql_local', 
+
     ];
 
     public function handle(Request $request, Closure $next)
