@@ -62,6 +62,7 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
         Route::post('/', [ContenedorController::class, 'store']);
         Route::post('/estado-documentacion', [ContenedorController::class, 'updateEstadoDocumentacion']);
         Route::delete('packing-list/{idContenedor}', [ContenedorController::class, 'deletePackingList']);
+        Route::post('update-fecha-documentacion/{idContenedor}', [ContenedorController::class, 'updateFechaDocumentacionMax']);
 
         // Cotizaciones
         Route::group(['prefix' => 'cotizaciones'], function () {
@@ -86,6 +87,12 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
             Route::post('/general/estado-cliente', [GeneralController::class, 'updateEstadoCliente']);
             Route::post('/general/status-cliente-doc', [GeneralController::class, 'updateStatusCliente']);
             Route::get('/embarcados/{idContenedor}', [EmbarcadosController::class, 'getEmbarcados']);
+            Route::post('embarcados/{idProveedor}/factura-comercial', [EmbarcadosController::class, 'uploadFacturaComercial']);
+            Route::post('embarcados/{idProveedor}/packing-list', [EmbarcadosController::class, 'uploadPackingList']);
+            Route::post('embarcados/{idProveedor}/excel-confirmacion', [EmbarcadosController::class, 'uploadExcelConfirmacion']);
+            Route::delete('embarcados/{idProveedor}/factura-comercial', [EmbarcadosController::class, 'deleteFacturaComercial']);
+            Route::delete('embarcados/{idProveedor}/packing-list', [EmbarcadosController::class, 'deletePackingList']);
+            Route::delete('embarcados/{idProveedor}/excel-confirmacion', [EmbarcadosController::class, 'deleteExcelConfirmacion']);
             Route::get('/variacion/{idContenedor}', [VariacionController::class, 'index']);
             Route::post('/variacion/vol-selected', [VariacionController::class, 'updateVolSelected']);
             Route::post('/variacion/documentacion/proveedor/{idProveedor}/create', [DocumentacionController::class, 'createProveedorDocumentacionFolder']);
@@ -127,6 +134,7 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
             Route::get('/pagos/{idCotizacion}', [CotizacionFinalController::class, 'getCotizacionFinalDocumentacionPagos']);
             Route::get('/general/{idContenedor}', [CotizacionFinalController::class, 'getContenedorCotizacionesFinales']);
             Route::get('/general/{idContenedor}/headers', [CotizacionFinalController::class, 'getCotizacionFinalHeaders']);
+            Route::post('/general/{idContenedor}/send-reminder-pago', [CotizacionFinalController::class, 'sendReminderPago']);
         });
         
         // Factura y guía
