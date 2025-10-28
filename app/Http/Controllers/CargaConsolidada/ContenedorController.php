@@ -450,10 +450,10 @@ class ContenedorController extends Controller
         // Si después de limpiar no arranca con assets/, no forzamos nada: devolvemos base + original limpio
         $baseUrl = rtrim(config('app.url'), '/');
         if (!preg_match('#^(assets/|storage/)#', $ruta)) {
-            return $baseUrl . '/' . $ruta;
+            return $baseUrl . '/' . ltrim($ruta, '/');
         }
 
-        return $baseUrl . '/' . $ruta;
+        return $baseUrl . '/' . ltrim($ruta, '/');
     }
     public function getValidContainers()
     {
