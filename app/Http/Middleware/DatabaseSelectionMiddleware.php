@@ -21,7 +21,7 @@ class DatabaseSelectionMiddleware
      */
     private $domainDatabaseMap = [
         'intranetv2.probusiness.pe' => 'mysql', // Base de datos principal (PROD)
-        'probusiness-intranet.com' => 'mysql_qa', // Base de datos de QA
+        'qaintranet.probusiness.pe' => 'mysql_qa', // Base de datos de QA
         'localhost' => 'mysql_local', // Para desarrollo
         // Agrega más dominios según necesites
     ];
@@ -86,6 +86,7 @@ class DatabaseSelectionMiddleware
      */
     private function getDatabaseConnection($domain)
     {
+        Log::info('Getting database connection for domain: ' . $domain);
         // Buscar en el mapa de dominios
         if (isset($this->domainDatabaseMap[$domain])) {
             return $this->domainDatabaseMap[$domain];
