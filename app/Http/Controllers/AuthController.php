@@ -121,7 +121,7 @@ class AuthController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'status' => 'error',
-                'message' => 'Error al iniciar sesión'
+                'message' => 'Error al iniciar sesión: ' . $e->getMessage()
             ], 500);
         }
     }
@@ -737,7 +737,7 @@ class AuthController extends Controller
             Log::error('Error en loginCliente: ' . $e->getMessage());
             return response()->json([
                 'status' => 'error',
-                'message' => 'Error al iniciar sesión'
+                'message' => 'Error al iniciar sesión: ' . $e->getMessage()
             ], 500);
         }
     }
@@ -751,29 +751,6 @@ class AuthController extends Controller
     {
         try {
             $user = JWTAuth::user();
-            /* return this format export interface UserProfile{
-    id:number,
-    fullName:string,
-    photoUrl:string,
-    email:string,
-    documentNumber:string,
-    age:number,
-    country:string,
-    city?:string,
-    phone?:string,
-    business?:UserBusiness,   
-    importedAmount:number,
-    importedContainers:number,
-    goals?:string, 
-}
-export interface UserBusiness{
-    id:number,
-    name:string,
-    ruc:string,
-    comercialCapacity:string,
-    rubric:string,
-    socialAddress?:string,
-}*/
 
             if (!$user) {
                 return response()->json([

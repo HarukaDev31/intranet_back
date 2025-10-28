@@ -98,7 +98,11 @@ class CotizacionFinalController extends Controller
                 ->where('id_contenedor', $idContenedor)
                 ->whereNotNull('estado_cliente')
                 ->whereNull('id_cliente_importacion')
-
+                ->whereExists(function ($query) {
+                    $query->select(DB::raw(1))
+                        ->from('contenedor_consolidado_cotizacion_proveedores')
+                        ->whereColumn('contenedor_consolidado_cotizacion_proveedores.id_cotizacion', 'contenedor_consolidado_cotizacion.id');
+                })
                 ->where('estado_cotizador', 'CONFIRMADO');
 
             // Aplicar filtros adicionales si se proporcionan
@@ -182,6 +186,7 @@ class CotizacionFinalController extends Controller
 
             ]);
         } catch (\Exception $e) {
+            Log::error('Error al obtener cotizaciones finales: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
                 'message' => 'Error al obtener cotizaciones finales: ' . $e->getMessage()
