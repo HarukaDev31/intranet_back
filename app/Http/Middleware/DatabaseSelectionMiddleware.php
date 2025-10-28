@@ -28,12 +28,24 @@ class DatabaseSelectionMiddleware
 
     public function handle(Request $request, Closure $next)
     {
-        // Obtener el host del request
-        $host = $request->getHost();
-        
+        // Priorizar el dominio proveniente de Origin/Referer (cuando hay frontend en otro dominio)
+        $origin = $request->headers->get('origin');
+        $referer = $request->headers->get('referer');
+
+        $sourceHost = null;
+        if ($origin) {
+            $sourceHost = parse_url($origin, PHP_URL_HOST);
+        }
+        if (!$sourceHost && $referer) {
+            $sourceHost = parse_url($referer, PHP_URL_HOST);
+        }
+
+        // Si no hay Origin/Referer válidos, usar el host de la request
+        $host = $sourceHost ?: $request->getHost();
+
         // Extraer solo el dominio (sin puerto o subdirectorios)
         $domain = $this->extractDomain($host);
-        
+
         // Obtener la conexión de base de datos según el dominio
         $databaseConnection = $this->getDatabaseConnection($domain);
         
@@ -45,8 +57,10 @@ class DatabaseSelectionMiddleware
         
         // Log para debugging
         Log::info('Database connection selected', [
-            'domain' => $domain,
-            'host' => $host,
+            'resolved_domain' => $domain,
+            'used_host' => $host,
+            'origin' => $origin,
+            'referer' => $referer,
             'connection' => $databaseConnection
         ]);
         
