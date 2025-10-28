@@ -30,46 +30,47 @@ class ContenedorController extends Controller
     private $defaultAdministracion = [];
     public function __construct()
     {
+        $host = rtrim(config('app.url') ?? env('APP_URL'), '/');
         $this->defaultAgenteSteps = array(
-            ["name" => "ORDEN DE COMPRA", "iconURL" => env('APP_URL') . "assets/icons/orden.png"],
-            ["name" => "PAGOS", "iconURL" => env('APP_URL') . "assets/icons/pagos.png"],
-            ["name" => "RECEPCION DE CARGA", "iconURL" => env('APP_URL') . "assets/icons/recepcion.png"],
-            ["name" => "BOOKING", "iconURL" => env('APP_URL') . "assets/icons/inspeccion.png"],
-            ["name" => "DOCUMENTACION", "iconURL" => env('APP_URL') . "assets/icons/documentacion.png"]
+            ["name" => "ORDEN DE COMPRA", "iconURL" => $host . '/assets/icons/orden.png'],
+            ["name" => "PAGOS", "iconURL" => $host . '/assets/icons/pagos.png'],
+            ["name" => "RECEPCION DE CARGA", "iconURL" => $host . '/assets/icons/recepcion.png'],
+            ["name" => "BOOKING", "iconURL" => $host . '/assets/icons/inspeccion.png'],
+            ["name" => "DOCUMENTACION", "iconURL" => $host . '/assets/icons/documentacion.png']
         );
         $this->defautlAgenteChinaSteps = array(
-            ["name" => "ORDEN DE COMPRA", "iconURL" => env('APP_URL') . "assets/icons/orden.png"],
-            ["name" => "PAGOS Y COORDINACION", "iconURL" => env('APP_URL') . "assets/icons/coordinacion.png"],
-            ["name" => "RECEPCION DE CARGA", "iconURL" => env('APP_URL') . "assets/icons/recepcion.png"],
-            ["name" => "BOOKING", "iconURL" => env('APP_URL') . "assets/icons/inspeccion.png"],
-            ["name" => "DOCUMENTACION", "iconURL" => env('APP_URL') . "assets/icons/documentacion.png"]
+            ["name" => "ORDEN DE COMPRA", "iconURL" => $host . '/assets/icons/orden.png'],
+            ["name" => "PAGOS Y COORDINACION", "iconURL" => $host . '/assets/icons/coordinacion.png'],
+            ["name" => "RECEPCION DE CARGA", "iconURL" => $host . '/assets/icons/recepcion.png'],
+            ["name" => "BOOKING", "iconURL" => $host . '/assets/icons/inspeccion.png'],
+            ["name" => "DOCUMENTACION", "iconURL" => $host . '/assets/icons/documentacion.png']
         );
         $this->defaultJefeChina = array(
-            ["name" => "ORDEN DE COMPRA", "iconURL" => env('APP_URL') . "assets/icons/orden.png"],
-            ["name" => "PAGOS Y COORDINACION", "iconURL" => env('APP_URL') . "assets/icons/coordinacion.png"],
-            ["name" => "RECEPCION E INSPECCION", "iconURL" => env('APP_URL') . "assets/icons/recepcion.png"],
-            ["name" => "BOOKING", "iconURL" => env('APP_URL') . "assets/icons/inspeccion.png"],
-            ["name" => "DOCUMENTACION", "iconURL" => env('APP_URL') . "assets/icons/documentacion.png"]
+            ["name" => "ORDEN DE COMPRA", "iconURL" => $host . '/assets/icons/orden.png'],
+            ["name" => "PAGOS Y COORDINACION", "iconURL" => $host . '/assets/icons/coordinacion.png'],
+            ["name" => "RECEPCION E INSPECCION", "iconURL" => $host . '/assets/icons/recepcion.png'],
+            ["name" => "BOOKING", "iconURL" => $host . '/assets/icons/inspeccion.png'],
+            ["name" => "DOCUMENTACION", "iconURL" => $host . '/assets/icons/documentacion.png']
         );
         $this->defaultCotizador = array(
-            ["name" => "COTIZACION", "iconURL" => env('APP_URL') . "assets/icons/cotizacion.png"],
-            ["name" => "CLIENTES", "iconURL" => env('APP_URL') . "assets/icons/clientes.png"],
-            ["name" => "DOCUMENTACION", "iconURL" => env('APP_URL') . "assets/icons/cdocumentacion.png"],
-            ["name" => "COTIZACION FINAL", "iconURL" => env('APP_URL') . "assets/icons/cotizacion_final.png"],
-            ["name" => "ENTREGA", "iconURL" => env('APP_URL') . "assets/icons/entrega.png"],
-            ["name" => "FACTURA Y GUIA", "iconURL" => env('APP_URL') . "assets/icons/factura.png"]
+            ["name" => "COTIZACION", "iconURL" => $host . '/assets/icons/cotizacion.png'],
+            ["name" => "CLIENTES", "iconURL" => $host . '/assets/icons/clientes.png'],
+            ["name" => "DOCUMENTACION", "iconURL" => $host . '/assets/icons/cdocumentacion.png'],
+            ["name" => "COTIZACION FINAL", "iconURL" => $host . '/assets/icons/cotizacion_final.png'],
+            ["name" => "ENTREGA", "iconURL" => $host . '/assets/icons/entrega.png'],
+            ["name" => "FACTURA Y GUIA", "iconURL" => $host . '/assets/icons/factura.png']
         );
         $this->defaultDocumentacion = array(
-            ["name" => "COTIZACION", "iconURL" => env('APP_URL') . "assets/icons/cotizacion.png"],
-            ["name" => "DOCUMENTACION", "iconURL" => env('APP_URL') . "assets/icons/cdocumentacion.png"],
-            ["name" => "ADUANA", "iconURL" => env('APP_URL') . "assets/icons/aduana.png"],
+            ["name" => "COTIZACION", "iconURL" => $host . '/assets/icons/cotizacion.png'],
+            ["name" => "DOCUMENTACION", "iconURL" => $host . '/assets/icons/cdocumentacion.png'],
+            ["name" => "ADUANA", "iconURL" => $host . '/assets/icons/aduana.png'],
         );
         $this->defaultAdministracion = array(
-            ["name" => "CLIENTES", "iconURL" => env('APP_URL') . "assets/icons/clientes.png"],
-            ["name" => "DOCUMENTACION", "iconURL" => env('APP_URL') . "assets/icons/cdocumentacion.png"],
-            ["name" => "COTIZACION FINAL", "iconURL" => env('APP_URL') . "assets/icons/cotizacion_final.png"],
-            ["name" => "ENTREGA", "iconURL" => env('APP_URL') . "assets/icons/entrega.png"],
-            ["name" => "FACTURA Y GUIA", "iconURL" => env('APP_URL') . "assets/icons/factura.png"]
+            ["name" => "CLIENTES", "iconURL" => $host . '/assets/icons/clientes.png'],
+            ["name" => "DOCUMENTACION", "iconURL" => $host . '/assets/icons/cdocumentacion.png'],
+            ["name" => "COTIZACION FINAL", "iconURL" => $host . '/assets/icons/cotizacion_final.png'],
+            ["name" => "ENTREGA", "iconURL" => $host . '/assets/icons/entrega.png'],
+            ["name" => "FACTURA Y GUIA", "iconURL" => $host . '/assets/icons/factura.png']
         );
     }
     public function index(Request $request)
