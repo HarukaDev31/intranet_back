@@ -126,6 +126,22 @@ class CotizacionFinalController extends Controller
             $index = 1;
 
             foreach ($data->items() as $row) {
+                // Obtener pagos asociados a la cotización (si existen) y su estado
+                $pagos = DB::table($this->table_contenedor_consolidado_cotizacion_coordinacion_pagos . ' as P')
+                    ->leftJoin($this->table_pagos_concept . ' as C', 'P.id_concept', '=', 'C.id')
+                    ->where('P.id_cotizacion', $row->id_cotizacion)
+                    ->select('P.id', 'P.monto', 'P.voucher_url', 'P.payment_date', 'P.banco', 'P.created_at', 'P.status', 'C.name as concept_name')
+                    ->orderBy('P.id', 'asc')
+                    ->get();
+
+                // Normalizar URLs de vouchers si aplica
+                $pagos->transform(function ($p) {
+                    if (isset($p->voucher_url) && $p->voucher_url) {
+                        $p->voucher_url = $this->generateImageUrl($p->voucher_url);
+                    }
+                    return $p;
+                });
+
                 $subdata = [
                     'index' => $index,
                     'nombre' => $this->cleanUtf8String($row->nombre_upper ?? $row->nombre),
@@ -140,7 +156,9 @@ class CotizacionFinalController extends Controller
                     'tarifa_final' => $row->tarifa_final_formateado ?? $row->tarifa_final,
                     'estado_cotizacion_final' => $this->cleanUtf8String($row->estado_cotizacion_final),
                     'id_cotizacion' => $row->id_cotizacion,
-                    'cotizacion_final_url' =>$this->generateImageUrl($row->cotizacion_final_url)
+                    'cotizacion_final_url' =>$this->generateImageUrl($row->cotizacion_final_url),
+                    // pagos: array con los pagos registrados y su estado/concepto
+                    'pagos' => $pagos
                 ];
 
                 $transformedData[] = $subdata;
@@ -1059,6 +1077,100 @@ class CotizacionFinalController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Enviar recordatorio de pago por WhatsApp al cliente para una cotización final.
+     * Body (opcional): { "sleep": <segundos de espera entre llamadas> }
+     */
+    public function sendReminderPago(Request $request, $idCotizacion)
+    {
+        try {
+            // Recuperar datos principales de la cotización (incluye subconsulta para totales pagados)
+            $cotizacion = DB::table($this->table_contenedor_cotizacion . ' as CC')
+                ->select([
+                    'CC.telefono',
+                    'CC.id_contenedor',
+                    'CC.impuestos_final',
+                    'CC.volumen_final',
+                    'CC.monto_final',
+                    'CC.tarifa_final',
+                    'CC.nombre',
+                    'CC.logistica_final',
+                    DB::raw('(
+                        SELECT IFNULL(SUM(cccp.monto), 0)
+                        FROM contenedor_consolidado_cotizacion_coordinacion_pagos cccp
+                        JOIN cotizacion_coordinacion_pagos_concept ccp ON cccp.id_concept = ccp.id
+                        WHERE cccp.id_cotizacion = CC.id
+                        AND (ccp.name = "LOGISTICA" OR ccp.name = "IMPUESTOS")
+                    ) as total_pagos')
+                ])
+                ->where('CC.id', $idCotizacion)
+                ->first();
+
+            if (! $cotizacion) {
+                return response()->json(['message' => 'Cotización no encontrada', 'success' => false], 404);
+            }
+
+            // Obtener contenedor para número de consolidado
+            $contenedor = Contenedor::select('carga')->where('id', $cotizacion->id_contenedor)->first();
+            $carga = $contenedor ? $contenedor->carga : 'N/A';
+
+            // Calculos de montos
+            $logisticaFinal = $cotizacion->logistica_final ?? 0;
+            $impuestosFinal = $cotizacion->impuestos_final ?? 0;
+            $totalCotizacion = $logisticaFinal + $impuestosFinal;
+            $totalPagos = $cotizacion->total_pagos ?? 0;
+            $pendiente = $totalCotizacion - $totalPagos;
+
+            // Preparar mensaje según plantilla solicitada
+            $message = "🙋🏽‍♀ RECORDATORÍO DE PAGO\n\n" .
+                "📦 Consolidado #" . $carga . "\n" .
+                "La carga ya llegó al puerto del Callao y es necesario realizar el pago de Impuestos para continuar con el proceso de nacionalización.\n\n" .
+                "Resumen de Pago\n" .
+                "✅ Cotización final: $" . number_format($totalCotizacion, 2, '.', '') . "\n" .
+                "✅ Adelanto: $" . number_format($totalPagos, 2, '.', '') . "\n" .
+                "✅ Pendiente de pago: $" . number_format($pendiente, 2, '.', '') . "\n\n" .
+                "Por favor debe enviar el comprobante de pago a la brevedad.";
+
+            // Preparar número y enviar (normalizar como en otros lugares del proyecto)
+            $rawTelefono = $cotizacion->telefono ?? '';
+            // Remover todo lo que no sea dígito
+            $telefonoDigits = preg_replace('/\D/', '', $rawTelefono);
+
+            // Si no tiene código de país, asumir Perú (+51) para números locales de 9 dígitos
+            if (strlen($telefonoDigits) === 9) {
+                $telefonoDigits = '51' . $telefonoDigits;
+            } elseif (strlen($telefonoDigits) === 10 && substr($telefonoDigits, 0, 1) === '0') {
+                $telefonoDigits = '51' . substr($telefonoDigits, 1);
+            }
+
+            if (empty($telefonoDigits)) {
+                Log::warning('sendReminderPago: teléfono inválido o vacío', ['cotizacion_id' => $idCotizacion, 'telefono_raw' => $rawTelefono]);
+                return response()->json(['message' => 'Teléfono del cliente inválido o vacío', 'success' => false], 400);
+            }
+
+            $this->phoneNumberId = $telefonoDigits . '@c.us';
+
+            // Log previo al envío para diagnóstico
+            Log::info('sendReminderPago enviando', [
+                'cotizacion_id' => $idCotizacion,
+                'telefono_raw' => $rawTelefono,
+                'telefono_normalized' => $telefonoDigits,
+                'phoneNumberId' => $this->phoneNumberId
+            ]);
+
+            $sleep = $request->input('sleep', 0);
+            $result = $this->sendMessage($message, $this->phoneNumberId, $sleep);
+
+            Log::info('sendReminderPago resultado', ['cotizacion_id' => $idCotizacion, 'result' => $result]);
+
+            return response()->json(['message' => 'Recordatorio enviado', 'success' => true, 'result' => $result]);
+        } catch (\Exception $e) {
+            Log::error('Error en sendReminderPago: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            return response()->json(['message' => 'Error al enviar recordatorio: ' . $e->getMessage(), 'success' => false], 500);
+        }
+    }
+
     /**
      * Obtiene la ruta local de un archivo, ya sea desde URL o ruta local
      * Si es una URL, descarga el archivo temporalmente

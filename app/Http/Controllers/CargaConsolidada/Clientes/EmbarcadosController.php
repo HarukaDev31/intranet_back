@@ -4,6 +4,7 @@ namespace App\Http\Controllers\CargaConsolidada\Clientes;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use App\Models\CargaConsolidada\Cotizacion;
 use App\Models\CargaConsolidada\CotizacionProveedor;
 use App\Models\Usuario;
@@ -53,6 +54,7 @@ class EmbarcadosController extends Controller
                 ->whereIn('id_cotizacion', $ids)
                 ->where('id_contenedor', $idContenedor)
                 ->select([
+                    'id',
                     'id_cotizacion',
                     'products',
                     'supplier',
@@ -74,6 +76,7 @@ class EmbarcadosController extends Controller
                 if (isset($proveedores[$cot->id])) {
                     $provList = collect($proveedores[$cot->id])->map(function ($p) {
                         return [
+                            'id' => $p->id,
                             'products' => $p->products,
                             'supplier' => $p->supplier,
                             'code_supplier' => $p->code_supplier,
@@ -102,6 +105,233 @@ class EmbarcadosController extends Controller
                 'status' => 'error',
                 'message' => 'Error al obtener embarcados.'
             ], 500);
+        }
+    }
+
+    /**
+     * Elimina la factura comercial de un proveedor (borra archivo en storage si aplica y deja el campo en null).
+     * @param int $idProveedor
+     */
+    public function deleteFacturaComercial($idProveedor)
+    {
+        try {
+            $prov = CotizacionProveedor::find($idProveedor);
+            if (!$prov) {
+                return response()->json(['status' => 'error', 'message' => 'Proveedor no encontrado'], 404);
+            }
+
+            $path = $prov->factura_comercial;
+            if (!empty($path)) {
+                // Si no es una URL absoluta intentamos borrar del disco 'public'
+                if (!filter_var($path, FILTER_VALIDATE_URL)) {
+                    // Normalizar: quitar prefijo /storage/ si lo tiene
+                    $normalized = preg_replace('#^/storage/#', '', $path);
+                    if (Storage::disk('public')->exists($normalized)) {
+                        Storage::disk('public')->delete($normalized);
+                    }
+                }
+                $prov->factura_comercial = null;
+                $prov->save();
+            }
+
+            return response()->json(['status' => 'success', 'message' => 'Factura comercial eliminada correctamente']);
+        } catch (Exception $e) {
+            Log::error('Error al eliminar factura comercial: ' . $e->getMessage());
+            return response()->json(['status' => 'error', 'message' => 'Error al eliminar factura comercial'], 500);
+        }
+    }
+
+    /**
+     * Elimina el packing list de un proveedor (borra archivo en storage si aplica y deja el campo en null).
+     * @param int $idProveedor
+     */
+    public function deletePackingList($idProveedor)
+    {
+        try {
+            $prov = CotizacionProveedor::find($idProveedor);
+            if (!$prov) {
+                return response()->json(['status' => 'error', 'message' => 'Proveedor no encontrado'], 404);
+            }
+
+            $path = $prov->packing_list;
+            if (!empty($path)) {
+                if (!filter_var($path, FILTER_VALIDATE_URL)) {
+                    $normalized = preg_replace('#^/storage/#', '', $path);
+                    if (Storage::disk('public')->exists($normalized)) {
+                        Storage::disk('public')->delete($normalized);
+                    }
+                }
+                $prov->packing_list = null;
+                $prov->save();
+            }
+
+            return response()->json(['status' => 'success', 'message' => 'Packing list eliminada correctamente']);
+        } catch (Exception $e) {
+            Log::error('Error al eliminar packing list: ' . $e->getMessage());
+            return response()->json(['status' => 'error', 'message' => 'Error al eliminar packing list'], 500);
+        }
+    }
+
+    /**
+     * Elimina el excel de confirmación de un proveedor (borra archivo en storage si aplica y deja el campo en null).
+     * @param int $idProveedor
+     */
+    public function deleteExcelConfirmacion($idProveedor)
+    {
+        try {
+            $prov = CotizacionProveedor::find($idProveedor);
+            if (!$prov) {
+                return response()->json(['status' => 'error', 'message' => 'Proveedor no encontrado'], 404);
+            }
+
+            $path = $prov->excel_confirmacion;
+            if (!empty($path)) {
+                if (!filter_var($path, FILTER_VALIDATE_URL)) {
+                    $normalized = preg_replace('#^/storage/#', '', $path);
+                    if (Storage::disk('public')->exists($normalized)) {
+                        Storage::disk('public')->delete($normalized);
+                    }
+                }
+                $prov->excel_confirmacion = null;
+                $prov->save();
+            }
+
+            return response()->json(['status' => 'success', 'message' => 'Excel de confirmación eliminado correctamente']);
+        } catch (Exception $e) {
+            Log::error('Error al eliminar excel de confirmación: ' . $e->getMessage());
+            return response()->json(['status' => 'error', 'message' => 'Error al eliminar excel de confirmación'], 500);
+        }
+    }
+
+    /**
+     * Sube la factura comercial para un proveedor, almacena el archivo en disk 'public' y actualiza la BD.
+     * Si ya existía un archivo local, lo elimina antes de guardar el nuevo.
+     * @param Request $request
+     * @param int $idProveedor
+     */
+    public function uploadFacturaComercial(Request $request, $idProveedor)
+    {
+        try {
+            $prov = CotizacionProveedor::find($idProveedor);
+            if (!$prov) {
+                return response()->json(['status' => 'error', 'message' => 'Proveedor no encontrado'], 404);
+            }
+
+            $validator = \Validator::make($request->all(), [
+                'file' => 'required|file|mimes:pdf,xls,xlsx,doc,docx|max:10240'
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json(['status' => 'error', 'message' => $validator->errors()->first()], 422);
+            }
+
+            $file = $request->file('file');
+            $original = preg_replace('/[^A-Za-z0-9_\-\.]/', '_', $file->getClientOriginalName());
+            $filename = time() . '_' . $original;
+
+            // Borrar archivo previo si era local
+            $current = $prov->factura_comercial;
+            if (!empty($current) && !filter_var($current, FILTER_VALIDATE_URL)) {
+                $normalized = preg_replace('#^/storage/#', '', $current);
+                if (Storage::disk('public')->exists($normalized)) {
+                    Storage::disk('public')->delete($normalized);
+                }
+            }
+
+            $stored = Storage::disk('public')->putFileAs('assets/images/agentecompra', $file, $filename);
+            $prov->factura_comercial = $stored; // ruta relativa dentro del disk 'public'
+            $prov->save();
+
+            return response()->json(['status' => 'success', 'message' => 'Factura comercial subida correctamente', 'path' => $stored, 'url' => $this->generateImageUrl($stored)]);
+        } catch (Exception $e) {
+            Log::error('Error al subir factura comercial: ' . $e->getMessage());
+            return response()->json(['status' => 'error', 'message' => 'Error al subir factura comercial'], 500);
+        }
+    }
+
+    /**
+     * Sube el packing list para un proveedor, almacena el archivo en disk 'public' y actualiza la BD.
+     */
+    public function uploadPackingList(Request $request, $idProveedor)
+    {
+        try {
+            $prov = CotizacionProveedor::find($idProveedor);
+            if (!$prov) {
+                return response()->json(['status' => 'error', 'message' => 'Proveedor no encontrado'], 404);
+            }
+
+            $validator = \Validator::make($request->all(), [
+                'file' => 'required|file|mimes:pdf,xls,xlsx|max:10240'
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json(['status' => 'error', 'message' => $validator->errors()->first()], 422);
+            }
+
+            $file = $request->file('file');
+            $original = preg_replace('/[^A-Za-z0-9_\-\.]/', '_', $file->getClientOriginalName());
+            $filename = time() . '_' . $original;
+
+            // Borrar previo si era local
+            $current = $prov->packing_list;
+            if (!empty($current) && !filter_var($current, FILTER_VALIDATE_URL)) {
+                $normalized = preg_replace('#^/storage/#', '', $current);
+                if (Storage::disk('public')->exists($normalized)) {
+                    Storage::disk('public')->delete($normalized);
+                }
+            }
+
+            $stored = Storage::disk('public')->putFileAs('assets/images/agentecompra', $file, $filename);
+            $prov->packing_list = $stored;
+            $prov->save();
+
+            return response()->json(['status' => 'success', 'message' => 'Packing list subida correctamente', 'path' => $stored, 'url' => $this->generateImageUrl($stored)]);
+        } catch (Exception $e) {
+            Log::error('Error al subir packing list: ' . $e->getMessage());
+            return response()->json(['status' => 'error', 'message' => 'Error al subir packing list'], 500);
+        }
+    }
+
+    /**
+     * Sube el excel de confirmación para un proveedor, almacena el archivo en disk 'public' y actualiza la BD.
+     */
+    public function uploadExcelConfirmacion(Request $request, $idProveedor)
+    {
+        try {
+            $prov = CotizacionProveedor::find($idProveedor);
+            if (!$prov) {
+                return response()->json(['status' => 'error', 'message' => 'Proveedor no encontrado'], 404);
+            }
+
+            $validator = \Validator::make($request->all(), [
+                'file' => 'required|file|mimes:xlsx,xls|max:10240'
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json(['status' => 'error', 'message' => $validator->errors()->first()], 422);
+            }
+
+            $file = $request->file('file');
+            $original = preg_replace('/[^A-Za-z0-9_\-\.]/', '_', $file->getClientOriginalName());
+            $filename = time() . '_' . $original;
+
+            // Borrar previo si era local
+            $current = $prov->excel_confirmacion;
+            if (!empty($current) && !filter_var($current, FILTER_VALIDATE_URL)) {
+                $normalized = preg_replace('#^/storage/#', '', $current);
+                if (Storage::disk('public')->exists($normalized)) {
+                    Storage::disk('public')->delete($normalized);
+                }
+            }
+
+            $stored = Storage::disk('public')->putFileAs('assets/images/agentecompra', $file, $filename);
+            $prov->excel_confirmacion = $stored;
+            $prov->save();
+
+            return response()->json(['status' => 'success', 'message' => 'Excel de confirmación subido correctamente', 'path' => $stored, 'url' => $this->generateImageUrl($stored)]);
+        } catch (Exception $e) {
+            Log::error('Error al subir excel de confirmación: ' . $e->getMessage());
+            return response()->json(['status' => 'error', 'message' => 'Error al subir excel de confirmación'], 500);
         }
     }
     public function getHeadersData($idContenedor)

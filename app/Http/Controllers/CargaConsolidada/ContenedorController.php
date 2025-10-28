@@ -563,6 +563,37 @@ Le estaré informando cualquier avance 🫡.";
             ];
         }
     }
+    /**
+     * Actualiza la columna fecha_documentacion_max de un contenedor.
+     * Espera un body { "fecha_documentacion_max": "YYYY-MM-DD" } y el id del contenedor en la ruta.
+     */
+    public function updateFechaDocumentacionMax(Request $request, $idcontenedor)
+    {
+        try {
+            $this->validate($request, [
+                'fecha_documentacion_max' => 'required|date_format:Y-m-d'
+            ]);
+
+            $contenedor = Contenedor::find($idcontenedor);
+            if (!$contenedor) {
+                return response()->json(['success' => false, 'message' => 'Contenedor no encontrado'], 404);
+            }
+
+            $contenedor->fecha_documentacion_max = $request->input('fecha_documentacion_max');
+            $contenedor->save();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Fecha de documentación máxima actualizada correctamente',
+                'data' => ['fecha_documentacion_max' => $contenedor->fecha_documentacion_max]
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $ve) {
+            return response()->json(['success' => false, 'message' => $ve->getMessage()], 422);
+        } catch (\Exception $e) {
+            Log::error('Error al actualizar fecha_documentacion_max: ' . $e->getMessage());
+            return response()->json(['success' => false, 'message' => 'Error al actualizar fecha_documentacion_max: ' . $e->getMessage()], 500);
+        }
+    }
     public function uploadPackingList(Request $request)
     {
         try {
