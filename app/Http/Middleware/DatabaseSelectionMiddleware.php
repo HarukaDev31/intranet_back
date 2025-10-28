@@ -21,6 +21,12 @@ class DatabaseSelectionMiddleware
      */
     private $domainDatabaseMap = [
         'intranetv2.probusiness.pe' => 'mysql', // Base de datos principal (PROD)
+        'clientes.probusiness.pe' => 'mysql', // Base de datos principal (PROD)
+        'curso.probusiness.pe' => 'mysql', // Base de datos principal (PROD)
+        'datosprovedor.probusiness.pe' => 'mysql', // Base de datos principal (PROD)
+        'tiendas.probusiness.pe' => 'mysql', // Base de datos principal (PROD)
+        'agentecompras.probusiness.pe' => 'mysql', // Base de datos principal (PROD)
+        'cargaconsolidada.probusiness.pe' => 'mysql', // Base de datos principal (PROD)
         'qaintranet.probusiness.pe' => 'mysql_qa', // Base de datos de QA
         'localhost' => 'mysql_local', // Para desarrollo
         // Agrega más dominios según necesites
