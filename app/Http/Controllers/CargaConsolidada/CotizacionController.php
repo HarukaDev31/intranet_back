@@ -1846,6 +1846,18 @@ class CotizacionController extends Controller
                     if (!(is_array($wspMessageData) && isset($wspMessageData['status']) && $wspMessageData['status'] === true)) {
                         Log::warning('Respuesta inesperada al enviar texto por WhatsApp al cliente confirmado: ' . json_encode($wspMessageData));
                     }
+                    //update cod_contract in cotizacion table
+                    //generate code PRO10250001 PROMMYY((4 DIGITS COUNT LAST COTIZACION WITH CODE) +1 ) with 0 padding
+                    $lastCotizacion = Cotizacion::where('cod_contract', 'like', 'PRO%')->
+                    where('uuid', '!=', $cotizacion->uuid)->
+                    orderBy('id', 'desc')->first();
+                    $lastSequentialNumber = 0;
+                    if ($lastCotizacion && preg_match('/(\d{4})$/', $lastCotizacion->cod_contract, $matches)) {
+                        $lastSequentialNumber = intval($matches[1]);
+                    }
+                    $newSequentialNumber = $lastSequentialNumber + 1;
+                    $newCotizacionCode = 'PRO' . date('m') . date('y') . str_pad($newSequentialNumber, 4, '0', STR_PAD_LEFT);
+                    $cotizacion->update(['cod_contract' => $newCotizacionCode]);
                 } catch (\Throwable $ex) {
                     Log::warning('Error enviando texto WhatsApp al cliente confirmado: ' . $ex->getMessage());
                 }

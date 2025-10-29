@@ -115,22 +115,17 @@ class CotizacionFinalController extends Controller
                 });
             }
 
-            // Filtrar por estado de cotización final si se proporciona
             if ($request->has('estado_cotizacion_final') && !empty($request->estado_cotizacion_final)) {
                 $query->where('estado_cotizacion_final', $request->estado_cotizacion_final);
             }
 
-
-            // Paginación
             $perPage = $request->input('per_page', 10);
             $data = $query->paginate($perPage);
 
-            // Transformar los datos para incluir las columnas específicas
             $transformedData = [];
             $index = 1;
 
             foreach ($data->items() as $row) {
-                // Obtener pagos asociados a la cotización (si existen) y su estado
                 $pagos = DB::table($this->table_contenedor_consolidado_cotizacion_coordinacion_pagos . ' as P')
                     ->leftJoin($this->table_pagos_concept . ' as C', 'P.id_concept', '=', 'C.id')
                     ->where('P.id_cotizacion', $row->id_cotizacion)
@@ -138,7 +133,6 @@ class CotizacionFinalController extends Controller
                     ->orderBy('P.id', 'asc')
                     ->get();
 
-                // Normalizar URLs de vouchers si aplica
                 $pagos->transform(function ($p) {
                     if (isset($p->voucher_url) && $p->voucher_url) {
                         $p->voucher_url = $this->generateImageUrl($p->voucher_url);
@@ -161,7 +155,6 @@ class CotizacionFinalController extends Controller
                     'estado_cotizacion_final' => $this->cleanUtf8String($row->estado_cotizacion_final),
                     'id_cotizacion' => $row->id_cotizacion,
                     'cotizacion_final_url' =>$this->generateImageUrl($row->cotizacion_final_url),
-                    // pagos: array con los pagos registrados y su estado/concepto
                     'pagos' => $pagos
                 ];
 

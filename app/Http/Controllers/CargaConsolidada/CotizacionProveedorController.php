@@ -462,7 +462,10 @@ class CotizacionProveedorController extends Controller
                     $mensaje .= "• #" . $pendiente['code_supplier'] . "\n";
                 }
                 $mensaje .= "\nContacta al proveedor y sube los datos faltantes.";
+                // en la siguiente url: https://datosprovedor.probusiness.pe/uuid
+                $url = env('APP_URL_DATOS_PROVEEDOR') . '/' . $uuid;
 
+                $mensaje .= "\nIngresar aquí: " . $url;
                 $tipoMensaje = "guardar1";
             } else {
                 // Guardar2: Todos los proveedores completos
@@ -1648,7 +1651,8 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
             if ($this->shouldSendReservationMessage($idCotizacion)) {
                 $this->sendReservationMessage($cotizacion, $telefono);
             }
-
+            $pagosUrl = public_path('assets/images/pagos-full.jpg');
+            $this->sendMedia($pagosUrl, 'image/jpg', 'Cuentas de pago', null, 5);
             return $this->jsonResponse(true, 'Proceso de inspección completado correctamente', [
                 'proveedor_actualizado' => true,
                 'imagenes_enviadas' => $sentFiles['images'],
@@ -1830,7 +1834,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
             "📦 En caso hubiera variaciones en el cubicaje se cobrará la diferencia en la cotización final.\n\n" .
             "Apenas haga el pago, envíe por este medio para hacer la reserva.";
 
-        $this->sendMessage($message, $telefono, 4);
+        $this->sendMessage($message, $telefono, 10);
     }
 
     /**
