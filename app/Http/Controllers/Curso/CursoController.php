@@ -1676,8 +1676,8 @@ class CursoController extends Controller
             $moodleUrl = env('MOODLE_URL', 'https://aulavirtualprobusiness.com/login/index.php');
             
             // Rutas de los logos
-            $logo_header = public_path('storage/logo_header.png');
-            $logo_footer = public_path('storage/logo_footer.png');
+            $logo_header = public_path('storage/logo_icons/logo_header.png');
+            $logo_footer = public_path('storage/logo_icons/logo_footer.png');
 
             // Enviar email con las credenciales
             try {

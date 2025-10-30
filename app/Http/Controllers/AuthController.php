@@ -49,7 +49,7 @@ class AuthController extends Controller
 
             $data = $request->all();
             $result = $this->verificarAccesoLogin($data);
-
+            Log::info('Resultado de verificación de acceso: ', $result);
             if ($result['sStatus'] === 'success') {
                 // Buscar el usuario para generar el token
                 $usuario = Usuario::where('No_Usuario', $data['No_Usuario'])
@@ -59,13 +59,13 @@ class AuthController extends Controller
                 if ($usuario) {
                     try {
                         $token = JWTAuth::fromUser($usuario);
-
-                        // Cargar relaciones del usuario
+                        Log::info('Token generado exitosamente: ', ['token' => $token]);
+                        // Cargar relaciones del usuario    
                         $usuario->load(['grupo', 'empresa', 'organizacion']);
 
                         // Obtener menús del usuario
                         $menus = $this->obtenerMenusUsuario($usuario);
-
+                        Log::info('Menús obtenidos para el usuario', ['menus' => $menus]);
                         // Preparar información del grupo
                         $grupoInfo = null;
                         if ($usuario->grupo) {
@@ -79,7 +79,7 @@ class AuthController extends Controller
                             ];
                         }
 
-                        return response()->json([
+                        $payload = [
                             'success' => true,
                             'message' => $result['sMessage'],
                             'token' => $token,
@@ -104,7 +104,12 @@ class AuthController extends Controller
                             'iCantidadAcessoUsuario' => $result['iCantidadAcessoUsuario'] ?? null,
                             'iIdEmpresa' => $result['iIdEmpresa'] ?? null,
                             'menus' => $menus
-                        ]);
+                        ];
+
+                        // Sanitize payload to avoid malformed UTF-8 characters during json_encode
+                        $payload = $this->sanitizeForJson($payload);
+
+                        return response()->json($payload);
                     } catch (JWTException $e) {
                         return response()->json([
                             'status' => 'error',
@@ -183,6 +188,70 @@ class AuthController extends Controller
             'token_type' => 'bearer',
             'expires_in' => config('jwt.ttl') * 60
         ]);
+    }
+
+    /**
+     * Recursively sanitize data to ensure strings are valid UTF-8 before json_encode.
+     * Attempts several common conversions and falls back to removing invalid bytes.
+     *
+     * @param mixed $data
+     * @return mixed
+     */
+    private function sanitizeForJson($data)
+    {
+        if (is_array($data)) {
+            $out = [];
+            foreach ($data as $k => $v) {
+                $out[$k] = $this->sanitizeForJson($v);
+            }
+            return $out;
+        }
+
+        if (is_object($data)) {
+            foreach ($data as $k => $v) {
+                $data->$k = $this->sanitizeForJson($v);
+            }
+            return $data;
+        }
+
+        if (is_string($data)) {
+            // If already valid UTF-8, return as-is
+            if (function_exists('mb_check_encoding')) {
+                if (mb_check_encoding($data, 'UTF-8')) return $data;
+            } else {
+                // try a quick iconv check
+                $try = @iconv('UTF-8', 'UTF-8//IGNORE', $data);
+                if ($try !== false && $try === $data) return $data;
+            }
+
+            // Try common conversions
+            $conversions = [
+                ['from' => 'ISO-8859-1', 'to' => 'UTF-8//TRANSLIT'],
+                ['from' => 'CP1252', 'to' => 'UTF-8//TRANSLIT'],
+                ['from' => 'UTF-8', 'to' => 'UTF-8//IGNORE'],
+            ];
+
+            foreach ($conversions as $c) {
+                $converted = @iconv($c['from'], $c['to'], $data);
+                if ($converted !== false) {
+                    if (!function_exists('mb_check_encoding') || mb_check_encoding($converted, 'UTF-8')) {
+                        return $converted;
+                    }
+                }
+            }
+
+            // Last resorts
+            $converted = @utf8_encode($data);
+            if ($converted !== false) return $converted;
+
+            // Remove bytes that are not valid UTF-8 as final fallback
+            $clean = @iconv('UTF-8', 'UTF-8//IGNORE', $data);
+            if ($clean !== false) return $clean;
+
+            return $data;
+        }
+
+        return $data;
     }
 
     /**

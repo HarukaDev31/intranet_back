@@ -20,13 +20,13 @@ class UpdateEstadoCotizacionFinalEnum extends Migration
      */
     public function up()
     {
-        // Enum values: keep existing ones and add COBRANDO and PAGADO_V
-        $enum = "'PENDIENTE','C.FINAL','AJUSTADO','COTIZADO','COBRANDO','PAGADO','SOBREPAGO','PAGADO_V'";
+        // Enum values: keep existing ones and add COBRANDO
+        $enum = "'PENDIENTE','C.FINAL','AJUSTADO','COTIZADO','COBRANDO','PAGADO','SOBREPAGO'";
 
         // 1) Add new column
         Schema::table('contenedor_consolidado_cotizacion', function (Blueprint $table) {
             // Use raw statement because some environments may not support ->enum alteration without doctrine/dbal
-            $table->enum('estado_cotizacion_final2', ['PENDIENTE','C.FINAL','AJUSTADO','COTIZADO','COBRANDO','PAGADO','SOBREPAGO','PAGADO_V'])->nullable();
+            $table->enum('estado_cotizacion_final2', ['PENDIENTE','C.FINAL','AJUSTADO','COTIZADO','COBRANDO','PAGADO','SOBREPAGO'])->nullable();
         });
 
         // 2) Copy data from old column into new column
