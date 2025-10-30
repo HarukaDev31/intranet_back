@@ -168,7 +168,6 @@ class Cotizacion extends Model
         'COBRANDO' => 'Cobrando',
         'PAGADO' => 'Pagado',
         'SOBREPAGO' => 'Sobrepago',
-        'PAGADO_V' => 'Pagado'
     ];
 
     /**

@@ -350,16 +350,6 @@ class PagosController extends Controller
                 }
             }
 
-            // Si es PAGADO o SOBREPAGO, verificar si todos los pagos relacionados están CONFIRMADO -> entonces PAGADO_V
-            if (in_array($estado, ['PAGADO', 'SOBREPAGO'])) {
-                $totalNoConfirmados = Pago::where('id_cotizacion', $idCotizacion)
-                    ->whereIn('id_concept', [PagoConcept::CONCEPT_PAGO_LOGISTICA, PagoConcept::CONCEPT_PAGO_IMPUESTOS])
-                    ->where('status', '!=', 'CONFIRMADO')
-                    ->count();
-                if ($totalNoConfirmados == 0) {
-                    $estado = 'PAGADO_V';
-                }
-            }
 
             // Respetar estado COBRANDO a menos que se fuerce la sincronización
             if (! $force && $cot->estado_cotizacion_final === 'COBRANDO' && $estado !== 'COBRANDO') {

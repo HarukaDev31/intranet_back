@@ -140,6 +140,23 @@ class CotizacionFinalController extends Controller
                     return $p;
                 });
 
+                // Determinar si los pagos asociados están todos confirmados
+                $pagosNotConfirmed = $pagos->filter(function($p){
+                    $status = isset($p->status) ? strtoupper(trim($p->status)) : '';
+                    return $status !== 'CONFIRMADO';
+                })->count();
+
+                $pagado_verificado = false;
+                // Considerar pagado verificado solo cuando:
+                //  - el estado en BD sea exactamente 'PAGADO' (no 'SOBREPAGO'), y
+                //  - NO existen pagos sin confirmar para los conceptos LOGISTICA/IMPUESTOS
+                // Esto garantiza que un registro en 'SOBREPAGO' nunca aparezca como "verificado"
+                // hasta que el monto pagado se iguale al monto a pagar (es decir, pase a 'PAGADO').
+                $estadoFinal = isset($row->estado_cotizacion_final) ? strtoupper(trim($row->estado_cotizacion_final)) : '';
+                if ($estadoFinal === 'PAGADO' && $pagosNotConfirmed === 0) {
+                    $pagado_verificado = true;
+                }
+
                 $subdata = [
                     'index' => $index,
                     'nombre' => $this->cleanUtf8String($row->nombre_upper ?? $row->nombre),
@@ -153,6 +170,7 @@ class CotizacionFinalController extends Controller
                     'impuestos_final' => $row->impuestos_final_formateado ?? $row->impuestos_final,
                     'tarifa_final' => $row->tarifa_final_formateado ?? $row->tarifa_final,
                     'estado_cotizacion_final' => $this->cleanUtf8String($row->estado_cotizacion_final),
+                    'pagado_verificado' => $pagado_verificado,
                     'id_cotizacion' => $row->id_cotizacion,
                     'cotizacion_final_url' =>$this->generateImageUrl($row->cotizacion_final_url),
                     'pagos' => $pagos
@@ -2548,7 +2566,7 @@ class CotizacionFinalController extends Controller
 
             // Actualizar el campo a null en la base de datos
             $cotizacion->update(['cotizacion_final_url' => null]);
-            $cotizacion->estado_cotizacion_final = 'PENDIENTE';
+            $cotizacion->update(['estado_cotizacion_final' => 'PENDIENTE']);
 
             return response()->json([
                 'success' => true,

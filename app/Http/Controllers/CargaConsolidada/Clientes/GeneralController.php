@@ -345,7 +345,7 @@ class GeneralController extends Controller
 
             // Consulta para obtener carga del contenedor
             $cargaRow = DB::table($this->table)
-                ->select('carga')
+                ->select('carga', 'fecha_documentacion_max')
                 ->where('id', $idContenedor)
                 ->first();
 
@@ -405,6 +405,7 @@ class GeneralController extends Controller
                     'success' => true,
                     'data' => $headersData,
                     'carga' => $cargaRow->carga ?? '',
+                    'fecha_documentacion_max' => $cargaRow->fecha_documentacion_max ?? '',
                 ]);
             } else {
                 return response()->json([

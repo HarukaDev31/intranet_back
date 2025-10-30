@@ -13,6 +13,11 @@ use Illuminate\Support\Facades\Storage;
 use App\Traits\WhatsappTrait;
 use App\Traits\FileTrait;
 use App\Models\CargaConsolidada\Contenedor;
+use Maatwebsite\Excel\Facades\Excel;
+use App\Exports\RotuladoParedExport;
+use Dompdf\Dompdf;
+use Dompdf\Options;
+use ZipArchive;
 
 class EntregaController extends Controller
 {
@@ -782,6 +787,173 @@ class EntregaController extends Controller
                 'to' => $data->lastItem()
             ]
         ]);
+    }
+
+    /**
+     * Genera y descarga un Excel "ROTULADO PARED" con las columnas:
+     * Cliente | CBM Total China | Qty Box China
+     */
+    public function downloadPlantillas(Request $request, $idContenedor)
+    {
+        try {
+            // Agregado por cotización desde proveedores (sumas por id_cotizacion)
+            $proveedoresAgg = DB::table('contenedor_consolidado_cotizacion_proveedores as CP')
+                ->select(
+                    'CP.id_cotizacion',
+                    DB::raw('SUM(COALESCE(CP.cbm_total_china, CP.cbm_total, 0)) as sum_cbm_china'),
+                    DB::raw('SUM(COALESCE(CP.qty_box_china, CP.qty_box, 0)) as sum_qty_box')
+                )
+                ->where('CP.id_contenedor', $idContenedor)
+                ->groupBy('CP.id_cotizacion');
+
+            $query = DB::table('contenedor_consolidado_cotizacion as CC')
+                ->leftJoinSub($proveedoresAgg, 'CPA', function ($join) {
+                    $join->on('CPA.id_cotizacion', '=', 'CC.id');
+                })
+                ->where('CC.id_contenedor', $idContenedor)
+                ->whereNotNull('CC.estado_cliente')
+                ->whereNull('CC.id_cliente_importacion')
+                ->where('CC.estado_cotizador', 'CONFIRMADO')
+                ->select([
+                    'CC.id as id_cotizacion',
+                    'CC.nombre as cliente',
+                    DB::raw('COALESCE(CPA.sum_cbm_china, 0) as cbm_total_china'),
+                    DB::raw('COALESCE(CPA.sum_qty_box, 0) as qty_box_china')
+                ])
+                ->orderBy('CC.nombre', 'asc');
+
+            // Debug logging to help diagnose empty resultsets
+            try {
+                Log::info('downloadPlantillas SQL: ' . $query->toSql());
+                Log::info('downloadPlantillas bindings: ' . json_encode($query->getBindings()));
+            } catch (\Exception $e) {
+                // ignore if driver doesn't support toSql in this context
+            }
+
+            $rowsQuery = $query->get();
+            Log::info('downloadPlantillas rows count: ' . $rowsQuery->count());
+            if ($rowsQuery->count() > 0) {
+                Log::info('downloadPlantillas sample rows: ' . substr(json_encode($rowsQuery->take(5)), 0, 1000));
+            }
+
+            $rows = [];
+            foreach ($rowsQuery as $r) {
+                // Formatear: CBM con 2 decimales, Qty como entero
+                $cbm = is_null($r->cbm_total_china) ? 0 : (float)$r->cbm_total_china;
+                $qty = is_null($r->qty_box_china) ? 0 : (int)$r->qty_box_china;
+
+                $rows[] = [
+                    (string)($r->cliente ?? ''),
+                    // Mantener formato numérico con 2 decimales (como string para preservar formato en Excel)
+                    number_format($cbm, 2, '.', ''),
+                    $qty,
+                ];
+            }
+
+            $contenedor = DB::table('carga_consolidada_contenedor')->where('id', $idContenedor)->first();
+            $suffix = $contenedor ? $contenedor->carga : $idContenedor;
+            $timestamp = date('Y-m-d_H-i-s');
+            $excelName = 'ROTULADO_PARED_' . $suffix . '_' . $timestamp . '.xlsx';
+
+            // Create temp directory
+            $tempDir = storage_path('app/temp/rotulado_' . $suffix . '_' . $timestamp);
+            if (!is_dir($tempDir)) {
+                mkdir($tempDir, 0755, true);
+            }
+
+            // Store the Excel file into temp dir
+            $excelPath = 'temp/rotulado_' . $suffix . '_' . $timestamp . '/' . $excelName;
+            $stored = Excel::store(new RotuladoParedExport($rows), $excelPath); // stores to storage/app/<path>
+            $fullExcelPath = storage_path('app/' . $excelPath);
+
+            // Generate PDFs per cotizacion and add to temp dir
+            $pdfFiles = [];
+
+            // Guard: ensure Dompdf is available
+            if (!class_exists(\Dompdf\Dompdf::class)) {
+                Log::warning('Dompdf not available, skipping PDF generation.');
+            } else {
+                foreach ($rowsQuery as $r) {
+                try {
+                        // Sanitize cliente nombre for filename: ASCII, underscores, max length
+                        $rawName = $r->cliente ?? ('cotizacion_' . $r->id_cotizacion);
+                        $trans = @iconv('UTF-8', 'ASCII//TRANSLIT', $rawName);
+                        if ($trans === false) $trans = $rawName;
+                        $trans = str_replace(' ', '_', $trans);
+                        $trans = preg_replace('/[^A-Za-z0-9_\-]/', '', $trans);
+                        $trans = strtoupper(substr($trans, 0, 40));
+                        if (empty($trans)) {
+                            $trans = 'COTIZACION_' . $r->id_cotizacion;
+                        }
+
+                        $pdfName = 'CARGO_ENTREGA_' . $trans . '_' . $suffix . '.pdf';
+                        $pdfPath = $tempDir . DIRECTORY_SEPARATOR . $pdfName;
+
+                    // Render Blade view
+                    $html = view('entrega.cargo_entrega', [
+                        'cliente' => $r->cliente,
+                        'cotizacion_id' => $r->id_cotizacion,
+                        'qty' => (int)($r->qty_box_china ?? 0),
+                        'carga' => $suffix,
+                    ])->render();
+
+                    $options = new Options();
+                    $options->set('isRemoteEnabled', true);
+                    $options->set('defaultFont', 'DejaVu Sans');
+                    $dompdf = new Dompdf($options);
+                    $dompdf->loadHtml($html);
+                    $dompdf->setPaper('A4', 'landscape');
+                    $dompdf->render();
+                    $output = $dompdf->output();
+                    file_put_contents($pdfPath, $output);
+                    $pdfFiles[] = $pdfPath;
+                } catch (\Exception $e) {
+                    Log::error('Error generating PDF for cotizacion ' . $r->id_cotizacion . ': ' . $e->getMessage());
+                    // continue generating others
+                }
+                }
+            }
+
+            // Create ZIP with Excel + PDFs
+            $zipName = 'PLANTILLAS_' . $suffix . '_' . $timestamp . '.zip';
+            $zipPath = $tempDir . DIRECTORY_SEPARATOR . $zipName;
+            $zip = new ZipArchive();
+            if ($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) === true) {
+                // add excel
+                if (file_exists($fullExcelPath)) {
+                    $zip->addFile($fullExcelPath, $excelName);
+                }
+                // add pdfs
+                foreach ($pdfFiles as $pf) {
+                    if (file_exists($pf)) {
+                        $zip->addFile($pf, basename($pf));
+                    }
+                }
+                $zip->close();
+                // Cleanup individual files (we keep only the ZIP to return)
+                try {
+                    if (file_exists($fullExcelPath)) {
+                        @unlink($fullExcelPath);
+                    }
+                    foreach ($pdfFiles as $pf) {
+                        if (file_exists($pf)) {
+                            @unlink($pf);
+                        }
+                    }
+                } catch (\Exception $e) {
+                    Log::warning('Error cleaning up temp files: ' . $e->getMessage());
+                }
+            } else {
+                Log::error('Could not create ZIP at ' . $zipPath);
+                return response()->json(['success' => false, 'message' => 'Error creando ZIP'], 500);
+            }
+
+            // Return ZIP for download and delete after send
+            return response()->download($zipPath, $zipName)->deleteFileAfterSend(true);
+        } catch (\Exception $e) {
+            Log::error('downloadPlantillas error: ' . $e->getMessage());
+            return response()->json(['success' => false, 'message' => 'Error generando ROTULADO PARED', 'error' => $e->getMessage()], 500);
+        }
     }
     public function getAllDelivery(Request $request)
     {

@@ -225,6 +225,13 @@ class PagosController extends Controller
                         ]
                     ]);
                 }
+                // Sincronizar estado de la cotización a partir de los pagos (LOGISTICA / IMPUESTOS)
+                try {
+                    app()->make(\App\Http\Controllers\CargaConsolidada\PagosController::class)
+                        ->syncEstadoCotizacionFromPayments($request->idCotizacion, false);
+                } catch (\Exception $e) {
+                    Log::error('Error sincronizando estado de cotizacion tras store pago: ' . $e->getMessage());
+                }
 
                 return response()->json([
                     'success' => true,
@@ -248,7 +255,42 @@ class PagosController extends Controller
     public function delete($id)
     {
         try {
-            $pago = DB::table($this->table_contenedor_consolidado_cotizacion_coordinacion_pagos)->where('id', $id)->delete();
+            // Buscar el pago antes de eliminar para obtener id_cotizacion y ruta de voucher
+            $pago = DB::table($this->table_contenedor_consolidado_cotizacion_coordinacion_pagos)->where('id', $id)->first();
+            if (! $pago) {
+                return response()->json(['success' => false, 'message' => 'Pago no encontrado'], 404);
+            }
+
+            // Intentar eliminar el archivo voucher si existe
+            try {
+                if (! empty($pago->voucher_url)) {
+                    // Normalizar ruta si contiene "public/"
+                    $ruta = $pago->voucher_url;
+                    if (strpos($ruta, 'public/') !== false) {
+                        $ruta = str_replace('public/', '', $ruta);
+                    }
+                    // Usar disco public
+                    if (Storage::disk('public')->exists($ruta)) {
+                        Storage::disk('public')->delete($ruta);
+                    }
+                }
+            } catch (\Exception $e) {
+                Log::warning('No se pudo eliminar voucher del storage: ' . $e->getMessage());
+            }
+
+            // Eliminar registro del pago
+            DB::table($this->table_contenedor_consolidado_cotizacion_coordinacion_pagos)->where('id', $id)->delete();
+
+            // Sincronizar estado de la cotización asociada (recalcula montos tras eliminación)
+            try {
+                if (! empty($pago->id_cotizacion)) {
+                    app()->make(\App\Http\Controllers\CargaConsolidada\PagosController::class)
+                        ->syncEstadoCotizacionFromPayments($pago->id_cotizacion, false);
+                }
+            } catch (\Exception $e) {
+                Log::error('Error sincronizando estado de cotizacion tras delete pago: ' . $e->getMessage());
+            }
+
             return response()->json(['success' => true, 'message' => 'Pago eliminado exitosamente']);
         } catch (\Exception $e) {
             Log::error('Error en delete: ' . $e->getMessage());
