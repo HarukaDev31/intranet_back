@@ -15,7 +15,7 @@ trait WhatsappTrait
             $envUrl = env('APP_URL');
             $defaultWhatsapNumber=env('DEFAULT_WHATSAPP_NUMBER','912705923@c.us');
             if (strpos($envUrl, 'localhost') !== false) {
-                $data['phoneNumberId'] = '51931629529@c.us';
+                $data['phoneNumberId'] = $defaultWhatsapNumber;
             }
            
             $ch = curl_init();
