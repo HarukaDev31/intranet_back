@@ -91,6 +91,7 @@ class EmbarcadosController extends Controller
                 }
 
                 return [
+                    'id' => $cot->id,
                     'nombre' => $cot->nombre,
                     'whatsapp' => $whatsapp,
                     'tipo_cliente' => $cot->tipo_cliente ?? null,

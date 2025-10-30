@@ -660,11 +660,35 @@ class CotizacionController extends Controller
                 // Obtener datos de proveedores
                 $dataEmbarque = $this->getEmbarqueData($cotizacion, $dataToInsert);
 
-                // Insertar proveedores en lote si existen
+                // Insertar proveedores (uno por uno) y sus items si existen
                 if (!empty($dataEmbarque)) {
                     try {
-                        CotizacionProveedor::insert($dataEmbarque);
-                        Log::info('Proveedores insertados correctamente: ' . count($dataEmbarque));
+                        $insertedCount = 0;
+                        foreach ($dataEmbarque as $prov) {
+                            $items = isset($prov['items']) ? $prov['items'] : [];
+                            if (isset($prov['items'])) {
+                                unset($prov['items']);
+                            }
+                            $provModel = CotizacionProveedor::create($prov);
+                            $insertedCount++;
+                            if ($provModel && !empty($items)) {
+                                foreach ($items as $item) {
+                                    \App\Models\CargaConsolidada\CotizacionProveedorItem::create([
+                                        'id_contenedor' => $provModel->id_contenedor,
+                                        'id_cotizacion' => $provModel->id_cotizacion,
+                                        'id_proveedor' => $provModel->id,
+                                        'initial_price' => $item['initial_price'] ?? null,
+                                        'initial_qty' => $item['initial_qty'] ?? null,
+                                        'initial_name' => $item['initial_name'] ?? null,
+                                        'final_price' => $item['final_price'] ?? null,
+                                        'final_qty' => $item['final_qty'] ?? null,
+                                        'final_name' => $item['final_name'] ?? null,
+                                        'tipo_producto' => $item['tipo_producto'] ?? 'GENERAL',
+                                    ]);
+                                }
+                            }
+                        }
+                        Log::info('Proveedores insertados correctamente: ' . $insertedCount);
                     } catch (\Exception $e) {
                         Log::error('Error al insertar proveedores: ' . $e->getMessage());
                         DB::rollBack();
@@ -982,14 +1006,6 @@ class CotizacionController extends Controller
                 $fob = $sheet->getCell('J30')->getOldCalculatedValue();
                 $impuestos = $sheet->getCell('J32')->getOldCalculatedValue();
 
-                //get j24 and j26
-                Log::error('20: ' . $sheet->getCell('J20')->getOldCalculatedValue());
-                Log::error('21: ' . $sheet->getCell('J21')->getOldCalculatedValue());
-                Log::error('22: ' . $sheet->getCell('J22')->getOldCalculatedValue());
-                Log::error('23: ' . $sheet->getCell('J23')->getOldCalculatedValue());
-                Log::error('24: ' . $sheet->getCell('J24')->getOldCalculatedValue());
-                Log::error('26: ' . $sheet->getCell('J26')->getOldCalculatedValue());
-                Log::error('impuestos: ' . $impuestos);
             } else {
                 $monto = $sheet->getCell('J30')->getOldCalculatedValue();
                 $fob = $sheet->getCell('J29')->getOldCalculatedValue();
@@ -1178,9 +1194,29 @@ class CotizacionController extends Controller
                 $dataEmbarque = $this->getEmbarqueData($cotizacion, $dataToInsert);
                 Log::error('Data embarque: ' . json_encode($dataEmbarque));
 
-                // Insertar proveedores
+                // Insertar proveedores y sus items
                 foreach ($dataEmbarque as $proveedor) {
-                    CotizacionProveedor::create($proveedor);
+                    $items = isset($proveedor['items']) ? $proveedor['items'] : [];
+                    if (isset($proveedor['items'])) {
+                        unset($proveedor['items']);
+                    }
+                    $proveedorModel = CotizacionProveedor::create($proveedor);
+                    if ($proveedorModel && !empty($items)) {
+                        foreach ($items as $item) {
+                            \App\Models\CargaConsolidada\CotizacionProveedorItem::create([
+                                'id_contenedor' => $proveedorModel->id_contenedor,
+                                'id_cotizacion' => $proveedorModel->id_cotizacion,
+                                'id_proveedor' => $proveedorModel->id,
+                                'initial_price' => $item['initial_price'] ?? null,
+                                'initial_qty' => $item['initial_qty'] ?? null,
+                                'initial_name' => $item['initial_name'] ?? null,
+                                'final_price' => $item['final_price'] ?? null,
+                                'final_qty' => $item['final_qty'] ?? null,
+                                'final_name' => $item['final_name'] ?? null,
+                                'tipo_producto' => $item['tipo_producto'] ?? 'GENERAL',
+                            ]);
+                        }
+                    }
                 }
 
                 $nombre = $dataToInsert['nombre'];
@@ -1200,8 +1236,6 @@ class CotizacionController extends Controller
                     'phoneNumberId' => $telefono,
                 ];
 
-                // Aquí podrías insertar en la tabla de crons si existe
-                // Por ahora solo retornamos éxito
 
                 return [
                     'id' => $idCotizacion,
@@ -2086,9 +2120,56 @@ class CotizacionController extends Controller
                     $peso = $sheet2->getCell($columnStart . $rowPesoProveedor)->getValue();
                     $cbmTotal = $sheet2->getCell($columnStart . $rowVolProveedor)->getValue();
 
+                    // Extraer items dentro del rango del proveedor (filas fijas 11,15,17)
+                    $items = [];
+                    $rowName = 11; // nombre
+                    $rowPrice = 15; // initial_price
+                    $rowQty = 17; // initial_qty
+
+                    // Determinar columnas del rango (ej: "C4:F4" => C..F)
+                    $startCol = $columnStart;
+                    $endCol = $columnStart;
+                    if ($currentRange) {
+                        $parts = explode(':', $currentRange);
+                        if (count($parts) === 2) {
+                            // Extraer letras de columna ignorando números de fila
+                            $startCol = preg_replace('/\d+/', '', $parts[0]);
+                            $endCol = preg_replace('/\d+/', '', $parts[1]);
+                        }
+                    }
+
+                    // Iterar columnas del rango del proveedor
+                    $col = $startCol;
+                    while (true) {
+                        $nameVal = $this->getDataCell($sheet2, $col . $rowName);
+                        $priceVal = $this->getDataCell($sheet2, $col . $rowPrice);
+                        $qtyVal = $this->getDataCell($sheet2, $col . $rowQty);
+
+                        $nameVal = is_null($nameVal) ? '' : trim((string) $nameVal);
+                        $priceNum = is_numeric($priceVal) ? (float)$priceVal : 0;
+                        $qtyNum = is_numeric($qtyVal) ? (int)$qtyVal : 0;
+
+                        if ($nameVal !== '' || $priceNum > 0 || $qtyNum > 0) {
+                            $items[] = [
+                                'initial_name' => $nameVal,
+                                'initial_price' => $priceNum,
+                                'initial_qty' => $qtyNum,
+                                'final_name' => null,
+                                'final_price' => null,
+                                'final_qty' => null,
+                                'tipo_producto' => 'GENERAL',
+                            ];
+                        }
+
+                        if ($col === $endCol) {
+                            break;
+                        }
+                        $col = $this->incrementColumn($col);
+                    }
+
                     // Solo agregar proveedor si tiene datos válidos
                     if ($qtyBox > 0 || $peso > 0 || $cbmTotal > 0) {
-                        // Agrega los datos del proveedor
+                        // Agrega los datos del proveedor con items
                         $proveedores[] = [
                             'qty_box' => $qtyBox ?? 0,
                             'peso' => $peso ?? 0,
@@ -2110,6 +2191,7 @@ class CotizacionController extends Controller
                             'cbm_total_china' => 0,
                             'arrive_date_china' => null,
                             'send_rotulado_status' => 'PENDING',
+                            'items' => $items,
                             'created_at' => now(),
                             'updated_at' => now()
                         ];

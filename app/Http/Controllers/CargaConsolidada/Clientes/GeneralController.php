@@ -7,7 +7,6 @@ use App\Traits\UserGroupsTrait;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use App\Models\CargaConsolidada\Cotizacion;
-use App\Models\CargaConsolidada\Contenedor;
 use App\Models\CargaConsolidada\TipoCliente;
 use App\Models\Usuario;
 use Illuminate\Support\Facades\Log;
@@ -15,13 +14,16 @@ use Illuminate\Support\Facades\Storage;
 use Tymon\JWTAuth\Facades\JWTAuth;
 use App\Services\CargaConsolidada\Clientes\GeneralService;
 use App\Services\CargaConsolidada\Clientes\GeneralExportService;
+use App\Models\CargaConsolidada\CotizacionProveedor;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use Exception;
-
+use App\Traits\WhatsappTrait;
+use App\Models\CargaConsolidada\Contenedor;
 
 class GeneralController extends Controller
 {
+    use WhatsappTrait;
     private $table_contenedor_cotizacion = "contenedor_consolidado_cotizacion";
     private $table_contenedor_cotizacion_proveedores = "contenedor_consolidado_cotizacion_proveedores";
     private $table_contenedor_consolidado_cotizacion_coordinacion_pagos = "contenedor_consolidado_cotizacion_coordinacion_pagos";
@@ -98,7 +100,7 @@ class GeneralController extends Controller
         // Aplicar filtros adicionales si se proporcionan (con TRIM y búsqueda mejorada)
         if ($request->has('search') && !empty($request->search)) {
             $search = trim($request->search); // TRIM del request
-            
+
             $query->where(function ($q) use ($search) {
                 // Búsqueda en nombre (con TRIM de BD)
                 $q->whereRaw('TRIM(CC.nombre) LIKE ?', ["%{$search}%"])
@@ -106,20 +108,20 @@ class GeneralController extends Controller
                     ->orWhereRaw('TRIM(CC.documento) LIKE ?', ["%{$search}%"])
                     // Búsqueda en correo (con TRIM de BD)
                     ->orWhereRaw('TRIM(CC.correo) LIKE ?', ["%{$search}%"]);
-                    
+
                 // Si el término parece ser un teléfono (contiene solo números, espacios, guiones, etc.)
                 if (preg_match('/^[\d\s\-\(\)\.\+]+$/', $search)) {
                     // Normalizar el término de búsqueda (remover espacios, guiones, paréntesis, puntos y +)
                     $telefonoNormalizado = preg_replace('/[\s\-\(\)\.\+]/', '', $search);
-                    
+
                     // Si empieza con 51 y tiene más de 9 dígitos, remover prefijo
                     if (preg_match('/^51(\d{9})$/', $telefonoNormalizado, $matches)) {
                         $telefonoNormalizado = $matches[1];
                     }
-                    
+
                     if (!empty($telefonoNormalizado)) {
                         // Buscar coincidencias flexibles en teléfono
-                        $q->orWhere(function($subQuery) use ($telefonoNormalizado, $search) {
+                        $q->orWhere(function ($subQuery) use ($telefonoNormalizado, $search) {
                             // Búsqueda por teléfono normalizado (eliminar espacios, guiones, etc. de BD)
                             $subQuery->whereRaw('REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(TRIM(CC.telefono), " ", ""), "-", ""), "(", ""), ")", ""), "+", "") LIKE ?', ["%{$telefonoNormalizado}%"])
                                 // Búsqueda con prefijo 51
@@ -177,7 +179,7 @@ class GeneralController extends Controller
                 ];
             }
 
-            $currentStatus = $cotizacion->status_cliente_doc;   
+            $currentStatus = $cotizacion->status_cliente_doc;
             if ($currentStatus != 'Completado') {
                 $cotizacion->update(['status_cliente_doc' => $status]);
                 return [
@@ -368,7 +370,7 @@ class GeneralController extends Controller
                     Usuario::ROL_COTIZADOR => ['cbm_total_china', 'cbm_total', 'total_logistica', 'total_logistica_pagado', 'qty_items', 'total_fob', 'total_impuestos'],
                     Usuario::ROL_ADMINISTRACION => ['cbm_total_china', 'cbm_total', 'total_logistica', 'total_logistica_pagado', 'qty_items', 'total_fob', 'total_impuestos'],
                     Usuario::ROL_COORDINACION => ['cbm_total_china', 'cbm_total', 'total_logistica', 'total_logistica_pagado', 'qty_items', 'total_fob', 'total_impuestos'],
-                    Usuario::ROL_DOCUMENTACION => [ null],
+                    Usuario::ROL_DOCUMENTACION => [null],
                 ];
                 $userIdCheck = $user->getNombreGrupo();
                 $headersData = [
@@ -396,7 +398,7 @@ class GeneralController extends Controller
                     $headersData = array_filter($headersData, function ($key) use ($allowedKeys) {
                         return in_array($key, $allowedKeys);
                     }, ARRAY_FILTER_USE_KEY);
-                } 
+                }
                 // Add formatted currency strings for CBMs and logística totals
                 $headersData = $this->addCurrencyFormatting($headersData);
                 return response()->json([
@@ -438,6 +440,502 @@ class GeneralController extends Controller
         } catch (\Exception $e) {
             Log::error('Error en exportarClientes: ' . $e->getMessage());
             return response()->json(['message' => $e->getMessage()], 500);
+        }
+    }
+    public function getProveedoresItemsCotizacion(Request $request, $idCotizacion)
+    {
+        try {
+            $proveedores = DB::table('contenedor_consolidado_cotizacion_proveedores')
+                ->select('id', 'code_supplier')
+                ->where('id_cotizacion', $idCotizacion)
+                ->orderBy('id', 'asc')
+                ->get();
+
+            if ($proveedores->isEmpty()) {
+                return response()->json([
+                    'success' => true,
+                    'data' => []
+                ]);
+            }
+
+            $proveedorIds = $proveedores->pluck('id')->all();
+            $items = DB::table('contenedor_consolidado_cotizacion_proveedores_items')
+                ->select('id_proveedor', 'initial_name', 'tipo_producto', 'id')
+                ->whereIn('id_proveedor', $proveedorIds)
+                ->orderBy('id', 'asc')
+                ->get()
+                ->groupBy('id_proveedor');
+
+            $result = $proveedores->map(function ($prov) use ($items) {
+                $provItems = $items->get($prov->id, collect())
+                    ->map(function ($it) {
+                        return [
+                            'id' => $it->id,
+                            'initial_name' => $it->initial_name,
+                            'tipo_producto' => $it->tipo_producto,
+                        ];
+                    })
+                    ->values();
+                return [
+                    'id' => $prov->id,
+                    'code_supplier' => $prov->code_supplier,
+                    'items' => $provItems,
+                ];
+            })->values();
+
+            return response()->json([
+                'success' => true,
+                'data' => $result
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error en getProveedoresItemsCotizacion: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al obtener proveedores e items',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+    public function getProveedorPendingDocuments(Request $request, $idCotizacion)
+    {
+        try {
+
+            $proveedores = CotizacionProveedor::where('id_cotizacion', $idCotizacion)->get();
+            foreach ($proveedores as $proveedor) {
+                $id = $proveedor->id;
+                $packing_list = $proveedor->packing_list;
+                $factura_comercial = $proveedor->factura_comercial;
+                $excel_confirmacion = $proveedor->excel_confirmacion;
+                $data[] = [
+                    'id' => $id,
+                    'code_supplier' => $proveedor->code_supplier,
+                    'packing_list' => $packing_list,
+                    'excel_confirmacion' => $excel_confirmacion,
+                    'factura_comercial' => $factura_comercial,
+                ];
+            }
+            return response()->json([
+                'success' => true,
+                'data' => $data
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error en getProveedorPendingDocuments: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al obtener proveedores pendientes de documentos',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+    public function solicitarDocumentos(Request $request)
+    {
+        try {
+            $data = $request->all();
+            $idCotizacion = $data['id_cotizacion'] ?? null;
+            $proveedores = $data['proveedores'] ?? [];
+
+            if (!$idCotizacion || empty($proveedores)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Payload inválido: se requiere id_cotizacion y proveedores'
+                ], 422);
+            }
+
+            // Actualizar tipo_producto por item.id
+            foreach ($proveedores as $prov) {
+                $items = $prov['items'] ?? [];
+                foreach ($items as $item) {
+                    if (!isset($item['id']) || !isset($item['tipo_producto'])) {
+                        continue;
+                    }
+                    DB::table('contenedor_consolidado_cotizacion_proveedores_items')
+                        ->where('id', $item['id'])
+                        ->update(['tipo_producto' => $item['tipo_producto']]);
+                }
+            }
+
+            // Obtener carga a partir de la cotización
+            $cot = DB::table('contenedor_consolidado_cotizacion')
+                ->select('id_contenedor', 'telefono')
+                ->where('id', $idCotizacion)
+                ->first();
+
+            if (!$cot) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Cotización no encontrada'
+                ], 404);
+            }
+            $telefono = $cot->telefono;
+            $telefono = preg_replace('/\s+/', '', $telefono);
+            $telefono = $telefono ? $telefono . '@c.us' : '';
+            //if tel length is 9, add 51 to the beginning
+
+            $cont = DB::table('carga_consolidada_contenedor')
+                ->select('carga')
+                ->where('id', $cot->id_contenedor)
+                ->first();
+
+            $carga = $cont->carga ?? '';
+            $cargaCode = is_numeric($carga) ? str_pad($carga, 2, '0', STR_PAD_LEFT) : $carga;
+
+            $message = "Hola 🙋🏻‍♀, según lo conversado en la reunión virtual, necesitamos los siguiente documentos:\n \n*Documentación: CONSOLIDADO #{$cargaCode}\n\n☑ PASO 1: Llenar el Excel de confirmación con las características de los productos que estás importando para poder declarar correctamente tus productos 📄 y evitar multas o pérdidas en aduanas.\n\n📢 IMPORTANTE:  Ver el video sobre el Excel de confirmación. 📋\nVideo:  https://youtu.be/rvhwblBEbXQ";
+
+            $response = $this->sendMessage($message, $telefono, 5);
+            Log::info('Respuesta de WhatsApp: ' . json_encode($response));
+
+            // Generar Excel de confirmación por proveedor
+            $templatePath = storage_path('app/public/templates/excel-confirmacion/EXCEL_DE_CONFIRMACION_GENERAL.xlsx');
+            $outputDir = storage_path('app/public/excel-confirmacion');
+            if (!is_dir($outputDir)) {
+                @mkdir($outputDir, 0775, true);
+            }
+
+            // Mapa de etiquetas por tipo de producto
+            $labelsMap = [
+                'GENERAL' => [
+                    'Material:',
+                    'Marca:',
+                    'Modelo:',
+                    'Tamaño:',
+                    'Capacidad (ml o kg):',
+                    'Peso Neto:',
+                    'Incluye:',
+                    'Pares o Piezas:',
+                    'Funcion:',
+                    'Presentacion (botella, caja, etc.)::',
+                    ''
+                ],
+                'CALZADO' => [
+                    'Marca:',
+                    'Modelo:',
+                    'Material de Capellada (%): ',
+                    'Material de Forro (%):',
+                    'Material de Plantilla (%):',
+                    'Material de Suela (%):',
+                    'Talla:',
+                    'Colores:',
+                    'Incluye:',
+                    'Empaque (Granel o Cajas):',
+                    ''
+                ],
+                'ROPA' => [
+                    'Marca:',
+                    'Modelo:',
+                    'Material Exterior (%):',
+                    'Material del Forro (%):',
+                    'Material del Relleno (%):',
+                    'Material del Cierre (%):',
+                    'Material del Puños (%):',
+                    'Talla:',
+                    'Colores:',
+                    'Incluye:',
+                    ''
+                ],
+                'TECNOLOGIA' => [
+                    'Material:',
+                    'Marca:',
+                    'Modelo:',
+                    'Tamaño del producto:',
+                    'Potencia:',
+                    'Voltaje:',
+                    'Amperaje:',
+                    'Bateria',
+                    'Peso Neto:',
+                    'Incluye:',
+                    'Pares o Piezas:',
+                    'Función:',
+                    ''
+                ],
+                'TELA' => [
+                    'Material (%):',
+                    'Marca:',
+                    'Modelo:',
+                    'Tamaño (Metros):',
+                    'Gramaje (g/m²):',
+                    'Tipo de Tela:',
+                    'Cantidad de Rollos:',
+                    'Uso:',
+                    ''
+                ],
+                'AUTOMOTRIZ' => [
+                    'Material:',
+                    'Marca:',
+                    'Modelo:',
+                    'Tamaño:',
+                    'Compatibilidad (vehiculo/moto):',
+                    'Voltaje:',
+                    'Potencia:',
+                    'Peso Neto:',
+                    'Incluye:',
+                    'Pares o Piezas:',
+                    'Función:',
+                    ''
+                ],
+                'MOVILIDAD PERSONAL' => [
+                    'Material:',
+                    'Marca:',
+                    'Modelo:',
+                    'Tamaño del producto:',
+                    'Tamaño de ruedas:',
+                    'Distancia entre ruedas:',
+                    'Voltaje:',
+                    'Potencia:',
+                    'Amperaje:',
+                    'Autonomia:',
+                    'Velocidad maxima:',
+                    'Peso Neto:',
+                    'Capacidad de Carga:',
+                    'Tipo de Bateria:',
+                    'Incluye:',
+                ],
+            ];
+
+            $generated = [];
+            foreach ($proveedores as $prov) {
+                $items = $prov['items'] ?? [];
+                if (!file_exists($templatePath)) {
+                    Log::error('Plantilla de Excel de confirmación no encontrada: ' . $templatePath);
+                    continue;
+                }
+                $spreadsheet = IOFactory::load($templatePath);
+                $sheet = $spreadsheet->getActiveSheet();
+
+                $baseStartRow = 14; // B14:L25
+                $baseBlockRows = 12;    // 12 filas base
+
+                $currentRow = $baseStartRow;
+                foreach ($items as $idx => $item) {
+                    $tipo = strtoupper($item['tipo_producto'] ?? 'GENERAL');
+                    $labels = $labelsMap[$tipo] ?? $labelsMap['GENERAL'];
+                    $rowsNeeded = max($baseBlockRows, count($labels));
+
+                    if ($idx === 0) {
+                        // Primer bloque: expandir si se requieren más de 12 filas
+                        if ($rowsNeeded > $baseBlockRows) {
+                            // Para MOVILIDAD PERSONAL, primero desmergear columnas B,C,D,F,G,H,I,J,K,L del bloque base
+                            if ($tipo === 'MOVILIDAD PERSONAL') {
+                                foreach (['B', 'C', 'D', 'F', 'G', 'H', 'I', 'J', 'K', 'L'] as $colToUnmerge) {
+                                    $sheet->unmergeCells("{$colToUnmerge}{$baseStartRow}:{$colToUnmerge}" . ($baseStartRow + $baseBlockRows - 1));
+                                }
+                            }
+                            $sheet->insertNewRowBefore($baseStartRow + $baseBlockRows, $rowsNeeded - $baseBlockRows);
+                            // Duplicar estilos para filas nuevas, tomando la última fila base como referencia
+                            for ($r = 0; $r < ($rowsNeeded - $baseBlockRows); $r++) {
+                                $srcRow = $baseStartRow + $baseBlockRows - 1;
+                                $dstRow = $baseStartRow + $baseBlockRows + $r;
+                                $sheet->duplicateStyle($sheet->getStyle("B{$srcRow}:L{$srcRow}"), "B{$dstRow}:L{$dstRow}");
+                            }
+                        }
+                        $startRow = $baseStartRow;
+                    } else {
+                        // Bloques subsecuentes: insertar bloque completo con el tamaño requerido
+                        $sheet->insertNewRowBefore($currentRow, $rowsNeeded);
+                        // Copiar estilos del bloque base fila por fila (hasta 12) y extender con la última fila base
+                        for ($r = 0; $r < $rowsNeeded; $r++) {
+                            $srcRow = $baseStartRow + min($r, $baseBlockRows - 1);
+                            $dstRow = $currentRow + $r;
+                            $sheet->duplicateStyle($sheet->getStyle("B{$srcRow}:L{$srcRow}"), "B{$dstRow}:L{$dstRow}");
+                        }
+                        $startRow = $currentRow;
+                    }
+
+
+                    foreach (range('B', 'L') as $colRef) {
+                        for ($rowApply = $startRow; $rowApply <= ($startRow + $rowsNeeded - 1); $rowApply++) {
+                            $sheet->duplicateStyle($sheet->getStyle("{$colRef}14"), "{$colRef}{$rowApply}");
+                        }
+                    }
+
+                    // A nunca debe tener bordes: limpiar bordes en el rango afectado
+                    for ($rowApply = $startRow; $rowApply <= ($startRow + $rowsNeeded - 1); $rowApply++) {
+                        $borders = $sheet->getStyle('A' . $rowApply)->getBorders();
+                        $borders->getTop()->setBorderStyle(\PhpOffice\PhpSpreadsheet\Style\Border::BORDER_NONE);
+                        $borders->getBottom()->setBorderStyle(\PhpOffice\PhpSpreadsheet\Style\Border::BORDER_NONE);
+                        $borders->getLeft()->setBorderStyle(\PhpOffice\PhpSpreadsheet\Style\Border::BORDER_NONE);
+                        $borders->getRight()->setBorderStyle(\PhpOffice\PhpSpreadsheet\Style\Border::BORDER_NONE);
+                    }
+
+                    // Merge vertical por columna para preservar forma del bloque completo (excepto E)
+                    foreach (range('B', 'L') as $col) {
+                        if ($col === 'E') {
+                            continue; // no mergear la columna E (labels)
+                        }
+                        $sheet->mergeCells("{$col}{$startRow}:{$col}" . ($startRow + $rowsNeeded - 1));
+                    }
+
+                    // Formateo especial posterior a merges
+                    $endRow = $startRow + $rowsNeeded - 1;
+                    // Columna H: aplicar formateo del primer rango (H14) al rango mergeado actual
+                    $sheet->duplicateStyle($sheet->getStyle('H14'), "H{$startRow}:H{$endRow}");
+
+                    // Columna I: fórmula explícita G{row}*H{row}
+                    $sheet->setCellValue('I' . $startRow, '=G' . $startRow . '*H' . $startRow);
+
+                    // Columna C: initial_name (en la primera fila del bloque)
+                    $initialName = $item['initial_name'] ?? '';
+                    $sheet->setCellValueExplicit('C' . $startRow, $initialName, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+                    // Ajustar estilo/texto de la columna C (usar estilo base C14 y centrar)
+                    $sheet->duplicateStyle($sheet->getStyle('C14'), 'C' . $startRow . ':C' . $endRow);
+                    $sheet->getStyle('C' . $startRow . ':C' . $endRow)
+                        ->getAlignment()
+                        ->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER)
+                        ->setVertical(\PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER)
+                        ->setWrapText(true);
+
+                    // Columna E: labels por tipo de producto
+                    for ($i = 0; $i < $rowsNeeded; $i++) {
+                        $sheet->setCellValueExplicit('E' . ($startRow + $i), $labels[$i] ?? '', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+                    }
+                    // Columna F: tipo de producto para todas las filas del bloque
+                    for ($i = 0; $i < $rowsNeeded; $i++) {
+                        $sheet->setCellValueExplicit('F' . ($startRow + $i), $tipo, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+                    }
+
+                    // Avanzar currentRow al final de este bloque
+                    $currentRow = $startRow + $rowsNeeded;
+                }
+                // Agregar fila de totales debajo del último bloque
+                $lastEndRow = $currentRow - 1;
+                $totalRow = $currentRow;
+                if ($lastEndRow >= $baseStartRow) {
+                    // SUM para G y I desde la fila 14 hasta la última fila del bloque
+                    $sheet->setCellValue('G' . $totalRow, '=SUM(G' . $baseStartRow . ':G' . $lastEndRow . ')');
+                    $sheet->setCellValue('I' . $totalRow, '=SUM(I' . $baseStartRow . ':I' . $lastEndRow . ')');
+                }
+                $codeSupplier = CotizacionProveedor::where('id', $prov['id'])->first()->code_supplier;
+                $fileName = 'excel_confirmacion' . '_' . $codeSupplier . '.xlsx';
+                $fullPath = $outputDir . DIRECTORY_SEPARATOR . $fileName;
+                $writer = IOFactory::createWriter($spreadsheet, 'Xlsx');
+                $writer->save($fullPath);
+                $response = $this->sendMedia($fullPath, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'Documento de confirmación', $telefono, 5);
+                Log::info('Respuesta de WhatsApp: ' . json_encode($response));
+            }
+            $contenedor = Contenedor::where('id', $cot->id_contenedor)->first();
+            $fecha_documentacion_max = $contenedor->fecha_documentacion_max;
+            $fecha_documentacion_max_formatted = date('d/m/Y', strtotime($fecha_documentacion_max));
+            $message = "☑ PASO 2: Solicita a tu proveedor los documentos finales:
+•⁠  ⁠Commercial Invoice 📄.
+•⁠  ⁠Packing List 📦.
+
+📋 Adjuntamos un Word con indicaciones para un correcto llenado.
+📩 El documento está en idioma chino, solo enviarlo a su proveedor.
+🚫 Indicar a tu proveedor, que no se rellena encima del World . ESTE WORD ES SOLO UNA GUIA.
+
+Fecha maxima de entrega: {$fecha_documentacion_max_formatted}";
+            $response = $this->sendMessage($message, $telefono, 8);
+            //send CONSIDERATIONS.docx on public storage templates
+            $considerationsPath = public_path('storage/templates/CONSIDERATIONS.docx');
+            $response = $this->sendMedia($considerationsPath, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'Consideraciones', $telefono, 10);
+
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Items actualizados, mensaje enviado y archivos generados',
+                'payload' => [
+                    'id_cotizacion' => $idCotizacion,
+                    'carga' => $cargaCode,
+                    'text' => $message,
+                    'files' => $generated
+                ]
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error en solicitarDocumentos: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error en el procesamiento',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+    public function recordatoriosDocumentos(Request $request){
+        try {
+            $idCotizacion = $request->input('id_cotizacion');
+            $proveedores = $request->input('proveedores', []);
+
+            if (!$idCotizacion || empty($proveedores)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Payload inválido: se requiere id_cotizacion y proveedores'
+                ], 422);
+            }
+
+            // Obtener información de la cotización
+            $cot = DB::table('contenedor_consolidado_cotizacion')
+                ->select('nombre', 'telefono')
+                ->where('id', $idCotizacion)
+                ->first();
+
+            if (!$cot) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Cotización no encontrada'
+                ], 404);
+            }
+
+            $nombreCliente = $cot->nombre;
+            $telefono = $cot->telefono;
+            $telefono = preg_replace('/\s+/', '', $telefono);
+            $telefono = $telefono ? $telefono . '@c.us' : '';
+
+            // Mapa de documentos a nombres legibles
+            $documentosMap = [
+                'commercial_invoice' => 'Commercial Invoice 📄',
+                'packing_list' => 'Packing List 📦.',
+                'excel_confirmacion' => 'Excel de confirmacion 📄'
+            ];
+
+            // Construir el mensaje
+            $mensaje = "Hola {$nombreCliente} estamos esperando nos envies los documentos de tu importación, a continuacion detallo los que faltan:\n\n";
+
+            foreach ($proveedores as $prov) {
+                $idProveedor = $prov['id'] ?? null;
+                $documentos = $prov['documentos'] ?? [];
+
+                if (!$idProveedor || empty($documentos)) {
+                    continue;
+                }
+
+                // Obtener el código del proveedor
+                $proveedor = CotizacionProveedor::where('id', $idProveedor)->first();
+                if (!$proveedor) {
+                    Log::warning('Proveedor no encontrado: ' . $idProveedor);
+                    continue;
+                }
+
+                $codeSupplier = $proveedor->code_supplier ?? "Proveedor #{$idProveedor}";
+                $mensaje .= "Proveedor: {$codeSupplier}\n";
+
+                // Agregar documentos faltantes
+                foreach ($documentos as $doc) {
+                    $nombreDocumento = $documentosMap[$doc] ?? ucwords(str_replace('_', ' ', $doc));
+                    $mensaje .= "{$nombreDocumento}\n";
+                }
+                $mensaje .= "\n";
+            }
+
+            $mensaje .= "Si no tenemos tus documentos a tiempo aduana puede aplicarte multas o inmovilización de tus productos.";
+
+            // Enviar mensaje por WhatsApp
+            $response = $this->sendMessage($mensaje, $telefono, 5);
+            Log::info('Respuesta de WhatsApp recordatorios: ' . json_encode($response));
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Recordatorio enviado correctamente',
+                'payload' => [
+                    'id_cotizacion' => $idCotizacion,
+                    'nombre_cliente' => $nombreCliente,
+                    'text' => $mensaje
+                ]
+            ]);
+        }catch (\Exception $e) {
+            Log::error('Error en recordatoriosDocumentos: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error en el procesamiento',
+                'error' => $e->getMessage()
+            ], 500);
         }
     }
 }

@@ -54,7 +54,8 @@ class Contenedor extends Model
         'costo_destino',
         'ajuste_valor',
         'multa',
-        'observaciones'
+        'observaciones',
+        'fecha_documentacion_max'
     ];
 
     /**

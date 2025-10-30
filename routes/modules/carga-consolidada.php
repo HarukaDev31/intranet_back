@@ -81,6 +81,10 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
         
         // Clientes
         Route::group(['prefix' => 'clientes'], function () {
+            Route::post('/general/recordatorios-documentos', [GeneralController::class, 'recordatoriosDocumentos']);
+            Route::post('/general/solicitar-documentos', [GeneralController::class, 'solicitarDocumentos']);
+            Route::get('/general/{idCotizacion}/proveedores-items', [GeneralController::class, 'getProveedoresItemsCotizacion']);
+            Route::get('/general/{idCotizacion}/proveedores-pending-documents', [GeneralController::class, 'getProveedorPendingDocuments']);
             Route::get('/general/{idContenedor}/export', [GeneralController::class, 'exportarClientes']);
             Route::get('/general/{idContenedor}/headers', [GeneralController::class, 'getClientesHeader']);
             Route::get('/general/{idContenedor}', [GeneralController::class, 'index']);
