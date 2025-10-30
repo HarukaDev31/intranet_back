@@ -164,8 +164,10 @@ class Cotizacion extends Model
         'C.FINAL' => 'C. Final',
         'AJUSTADO' => 'Ajustado',
         'COTIZADO' => 'Cotizado',
+        'COBRANDO' => 'Cobrando',
         'PAGADO' => 'Pagado',
-        'SOBREPAGO' => 'Sobrepago'
+        'SOBREPAGO' => 'Sobrepago',
+        'PAGADO_V' => 'Pagado'
     ];
 
     /**

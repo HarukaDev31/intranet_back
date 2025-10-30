@@ -308,6 +308,98 @@ class PagosController extends Controller
         return 'PENDIENTE';
     }
 
+    /**
+     * Sincroniza el campo estado_cotizacion_final de una cotización a partir de los pagos (LOGISTICA / IMPUESTOS).
+     * $force = true  -> fuerza actualización incluso si estado actual es 'COBRANDO'
+     */
+    public function syncEstadoCotizacionFromPayments($idCotizacion, $force = false)
+    {
+        try {
+            $cot = Cotizacion::find($idCotizacion);
+            if (! $cot) {
+                Log::warning("syncEstadoCotizacionFromPayments: cotizacion no encontrada: {$idCotizacion}");
+                return ['success' => false, 'message' => 'Cotizacion no encontrada'];
+            }
+
+            // monto a pagar: preferir logistica_final + impuestos_final, si 0 usar monto
+            $montoAart = (float) (($cot->logistica_final ?? 0) + ($cot->impuestos_final ?? 0));
+            if (round($montoAart, 2) == 0.0) {
+                $montoAart = (float) ($cot->monto ?? 0);
+            }
+
+            // Sumar pagos (todos los registros, independientemente de su status) para conceptos LOGISTICA / IMPUESTOS
+            $pagosQuery = Pago::where('id_cotizacion', $idCotizacion)
+                ->whereIn('id_concept', [PagoConcept::CONCEPT_PAGO_LOGISTICA, PagoConcept::CONCEPT_PAGO_IMPUESTOS]);
+
+            $totales = $pagosQuery->selectRaw('IFNULL(SUM(monto),0) as total_pagos_monto, COUNT(*) as pagos_count')->first();
+            $totalPagado = (float) ($totales->total_pagos_monto ?? 0);
+
+            // Determinar estado base
+            $estado = 'PENDIENTE';
+            if ($totalPagado == 0) {
+                $estado = 'PENDIENTE';
+            } else {
+                $rTotal = round($totalPagado, 2);
+                $rApar = round($montoAart, 2);
+                if ($rTotal < $rApar) {
+                    $estado = 'ADELANTO';
+                } elseif ($rTotal == $rApar) {
+                    $estado = 'PAGADO';
+                } else {
+                    $estado = 'SOBREPAGO';
+                }
+            }
+
+            // Si es PAGADO o SOBREPAGO, verificar si todos los pagos relacionados están CONFIRMADO -> entonces PAGADO_V
+            if (in_array($estado, ['PAGADO', 'SOBREPAGO'])) {
+                $totalNoConfirmados = Pago::where('id_cotizacion', $idCotizacion)
+                    ->whereIn('id_concept', [PagoConcept::CONCEPT_PAGO_LOGISTICA, PagoConcept::CONCEPT_PAGO_IMPUESTOS])
+                    ->where('status', '!=', 'CONFIRMADO')
+                    ->count();
+                if ($totalNoConfirmados == 0) {
+                    $estado = 'PAGADO_V';
+                }
+            }
+
+            // Respetar estado COBRANDO a menos que se fuerce la sincronización
+            if (! $force && $cot->estado_cotizacion_final === 'COBRANDO' && $estado !== 'COBRANDO') {
+                return [
+                    'success' => true,
+                    'skipped' => true,
+                    'reason' => 'estado COBRANDO existente y no se forzó',
+                    'current_estado' => $cot->estado_cotizacion_final
+                ];
+            }
+
+            $prev = $cot->estado_cotizacion_final;
+            if ($prev !== $estado) {
+                $cot->estado_cotizacion_final = $estado;
+                $cot->timestamps = false;
+                $cot->save();
+                return [
+                    'success' => true,
+                    'updated' => true,
+                    'previous' => $prev,
+                    'new' => $estado,
+                    'total_pagado' => $totalPagado,
+                    'monto_a_pagar' => $montoAart
+                ];
+            }
+
+            return [
+                'success' => true,
+                'updated' => false,
+                'previous' => $prev,
+                'new' => $estado,
+                'total_pagado' => $totalPagado,
+                'monto_a_pagar' => $montoAart
+            ];
+        } catch (\Exception $e) {
+            Log::error("syncEstadoCotizacionFromPayments error: " . $e->getMessage());
+            return ['success' => false, 'message' => $e->getMessage()];
+        }
+    }
+
 
 
     /**
@@ -516,6 +608,12 @@ class PagosController extends Controller
                 ->first();
 
             DB::commit();
+            // Después de commit, sincronizar el estado de la cotización asociado
+            try {
+                $this->syncEstadoCotizacionFromPayments($cotizacionId, false);
+            } catch (\Exception $e) {
+                Log::error('Error sincronizando estado cotizacion tras actualizar pago: ' . $e->getMessage());
+            }
 
             return response()->json([
                 'success' => true,

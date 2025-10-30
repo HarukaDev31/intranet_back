@@ -998,7 +998,7 @@ class CotizacionFinalController extends Controller
             $cotizacion = Cotizacion::find($request->idCotizacion);
             $cotizacion->estado_cotizacion_final = $request->estado;
             $cotizacion->save();
-            if ($request->estado == 'COTIZADO') {
+            if ($request->estado == 'COBRANDO') {
                 $cotizacion = DB::table($this->table_contenedor_cotizacion . ' as CC')
                     ->select([
                         'CC.telefono',
@@ -1314,6 +1314,13 @@ class CotizacionFinalController extends Controller
                             ]
                         ]
                     ]);
+                }
+                // Sincronizar estado de la cotización a partir de los pagos (LOGISTICA / IMPUESTOS)
+                try {
+                    app()->make(\App\Http\Controllers\CargaConsolidada\PagosController::class)
+                        ->syncEstadoCotizacionFromPayments($request->idCotizacion, false);
+                } catch (\Exception $e) {
+                    Log::error('Error sincronizando estado de cotizacion tras store pago: ' . $e->getMessage());
                 }
                 return response()->json([
                     'success' => true,
@@ -1639,7 +1646,7 @@ class CotizacionFinalController extends Controller
                         'impuestos_final' => $result['impuestos_final'],
                         'logistica_final' => $result['logistica_final'],
                         'fob_final' => $result['fob_final'],
-                        'estado_cotizacion_final' => 'PENDIENTE',
+                        'estado_cotizacion_final' => 'COTIZADO',
                         'peso_final' => $result['peso_final'],
                     ];
                     
@@ -2548,6 +2555,7 @@ class CotizacionFinalController extends Controller
 
             // Actualizar el campo a null en la base de datos
             $cotizacion->update(['cotizacion_final_url' => null]);
+            $cotizacion->estado_cotizacion_final = 'PENDIENTE';
 
             return response()->json([
                 'success' => true,
