@@ -11,7 +11,7 @@
         .title { text-align: center; font-weight: bold; font-size: 16px; margin-top: 10px; }
         .section { margin-top: 20px; }
         .field { margin-bottom: 8px; }
-        .main {margin-top: 15em;}
+        .main {margin-top: 12em;}
     </style>
 </head>
 <body>
@@ -59,7 +59,7 @@
     </div>
 
     <div class="section">
-        <p>Fecha: _________________</p>
+        <p>Fecha: _________________</p><br/>
         <p>Firma del receptor: _________________________</p>
     </div>
 
