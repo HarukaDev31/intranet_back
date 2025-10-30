@@ -3064,7 +3064,8 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
             'data' => [
                 'cotizacion_contrato_url' => $this->generateImageUrl($cotizacion->cotizacion_contrato_url),
                 'cotizacion_contrato_firmado_url' => $this->generateImageUrl($cotizacion->cotizacion_contrato_firmado_url),
-                'uuid' => $cotizacion->uuid
+                'uuid' => $cotizacion->uuid,
+                'cod_contract' => $cotizacion->cod_contract
             ]
         ]);
     }
