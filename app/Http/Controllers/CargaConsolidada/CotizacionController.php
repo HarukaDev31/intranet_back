@@ -1876,7 +1876,7 @@ class CotizacionController extends Controller
                     $signUrl = rtrim(env('APP_URL_CLIENTES', 'http://localhost:3001'), '/') . '/firma-acuerdo-servicio/' . ($cotizacion->uuid ?? '');
                     $wspMessage .= "\n\nPara firmar el acuerdo ve a este enlace: \n" . $signUrl;
 
-                    $wspMessageData = $this->sendMessage($wspMessage, $telefonoCliente);
+                    $wspMessageData = $this->sendMessageVentas($wspMessage, $telefonoCliente);
                     if (!(is_array($wspMessageData) && isset($wspMessageData['status']) && $wspMessageData['status'] === true)) {
                         Log::warning('Respuesta inesperada al enviar texto por WhatsApp al cliente confirmado: ' . json_encode($wspMessageData));
                     }
