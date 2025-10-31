@@ -160,7 +160,7 @@ trait WhatsappTrait
             'sleep' => $sleep
         ]);
     }
-    public function sendMedia($filePath, $mimeType = null, $message = null, $phoneNumberId = null, $sleep = 0)
+    public function sendMedia($filePath, $mimeType = null, $message = null, $phoneNumberId = null, $sleep = 0,$fromNumber='consolidado')
     {
         try {
             $phoneNumberId = $phoneNumberId ? $phoneNumberId : $this->phoneNumberId;
@@ -191,7 +191,8 @@ trait WhatsappTrait
                 'mimeType' => $mimeType,
                 'message' => $message,
                 'phoneNumberId' => $phoneNumberId,
-                'sleep' => $sleep
+                'sleep' => $sleep,
+                'fromNumber' => $fromNumber
             ]);
         } catch (\Exception $e) {
             Log::error('Error al enviar media: ' . $e->getMessage(), [
