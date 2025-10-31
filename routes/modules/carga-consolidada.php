@@ -104,6 +104,7 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
             Route::delete('/variacion/documentacion/proveedor/{idProveedor}/factura-comercial', [DocumentacionController::class, 'deleteProveedorFacturaComercial']);
             Route::delete('/variacion/documentacion/proveedor/{idProveedor}/excel-confirmacion', [DocumentacionController::class, 'deleteProveedorExcelConfirmacion']);
             Route::delete('/variacion/documentacion/proveedor/{idProveedor}/packing-list', [DocumentacionController::class, 'deleteProveedorPackingList']);
+            Route::delete('/variacion/documentacion/archivo/{idFile}', [CotizacionProveedorController::class, 'deleteFileDocumentationPeru']);
             Route::get('/variacion/documentacion/{idCotizacion}', [VariacionController::class, 'showClientesDocumentacion']);
             Route::get('/pagos/{idContenedor}', [ClientesPagosController::class, 'index']);
             Route::post('/pagos', [ClientesPagosController::class, 'store']);
