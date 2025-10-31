@@ -3,8 +3,6 @@
 namespace App\Exports;
 
 use Maatwebsite\Excel\Concerns\FromArray;
-use Maatwebsite\Excel\Concerns\WithHeadings;
-use Maatwebsite\Excel\Concerns\WithStyles;
 use Maatwebsite\Excel\Concerns\WithEvents;
 use Maatwebsite\Excel\Events\AfterSheet;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
@@ -12,7 +10,7 @@ use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
 
-class RotuladoParedExport implements FromArray, WithHeadings, WithStyles, WithEvents
+class RotuladoParedExport implements FromArray, WithEvents
 {
     protected $rows;
 
@@ -25,28 +23,6 @@ class RotuladoParedExport implements FromArray, WithHeadings, WithStyles, WithEv
     {
         return $this->rows;
     }
-
-    public function headings(): array
-    {
-        return [
-            'Cliente',
-            'CBM',
-            'Bulto',
-        ];
-    }
-
-    public function styles(Worksheet $sheet)
-    {
-        return [
-            1 => [
-                'font' => ['bold' => true, 'size' => 12],
-                'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '4472C4']],
-                'font' => ['color' => ['rgb' => 'FFFFFF']],
-                'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER]
-            ]
-        ];
-    }
-
     public function registerEvents(): array
     {
         return [
@@ -54,9 +30,9 @@ class RotuladoParedExport implements FromArray, WithHeadings, WithStyles, WithEv
                 $sheet = $event->sheet->getDelegate();
                 $highestRow = $sheet->getHighestRow();
                 $highestColumn = $sheet->getHighestColumn();
+                $usedRange = 'A1:' . $highestColumn . $highestRow;
 
-                // Apply thin borders to the whole used range
-                $sheet->getStyle('A1:' . $highestColumn . $highestRow)->applyFromArray([
+                $sheet->getStyle($usedRange)->applyFromArray([
                     'borders' => [
                         'allBorders' => [
                             'borderStyle' => Border::BORDER_THIN,
@@ -65,15 +41,60 @@ class RotuladoParedExport implements FromArray, WithHeadings, WithStyles, WithEv
                     ]
                 ]);
 
-                // Set sensible column widths: cliente wide, numbers narrower
+                // Make big printable boxes: wider name column and large row heights
                 try {
-                    $sheet->getColumnDimension('A')->setWidth(60);
-                    $sheet->getColumnDimension('B')->setWidth(18);
-                    $sheet->getColumnDimension('C')->setWidth(12);
+                    // Adjust columns: A may be present as an empty column in some viewers, but set first 3 columns
+                    $sheet->getColumnDimension('A')->setWidth(80);
+                    $sheet->getColumnDimension('B')->setWidth(36); // Cliente (very wide)
+                    $sheet->getColumnDimension('C')->setWidth(36); // CBM
 
-                    // Align numeric columns to right
-                    $sheet->getStyle('B2:B' . $highestRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
-                    $sheet->getStyle('C2:C' . $highestRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+                    // Set large font sizes per column
+                    $sheet->getStyle('A1:A' . $highestRow)->getFont()->setSize(48)->setBold(true);
+                    $sheet->getStyle('B1:B' . $highestRow)->getFont()->setSize(36);
+                    $sheet->getStyle('C1:C' . $highestRow)->getFont()->setSize(36);
+
+                    // Set row heights dynamically per-row based on the text in column A (name)
+                    $nameFontSize = 48;
+                    $lineHeightFactor = 1.15; // multiplier for font size to compute line height
+                    // get column A width and estimate chars per line
+                    $colWidth = $sheet->getColumnDimension('A')->getWidth();
+                    $charsPerLine = max(20, (int)round($colWidth * 1.1));
+
+                    for ($row = 1; $row <= $highestRow; $row++) {
+                        // read the cell value for the name column (A)
+                        try {
+                            $cellValue = (string)$sheet->getCell('A' . $row)->getValue();
+                        } catch (\Exception $e) {
+                            $cellValue = '';
+                        }
+                        $cellTrim = trim($cellValue);
+                        if ($cellTrim === '') {
+                            $lines = 1;
+                        } else {
+                            // Wrap by estimated chars per line preserving words when possible
+                            $wrapped = wordwrap($cellTrim, $charsPerLine, "\n", true);
+                            $lines = substr_count($wrapped, "\n") + 1;
+                            // If cell already contains explicit newlines, ensure we count them
+                            $explicitLines = substr_count($cellTrim, "\n") + 1;
+                            $lines = max($lines, $explicitLines);
+                        }
+                        // compute height: lines * fontSize * factor + small padding
+                        $rowHeight = (int)ceil($lines * $nameFontSize * $lineHeightFactor + 8);
+                        // enforce minimum 160 and reasonable maximum
+                        $rowHeight = max(160, min($rowHeight, 800));
+                        $sheet->getRowDimension($row)->setRowHeight($rowHeight);
+                    }
+
+                    // Center texts and enable wrapping
+                    $sheet->getStyle('A1:A' . $highestRow)->getAlignment()
+                        ->setHorizontal(Alignment::HORIZONTAL_CENTER)
+                        ->setVertical(Alignment::VERTICAL_CENTER)
+                        ->setWrapText(true);
+
+                    $sheet->getStyle('B1:C' . $highestRow)->getAlignment()
+                        ->setHorizontal(Alignment::HORIZONTAL_CENTER)
+                        ->setVertical(Alignment::VERTICAL_CENTER)
+                        ->setWrapText(true);
                 } catch (\Exception $e) {
                     // Ignore if column dimension adjustments fail on some drivers
                 }

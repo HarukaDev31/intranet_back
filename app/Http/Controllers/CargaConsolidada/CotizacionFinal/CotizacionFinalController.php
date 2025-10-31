@@ -1135,7 +1135,7 @@ class CotizacionFinalController extends Controller
             // Preparar mensaje según plantilla solicitada
             $message = "🙋🏽‍♀ RECORDATORÍO DE PAGO\n\n" .
                 "📦 Consolidado #" . $carga . "\n" .
-                "La carga ya llegó al puerto del Callao y es necesario realizar el pago de Impuestos para continuar con el proceso de nacionalización.\n\n" .
+                "Usted cuenta con un pago pendiente, es necesario realizar el pago para continuar con el proceso de nacionalización.\n\n" .
                 "Resumen de Pago\n" .
                 "✅ Cotización final: $" . number_format($totalCotizacion, 2, '.', '') . "\n" .
                 "✅ Adelanto: $" . number_format($totalPagos, 2, '.', '') . "\n" .

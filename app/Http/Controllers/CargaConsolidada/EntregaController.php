@@ -844,9 +844,10 @@ class EntregaController extends Controller
 
                 $rows[] = [
                     (string)($r->cliente ?? ''),
-                    // Mantener formato numérico con 2 decimales (como string para preservar formato en Excel)
-                    number_format($cbm, 2, '.', ''),
-                    $qty,
+                    // Añadir unidad ' CBM' al valor de CBM
+                    number_format($cbm, 2, '.', '') . ' CBM',
+                    // Añadir unidad ' CAJAS' al quantity
+                    (string)$qty . ' CAJAS',
                 ];
             }
 
