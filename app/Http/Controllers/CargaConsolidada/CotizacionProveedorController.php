@@ -3216,7 +3216,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
 
             // Usar la ruta correcta del archivo (PDF generado o archivo movido)
             $finalFilePath = $contratosDir . '/' . $filename;
-            $this->sendMedia($finalFilePath, 'application/pdf', $message, $telefono, 10);
+            $this->sendMedia($finalFilePath, 'application/pdf', $message, $telefono, 10,'ventas');
 
             Log::info('Contrato firmado guardado exitosamente', [
                 'uuid' => $uuid,
