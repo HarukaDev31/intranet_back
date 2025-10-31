@@ -34,6 +34,9 @@ use App\Traits\UserGroupsTrait;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Exports\EmbarqueExport;
 use App\Jobs\SendRotuladoJob;
+use App\Models\CargaConsolidada\DocumentacionFile;
+use App\Models\CargaConsolidada\DocumentacionFolder;
+use App\Models\CargaConsolidada\CotizacionDocumentacion;
 
 class CotizacionProveedorController extends Controller
 {
@@ -1568,6 +1571,25 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
             ], 500);
         }
     }
+    public function deleteFileDocumentationPeru($idFile)
+    {
+        try {
+            DB::beginTransaction();
+
+            //delete file from contenedor_consolidado_cotizacion_documentacion
+            $file = CotizacionDocumentacion::find($idFile);
+            if (!$file) {
+                return $this->jsonResponse(false, 'Archivo no encontrado', [], 404);
+            }
+            $file->delete();
+            
+            DB::commit();
+            return $this->jsonResponse(true, 'Archivo eliminado correctamente', [], 200);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return $this->jsonResponse(false, 'Error al eliminar el archivo: ' . $e->getMessage(), [], 500);
+        }
+    }
     /**
      * Obtener archivos de inspección del almacén
      */
@@ -1743,10 +1765,10 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
     private function sendInspectionFiles($inspectionFiles, $message, $telefono)
     {
         $sentFiles = ['images' => 0, 'videos' => 0];
-        
+
         // Contar total de archivos a enviar
         $totalFiles = count($inspectionFiles['images']) + count($inspectionFiles['videos']);
-        
+
         // Solo enviar mensaje si hay archivos para enviar
         if ($totalFiles > 0) {
             $this->sendMessage($message, $telefono);
