@@ -160,7 +160,7 @@ trait WhatsappTrait
             'sleep' => $sleep
         ]);
     }
-    public function sendMedia($filePath, $mimeType = null, $message = null, $phoneNumberId = null, $sleep = 0,$fromNumber='consolidado')
+    public function sendMedia($filePath, $mimeType = null, $message = null, $phoneNumberId = null, $sleep = 0,$fromNumber='consolidado',$fileName=null)
     {
         try {
             $phoneNumberId = $phoneNumberId ? $phoneNumberId : $this->phoneNumberId;
@@ -187,7 +187,7 @@ trait WhatsappTrait
 
             return $this->_callApi('/media', [
                 'fileContent' => $fileContent,
-                'fileName' => basename($filePath),
+                'fileName' => $fileName ?? basename($filePath),
                 'mimeType' => $mimeType,
                 'message' => $message,
                 'phoneNumberId' => $phoneNumberId,

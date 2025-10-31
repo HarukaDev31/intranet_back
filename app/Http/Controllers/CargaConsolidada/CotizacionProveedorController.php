@@ -463,8 +463,9 @@ class CotizacionProveedorController extends Controller
 
                 foreach ($proveedoresPendientes as $pendiente) {
                     $mensaje .= "• #" . $pendiente['code_supplier'] . "\n";
+                    $mensaje .= "----------------------------------------------------------\n";
                 }
-                $mensaje .= "\nContacta al proveedor y sube los datos faltantes.";
+                $mensaje .= "\nContacta al vendedor y sube los datos faltantes.";
                 // en la siguiente url: https://datosprovedor.probusiness.pe/uuid
                 $url = env('APP_URL_DATOS_PROVEEDOR') . '/' . $uuid;
 
@@ -1674,7 +1675,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                 $this->sendReservationMessage($cotizacion, $telefono);
             }
             $pagosUrl = public_path('assets/images/pagos-full.jpg');
-            $this->sendMedia($pagosUrl, 'image/jpg', 'Cuentas de pago', $telefono, 10);
+            $this->sendMedia($pagosUrl, 'image/jpg', null, $telefono, 15,'consolidado','Numeros de cuenta');
             return $this->jsonResponse(true, 'Proceso de inspección completado correctamente', [
                 'proveedor_actualizado' => true,
                 'imagenes_enviadas' => $sentFiles['images'],
@@ -1804,7 +1805,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
         }
 
         // No enviar mensaje con los archivos, solo el archivo
-        $response = $this->sendMediaInspection($fileSystemPath, $file->file_type, '', $telefono, 0, $file->id);
+        $response = $this->sendMediaInspection($fileSystemPath, $file->file_type, '', $telefono, 2, $file->id);
 
         // Verificar que la respuesta sea exitosa antes de actualizar el estado
         if ($response && isset($response['status']) && $response['status'] === true) {
@@ -2171,13 +2172,8 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
 
             foreach ($files as $file) {
                 if ($file->isValid()) {
-                    // Generar nombre único para el archivo
                     $filename = time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
-
-                    // Guardar archivo en storage
                     $path = $file->storeAs(self::INSPECTION_PATH, $filename, 'public');
-
-                    // Crear registro en la base de datos
                     $inspeccion = new AlmacenInspection();
                     $inspeccion->file_name = $file->getClientOriginalName();
                     $inspeccion->file_type = $file->getMimeType();
@@ -2245,7 +2241,6 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                     'message' => 'No se han enviado archivos'
                 ], 400);
             }
-
             $files = $request->file('files');
 
             // Si es un solo archivo, convertirlo en array
