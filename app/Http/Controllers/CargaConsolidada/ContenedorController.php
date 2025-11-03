@@ -17,10 +17,11 @@ use Illuminate\Support\Facades\Storage;
 use App\Models\CalculadoraImportacion;
 use App\Models\Notificacion;
 use App\Traits\WhatsappTrait;
+use App\Traits\GoogleSheetsHelper;
 
 class ContenedorController extends Controller
 {
-    use WhatsappTrait;
+    use WhatsappTrait, GoogleSheetsHelper;
     private $defaultAgenteSteps = [];
 
     private $defautlAgenteChinaSteps = [];
@@ -658,6 +659,38 @@ Le estaré informando cualquier avance 🫡.";
             
             // Validar usuarios en cotizaciones con proveedores cargados
             $this->validateUsersInCotizacionesWithLoadedProveedores($idContenedor);
+            $carga = Contenedor::find($idContenedor);
+            $sheetName = 'CONSOLIDADO ' . $carga->carga;
+            
+            // Crear hoja "CONSOLIDADO CARGA" en el spreadsheet de estado
+            try {
+                $spreadsheetId = config('google.post_sheet_status_doc_id');
+                if ($spreadsheetId) {
+                    $sheetId = $this->createSheet($sheetName, $spreadsheetId);
+                    if ($sheetId) {
+                        Log::info("Hoja {$sheetName} creada exitosamente para contenedor ID: {$idContenedor}");
+                        
+                        // Obtener cotizaciones con proveedores para poblar la hoja
+                        $cotizaciones = $this->getCotizacionesForSheet($idContenedor);
+                        
+                        if (!empty($cotizaciones)) {
+                            // Poblar la hoja con los datos
+                            $numeroCarga = $carga->carga ?? '';
+                            $this->populateConsolidadoSheet($sheetName, $spreadsheetId, $cotizaciones, $numeroCarga);
+                            Log::info("Hoja {$sheetName} poblada exitosamente con " . count($cotizaciones) . " cotizaciones");
+                        } else {
+                            Log::warning("No se encontraron cotizaciones para poblar la hoja {$sheetName}");
+                        }
+                    } else {
+                        Log::warning("No se pudo crear la hoja {$sheetName} para contenedor ID: {$idContenedor}");
+                    }
+                } else {
+                    Log::warning("POST_SHEET_STATUS_DOC_ID no está configurado en el archivo .env");
+                }
+            } catch (\Exception $e) {
+                // No fallar la respuesta si hay error al crear/poblar la hoja
+                Log::error("Error al crear/poblar hoja {$sheetName}: " . $e->getMessage());
+            }
             
             return response()->json([
                 'success' => true,
@@ -1086,6 +1119,104 @@ Le estaré informando cualquier avance 🫡.";
                 'correo' => $correo
             ]);
             return null;
+        }
+    }
+
+    /**
+     * Obtener cotizaciones con proveedores para poblar la hoja de consolidado
+     * 
+     * @param int $idContenedor ID del contenedor
+     * @return array Array de cotizaciones con proveedores
+     */
+    private function getCotizacionesForSheet($idContenedor)
+    {
+        try {
+            // Obtener solo cotizaciones que tengan al menos un proveedor con estados_proveedor = 'LOADED'
+            $query = DB::table('contenedor_consolidado_cotizacion AS main')
+                ->select([
+                    'main.id',
+                    'main.nombre',
+                    'main.documento',
+                    'main.id_contenedor'
+                ])
+                ->where('main.id_contenedor', $idContenedor)
+                ->whereNull('main.id_cliente_importacion')
+                ->where('main.estado_cotizador', 'CONFIRMADO')
+                ->whereExists(function ($sub) {
+                    $sub->select(DB::raw(1))
+                        ->from('contenedor_consolidado_cotizacion_proveedores as proveedores')
+                        ->whereRaw('proveedores.id_cotizacion = main.id')
+                        ->where('proveedores.estados_proveedor', 'LOADED');
+                })
+                ->orderBy('main.id', 'asc');
+
+            $cotizaciones = $query->get();
+
+            // Para cada cotización, obtener TODOS los proveedores (no solo LOADED)
+            // porque la cotización ya fue filtrada por tener al menos uno LOADED
+            $cotizacionesConProveedores = [];
+            foreach ($cotizaciones as $cotizacion) {
+                // Obtener TODOS los proveedores de esta cotización (no solo LOADED)
+                // La cotización ya fue filtrada por tener al menos uno LOADED
+                $proveedores = DB::table('contenedor_consolidado_cotizacion_proveedores')
+                    ->where('id_cotizacion', $cotizacion->id)
+                    ->select([
+                        'id',
+                        'id_cotizacion', // Incluir para validación
+                        'factura_comercial',
+                        'packing_list',
+                        'excel_confirmacion',
+                        'supplier',
+                        'code_supplier',
+                        'estados_proveedor'
+                    ])
+                    ->orderBy('id', 'asc')
+                    ->get()
+                    ->toArray();
+
+                // Validar que todos los proveedores pertenezcan a esta cotización
+                $proveedoresValidados = [];
+                foreach ($proveedores as $proveedor) {
+                    // Validación adicional: asegurar que el id_cotizacion coincida
+                    if ($proveedor->id_cotizacion == $cotizacion->id) {
+                        $proveedoresValidados[] = [
+                            'id' => $proveedor->id,
+                            'id_cotizacion' => $proveedor->id_cotizacion,
+                            'factura_comercial' => $proveedor->factura_comercial ?? '',
+                            'packing_list' => $proveedor->packing_list ?? '',
+                            'excel_confirmacion' => $proveedor->excel_confirmacion ?? '',
+                            'supplier' => $proveedor->supplier ?? '',
+                            'code_supplier' => $proveedor->code_supplier ?? ''
+                        ];
+                    } else {
+                        Log::warning("Proveedor con ID {$proveedor->id} no pertenece a cotización {$cotizacion->id}", [
+                            'proveedor_id_cotizacion' => $proveedor->id_cotizacion,
+                            'cotizacion_id' => $cotizacion->id
+                        ]);
+                    }
+                }
+
+                // Solo agregar si tiene proveedores válidos
+                if (!empty($proveedoresValidados)) {
+                    $cotizacionesConProveedores[] = [
+                        'id' => $cotizacion->id,
+                        'nombre' => $cotizacion->nombre,
+                        'documento' => $cotizacion->documento,
+                        'proveedores' => $proveedoresValidados
+                    ];
+                    
+                    // Log para debugging
+                    $codes = array_column($proveedoresValidados, 'code_supplier');
+                    Log::info("Cotización {$cotizacion->id} ({$cotizacion->nombre}) tiene " . count($proveedoresValidados) . " proveedores", [
+                        'codes' => $codes
+                    ]);
+                }
+            }
+
+            return $cotizacionesConProveedores;
+        } catch (\Exception $e) {
+            Log::error("Error obteniendo cotizaciones para hoja: " . $e->getMessage());
+            return [];
         }
     }
 }

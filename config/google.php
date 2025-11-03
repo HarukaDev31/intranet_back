@@ -67,4 +67,5 @@ return [
     'config'           => [],
     'post_spreadsheet_id' => env('POST_SPREADSHEET_ID'),
     'post_sheet_id'       => env('POST_SHEET_ID'),
+    'post_sheet_status_doc_id' => env('POST_SHEET_STATUS_DOC_ID'),
 ];

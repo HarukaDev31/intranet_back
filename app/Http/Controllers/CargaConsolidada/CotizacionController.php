@@ -1643,21 +1643,85 @@ class CotizacionController extends Controller
                     if (in_array($code, $newProviders)) {
                         $key = array_search($code, $newProviders);
                         $dataToUpdate = $dataEmbarque[$key];
+                        $items = isset($dataToUpdate['items']) ? $dataToUpdate['items'] : [];
+                        if (isset($dataToUpdate['items'])) {
+                            unset($dataToUpdate['items']);
+                        }
+                        
+                        // Actualizar proveedor (mantener lógica original)
                         CotizacionProveedor::where('code_supplier', $code)
                             ->where('id_cotizacion', $id)
                             ->update($dataToUpdate);
-                    } else {
-                        CotizacionProveedor::where('code_supplier', $code)
+                        
+                        // Obtener el proveedor actualizado para manejar items
+                        $proveedor = CotizacionProveedor::where('code_supplier', $code)
                             ->where('id_cotizacion', $id)
-                            ->delete();
+                            ->first();
+                        
+                        // Manejar items del proveedor actualizado
+                        if ($proveedor) {
+                            // Eliminar items antiguos del proveedor
+                            \App\Models\CargaConsolidada\CotizacionProveedorItem::where('id_proveedor', $proveedor->id)->delete();
+                            
+                            // Insertar nuevos items
+                            if (!empty($items)) {
+                                foreach ($items as $item) {
+                                    \App\Models\CargaConsolidada\CotizacionProveedorItem::create([
+                                        'id_contenedor' => $proveedor->id_contenedor,
+                                        'id_cotizacion' => $proveedor->id_cotizacion,
+                                        'id_proveedor' => $proveedor->id,
+                                        'initial_price' => $item['initial_price'] ?? null,
+                                        'initial_qty' => $item['initial_qty'] ?? null,
+                                        'initial_name' => $item['initial_name'] ?? null,
+                                        'final_price' => $item['final_price'] ?? null,
+                                        'final_qty' => $item['final_qty'] ?? null,
+                                        'final_name' => $item['final_name'] ?? null,
+                                        'tipo_producto' => $item['tipo_producto'] ?? 'GENERAL',
+                                    ]);
+                                }
+                            }
+                        }
+                    } else {
+                        // Eliminar proveedor y sus items
+                        $proveedorToDelete = CotizacionProveedor::where('code_supplier', $code)
+                            ->where('id_cotizacion', $id)
+                            ->first();
+                        
+                        if ($proveedorToDelete) {
+                            \App\Models\CargaConsolidada\CotizacionProveedorItem::where('id_proveedor', $proveedorToDelete->id)->delete();
+                            $proveedorToDelete->delete();
+                        }
                     }
                 }
 
                 // Insertar nuevos proveedores
                 foreach ($dataEmbarque as $data) {
                     if (!in_array($data['code_supplier'], $existingProviders)) {
-                        Log::info('Insertando nuevo prove edor: ' . json_encode($data));
-                        CotizacionProveedor::create($data);
+                        $items = isset($data['items']) ? $data['items'] : [];
+                        if (isset($data['items'])) {
+                            unset($data['items']);
+                        }
+                        
+                        Log::info('Insertando nuevo proveedor: ' . json_encode($data));
+                        $provModel = CotizacionProveedor::create($data);
+                        
+                        // Insertar items del nuevo proveedor
+                        if ($provModel && !empty($items)) {
+                            foreach ($items as $item) {
+                                \App\Models\CargaConsolidada\CotizacionProveedorItem::create([
+                                    'id_contenedor' => $provModel->id_contenedor,
+                                    'id_cotizacion' => $provModel->id_cotizacion,
+                                    'id_proveedor' => $provModel->id,
+                                    'initial_price' => $item['initial_price'] ?? null,
+                                    'initial_qty' => $item['initial_qty'] ?? null,
+                                    'initial_name' => $item['initial_name'] ?? null,
+                                    'final_price' => $item['final_price'] ?? null,
+                                    'final_qty' => $item['final_qty'] ?? null,
+                                    'final_name' => $item['final_name'] ?? null,
+                                    'tipo_producto' => $item['tipo_producto'] ?? 'GENERAL',
+                                ]);
+                            }
+                        }
                     }
                 }
 
@@ -2304,6 +2368,54 @@ class CotizacionController extends Controller
                     if ($codeSupplier == null) {
                         $codeSupplier = $this->generateCodeSupplier($nameCliente, $carga, $count, $provider);
                     }
+
+                    // Extraer items dentro del rango del proveedor (filas fijas 11,15,17)
+                    $items = [];
+                    $rowName = 11; // nombre
+                    $rowPrice = 15; // initial_price
+                    $rowQty = 17; // initial_qty
+
+                    // Determinar columnas del rango (ej: "C4:F4" => C..F)
+                    $startCol = $columnStart;
+                    $endCol = $columnStart;
+                    if ($currentRange) {
+                        $parts = explode(':', $currentRange);
+                        if (count($parts) === 2) {
+                            // Extraer letras de columna ignorando números de fila
+                            $startCol = preg_replace('/\d+/', '', $parts[0]);
+                            $endCol = preg_replace('/\d+/', '', $parts[1]);
+                        }
+                    }
+
+                    // Iterar columnas del rango del proveedor
+                    $col = $startCol;
+                    while (true) {
+                        $nameVal = $this->getDataCell($sheet2, $col . $rowName);
+                        $priceVal = $this->getDataCell($sheet2, $col . $rowPrice);
+                        $qtyVal = $this->getDataCell($sheet2, $col . $rowQty);
+
+                        $nameVal = is_null($nameVal) ? '' : trim((string) $nameVal);
+                        $priceNum = is_numeric($priceVal) ? (float)$priceVal : 0;
+                        $qtyNum = is_numeric($qtyVal) ? (int)$qtyVal : 0;
+
+                        if ($nameVal !== '' || $priceNum > 0 || $qtyNum > 0) {
+                            $items[] = [
+                                'initial_name' => $nameVal,
+                                'initial_price' => $priceNum,
+                                'initial_qty' => $qtyNum,
+                                'final_name' => null,
+                                'final_price' => null,
+                                'final_qty' => null,
+                                'tipo_producto' => 'GENERAL',
+                            ];
+                        }
+
+                        if ($col === $endCol) {
+                            break;
+                        }
+                        $col = $this->incrementColumn($col);
+                    }
+
                     // Solo agregar proveedor si tiene datos válidos
                     if ($qtyBox > 0 || $peso > 0 || $cbmTotal > 0) {
                         $proveedores[] = [
@@ -2315,6 +2427,7 @@ class CotizacionController extends Controller
                             'code_supplier' => $codeSupplier,
                             'volumen_doc' => 0,
                             'send_rotulado_status' => 'PENDING',
+                            'items' => $items,
                             'created_at' => now(),
                             'updated_at' => now()
                         ];
