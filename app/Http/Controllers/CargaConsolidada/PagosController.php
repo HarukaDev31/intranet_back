@@ -334,31 +334,48 @@ class PagosController extends Controller
             $totales = $pagosQuery->selectRaw('IFNULL(SUM(monto),0) as total_pagos_monto, COUNT(*) as pagos_count')->first();
             $totalPagado = (float) ($totales->total_pagos_monto ?? 0);
 
-            // Determinar estado base
-            $estado = 'PENDIENTE';
-            if ($totalPagado == 0) {
+            // Determinar estado base según el flujo requerido:
+            // - PENDIENTE: si no existe cotizacion_final_url
+            // - COTIZADO: si existe cotizacion_final_url (por defecto)
+            // - PAGADO: si suma pagos == monto a pagar
+            // - SOBREPAGO: si suma pagos > monto a pagar
+            if (empty($cot->cotizacion_final_url)) {
                 $estado = 'PENDIENTE';
             } else {
+                // existe cotizacion final -> consideramos COTIZADO por defecto
                 $rTotal = round($totalPagado, 2);
                 $rApar = round($montoAart, 2);
-                if ($rTotal < $rApar) {
-                    $estado = 'ADELANTO';
-                } elseif ($rTotal == $rApar) {
-                    $estado = 'PAGADO';
+                Log::info("syncEstadoCotizacionFromPayments: idCotizacion={$idCotizacion}, totalPagado={$totalPagado}, montoAart={$montoAart}, rTotal={$rTotal}");
+
+                if ($rTotal == 0) {
+                    $estado = 'COTIZADO';
                 } else {
-                    $estado = 'SOBREPAGO';
+                    if ($rTotal < $rApar) {
+                        // pagos parciales: mantenemos COTIZADO
+                        $estado = 'COTIZADO';
+                    } elseif ($rTotal == $rApar) {
+                        $estado = 'PAGADO';
+                    } elseif ($rTotal > $rApar) {
+                        $estado = 'SOBREPAGO';
+                    }
                 }
             }
 
 
-            // Respetar estado COBRANDO a menos que se fuerce la sincronización
-            if (! $force && $cot->estado_cotizacion_final === 'COBRANDO' && $estado !== 'COBRANDO') {
-                return [
-                    'success' => true,
-                    'skipped' => true,
-                    'reason' => 'estado COBRANDO existente y no se forzó',
-                    'current_estado' => $cot->estado_cotizacion_final
-                ];
+            // Respetar estado COBRANDO a menos que se fuerce la sincronización.
+            // Nuevo comportamiento: si el estado actual es COBRANDO, no sobrescribimos
+            // a menos que el nuevo estado sea PAGADO o SOBREPAGO (o se use --force).
+            if (! $force && $cot->estado_cotizacion_final === 'COBRANDO') {
+                if ($estado !== 'PAGADO' && $estado !== 'SOBREPAGO') {
+                    Log::info("syncEstadoCotizacionFromPayments: manteniendo COBRANDO para cotizacion {$idCotizacion}");
+                    return [
+                        'success' => true,
+                        'skipped' => true,
+                        'reason' => 'estado COBRANDO se mantiene hasta PAGADO o SOBREPAGO',
+                        'current_estado' => $cot->estado_cotizacion_final
+                    ];
+                }
+                // Si el nuevo estado es PAGADO o SOBREPAGO, permitimos actualizar (caerá en la lógica de persistencia)
             }
 
             $prev = $cot->estado_cotizacion_final;
