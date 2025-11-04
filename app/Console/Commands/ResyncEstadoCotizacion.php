@@ -4,8 +4,6 @@ namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Storage;
-use Carbon\Carbon;
 use App\Models\CargaConsolidada\Cotizacion;
 use App\Http\Controllers\CargaConsolidada\PagosController;
 
@@ -62,22 +60,7 @@ class ResyncEstadoCotizacion extends Command
 
         $pagosController = app(PagosController::class);
 
-        // Prepare CSV audit file (always create a CSV so there's a report)
-        $csvFp = null;
-        $csvFile = 'resync_estados_audit_' . Carbon::now()->format('Ymd_His') . '.csv';
-        $fullPath = storage_path('app/' . $csvFile);
-        try {
-            $csvFp = fopen($fullPath, 'w');
-            // header: cliente_nombre, carga, previous_estado, new_estado, total_pagado, monto_a_pagar, result, message
-            fputcsv($csvFp, ['cliente_nombre', 'carga', 'previous_estado', 'new_estado', 'total_pagado', 'monto_a_pagar', 'result', 'message']);
-            $this->info("Audit CSV will be written to storage/app/{$csvFile}");
-        } catch (\Exception $e) {
-            Log::error('Unable to open audit CSV file: ' . $e->getMessage());
-            $csvFp = null;
-            $csvFile = null;
-        }
-
-        $query->orderBy('id')->chunkById($chunk, function ($items) use (&$bar, &$updated, &$skipped, &$errors, $pagosController, $force, $dryRun, $csvFp) {
+        $query->orderBy('id')->chunkById($chunk, function ($items) use (&$bar, &$updated, &$skipped, &$errors, $pagosController, $force, $dryRun) {
             foreach ($items as $cot) {
                 try {
                     // capture previous estado before sync (controller may persist changes)
@@ -86,8 +69,6 @@ class ResyncEstadoCotizacion extends Command
                     if (! isset($cot->contenedor)) {
                         $cot->load('contenedor');
                     }
-                    $clienteNombre = $cot->nombre ?? '';
-                    $carga = $cot->contenedor->carga ?? '';
                     $res = $pagosController->syncEstadoCotizacionFromPayments($cot->id, $force);
                     if (isset($res['success']) && $res['success'] === true) {
                         if (!empty($res['skipped'])) {
@@ -110,33 +91,16 @@ class ResyncEstadoCotizacion extends Command
                         } else {
                             $result = 'no_change';
                         }
-                        // write audit row if csv open (use cliente nombre + carga instead of id)
-                        if ($csvFp) {
-                            $row = [
-                                $clienteNombre,
-                                $carga,
-                                $prevEstado,
-                                $res['new'] ?? '',
-                                isset($res['total_pagado']) ? $res['total_pagado'] : '',
-                                isset($res['monto_a_pagar']) ? $res['monto_a_pagar'] : '',
-                                $result,
-                                $res['reason'] ?? ($res['message'] ?? '')
-                            ];
-                            fputcsv($csvFp, $row);
-                        }
+                        // CSV generation disabled
                     } else {
                         $errors++;
                         Log::warning('ResyncEstadoCotizacion: unexpected result', ['id' => $cot->id, 'res' => $res]);
-                        if ($csvFp) {
-                            fputcsv($csvFp, [$clienteNombre, $carga, $prevEstado, '', '', 'error', $res['message'] ?? 'unexpected result']);
-                        }
+                        // CSV generation disabled
                     }
                 } catch (\Exception $e) {
                     $errors++;
                     Log::error('ResyncEstadoCotizacion error processing cotizacion', ['id' => $cot->id, 'error' => $e->getMessage()]);
-                    if ($csvFp) {
-                        fputcsv($csvFp, [$clienteNombre ?? '', $carga ?? '', $prevEstado ?? '', '', '', 'exception', $e->getMessage()]);
-                    }
+                    // CSV generation disabled
                 }
                 $bar->advance();
             }
@@ -145,12 +109,7 @@ class ResyncEstadoCotizacion extends Command
         $bar->finish();
         $this->newLine(2);
 
-        // close csv if open
-        if ($csvFp) {
-            fclose($csvFp);
-            $this->info("Audit CSV written to storage/app/{$csvFile}");
-        }
-
+        // CSV generation disabled (removed as requested)
         $this->info("Done. Processed: {$total}. Updated: {$updated}. Skipped: {$skipped}. Errors: {$errors}.");
 
         return 0;
