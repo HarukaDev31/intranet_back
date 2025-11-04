@@ -27,6 +27,7 @@ use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\IOFactory;
+use Illuminate\Support\Facades\DB;
 
 class SendRotuladoJob implements ShouldQueue
 {
@@ -626,12 +627,16 @@ Ingresar aquí: " . $url, null, $sleepSendMedia);
                 Log::error('No se encontró el proveedor en BD: ' . $supplierCode);
                 return;
             }
+            //get id and from  table contenedor_consolidado_cotizacion_proveedores_items with id_proveedor = $proveedorDB->id get sum of initial_qty 
 
-            $qtyBox = (int) $proveedorDB->qty_box;
-            if ($qtyBox <= 0) {
-                Log::warning('qty_box no válido para movilidad personal: ' . $qtyBox);
+            $items = DB::table('contenedor_consolidado_cotizacion_proveedores_items')
+                ->where('id_proveedor', $proveedorDB->id)
+                ->sum('initial_qty');
+            if ($items <= 0) {
+                Log::warning('items no válido para movilidad personal: ' . $items);
                 return;
             }
+            $qtyBox = $items;
 
             Log::info("Procesando movilidad personal - qty_box: {$qtyBox}, cliente: {$cotizacionInfo->nombre}");
 
