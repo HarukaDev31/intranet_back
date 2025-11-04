@@ -632,11 +632,13 @@ Ingresar aquí: " . $url, null, $sleepSendMedia);
             $items = DB::table('contenedor_consolidado_cotizacion_proveedores_items')
                 ->where('id_proveedor', $proveedorDB->id)
                 ->sum('initial_qty');
-            if ($items <= 0) {
-                Log::warning('items no válido para movilidad personal: ' . $items);
+            // sum() puede devolver null si no hay registros, usar ?? 0 para manejarlo
+            $qtyBox = $items ?? 0;
+            Log::info('items: ' . $items);
+            if ($qtyBox <= 0) {
+                Log::warning('items no válido para movilidad personal: ' . ($items ?? 'null'));
                 return;
             }
-            $qtyBox = $items;
 
             Log::info("Procesando movilidad personal - qty_box: {$qtyBox}, cliente: {$cotizacionInfo->nombre}");
 
