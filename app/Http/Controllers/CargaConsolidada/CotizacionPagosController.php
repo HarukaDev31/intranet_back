@@ -67,6 +67,37 @@ class CotizacionPagosController extends Controller
             $filteredResults = collect($results)->filter(function ($item) {
                 return is_null($item->id_cliente_importacion ?? null);
             });
+
+            // Aplicar búsqueda simple si viene el parámetro 'search'
+            // Solo buscar por nombre, documento (DNI) o número (teléfono)
+            $search = $request->get('search', '');
+            if (!empty($search)) {
+                $s = mb_strtolower(trim((string)$search));
+                $s_digits = preg_replace('/\D+/', '', $s);
+
+                $filteredResults = $filteredResults->filter(function ($row) use ($s, $s_digits) {
+                    $nombre = mb_strtolower($this->cleanText($row->nombre ?? ''));
+                    $documento = mb_strtolower((string)($row->documento ?? ''));
+                    $telefono = preg_replace('/\D+/', '', (string)($row->telefono ?? ''));
+
+                    // Coincidir por nombre (contains)
+                    if ($s !== '' && strpos($nombre, $s) !== false) {
+                        return true;
+                    }
+
+                    // Coincidir por documento (contains) - DNI o parte del mismo
+                    if ($s !== '' && strpos($documento, $s) !== false) {
+                        return true;
+                    }
+
+                    // Coincidir por teléfono (buscar por dígitos)
+                    if ($s_digits !== '' && strpos($telefono, $s_digits) !== false) {
+                        return true;
+                    }
+
+                    return false;
+                })->values();
+            }
             
             if ($user->No_Grupo == Usuario::ROL_COTIZADOR && $user->ID_Usuario != 28791) {
                 $filteredResults = $filteredResults->where('id_usuario', $user->ID_Usuario);
