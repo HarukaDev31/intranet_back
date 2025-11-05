@@ -496,6 +496,9 @@ class ContenedorController extends Controller
             $cotizacion->updated_at = date('Y-m-d H:i:s');
             $cotizacion->save();
             $contenedorDestino=Contenedor::find($idContenedorDestino);
+            $idContenedorOrigen=Cotizacion::find($idCotizacion)->id_contenedor;
+            $contenedorOrigen=Contenedor::find($idContenedorOrigen);
+            $cargaOrigen=$contenedorOrigen->carga;
             // Actualiza los proveedores asociados
             $proveedores = CotizacionProveedor::where('id_cotizacion', $idCotizacion)->get();
             if (!$proveedores || $proveedores->isEmpty()) {
@@ -510,7 +513,7 @@ class ContenedorController extends Controller
             // Crear notificaciones para Coordinación y Jefe de Ventas
             $this->crearNotificacionesMovimientoConsolidado($cotizacion, $idContenedorDestino);
           
-            $message = "Hola @nombrecliente, estamos pasando su carga para el consolidado @contenedorDestino,ya que al parecer tu pedido no llego a la fecha de cierre. 
+            $message = "Hola @nombrecliente, tu carga que estaba proyectado subir en el consolidado #@cargaOrigen estamos pasándolo al #@contenedorDestino,ya que al parecer tu pedido no llego a la fecha de cierre. 
 .
 Le estaré informando cualquier avance 🫡.";
             $message = str_replace('@nombrecliente', $cotizacion->nombre, $message);
