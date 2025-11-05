@@ -24,11 +24,15 @@ class EmbarcadosController extends Controller
      * @param int $idContenedor
      * @return \Illuminate\Http\JsonResponse
      */
-    public function getEmbarcados($idContenedor)
+    public function getEmbarcados(Request $request, $idContenedor)
     {
         try {
             // Basado en el índice de GeneralController: traer cotizaciones mediante query builder
-            $cotizaciones = DB::table('contenedor_consolidado_cotizacion as CC')
+            $page = max(1, (int) $request->input('currentPage', 1));
+            $perPage = (int) $request->input('itemsPerPage', 100);
+            $search = trim((string) $request->input('search', ''));
+
+            $baseQuery = DB::table('contenedor_consolidado_cotizacion as CC')
                 ->leftJoin('contenedor_consolidado_tipo_cliente as TC', 'TC.id', '=', 'CC.id_tipo_cliente')
                 ->select([
                     'CC.id',
@@ -39,12 +43,28 @@ class EmbarcadosController extends Controller
                 ->where('CC.id_contenedor', $idContenedor)
                 ->whereNotNull('CC.estado_cliente')
                 ->whereNull('CC.id_cliente_importacion')
-                ->where('CC.estado_cotizador', 'CONFIRMADO')
-                ->get();
+                ->where('CC.estado_cotizador', 'CONFIRMADO');
+
+            if ($search !== '') {
+                $like = "%{$search}%";
+                $baseQuery->where(function ($q) use ($like) {
+                    $q->where('CC.nombre', 'like', $like)
+                      ->orWhere('CC.telefono', 'like', $like)
+                      ->orWhere('CC.documento', 'like', $like);
+                });
+            }
+
+            $cotizacionesPage = $baseQuery->orderBy('CC.nombre', 'asc')->paginate($perPage, ['CC.id','CC.nombre','CC.telefono','TC.name as tipo_cliente'], 'page', $page);
+            $cotizaciones = collect($cotizacionesPage->items());
 
             if ($cotizaciones->isEmpty()) {
                 Log::info("getEmbarcados: no hay cotizaciones embarcadas para contenedor={$idContenedor}");
-                return response()->json(['status' => 'success', 'data' => []]);
+                return response()->json(['status' => 'success', 'data' => [], 'pagination' => [
+                    'current_page' => $cotizacionesPage->currentPage(),
+                    'per_page' => $cotizacionesPage->perPage(),
+                    'total' => $cotizacionesPage->total(),
+                    'last_page' => $cotizacionesPage->lastPage(),
+                ]]);
             }
 
             $ids = $cotizaciones->pluck('id')->all();
@@ -99,7 +119,12 @@ class EmbarcadosController extends Controller
                 ];
             })->values();
 
-            return response()->json(['status' => 'success', 'data' => $data]);
+            return response()->json(['status' => 'success', 'data' => $data, 'pagination' => [
+                'current_page' => $cotizacionesPage->currentPage(),
+                'per_page' => $cotizacionesPage->perPage(),
+                'total' => $cotizacionesPage->total(),
+                'last_page' => $cotizacionesPage->lastPage(),
+            ]]);
         } catch (Exception $e) {
             Log::error('Error al obtener embarcados: ' . $e->getMessage());
             return response()->json([

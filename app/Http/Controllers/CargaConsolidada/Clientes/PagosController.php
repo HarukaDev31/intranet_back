@@ -27,6 +27,10 @@ class PagosController extends Controller
     {
         try {
             $user = JWTAuth::parseToken()->authenticate();
+            // support frontend search and pagination param names
+            $search = $request->get('search', $request->get('q', ''));
+            $perPage = (int) $request->get('limit', $request->get('itemsPerPage', 100));
+            $page = (int) $request->get('page', $request->get('currentPage', 1));
             //get as subquery json of pagos_details
             $query = DB::table('contenedor_consolidado_cotizacion as CC')
                 ->select(
@@ -87,9 +91,16 @@ class PagosController extends Controller
                 $query->orderBy('fecha_confirmacion', 'asc');
             }
 
-            // Paginación
-            $perPage = $request->get('limit', 100);
-            $page = $request->get('page', 1);
+            // Apply search filter (nombre, documento, telefono)
+            if (!empty($search)) {
+                $like = "%{$search}%";
+                $query->where(function ($q) use ($like) {
+                    $q->where('CC.nombre', 'like', $like)
+                      ->orWhere('CC.telefono', 'like', $like)
+                      ->orWhere('CC.documento', 'like', $like);
+                });
+            }
+            // Paginación (values for $perPage and $page were already resolved above)
             $query = $query->paginate($perPage, ['*'], 'page', $page);
             $items = $query->items();
             foreach ($items as $item) {
