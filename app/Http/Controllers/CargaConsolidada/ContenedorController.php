@@ -513,8 +513,7 @@ class ContenedorController extends Controller
             // Crear notificaciones para Coordinación y Jefe de Ventas
             $this->crearNotificacionesMovimientoConsolidado($cotizacion, $idContenedorDestino);
           
-            $message = "Hola @nombrecliente, tu carga que estaba proyectado subir en el consolidado #@cargaOrigen estamos pasándolo al #@contenedorDestino,ya que al parecer tu pedido no llego a la fecha de cierre. 
-.
+            $message = "Hola @nombrecliente, tu carga que estaba proyectado subir en el consolidado @cargaOrigen estamos pasándolo al @contenedorDestino,ya que al parecer tu pedido no llego a la fecha de cierre. 
 Le estaré informando cualquier avance 🫡.";
             $message = str_replace('@nombrecliente', $cotizacion->nombre, $message);
             $message = str_replace('@contenedorDestino', '#'.$contenedorDestino->carga, $message);
