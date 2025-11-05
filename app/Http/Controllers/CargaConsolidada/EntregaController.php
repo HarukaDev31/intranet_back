@@ -903,8 +903,9 @@ class EntregaController extends Controller
                     $idx++,
                     (string)($r->cliente ?? ''),
                     $this->formatPhoneNumber($r->telefono ?? ''),
-                    number_format($cbm, 2, '.', ''),
-                    (string)$qty,
+                    // append unit labels like in RotuladoPared
+                    number_format($cbm, 2, '.', '') . ' CBM',
+                    (string)$qty . ' CAJAS',
                     '',
                     '',
                     ''
