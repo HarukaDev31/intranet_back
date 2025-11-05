@@ -44,12 +44,12 @@ class RotuladoParedExport implements FromArray, WithEvents
                 // Make big printable boxes: wider name column and large row heights
                 try {
                     // Adjust columns: A may be present as an empty column in some viewers, but set first 3 columns
-                    $sheet->getColumnDimension('A')->setWidth(80);
-                    $sheet->getColumnDimension('B')->setWidth(36); // Cliente (very wide)
-                    $sheet->getColumnDimension('C')->setWidth(36); // CBM
+                    $sheet->getColumnDimension('A')->setWidth(70);
+                    $sheet->getColumnDimension('B')->setWidth(30); // Cliente (very wide)
+                    $sheet->getColumnDimension('C')->setWidth(30); // CBM
 
                     // Set large font sizes per column
-                    $sheet->getStyle('A1:A' . $highestRow)->getFont()->setSize(48)->setBold(true);
+                    $sheet->getStyle('A1:A' . $highestRow)->getFont()->setSize(42)->setBold(true);
                     $sheet->getStyle('B1:B' . $highestRow)->getFont()->setSize(36);
                     $sheet->getStyle('C1:C' . $highestRow)->getFont()->setSize(36);
 
@@ -95,6 +95,13 @@ class RotuladoParedExport implements FromArray, WithEvents
                         ->setHorizontal(Alignment::HORIZONTAL_CENTER)
                         ->setVertical(Alignment::VERTICAL_CENTER)
                         ->setWrapText(true);
+                    // Set page orientation to landscape for better printing
+                    try {
+                        $sheet->getPageSetup()->setOrientation(\PhpOffice\PhpSpreadsheet\Worksheet\PageSetup::ORIENTATION_LANDSCAPE);
+                        $sheet->getPageSetup()->setPaperSize(\PhpOffice\PhpSpreadsheet\Worksheet\PageSetup::PAPERSIZE_A4);
+                    } catch (\Throwable $e) {
+                        // ignore if page setup is not available in this environment
+                    }
                 } catch (\Exception $e) {
                     // Ignore if column dimension adjustments fail on some drivers
                 }

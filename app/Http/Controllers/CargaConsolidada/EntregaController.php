@@ -15,6 +15,7 @@ use App\Traits\FileTrait;
 use App\Models\CargaConsolidada\Contenedor;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Exports\RotuladoParedExport;
+use App\Exports\FormatoResumenExport;
 use Dompdf\Dompdf;
 use Dompdf\Options;
 use ZipArchive;
@@ -506,6 +507,29 @@ class EntregaController extends Controller
         }
         return null;
     }
+
+    /**
+     * Formatea números de teléfono: elimina espacios/caracteres no numéricos y
+     * si el número empieza por el código de país 51 (o 0051) lo elimina.
+     * Ejemplo: "+51 919 000 000" -> "919000000"
+     */
+    private function formatPhoneNumber($raw)
+    {
+        if (is_null($raw)) return '';
+        $s = (string)$raw;
+        // eliminar espacios y cualquier caracter que no sea dígito
+        $digits = preg_replace('/\D+/', '', $s);
+        if ($digits === null) return '';
+
+        // manejar prefijos internacionales comunes
+        if (strpos($digits, '0051') === 0) {
+            $digits = substr($digits, 4);
+        } elseif (strpos($digits, '51') === 0) {
+            $digits = substr($digits, 2);
+        }
+
+        return $digits;
+    }
     public function getClientesEntrega(Request $request, $idContenedor)
     {
         // Lo obtiene de la tabla de clientes asociados al contenedor
@@ -817,6 +841,7 @@ class EntregaController extends Controller
                 ->select([
                     'CC.id as id_cotizacion',
                     'CC.nombre as cliente',
+                    'CC.telefono as telefono',
                     DB::raw('COALESCE(CPA.sum_cbm_china, 0) as cbm_total_china'),
                     DB::raw('COALESCE(CPA.sum_qty_box, 0) as qty_box_china')
                 ])
@@ -862,10 +887,35 @@ class EntregaController extends Controller
                 mkdir($tempDir, 0755, true);
             }
 
-            // Store the Excel file into temp dir
+            // Store the ROTULADO Excel file into temp dir
             $excelPath = 'temp/rotulado_' . $suffix . '_' . $timestamp . '/' . $excelName;
             $stored = Excel::store(new RotuladoParedExport($rows), $excelPath); // stores to storage/app/<path>
             $fullExcelPath = storage_path('app/' . $excelPath);
+
+            // Also generate the FORMATO RESUMEN Excel and store in the same temp dir
+            $rowsFormato = [];
+            $rowsFormato[] = ['N°', 'CLIENTE', 'CELULAR', 'CBM TOTAL', 'TOTAL CAJAS', 'OBSERVACION', '# DE GUIA', 'FIRMA'];
+            $idx = 1;
+            foreach ($rowsQuery as $r) {
+                $cbm = is_null($r->cbm_total_china) ? 0 : (float)$r->cbm_total_china;
+                $qty = is_null($r->qty_box_china) ? 0 : (int)$r->qty_box_china;
+                $rowsFormato[] = [
+                    $idx++,
+                    (string)($r->cliente ?? ''),
+                    $this->formatPhoneNumber($r->telefono ?? ''),
+                    number_format($cbm, 2, '.', ''),
+                    (string)$qty,
+                    '',
+                    '',
+                    ''
+                ];
+            }
+
+            $excelName2 = 'FORMATO_RESUMEN_' . $suffix . '_' . $timestamp . '.xlsx';
+            $excelPath2 = 'temp/rotulado_' . $suffix . '_' . $timestamp . '/' . $excelName2;
+            // store the formato resumen
+            $stored2 = Excel::store(new FormatoResumenExport($rowsFormato), $excelPath2);
+            $fullExcelPath2 = storage_path('app/' . $excelPath2);
 
             // Generate PDFs per cotizacion and add to temp dir
             $pdfFiles = [];
@@ -920,9 +970,12 @@ class EntregaController extends Controller
             $zipPath = $tempDir . DIRECTORY_SEPARATOR . $zipName;
             $zip = new ZipArchive();
             if ($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) === true) {
-                // add excel
+                // add excel files
                 if (file_exists($fullExcelPath)) {
                     $zip->addFile($fullExcelPath, $excelName);
+                }
+                if (isset($fullExcelPath2) && file_exists($fullExcelPath2)) {
+                    $zip->addFile($fullExcelPath2, $excelName2);
                 }
                 // add pdfs
                 foreach ($pdfFiles as $pf) {
@@ -935,6 +988,9 @@ class EntregaController extends Controller
                 try {
                     if (file_exists($fullExcelPath)) {
                         @unlink($fullExcelPath);
+                    }
+                    if (isset($fullExcelPath2) && file_exists($fullExcelPath2)) {
+                        @unlink($fullExcelPath2);
                     }
                     foreach ($pdfFiles as $pf) {
                         if (file_exists($pf)) {
@@ -956,6 +1012,7 @@ class EntregaController extends Controller
             return response()->json(['success' => false, 'message' => 'Error generando ROTULADO PARED', 'error' => $e->getMessage()], 500);
         }
     }
+    
     public function getAllDelivery(Request $request)
     {
         // Lo obtiene de la tabla de clientes asociados al contenedor
