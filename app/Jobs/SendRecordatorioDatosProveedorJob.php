@@ -55,7 +55,7 @@ class SendRecordatorioDatosProveedorJob implements ShouldQueue
             $nombreCliente = $cotizacion->nombre;
             $url = env('APP_URL_DATOS_PROVEEDOR');
             $url = $url . '/' . $uuid;
-            $message = "Hola @nombrecliente necesitamos los datos de tu vendedor para que nuestro equipo de China se encarge de recibir tu carga.\n\nPor favor ingresa al enlace y colocar los datos del vendedor.\n\nIngresar aquí: @url\n\n";
+            $message = "Hola @nombrecliente necesitamos los datos de tu proveedor para que nuestro equipo de China se encarge de recibir tu carga.\n\nPor favor ingresa al enlace y colocar los datos del proveedor.\n\nIngresar aquí: @url\n\n";
             $message = str_replace('@nombrecliente', $nombreCliente, $message);
             $message = str_replace('@url', $url, $message);
             
@@ -64,8 +64,8 @@ class SendRecordatorioDatosProveedorJob implements ShouldQueue
                 
                 if ($proveedor) {
                     $message .= "Nombre del vendedor: " . $proveedor->supplier . "\n";
-                    $message .= "WeChat: " . $proveedor->supplier_phone . "\n";
-                    $message .= "Codigo vendedor: " . $proveedor->code_supplier . "\n";
+                    $message .= "Número o WeChat: " . $proveedor->supplier_phone . "\n";
+                    $message .= "Codigo proveedor: " . $proveedor->code_supplier . "\n";
                     $message .= "----------------------------------------------------------\n";
                 }
             }
