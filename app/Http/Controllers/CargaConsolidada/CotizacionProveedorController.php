@@ -1675,7 +1675,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                 $this->sendReservationMessage($cotizacion, $telefono);
             }
             $pagosUrl = public_path('assets/images/pagos-full.jpg');
-            $this->sendMedia($pagosUrl, 'image/jpg', null, $telefono, 15,'consolidado','Numeros de cuenta');
+            $this->sendMedia($pagosUrl, 'image/jpg', null, $telefono, 15,'consolidado','Numeros_de_cuenta.jpg');
             return $this->jsonResponse(true, 'Proceso de inspección completado correctamente', [
                 'proveedor_actualizado' => true,
                 'imagenes_enviadas' => $sentFiles['images'],
