@@ -518,6 +518,7 @@ class ContenedorController extends Controller
 Le estaré informando cualquier avance 🫡.";
             $message = str_replace('@nombrecliente', $cotizacion->nombre, $message);
             $message = str_replace('@contenedorDestino', '#'.$contenedorDestino->carga, $message);
+            $message = str_replace('@cargaOrigen', '#'.$cargaOrigen, $message);
             $telefono = preg_replace('/\s+/', '', $cotizacion->telefono);
             $telefono = $telefono ? $telefono . '@c.us' : '';
             $this->sendMessage($message, $telefono, 3);
