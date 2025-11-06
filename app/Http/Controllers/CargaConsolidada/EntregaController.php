@@ -1092,12 +1092,13 @@ class EntregaController extends Controller
             )
 
             ->whereNotNull('CC.estado_cliente')
-            //where has pagos
+            //where has pagos delivery
             ->whereExists(function ($q) {
                 $q->select(DB::raw(1))
-                    ->from('contenedor_consolidado_cotizacion_coordinacion_pagos')
-                    ->whereRaw('contenedor_consolidado_cotizacion_coordinacion_pagos.id_cotizacion = contenedor_consolidado_cotizacion.id')
-                    ->where('contenedor_consolidado_cotizacion_coordinacion_pagos.id_concept', PagoConcept::CONCEPT_PAGO_DELIVERY);
+                    ->from("{$this->table_contenedor_consolidado_cotizacion_coordinacion_pagos} as cccp")
+                    ->join("{$this->table_pagos_concept} as ccp", 'cccp.id_concept', '=', 'ccp.id')
+                    ->whereColumn('cccp.id_cotizacion', 'CC.id')
+                    ->where('ccp.name', 'DELIVERY');
             })
             ->whereNull('CC.id_cliente_importacion')
             ->where('CC.estado_cotizador', 'CONFIRMADO');
