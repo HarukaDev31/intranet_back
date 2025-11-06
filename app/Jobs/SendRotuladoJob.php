@@ -344,6 +344,8 @@ Ingresar aquí: " . $url, null, $sleepSendMedia);
                 return $basePath . '/ropa_interior.pdf';
             case 'maquinaria':
                 return $basePath . '/maquinaria.pdf';
+            case 'movilidad_personal':
+                return $basePath . '/movilidad_personal.pdf';
             default:
                 return $basePath . '/rotulado.pdf';
         }
@@ -687,7 +689,7 @@ Por lo tanto, dile a tu proveedor #{$supplierCode} que le ponga la etiqueta.
             }
             if (file_exists($excelPath)) {
                 $message = "👆🏼Te adjunto la plantilla de la placa para que tu proveedor la pueda editar según los datos de tu producto.";
-                $this->sendMedia($excelPath, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', $message, null, $sleepSendMedia);
+                $this->sendMedia($excelPath, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', $message, null, $sleepSendMedia,'consolidado','vin_movilidad.xlsx');
                 Log::info('Archivo VIM enviado por WhatsApp exitosamente');
             } else {
                 Log::error('No se pudo crear el archivo VIM: ' . $excelPath);

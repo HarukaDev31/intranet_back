@@ -890,8 +890,8 @@ class DocumentacionController extends Controller
             }
         }
 
-        // Aplicar merges pendientes
-        $this->applyPendingMerges($sheet, $pendingMerge, $currentClient, $clientStartRow, $clientEndRow);
+        // Aplicar merges pendientes (primera hoja, no es adicional)
+        $this->applyPendingMerges($sheet, $pendingMerge, $currentClient, $clientStartRow, $clientEndRow, false);
 
         // Retornar información del último cliente para continuidad entre hojas
         return [
@@ -1087,7 +1087,7 @@ class DocumentacionController extends Controller
     /**
      * Aplica merges pendientes
      */
-    private function applyPendingMerges($sheet, $pendingMerge, $currentClient, $clientStartRow, $clientEndRow)
+    private function applyPendingMerges($sheet, $pendingMerge, $currentClient, $clientStartRow, $clientEndRow, $isAdditionalSheet = false)
     {
         if ($currentClient !== "" && $currentClient !== null && $clientStartRow > 0) {
             $pendingMerge[] = [
@@ -1114,7 +1114,28 @@ class DocumentacionController extends Controller
                     $sheet->mergeCells('D' . $merge['start'] . ':D' . $merge['end']);
                     $sheet->mergeCells('T' . $merge['start'] . ':T' . $merge['end']);
 
-                    Log::info('✅ Merge aplicado exitosamente para cliente: ' . $merge['client']);
+                    // Re-aplicar formatos numéricos al rango extendido COMPLETO
+                    // IMPORTANTE: Para columnas mergeadas (T), aplicar formato solo a la primera celda
+                    // Para columnas NO mergeadas (R, O, Q), aplicar formato a todas las filas
+                    
+                    // Aplicar formatos a TODAS las filas para columnas no mergeadas
+                    for ($row = $merge['start']; $row <= $merge['end']; $row++) {
+                        // Para hojas adicionales, SIEMPRE aplicar formatos a columnas O y Q (no mergeadas)
+                        // Usar formato de contabilidad con 2 decimales (igual que la primera hoja)
+                        // Esto asegura que todas las filas del rango extendido tengan el formato correcto
+                        if ($isAdditionalSheet) {
+                            // Formato de contabilidad USD con 2 decimales
+                            $sheet->getStyle('O' . $row)->getNumberFormat()->setFormatCode('_("$"* #,##0.00_);_("$"* (#,##0.00);_("$"* "-"??_);_(@_)');
+                            $sheet->getStyle('Q' . $row)->getNumberFormat()->setFormatCode('_("$"* #,##0.00_);_("$"* (#,##0.00);_("$"* "-"??_);_(@_)');
+                        }
+                        // Aplicar formato a columna R (no mergeada) en todas las filas
+                        $sheet->getStyle('R' . $row)->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_PERCENTAGE_00);
+                    }
+                    
+                    // Aplicar formato a columna T (mergeada) solo a la primera celda del merge (la visible)
+                    $sheet->getStyle('T' . $merge['start'])->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_NUMBER_00);
+
+                    Log::info('✅ Merge aplicado exitosamente para cliente: ' . $merge['client'] . ' con formatos reaplicados');
                 } catch (\Exception $e) {
                     Log::error('❌ Error merging cells for client ' . $merge['client'] . ': ' . $e->getMessage());
                 }
@@ -1156,9 +1177,13 @@ class DocumentacionController extends Controller
                         $this->safeUnmergeCells($sheet, 'C' . $r);
                         $this->safeUnmergeCells($sheet, 'D' . $r);
                         $this->safeUnmergeCells($sheet, 'T' . $r);
+                        
+                        // Formato de contabilidad USD con 2 decimales (igual que la primera hoja)
+                        $sheet->getStyle('O' . $r)->getNumberFormat()->setFormatCode('_("$"* #,##0.00_);_("$"* (#,##0.00);_("$"* "-"??_);_(@_)');
+                        $sheet->getStyle('Q' . $r)->getNumberFormat()->setFormatCode('_("$"* #,##0.00_);_("$"* (#,##0.00);_("$"* "-"??_);_(@_)');
                     }
                     
-                    Log::info('✅ Celdas desmergeadas para extender merge del cliente continuo');
+                    Log::info('✅ Celdas desmergeadas y formatos O/Q reaplicados para extender merge del cliente continuo');
                 } catch (\Exception $e) {
                     Log::warning('⚠️ Error al desmergear cliente continuo (continuando de todas formas): ' . $e->getMessage());
                 }
@@ -1294,8 +1319,8 @@ class DocumentacionController extends Controller
             }
         }
 
-        // Aplicar merges pendientes al final
-        $this->applyPendingMerges($sheet0, $pendingMerge, $currentClient, $clientStartRow, $clientEndRow);
+        // Aplicar merges pendientes al final (hoja adicional, pasar true)
+        $this->applyPendingMerges($sheet0, $pendingMerge, $currentClient, $clientStartRow, $clientEndRow, true);
 
         // Retornar información del último cliente para la siguiente hoja
         return [
@@ -1339,9 +1364,12 @@ class DocumentacionController extends Controller
         $sheet->getStyle('R' . $row . ':T' . $row)->applyFromArray($styleArray);
         $sheet->getStyle('R' . $row . ':T' . $row)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
         $sheet->getStyle('R' . $row . ':T' . $row)->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
-        $sheet->getStyle('O' . $row)->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_CURRENCY_USD_SIMPLE);
-        $sheet->getStyle('Q' . $row)->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_CURRENCY_USD_SIMPLE);
+        // Formato de contabilidad USD con 2 decimales (igual que la primera hoja)
+        $sheet->getStyle('O' . $row)->getNumberFormat()->setFormatCode('_("$"* #,##0.00_);_("$"* (#,##0.00);_("$"* "-"??_);_(@_)');
+        $sheet->getStyle('Q' . $row)->getNumberFormat()->setFormatCode('_("$"* #,##0.00_);_("$"* (#,##0.00);_("$"* "-"??_);_(@_)');
         $sheet->getStyle('R' . $row)->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_PERCENTAGE_00);
+        // Aplicar formato numérico con 2 decimales para columna T (volumen)
+        $sheet->getStyle('T' . $row)->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_NUMBER_00);
     }
 
     /**
