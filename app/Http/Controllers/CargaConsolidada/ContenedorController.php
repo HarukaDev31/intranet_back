@@ -62,7 +62,7 @@ class ContenedorController extends Controller
             ["name" => "FACTURA Y GUIA", "iconURL" => $host . '/assets/icons/factura.png']
         );
         $this->defaultDocumentacion = array(
-            ["name" => "COTIZACION", "iconURL" => $host . '/assets/icons/cotizacion.png'],
+            ["name" => "CLIENTES", "iconURL" => $host . '/assets/icons/clientes.png'],
             ["name" => "DOCUMENTACION", "iconURL" => $host . '/assets/icons/cdocumentacion.png'],
             ["name" => "ADUANA", "iconURL" => $host . '/assets/icons/aduana.png'],
         );
