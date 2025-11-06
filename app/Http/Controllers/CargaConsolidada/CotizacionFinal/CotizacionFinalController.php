@@ -1465,6 +1465,12 @@ class CotizacionFinalController extends Controller
                 ->where('estado_cotizador', 'CONFIRMADO')
                 ->whereNotNull('estado_cliente')
                 ->whereNull('id_cliente_importacion')
+                //has providers
+                ->whereExists(function ($query) {
+                    $query->select(DB::raw(1))
+                        ->from('contenedor_consolidado_cotizacion_proveedores')
+                        ->whereColumn('contenedor_consolidado_cotizacion_proveedores.id_cotizacion', 'contenedor_consolidado_cotizacion.id');
+                })
                 ->get();
 
             Log::info('Datos de cotizaciones encontrados: ' . json_encode($result));

@@ -28,6 +28,7 @@ use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use Illuminate\Support\Facades\DB;
+use App\Models\CargaConsolidada\Contenedor;
 
 class SendRotuladoJob implements ShouldQueue
 {
@@ -613,6 +614,8 @@ Ingresar aquí: " . $url, null, $sleepSendMedia);
         try {
             // Obtener información de la cotización
             $cotizacionInfo = Cotizacion::where('id', $this->idCotizacion)->first();
+            $idContenedor = $cotizacionInfo->id_contenedor;
+            $carga = Contenedor::where('id', $idContenedor)->first()->carga;
             if (!$cotizacionInfo) {
                 Log::error('No se encontró la cotización con ID: ' . $this->idCotizacion);
                 return;
@@ -657,12 +660,13 @@ Ingresar aquí: " . $url, null, $sleepSendMedia);
             // Generar códigos correlativos
             $codes = $this->generateCorrelativeCodes($lastCode, $qtyBox);
 
-            // Agregar filas al Google Sheet debajo de la última fila con datos
-            $this->addRowsToGoogleSheet($cotizacionInfo->nombre, $codes, $qtyBox, $lastRowNumber);
+            // Agregar filas al Google Sheet debajo de la última fila con dat
+            $sheetName = $cotizacionInfo->nombre . ' CONS' . $carga;
+            $this->addRowsToGoogleSheet($sheetName, $codes, $qtyBox, $lastRowNumber);
 
             // Procesar plantilla VIM
             $excelPath = $this->processVimTemplate($cotizacionInfo->nombre, $codes);
-
+            $movilidadPersonalPath = $this->getRotuladoPdfPath('movilidad_personal');
             // Enviar archivo por WhatsApp
             $message = "👆🏻 ⚠ Atención ⚠
 Etiqueta especial: Movilidad Personal
@@ -675,6 +679,14 @@ Por lo tanto, dile a tu proveedor #{$supplierCode} que le ponga la etiqueta.
 📝 Aquí tienes el archivo con los códigos generados";
 
             if (file_exists($excelPath)) {
+                $this->sendMedia($movilidadPersonalPath, 'application/pdf', $message, null, $sleepSendMedia);
+               
+                Log::info('Archivo MOVILIDAD PERSONAL enviado por WhatsApp exitosamente');
+            } else {
+                Log::error('No se pudo crear el archivo VIM: ' . $excelPath);
+            }
+            if (file_exists($excelPath)) {
+                $message = "👆🏼Te adjunto la plantilla de la placa para que tu proveedor la pueda editar según los datos de tu producto.";
                 $this->sendMedia($excelPath, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', $message, null, $sleepSendMedia);
                 Log::info('Archivo VIM enviado por WhatsApp exitosamente');
             } else {
@@ -804,7 +816,7 @@ Por lo tanto, dile a tu proveedor #{$supplierCode} que le ponga la etiqueta.
             if ($qtyBox > 1) {
                 $this->mergeCells("B{$startRow}", "B" . ($startRow + $qtyBox - 1));
             }
-
+            //center verticalmente el contenido mergeado and horizontal center
             // Aplicar bordes desde columna B hasta G
             $this->applyBordersToRows($startRow, $startRow + $qtyBox - 1, 'B', 'G');
 

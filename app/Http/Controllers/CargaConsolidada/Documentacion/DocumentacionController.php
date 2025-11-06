@@ -896,6 +896,7 @@ class DocumentacionController extends Controller
         // Retornar información del último cliente para continuidad entre hojas
         return [
             'lastClient' => $currentClient,
+            'lastClientStartRow' => $clientStartRow,
             'lastClientEndRow' => $clientEndRow,
             'lastProcessedRow' => $row - 1 // La última fila procesada antes del TOTAL
         ];
@@ -1126,7 +1127,12 @@ class DocumentacionController extends Controller
      */
     private function processAdditionalClientMerge($sheet, $row, $client, &$currentClient, &$clientStartRow, &$clientEndRow, &$pendingMerge)
     {
-        if ($client !== $currentClient) {
+        // Usar isNameMatch para comparar clientes, no comparación estricta
+        // Esto permite detectar el mismo cliente incluso si hay diferencias menores (espacios, acentos, etc.)
+        $isSameClient = !empty($currentClient) && $this->isNameMatch($client, $currentClient);
+        
+        if (!$isSameClient) {
+            // Si hay un cliente anterior válido, guardarlo para merge
             if ($currentClient !== "" && $currentClient !== null && $clientStartRow > 0) {
                 $pendingMerge[] = [
                     'client' => $currentClient,
@@ -1135,8 +1141,31 @@ class DocumentacionController extends Controller
                 ];
             }
 
+            // Iniciar nuevo cliente
             $currentClient = $client;
             $clientStartRow = $row;
+        } else {
+            // Si es el mismo cliente que el último de la hoja anterior, extender el merge
+            // El merge del último cliente ya fue aplicado al final de la hoja anterior,
+            // así que necesitamos desmergearlo y volver a aplicarlo con el rango extendido
+            if ($clientStartRow > 0 && $clientEndRow > 0 && $clientEndRow >= $clientStartRow) {
+                try {
+                    Log::info('🔄 Cliente continuo detectado: ' . $currentClient . ' - Extendiendo merge desde fila ' . $clientStartRow . ' hasta ' . $row);
+                    
+                    for ($r = $clientStartRow; $r <= $clientEndRow; $r++) {
+                        $this->safeUnmergeCells($sheet, 'C' . $r);
+                        $this->safeUnmergeCells($sheet, 'D' . $r);
+                        $this->safeUnmergeCells($sheet, 'T' . $r);
+                    }
+                    
+                    Log::info('✅ Celdas desmergeadas para extender merge del cliente continuo');
+                } catch (\Exception $e) {
+                    Log::warning('⚠️ Error al desmergear cliente continuo (continuando de todas formas): ' . $e->getMessage());
+                }
+            }
+            // Mantener clientStartRow desde donde empezó en la hoja anterior
+            // No cambiar currentClient ni clientStartRow
+            // El merge se aplicará al final con el rango extendido (clientStartRow hasta la nueva clientEndRow)
         }
 
         $clientEndRow = $row;
@@ -1201,7 +1230,8 @@ class DocumentacionController extends Controller
 
         // Variables para manejar merge de clientes - inicializar con info de hoja anterior
         $currentClient = $lastClientInfo['lastClient'] ?? "";
-        $clientStartRow = $lastClientInfo['lastClientEndRow'] ?? 0;
+        // Si hay un último cliente, usar su startRow para continuar el merge si es el mismo cliente
+        $clientStartRow = $lastClientInfo['lastClientStartRow'] ?? 0;
         $clientEndRow = $lastClientInfo['lastClientEndRow'] ?? 0;
         $pendingMerge = [];
 
@@ -1270,6 +1300,7 @@ class DocumentacionController extends Controller
         // Retornar información del último cliente para la siguiente hoja
         return [
             'lastClient' => $currentClient,
+            'lastClientStartRow' => $clientStartRow,
             'lastClientEndRow' => $clientEndRow,
             'lastProcessedRow' => $highestFirstSheetRow - 1
         ];
