@@ -1468,8 +1468,8 @@ class CotizacionFinalController extends Controller
                 //has providers
                 ->whereExists(function ($query) {
                     $query->select(DB::raw(1))
-                        ->from('contenedor_consolidado_cotizacion_proveedores')
-                        ->whereColumn('contenedor_consolidado_cotizacion_proveedores.id_cotizacion', 'contenedor_consolidado_cotizacion.id');
+                        ->from($this->table_contenedor_cotizacion_proveedores)
+                        ->whereColumn('contenedor_consolidado_cotizacion_proveedores.id_cotizacion', 'cc.id');
                 })
                 ->get();
 
