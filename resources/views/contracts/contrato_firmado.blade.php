@@ -118,7 +118,7 @@
     <div class="page">
         <h1>ACUERDO POR SERVICIO DE CARGA CONSOLIDADA</h1>
         <div class="meta small"><strong>FECHA:</strong> {{ $fecha ?? date('d-m-Y') }}</div>
-
+        <div class="meta small"><strong>CONTRATO:</strong> {{ $cod_contract ?? '' }}</div>
         <div class="section small">
             <p><strong>Partes:</strong> Este acuerdo se celebra entre:</p>
             <p><strong>PRO MUNDO COMEX SAC</strong>, con RUC 20612452432, con domicilio de oficina administrativa en Av. Nicolas de Arriola 314, piso 11 oficina #3, Santa Catalina, La Victoria, en adelante referido como <strong>"EL GESTOR"</strong>.</p>

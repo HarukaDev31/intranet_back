@@ -67,7 +67,6 @@
 </head>
 <body>
     @php
-        // We know the filename is exactly 'logo_contrato.png'. Check common locations sequentially and embed the first found file as base64 (Dompdf-friendly).
         $filename = 'logo_contrato.png';
         $logoSrc = asset('storage/logo_icons/' . $filename); // default public URL fallback
 
@@ -84,7 +83,6 @@
             }
         }
 
-        // public/storage/logo_contrato.png
         if (strpos($logoSrc, 'data:') !== 0) {
             $p = public_path('storage/logo_icons/' . $filename);
             $pNorm = str_replace('\\', DIRECTORY_SEPARATOR, $p);
@@ -118,7 +116,7 @@
     <div class="page">
         <h1>ACUERDO POR SERVICIO DE CARGA CONSOLIDADA</h1>
         <div class="meta small"><strong>FECHA:</strong> {{ $fecha ?? date('d-m-Y') }}</div>
-
+        <div class="meta small"><strong>CONTRATO:</strong> {{ $cod_contract ?? '' }}</div>
         <div class="section small">
             <p><strong>Partes:</strong> Este acuerdo se celebra entre:</p>
             <p><strong>PRO MUNDO COMEX SAC</strong>, con RUC 20612452432, con domicilio de oficina administrativa en Av. Nicolas de Arriola 314, piso 11 oficina #3, Santa Catalina, La Victoria, en adelante referido como <strong>"EL GESTOR"</strong>.</p>

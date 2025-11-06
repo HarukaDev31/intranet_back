@@ -486,12 +486,12 @@ trait GoogleSheetsHelper
                 throw new \Exception("No se encontró la hoja: {$sheetName}");
             }
 
-            // Fila 1: CONSOLIDADO en B1:C1 (merged), número de carga en D1
-            $row1 = ['', 'CONSOLIDADO', '', $numeroCarga, '', ''];
+            // Fila 1: CONSOLIDADO en B1:D1 (merged), número de carga en E1
+            $row1 = ['', 'CONSOLIDADO', '', '', $numeroCarga, '', ''];
             // Fila 2: vacía
-            $row2 = ['', '', '', '', '', ''];
+            $row2 = ['', '', '', '', '', '', ''];
             // Fila 3: Headers - CLIENTE en columna B
-            $row3 = ['', 'CLIENTE', 'PROVEEDOR', 'INVOICE', 'PL', 'EXCEL CONF.'];
+            $row3 = ['', 'CLIENTE', 'PROVEEDOR', 'PRODUCTO', 'INVOICE', 'PL', 'EXCEL CONF.'];
 
             // Preparar datos desde fila 4
             $rows = [];
@@ -533,10 +533,12 @@ trait GoogleSheetsHelper
 
                     // Poner el índice del cliente y nombre en TODAS las filas del mismo cliente
                     // Google Sheets al hacer merge mostrará el valor de la primera celda
+                    $products = $proveedor['products'] ?? '';
                     $row = [
                         $clienteIndex, // Índice del cliente (en todas las filas del mismo cliente)
                         $nombreCliente, // Nombre del cliente (en todas las filas del mismo cliente)
                         $codeSupplier, // code_supplier del proveedor
+                        $products, // PRODUCTO del proveedor
                         'PENDIENTE', // INVOICE default
                         'PENDIENTE', // PL default
                         'PENDIENTE'  // EXCEL CONF. default
@@ -622,7 +624,7 @@ trait GoogleSheetsHelper
 
             // Aplicar formato y validaciones
             $totalRows = count($rows) + 3; // 3 filas iniciales + datos
-            $totalColumns = 6; // A=CLIENTE, B=nombre mergeado, C=PROVEEDOR, D=INVOICE, E=PL, F=EXCEL CONF.
+            $totalColumns = 7; // A=CLIENTE, B=nombre mergeado, C=PROVEEDOR, D=PRODUCTO, E=INVOICE, F=PL, G=EXCEL CONF.
             $this->applyConsolidadoSheetFormat($sheetId, $spreadsheetId, $totalRows, $totalColumns, $mergeRanges);
 
             Log::info("Hoja '{$sheetName}' poblada exitosamente con " . count($cotizaciones) . " clientes y " . count($rows) . " filas de datos");
@@ -648,7 +650,7 @@ trait GoogleSheetsHelper
         try {
             $requests = [];
 
-            // 1. Mergear "CONSOLIDADO" en B1:C1
+            // 1. Mergear "CONSOLIDADO" en B1:D1
             $requests[] = new \Google\Service\Sheets\Request([
                 'mergeCells' => new \Google\Service\Sheets\MergeCellsRequest([
                     'range' => new \Google\Service\Sheets\GridRange([
@@ -656,7 +658,7 @@ trait GoogleSheetsHelper
                         'startRowIndex' => 0,
                         'endRowIndex' => 1,
                         'startColumnIndex' => 1, // Columna B
-                        'endColumnIndex' => 3    // Hasta columna C (0-indexed: B=1, C=2)
+                        'endColumnIndex' => 4    // Hasta columna D (0-indexed: B=1, C=2, D=3)
                     ]),
                     'mergeType' => 'MERGE_ALL'
                 ])
@@ -678,9 +680,9 @@ trait GoogleSheetsHelper
                 ]);
             }
 
-            // 3. Crear validaciones con dropdown para columnas D, E, F (INVOICE, PL, EXCEL CONF.)
-            // Columnas: D=3, E=4, F=5 (0-indexed)
-            $statusColumns = [3, 4, 5]; // D, E, F
+            // 3. Crear validaciones con dropdown para columnas E, F, G (INVOICE, PL, EXCEL CONF.)
+            // Columnas: E=4, F=5, G=6 (0-indexed)
+            $statusColumns = [4, 5, 6]; // E, F, G
             $statusOptions = ['PENDIENTE', 'RECIBIDO', 'OBSERVADO', 'REVISADO'];
             
             foreach ($statusColumns as $colIndex) {
@@ -758,7 +760,7 @@ trait GoogleSheetsHelper
                 ])
             ]);
 
-            // 6. Aplicar bordes desde B1 hasta D1
+            // 6. Aplicar bordes desde B1 hasta E1
             $requests[] = new \Google\Service\Sheets\Request([
                 'updateBorders' => new \Google\Service\Sheets\UpdateBordersRequest([
                     'range' => new \Google\Service\Sheets\GridRange([
@@ -766,7 +768,7 @@ trait GoogleSheetsHelper
                         'startRowIndex' => 0, // Fila 1
                         'endRowIndex' => 1,    // Hasta fila 1
                         'startColumnIndex' => 1, // Columna B
-                        'endColumnIndex' => 4     // Hasta columna D (0-indexed: B=1, C=2, D=3)
+                        'endColumnIndex' => 5     // Hasta columna E (0-indexed: B=1, C=2, D=3, E=4)
                     ]),
                     'top' => new \Google\Service\Sheets\Border([
                         'style' => 'SOLID',
@@ -840,9 +842,9 @@ trait GoogleSheetsHelper
                 ])
             ]);
 
-            // 9. Agregar formato condicional para colorear los estados en columnas D, E, F
-            // Columnas: D=3, E=4, F=5 (0-indexed)
-            $statusColumns = [3, 4, 5]; // D, E, F
+            // 9. Agregar formato condicional para colorear los estados en columnas E, F, G
+            // Columnas: E=4, F=5, G=6 (0-indexed)
+            $statusColumns = [4, 5, 6]; // E, F, G
             $statusColors = [
                 'PENDIENTE' => ['red' => 0.96, 'green' => 0.26, 'blue' => 0.21],      // Rojo
                 'RECIBIDO' => ['red' => 0.26, 'green' => 0.52, 'blue' => 0.96],      // Azul

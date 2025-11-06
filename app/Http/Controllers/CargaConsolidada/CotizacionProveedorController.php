@@ -1194,9 +1194,11 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                 $this->verifyContainerIsCompleted($idContenedor);
             }
             if (isset($data['qty_box_china']) && isset($data['cbm_total_china'])) {
-                $dateTime = \DateTime::createFromFormat('d/m/Y', $data['arrive_date_china']);
-                if ($dateTime) {
-                    $data['arrive_date_china'] = $dateTime->format('Y-m-d');
+                //if arrive_date_china is not available or null use today's date else use the date provided
+                if (!isset($data['arrive_date_china']) || $data['arrive_date_china'] == null) {
+                    $data['arrive_date_china'] = \Carbon\Carbon::now()->format('Y-m-d');
+                } else {
+                    $data['arrive_date_china'] = \Carbon\Carbon::parse($data['arrive_date_china'])->format('Y-m-d');
                 }
                 $estadoProveedorOrder = $this->providerOrderStatus[$estadoProveedor] ?? 0;
                 $estadoProvedorToUpdate = $this->providerOrderStatus[$this->STATUS_RECIVED] ?? 0;
@@ -1204,7 +1206,10 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                     $proveedor->estados_proveedor = $this->STATUS_RECIVED;
                     $proveedor->qty_box_china = $data['qty_box_china'];
                     $proveedor->cbm_total_china = $data['cbm_total_china'];
-                    $proveedor->arrive_date_china = $data['arrive_date_china'];
+                    ///validate if proveedor has arrive_date_china and is valid date if not update
+                    if (!isset($proveedor->arrive_date_china) || $proveedor->arrive_date_china == null) {
+                        $proveedor->arrive_date_china = $data['arrive_date_china'];
+                    }
                     $proveedor->save();
 
 
@@ -1583,7 +1588,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                 return $this->jsonResponse(false, 'Archivo no encontrado', [], 404);
             }
             $file->delete();
-            
+
             DB::commit();
             return $this->jsonResponse(true, 'Archivo eliminado correctamente', [], 200);
         } catch (\Exception $e) {
@@ -1668,20 +1673,26 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
             $inspectionMessage = $this->buildInspectionMessage($cotizacion->nombre, $proveedor->code_supplier, $qtyBox);
 
             // Enviar archivos de inspección (el mensaje se envía una sola vez dentro de esta función)
-            $sentFiles = $this->sendInspectionFiles($inspectionFiles, $inspectionMessage, $telefono);
+            $sentFiles = $this->sendInspectionFiles($inspectionFiles, $inspectionMessage, $telefono,$proveedor->code_supplier);
 
             // Verificar si debe enviar mensaje de reserva (primer proveedor inspeccionado y más de 1 proveedor)
-            if ($this->shouldSendReservationMessage($idCotizacion)) {
-                $this->sendReservationMessage($cotizacion, $telefono);
+
+            //validate if this cotizacion has proveedors with files sended else not send more
+            $proveedorsWithFilesSended = AlmacenInspection::where('id_cotizacion', $idCotizacion)
+                ->where('send_status', 'SENDED')
+                ->count();
+            if ($proveedorsWithFilesSended <1) {
+                if ($this->shouldSendReservationMessage($idCotizacion)) {
+                    $this->sendReservationMessage($cotizacion, $telefono);
+                }
+                $pagosUrl = public_path('assets/images/pagos-full.jpg');
+
+                $this->sendMedia($pagosUrl, 'image/jpg', null, $telefono, 15, 'consolidado', 'Numeros_de_cuenta.jpg');
+            } else {
+                return $this->jsonResponse(true, 'Proceso de inspección completado correctamente', [
+                    'proveedors_with_files_sended' => $proveedorsWithFilesSended,
+                ]);
             }
-            $pagosUrl = public_path('assets/images/pagos-full.jpg');
-            $this->sendMedia($pagosUrl, 'image/jpg', null, $telefono, 15,'consolidado','Numeros_de_cuenta.jpg');
-            return $this->jsonResponse(true, 'Proceso de inspección completado correctamente', [
-                'proveedor_actualizado' => true,
-                'imagenes_enviadas' => $sentFiles['images'],
-                'videos_enviados' => $sentFiles['videos'],
-                'mensaje_enviado' => true
-            ]);
         } catch (\Exception $e) {
             Log::error('Error en validateToSendInspectionMessage: ' . $e->getMessage());
             return $this->jsonResponse(false, 'Error al procesar la inspección', ['error' => $e->getMessage()], 500);
@@ -1726,6 +1737,12 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                     'estados_proveedor' => 'INSPECTION',
                     'estados' => 'INSPECCIONADO'
                 ]);
+            //if provider not has arrive_date_china, update with today's date
+            $proveedor = CotizacionProveedor::where('id', $idProveedor)->first();
+            if (!isset($proveedor->arrive_date_china) || $proveedor->arrive_date_china == null) {
+                $proveedor->arrive_date_china = \Carbon\Carbon::now()->format('Y-m-d');
+                $proveedor->save();
+            }
         } catch (\Exception $e) {
             Log::error('Error en updateProveedorStatus: ' . $e->getMessage(), ['idProveedor' => $idProveedor]);
             return;
@@ -1763,7 +1780,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
     /**
      * Enviar archivos de inspección
      */
-    private function sendInspectionFiles($inspectionFiles, $message, $telefono)
+    private function sendInspectionFiles($inspectionFiles, $message, $telefono,$codeSupplier=null)
     {
         $sentFiles = ['images' => 0, 'videos' => 0];
 
@@ -1777,14 +1794,14 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
 
         // Enviar imágenes sin mensaje adicional
         foreach ($inspectionFiles['images'] as $image) {
-            if ($this->sendSingleInspectionFile($image, $message, $telefono)) {
+            if ($this->sendSingleInspectionFile($image, $message, $telefono,$codeSupplier)) {
                 $sentFiles['images']++;
             }
         }
 
         // Enviar videos sin mensaje adicional
         foreach ($inspectionFiles['videos'] as $video) {
-            if ($this->sendSingleInspectionFile($video, $message, $telefono)) {
+            if ($this->sendSingleInspectionFile($video, $message, $telefono,$codeSupplier)) {
                 $sentFiles['videos']++;
             }
         }
@@ -1795,7 +1812,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
     /**
      * Enviar un archivo individual de inspección
      */
-    private function sendSingleInspectionFile($file, $message, $telefono)
+    private function sendSingleInspectionFile($file, $message, $telefono,$codeSupplier=null)
     {
         $fileSystemPath = storage_path('app/public/' . $file->file_path);
 
@@ -1803,9 +1820,10 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
             Log::error('Archivo no encontrado: ' . $fileSystemPath);
             return false;
         }
-
+        $extension = pathinfo($file->file_path, PATHINFO_EXTENSION);
+        $fileName = $codeSupplier.'.'.$extension;
         // No enviar mensaje con los archivos, solo el archivo
-        $response = $this->sendMediaInspection($fileSystemPath, $file->file_type, '', $telefono, 2, $file->id);
+        $response = $this->sendMediaInspection($fileSystemPath, $file->file_type, '', $telefono, 2, $file->id,$fileName);
 
         // Verificar que la respuesta sea exitosa antes de actualizar el estado
         if ($response && isset($response['status']) && $response['status'] === true) {
@@ -3152,6 +3170,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                     'carga' => $carga,
                     'logo_contrato_url' => public_path('storage/logo_contrato.png'),
                     'signature_base64' => $signatureBase64,
+                    'cod_contract' => $cotizacion->cod_contract,
                 ];
 
                 // Renderizar vista del contrato con firma
@@ -3211,7 +3230,8 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
 
             // Usar la ruta correcta del archivo (PDF generado o archivo movido)
             $finalFilePath = $contratosDir . '/' . $filename;
-            $this->sendMedia($finalFilePath, 'application/pdf', $message, $telefono, 10,'ventas');
+            $fileName = 'contrato_' . $cotizacion->cod_contract . '.pdf';
+            $this->sendMedia($finalFilePath, 'application/pdf', $message, $telefono, 10, 'ventas', $fileName);
 
             Log::info('Contrato firmado guardado exitosamente', [
                 'uuid' => $uuid,

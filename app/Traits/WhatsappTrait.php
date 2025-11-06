@@ -202,7 +202,7 @@ trait WhatsappTrait
             return false;
         }
     }
-    public function sendMediaInspection($filePath, $mimeType = null, $message = null, $phoneNumberId = null, $sleep = 0, $inspection_id = null)
+    public function sendMediaInspection($filePath, $mimeType = null, $message = null, $phoneNumberId = null, $sleep = 0, $inspection_id = null,$fileName=null)
     {
         try {
             $phoneNumberId = $phoneNumberId ? $phoneNumberId : $this->phoneNumberId;
@@ -241,7 +241,7 @@ trait WhatsappTrait
             
             return $this->_callApi('/media-inspection', [
                 'fileContent' => $fileContent,
-                'fileName' => basename($filePath),
+                'fileName' => $fileName ?? basename($filePath),
                 'mimeType' => $mimeType,
                 'message' => $message,
                 'phoneNumberId' => $phoneNumberId,

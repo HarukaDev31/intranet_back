@@ -491,12 +491,13 @@ class ContenedorController extends Controller
             if (!$cotizacion) {
                 return response()->json(['message' => 'Cotización no encontrada', 'success' => false], 404);
             }
+            $idContenedorOrigen=Cotizacion::find($idCotizacion)->id_contenedor;
+
             $cotizacion->id_contenedor = $idContenedorDestino;
             $cotizacion->estado_cotizador = 'CONFIRMADO';
             $cotizacion->updated_at = date('Y-m-d H:i:s');
             $cotizacion->save();
             $contenedorDestino=Contenedor::find($idContenedorDestino);
-            $idContenedorOrigen=Cotizacion::find($idCotizacion)->id_contenedor;
             $contenedorOrigen=Contenedor::find($idContenedorOrigen);
             $cargaOrigen=$contenedorOrigen->carga;
             // Actualiza los proveedores asociados
@@ -1172,7 +1173,8 @@ Le estaré informando cualquier avance 🫡.";
                         'excel_confirmacion',
                         'supplier',
                         'code_supplier',
-                        'estados_proveedor'
+                        'estados_proveedor',
+                        'products'
                     ])
                     ->orderBy('id', 'asc')
                     ->get()
@@ -1190,7 +1192,8 @@ Le estaré informando cualquier avance 🫡.";
                             'packing_list' => $proveedor->packing_list ?? '',
                             'excel_confirmacion' => $proveedor->excel_confirmacion ?? '',
                             'supplier' => $proveedor->supplier ?? '',
-                            'code_supplier' => $proveedor->code_supplier ?? ''
+                            'code_supplier' => $proveedor->code_supplier ?? '',
+                            'products' => $proveedor->products ?? ''
                         ];
                     } else {
                         Log::warning("Proveedor con ID {$proveedor->id} no pertenece a cotización {$cotizacion->id}", [

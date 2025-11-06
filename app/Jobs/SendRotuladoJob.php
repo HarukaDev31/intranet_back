@@ -261,7 +261,7 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
             $cotizacion = Cotizacion::where('id', $this->idCotizacion)->first();
             $uuid = $cotizacion->uuid;
             $url = env('APP_URL_DATOS_PROVEEDOR') . '/' . $uuid;
-            $this->sendMessage("También necesito que ingrese al enlace y coloques los datos de tu vendedor para comunicarnos y recibir tu carga.👇🏼
+            $this->sendMessage("También necesito que ingrese al enlace y coloques los datos de tu proveedorx para comunicarnos y recibir tu carga.👇🏼
 Ingresar aquí: " . $url, null, $sleepSendMedia);
 
 
