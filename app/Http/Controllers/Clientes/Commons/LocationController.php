@@ -101,6 +101,17 @@ class LocationController extends Controller
         });
         return response()->json(['data' => $provincias, 'success' => true]);
     }
+    public function getAllDistritos()
+    {
+        $distritos = Distrito::all();
+        $distritos = $distritos->map(function ($distrito) {
+            return [
+                'value' => $distrito->ID_Distrito,
+                'label' => $distrito->No_Distrito
+            ];
+        });
+        return response()->json(['data' => $distritos, 'success' => true]);
+    }
     /**
      * Obtiene la estructura completa de ubicaciones (departamento -> provincia -> distrito)
      */
