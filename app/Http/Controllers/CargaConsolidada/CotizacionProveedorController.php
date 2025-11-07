@@ -1671,16 +1671,16 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
 
             // Preparar mensaje inicial de inspección (se enviará solo una vez en sendInspectionFiles)
             $inspectionMessage = $this->buildInspectionMessage($cotizacion->nombre, $proveedor->code_supplier, $qtyBox);
-
+            $proveedorsWithFilesSended = AlmacenInspection::where('id_cotizacion', $idCotizacion)
+                ->where('send_status', 'SENDED')
+                ->count();
             // Enviar archivos de inspección (el mensaje se envía una sola vez dentro de esta función)
             $sentFiles = $this->sendInspectionFiles($inspectionFiles, $inspectionMessage, $telefono,$proveedor->code_supplier);
 
             // Verificar si debe enviar mensaje de reserva (primer proveedor inspeccionado y más de 1 proveedor)
 
             //validate if this cotizacion has proveedors with files sended else not send more
-            $proveedorsWithFilesSended = AlmacenInspection::where('id_cotizacion', $idCotizacion)
-                ->where('send_status', 'SENDED')
-                ->count();
+            
             Log::info('proveedorsWithFilesSended: ' . $proveedorsWithFilesSended);
             if ($proveedorsWithFilesSended < 1) {
                 if ($this->shouldSendReservationMessage($idCotizacion)) {
