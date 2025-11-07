@@ -548,6 +548,11 @@ class EntregaController extends Controller
             ->whereNotNull('CC.estado_cliente')
             ->whereNull('CC.id_cliente_importacion')
             ->where('CC.estado_cotizador', 'CONFIRMADO')
+            ->whereExists(function ($query) {
+                $query->select(DB::raw(1))
+                    ->from('contenedor_consolidado_cotizacion_proveedores')
+                    ->whereColumn('contenedor_consolidado_cotizacion_proveedores.id_cotizacion', 'CC.id');
+            })
             ->select([
                 'CC.*',
                 'TC.name as name',
@@ -691,6 +696,11 @@ class EntregaController extends Controller
             ->whereNotNull('CC.estado_cliente')
             ->whereNull('CC.id_cliente_importacion')
             ->where('CC.estado_cotizador', 'CONFIRMADO')
+            ->whereExists(function ($query) {
+                $query->select(DB::raw(1))
+                    ->from('contenedor_consolidado_cotizacion_proveedores')
+                    ->whereColumn('contenedor_consolidado_cotizacion_proveedores.id_cotizacion', 'CC.id');
+            })
             // Solo filas que tengan algún formulario asociado
             ->where(function ($q) {
                 $q->whereNotNull('L.id')
@@ -734,7 +744,7 @@ class EntregaController extends Controller
             $query->where(function ($q) use ($search) {
                 $q->where('CC.nombre', 'LIKE', "%{$search}%")
                     ->orWhere('CC.documento', 'LIKE', "%{$search}%")
-                    ->orWhere('CC.correo', 'LIKE', "%{$search}%");
+                    ->orWhere('CC.telefono', 'LIKE', "%{$search}%");
             });
         }
 
@@ -838,6 +848,11 @@ class EntregaController extends Controller
                 ->whereNotNull('CC.estado_cliente')
                 ->whereNull('CC.id_cliente_importacion')
                 ->where('CC.estado_cotizador', 'CONFIRMADO')
+                ->whereExists(function ($query) {
+                    $query->select(DB::raw(1))
+                        ->from('contenedor_consolidado_cotizacion_proveedores')
+                        ->whereColumn('contenedor_consolidado_cotizacion_proveedores.id_cotizacion', 'CC.id');
+                })
                 ->select([
                     'CC.id as id_cotizacion',
                     'CC.nombre as cliente',
