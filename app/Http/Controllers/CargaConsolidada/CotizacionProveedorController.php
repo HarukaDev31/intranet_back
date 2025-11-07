@@ -1681,7 +1681,8 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
             $proveedorsWithFilesSended = AlmacenInspection::where('id_cotizacion', $idCotizacion)
                 ->where('send_status', 'SENDED')
                 ->count();
-            if ($proveedorsWithFilesSended <1) {
+            Log::info('proveedorsWithFilesSended: ' . $proveedorsWithFilesSended);
+            if ($proveedorsWithFilesSended < 1) {
                 if ($this->shouldSendReservationMessage($idCotizacion)) {
                     $this->sendReservationMessage($cotizacion, $telefono);
                 }
