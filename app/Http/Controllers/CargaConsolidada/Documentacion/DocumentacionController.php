@@ -956,9 +956,9 @@ class DocumentacionController extends Controller
                     $endRow = (int)$endMatches[0];
 
                     for ($r = $startRow; $r <= $endRow; $r++) {
-                        $adValorem = $sheetListaPartidas->getCell('G' . $r)->getValue();
+                        $adValorem = $sheetListaPartidas->getCell('G' . $r)->getCalculatedValue();
                         if (trim($adValorem) == "FTA") {
-                            $adValorem = $sheetListaPartidas->getCell('H' . $r)->getValue();
+                            $adValorem = $sheetListaPartidas->getCell('H' . $r)->getCalculatedValue();
                         }
 
                         $antiDumping = $sheetListaPartidas->getCell('I' . $r)->getValue();
