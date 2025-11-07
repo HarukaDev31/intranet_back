@@ -1612,18 +1612,10 @@ class CotizacionFinalController extends Controller
                 ->where('estado_cotizador', 'CONFIRMADO')
                 ->whereNotNull('estado_cliente')
                 ->whereNull('id_cliente_importacion')
-<<<<<<< Updated upstream
-                //has providers
-                ->whereExists(function ($query) {
-                    $query->select(DB::raw(1))
-                        ->from($this->table_contenedor_cotizacion_proveedores)
-                        ->whereColumn('contenedor_consolidado_cotizacion_proveedores.id_cotizacion', 'cc.id');
-=======
                 ->whereExists(function ($query) {
                     $query->select(DB::raw(1))
                         ->from($this->table_contenedor_cotizacion_final)
                         ->whereRaw($this->table_contenedor_cotizacion_final . '.id_cotizacion = cc.id');
->>>>>>> Stashed changes
                 })
                 ->get();
 
