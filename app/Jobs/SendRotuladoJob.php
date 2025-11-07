@@ -262,9 +262,27 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
             $cotizacion = Cotizacion::where('id', $this->idCotizacion)->first();
             $uuid = $cotizacion->uuid;
             $url = env('APP_URL_DATOS_PROVEEDOR') . '/' . $uuid;
-            $this->sendMessage("También necesito que ingrese al enlace y coloques los datos de tu proveedorx para comunicarnos y recibir tu carga.👇🏼
-Ingresar aquí: " . $url, null, $sleepSendMedia);
-
+            $message = "También necesito que ingrese al enlace y coloques los datos de tu proveedorx por favor 🫡
+Ingresar aquí: " . $url;
+            //get all providers from db with not have supplier_phone or supplier
+            $providers = CotizacionProveedor::where('id_cotizacion', $this->idCotizacion)
+                ->where(function ($query) {
+                    $query->where('supplier_phone', null)
+                        ->orWhere('supplier_phone', '')
+                        ->orWhere('supplier', null)
+                        ->orWhere('supplier', '');
+                })
+                ->get();
+            foreach ($providers as $provider) {
+                $message .= "----------------------------------------------------------\n";
+                if ($provider) {
+                    $message .= "Nombre del vendedor: " . $provider->supplier . "\n";
+                    $message .= "Número o WeChat: " . $provider->supplier_phone . "\n";
+                    $message .= "Codigo proveedor: " . $provider->code_supplier . "\n";
+                    $message .= "----------------------------------------------------------\n";
+                }
+            }
+            $this->sendMessage($message, null, $sleepSendMedia);
 
             Log::info('SendRotuladoJob completado exitosamente');
         } catch (\Exception $e) {
@@ -682,14 +700,14 @@ Por lo tanto, dile a tu proveedor #{$supplierCode} que le ponga la etiqueta.
 
             if (file_exists($excelPath)) {
                 $this->sendMedia($movilidadPersonalPath, 'application/pdf', $message, null, $sleepSendMedia);
-               
+
                 Log::info('Archivo MOVILIDAD PERSONAL enviado por WhatsApp exitosamente');
             } else {
                 Log::error('No se pudo crear el archivo VIM: ' . $excelPath);
             }
             if (file_exists($excelPath)) {
                 $message = "👆🏼Te adjunto la plantilla de la placa para que tu proveedor la pueda editar según los datos de tu producto.";
-                $this->sendMedia($excelPath, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', $message, null, $sleepSendMedia,'consolidado','vin_movilidad.xlsx');
+                $this->sendMedia($excelPath, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', $message, null, $sleepSendMedia, 'consolidado', 'vin_movilidad.xlsx');
                 Log::info('Archivo VIM enviado por WhatsApp exitosamente');
             } else {
                 Log::error('No se pudo crear el archivo VIM: ' . $excelPath);

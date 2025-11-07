@@ -1386,7 +1386,7 @@ class CotizacionFinalController extends Controller
             // Requerir idCotizacion: el flujo debe ser por id para evitar ambigüedades
             $request->validate([
                 'file' => 'required|file|mimes:xlsx,xls',
-                'idCotizacion' => 'required|integer'
+                
             ]);
 
             $file = $request->file('file');
@@ -1405,7 +1405,8 @@ class CotizacionFinalController extends Controller
 
             // Guardar archivo en storage/public
             $fileName = time() . '_cotizacion_final_' . $idCotizacion . '.' . $fileExt;
-            $storedPath = $file->storeAs('cargaconsolidada/cotizacionfinal/' . $idContenedor, $fileName, 'public');
+            $relativeDirectory = 'cotizacion_final/' . $idContenedor;
+            $storedPath = $file->storeAs($relativeDirectory, $fileName, 'public');
             $dbPath = $storedPath;
 
             // Leer desde el archivo guardado
@@ -1438,14 +1439,47 @@ class CotizacionFinalController extends Controller
                 return floatval($clean);
             };
 
-            $monto_final = $getNumeric('K30');
-            $impuestos_final = $getNumeric('K31');
-            $logistica_final = $getNumeric('K29');
-            $fob_final = $getNumeric('K28');
-            $peso_final = $getNumeric('K26');
-            // Tarifa/volumen finales son opcionales; intentar leer K27/K25 (si plantilla lo contiene)
+            $hasAntidumping = strtoupper(trim((string) $sheet->getCell('B23')->getValue())) === 'ANTIDUMPING';
+
+            if ($hasAntidumping) {
+                $fob_final = $getNumeric('K30');
+                $logistica_sheet = $getNumeric('K31');
+                $impuestos_final = $getNumeric('K32');
+                $monto_final = $getNumeric('K31');
+            } else {
+                $fob_final = $getNumeric('K29');
+                $logistica_sheet = $getNumeric('K30');
+                $impuestos_final = $getNumeric('K31');
+                $monto_final = $getNumeric('K30');
+            }
+
             $tarifa_final = $getNumeric('K27');
-            $volumen_final = $getNumeric('K25');
+            $volumen_final = $getNumeric('J11');
+
+            $pesoCellRaw = $sheet->getCell('J9')->getValue();
+            $peso_final = null;
+            if ($pesoCellRaw !== null) {
+                $pesoClean = preg_replace('/[^0-9\.,\-]/', '', (string) $pesoCellRaw);
+                if ($pesoClean !== '' && $pesoClean !== null) {
+                    if (substr_count($pesoClean, ',') > 0 && substr_count($pesoClean, '.') === 0) {
+                        $pesoClean = str_replace(',', '.', $pesoClean);
+                    } else {
+                        $pesoClean = str_replace(',', '', $pesoClean);
+                    }
+                    $peso_final = is_numeric($pesoClean) ? (float) $pesoClean : null;
+                    if ($peso_final !== null && stripos((string) $pesoCellRaw, 'tn') !== false) {
+                        $peso_final *= 1000;
+                    }
+                }
+            }
+
+            $logistica_final = $logistica_sheet;
+
+            if ($tarifa_final === null && $volumen_final !== null && $volumen_final > 0) {
+                $tarifa_final = $volumen_final < 1 ? $logistica_final : ($logistica_final / $volumen_final);
+            } elseif ($tarifa_final !== null && $volumen_final !== null && $volumen_final > 0) {
+                $logistica_final = $volumen_final < 1 ? $tarifa_final : $tarifa_final * $volumen_final;
+            }
 
             // Validación estricta: monto, impuestos y logística deben extraerse correctamente
             if ($monto_final === null || $impuestos_final === null || $logistica_final === null) {
@@ -1468,19 +1502,19 @@ class CotizacionFinalController extends Controller
             $updateData['impuestos_final'] = $impuestos_final;
             $updateData['logistica_final'] = $logistica_final;
 
-            if ($fob_final !== null) $updateData['fob_final'] = $fob_final;
-            if ($peso_final !== null) $updateData['peso_final'] = $peso_final;
-            if ($tarifa_final !== null) $updateData['tarifa_final'] = $tarifa_final;
-            if ($volumen_final !== null) $updateData['volumen_final'] = $volumen_final;
+            $updateData['fob_final'] = $fob_final ?? 0;
+            $updateData['peso_final'] = $peso_final ?? 0;
+            $updateData['tarifa_final'] = $tarifa_final ?? 0;
+            $updateData['volumen_final'] = $volumen_final ?? 0;
 
             // Actualizar la cotizacion (por id obligatorio)
             try {
                 DB::table($this->table_contenedor_cotizacion)
-                    ->where('id', $request->idCotizacion)
+                    ->where('id', $idCotizacion)
                     ->update($updateData);
-                Log::info('Cotización final actualizada', ['id' => $request->idCotizacion, 'update' => $updateData]);
+                Log::info('Cotización final actualizada', ['id' => $idCotizacion, 'update' => $updateData]);
             } catch (\Exception $dbError) {
-                Log::error('Error al actualizar cotizacion final: ' . $dbError->getMessage(), ['id' => $request->idCotizacion, 'update' => $updateData]);
+                Log::error('Error al actualizar cotizacion final: ' . $dbError->getMessage(), ['id' => $idCotizacion, 'update' => $updateData]);
                 if (strpos($dbError->getMessage(), 'Out of range value') !== false) {
                     // aplicar límites y reintentar
                     $limited = $updateData;
@@ -1489,11 +1523,11 @@ class CotizacionFinalController extends Controller
                     if (isset($limited['impuestos_final'])) $limited['impuestos_final'] = min($limited['impuestos_final'], 999999.99);
                     try {
                         DB::table($this->table_contenedor_cotizacion)
-                            ->where('id', $request->idCotizacion)
+                            ->where('id', $idCotizacion)
                             ->update($limited);
-                        Log::info('Cotización final actualizada con valores limitados', ['id' => $request->idCotizacion]);
+                        Log::info('Cotización final actualizada con valores limitados', ['id' => $idCotizacion]);
                     } catch (\Exception $retryErr) {
-                        Log::error('Fallo persistente al actualizar cotizacion final: ' . $retryErr->getMessage(), ['id' => $request->idCotizacion]);
+                        Log::error('Fallo persistente al actualizar cotizacion final: ' . $retryErr->getMessage(), ['id' => $idCotizacion]);
                         return response()->json([
                             'success' => false,
                             'message' => 'Error al actualizar la cotización final en la base de datos.'
