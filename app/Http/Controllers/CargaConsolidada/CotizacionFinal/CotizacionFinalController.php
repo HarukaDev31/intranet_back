@@ -108,12 +108,16 @@ class CotizacionFinalController extends Controller
 
             // Aplicar filtros adicionales si se proporcionan
             if ($request->has('search')) {
-                $search = $request->search;
-                $query->where(function ($q) use ($search) {
-                    $q->where('nombre', 'LIKE', "%{$search}%")
-                        ->orWhere('documento', 'LIKE', "%{$search}%")
-                        ->orWhere('correo', 'LIKE', "%{$search}%");
-                });
+                // Normalize and trim search input
+                $search = trim((string)$request->search);
+                if ($search !== '') {
+                    $query->where(function ($q) use ($search) {
+                        $q->where('contenedor_consolidado_cotizacion.nombre', 'LIKE', "%{$search}%")
+                          ->orWhere('contenedor_consolidado_cotizacion.documento', 'LIKE', "%{$search}%")
+                          ->orWhere('contenedor_consolidado_cotizacion.correo', 'LIKE', "%{$search}%")
+                          ->orWhere('contenedor_consolidado_cotizacion.telefono', 'LIKE', "%{$search}%");
+                    });
+                }
             }
 
             if ($request->has('estado_cotizacion_final') && !empty($request->estado_cotizacion_final)) {
