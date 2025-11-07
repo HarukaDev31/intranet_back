@@ -21,6 +21,8 @@
             .page:last-child { page-break-after: avoid; }
         h1 { font-size:18px; margin:6px 0 12px 0; text-align:center; }
         .meta { margin-bottom:10px; font-size:11px }
+        .meta-table { width:100%; margin-bottom:10px; font-size:11px; border-collapse:collapse }
+        .meta-table td { width:50%; padding:0 8px 0 0; vertical-align:top; box-sizing:border-box }
         .section { margin-bottom:0px; }
         .section h3 { margin:6px 0; font-size:13px }
         .bullets { margin-left:18px; }
@@ -115,8 +117,12 @@
     <!-- Page 1 -->
     <div class="page">
         <h1>ACUERDO POR SERVICIO DE CARGA CONSOLIDADA</h1>
-        <div class="meta small"><strong>FECHA:</strong> {{ $fecha ?? date('d-m-Y') }}</div>
-        <div class="meta small"><strong>CONTRATO:</strong> {{ $cod_contract ?? '' }}</div>
+        <table class="meta-table small">
+            <tr>
+                <td><strong>FECHA:</strong> {{ $fecha ?? date('d-m-Y') }}</td>
+                <td><strong>CONTRATO:</strong> {{ $cod_contract ?? '' }}</td>
+            </tr>
+        </table>
         <div class="section small">
             <p><strong>Partes:</strong> Este acuerdo se celebra entre:</p>
             <p><strong>PRO MUNDO COMEX SAC</strong>, con RUC 20612452432, con domicilio de oficina administrativa en Av. Nicolas de Arriola 314, piso 11 oficina #3, Santa Catalina, La Victoria, en adelante referido como <strong>"EL GESTOR"</strong>.</p>
