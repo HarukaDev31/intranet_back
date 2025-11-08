@@ -534,14 +534,27 @@ class GeneralController extends Controller
             $data = $request->all();
             $idCotizacion = $data['id_cotizacion'] ?? null;
             $proveedores = $data['proveedores'] ?? [];
-
+            $validateMaxDate = $data['validate_max_date'] ?? false;
             if (!$idCotizacion || empty($proveedores)) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Payload inválido: se requiere id_cotizacion y proveedores'
                 ], 422);
             }
-
+            $idContenedor = Cotizacion::find($idCotizacion)->id_contenedor;
+            $container = Contenedor::find($idContenedor);
+            if (!$container) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Contenedor no encontrado'
+                ], 404);
+            }
+            if ($validateMaxDate && !$container->fecha_documentacion_max) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Contenedor no tiene fecha de documentacion maxima'
+                ], 400);
+            }
             // Actualizar tipo_producto por item.id
             foreach ($proveedores as $prov) {
                 $items = $prov['items'] ?? [];
@@ -814,7 +827,7 @@ class GeneralController extends Controller
             }
             $contenedor = Contenedor::where('id', $cot->id_contenedor)->first();
             $fecha_documentacion_max = $contenedor->fecha_documentacion_max;
-            $fecha_documentacion_max_formatted = date('d/m/Y', strtotime($fecha_documentacion_max));
+            $fecha_documentacion_max_formatted = $fecha_documentacion_max ? date('d/m/Y', strtotime($fecha_documentacion_max)) : null;
             $message = "☑ PASO 2: Solicita a tu proveedor los documentos finales:
 •⁠  ⁠Commercial Invoice 📄.
 •⁠  ⁠Packing List 📦.
@@ -823,7 +836,10 @@ class GeneralController extends Controller
 📩 El documento está en idioma chino, solo enviarlo a su proveedor.
 🚫 Indicar a tu proveedor, que no se rellena encima del World . ESTE WORD ES SOLO UNA GUIA.
 
-Fecha maxima de entrega: {$fecha_documentacion_max_formatted}";
+";
+            if ($validateMaxDate && $fecha_documentacion_max_formatted) {
+                $message .= "Fecha maxima de entrega: {$fecha_documentacion_max_formatted}";
+            }
             $response = $this->sendMessage($message, $telefono, 8);
             //send CONSIDERATIONS.docx on public storage templates
             $considerationsPath = public_path('storage/templates/CONSIDERATIONS.docx');
