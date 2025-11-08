@@ -572,11 +572,22 @@ class EntregaController extends Controller
 
         // Filtros adicionales
         if ($request->filled('search')) {
-            $search = $request->input('search');
-            $query->where(function ($q) use ($search) {
+            $search = trim((string)$request->input('search'));
+            $searchDigits = preg_replace('/\D+/', '', $search);
+
+            $query->where(function ($q) use ($search, $searchDigits) {
                 $q->where('CC.nombre', 'LIKE', "%{$search}%")
                     ->orWhere('CC.documento', 'LIKE', "%{$search}%")
                     ->orWhere('CC.correo', 'LIKE', "%{$search}%");
+
+                // Si la búsqueda contiene dígitos, comparar con la versión numérica del teléfono
+                if ($searchDigits !== '') {
+                    // Normalizar teléfono en SQL removiendo espacios, guiones, paréntesis y '+'
+                    $normalized = 'REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(CC.telefono, " ", ""), "-", ""), "(", ""), ")", ""), "+", "")';
+                    // Comparar tanto contra la cadena de dígitos como contra la versión con prefijo 51 (código país)
+                    $q->orWhereRaw("{$normalized} LIKE ?", ["%{$searchDigits}%"]);
+                    $q->orWhereRaw("{$normalized} LIKE ?", ["%51{$searchDigits}%"]);
+                }
             });
         }
 
