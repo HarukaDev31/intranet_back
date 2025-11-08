@@ -1652,8 +1652,8 @@ class CotizacionFinalController extends Controller
                 ->whereNull('id_cliente_importacion')
                 ->whereExists(function ($query) {
                     $query->select(DB::raw(1))
-                        ->from($this->table_contenedor_cotizacion_final)
-                        ->whereRaw($this->table_contenedor_cotizacion_final . '.id_cotizacion = cc.id');
+                        ->from($this->table_contenedor_cotizacion_proveedores)
+                        ->whereRaw($this->table_contenedor_cotizacion_proveedores . '.id_cotizacion = cc.id');
                 })
                 ->get();
 
@@ -1732,10 +1732,7 @@ class CotizacionFinalController extends Controller
 
             // Crear nuevo archivo ZIP
             $zip = new ZipArchive();
-            Log::info('Intentando crear archivo ZIP en: ' . $zipFilePath);
-            Log::info('Directorio existe: ' . (file_exists(dirname($zipFilePath)) ? 'Sí' : 'No'));
-            Log::info('Directorio es escribible: ' . (is_writable(dirname($zipFilePath)) ? 'Sí' : 'No'));
-            
+       
             $zipResult = $zip->open($zipFilePath, ZipArchive::CREATE);
             if ($zipResult !== TRUE) {
                 $errorMessages = [
@@ -1799,7 +1796,6 @@ class CotizacionFinalController extends Controller
                 }
 
                 $processedCount++;
-                Log::info('Procesando cliente ' . $processedCount . ' de ' . count($data) . ': ' . $value['cliente']['nombre']);
 
                 try {
                     Log::info('Iniciando generación de Excel para: ' . $value['cliente']['nombre']);
@@ -1830,7 +1826,6 @@ class CotizacionFinalController extends Controller
                     if (file_exists($fullExcelPath)) {
                         $addResult = $zip->addFile($fullExcelPath, $excelFileName);
                         if ($addResult) {
-                            Log::info('Archivo agregado al ZIP exitosamente: ' . $excelFileName);
                         } else {
                             Log::error('Error al agregar archivo al ZIP: ' . $excelFileName);
                         }
@@ -1851,18 +1846,12 @@ class CotizacionFinalController extends Controller
                         'peso_final' => $result['peso_final'],
                     ];
                     
-                    Log::info('Actualizando cotización con datos:', [
-                        'id' => $result['id'],
-                        'cliente' => $value['cliente']['nombre'],
-                        'datos' => $updateData
-                    ]);
                     
                     // Actualizar tabla de cotizaciones con manejo de errores
                     try {
                         DB::table($this->table_contenedor_cotizacion)
                             ->where('id', $result['id'])
                             ->update($updateData);
-                        Log::info('Cotización actualizada exitosamente en BD');
                     } catch (\Exception $dbError) {
                         Log::error('Error al actualizar cotización en BD: ' . $dbError->getMessage(), [
                             'id' => $result['id'],
