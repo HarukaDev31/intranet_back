@@ -1201,12 +1201,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
             if (isset($data['qty_box_china']) && isset($data['cbm_total_china'])
             && $user->getNombreGrupo() == Usuario::ROL_ALMACEN_CHINA
             ) {
-                if (!is_numeric($data['qty_box_china']) || !is_numeric($data['cbm_total_china']) || $data['qty_box_china'] <= 0 || $data['cbm_total_china'] <= 0) {
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'La cantidad de cajas y volumen total de china deben ser números y mayores que 0'
-                    ], 422);
-                }
+                
                 if (!isset($data['arrive_date_china']) || $data['arrive_date_china'] == null) {
                     $data['arrive_date_china'] = \Carbon\Carbon::now()->format('Y-m-d');
                 } else {
@@ -1215,9 +1210,17 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                 $estadoProveedorOrder = $this->providerOrderStatus[$estadoProveedor] ?? 0;
                 $estadoProvedorToUpdate = $this->providerOrderStatus[$this->STATUS_RECIVED] ?? 0;
                 if ($estadoProveedorOrder < $estadoProvedorToUpdate) {
-                    $proveedor->estados_proveedor = $this->STATUS_RECIVED;
-                    $proveedor->qty_box_china = $data['qty_box_china'];
-                    $proveedor->cbm_total_china = $data['cbm_total_china'];
+                    if (!is_numeric($data['qty_box_china']) || !is_numeric($data['cbm_total_china']) || $data['qty_box_china'] <= 0 || $data['cbm_total_china'] <= 0) {
+                        Log::error('Error en updateProveedorData: La cantidad de cajas y volumen total de china deben ser números y mayores que 0');
+                        $proveedor->estados_proveedor = $this->STATUS_CONTACTED;
+
+                    }else{
+                        $proveedor->qty_box_china = $data['qty_box_china'];
+                        $proveedor->cbm_total_china = $data['cbm_total_china'];
+                        $proveedor->estados_proveedor = $this->STATUS_RECIVED;
+
+                    }
+                
                     ///validate if proveedor has arrive_date_china and is valid date if not update
                     if (!isset($proveedor->arrive_date_china) || $proveedor->arrive_date_china == null) {
                         $proveedor->arrive_date_china = $data['arrive_date_china'];
