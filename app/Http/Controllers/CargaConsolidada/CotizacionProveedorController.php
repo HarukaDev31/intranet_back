@@ -1158,8 +1158,12 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                 $estadoProvedorToUpdate = $this->providerOrderStatus[$this->STATUS_CONTACTED] ?? 0;
                 if ($estadoProveedorOrder < $estadoProvedorToUpdate) {
                     $proveedor->estados = $this->STATUS_CONTACTED;
-                    $proveedor->arrive_date_china = $data['arrive_date_china'];
-                    $proveedor->save();
+
+                    if (\DateTime::createFromFormat('Y-m-d', $data['arrive_date_china']) !== false) {
+                        $proveedor->arrive_date_china = $data['arrive_date_china'];
+                    } else {
+                        Log::error('Error en updateProveedorData: La fecha de llegada de china no es válida');
+                    }
 
 
                     //INSERT INTO TABLE contenedor_proveedor_estados_tracking with estado CONTACTED and id_cotizacion and id_proveedor
