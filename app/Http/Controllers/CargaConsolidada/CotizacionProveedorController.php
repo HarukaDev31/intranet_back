@@ -1222,8 +1222,15 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                     }
                 
                     ///validate if proveedor has arrive_date_china and is valid date if not update
-                    if (!isset($proveedor->arrive_date_china) || $proveedor->arrive_date_china == null) {
-                        $proveedor->arrive_date_china = $data['arrive_date_china'];
+                    if (!isset($proveedor->arrive_date_china) || $proveedor->arrive_date_china == null
+                    
+                    ) {
+                        //amd if is valid date
+                        if (\DateTime::createFromFormat('Y-m-d', $data['arrive_date_china']) !== false) {
+                            $proveedor->arrive_date_china = $data['arrive_date_china'];
+                        } else {
+                            Log::error('Error en updateProveedorData: La fecha de llegada de china no es válida');
+                        }
                     }
                     $proveedor->save();
 
