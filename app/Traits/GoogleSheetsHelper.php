@@ -487,11 +487,11 @@ trait GoogleSheetsHelper
             }
 
             // Fila 1: CONSOLIDADO en B1:D1 (merged), número de carga en E1
-            $row1 = ['', 'CONSOLIDADO', '', '', $numeroCarga, '', ''];
+            $row1 = ['', 'CONSOLIDADO', '', '', $numeroCarga, '', '', ''];
             // Fila 2: vacía
-            $row2 = ['', '', '', '', '', '', ''];
-            // Fila 3: Headers - CLIENTE en columna B
-            $row3 = ['', 'CLIENTE', 'PROVEEDOR', 'PRODUCTO', 'INVOICE', 'PL', 'EXCEL CONF.'];
+            $row2 = ['', '', '', '', '', '', '', ''];
+            // Fila 3: Headers - CLIENTE en columna B, TELÉFONO en columna C
+            $row3 = ['', 'CLIENTE', 'TELÉFONO', 'PROVEEDOR', 'PRODUCTO', 'INVOICE', 'PL', 'EXCEL CONF.'];
 
             // Preparar datos desde fila 4
             $rows = [];
@@ -501,6 +501,7 @@ trait GoogleSheetsHelper
             foreach ($cotizaciones as $cotizacion) {
                 $proveedores = $cotizacion['proveedores'] ?? [];
                 $nombreCliente = trim($cotizacion['nombre'] ?? '');
+                $telefonoCliente = trim($cotizacion['telefono'] ?? '');
                 $cotizacionId = $cotizacion['id'] ?? 'N/A';
                 $numProveedores = count($proveedores);
 
@@ -537,6 +538,7 @@ trait GoogleSheetsHelper
                     $row = [
                         $clienteIndex, // Índice del cliente (en todas las filas del mismo cliente)
                         $nombreCliente, // Nombre del cliente (en todas las filas del mismo cliente)
+                        $telefonoCliente, // Teléfono del cliente
                         $codeSupplier, // code_supplier del proveedor
                         $products, // PRODUCTO del proveedor
                         'PENDIENTE', // INVOICE default
@@ -594,6 +596,15 @@ trait GoogleSheetsHelper
                     'indice' => $clientRange['clienteIndex']
                 ];
                 
+                // Merge columna C (teléfono del cliente)
+                $mergeRanges[] = [
+                    'startRow' => $googleSheetStartRow,
+                    'endRow' => $googleSheetEndRow,
+                    'column' => 2, // Columna C (0-indexed)
+                    'cliente' => $clientRange['nombreCliente'],
+                    'indice' => $clientRange['clienteIndex']
+                ];
+
                 Log::debug("Merge configurado para cliente {$clientRange['clienteIndex']} ({$clientRange['nombreCliente']}): filas Google Sheets {$googleSheetStartRow}-{$googleSheetEndRow} (0-indexed, endRow exclusivo)", [
                     'fila_inicio' => $googleSheetStartRow + 1, // 1-indexed para log
                     'fila_fin' => $googleSheetEndRow, // 1-indexed para log
@@ -624,7 +635,7 @@ trait GoogleSheetsHelper
 
             // Aplicar formato y validaciones
             $totalRows = count($rows) + 3; // 3 filas iniciales + datos
-            $totalColumns = 7; // A=CLIENTE, B=nombre mergeado, C=PROVEEDOR, D=PRODUCTO, E=INVOICE, F=PL, G=EXCEL CONF.
+            $totalColumns = 8; // A=ÍNDICE, B=CLIENTE, C=TELÉFONO, D=PROVEEDOR, E=PRODUCTO, F=INVOICE, G=PL, H=EXCEL CONF.
             $this->applyConsolidadoSheetFormat($sheetId, $spreadsheetId, $totalRows, $totalColumns, $mergeRanges);
 
             Log::info("Hoja '{$sheetName}' poblada exitosamente con " . count($cotizaciones) . " clientes y " . count($rows) . " filas de datos");
@@ -680,9 +691,9 @@ trait GoogleSheetsHelper
                 ]);
             }
 
-            // 3. Crear validaciones con dropdown para columnas E, F, G (INVOICE, PL, EXCEL CONF.)
-            // Columnas: E=4, F=5, G=6 (0-indexed)
-            $statusColumns = [4, 5, 6]; // E, F, G
+            // 3. Crear validaciones con dropdown para columnas F, G, H (INVOICE, PL, EXCEL CONF.)
+            // Columnas: F=5, G=6, H=7 (0-indexed)
+            $statusColumns = [5, 6, 7]; // F, G, H
             $statusOptions = ['PENDIENTE', 'RECIBIDO', 'OBSERVADO', 'REVISADO'];
             
             foreach ($statusColumns as $colIndex) {
@@ -842,9 +853,9 @@ trait GoogleSheetsHelper
                 ])
             ]);
 
-            // 9. Agregar formato condicional para colorear los estados en columnas E, F, G
-            // Columnas: E=4, F=5, G=6 (0-indexed)
-            $statusColumns = [4, 5, 6]; // E, F, G
+            // 9. Agregar formato condicional para colorear los estados en columnas F, G, H
+            // Columnas: F=5, G=6, H=7 (0-indexed)
+            $statusColumns = [5, 6, 7]; // F, G, H
             $statusColors = [
                 'PENDIENTE' => ['red' => 0.96, 'green' => 0.26, 'blue' => 0.21],      // Rojo
                 'RECIBIDO' => ['red' => 0.26, 'green' => 0.52, 'blue' => 0.96],      // Azul

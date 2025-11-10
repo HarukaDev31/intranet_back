@@ -1142,6 +1142,7 @@ Le estaré informando cualquier avance 🫡.";
                     'main.id',
                     'main.nombre',
                     'main.documento',
+                    'main.telefono',
                     'main.id_contenedor'
                 ])
                 ->where('main.id_contenedor', $idContenedor)
@@ -1209,6 +1210,7 @@ Le estaré informando cualquier avance 🫡.";
                         'id' => $cotizacion->id,
                         'nombre' => $cotizacion->nombre,
                         'documento' => $cotizacion->documento,
+                        'telefono' => $cotizacion->telefono ? preg_replace('/\s+/', '', $cotizacion->telefono) : '',
                         'proveedores' => $proveedoresValidados
                     ];
                     
