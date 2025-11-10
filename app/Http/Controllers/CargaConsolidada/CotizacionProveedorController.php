@@ -1102,8 +1102,12 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
     {
         try {
             $idProveedor = $request->id;
-            Log::info('idProveedor: ' . $idProveedor);
             $data = $request->all();
+            $user = JWTAuth::parseToken()->authenticate();
+            Log::info('user: ' . json_encode($user));
+            Log::info('role: ' . $user->getNombreGrupo());
+            //LOG DATA
+            Log::info('data: ' . json_encode($data));
             $proveedor = CotizacionProveedor::where('id', $idProveedor)
                 ->first();
 
@@ -1147,6 +1151,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
             if (
                 isset($data['arrive_date_china']) &&
                 (!isset($data['qty_box_china']) && !isset($data['cbm_total_china']))
+                && $user->getNombreGrupo() == Usuario::ROL_ALMACEN_CHINA
             ) {
                 $data['arrive_date_china'] = date('Y-m-d', strtotime(str_replace('/', '-', $data['arrive_date_china'])));
                 $estadoProveedorOrder = $this->providerOrderStatus[$estadoProveedor] ?? 0;
@@ -1193,8 +1198,15 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                 }
                 $this->verifyContainerIsCompleted($idContenedor);
             }
-            if (isset($data['qty_box_china']) && isset($data['cbm_total_china'])) {
-                //if arrive_date_china is not available or null use today's date else use the date provided
+            if (isset($data['qty_box_china']) && isset($data['cbm_total_china'])
+            && $user->getNombreGrupo() == Usuario::ROL_ALMACEN_CHINA
+            ) {
+                if (!is_numeric($data['qty_box_china']) || !is_numeric($data['cbm_total_china']) || $data['qty_box_china'] <= 0 || $data['cbm_total_china'] <= 0) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'La cantidad de cajas y volumen total de china deben ser números y mayores que 0'
+                    ], 422);
+                }
                 if (!isset($data['arrive_date_china']) || $data['arrive_date_china'] == null) {
                     $data['arrive_date_china'] = \Carbon\Carbon::now()->format('Y-m-d');
                 } else {
@@ -1242,7 +1254,19 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
             if ($user->getNombreGrupo() == Usuario::ROL_ALMACEN_CHINA) {
                 $this->sendAlertDifferenceCbmMessage($idCotizacion);
             }
-
+            //Validate if provveedor has status R but not have qty box china and cbm total china OR ARE 0
+            if ($proveedor->estados_proveedor == $this->STATUS_RECIVED && (!$proveedor->qty_box_china || $proveedor->qty_box_china == 0) && (!$proveedor->cbm_total_china || $proveedor->cbm_total_china == 0)) {
+                //if have arrive date china, change status to C else if have datos_proveedor change to NC
+                if ($proveedor->arrive_date_china) {
+                    $proveedor->estados_proveedor = $this->STATUS_CONTACTED;
+                    $proveedor->save();
+                    Log::info('proveedor status changed to C: ' . $proveedor->estados_proveedor);
+                } else if ($proveedor->datos_proveedor) {
+                    $proveedor->estados_proveedor = $this->STATUS_NOT_CONTACTED;
+                    $proveedor->save();
+                    Log::info('proveedor status changed to NC: ' . $proveedor->estados_proveedor);
+                }
+            }
             return response()->json([
                 'success' => true,
                 'message' => 'Datos actualizados correctamente',
