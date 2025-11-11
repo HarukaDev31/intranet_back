@@ -264,8 +264,8 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
             $cotizacion = Cotizacion::where('id', $this->idCotizacion)->first();
             $uuid = $cotizacion->uuid;
             $url = env('APP_URL_DATOS_PROVEEDOR') . '/' . $uuid;
-            $message = "También necesito que ingrese al enlace y coloques los datos de tu proveedorx por favor 🫡
-Ingresar aquí: " . $url;
+            $message = "También necesito que ingrese al enlace y coloques los datos de tu proveedor x por favor 🫡
+Ingresar aquí: " . $url."\n\n";
             //get all providers from db with not have supplier_phone or supplier
             $providers = CotizacionProveedor::where('id_cotizacion', $this->idCotizacion)
                 ->where(function ($query) {
