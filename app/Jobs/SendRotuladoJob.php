@@ -38,16 +38,18 @@ class SendRotuladoJob implements ShouldQueue
     protected $carga;
     protected $proveedores;
     protected $idCotizacion;
+    protected $total_movilidad_personal;
 
     /**
      * Create a new job instance.
      */
-    public function __construct($cliente, $carga, $proveedores, $idCotizacion)
+    public function __construct($cliente, $carga, $proveedores, $idCotizacion, $total_movilidad_personal)
     {
         $this->cliente = $cliente;
         $this->carga = $carga;
         $this->proveedores = $proveedores;
         $this->idCotizacion = $idCotizacion;
+        $this->total_movilidad_personal = $total_movilidad_personal;
     }
 
     /**
@@ -170,7 +172,7 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
 
             $sleepSendMedia = 7;
             $processedProviders = 0;
-
+            
             // Procesar cada proveedor pendiente
             foreach ($providersHasNoSended as $proveedor) {
                 $proveedorDB = $proveedoresFromDB->get($proveedor['id']);
@@ -182,7 +184,7 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                 $supplierCode = $proveedorDB->code_supplier ?? '';
                 $products = $proveedorDB->products ?? '';
                 $tipoRotulado = $proveedor['tipo_rotulado'] ?? 'rotulado';
-
+                
                 try {
                     // Generar rotulado según el tipo
                     $pdfContent = $this->generateRotuladoByType($tipoRotulado, $supplierCode, $products);
@@ -223,7 +225,7 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
 
                     // PASO 2: Enviar archivo adicional por tipo (si aplica)
                     $sleepSendMedia += 1;
-                    $this->sendRotuladoByType($tipoRotulado, $supplierCode, $products, $sleepSendMedia);
+                    $this->sendRotuladoByType($tipoRotulado, $supplierCode, $products, $sleepSendMedia, $proveedor);
 
                     // Actualizar estado del proveedor y tipo de rotulado
                     $updateData = [
@@ -318,7 +320,7 @@ Ingresar aquí: " . $url;
     /**
      * Enviar rotulado según el tipo
      */
-    private function sendRotuladoByType($tipoRotulado, $supplierCode, $products, $sleepSendMedia)
+    private function sendRotuladoByType($tipoRotulado, $supplierCode, $products, $sleepSendMedia, array $proveedorData = [])
     {
         switch ($tipoRotulado) {
             case 'rotulado':
@@ -337,7 +339,7 @@ Ingresar aquí: " . $url;
                 $this->sendRotuladoMaquinaria($supplierCode, $products, $sleepSendMedia);
                 break;
             case 'movilidad_personal':
-                $this->sendRotuladoMovilidadPersonal($supplierCode, $products, $sleepSendMedia);
+                $this->sendRotuladoMovilidadPersonal($supplierCode, $products, $sleepSendMedia, $proveedorData);
                 break;
             default:
                 $this->sendRotuladoGeneral($supplierCode, $products, $sleepSendMedia);
@@ -629,7 +631,7 @@ Ingresar aquí: " . $url;
         }
     }
 
-    private function sendRotuladoMovilidadPersonal($supplierCode, $products, $sleepSendMedia)
+    private function sendRotuladoMovilidadPersonal($supplierCode, $products, $sleepSendMedia, array $proveedorData = [])
     {
         try {
             // Obtener información de la cotización
@@ -650,16 +652,20 @@ Ingresar aquí: " . $url;
                 Log::error('No se encontró el proveedor en BD: ' . $supplierCode);
                 return;
             }
-            //get id and from  table contenedor_consolidado_cotizacion_proveedores_items with id_proveedor = $proveedorDB->id get sum of initial_qty 
-
-            $items = DB::table('contenedor_consolidado_cotizacion_proveedores_items')
-                ->where('id_proveedor', $proveedorDB->id)
-                ->sum('initial_qty');
-            // sum() puede devolver null si no hay registros, usar ?? 0 para manejarlo
-            $qtyBox = $items ?? 0;
-            Log::info('items: ' . $items);
+            $qtyBox = $proveedorData['total_initial_qty_movilidad_personal'] ?? 0 ?? null;
+            Log::info('qtyBox: ' . $qtyBox);
+            if (is_null($qtyBox) || $qtyBox <= 0) {
+                $items = DB::table('contenedor_consolidado_cotizacion_proveedores_items')
+                    ->where('id_proveedor', $proveedorDB->id)
+                    ->sum('initial_qty');
+                // sum() puede devolver null si no hay registros, usar ?? 0 para manejarlo
+                $qtyBox = $items ?? 0;
+                Log::info('items (fallback sum initial_qty): ' . ($items ?? 'null'));
+            } else {
+                Log::info('items (total_initial_qty_movilidad_personal): ' . $qtyBox);
+            }
             if ($qtyBox <= 0) {
-                Log::warning('items no válido para movilidad personal: ' . ($items ?? 'null'));
+                Log::warning('items no válido para movilidad personal');
                 return;
             }
 

@@ -987,14 +987,14 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
      * @return \Illuminate\Http\Response
      * @throws Exception
      */
-    protected function procesarEstadoRotuladoJob($cliente, $carga, $proveedores, $idCotizacion)
+    protected function procesarEstadoRotuladoJob($cliente, $carga, $proveedores, $idCotizacion, $total_movilidad_personal=0)
     {
         try {
             $idContenedor = Cotizacion::where('id', $idCotizacion)->first()->id_contenedor;
             $carga = Contenedor::where('id', $idContenedor)->first()->carga;
 
             // Dispatch del Job para procesamiento asíncrono
-            SendRotuladoJob::dispatch($cliente, $carga, $proveedores, $idCotizacion)->onQueue('importaciones');
+            SendRotuladoJob::dispatch($cliente, $carga, $proveedores, $idCotizacion, $total_movilidad_personal)->onQueue('importaciones');
 
             Log::info('SendRotuladoJob dispatchado exitosamente');
 
@@ -2372,7 +2372,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
     }
     public function getCotizacionProveedorByIdCotizacion($idCotizacion)
     {
-        $proveedores = CotizacionProveedor::where('id_cotizacion', $idCotizacion)->get();
+        $proveedores = CotizacionProveedor::with('items')->where('id_cotizacion', $idCotizacion)->get();
         if (!$proveedores) {
             return response()->json([
                 'success' => false,
@@ -3104,6 +3104,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
         $idCotizacion = $request->idCotizacion;
         $proveedores = $request->proveedores;
         $cotizacion = Cotizacion::find($idCotizacion);
+        $total_movilidad_personal=$request->total_movilidad_personal??0;
         if (!$cotizacion) {
             return response()->json([
                 'success' => false,
@@ -3117,7 +3118,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                 'message' => 'Proveedores no encontrados'
             ], 404);
         }
-        $this->procesarEstadoRotuladoJob($cotizacion->nombre, $cotizacion->carga, $proveedores, $idCotizacion);
+        $this->procesarEstadoRotuladoJob($cotizacion->nombre, $cotizacion->carga, $proveedores, $idCotizacion, $total_movilidad_personal);
         return response()->json([
             'success' => true,
             'message' => 'Rotulado enviado correctamente'

@@ -4,6 +4,7 @@ namespace App\Models\CargaConsolidada;
 
 use Illuminate\Database\Eloquent\Model;
 use App\Models\CargaConsolidada\Contenedor;
+use App\Models\CargaConsolidada\CotizacionProveedorItems;
 
 class CotizacionProveedor extends Model
 {
@@ -60,5 +61,10 @@ class CotizacionProveedor extends Model
     public function inspectionAlmacen()
     {
         return $this->hasMany(AlmacenInspection::class, 'id_proveedor');
+    }
+    //relation items with contenedor_consolidado_cotizacion_proveedores_items
+    public function items()
+    {
+        return $this->hasMany(CotizacionProveedorItems::class, 'id_proveedor');
     }
 }
