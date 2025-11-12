@@ -3,8 +3,9 @@
 namespace App\Providers;
 
 use Illuminate\Support\ServiceProvider;
-use Illuminate\Support\Facades\DB;
-
+use Illuminate\Database\Events\ConnectionEstablished;
+use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Log;
 class AppServiceProvider extends ServiceProvider
 {
     /**
@@ -24,7 +25,12 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot()
     {
-        DB::statement("SET time_zone = '-05:00';");
-
+        Event::listen(ConnectionEstablished::class, function ($event) {
+            try {
+                $event->connection->statement("SET time_zone = '-05:00';");
+            } catch (\Throwable $e) {
+                Log::warning('No se pudo establecer zona horaria MySQL: ' . $e->getMessage());
+            }
+        });
     }
 }
