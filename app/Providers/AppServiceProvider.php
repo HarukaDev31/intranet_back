@@ -23,6 +23,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot()
     {
-        //
+        DB::statement("SET time_zone = '-05:00';");
+
     }
 }
