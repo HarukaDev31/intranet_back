@@ -230,21 +230,35 @@ class Notificacion extends Model
     {
         $query = static::activas()
             ->noExpiradas()
-            ->porUsuario($usuario->ID_Usuario);
-
-        // Filtrar por rol si el usuario tiene grupo
-        if ($usuario->grupo) {
-            $rolUsuario = $usuario->grupo->No_Grupo;
-            Log::info('Filtrando notificaciones por rol', [
-                'usuario_id' => $usuario->ID_Usuario,
-                'rol_usuario' => $rolUsuario,
-                'rol_coordinacion' => Usuario::ROL_COORDINACION,
-                'rol_cotizador' => Usuario::ROL_COTIZADOR,
-                'coincide_coordinacion' => $rolUsuario === Usuario::ROL_COORDINACION,
-                'coincide_cotizador' => $rolUsuario === Usuario::ROL_COTIZADOR,
-            ]);
-            $query->porRol($rolUsuario);
-        }
+            ->where(function ($q) use ($usuario) {
+                // La notificación debe cumplir: (usuario_destinatario IS NULL OR usuario_destinatario = usuario_id)
+                // Y (rol_destinatario IS NULL OR rol_destinatario = rol_usuario)
+                $q->where(function ($subQ) use ($usuario) {
+                    $subQ->whereNull('usuario_destinatario')
+                        ->orWhere('usuario_destinatario', $usuario->ID_Usuario);
+                });
+                
+                // Filtrar por rol si el usuario tiene grupo
+                if ($usuario->grupo) {
+                    $rolUsuario = $usuario->grupo->No_Grupo;
+                    Log::info('Filtrando notificaciones por rol', [
+                        'usuario_id' => $usuario->ID_Usuario,
+                        'rol_usuario' => $rolUsuario,
+                        'rol_coordinacion' => Usuario::ROL_COORDINACION,
+                        'rol_cotizador' => Usuario::ROL_COTIZADOR,
+                        'coincide_coordinacion' => $rolUsuario === Usuario::ROL_COORDINACION,
+                        'coincide_cotizador' => $rolUsuario === Usuario::ROL_COTIZADOR,
+                    ]);
+                    
+                    $q->where(function ($subQ) use ($rolUsuario) {
+                        $subQ->whereNull('rol_destinatario')
+                            ->orWhere('rol_destinatario', $rolUsuario);
+                    });
+                } else {
+                    // Si no tiene grupo, solo mostrar notificaciones sin rol específico
+                    $q->whereNull('rol_destinatario');
+                }
+            });
 
         // Aplicar filtros adicionales
         if (isset($filtros['modulo'])) {
@@ -265,6 +279,12 @@ class Notificacion extends Model
                   ->where('leida', true);
             });
         }
+
+        // Log del SQL generado para debugging
+        Log::info('SQL de notificaciones generado', [
+            'sql' => $query->toSql(),
+            'bindings' => $query->getBindings(),
+        ]);
 
         return $query->orderByDesc('prioridad')
             ->orderByDesc('created_at');

@@ -3419,7 +3419,13 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
 
             Log::info('Notificaciones de proveedor contactado en China creadas para Coordinación y Cotizador:', [
                 'notificacion_coordinacion_id' => $notificacionCoordinacion->id,
+                'notificacion_coordinacion_rol_destinatario' => $notificacionCoordinacion->rol_destinatario,
+                'notificacion_coordinacion_usuario_destinatario' => $notificacionCoordinacion->usuario_destinatario,
+                'notificacion_coordinacion_activa' => $notificacionCoordinacion->activa,
                 'notificacion_cotizador_id' => $notificacionCotizador->id,
+                'notificacion_cotizador_rol_destinatario' => $notificacionCotizador->rol_destinatario,
+                'notificacion_cotizador_usuario_destinatario' => $notificacionCotizador->usuario_destinatario,
+                'notificacion_cotizador_activa' => $notificacionCotizador->activa,
                 'cotizacion_id' => $cotizacion->id,
                 'proveedor_id' => $proveedor->id,
                 'supplier_code' => $supplierCode,
