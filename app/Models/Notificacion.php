@@ -312,7 +312,10 @@ class Notificacion extends Model
             })
         ]);
 
-        return $query->orderByDesc('prioridad')
+        // Ordenar de forma que las notificaciones dirigidas específicamente al usuario
+        // tengan prioridad, luego por prioridad y fecha de creación
+        return $query->orderByRaw('CASE WHEN usuario_destinatario = ? THEN 0 ELSE 1 END', [$usuario->ID_Usuario])
+            ->orderByDesc('prioridad')
             ->orderByDesc('created_at');
     }
 }
