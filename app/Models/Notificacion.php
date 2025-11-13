@@ -285,6 +285,23 @@ class Notificacion extends Model
             'sql' => $query->toSql(),
             'bindings' => $query->getBindings(),
         ]);
+        
+        // Clonar la query para debugging sin afectar la query principal
+        $queryDebug = clone $query;
+        $resultados = $queryDebug->get();
+        Log::info('Notificaciones encontradas antes de ordenar', [
+            'total' => $resultados->count(),
+            'notificaciones' => $resultados->map(function ($notif) {
+                return [
+                    'id' => $notif->id,
+                    'titulo' => $notif->titulo,
+                    'rol_destinatario' => $notif->rol_destinatario,
+                    'usuario_destinatario' => $notif->usuario_destinatario,
+                    'activa' => $notif->activa,
+                    'referencia_tipo' => $notif->referencia_tipo
+                ];
+            })->toArray()
+        ]);
 
         return $query->orderByDesc('prioridad')
             ->orderByDesc('created_at');
