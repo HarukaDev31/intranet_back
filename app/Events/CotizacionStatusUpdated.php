@@ -66,4 +66,14 @@ class CotizacionStatusUpdated implements ShouldBroadcast, ShouldQueue
             'updated_at' => now()->toIso8601String(),
         ];
     }
+
+    /**
+     * Get the broadcast event name.
+     *
+     * @return string
+     */
+    public function broadcastAs()
+    {
+        return 'CotizacionStatusUpdated';
+    }
 }
