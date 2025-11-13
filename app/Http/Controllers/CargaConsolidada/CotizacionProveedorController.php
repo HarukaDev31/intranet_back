@@ -1276,7 +1276,6 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                     }else{
                         $usuarioActual = JWTAuth::parseToken()->authenticate();
                         $cotizacion = Cotizacion::find($idCotizacion);
-                        $proveedor = CotizacionProveedor::find($idProveedor);
                         $supplierCode = $proveedor->code_supplier;
                         $carga = Contenedor::where('id', $idContenedor)->first()->carga;
                         $this->dispararEventoYNotificacionProveedorRecibido($cotizacion, $proveedor, $supplierCode, $data['qty_box_china'], $data['cbm_total_china'], $carga, $usuarioActual);
