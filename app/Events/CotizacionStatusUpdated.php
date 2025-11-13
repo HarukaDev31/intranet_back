@@ -44,7 +44,12 @@ class CotizacionStatusUpdated implements ShouldBroadcast, ShouldQueue
     public function broadcastOn()
     {
         // El prefijo 'private-' se agrega automáticamente por Laravel
-        return new PrivateChannel('Cotizador-notifications');
+        // Retornar un array de canales para enviar a múltiples canales
+        return [
+            new PrivateChannel('Cotizador-notifications'),
+            new PrivateChannel('Coordinación-notifications'),
+            new PrivateChannel('Administracion-notifications'),
+        ];
     }
 
     /**
