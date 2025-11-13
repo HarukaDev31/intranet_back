@@ -989,7 +989,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
      * @return \Illuminate\Http\Response
      * @throws Exception
      */
-    protected function procesarEstadoRotuladoJob($cliente, $carga, $proveedores, $idCotizacion, $total_movilidad_personal=0)
+    protected function procesarEstadoRotuladoJob($cliente, $carga, $proveedores, $idCotizacion, $total_movilidad_personal = 0)
     {
         try {
             $idContenedor = Cotizacion::where('id', $idCotizacion)->first()->id_contenedor;
@@ -1200,27 +1200,27 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                     $telefono = preg_replace('/\s+/', '', $telefono);
                     $this->phoneNumberId = $telefono ? $telefono . '@c.us' : '';
                     $this->sendMessage($message);
-                    
+
                     // Disparar evento de proveedor contactado en China
                     try {
                         $carga = Contenedor::where('id', $idContenedor)->first()->carga;
                         //china contacto al proveedor con codigo de proveedor "codigo"del cliente "nombre" del contenedor "carga" y fecha de llegada "fecha" 
                         $message = "China contacto al proveedor con codigo de proveedor " . $supplierCode . " del cliente " . $cotizacion->nombre . " del contenedor " . $carga . " y fecha de llegada " . $data['arrive_date_china'];
                         CotizacionChinaContacted::dispatch($cotizacion, $proveedor, $supplierCode, $data['arrive_date_china'], $message);
-                        
+
                         // Crear notificaciones en la base de datos para Coordinación y Cotizador
                         $this->crearNotificacionesProveedorContactado($cotizacion, $proveedor, $supplierCode, $carga, $data['arrive_date_china'], $user);
                     } catch (\Exception $e) {
                         Log::error('Error al disparar evento CotizacionChinaContacted: ' . $e->getMessage());
                     }
-                    
                 }
                 $this->verifyContainerIsCompleted($idContenedor);
             }
-            if (isset($data['qty_box_china']) && isset($data['cbm_total_china'])
-            && $user->getNombreGrupo() == Usuario::ROL_ALMACEN_CHINA
+            if (
+                isset($data['qty_box_china']) && isset($data['cbm_total_china'])
+                && $user->getNombreGrupo() == Usuario::ROL_ALMACEN_CHINA
             ) {
-                
+
                 if (!isset($data['arrive_date_china']) || $data['arrive_date_china'] == null) {
                     $data['arrive_date_china'] = \Carbon\Carbon::now()->format('Y-m-d');
                 } else {
@@ -1232,17 +1232,16 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                     if (!is_numeric($data['qty_box_china']) || !is_numeric($data['cbm_total_china']) || $data['qty_box_china'] <= 0 || $data['cbm_total_china'] <= 0) {
                         Log::error('Error en updateProveedorData: La cantidad de cajas y volumen total de china deben ser números y mayores que 0');
                         $proveedor->estados_proveedor = $this->STATUS_CONTACTED;
-
-                    }else{
+                    } else {
                         $proveedor->qty_box_china = $data['qty_box_china'];
                         $proveedor->cbm_total_china = $data['cbm_total_china'];
                         $proveedor->estados_proveedor = $this->STATUS_RECIVED;
-
                     }
-                
+
                     ///validate if proveedor has arrive_date_china and is valid date if not update
-                    if (!isset($proveedor->arrive_date_china) || $proveedor->arrive_date_china == null
-                    
+                    if (
+                        !isset($proveedor->arrive_date_china) || $proveedor->arrive_date_china == null
+
                     ) {
                         //amd if is valid date
                         if (\DateTime::createFromFormat('Y-m-d', $data['arrive_date_china']) !== false) {
@@ -1252,7 +1251,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                                 //china contacto al proveedor con codigo de proveedor "codigo"del cliente "nombre" del contenedor "carga" y fecha de llegada "fecha" 
                                 $message = "China contacto al proveedor con codigo de proveedor " . $supplierCode . " del cliente " . $cotizacion->nombre . " del contenedor " . $carga . " y fecha de llegada " . $data['arrive_date_china'];
                                 CotizacionChinaContacted::dispatch($cotizacion, $proveedor, $supplierCode, $data['arrive_date_china'], $message);
-                                
+
                                 // Crear notificaciones en la base de datos para Coordinación y Cotizador
                                 $this->crearNotificacionesProveedorContactado($cotizacion, $proveedor, $supplierCode, $carga, $data['arrive_date_china'], $user);
                             } catch (\Exception $e) {
@@ -1300,6 +1299,13 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                 if ($proveedor->arrive_date_china) {
                     $proveedor->estados_proveedor = $this->STATUS_CONTACTED;
                     $proveedor->save();
+                    try {
+                        $carga = Contenedor::where('id', $idContenedor)->first()->carga;
+                        $message = "China contacto al proveedor con codigo de proveedor " . $supplierCode . " del cliente " . $cotizacion->nombre . " del contenedor " . $carga . " y fecha de llegada " . $data['arrive_date_china'];
+                        CotizacionChinaContacted::dispatch($cotizacion, $proveedor, $supplierCode, $data['arrive_date_china'], $message);
+                    } catch (\Exception $e) {
+                        Log::error('Error al disparar evento CotizacionChinaContacted: ' . $e->getMessage());
+                    }
                     Log::info('proveedor status changed to C: ' . $proveedor->estados_proveedor);
                 } else if ($proveedor->datos_proveedor) {
                     $proveedor->estados_proveedor = $this->STATUS_NOT_CONTACTED;
@@ -1739,12 +1745,12 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                 ->where('send_status', 'SENDED')
                 ->count();
             // Enviar archivos de inspección (el mensaje se envía una sola vez dentro de esta función)
-            $sentFiles = $this->sendInspectionFiles($inspectionFiles, $inspectionMessage, $telefono,$proveedor->code_supplier);
+            $sentFiles = $this->sendInspectionFiles($inspectionFiles, $inspectionMessage, $telefono, $proveedor->code_supplier);
 
             // Verificar si debe enviar mensaje de reserva (primer proveedor inspeccionado y más de 1 proveedor)
 
             //validate if this cotizacion has proveedors with files sended else not send more
-            
+
             Log::info('proveedorsWithFilesSended: ' . $proveedorsWithFilesSended);
             if ($proveedorsWithFilesSended < 1) {
                 if ($this->shouldSendReservationMessage($idCotizacion)) {
@@ -1845,7 +1851,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
     /**
      * Enviar archivos de inspección
      */
-    private function sendInspectionFiles($inspectionFiles, $message, $telefono,$codeSupplier=null)
+    private function sendInspectionFiles($inspectionFiles, $message, $telefono, $codeSupplier = null)
     {
         $sentFiles = ['images' => 0, 'videos' => 0];
 
@@ -1859,14 +1865,14 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
 
         // Enviar imágenes sin mensaje adicional
         foreach ($inspectionFiles['images'] as $image) {
-            if ($this->sendSingleInspectionFile($image, $message, $telefono,$codeSupplier)) {
+            if ($this->sendSingleInspectionFile($image, $message, $telefono, $codeSupplier)) {
                 $sentFiles['images']++;
             }
         }
 
         // Enviar videos sin mensaje adicional
         foreach ($inspectionFiles['videos'] as $video) {
-            if ($this->sendSingleInspectionFile($video, $message, $telefono,$codeSupplier)) {
+            if ($this->sendSingleInspectionFile($video, $message, $telefono, $codeSupplier)) {
                 $sentFiles['videos']++;
             }
         }
@@ -1877,7 +1883,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
     /**
      * Enviar un archivo individual de inspección
      */
-    private function sendSingleInspectionFile($file, $message, $telefono,$codeSupplier=null)
+    private function sendSingleInspectionFile($file, $message, $telefono, $codeSupplier = null)
     {
         $fileSystemPath = storage_path('app/public/' . $file->file_path);
 
@@ -1886,9 +1892,9 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
             return false;
         }
         $extension = pathinfo($file->file_path, PATHINFO_EXTENSION);
-        $fileName = $codeSupplier.'.'.$extension;
+        $fileName = $codeSupplier . '.' . $extension;
         // No enviar mensaje con los archivos, solo el archivo
-        $response = $this->sendMediaInspection($fileSystemPath, $file->file_type, '', $telefono, 2, $file->id,$fileName);
+        $response = $this->sendMediaInspection($fileSystemPath, $file->file_type, '', $telefono, 2, $file->id, $fileName);
 
         // Verificar que la respuesta sea exitosa antes de actualizar el estado
         if ($response && isset($response['status']) && $response['status'] === true) {
@@ -3130,7 +3136,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
         $idCotizacion = $request->idCotizacion;
         $proveedores = $request->proveedores;
         $cotizacion = Cotizacion::find($idCotizacion);
-        $total_movilidad_personal=$request->total_movilidad_personal??0;
+        $total_movilidad_personal = $request->total_movilidad_personal ?? 0;
         if (!$cotizacion) {
             return response()->json([
                 'success' => false,
@@ -3367,7 +3373,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                         'mensaje' => "Proveedor {$supplierCode} contactado del cliente {$cotizacion->nombre}",
                         'descripcion' => "Fecha de llegada: {$arriveDate} | Contenedor: #{$carga}"
                     ],
-                    
+
                 ])
             ]);
 
