@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use App\Models\CalculadoraImportacion;
 use App\Models\Notificacion;
+use App\Events\CotizacionChangeContainer;
 use App\Traits\WhatsappTrait;
 use App\Traits\GoogleSheetsHelper;
 
@@ -512,7 +513,7 @@ class ContenedorController extends Controller
             }
 
             // Crear notificaciones para Coordinación y Jefe de Ventas
-            $this->crearNotificacionesMovimientoConsolidado($cotizacion, $idContenedorDestino);
+            $this->crearNotificacionesMovimientoConsolidado($cotizacion, $idContenedorOrigen, $idContenedorDestino);
           
             $message = "Hola @nombrecliente, tu carga que estaba proyectado subir en el consolidado @cargaOrigen estamos pasándolo al @contenedorDestino,ya que al parecer tu pedido no llego a la fecha de cierre. 
 Le estaré informando cualquier avance 🫡.";
@@ -790,11 +791,18 @@ Le estaré informando cualquier avance 🫡.";
     /**
      * Crea notificaciones para Coordinación y Jefe de Ventas cuando se mueve una cotización a consolidado
      */
-    private function crearNotificacionesMovimientoConsolidado($cotizacion, $idContenedorDestino)
+    private function crearNotificacionesMovimientoConsolidado($cotizacion, $idContenedorOrigen, $idContenedorDestino)
     {
         try {
-            // Obtener el contenedor destino
+            // Obtener los contenedores
+            $contenedorOrigen = Contenedor::find($idContenedorOrigen);
             $contenedorDestino = Contenedor::find($idContenedorDestino);
+            
+            if (!$contenedorOrigen) {
+                Log::warning('Contenedor origen no encontrado: ' . $idContenedorOrigen);
+                return;
+            }
+            
             if (!$contenedorDestino) {
                 Log::warning('Contenedor destino no encontrado: ' . $idContenedorDestino);
                 return;
@@ -805,6 +813,14 @@ Le estaré informando cualquier avance 🫡.";
             if (!$usuarioActual) {
                 Log::warning('Usuario actual no encontrado al mover cotización a consolidado');
                 return;
+            }
+            
+            // Disparar evento de cambio de contenedor
+            try {
+                $message = "El usuario {$usuarioActual->No_Nombres_Apellidos} movió la cotización de {$cotizacion->nombre} del contenedor {$contenedorOrigen->carga} al contenedor {$contenedorDestino->carga}";
+                CotizacionChangeContainer::dispatch($cotizacion, $contenedorOrigen, $contenedorDestino, $usuarioActual, $message);
+            } catch (\Exception $e) {
+                Log::error('Error al disparar evento CotizacionChangeContainer: ' . $e->getMessage());
             }
 
             // Crear la notificación para Coordinación
