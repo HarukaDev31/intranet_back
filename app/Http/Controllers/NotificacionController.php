@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Validator;
 use App\Models\Notificacion;
 use App\Models\Usuario;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Log;
 
 class NotificacionController extends Controller
 {
