@@ -292,9 +292,12 @@ class Notificacion extends Model
         $queryDebug = clone $query;
         $resultadosSinOrdenar = $queryDebug->get();
         
-        // Aplicar ordenamiento y obtener resultados ordenados
+        // Aplicar ordenamiento y obtener resultados ordenados para debugging
         $queryDebug2 = clone $query;
-        $resultadosOrdenados = $queryDebug2->orderByDesc('prioridad')->orderByDesc('created_at')->get();
+        $queryDebug2->orderByRaw('CASE WHEN usuario_destinatario = ? THEN 0 ELSE 1 END', [$usuario->ID_Usuario])
+            ->orderByDesc('prioridad')
+            ->orderByDesc('created_at');
+        $resultadosOrdenados = $queryDebug2->get();
         
         Log::info('Notificaciones encontradas antes de ordenar', [
             'total' => $resultadosSinOrdenar->count(),
@@ -309,7 +312,8 @@ class Notificacion extends Model
             'notificacion_1897_existe' => $resultadosOrdenados->contains('id', 1897),
             'notificacion_1897_posicion' => $resultadosOrdenados->search(function ($notif) {
                 return $notif->id == 1897;
-            })
+            }),
+            'notificaciones_con_usuario_destinatario' => $resultadosOrdenados->where('usuario_destinatario', $usuario->ID_Usuario)->pluck('id')->take(10)->toArray()
         ]);
 
         // Ordenar de forma que las notificaciones dirigidas específicamente al usuario
