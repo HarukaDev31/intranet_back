@@ -1273,6 +1273,10 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                         } else {
                             Log::error('Error en updateProveedorData: La fecha de llegada de china no es válida');
                         }
+                    }else{
+                        $usuarioActual = JWTAuth::parseToken()->authenticate();
+                        $this->dispararEventoYNotificacionProveedorRecibido($cotizacion, $proveedor, $supplierCode, $data['qty_box_china'], $data['cbm_total_china'], $carga, $usuarioActual);
+                        $this->crearNotificacionesProveedorRecibido($cotizacion, $proveedor, $supplierCode, $data['qty_box_china'], $data['cbm_total_china'], $carga, $usuarioActual);
                     }
                     $proveedor->save();
 
