@@ -29,7 +29,14 @@ class ProductosController extends Controller
 
             // Usar query builder con join explícito a contenedor según idContenedor
             $query = ProductoImportadoExcel::leftJoin('carga_consolidada_contenedor', 'productos_importados_excel.idContenedor', '=', 'carga_consolidada_contenedor.id')
-                ->select('productos_importados_excel.*', 'carga_consolidada_contenedor.carga as carga_contenedor');
+                ->select('productos_importados_excel.id',
+                    'productos_importados_excel.nombre_comercial',
+                    'productos_importados_excel.subpartida',
+                    'productos_importados_excel.rubro',
+                    'productos_importados_excel.tipo_producto',
+                    'productos_importados_excel.foto',
+                    'productos_importados_excel.unidad_comercial',
+                 'carga_consolidada_contenedor.carga as carga_contenedor');
 
             // Aplicar filtros si están presentes (reemplaza el bloque actual)
             if ($request->has('search') && $request->search) {
