@@ -290,23 +290,26 @@ class Notificacion extends Model
         
         // Clonar la query para debugging sin afectar la query principal
         $queryDebug = clone $query;
-        $resultados = $queryDebug->get();
+        $resultadosSinOrdenar = $queryDebug->get();
+        
+        // Aplicar ordenamiento y obtener resultados ordenados
+        $queryDebug2 = clone $query;
+        $resultadosOrdenados = $queryDebug2->orderByDesc('prioridad')->orderByDesc('created_at')->get();
+        
         Log::info('Notificaciones encontradas antes de ordenar', [
-            'total' => $resultados->count(),
+            'total' => $resultadosSinOrdenar->count(),
             'usuario_id' => $usuario->ID_Usuario,
             'rol_usuario' => $usuario->grupo ? $usuario->grupo->No_Grupo : 'sin_grupo',
-            'notificaciones' => $resultados->map(function ($notif) {
-                return [
-                    'id' => $notif->id,
-                    'titulo' => $notif->titulo,
-                    'rol_destinatario' => $notif->rol_destinatario,
-                    'usuario_destinatario' => $notif->usuario_destinatario,
-                    'activa' => $notif->activa,
-                    'prioridad' => $notif->prioridad,
-                    'created_at' => $notif->created_at,
-                    'referencia_tipo' => $notif->referencia_tipo
-                ];
-            })->toArray()
+            'notificaciones_ids' => $resultadosSinOrdenar->pluck('id')->toArray()
+        ]);
+        
+        Log::info('Notificaciones después de ordenar (primeras 20)', [
+            'total' => $resultadosOrdenados->count(),
+            'primeras_20_ids' => $resultadosOrdenados->take(20)->pluck('id')->toArray(),
+            'notificacion_1897_existe' => $resultadosOrdenados->contains('id', 1897),
+            'notificacion_1897_posicion' => $resultadosOrdenados->search(function ($notif) {
+                return $notif->id == 1897;
+            })
         ]);
 
         return $query->orderByDesc('prioridad')
