@@ -1248,6 +1248,9 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                             $proveedor->arrive_date_china = $data['arrive_date_china'];
                             try {
                                 $carga = Contenedor::where('id', $idContenedor)->first()->carga;
+                                $cotizacion = Cotizacion::find($idCotizacion);
+                                $supplierCode = $proveedor->code_supplier;
+                                $user = JWTAuth::parseToken()->authenticate();
                                 //china contacto al proveedor con codigo de proveedor "codigo"del cliente "nombre" del contenedor "carga" y fecha de llegada "fecha" 
                                 $message = "China contacto al proveedor con codigo de proveedor " . $supplierCode . " del cliente " . $cotizacion->nombre . " del contenedor " . $carga . " y fecha de llegada " . $data['arrive_date_china'];
                                 CotizacionChinaContacted::dispatch($cotizacion, $proveedor, $supplierCode, $data['arrive_date_china'], $message);
