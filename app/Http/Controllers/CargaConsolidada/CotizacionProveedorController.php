@@ -3359,32 +3359,32 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                 'cotizacion_id' => $cotizacion->id
             ]);
             
-            $notificacionCoordinacion = Notificacion::create([
+              // Crear la notificación para Coordinación
+              $notificacionCoordinacion = Notificacion::create([
                 'titulo' => 'Proveedor Contactado en China',
-                'mensaje' => "El usuario {$usuarioActual->No_Nombres_Apellidos} contactó al proveedor con código {$supplierCode} del cliente {$cotizacion->nombre}",
+                'mensaje' => "El usuario {$usuarioActual->No_Nombres_Apellidos} confirmó la cotización del cliente {$cotizacion->nombre}",
                 'descripcion' => "Cliente: {$cotizacion->nombre} | Código Proveedor: {$supplierCode} | Contenedor: #{$carga} | Fecha de llegada: {$arriveDate}",
                 'modulo' => Notificacion::MODULO_CARGA_CONSOLIDADA,
-                'rol_destinatario' => $rolCoordinacion,
+                'rol_destinatario' => Usuario::ROL_COORDINACION,
                 'navigate_to' => 'cargaconsolidada/abiertos/cotizaciones',
                 'navigate_params' => json_encode([
                     'idContenedor' => $cotizacion->id_contenedor,
                     'tab' => 'prospectos',
                     'idCotizacion' => $cotizacion->id
                 ]),
-                'tipo' => Notificacion::TIPO_INFO,
-                'icono' => 'mdi:phone-outgoing',
-                'prioridad' => Notificacion::PRIORIDAD_MEDIA,
-                'referencia_tipo' => 'proveedor',
-                'referencia_id' => $proveedor->id,
+                'tipo' => Notificacion::TIPO_SUCCESS,
+                'icono' => 'mdi:check-circle',
+                'prioridad' => Notificacion::PRIORIDAD_ALTA,
+                'referencia_tipo' => 'cotizacion',
+                'referencia_id' => $cotizacion->id,
                 'activa' => true,
                 'creado_por' => $usuarioActual->ID_Usuario,
                 'configuracion_roles' => json_encode([
                     Usuario::ROL_COORDINACION => [
-                        'titulo' => 'Proveedor Contactado - China',
-                        'mensaje' => "Proveedor {$supplierCode} contactado del cliente {$cotizacion->nombre}",
-                        'descripcion' => "Fecha de llegada: {$arriveDate} | Contenedor: #{$carga}"
-                    ],
-
+                        'titulo' => 'Cotización Confirmada - Acción Requerida',
+                        'mensaje' => "El usuario {$usuarioActual->No_Nombres_Apellidos} confirmó la cotización de {$cotizacion->nombre} - Requiere seguimiento",
+                        'descripcion' => "Cotización #{$cotizacion->id} para contenedor {$carga} confirmada por el usuario {$usuarioActual->No_Nombres_Apellidos}"
+                    ]
                 ])
             ]);
 
@@ -3419,31 +3419,33 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
             //notificar tambien al jefe de ventas
             $notificacionJefeVentas = Notificacion::create([
                 'titulo' => 'Proveedor Contactado en China',
-                'mensaje' => "El usuario {$usuarioActual->No_Nombres_Apellidos} contactó al proveedor con código {$supplierCode} del cliente {$cotizacion->nombre}",
+                'mensaje' => "El usuario {$usuarioActual->No_Nombres_Apellidos} confirmó la cotización del cliente {$cotizacion->nombre}",
                 'descripcion' => "Cliente: {$cotizacion->nombre} | Código Proveedor: {$supplierCode} | Contenedor: #{$carga} | Fecha de llegada: {$arriveDate}",
                 'modulo' => Notificacion::MODULO_CARGA_CONSOLIDADA,
                 'usuario_destinatario' => Usuario::ID_JEFE_VENTAS,
+                'rol_destinatario' => Usuario::ROL_COTIZADOR,
                 'navigate_to' => 'cargaconsolidada/abiertos/cotizaciones',
                 'navigate_params' => json_encode([
                     'idContenedor' => $cotizacion->id_contenedor,
                     'tab' => 'prospectos',
                     'idCotizacion' => $cotizacion->id
                 ]),
-                'tipo' => Notificacion::TIPO_INFO,
-                'icono' => 'mdi:phone-outgoing',
-                'prioridad' => Notificacion::PRIORIDAD_MEDIA,
-                'referencia_tipo' => 'proveedor',
-                'referencia_id' => $proveedor->id,
+                'tipo' => Notificacion::TIPO_SUCCESS,
+                'icono' => 'mdi:check-circle',
+                'prioridad' => Notificacion::PRIORIDAD_ALTA,
+                'referencia_tipo' => 'cotizacion',
+                'referencia_id' => $cotizacion->id,
                 'activa' => true,
                 'creado_por' => $usuarioActual->ID_Usuario,
                 'configuracion_roles' => json_encode([
                     Usuario::ROL_COTIZADOR => [
-                        'titulo' => 'Proveedor Contactado - China',
-                        'mensaje' => "Proveedor {$supplierCode} contactado del cliente {$cotizacion->nombre}",
-                        'descripcion' => "Fecha de llegada: {$arriveDate} | Contenedor: #{$carga}"
+                        'titulo' => 'Cotización Confirmada - Supervisión',
+                        'mensaje' => "El usuario {$usuarioActual->No_Nombres_Apellidos} confirmó la cotización de {$cotizacion->nombre} - Seguimiento requerido",
+                        'descripcion' => "Cotización #{$cotizacion->id} para contenedor {$contenedor->carga} confirmada por {$usuarioActual->No_Nombres_Apellidos}"
                     ]
                 ])
             ]);
+
             Log::info('Notificaciones de proveedor contactado en China creadas para Coordinación y Cotizador:', [
                 'notificacion_coordinacion_id' => $notificacionCoordinacion->id,
                 'notificacion_coordinacion_rol_destinatario' => $notificacionCoordinacion->rol_destinatario,
