@@ -32,12 +32,7 @@ class CotizacionChinaContacted implements ShouldBroadcast, ShouldQueue
      */
     public function __construct(Cotizacion $cotizacion, CotizacionProveedor $proveedor, string $supplierCode, string $arriveDate, string $message)
     {
-        Log::info('CotizacionChinaContacted', [
-            'cotizacion_id' => $cotizacion->id,
-            'proveedor_id' => $proveedor->id,
-            'supplier_code' => $supplierCode,
-            'arrive_date' => $arriveDate
-        ]);
+     
 
         $this->cotizacion = $cotizacion;
         $this->proveedor = $proveedor;

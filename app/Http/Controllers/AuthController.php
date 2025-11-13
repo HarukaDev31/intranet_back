@@ -49,7 +49,6 @@ class AuthController extends Controller
 
             $data = $request->all();
             $result = $this->verificarAccesoLogin($data);
-            Log::info('Resultado de verificación de acceso: ', $result);
             if ($result['sStatus'] === 'success') {
                 // Buscar el usuario para generar el token
                 $usuario = Usuario::where('No_Usuario', $data['No_Usuario'])
@@ -59,13 +58,11 @@ class AuthController extends Controller
                 if ($usuario) {
                     try {
                         $token = JWTAuth::fromUser($usuario);
-                        Log::info('Token generado exitosamente: ', ['token' => $token]);
                         // Cargar relaciones del usuario    
                         $usuario->load(['grupo', 'empresa', 'organizacion']);
 
                         // Obtener menús del usuario
                         $menus = $this->obtenerMenusUsuario($usuario);
-                        Log::info('Menús obtenidos para el usuario', ['menus' => $menus]);
                         // Preparar información del grupo
                         $grupoInfo = null;
                         if ($usuario->grupo) {

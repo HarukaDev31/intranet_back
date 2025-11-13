@@ -865,17 +865,37 @@ Le estaré informando cualquier avance 🫡.";
                     ]
                 ])
             ]);
-
-            Log::info('Notificaciones de movimiento a consolidado creadas para Coordinación y Jefe de Ventas:', [
-                'notificacion_coordinacion_id' => $notificacionCoordinacion->id,
-                'notificacion_jefe_ventas_id' => $notificacionJefeVentas->id,
-                'cotizacion_id' => $cotizacion->id,
-                'contenedor_destino_id' => $idContenedorDestino,
-                'contenedor_destino_carga' => $contenedorDestino->carga,
-                'usuario_actual' => $usuarioActual->No_Nombres_Apellidos
+            //creat tambien para un cotizador 
+            $notificacionCotizador = Notificacion::create([
+                'titulo' => 'Cotización Movida a Consolidado',
+                'mensaje' => "El usuario {$usuarioActual->No_Nombres_Apellidos} movió la cotización de {$cotizacion->nombre} al contenedor {$contenedorDestino->carga}",
+                'descripcion' => "Cotización #{$cotizacion->id} | Cliente: {$cotizacion->nombre} | Documento: {$cotizacion->documento} | Volumen: {$cotizacion->volumen} CBM | Contenedor destino: {$contenedorDestino->carga}",
+                'modulo' => Notificacion::MODULO_CARGA_CONSOLIDADA,
+                'rol_destinatario' => Usuario::ROL_COTIZADOR,
+                'navigate_to' => 'cargaconsolidada/abiertos/cotizaciones',
+                'navigate_params' => json_encode([
+                    'idContenedor' => $idContenedorDestino,
+                    'tab' => 'prospectos',
+                    'idCotizacion' => $cotizacion->id
+                ]),
+                'tipo' => Notificacion::TIPO_INFO,
+                'icono' => 'mdi:swap-horizontal',
+                'prioridad' => Notificacion::PRIORIDAD_MEDIA,
+                'referencia_tipo' => 'cotizacion',
+                'referencia_id' => $cotizacion->id,
+                'activa' => true,
+                'creado_por' => $usuarioActual->ID_Usuario,
+                'configuracion_roles' => json_encode([
+                    Usuario::ROL_COTIZADOR => [
+                        'titulo' => 'Cotización Movida - Supervisión',
+                        'mensaje' => "Cotización de {$cotizacion->nombre} movida al contenedor {$contenedorDestino->carga} por {$usuarioActual->No_Nombres_Apellidos}",
+                        'descripcion' => "Cotización #{$cotizacion->id} movida - Supervisión requerida"
+                    ]
+                ])
             ]);
+           
 
-            return [$notificacionCoordinacion, $notificacionJefeVentas];
+            return [$notificacionCoordinacion, $notificacionJefeVentas, $notificacionCotizador];
         } catch (\Exception $e) {
             Log::error('Error al crear notificaciones de movimiento a consolidado para Coordinación y Jefe de Ventas: ' . $e->getMessage());
             // No lanzar excepción para no afectar el flujo principal de movimiento

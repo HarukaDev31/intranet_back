@@ -29,13 +29,7 @@ class ImportacionExcelCompleted implements ShouldBroadcast,ShouldQueue
      */
     public function __construct(ImportProducto $importProducto, string $status, string $message, array $estadisticas = [])
     {
-        Log::info('ImportacionExcelCompleted', [
-            'import_id' => $importProducto->id,
-            'nombre_archivo' => $importProducto->nombre_archivo,
-            'status' => $status,
-            'message' => $message,
-            'estadisticas' => $estadisticas
-        ]);
+       
 
         $this->importProducto = $importProducto;
         $this->status = $status;

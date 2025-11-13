@@ -21,12 +21,7 @@ class UserBusinessController extends Controller
     {
         try {
             $user = JWTAuth::user();
-            Log::info('UserBusinessController - Usuario:', [
-                'user' => $user
-            ]);
-            Log::info('UserBusinessController - Datos recibidos:', [
-                'request' => $request->all()
-            ]);
+            
             if (!$user) {
                 return response()->json([
                     'success' => false,

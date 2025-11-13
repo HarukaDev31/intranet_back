@@ -64,7 +64,6 @@ class NotifyArriveDateToday extends Command
                 $clienteNombre = $cotizacion->nombre ?? 'Cliente';
                 $providerCode = $prov->code_supplier ?? $prov->supplier_code ?? '';
                 $telefono = $cotizacion->telefono ?? '';
-                Log::info('Telefono: ' . $telefono);
                 $mensaje = "Hola 👋 {$clienteNombre} la carga de tu proveedor {$providerCode} aun no llega a nuestro almacen de China, ¿tienes alguna noticia por parte de tu proveedor?";
 
                 // The controller uses sendMessage via trait; instantiate controller and call sendMessage

@@ -282,11 +282,7 @@ class Notificacion extends Model
             });
         }
 
-        // Log del SQL generado para debugging
-        Log::info('SQL de notificaciones generado', [
-            'sql' => $query->toSql(),
-            'bindings' => $query->getBindings(),
-        ]);
+      
         
         // Clonar la query para debugging sin afectar la query principal
         $queryDebug = clone $query;
@@ -297,31 +293,11 @@ class Notificacion extends Model
         $queryDebug2->orderByRaw('CASE WHEN usuario_destinatario = ? THEN 0 ELSE 1 END', [$usuario->ID_Usuario])
             ->orderByDesc('id');
         $resultadosOrdenados = $queryDebug2->get();
-        
-        Log::info('Notificaciones encontradas antes de ordenar', [
-            'total' => $resultadosSinOrdenar->count(),
-            'usuario_id' => $usuario->ID_Usuario,
-            'rol_usuario' => $usuario->grupo ? $usuario->grupo->No_Grupo : 'sin_grupo',
-            'notificaciones_ids' => $resultadosSinOrdenar->pluck('id')->toArray()
-        ]);
-        
+      
         // Verificar la notificación 1897 específicamente
         $notif1897 = $resultadosOrdenados->firstWhere('id', 1897);
         
-        Log::info('Notificaciones después de ordenar (primeras 20)', [
-            'total' => $resultadosOrdenados->count(),
-            'primeras_20_ids' => $resultadosOrdenados->take(20)->pluck('id')->toArray(),
-            'notificacion_1897_existe' => $notif1897 !== null,
-            'notificacion_1897_posicion' => $notif1897 ? $resultadosOrdenados->search(function ($notif) {
-                return $notif->id == 1897;
-            }) : null,
-            'notificacion_1897_usuario_destinatario' => $notif1897 ? $notif1897->usuario_destinatario : null,
-            'notificacion_1897_prioridad' => $notif1897 ? $notif1897->prioridad : null,
-            'notificacion_1897_created_at' => $notif1897 ? $notif1897->created_at : null,
-            'total_con_usuario_destinatario' => $resultadosOrdenados->where('usuario_destinatario', $usuario->ID_Usuario)->count(),
-            'primeras_10_con_usuario_destinatario' => $resultadosOrdenados->where('usuario_destinatario', $usuario->ID_Usuario)->take(10)->pluck('id')->toArray(),
-            'primeras_10_sin_usuario_destinatario' => $resultadosOrdenados->where('usuario_destinatario', '!=', $usuario->ID_Usuario)->whereNull('usuario_destinatario')->take(10)->pluck('id')->toArray()
-        ]);
+        
 
         // Ordenar de forma que las notificaciones dirigidas específicamente al usuario
         // tengan prioridad, luego por ID (más recientes primero)
