@@ -1247,6 +1247,17 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                         //amd if is valid date
                         if (\DateTime::createFromFormat('Y-m-d', $data['arrive_date_china']) !== false) {
                             $proveedor->arrive_date_china = $data['arrive_date_china'];
+                            try {
+                                $carga = Contenedor::where('id', $idContenedor)->first()->carga;
+                                //china contacto al proveedor con codigo de proveedor "codigo"del cliente "nombre" del contenedor "carga" y fecha de llegada "fecha" 
+                                $message = "China contacto al proveedor con codigo de proveedor " . $supplierCode . " del cliente " . $cotizacion->nombre . " del contenedor " . $carga . " y fecha de llegada " . $data['arrive_date_china'];
+                                CotizacionChinaContacted::dispatch($cotizacion, $proveedor, $supplierCode, $data['arrive_date_china'], $message);
+                                
+                                // Crear notificaciones en la base de datos para Coordinación y Cotizador
+                                $this->crearNotificacionesProveedorContactado($cotizacion, $proveedor, $supplierCode, $carga, $data['arrive_date_china'], $user);
+                            } catch (\Exception $e) {
+                                Log::error('Error al disparar evento CotizacionChinaContacted: ' . $e->getMessage());
+                            }
                         } else {
                             Log::error('Error en updateProveedorData: La fecha de llegada de china no es válida');
                         }
