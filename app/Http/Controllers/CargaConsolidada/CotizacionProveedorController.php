@@ -1769,9 +1769,9 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
             $usuarioActual = JWTAuth::parseToken()->authenticate();
             $cotizacion = Cotizacion::find($idCotizacion);
             $proveedor = CotizacionProveedor::find($idProveedor);
-     
-            $this->dispararEventoYNotificacionProveedorInspeccionado($cotizacion, $proveedor, $proveedor->code_supplier, $cotizacion->id_contenedor, $usuarioActual);
-            $this->crearNotificacionesProveedorInspeccionado($cotizacion, $proveedor, $proveedor->code_supplier, $cotizacion->id_contenedor, $usuarioActual);
+            $carga=Contenedor::where('id', $cotizacion->id_contenedor)->first();
+            $this->dispararEventoYNotificacionProveedorInspeccionado($cotizacion, $proveedor, $proveedor->code_supplier, $carga, $usuarioActual);
+            $this->crearNotificacionesProveedorInspeccionado($cotizacion, $proveedor, $proveedor->code_supplier, $carga, $usuarioActual);
     
            
             Log::info('proveedorsWithFilesSended: ' . $proveedorsWithFilesSended);
