@@ -1915,7 +1915,8 @@ class CotizacionController extends Controller
 
                 $message = "El cliente {$cotizacion->nombre} ha pasado a confirmado, por favor contactar.";
                 try {
-                    \App\Events\CotizacionStatusUpdated::dispatch($cotizacion, $estado, $message);
+                    $usuarioActual = Auth::user();
+                    \App\Events\CotizacionStatusUpdated::dispatch($cotizacion, $estado, $message, $usuarioActual);
                 } catch (\Exception $e) {
                     Log::error('Error en updateEstadoCotizacion: Pusher error: ' . $e->getMessage());
                 }

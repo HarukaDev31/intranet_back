@@ -3,6 +3,7 @@
 namespace App\Events;
 
 use App\Models\CargaConsolidada\Cotizacion;
+use App\Models\CargaConsolidada\CotizacionProveedor;
 use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PresenceChannel;
@@ -13,14 +14,14 @@ use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 
-class CotizacionStatusUpdated implements ShouldBroadcast, ShouldQueue
+class CotizacionChinaInspected implements ShouldBroadcast, ShouldQueue
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
     public $cotizacion;
-    public $status;
+    public $proveedor;
+    public $supplierCode;
     public $message;
-    public $usuario;
     public $queue = 'notificaciones';
 
     /**
@@ -28,14 +29,19 @@ class CotizacionStatusUpdated implements ShouldBroadcast, ShouldQueue
      *
      * @return void
      */
-    public function __construct(Cotizacion $cotizacion, string $status, string $message, Usuario $usuario)
+    public function __construct(Cotizacion $cotizacion, CotizacionProveedor $proveedor, string $supplierCode, string $message)
     {
-        Log::info('CotizacionStatusUpdated', ['cotizacion' => $cotizacion, 'status' => $status, 'message' => $message]);
+        Log::info('CotizacionChinaInspected', [
+            'cotizacion_id' => $cotizacion->id,
+            'proveedor_id' => $proveedor->id,
+            'supplier_code' => $supplierCode,
+            'message' => $message
+        ]);
 
         $this->cotizacion = $cotizacion;
-        $this->status = $status;
+        $this->proveedor = $proveedor;
+        $this->supplierCode = $supplierCode;
         $this->message = $message;
-        $this->usuario = $usuario;
     }
 
     /**
@@ -45,12 +51,9 @@ class CotizacionStatusUpdated implements ShouldBroadcast, ShouldQueue
      */
     public function broadcastOn()
     {
-        // El prefijo 'private-' se agrega automáticamente por Laravel
-        // Retornar un array de canales para enviar a múltiples canales
         return [
-            new PrivateChannel('Cotizador-notifications'),
             new PrivateChannel('Coordinacion-notifications'),
-            new PrivateChannel('Administracion-notifications'),
+            new PrivateChannel('Cotizador-notifications'),
         ];
     }
 
@@ -62,10 +65,11 @@ class CotizacionStatusUpdated implements ShouldBroadcast, ShouldQueue
     public function broadcastWith()
     {
         return [
-            'id' => $this->cotizacion->id,
-            'status' => $this->status,
+            'cotizacion_id' => $this->cotizacion->id,
+            'cotizacion_nombre' => $this->cotizacion->nombre,
+            'proveedor_id' => $this->proveedor->id,
+            'supplier_code' => $this->supplierCode,
             'message' => $this->message,
-            'usuario_id' => $this->usuario->ID_Usuario,
             'updated_at' => now()->toIso8601String(),
         ];
     }
@@ -77,6 +81,7 @@ class CotizacionStatusUpdated implements ShouldBroadcast, ShouldQueue
      */
     public function broadcastAs()
     {
-        return 'CotizacionStatusUpdated';
+        return 'CotizacionChinaInspected';
     }
 }
+
