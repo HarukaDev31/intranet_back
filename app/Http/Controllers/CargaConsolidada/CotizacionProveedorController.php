@@ -1760,6 +1760,9 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
             // Enviar archivos de inspección (el mensaje se envía una sola vez dentro de esta función)
             $sentFiles = $this->sendInspectionFiles($inspectionFiles, $inspectionMessage, $telefono, $proveedor->code_supplier);
             $usuarioActual = JWTAuth::parseToken()->authenticate();
+            $this->dispararEventoYNotificacionProveedorInspeccionado($cotizacion, $proveedor, $proveedor->code_supplier, $cotizacion->id_contenedor, $usuarioActual);
+            $this->crearNotificacionesProveedorInspeccionado($cotizacion, $proveedor, $proveedor->code_supplier, $cotizacion->id_contenedor, $usuarioActual);
+    
            
             Log::info('proveedorsWithFilesSended: ' . $proveedorsWithFilesSended);
             if ($proveedorsWithFilesSended < 1) {

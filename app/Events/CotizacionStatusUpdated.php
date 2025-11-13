@@ -3,6 +3,7 @@
 namespace App\Events;
 
 use App\Models\CargaConsolidada\Cotizacion;
+use App\Models\Usuario;
 use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PresenceChannel;
