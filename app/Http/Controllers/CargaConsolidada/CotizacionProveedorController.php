@@ -37,6 +37,8 @@ use App\Jobs\SendRotuladoJob;
 use App\Models\CargaConsolidada\DocumentacionFile;
 use App\Models\CargaConsolidada\DocumentacionFolder;
 use App\Models\CargaConsolidada\CotizacionDocumentacion;
+use App\Events\CotizacionChinaContacted;
+use App\Models\Notificacion;
 
 class CotizacionProveedorController extends Controller
 {
@@ -1157,7 +1159,6 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                 $estadoProveedorOrder = $this->providerOrderStatus[$estadoProveedor] ?? 0;
                 $estadoProvedorToUpdate = $this->providerOrderStatus[$this->STATUS_CONTACTED] ?? 0;
                 if ($estadoProveedorOrder < $estadoProvedorToUpdate) {
-                    $proveedor->estados = $this->STATUS_CONTACTED;
 
                     if (\DateTime::createFromFormat('Y-m-d', $data['arrive_date_china']) !== false) {
                         $proveedor->arrive_date_china = $data['arrive_date_china'];
@@ -1199,6 +1200,20 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                     $telefono = preg_replace('/\s+/', '', $telefono);
                     $this->phoneNumberId = $telefono ? $telefono . '@c.us' : '';
                     $this->sendMessage($message);
+                    
+                    // Disparar evento de proveedor contactado en China
+                    try {
+                        $carga = Contenedor::where('id', $idContenedor)->first()->carga;
+                        //china contacto al proveedor con codigo de proveedor "codigo"del cliente "nombre" del contenedor "carga" y fecha de llegada "fecha" 
+                        $message = "China contacto al proveedor con codigo de proveedor " . $supplierCode . " del cliente " . $cotizacion->nombre . " del contenedor " . $carga . " y fecha de llegada " . $data['arrive_date_china'];
+                        CotizacionChinaContacted::dispatch($cotizacion, $proveedor, $supplierCode, $data['arrive_date_china'], $message);
+                        
+                        // Crear notificaciones en la base de datos para Coordinación y Cotizador
+                        $this->crearNotificacionesProveedorContactado($cotizacion, $proveedor, $supplierCode, $carga, $data['arrive_date_china'], $user);
+                    } catch (\Exception $e) {
+                        Log::error('Error al disparar evento CotizacionChinaContacted: ' . $e->getMessage());
+                    }
+                    
                 }
                 $this->verifyContainerIsCompleted($idContenedor);
             }
@@ -3301,6 +3316,93 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                 'message' => 'Error al procesar el contrato firmado',
                 'error' => $e->getMessage()
             ], 500);
+        }
+    }
+
+    /**
+     * Crea notificaciones para Coordinación y Cotizador cuando se contacta a un proveedor en China
+     */
+    private function crearNotificacionesProveedorContactado($cotizacion, $proveedor, $supplierCode, $carga, $arriveDate, $usuarioActual)
+    {
+        try {
+            if (!$usuarioActual) {
+                Log::warning('Usuario actual no encontrado al contactar proveedor en China');
+                return;
+            }
+
+            // Crear la notificación para Coordinación
+            $notificacionCoordinacion = Notificacion::create([
+                'titulo' => 'Proveedor Contactado en China',
+                'mensaje' => "El usuario {$usuarioActual->No_Nombres_Apellidos} contactó al proveedor con código {$supplierCode} del cliente {$cotizacion->nombre}",
+                'descripcion' => "Cliente: {$cotizacion->nombre} | Código Proveedor: {$supplierCode} | Contenedor: #{$carga} | Fecha de llegada: {$arriveDate}",
+                'modulo' => Notificacion::MODULO_CARGA_CONSOLIDADA,
+                'rol_destinatario' => Usuario::ROL_COORDINACION,
+                'navigate_to' => 'cargaconsolidada/abiertos/cotizaciones',
+                'navigate_params' => json_encode([
+                    'idContenedor' => $cotizacion->id_contenedor,
+                    'tab' => 'prospectos',
+                    'idCotizacion' => $cotizacion->id
+                ]),
+                'tipo' => Notificacion::TIPO_INFO,
+                'icono' => 'mdi:phone-outgoing',
+                'prioridad' => Notificacion::PRIORIDAD_MEDIA,
+                'referencia_tipo' => 'proveedor',
+                'referencia_id' => $proveedor->id,
+                'activa' => true,
+                'creado_por' => $usuarioActual->ID_Usuario,
+                'configuracion_roles' => json_encode([
+                    Usuario::ROL_COORDINACION => [
+                        'titulo' => 'Proveedor Contactado - China',
+                        'mensaje' => "Proveedor {$supplierCode} contactado del cliente {$cotizacion->nombre}",
+                        'descripcion' => "Fecha de llegada: {$arriveDate} | Contenedor: #{$carga}"
+                    ],
+                    
+                ])
+            ]);
+
+            // Crear la notificación para Cotizador
+            $notificacionCotizador = Notificacion::create([
+                'titulo' => 'Proveedor Contactado en China',
+                'mensaje' => "El usuario {$usuarioActual->No_Nombres_Apellidos} contactó al proveedor con código {$supplierCode} del cliente {$cotizacion->nombre}",
+                'descripcion' => "Cliente: {$cotizacion->nombre} | Código Proveedor: {$supplierCode} | Contenedor: #{$carga} | Fecha de llegada: {$arriveDate}",
+                'modulo' => Notificacion::MODULO_CARGA_CONSOLIDADA,
+                'rol_destinatario' => Usuario::ROL_COTIZADOR,
+                'navigate_to' => 'cargaconsolidada/abiertos/cotizaciones',
+                'navigate_params' => json_encode([
+                    'idContenedor' => $cotizacion->id_contenedor,
+                    'tab' => 'prospectos',
+                    'idCotizacion' => $cotizacion->id
+                ]),
+                'tipo' => Notificacion::TIPO_INFO,
+                'icono' => 'mdi:phone-outgoing',
+                'prioridad' => Notificacion::PRIORIDAD_MEDIA,
+                'referencia_tipo' => 'proveedor',
+                'referencia_id' => $proveedor->id,
+                'activa' => true,
+                'creado_por' => $usuarioActual->ID_Usuario,
+                'configuracion_roles' => json_encode([
+                    Usuario::ROL_COTIZADOR => [
+                        'titulo' => 'Proveedor Contactado - China',
+                        'mensaje' => "Proveedor {$supplierCode} contactado del cliente {$cotizacion->nombre}",
+                        'descripcion' => "Fecha de llegada: {$arriveDate} | Contenedor: #{$carga}"
+                    ]
+                ])
+            ]);
+
+            Log::info('Notificaciones de proveedor contactado en China creadas para Coordinación y Cotizador:', [
+                'notificacion_coordinacion_id' => $notificacionCoordinacion->id,
+                'notificacion_cotizador_id' => $notificacionCotizador->id,
+                'cotizacion_id' => $cotizacion->id,
+                'proveedor_id' => $proveedor->id,
+                'supplier_code' => $supplierCode,
+                'usuario_actual' => $usuarioActual->No_Nombres_Apellidos
+            ]);
+
+            return [$notificacionCoordinacion, $notificacionCotizador];
+        } catch (\Exception $e) {
+            Log::error('Error al crear notificaciones de proveedor contactado en China: ' . $e->getMessage());
+            // No lanzar excepción para no afectar el flujo principal
+            return null;
         }
     }
 }
