@@ -3351,12 +3351,20 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
             }
 
             // Crear la notificación para Coordinación
+            $rolCoordinacion = Usuario::ROL_COORDINACION;
+            Log::info('Creando notificación para Coordinación', [
+                'rol_coordinacion' => $rolCoordinacion,
+                'rol_constante' => Usuario::ROL_COORDINACION,
+                'supplier_code' => $supplierCode,
+                'cotizacion_id' => $cotizacion->id
+            ]);
+            
             $notificacionCoordinacion = Notificacion::create([
                 'titulo' => 'Proveedor Contactado en China',
                 'mensaje' => "El usuario {$usuarioActual->No_Nombres_Apellidos} contactó al proveedor con código {$supplierCode} del cliente {$cotizacion->nombre}",
                 'descripcion' => "Cliente: {$cotizacion->nombre} | Código Proveedor: {$supplierCode} | Contenedor: #{$carga} | Fecha de llegada: {$arriveDate}",
                 'modulo' => Notificacion::MODULO_CARGA_CONSOLIDADA,
-                'rol_destinatario' => Usuario::ROL_COORDINACION,
+                'rol_destinatario' => $rolCoordinacion,
                 'navigate_to' => 'cargaconsolidada/abiertos/cotizaciones',
                 'navigate_params' => json_encode([
                     'idContenedor' => $cotizacion->id_contenedor,

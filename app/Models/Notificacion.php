@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
 
 class Notificacion extends Model
@@ -233,7 +234,16 @@ class Notificacion extends Model
 
         // Filtrar por rol si el usuario tiene grupo
         if ($usuario->grupo) {
-            $query->porRol($usuario->grupo->No_Grupo);
+            $rolUsuario = $usuario->grupo->No_Grupo;
+            Log::info('Filtrando notificaciones por rol', [
+                'usuario_id' => $usuario->ID_Usuario,
+                'rol_usuario' => $rolUsuario,
+                'rol_coordinacion' => Usuario::ROL_COORDINACION,
+                'rol_cotizador' => Usuario::ROL_COTIZADOR,
+                'coincide_coordinacion' => $rolUsuario === Usuario::ROL_COORDINACION,
+                'coincide_cotizador' => $rolUsuario === Usuario::ROL_COTIZADOR,
+            ]);
+            $query->porRol($rolUsuario);
         }
 
         // Aplicar filtros adicionales
