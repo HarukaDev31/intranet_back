@@ -1237,7 +1237,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                         $proveedor->cbm_total_china = $data['cbm_total_china'];
                         $proveedor->estados_proveedor = $this->STATUS_RECIVED;
                     }
-
+                    Log::info('proveedor->arrive_date_china: ' . $proveedor->arrive_date_china);
                     ///validate if proveedor has arrive_date_china and is valid date if not update
                     if (
                         !isset($proveedor->arrive_date_china) || $proveedor->arrive_date_china == null
