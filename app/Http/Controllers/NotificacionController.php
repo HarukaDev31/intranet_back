@@ -40,8 +40,15 @@ class NotificacionController extends Controller
 
             $notificaciones = Notificacion::paraUsuario($usuario, $filtros)
                 ->with(['creador', 'usuarioDestinatario'])
-                ->orderBy('created_at', 'desc')
                 ->paginate($request->get('per_page', 15));
+            
+            // Log de notificaciones después de paginar
+            Log::info('Notificaciones después de paginar', [
+                'total' => $notificaciones->total(),
+                'count' => $notificaciones->count(),
+                'current_page' => $notificaciones->currentPage(),
+                'notificaciones_ids' => $notificaciones->pluck('id')->toArray()
+            ]);
 
             // Transformar las notificaciones para incluir información específica del usuario
             $notificaciones->getCollection()->transform(function ($notificacion) use ($usuario) {

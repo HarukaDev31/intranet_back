@@ -241,14 +241,7 @@ class Notificacion extends Model
                 // Filtrar por rol si el usuario tiene grupo
                 if ($usuario->grupo) {
                     $rolUsuario = $usuario->grupo->No_Grupo;
-                    Log::info('Filtrando notificaciones por rol', [
-                        'usuario_id' => $usuario->ID_Usuario,
-                        'rol_usuario' => $rolUsuario,
-                        'rol_coordinacion' => Usuario::ROL_COORDINACION,
-                        'rol_cotizador' => Usuario::ROL_COTIZADOR,
-                        'coincide_coordinacion' => $rolUsuario === Usuario::ROL_COORDINACION,
-                        'coincide_cotizador' => $rolUsuario === Usuario::ROL_COTIZADOR,
-                    ]);
+                 
                     
                     $q->where(function ($subQ) use ($rolUsuario) {
                         $subQ->whereNull('rol_destinatario')
@@ -291,6 +284,8 @@ class Notificacion extends Model
         $resultados = $queryDebug->get();
         Log::info('Notificaciones encontradas antes de ordenar', [
             'total' => $resultados->count(),
+            'usuario_id' => $usuario->ID_Usuario,
+            'rol_usuario' => $usuario->grupo ? $usuario->grupo->No_Grupo : 'sin_grupo',
             'notificaciones' => $resultados->map(function ($notif) {
                 return [
                     'id' => $notif->id,
@@ -298,6 +293,8 @@ class Notificacion extends Model
                     'rol_destinatario' => $notif->rol_destinatario,
                     'usuario_destinatario' => $notif->usuario_destinatario,
                     'activa' => $notif->activa,
+                    'prioridad' => $notif->prioridad,
+                    'created_at' => $notif->created_at,
                     'referencia_tipo' => $notif->referencia_tipo
                 ];
             })->toArray()
