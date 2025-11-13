@@ -20,7 +20,7 @@ class BroadcastController extends Controller
     public $CHANNELS = [
         'private-Cotizador-notifications' => 'Cotizador',
         'private-Documentacion-notifications' => 'Documentacion',
-        'private-Coordinacion-notifications' => 'Coordinación',
+        'private-Coordinación-notifications' => 'Coordinación',
         'private-ContenedorAlmacen-notifications' => 'ContenedorAlmacen',
         'private-CatalogoChina-notifications' => 'CatalogoChina',
         'private-Administracion-notifications' => 'Administración',
