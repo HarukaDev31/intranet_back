@@ -3448,6 +3448,10 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
             Log::info('Notificaciones de proveedor contactado en China creadas para Coordinación y Cotizador:', [
                 'notificacion_coordinacion_id' => $notificacionCoordinacion->id,
                 'notificacion_coordinacion_rol_destinatario' => $notificacionCoordinacion->rol_destinatario,
+                'notificacion_coordinacion_rol_destinatario_encoded' => base64_encode($notificacionCoordinacion->rol_destinatario),
+                'notificacion_coordinacion_rol_constante' => Usuario::ROL_COORDINACION,
+                'notificacion_coordinacion_rol_constante_encoded' => base64_encode(Usuario::ROL_COORDINACION),
+                'notificacion_coordinacion_coinciden' => $notificacionCoordinacion->rol_destinatario === Usuario::ROL_COORDINACION,
                 'notificacion_coordinacion_usuario_destinatario' => $notificacionCoordinacion->usuario_destinatario,
                 'notificacion_coordinacion_activa' => $notificacionCoordinacion->activa,
                 'notificacion_cotizador_id' => $notificacionCotizador->id,
@@ -3458,6 +3462,15 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                 'proveedor_id' => $proveedor->id,
                 'supplier_code' => $supplierCode,
                 'usuario_actual' => $usuarioActual->No_Nombres_Apellidos
+            ]);
+            
+            // Verificar que la notificación de Coordinación se guardó correctamente
+            $verificacionCoordinacion = Notificacion::find($notificacionCoordinacion->id);
+            Log::info('Verificación de notificación de Coordinación en BD:', [
+                'existe' => $verificacionCoordinacion !== null,
+                'id' => $verificacionCoordinacion ? $verificacionCoordinacion->id : null,
+                'rol_destinatario' => $verificacionCoordinacion ? $verificacionCoordinacion->rol_destinatario : null,
+                'activa' => $verificacionCoordinacion ? $verificacionCoordinacion->activa : null
             ]);
 
             return [$notificacionCoordinacion, $notificacionCotizador];

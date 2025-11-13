@@ -231,26 +231,35 @@ class Notificacion extends Model
         $query = static::activas()
             ->noExpiradas()
             ->where(function ($q) use ($usuario) {
-                // La notificación debe cumplir: (usuario_destinatario IS NULL OR usuario_destinatario = usuario_id)
-                // Y (rol_destinatario IS NULL OR rol_destinatario = rol_usuario)
+                // La notificación debe cumplir:
+                // 1. (usuario_destinatario IS NULL OR usuario_destinatario = usuario_id)
+                // 2. Y (rol_destinatario IS NULL OR rol_destinatario = rol_usuario)
+                // Pero si tiene usuario_destinatario específico, esa notificación debe aparecer para ese usuario
+                // independientemente del rol
                 $q->where(function ($subQ) use ($usuario) {
-                    $subQ->whereNull('usuario_destinatario')
-                        ->orWhere('usuario_destinatario', $usuario->ID_Usuario);
-                });
-                
-                // Filtrar por rol si el usuario tiene grupo
-                if ($usuario->grupo) {
-                    $rolUsuario = $usuario->grupo->No_Grupo;
-                 
+                    // Caso 1: Notificación dirigida específicamente a este usuario (por usuario_destinatario)
+                    $subQ->where('usuario_destinatario', $usuario->ID_Usuario);
                     
-                    $q->where(function ($subQ) use ($rolUsuario) {
-                        $subQ->whereNull('rol_destinatario')
-                            ->orWhere('rol_destinatario', $rolUsuario);
-                    });
-                } else {
-                    // Si no tiene grupo, solo mostrar notificaciones sin rol específico
-                    $q->whereNull('rol_destinatario');
-                }
+                    // Caso 2: Notificación sin usuario específico, pero con rol
+                    // Si el usuario tiene grupo, mostrar notificaciones con ese rol o sin rol
+                    if ($usuario->grupo) {
+                        $rolUsuario = $usuario->grupo->No_Grupo;
+                        
+                        $subQ->orWhere(function ($subQ2) use ($rolUsuario) {
+                            $subQ2->whereNull('usuario_destinatario')
+                                ->where(function ($subQ3) use ($rolUsuario) {
+                                    $subQ3->whereNull('rol_destinatario')
+                                        ->orWhere('rol_destinatario', $rolUsuario);
+                                });
+                        });
+                    } else {
+                        // Si no tiene grupo, solo mostrar notificaciones sin usuario ni rol específico
+                        $subQ->orWhere(function ($subQ2) {
+                            $subQ2->whereNull('usuario_destinatario')
+                                ->whereNull('rol_destinatario');
+                        });
+                    }
+                });
             });
 
         // Aplicar filtros adicionales
