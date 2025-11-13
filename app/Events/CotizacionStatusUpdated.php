@@ -47,7 +47,7 @@ class CotizacionStatusUpdated implements ShouldBroadcast, ShouldQueue
         // Retornar un array de canales para enviar a múltiples canales
         return [
             new PrivateChannel('Cotizador-notifications'),
-            new PrivateChannel('Coordinación-notifications'),
+            new PrivateChannel('Coordinacion-notifications'),
             new PrivateChannel('Administracion-notifications'),
         ];
     }
