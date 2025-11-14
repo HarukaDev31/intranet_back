@@ -238,7 +238,7 @@ class AuthController extends Controller
 
             // Aplicar filtro de fechas si vienen (usando fecha_zarpe para embarcados)
             if ($fechaInicio && $fechaFin) {
-                $embarquedCBMQuery->whereBetween(DB::raw('DATE(cont.fecha_zarpe)'), [$fechaInicio, $fechaFin]);
+                $embarquedCBMQuery->whereBetween(DB::raw('DATE(cc.fecha_confirmacion)'), [$fechaInicio, $fechaFin]);
             }
 
             $embarquedCBM = $embarquedCBMQuery->sum('cccp.cbm_total_china') ?? 0;
