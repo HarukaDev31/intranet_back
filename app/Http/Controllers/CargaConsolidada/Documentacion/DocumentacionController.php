@@ -18,6 +18,7 @@ use Illuminate\Support\Facades\DB;
 use Tymon\JWTAuth\Facades\JWTAuth;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Http\Controllers\BaseDatos\ProductosController;
+use App\Models\ImportProducto;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
@@ -1537,7 +1538,51 @@ class DocumentacionController extends Controller
     public function deleteFileDocumentation(Request $request, $idFile)
     {
         $file = DocumentacionFile::find($idFile);
-        $file->delete();
+        if (!$file) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Archivo no encontrado'
+            ], 404);
+        }
+
+        // Si es el folder 9 (productos), eliminar imports vinculados a este archivo
+        if ($file->id_folder == 9) {
+            try {
+                $productosController = new ProductosController();
+
+                // Intentar localizar imports por varios criterios para ser robustos
+                $filename = basename($file->file_url);
+
+                $imports = ImportProducto::where(function ($q) use ($file, $filename) {
+                    $q->where('id_contenedor_consolidado_documentacion_files', $file->id)
+                      ->orWhere('id_contenedor_consolidado_documentacion_files', $file->id_contenedor)
+                      ->orWhere('ruta_archivo', 'like', '%' . $filename . '%');
+                })->get();
+
+                foreach ($imports as $import) {
+                    try {
+                        // Llamar al método existente en ProductosController que elimina la importación por id
+                        $productosController->deleteExcel($import->id);
+                    } catch (\Exception $e) {
+                        Log::error('Error calling deleteExcel for import id=' . $import->id . ': ' . $e->getMessage());
+                    }
+                }
+            } catch (\Exception $e) {
+                Log::error('Error al buscar/eliminar imports asociados al DocumentacionFile id=' . $file->id . ': ' . $e->getMessage());
+            }
+        }
+
+        // Eliminar el registro del archivo de documentación
+        try {
+            $file->delete();
+        } catch (\Exception $e) {
+            Log::error('Error al eliminar DocumentacionFile id=' . $idFile . ': ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al eliminar archivo: ' . $e->getMessage()
+            ], 500);
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'Archivo eliminado correctamente'
