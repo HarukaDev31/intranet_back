@@ -23,7 +23,18 @@ class Usuario extends Authenticatable implements JWTSubject
         'ID_Empresa',
         'ID_Organizacion',
         'ID_Grupo',
-        'Fe_Creacion'
+        'Fe_Creacion',
+        'ID_Pais',
+        'ID_Departamento',
+        'ID_Provincia',
+        'ID_Distrito',
+        'Fe_Nacimiento',
+        'Nu_Documento',
+        'Txt_Objetivos',
+        'Txt_Foto',
+        'Txt_Email',
+        'Nu_Celular',
+        'No_Nombres_Apellidos'
     ];
 
     protected $hidden = [

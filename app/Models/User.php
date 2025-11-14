@@ -24,6 +24,7 @@ class User extends Authenticatable implements JWTSubject
         'email',
         'password',
         'whatsapp',
+        'phone',
         'photo_url',
         'goals',
         'age',
@@ -36,7 +37,7 @@ class User extends Authenticatable implements JWTSubject
         'provincia_id',
         'departamento_id',
         'distrito_id',
-        'goals'
+        'idcity'
     ];
 
     /**

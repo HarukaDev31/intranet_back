@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Tymon\JWTAuth\Facades\JWTAuth;
 use Tymon\JWTAuth\Exceptions\JWTException;
@@ -24,6 +25,7 @@ use App\Http\Requests\RegisterRequest;
 use App\Models\User;
 use App\Models\CargaConsolidada\Cotizacion;
 use App\Traits\FileTrait;
+
 class AuthController extends Controller
 {
     use FileTrait;
@@ -76,6 +78,48 @@ class AuthController extends Controller
                             ];
                         }
 
+                        // Calcular CBM vendidos y embarcados (sin filtros de fecha en el login)
+                        $idUsuario = $usuario->ID_Usuario;
+
+                        // Calcular CBM vendidos en Perú (total de volumen confirmado por usuario)
+                        $soldCBM = DB::table('contenedor_consolidado_cotizacion as cc')
+                            ->leftJoin('contenedor_consolidado_cotizacion_proveedores as cccp', 'cc.id', '=', 'cccp.id_cotizacion')
+                            ->leftJoin('carga_consolidada_contenedor as cont', 'cc.id_contenedor', '=', 'cont.id')
+                            ->where('cc.estado_cotizador', 'CONFIRMADO')
+                            ->where('cc.id_usuario', $idUsuario)
+                            ->where('cont.empresa', '!=', '1')
+                            ->whereNotNull('cc.fecha_confirmacion')
+                            ->sum('cccp.cbm_total') ?? 0;
+
+                        // Calcular CBM embarcados (total de cbm_total_china recibidos en china y embarcados)
+                        $embarquedCBM = DB::table('contenedor_consolidado_cotizacion_proveedores as cccp')
+                            ->join('contenedor_consolidado_cotizacion as cc', 'cccp.id_cotizacion', '=', 'cc.id')
+                            ->join('carga_consolidada_contenedor as cont', 'cc.id_contenedor', '=', 'cont.id')
+                            ->where('cccp.estados_proveedor', 'LOADED')
+                            ->where('cc.id_usuario', $idUsuario)
+                            ->where('cont.empresa', '!=', '1')
+                            ->whereNull('cc.id_cliente_importacion')
+                            ->where('cc.estado_cotizador', 'CONFIRMADO')
+                            ->sum('cccp.cbm_total_china') ?? 0;
+
+                        // Obtener datos del perfil (mismo formato que me())
+                        $nombreCompleto = $usuario->No_Nombres_Apellidos ?? $usuario->No_Usuario ?? '';
+                        $email = $usuario->Txt_Email ?? '';
+                        
+                        // Obtener fecha de nacimiento
+                        $fechaNacimiento = '';
+                        if ($usuario->Fe_Nacimiento) {
+                            $fechaNacimiento = is_string($usuario->Fe_Nacimiento) 
+                                ? $usuario->Fe_Nacimiento 
+                                : (new \DateTime($usuario->Fe_Nacimiento))->format('Y-m-d');
+                        }
+
+                        // Obtener foto URL
+                        $photoUrl = '';
+                        if ($usuario->Txt_Foto) {
+                            $photoUrl = $this->generateImageUrl($usuario->Txt_Foto);
+                        }
+
                         $payload = [
                             'success' => true,
                             'message' => $result['sMessage'],
@@ -86,7 +130,19 @@ class AuthController extends Controller
                                 'id' => $usuario->ID_Usuario,
                                 'nombre' => $usuario->No_Usuario,
                                 'nombres_apellidos' => $usuario->No_Nombres_Apellidos,
-                                'email' => $usuario->Txt_Email,
+                                'fullName' => !empty($nombreCompleto) ? $nombreCompleto : null,
+                                'photoUrl' => $photoUrl,
+                                'email' => $email,
+                                'dni' => $usuario->Nu_Documento ?? '',
+                                'fechaNacimiento' => $fechaNacimiento,
+                                'idCountry' => $usuario->ID_Pais ? (int)$usuario->ID_Pais : 0,
+                                'idDepartment' => $usuario->ID_Departamento ? (int)$usuario->ID_Departamento : 0,
+                                'idProvince' => $usuario->ID_Provincia ? (int)$usuario->ID_Provincia : 0,
+                                'idDistrict' => $usuario->ID_Distrito ? (int)$usuario->ID_Distrito : 0,
+                                'phone' => $usuario->Nu_Celular ?? null,
+                                'soldCBM' => (float) $soldCBM,
+                                'embarquedCBM' => (float) $embarquedCBM,
+                                'goals' => $usuario->Txt_Objetivos ?? null,
                                 'estado' => $usuario->Nu_Estado,
                                 'empresa' => $usuario->empresa ? [
                                     'id' => $usuario->empresa->ID_Empresa,
@@ -133,9 +189,332 @@ class AuthController extends Controller
      *
      * @return \Illuminate\Http\JsonResponse
      */
-    public function me()
+    public function me(Request $request)
     {
-        return response()->json(auth()->user());
+        try {
+            $usuario = auth()->user();
+
+            if (!$usuario) {
+                return response()->json(['error' => 'Usuario no autenticado'], 401);
+            }
+
+            // El usuario autenticado es un Usuario (modelo Usuario), no User
+            // Usamos ID_Usuario para los cálculos de CBM
+            $idUsuario = $usuario->ID_Usuario;
+
+            // Obtener fechas de filtro si vienen como query parameters
+            $fechaInicio = $request->query('fecha_inicio');
+            $fechaFin = $request->query('fecha_fin');
+
+            // Calcular CBM vendidos en Perú (total de volumen confirmado por usuario)
+            // Los CBM vendidos: son el total de todos los cbm vendidos en Peru
+            // Usa la misma lógica que DashboardVentasController: suma cbm_total de cotizaciones confirmadas
+            $soldCBMQuery = DB::table('contenedor_consolidado_cotizacion as cc')
+                ->leftJoin('contenedor_consolidado_cotizacion_proveedores as cccp', 'cc.id', '=', 'cccp.id_cotizacion')
+                ->leftJoin('carga_consolidada_contenedor as cont', 'cc.id_contenedor', '=', 'cont.id')
+                ->where('cc.estado_cotizador', 'CONFIRMADO')
+                ->where('cc.id_usuario', $idUsuario)
+                ->where('cont.empresa', '!=', '1')
+                ->whereNotNull('cc.fecha_confirmacion');
+
+            // Aplicar filtro de fechas si vienen (usando fecha_confirmacion como en DashboardVentasController)
+            if ($fechaInicio && $fechaFin) {
+                $soldCBMQuery->whereBetween(DB::raw('DATE(cc.fecha_confirmacion)'), [$fechaInicio, $fechaFin]);
+            }
+
+            $soldCBM = $soldCBMQuery->sum('cccp.cbm_total') ?? 0;
+
+            // Calcular CBM embarcados (total de cbm_total_china recibidos en china y embarcados)
+            // Los cbm embarcados son el total de todos los cbm recibidos en china y embarcados
+            // Usa fecha_zarpe del contenedor para filtrar cuando están embarcados
+            $embarquedCBMQuery = DB::table('contenedor_consolidado_cotizacion_proveedores as cccp')
+                ->join('contenedor_consolidado_cotizacion as cc', 'cccp.id_cotizacion', '=', 'cc.id')
+                ->join('carga_consolidada_contenedor as cont', 'cc.id_contenedor', '=', 'cont.id')
+                ->where('cccp.estados_proveedor', 'LOADED')
+                ->where('cc.id_usuario', $idUsuario)
+                ->where('cont.empresa', '!=', '1')
+                ->whereNull('cc.id_cliente_importacion')
+                ->where('cc.estado_cotizador', 'CONFIRMADO');
+
+            // Aplicar filtro de fechas si vienen (usando fecha_zarpe para embarcados)
+            if ($fechaInicio && $fechaFin) {
+                $embarquedCBMQuery->whereBetween(DB::raw('DATE(cont.fecha_zarpe)'), [$fechaInicio, $fechaFin]);
+            }
+
+            $embarquedCBM = $embarquedCBMQuery->sum('cccp.cbm_total_china') ?? 0;
+
+            // Obtener datos directamente del modelo Usuario
+            $nombreCompleto = $usuario->No_Nombres_Apellidos ?? $usuario->No_Usuario ?? '';
+            $email = $usuario->Txt_Email ?? '';
+            
+            // Obtener fecha de nacimiento
+            $fechaNacimiento = '';
+            if ($usuario->Fe_Nacimiento) {
+                $fechaNacimiento = is_string($usuario->Fe_Nacimiento) 
+                    ? $usuario->Fe_Nacimiento 
+                    : (new \DateTime($usuario->Fe_Nacimiento))->format('Y-m-d');
+            }
+
+            // Obtener foto URL
+            $photoUrl = '';
+            if ($usuario->Txt_Foto) {
+                $photoUrl = $this->generateImageUrl($usuario->Txt_Foto);
+            }
+
+            // Construir respuesta según el formato UserProfile usando directamente el modelo Usuario
+            $userProfile = [
+                'id' => $usuario->ID_Usuario,
+                'fullName' => !empty($nombreCompleto) ? $nombreCompleto : null,
+                'photoUrl' => $photoUrl,
+                'email' => $email,
+                'dni' => $usuario->Nu_Documento ?? '',
+                'fechaNacimiento' => $fechaNacimiento,
+                'idCountry' => $usuario->ID_Pais ? (int)$usuario->ID_Pais : 0,
+                'idDepartment' => $usuario->ID_Departamento ? (int)$usuario->ID_Departamento : 0,
+                'idProvince' => $usuario->ID_Provincia ? (int)$usuario->ID_Provincia : 0,
+                'idDistrict' => $usuario->ID_Distrito ? (int)$usuario->ID_Distrito : 0,
+                'phone' => $usuario->Nu_Celular ?? null,
+                'soldCBM' => (float) $soldCBM,
+                'embarquedCBM' => (float) $embarquedCBM,
+                'goals' => $usuario->Txt_Objetivos ?? null,
+            ];
+
+            return response()->json([
+                'success' => true,
+                'user' => $userProfile
+            ], 200);
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Error al obtener el usuario: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Actualizar perfil del usuario
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function profile(Request $request)
+    {
+        try {
+            $usuario = auth()->user();
+
+            if (!$usuario) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Usuario no autenticado'
+                ], 401);
+            }
+
+            // Validar unicidad de email, dni y phone (excepto el usuario actual)
+            $idUsuario = $usuario->ID_Usuario;
+            
+            if ($request->has('email')) {
+                $email = $request->input('email');
+                $emailExists = DB::table('usuario')
+                    ->where('Txt_Email', $email)
+                    ->where('ID_Usuario', '!=', $idUsuario)
+                    ->exists();
+                if ($emailExists) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'El correo electrónico ya está en uso'
+                    ], 422);
+                }
+            }
+
+            if ($request->has('dni')) {
+                $dni = $request->input('dni');
+                if ($dni) {
+                    $dniExists = DB::table('usuario')
+                        ->where('Nu_Documento', $dni)
+                        ->where('ID_Usuario', '!=', $idUsuario)
+                        ->exists();
+                    if ($dniExists) {
+                        return response()->json([
+                            'success' => false,
+                            'message' => 'El DNI ya está en uso'
+                        ], 422);
+                    }
+                }
+            }
+
+            if ($request->has('phone')) {
+                $phone = $request->input('phone');
+                if ($phone) {
+                    $phoneExists = DB::table('usuario')
+                        ->where('Nu_Celular', $phone)
+                        ->where('ID_Usuario', '!=', $idUsuario)
+                        ->exists();
+                    if ($phoneExists) {
+                        return response()->json([
+                            'success' => false,
+                            'message' => 'El teléfono ya está en uso'
+                        ], 422);
+                    }
+                }
+            }
+
+            DB::beginTransaction();
+
+            // Preparar datos para actualizar (solo los que vienen en el request)
+            $updateData = [];
+
+            // Email
+            if ($request->has('email')) {
+                $updateData['Txt_Email'] = $request->input('email');
+            }
+
+            // Phone
+            if ($request->has('phone')) {
+                $updateData['Nu_Celular'] = $request->input('phone');
+            }
+
+            // DNI
+            if ($request->has('dni')) {
+                $updateData['Nu_Documento'] = $request->input('dni');
+            }
+
+            // Fecha de nacimiento
+            if ($request->has('fecha_nacimiento')) {
+                $updateData['Fe_Nacimiento'] = $request->input('fecha_nacimiento');
+            }
+
+            // Country
+            if ($request->has('country')) {
+                $updateData['ID_Pais'] = $request->input('country');
+            }
+
+            // Departamento
+            if ($request->has('departamento')) {
+                $updateData['ID_Departamento'] = $request->input('departamento');
+            }
+
+            // Provincia (puede venir como 'city' o 'province')
+            if ($request->has('city')) {
+                $updateData['ID_Provincia'] = $request->input('city');
+            } elseif ($request->has('province')) {
+                $updateData['ID_Provincia'] = $request->input('province');
+            }
+
+            // Distrito
+            if ($request->has('distrito')) {
+                $updateData['ID_Distrito'] = $request->input('distrito');
+            }
+
+            // Goals
+            if ($request->has('goals')) {
+                $updateData['Txt_Objetivos'] = $request->input('goals');
+            }
+
+            // Manejar foto si viene
+            $photoPath = null;
+            
+            if ($request->hasFile('photo')) {
+                // Eliminar foto anterior si existe
+                $fotoAnterior = $usuario->Txt_Foto ?? null;
+                if ($fotoAnterior && Storage::disk('public')->exists($fotoAnterior)) {
+                    Storage::disk('public')->delete($fotoAnterior);
+                }
+                
+                // Guardar nueva foto
+                $photo = $request->file('photo');
+                $photoName = 'profile_' . $idUsuario . '_' . time() . '.' . $photo->getClientOriginalExtension();
+                $photoPath = $photo->storeAs('profiles', $photoName, 'public');
+                $updateData['Txt_Foto'] = $photoPath;
+            } elseif ($request->has('photo')) {
+                // Manejar foto como base64/binary
+                $photoData = $request->input('photo');
+                
+                if ($photoData && !empty($photoData)) {
+                    // Eliminar foto anterior si existe
+                    $fotoAnterior = $usuario->Txt_Foto ?? null;
+                    if ($fotoAnterior && Storage::disk('public')->exists($fotoAnterior)) {
+                        Storage::disk('public')->delete($fotoAnterior);
+                    }
+                    
+                    // Decodificar base64 si es necesario
+                    if (preg_match('/^data:image\/(\w+);base64,/', $photoData, $type)) {
+                        $photoData = substr($photoData, strpos($photoData, ',') + 1);
+                        $type = strtolower($type[1]);
+                    } else {
+                        $type = 'jpg'; // Default
+                    }
+                    
+                    $photoDecoded = base64_decode($photoData);
+                    if ($photoDecoded !== false) {
+                        $photoName = 'profile_' . $idUsuario . '_' . time() . '.' . $type;
+                        $photoPath = 'profiles/' . $photoName;
+                        Storage::disk('public')->put($photoPath, $photoDecoded);
+                        $updateData['Txt_Foto'] = $photoPath;
+                    }
+                }
+            }
+
+            // Actualizar directamente en la tabla usuario
+            if (!empty($updateData)) {
+                DB::table('usuario')
+                    ->where('ID_Usuario', $idUsuario)
+                    ->update($updateData);
+                
+                // Refrescar el modelo
+                $usuario = Usuario::find($idUsuario);
+            }
+
+            DB::commit();
+
+            // Obtener fecha de nacimiento formateada
+            $fechaNacimiento = '';
+            if ($usuario->Fe_Nacimiento) {
+                $fechaNacimiento = is_string($usuario->Fe_Nacimiento) 
+                    ? $usuario->Fe_Nacimiento 
+                    : (new \DateTime($usuario->Fe_Nacimiento))->format('Y-m-d');
+            }
+
+            // Obtener foto URL
+            $photoUrl = '';
+            if ($usuario->Txt_Foto) {
+                $photoUrl = $this->generateImageUrl($usuario->Txt_Foto);
+            } elseif ($photoPath) {
+                $photoUrl = $this->generateImageUrl($photoPath);
+            }
+
+            // Construir respuesta según el formato UserProfile
+            $response = [
+                'success' => true,
+                'message' => 'Perfil actualizado exitosamente',
+                'user' => [
+                    'id' => $usuario->ID_Usuario,
+                    'fullName' => !empty($usuario->No_Nombres_Apellidos) ? $usuario->No_Nombres_Apellidos : ($usuario->No_Usuario ?? null),
+                    'photoUrl' => $photoUrl,
+                    'email' => $usuario->Txt_Email ?? '',
+                    'dni' => $usuario->Nu_Documento ?? '',
+                    'fechaNacimiento' => $fechaNacimiento,
+                    'idCountry' => $usuario->ID_Pais ? (int)$usuario->ID_Pais : 0,
+                    'idDepartment' => $usuario->ID_Departamento ? (int)$usuario->ID_Departamento : 0,
+                    'idProvince' => $usuario->ID_Provincia ? (int)$usuario->ID_Provincia : 0,
+                    'idDistrict' => $usuario->ID_Distrito ? (int)$usuario->ID_Distrito : 0,
+                    'phone' => $usuario->Nu_Celular ?? null,
+                    'soldCBM' => 0, // Se calcula en me(), no en profile
+                    'embarquedCBM' => 0, // Se calcula en me(), no en profile
+                    'goals' => $usuario->Txt_Objetivos ?? null,
+                ]
+            ];
+
+            return response()->json($response, 200);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Error en profile AuthController: ' . $e->getMessage());
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al actualizar el perfil: ' . $e->getMessage()
+            ], 500);
+        }
     }
 
     /**
@@ -617,7 +996,7 @@ class AuthController extends Controller
                 'departamento_id' => $validatedData['departamento_id'] ?? null,
                 'distrito_id' => $validatedData['distrito_id'] ?? null,
             ]);
-            
+
             Log::info('user created', $user->toArray());
 
             $token = JWTAuth::fromUser($user);
@@ -688,7 +1067,7 @@ class AuthController extends Controller
                     ],
                 ],
                 'iCantidadAcessoUsuario' => 1,
-                
+
                 'iIdEmpresa' => null,
                 'menus' => $menus,
                 'success' => true
@@ -843,7 +1222,7 @@ class AuthController extends Controller
                     'socialAddress' => $user->userBusiness->social_address,
                 ];
             }
-            $importedAmount = $this->getUserCotizacionesByWhatsapp($user->whatsapp,$user->dni);
+            $importedAmount = $this->getUserCotizacionesByWhatsapp($user->whatsapp, $user->dni);
 
             return response()->json([
                 'success' => true,
@@ -955,7 +1334,7 @@ class AuthController extends Controller
                 $user = User::where('dni', $dni)->first();
                 $correo = $user ? $user->email : null;
             }
-      
+
             $trayectos = Cotizacion::where('estado_cotizador', 'CONFIRMADO')
                 ->whereNull('id_cliente_importacion')
                 ->whereNotNull('estado_cliente')
@@ -988,27 +1367,27 @@ class AuthController extends Controller
 
                 ->select('id', 'fob_final', 'volumen', 'fob', 'monto', 'id_contenedor', 'impuestos_final', 'impuestos', 'logistica_final', 'volumen_doc', 'volumen_final')
                 ->get();
-                
+
             Log::info('Trayectos encontrados: ' . $trayectos->count());
-            
+
             // Calcular la suma de FOB
-            $sumFob = $trayectos->sum(function($cotizacion) {
-                return (float)(($cotizacion->fob_final==0 || $cotizacion->fob_final==null) ? $cotizacion->fob : $cotizacion->fob_final);
+            $sumFob = $trayectos->sum(function ($cotizacion) {
+                return (float)(($cotizacion->fob_final == 0 || $cotizacion->fob_final == null) ? $cotizacion->fob : $cotizacion->fob_final);
             });
-            
-            $sumImpuestos = $trayectos->sum(function($cotizacion) {
-                return (float)(($cotizacion->impuestos_final==0 || $cotizacion->impuestos_final==null) ? $cotizacion->impuestos : $cotizacion->impuestos_final);
+
+            $sumImpuestos = $trayectos->sum(function ($cotizacion) {
+                return (float)(($cotizacion->impuestos_final == 0 || $cotizacion->impuestos_final == null) ? $cotizacion->impuestos : $cotizacion->impuestos_final);
             });
-            
-            $sumLogistica = $trayectos->sum(function($cotizacion) {
-                return (float)(($cotizacion->logistica_final==0 || $cotizacion->logistica_final==null) ? $cotizacion->monto : $cotizacion->logistica_final);
+
+            $sumLogistica = $trayectos->sum(function ($cotizacion) {
+                return (float)(($cotizacion->logistica_final == 0 || $cotizacion->logistica_final == null) ? $cotizacion->monto : $cotizacion->logistica_final);
             });
 
             //Calcular la suma cbm
-            $volumen_final = $trayectos->sum(function($cotizacion) {
-                return (float)(($cotizacion->volumen_final==0 || $cotizacion->volumen_final==null) ? $cotizacion->volumen : $cotizacion->volumen_final);
+            $volumen_final = $trayectos->sum(function ($cotizacion) {
+                return (float)(($cotizacion->volumen_final == 0 || $cotizacion->volumen_final == null) ? $cotizacion->volumen : $cotizacion->volumen_final);
             });
-            
+
             // Contar contenedores totales aun no sean unicos
             $containerCount = $trayectos->count();
             return [
@@ -1080,7 +1459,7 @@ class AuthController extends Controller
             );
 
             // Construir URL de reset (viene del frontend)
-            $frontendUrl = env('APP_URL_CLIENTES','http://localhost:3001');
+            $frontendUrl = env('APP_URL_CLIENTES', 'http://localhost:3001');
             $resetUrl = $frontendUrl . '/reset-password?token=' . $token;
 
             // Despachar job para enviar email
@@ -1095,7 +1474,6 @@ class AuthController extends Controller
                 'success' => true,
                 'message' => 'Se ha enviado un correo con las instrucciones para recuperar tu contraseña'
             ], 200);
-
         } catch (\Exception $e) {
             Log::error('Error en forgotPassword: ' . $e->getMessage(), [
                 'trace' => $e->getTraceAsString()
@@ -1142,7 +1520,7 @@ class AuthController extends Controller
 
             // Obtener todos los registros de password_resets
             $passwordResets = DB::table('password_resets')->get();
-                
+
             // Buscar el registro correcto comparando el token hasheado
             $resetRecord = null;
             foreach ($passwordResets as $record) {
@@ -1201,7 +1579,6 @@ class AuthController extends Controller
                 'success' => true,
                 'message' => '¡Contraseña restablecida exitosamente! Ahora puedes iniciar sesión con tu nueva contraseña.'
             ], 200);
-
         } catch (\Exception $e) {
             Log::error('Error en resetPassword: ' . $e->getMessage(), [
                 'trace' => $e->getTraceAsString()
