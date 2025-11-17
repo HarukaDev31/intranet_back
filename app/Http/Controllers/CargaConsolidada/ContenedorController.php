@@ -10,6 +10,7 @@ use App\Models\Usuario;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Tymon\JWTAuth\Facades\JWTAuth;
+use App\Jobs\ValidateCotizacionesWithLoadedProveedoresJob;
 use App\Models\CargaConsolidada\Cotizacion;
 use App\Models\CargaConsolidada\CotizacionProveedor;
 use Illuminate\Support\Facades\DB;
@@ -663,8 +664,8 @@ Le estaré informando cualquier avance 🫡.";
             // Verificar si el contenedor está completado
             $this->verifyContainerIsCompleted($idContenedor);
             
-            // Validar usuarios en cotizaciones con proveedores cargados
-            $this->validateUsersInCotizacionesWithLoadedProveedores($idContenedor);
+            // Validar usuarios en cotizaciones con proveedores cargados (Job asíncrono)
+            ValidateCotizacionesWithLoadedProveedoresJob::dispatch($idContenedor)->onQueue('importaciones');
             $carga = Contenedor::find($idContenedor);
             $sheetName = 'CONSOLIDADO ' . $carga->carga;
             
@@ -919,249 +920,10 @@ Le estaré informando cualquier avance 🫡.";
         }
     }
 
-    /**
-     * Validar usuarios en cotizaciones con proveedores cargados
-     * Usa la misma validación del comando PopulateClientesData
-     */
-    private function validateUsersInCotizacionesWithLoadedProveedores($idContenedor)
-    {
-        try {
-            Log::info('🔍 Iniciando validación de usuarios en cotizaciones con proveedores cargados', [
-                'contenedor_id' => $idContenedor
-            ]);
+    
 
-            // Obtener cotizaciones del contenedor que tienen proveedores con estado_china = 'LOADED'
-            $cotizaciones = DB::table('contenedor_consolidado_cotizacion as ccc')
-                ->join('contenedor_consolidado_cotizacion_proveedores as cccp', 'ccc.id', '=', 'cccp.id_cotizacion')
-                ->where('ccc.id_contenedor', $idContenedor)
-                ->where('cccp.estados_proveedor', 'LOADED')
-                ->whereNotNull('ccc.nombre')
-                ->where('ccc.nombre', '!=', '')
-                ->whereRaw('LENGTH(TRIM(ccc.nombre)) >= 2')
-                ->where(function ($query) {
-                    $query->whereNotNull('ccc.telefono')
-                        ->where('ccc.telefono', '!=', '')
-                        ->whereRaw('LENGTH(TRIM(ccc.telefono)) >= 7')
-                        ->orWhereNotNull('ccc.documento')
-                        ->where('ccc.documento', '!=', '')
-                        ->whereRaw('LENGTH(TRIM(ccc.documento)) >= 5')
-                        ->orWhereNotNull('ccc.correo')
-                        ->where('ccc.correo', '!=', '')
-                        ->whereRaw('ccc.correo REGEXP "^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$"');
-                })
-                ->select('ccc.id', 'ccc.telefono', 'ccc.nombre', 'ccc.documento', 'ccc.correo')
-                ->distinct()
-                ->get();
+    
 
-            Log::info('Cotizaciones encontradas con proveedores cargados: ' . $cotizaciones->count());
-
-            $validados = 0;
-            $clientesCreados = 0;
-            $clientesEncontrados = 0;
-
-            foreach ($cotizaciones as $cotizacion) {
-                // Convertir a objeto para usar las mismas validaciones
-                $clienteData = [
-                    'nombre' => $cotizacion->nombre,
-                    'documento' => $cotizacion->documento,
-                    'correo' => $cotizacion->correo,
-                    'telefono' => $cotizacion->telefono
-                ];
-
-                $clienteObj = (object)$clienteData;
-
-                // Usar la misma validación del comando
-                if ($this->validateClienteDataFromCommand($clienteObj)) {
-                    $validados++;
-                    $clienteId = $this->insertOrGetClienteFromCommand($clienteObj, 'cotizacion_proveedor_loaded');
-                    
-                    if ($clienteId) {
-                        // Verificar si el cliente ya existía o fue creado
-                        $clienteExistia = DB::table('clientes')->where('id', $clienteId)->exists();
-                        
-                        if ($clienteExistia) {
-                            $clientesEncontrados++;
-                        } else {
-                            $clientesCreados++;
-                        }
-
-                        Log::info("✅ Cliente validado para cotización con proveedor cargado", [
-                            'cotizacion_id' => $cotizacion->id,
-                            'cliente_id' => $clienteId,
-                            'nombre' => $clienteObj->nombre,
-                            'fue_creado' => !$clienteExistia
-                        ]);
-                    }
-                } else {
-                    Log::warning("❌ Cliente no válido en cotización con proveedor cargado", [
-                        'cotizacion_id' => $cotizacion->id,
-                        'nombre' => $clienteObj->nombre,
-                        'telefono' => $clienteObj->telefono,
-                        'documento' => $clienteObj->documento,
-                        'correo' => $clienteObj->correo
-                    ]);
-                }
-            }
-
-            Log::info('🎉 Validación completada', [
-                'contenedor_id' => $idContenedor,
-                'total_procesados' => $cotizaciones->count(),
-                'validados' => $validados,
-                'clientes_encontrados' => $clientesEncontrados,
-                'clientes_creados' => $clientesCreados
-            ]);
-
-        } catch (\Exception $e) {
-            Log::error('Error en validación de usuarios con proveedores cargados: ' . $e->getMessage(), [
-                'contenedor_id' => $idContenedor,
-                'error' => $e->getMessage()
-            ]);
-        }
-    }
-
-    /**
-     * Validar que el cliente tenga al menos un campo de contacto válido
-     * (Copiado del comando PopulateClientesData)
-     */
-    private function validateClienteDataFromCommand($data)
-    {
-        $telefono = trim($data->telefono ?? '');
-        $documento = trim($data->documento ?? '');
-        $correo = trim($data->correo ?? '');
-        $nombre = trim($data->nombre ?? '');
-
-        // Validar que tenga nombre válido (no vacío y no solo espacios)
-        if (empty($nombre) || strlen($nombre) < 2) {
-            return false;
-        }
-
-        // Validar que tenga al menos uno de los tres campos de contacto válidos
-        $hasValidPhone = !empty($telefono) && strlen($telefono) >= 7;
-        $hasValidDocument = !empty($documento) && strlen($documento) >= 5;
-        $hasValidEmail = !empty($correo) && filter_var($correo, FILTER_VALIDATE_EMAIL);
-
-        if (!$hasValidPhone && !$hasValidDocument && !$hasValidEmail) {
-            return false;
-        }
-
-        return true;
-    }
-
-    /**
-     * Normalizar número de teléfono eliminando espacios, caracteres especiales y +
-     * (Copiado del comando PopulateClientesData)
-     */
-    private function normalizePhoneFromCommand($phone)
-    {
-        if (empty($phone)) {
-            return null;
-        }
-
-        // Eliminar espacios, guiones, paréntesis, puntos y símbolo +
-        $normalized = preg_replace('/[\s\-\(\)\.\+]/', '', $phone);
-
-        // Solo mantener números
-        $normalized = preg_replace('/[^0-9]/', '', $normalized);
-
-        return $normalized ?: null;
-    }
-
-    /**
-     * Insertar cliente si no existe, o retornar ID si ya existe
-     * (Copiado del comando PopulateClientesData)
-     */
-    private function insertOrGetClienteFromCommand($data, $fuente = 'desconocida')
-    {
-        // Normalizar teléfono
-        $telefonoNormalizado = $this->normalizePhoneFromCommand($data->telefono ?? null);
-
-        // Buscar por teléfono normalizado primero
-        $cliente = null;
-        
-        // Validar que el teléfono no sea nulo o vacío antes de procesar
-        if (!empty($telefonoNormalizado) && $telefonoNormalizado !== null) {
-            $cliente = DB::table('clientes')
-                ->where('telefono', 'like', $telefonoNormalizado)
-                ->first();
-            
-            if ($cliente) {
-                return $cliente->id;
-            }
-        }
-
-        // Si no se encuentra por teléfono, buscar por documento
-        // Validar que el documento no sea nulo o vacío antes de procesar
-        if (!$cliente && !empty(trim($data->documento ?? '')) && trim($data->documento ?? '') !== null) {
-            $cliente = DB::table('clientes')
-                ->where('documento', $data->documento)
-                ->first();
-                
-            if ($cliente) {
-                return $cliente->id;
-            }
-        }
-
-        // Si no se encuentra por documento, buscar por correo
-        // Validar que el correo no sea nulo o vacío antes de procesar
-        if (!$cliente && !empty(trim($data->correo ?? '')) && trim($data->correo ?? '') !== null) {
-            $cliente = DB::table('clientes')
-                ->where('correo', $data->correo)
-                ->first();
-                
-            if ($cliente) {
-                return $cliente->id;
-            }
-        }
-
-        // Validación final antes de insertar
-        $nombre = trim($data->nombre ?? '');
-        $documento = !empty($data->documento) ? trim($data->documento) : null;
-        $correo = !empty($data->correo) ? trim($data->correo) : null;
-
-        // Verificar que el nombre sea válido
-        if (empty($nombre) || strlen($nombre) < 2) {
-            return null;
-        }
-
-        // Verificar que tenga al menos un método de contacto válido
-        $hasValidContact = false;
-        if (!empty($telefonoNormalizado) && strlen($telefonoNormalizado) >= 7) {
-            $hasValidContact = true;
-        }
-        if (!$hasValidContact && !empty($documento) && strlen($documento) >= 5) {
-            $hasValidContact = true;
-        }
-        if (!$hasValidContact && !empty($correo) && filter_var($correo, FILTER_VALIDATE_EMAIL)) {
-            $hasValidContact = true;
-        }
-
-        if (!$hasValidContact) {
-            return null;
-        }
-
-        try {
-            // Insertar nuevo cliente
-            $clienteId = DB::table('clientes')->insertGetId([
-                'nombre' => $nombre,
-                'documento' => $documento,
-                'correo' => $correo,
-                'telefono' => $telefonoNormalizado,
-                'fecha' => now(),
-                'created_at' => now(),
-                'updated_at' => now()
-            ]);
-
-            return $clienteId;
-        } catch (\Exception $e) {
-            Log::error("Error al insertar cliente desde {$fuente}: " . $e->getMessage(), [
-                'nombre' => $nombre,
-                'telefono' => $telefonoNormalizado,
-                'documento' => $documento,
-                'correo' => $correo
-            ]);
-            return null;
-        }
-    }
 
     /**
      * Obtener cotizaciones con proveedores para poblar la hoja de consolidado
