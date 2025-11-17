@@ -59,7 +59,7 @@ class EmbarcadosController extends Controller
                 });
             }
 
-            $cotizacionesPage = $baseQuery->orderBy('CC.nombre', 'asc')->paginate($perPage, ['CC.id','CC.nombre','CC.telefono','TC.name as tipo_cliente'], 'page', $page);
+            $cotizacionesPage = $baseQuery->orderBy('CC.id', 'asc')->paginate($perPage, ['CC.id','CC.nombre','CC.telefono','TC.name as tipo_cliente'], 'page', $page);
             $cotizaciones = collect($cotizacionesPage->items());
 
             if ($cotizaciones->isEmpty()) {
