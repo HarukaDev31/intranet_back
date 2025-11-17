@@ -660,7 +660,7 @@ Le estaré informando cualquier avance 🫡.";
                 'lista_embarque_url' => $fileUrl,
                 'lista_embarque_uploaded_at' => date('Y-m-d H:i:s')
             ]);
-
+            Log::info('contenedor actualizado', ['idContenedor' => $idContenedor, 'fileUrl' => $fileUrl]);
             // Verificar si el contenedor está completado
             $this->verifyContainerIsCompleted($idContenedor);
             
