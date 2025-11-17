@@ -200,7 +200,6 @@ class ValidateCotizacionesWithLoadedProveedoresJob implements ShouldQueue
             'documento' => $data->documento,
             'correo' => $data->correo,
             'telefono' => $telefonoNormalizado,
-            'fuente' => $fuente,
             'created_at' => now(),
             'updated_at' => now(),
         ]);
