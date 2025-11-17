@@ -114,12 +114,16 @@ class CotizacionController extends Controller
             // Siempre filtrar cotizaciones que tengan al menos un proveedor
             $query->whereHas('proveedores');
 
-            //if request has estado_coordinacion or estado_china  then query with  proveedores  and just get cotizaciones with at least one proveedor with the state
+            //if request has estado_coordinacion or estado_china or estado_cotizador  then query with  proveedores  and just get cotizaciones with at least one proveedor with the state
             if ($request->has('estado_coordinacion') || $request->has('estado_china')) {
                 $query->whereHas('proveedores', function ($query) use ($request) {
                     $query->where('estados', $request->estado_coordinacion)
                         ->orWhere('estados_proveedor', $request->estado_china);
                 });
+            }
+            // filtrar por estado_cotizador
+            if ($request->has('estado_cotizador') && !empty($request->estado_cotizador)) {
+                $query->where('estado_cotizador', $request->estado_cotizador);
             }
             // Aplicar filtros según el rol del usuario
             switch ($rol) {
