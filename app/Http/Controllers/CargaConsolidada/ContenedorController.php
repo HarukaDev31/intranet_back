@@ -10,7 +10,7 @@ use App\Models\Usuario;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Tymon\JWTAuth\Facades\JWTAuth;
-use App\Jobs\ValidateCotizacionesWithLoadedProveedoresJob;
+use App\Jobs\ProcessPackingListUploadJob;
 use App\Models\CargaConsolidada\Cotizacion;
 use App\Models\CargaConsolidada\CotizacionProveedor;
 use Illuminate\Support\Facades\DB;
@@ -606,100 +606,58 @@ Le estaré informando cualquier avance 🫡.";
     public function uploadPackingList(Request $request)
     {
         try {
-            $idContenedor = $request->input('idContenedor');
+            $idContenedor = (int) $request->input('idContenedor');
 
-            // Validar que se haya enviado un archivo
             if (!$request->hasFile('file')) {
                 return response()->json([
                     'status' => 'error',
-                    'message' => 'No se ha enviado ningún archivo'
+                    'message' => 'No se ha enviado ningún archivo',
                 ], 400);
             }
 
             $file = $request->file('file');
 
-
-            // Validar extensión del archivo
             $allowedExtensions = ['jpg', 'jpeg', 'png', 'gif', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'txt'];
             $fileExtension = strtolower($file->getClientOriginalExtension());
 
-           
-
-            // Generar nombre único para el archivo
-            $filename = time() . '_' . uniqid() . '.' . $fileExtension;
-
-            // Ruta de almacenamiento
-            $path = 'assets/images/agentecompra/';
-
-            // Guardar archivo usando Laravel Storage
-            $fileUrl = $file->storeAs($path, $filename, 'public');
-
-            // Actualizar el contenedor usando Eloquent
-            $contenedor = Contenedor::find($idContenedor);
-            if (!$contenedor) {
+            if (!in_array($fileExtension, $allowedExtensions)) {
                 return response()->json([
                     'status' => 'error',
-                    'message' => 'Contenedor no encontrado'
-                ], 404);
+                    'message' => 'Tipo de archivo no permitido',
+                ], 400);
             }
 
-            $contenedor->update([
-                'lista_embarque_url' => $fileUrl,
-                'lista_embarque_uploaded_at' => date('Y-m-d H:i:s')
-            ]);
-            Log::info('contenedor actualizado', ['idContenedor' => $idContenedor, 'fileUrl' => $fileUrl]);
-            // Verificar si el contenedor está completado
-            $this->verifyContainerIsCompleted($idContenedor);
-            
-            // Validar usuarios en cotizaciones con proveedores cargados (Job asíncrono)
-            ValidateCotizacionesWithLoadedProveedoresJob::dispatch($idContenedor)->onQueue('importaciones');
-            $carga = Contenedor::find($idContenedor);
-            $sheetName = 'CONSOLIDADO ' . $carga->carga;
-            
-            // Crear hoja "CONSOLIDADO CARGA" en el spreadsheet de estado
-            try {
-                $spreadsheetId = config('google.post_sheet_status_doc_id');
-                if ($spreadsheetId) {
-                    $sheetId = $this->createSheet($sheetName, $spreadsheetId);
-                    if ($sheetId) {
-                        Log::info("Hoja {$sheetName} creada exitosamente para contenedor ID: {$idContenedor}");
-                        
-                        // Obtener cotizaciones con proveedores para poblar la hoja
-                        $cotizaciones = $this->getCotizacionesForSheet($idContenedor);
-                        
-                        if (!empty($cotizaciones)) {
-                            // Poblar la hoja con los datos
-                            $numeroCarga = $carga->carga ?? '';
-                            $this->populateConsolidadoSheet($sheetName, $spreadsheetId, $cotizaciones, $numeroCarga);
-                            Log::info("Hoja {$sheetName} poblada exitosamente con " . count($cotizaciones) . " cotizaciones");
-                        } else {
-                            Log::warning("No se encontraron cotizaciones para poblar la hoja {$sheetName}");
-                        }
-                    } else {
-                        Log::warning("No se pudo crear la hoja {$sheetName} para contenedor ID: {$idContenedor}");
-                    }
-                } else {
-                    Log::warning("POST_SHEET_STATUS_DOC_ID no está configurado en el archivo .env");
-                }
-            } catch (\Exception $e) {
-                // No fallar la respuesta si hay error al crear/poblar la hoja
-                Log::error("Error al crear/poblar hoja {$sheetName}: " . $e->getMessage());
-            }
-            
+            $filename = time() . '_' . uniqid() . '.' . $fileExtension;
+            $path = 'assets/images/agentecompra/';
+            $fileUrl = $file->storeAs($path, $filename, 'public');
+
+            $user = auth()->user();
+            $userId = $user ? $user->ID_Usuario : null;
+            $userGroup = $user ? $user->No_Grupo : null;
+
+            ProcessPackingListUploadJob::dispatch(
+                $idContenedor,
+                $fileUrl,
+                $file->getClientOriginalName(),
+                $file->getSize(),
+                $userId,
+                $userGroup
+            )->onQueue('importaciones');
+
             return response()->json([
                 'success' => true,
-                'message' => 'Lista de embarque actualizada correctamente',
+                'message' => 'Lista de embarque recibida. Procesaremos la información en segundo plano.',
                 'data' => [
                     'file_url' => $fileUrl,
                     'file_name' => $file->getClientOriginalName(),
-                    'file_size' => $file->getSize()
-                ]
+                    'file_size' => $file->getSize(),
+                ],
             ]);
         } catch (\Exception $e) {
             Log::error('Error en uploadListaEmbarque: ' . $e->getMessage());
             return response()->json([
                 'status' => 'error',
-                'message' => 'Error al subir la lista de embarque: ' . $e->getMessage()
+                'message' => 'Error al subir la lista de embarque: ' . $e->getMessage(),
             ], 500);
         }
     }
@@ -912,105 +870,4 @@ Le estaré informando cualquier avance 🫡.";
     
 
 
-    /**
-     * Obtener cotizaciones con proveedores para poblar la hoja de consolidado
-     * 
-     * @param int $idContenedor ID del contenedor
-     * @return array Array de cotizaciones con proveedores
-     */
-    private function getCotizacionesForSheet($idContenedor)
-    {
-        try {
-            // Obtener solo cotizaciones que tengan al menos un proveedor con estados_proveedor = 'LOADED'
-            $query = DB::table('contenedor_consolidado_cotizacion AS main')
-                ->select([
-                    'main.id',
-                    'main.nombre',
-                    'main.documento',
-                    'main.telefono',
-                    'main.id_contenedor'
-                ])
-                ->where('main.id_contenedor', $idContenedor)
-                ->whereNull('main.id_cliente_importacion')
-                ->where('main.estado_cotizador', 'CONFIRMADO')
-                ->whereExists(function ($sub) {
-                    $sub->select(DB::raw(1))
-                        ->from('contenedor_consolidado_cotizacion_proveedores as proveedores')
-                        ->whereRaw('proveedores.id_cotizacion = main.id')
-                        ->where('proveedores.estados_proveedor', 'LOADED');
-                })
-                ->orderBy('main.id', 'asc');
-
-            $cotizaciones = $query->get();
-
-            // Para cada cotización, obtener TODOS los proveedores (no solo LOADED)
-            // porque la cotización ya fue filtrada por tener al menos uno LOADED
-            $cotizacionesConProveedores = [];
-            foreach ($cotizaciones as $cotizacion) {
-                // Obtener TODOS los proveedores de esta cotización (no solo LOADED)
-                // La cotización ya fue filtrada por tener al menos uno LOADED
-                $proveedores = DB::table('contenedor_consolidado_cotizacion_proveedores')
-                    ->where('id_cotizacion', $cotizacion->id)
-                    ->select([
-                        'id',
-                        'id_cotizacion', // Incluir para validación
-                        'factura_comercial',
-                        'packing_list',
-                        'excel_confirmacion',
-                        'supplier',
-                        'code_supplier',
-                        'estados_proveedor',
-                        'products'
-                    ])
-                    ->orderBy('id', 'asc')
-                    ->get()
-                    ->toArray();
-
-                // Validar que todos los proveedores pertenezcan a esta cotización
-                $proveedoresValidados = [];
-                foreach ($proveedores as $proveedor) {
-                    // Validación adicional: asegurar que el id_cotizacion coincida
-                    if ($proveedor->id_cotizacion == $cotizacion->id) {
-                        $proveedoresValidados[] = [
-                            'id' => $proveedor->id,
-                            'id_cotizacion' => $proveedor->id_cotizacion,
-                            'factura_comercial' => $proveedor->factura_comercial ?? '',
-                            'packing_list' => $proveedor->packing_list ?? '',
-                            'excel_confirmacion' => $proveedor->excel_confirmacion ?? '',
-                            'supplier' => $proveedor->supplier ?? '',
-                            'code_supplier' => $proveedor->code_supplier ?? '',
-                            'products' => $proveedor->products ?? ''
-                        ];
-                    } else {
-                        Log::warning("Proveedor con ID {$proveedor->id} no pertenece a cotización {$cotizacion->id}", [
-                            'proveedor_id_cotizacion' => $proveedor->id_cotizacion,
-                            'cotizacion_id' => $cotizacion->id
-                        ]);
-                    }
-                }
-
-                // Solo agregar si tiene proveedores válidos
-                if (!empty($proveedoresValidados)) {
-                    $cotizacionesConProveedores[] = [
-                        'id' => $cotizacion->id,
-                        'nombre' => $cotizacion->nombre,
-                        'documento' => $cotizacion->documento,
-                        'telefono' => $cotizacion->telefono ? preg_replace('/\s+/', '', $cotizacion->telefono) : '',
-                        'proveedores' => $proveedoresValidados
-                    ];
-                    
-                    // Log para debugging
-                    $codes = array_column($proveedoresValidados, 'code_supplier');
-                    Log::info("Cotización {$cotizacion->id} ({$cotizacion->nombre}) tiene " . count($proveedoresValidados) . " proveedores", [
-                        'codes' => $codes
-                    ]);
-                }
-            }
-
-            return $cotizacionesConProveedores;
-        } catch (\Exception $e) {
-            Log::error("Error obteniendo cotizaciones para hoja: " . $e->getMessage());
-            return [];
-        }
-    }
 }
