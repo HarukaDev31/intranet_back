@@ -71,6 +71,12 @@ class CotizacionController extends Controller
             $user = JWTAuth::parseToken()->authenticate();
             $query = Cotizacion::where('id_contenedor', $idContenedor)->whereNull('id_cliente_importacion');
             $rol = $user->getNombreGrupo();
+            
+            // Filtrar por ID de cotización si se proporciona
+            if ($request->has('idCotizacion') && !empty($request->idCotizacion)) {
+                $query->where('id', $request->idCotizacion);
+            }
+            
             // Aplicar filtros básicos
             if ($request->has('search')) {
                 $search = $request->search;
