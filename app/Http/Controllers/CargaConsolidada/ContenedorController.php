@@ -618,25 +618,12 @@ Le estaré informando cualquier avance 🫡.";
 
             $file = $request->file('file');
 
-            // Validar tamaño del archivo 400 MB
-            $maxFileSize = 400 * 1024 * 1024; // 400 MB en bytes
-            if ($file->getSize() > $maxFileSize) {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => 'El archivo excede el tamaño máximo permitido (1MB)'
-                ], 400);
-            }
 
             // Validar extensión del archivo
             $allowedExtensions = ['jpg', 'jpeg', 'png', 'gif', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'txt'];
             $fileExtension = strtolower($file->getClientOriginalExtension());
 
-            if (!in_array($fileExtension, $allowedExtensions)) {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => 'Tipo de archivo no permitido'
-                ], 400);
-            }
+           
 
             // Generar nombre único para el archivo
             $filename = time() . '_' . uniqid() . '.' . $fileExtension;
