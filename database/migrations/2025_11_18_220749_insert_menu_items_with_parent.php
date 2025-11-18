@@ -21,7 +21,7 @@ class InsertMenuItemsWithParent extends Migration
             'ID_Padre' => 0,
             'Nu_Orden' => 1,
             'No_Menu' => 'Mi Progreso',
-            'No_Menu_Url' => '#',
+            'No_Menu_Url' => 'Administracion/MiProgresoController/index',
             'No_Class_Controller' => '',
             'Txt_Css_Icons' => 'fa fa-folder',
             'Nu_Separador' => 1,
@@ -39,7 +39,7 @@ class InsertMenuItemsWithParent extends Migration
             'ID_Padre' => $padreId, // Usa el ID_Menu autogenerado del registro anterior
             'Nu_Orden' => 2,
             'No_Menu' => 'Mi Progreso',
-            'No_Menu_Url' => 'menu-hijo',
+            'No_Menu_Url' => 'Administracion/MiProgresoController/index',
             'No_Class_Controller' => '',
             'Txt_Css_Icons' => 'fa fa-file',
             'Nu_Separador' => 0,
