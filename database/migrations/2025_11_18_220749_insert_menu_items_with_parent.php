@@ -14,6 +14,8 @@ class InsertMenuItemsWithParent extends Migration
      */
     public function up()
     {
+
+     
         // Insertar el primer registro (padre) y obtener su ID_Menu autogenerado
         $padreId = DB::table('menu')->insertGetId([
             'ID_Padre' => 0,
@@ -29,13 +31,13 @@ class InsertMenuItemsWithParent extends Migration
             'Txt_Url_Video' => null,
             'No_Menu_China' => null,
             'url_intranet_v2' => 'mi-progreso',
-            'show_father' => 1
+            'show_father' => 0
         ]);
 
         // Insertar el segundo registro (hijo) usando el ID_Menu del padre como ID_Padre
         DB::table('menu')->insert([
             'ID_Padre' => $padreId, // Usa el ID_Menu autogenerado del registro anterior
-            'Nu_Orden' => 1,
+            'Nu_Orden' => 2,
             'No_Menu' => 'Mi Progreso',
             'No_Menu_Url' => 'menu-hijo',
             'No_Class_Controller' => '',
@@ -47,7 +49,7 @@ class InsertMenuItemsWithParent extends Migration
             'Txt_Url_Video' => null,
             'No_Menu_China' => null,
             'url_intranet_v2' => null,
-            'show_father' => 1
+            'show_father' => 0
         ]);
     }
 
