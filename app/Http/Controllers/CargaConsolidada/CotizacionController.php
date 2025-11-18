@@ -2533,28 +2533,6 @@ class CotizacionController extends Controller
                 return;
             }
 
-            // Crear la notificación para Coordinación
-            $notificacion = Notificacion::create([
-                'titulo' => 'Nueva Cotización Creada',
-                'mensaje' => "El usuario {$usuarioCreador->No_Nombres_Apellidos} ha creado una nueva cotización para {$cotizacion->nombre}",
-                'descripcion' => "Cliente: {$cotizacion->nombre} | Documento: {$cotizacion->documento} | Volumen: {$cotizacion->volumen} CBM | Contenedor: {$contenedor->carga}",
-                'modulo' => Notificacion::MODULO_CARGA_CONSOLIDADA,
-                'rol_destinatario' => Usuario::ROL_COORDINACION,
-                'tipo' => Notificacion::TIPO_INFO,
-                'icono' => 'mdi:file-document-plus',
-                'prioridad' => Notificacion::PRIORIDAD_MEDIA,
-                'referencia_tipo' => 'cotizacion',
-                'referencia_id' => $cotizacion->id,
-                'activa' => true,
-                'creado_por' => $usuarioCreador->ID_Usuario,
-                'configuracion_roles' => json_encode([
-                    Usuario::ROL_COORDINACION => [
-                        'titulo' => 'Nueva Cotización - Revisar',
-                        'mensaje' => "Nueva cotización de {$cotizacion->nombre} requiere revisión",
-                        'descripcion' => "Cotización #{$cotizacion->id} para contenedor {$contenedor->carga}"
-                    ]
-                ])
-            ]);
 
             // Crear la notificación para Jefe de Ventas
             $notificacionJefeVentas = Notificacion::create([

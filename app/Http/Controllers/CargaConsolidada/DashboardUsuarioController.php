@@ -1,0 +1,900 @@
+<?php
+
+namespace App\Http\Controllers\CargaConsolidada;
+
+use App\Http\Controllers\Controller;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use App\Models\Usuario;
+use Illuminate\Support\Facades\Log;
+use Carbon\Carbon;
+use Tymon\JWTAuth\Facades\JWTAuth;
+
+class DashboardUsuarioController extends Controller
+{
+    private $table_contenedor_cotizacion = "contenedor_consolidado_cotizacion";
+    private $table_contenedor_cotizacion_proveedores = "contenedor_consolidado_cotizacion_proveedores";
+    private $table_contenedor = "carga_consolidada_contenedor";
+    private $table_pagos = "contenedor_consolidado_cotizacion_coordinacion_pagos";
+    private $table_pagos_concept = "cotizacion_coordinacion_pagos_concept";
+
+    /**
+     * Obtiene el usuario autenticado y valida el token
+     * 
+     * @return Usuario
+     * @throws \Exception
+     */
+    private function getAuthenticatedUser()
+    {
+        try {
+            $user = JWTAuth::parseToken()->authenticate();
+            
+            if (!$user) {
+                throw new \Exception('Usuario no autenticado');
+            }
+
+            return $user;
+        } catch (\Exception $e) {
+            Log::error('Error de autenticación en DashboardUsuarioController: ' . $e->getMessage());
+            throw new \Exception('Token inválido o usuario no encontrado');
+        }
+    }
+
+    /**
+     * Obtiene la lista de contenedores para el filtro (solo del usuario autenticado)
+     */
+    public function getContenedoresFiltro(Request $request)
+    {
+        try {
+            $user = $this->getAuthenticatedUser();
+            $fechaInicio = $request->input('fecha_inicio');
+            $fechaFin = $request->input('fecha_fin');
+
+            $query = DB::table($this->table_contenedor . ' as cont')
+                ->select([
+                    'cont.id',
+                    'cont.carga',
+                    'cont.fecha_zarpe',
+                    DB::raw("CONCAT('Consolidado #',cont.carga) as label")
+                ])
+                ->join($this->table_contenedor_cotizacion . ' as cc', 'cont.id', '=', 'cc.id_contenedor')
+                ->where('cont.empresa', '!=', '1')
+                ->where('cc.id_usuario', $user->ID_Usuario) // Filtrar por usuario autenticado
+                ->distinct();
+
+            if ($fechaInicio && $fechaFin) {
+                $query->whereBetween('cont.fecha_zarpe', [$fechaInicio, $fechaFin]);
+            }
+
+            $query->orderByRaw('CAST(cont.carga AS UNSIGNED)');
+
+            $contenedores = $query->get()->map(function($item) {
+                return [
+                    'value' => $item->id,
+                    'label' => $item->label,
+                    'carga' => $item->carga,
+                    'fecha_zarpe' => $item->fecha_zarpe ? Carbon::parse($item->fecha_zarpe)->format('d/m/Y') : null
+                ];
+            });
+
+            return response()->json([
+                'success' => true,
+                'data' => $contenedores
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error en getContenedoresFiltro: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al obtener contenedores para filtro',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Obtiene la lista de vendedores para el filtro (solo el usuario autenticado)
+     */
+    public function getVendedoresFiltro(Request $request)
+    {
+        try {
+            $user = $this->getAuthenticatedUser();
+            $fechaInicio = $request->input('fecha_inicio');
+            $fechaFin = $request->input('fecha_fin');
+            $idContenedor = $request->input('id_contenedor');
+
+            $query = DB::table('usuario as u')
+                ->select([
+                    'u.ID_Usuario as id',
+                    'u.No_Nombres_Apellidos as nombre',
+                    DB::raw('COUNT(DISTINCT cc.id) as total_cotizaciones'),
+                    DB::raw('COALESCE(SUM(cccp.cbm_total), 0) as volumen_total')
+                ])
+                ->join($this->table_contenedor_cotizacion . ' as cc', 'u.ID_Usuario', '=', 'cc.id_usuario')
+                ->join($this->table_contenedor_cotizacion_proveedores . ' as cccp', 'cc.id', '=', 'cccp.id_cotizacion')
+                ->join($this->table_contenedor . ' as cont', 'cc.id_contenedor', '=', 'cont.id')
+                ->where('u.ID_Usuario', $user->ID_Usuario) // Solo el usuario autenticado
+                ->where('cont.empresa', '!=', '1')
+                ->groupBy('u.ID_Usuario', 'u.No_Nombres_Apellidos');
+
+            if ($fechaInicio && $fechaFin) {
+                $query->whereBetween('cont.fecha_zarpe', [$fechaInicio, $fechaFin]);
+            }
+
+            if ($idContenedor) {
+                $query->where('cc.id_contenedor', $idContenedor);
+            }
+
+            $vendedores = $query->get()->map(function($item) {
+                return [
+                    'value' => $item->id,
+                    'label' => $item->nombre,
+                    'total_cotizaciones' => $item->total_cotizaciones,
+                    'volumen_total' => round($item->volumen_total, 2)
+                ];
+            });
+
+            return response()->json([
+                'success' => true,
+                'data' => $vendedores
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error en getVendedoresFiltro: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al obtener vendedores para filtro',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Obtiene el resumen general de ventas por contenedor (solo del usuario autenticado)
+     */
+    public function getResumenVentas(Request $request)
+    {
+        try {
+            $user = $this->getAuthenticatedUser();
+            $fechaInicio = $request->input('fecha_inicio');
+            $fechaFin = $request->input('fecha_fin');
+            $idContenedor = $request->input('id_contenedor');
+
+            // Construir condición de fecha para los subqueries
+            $fechaCondition = '';
+            if ($fechaInicio && $fechaFin) {
+                $fechaCondition = ' AND DATE(cc2.fecha_confirmacion) BETWEEN "' . $fechaInicio . '" AND "' . $fechaFin . '"';
+            }
+
+            $query = DB::table($this->table_contenedor . ' as cont')
+                ->select([
+                    'cont.id as id_contenedor',
+                    'cont.carga',
+                    'cont.fecha_zarpe',
+                    'u.ID_Usuario',
+                    'u.No_Nombres_Apellidos as vendedor',
+                    // Total clientes confirmados en el rango de fechas
+                    DB::raw('(
+                        SELECT COUNT(DISTINCT cc2.id)
+                        FROM ' . $this->table_contenedor_cotizacion . ' cc2
+                        WHERE cc2.id_contenedor = cont.id
+                        AND cc2.id_usuario = ' . $user->ID_Usuario . '
+                        AND cc2.estado_cotizador = "CONFIRMADO"
+                        ' . ($fechaInicio && $fechaFin ? ' AND DATE(cc2.fecha_confirmacion) BETWEEN "' . $fechaInicio . '" AND "' . $fechaFin . '"' : '') . '
+                    ) as total_clientes'),
+                    
+                    // Volumen vendido: cotizaciones confirmadas en esa fecha (suma de cbm_total)
+                    DB::raw('(
+                        SELECT COALESCE(SUM(cccp2.cbm_total), 0)
+                        FROM ' . $this->table_contenedor_cotizacion . ' cc2
+                        JOIN ' . $this->table_contenedor_cotizacion_proveedores . ' cccp2 ON cc2.id = cccp2.id_cotizacion
+                        WHERE cc2.id_contenedor = cont.id
+                        AND cc2.id_usuario = ' . $user->ID_Usuario . '
+                        AND cc2.estado_cotizador = "CONFIRMADO"
+                        ' . $fechaCondition . '
+                    ) as volumen_vendido'),
+                    
+                    // Volumen china: cotizaciones confirmadas que fueron embarcadas (LOADED)
+                    DB::raw('(
+                        SELECT COALESCE(SUM(cccp2.cbm_total_china), 0)
+                        FROM ' . $this->table_contenedor_cotizacion . ' cc2
+                        JOIN ' . $this->table_contenedor_cotizacion_proveedores . ' cccp2 ON cc2.id = cccp2.id_cotizacion
+                        WHERE cc2.id_contenedor = cont.id
+                        AND cc2.id_usuario = ' . $user->ID_Usuario . '
+                        AND cc2.estado_cotizador = "CONFIRMADO"
+                        AND cccp2.estados_proveedor = "LOADED"
+                        ' . $fechaCondition . '
+                    ) as volumen_china'),
+                    
+                    // Volumen pendiente: cotizaciones no confirmadas
+                    DB::raw('(
+                        SELECT COALESCE(SUM(cccp2.cbm_total), 0)
+                        FROM ' . $this->table_contenedor_cotizacion . ' cc2
+                        JOIN ' . $this->table_contenedor_cotizacion_proveedores . ' cccp2 ON cc2.id = cccp2.id_cotizacion
+                        WHERE cc2.id_contenedor = cont.id
+                        AND cc2.id_usuario = ' . $user->ID_Usuario . '
+                        AND (cc2.estado_cotizador != "CONFIRMADO" OR cc2.estado_cotizador IS NULL)
+                    ) as volumen_pendiente'),
+                    
+                    // Volumen total: suma de vendido + pendiente
+                    DB::raw('(
+                        SELECT COALESCE(SUM(cccp2.cbm_total), 0)
+                        FROM ' . $this->table_contenedor_cotizacion . ' cc2
+                        JOIN ' . $this->table_contenedor_cotizacion_proveedores . ' cccp2 ON cc2.id = cccp2.id_cotizacion
+                        WHERE cc2.id_contenedor = cont.id
+                        AND cc2.id_usuario = ' . $user->ID_Usuario . '
+                    ) as volumen_total'),
+                    
+                    // Totales monetarios
+                    DB::raw('(
+                        SELECT COALESCE(SUM(cc2.monto), 0)
+                        FROM ' . $this->table_contenedor_cotizacion . ' cc2
+                        WHERE cc2.id_contenedor = cont.id
+                        AND cc2.id_usuario = ' . $user->ID_Usuario . '
+                        AND cc2.estado_cotizador = "CONFIRMADO"
+                        AND cc2.estado_cliente IS NOT NULL
+                        AND cc2.id_cliente_importacion IS NULL
+                        ' . $fechaCondition . '
+                    ) as total_logistica'),
+                    
+                    DB::raw('(
+                        SELECT COALESCE(SUM(cc2.fob), 0)
+                        FROM ' . $this->table_contenedor_cotizacion . ' cc2
+                        WHERE cc2.id_contenedor = cont.id
+                        AND cc2.id_usuario = ' . $user->ID_Usuario . '
+                        AND cc2.estado_cotizador = "CONFIRMADO"
+                        AND cc2.estado_cliente IS NOT NULL
+                        AND cc2.id_cliente_importacion IS NULL
+                        ' . $fechaCondition . '
+                    ) as total_fob'),
+                    
+                    DB::raw('(
+                        SELECT COALESCE(SUM(cc2.impuestos), 0)
+                        FROM ' . $this->table_contenedor_cotizacion . ' cc2
+                        WHERE cc2.id_contenedor = cont.id
+                        AND cc2.id_usuario = ' . $user->ID_Usuario . '
+                        AND cc2.estado_cotizador = "CONFIRMADO"
+                        AND cc2.estado_cliente IS NOT NULL
+                        AND cc2.id_cliente_importacion IS NULL
+                        ' . $fechaCondition . '
+                    ) as total_impuestos'),
+                    
+                    DB::raw('(
+                        SELECT 
+                            (COALESCE(SUM(CASE WHEN cc2.estado_cotizador = "CONFIRMADO" THEN cccp2.cbm_total ELSE 0 END), 0) / 
+                            NULLIF(COALESCE(SUM(cccp2.cbm_total), 0), 0)) * 100
+                        FROM ' . $this->table_contenedor_cotizacion . ' cc2
+                        JOIN ' . $this->table_contenedor_cotizacion_proveedores . ' cccp2 ON cc2.id = cccp2.id_cotizacion
+                        WHERE cc2.id_contenedor = cont.id
+                        AND cc2.id_usuario = ' . $user->ID_Usuario . '
+                    ) as porcentaje_avance')
+                ])
+                ->leftJoin($this->table_contenedor_cotizacion . ' as cc', function($join) use ($user, $fechaInicio, $fechaFin) {
+                    $join->on('cont.id', '=', 'cc.id_contenedor')
+                         ->where('cc.id_usuario', '=', $user->ID_Usuario)
+                         ->where('cc.estado_cotizador', '=', 'CONFIRMADO');
+                    if ($fechaInicio && $fechaFin) {
+                        $join->whereBetween(DB::raw('DATE(cc.fecha_confirmacion)'), [$fechaInicio, $fechaFin]);
+                    }
+                })
+                ->leftJoin('usuario as u', 'cc.id_usuario', '=', 'u.ID_Usuario')
+                ->where('cont.empresa', '!=', '1')
+                ->whereExists(function($query) use ($user, $fechaInicio, $fechaFin) {
+                    $query->select(DB::raw(1))
+                        ->from($this->table_contenedor_cotizacion . ' as cc2')
+                        ->whereRaw('cc2.id_contenedor = cont.id')
+                        ->where('cc2.id_usuario', $user->ID_Usuario)
+                        ->where('cc2.estado_cotizador', 'CONFIRMADO');
+                    if ($fechaInicio && $fechaFin) {
+                        $query->whereBetween(DB::raw('DATE(cc2.fecha_confirmacion)'), [$fechaInicio, $fechaFin]);
+                    }
+                })
+                ->groupBy('cont.id', 'cont.carga', 'cont.fecha_zarpe', 'u.No_Nombres_Apellidos', 'u.ID_Usuario');
+
+            // Filtrar por contenedor
+            if ($idContenedor) {
+                $query->where('cont.id', $idContenedor);
+            }
+
+            $data = $query->get()->map(function($item) {
+                return [
+                    'id_contenedor' => $item->id_contenedor,
+                    'carga' => $item->carga,
+                    'fecha_zarpe' => $item->fecha_zarpe ? Carbon::parse($item->fecha_zarpe)->format('d/m/Y') : null,
+                    'vendedor' => $item->vendedor,
+                    'total_clientes' => $item->total_clientes,
+                    'volumenes' => [
+                        'china' => round($item->volumen_china, 2),
+                        'total' => round($item->volumen_total, 2),
+                        'vendido' => round($item->volumen_vendido, 2),
+                        'pendiente' => round($item->volumen_pendiente, 2)
+                    ],
+                    'totales' => [
+                        'impuestos' => round($item->total_impuestos, 2),
+                        'logistica' => round($item->total_logistica, 2),
+                        'fob' => round($item->total_fob, 2)
+                    ],
+                    'metricas' => [
+                        'porcentaje_avance' => round($item->porcentaje_avance, 2),
+                        'meta_volumen' => 0,
+                        'meta_clientes' => 0
+                    ]
+                ];
+            });
+
+            // Calcular totales generales
+            $totales = [
+                'total_clientes' => $data->sum('total_clientes'),
+                'volumenes' => [
+                    'china' => round($data->sum(function($item) { return $item['volumenes']['china']; }), 2),
+                    'total' => round($data->sum(function($item) { return $item['volumenes']['total']; }), 2),
+                    'vendido' => round($data->sum(function($item) { return $item['volumenes']['vendido']; }), 2),
+                    'pendiente' => round($data->sum(function($item) { return $item['volumenes']['pendiente']; }), 2)
+                ],
+                'totales' => [
+                    'impuestos' => round($data->sum(function($item) { return $item['totales']['impuestos']; }), 2),
+                    'logistica' => round($data->sum(function($item) { return $item['totales']['logistica']; }), 2),
+                    'fob' => round($data->sum(function($item) { return $item['totales']['fob']; }), 2)
+                ]
+            ];
+
+            return response()->json([
+                'success' => true,
+                'data' => $data,
+                'totales' => $totales
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error en getResumenVentas: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al obtener el resumen de ventas',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Obtiene el detalle de ventas por vendedor (solo del usuario autenticado)
+     */
+    public function getVentasPorVendedor(Request $request)
+    {
+        try {
+            $user = $this->getAuthenticatedUser();
+            $fechaInicio = $request->input('fecha_inicio');
+            $fechaFin = $request->input('fecha_fin');
+
+            $query = DB::table('usuario as u')
+                ->select([
+                    'u.ID_Usuario as id_vendedor',
+                    'u.No_Nombres_Apellidos as vendedor',
+                    DB::raw('COUNT(DISTINCT cc.id) as total_cotizaciones'),
+                    DB::raw('COUNT(DISTINCT CASE WHEN cc.estado_cotizador = "CONFIRMADO" THEN cc.id END) as cotizaciones_confirmadas'),
+                    DB::raw('COALESCE(SUM(CASE WHEN cc.estado_cotizador = "CONFIRMADO" AND cc.estado_cliente IS NOT NULL AND cc.id_cliente_importacion IS NULL THEN cccp.cbm_total ELSE 0 END), 0) as volumen_total'),
+                    
+                    DB::raw('COALESCE(SUM(CASE WHEN cc.estado_cotizador = "CONFIRMADO" AND cc.estado_cliente IS NOT NULL AND cc.id_cliente_importacion IS NULL THEN cccp.cbm_total ELSE 0 END), 0) as volumen_vendido'),
+                    
+                    DB::raw('COALESCE(SUM(CASE WHEN cc.estado_cotizador = "CONFIRMADO" AND cc.estado_cliente IS NOT NULL AND cc.id_cliente_importacion IS NULL THEN cc.monto ELSE 0 END), 0) as total_logistica'),
+                    
+                    DB::raw('COALESCE(SUM(CASE WHEN cc.estado_cotizador = "CONFIRMADO" AND cc.estado_cliente IS NOT NULL AND cc.id_cliente_importacion IS NULL THEN cc.fob ELSE 0 END), 0) as total_fob'),
+                    
+                    DB::raw('COALESCE(SUM(CASE WHEN cc.estado_cotizador = "CONFIRMADO" AND cc.estado_cliente IS NOT NULL AND cc.id_cliente_importacion IS NULL THEN cc.impuestos ELSE 0 END), 0) as total_impuestos')
+                ])
+                ->leftJoin($this->table_contenedor_cotizacion . ' as cc', 'u.ID_Usuario', '=', 'cc.id_usuario')
+                ->leftJoin($this->table_contenedor_cotizacion_proveedores . ' as cccp', 'cc.id', '=', 'cccp.id_cotizacion')
+                ->leftJoin($this->table_contenedor . ' as cont', 'cc.id_contenedor', '=', 'cont.id')
+                ->where('cont.empresa', '!=', '1')
+                ->where('u.ID_Usuario', $user->ID_Usuario); // Solo el usuario autenticado
+
+            // Filtrar por contenedor
+            if ($request->input('id_contenedor')) {
+                $query->where('cc.id_contenedor', $request->input('id_contenedor'));
+            }
+            
+            if ($fechaInicio && $fechaFin) {
+                $query->whereExists(function ($query) use ($fechaInicio, $fechaFin, $user) {
+                    $query->select(DB::raw(1))
+                        ->from($this->table_contenedor . ' as cont')
+                        ->join($this->table_contenedor_cotizacion . ' as cc2', 'cont.id', '=', 'cc2.id_contenedor')
+                        ->whereBetween('cont.fecha_zarpe', [$fechaInicio, $fechaFin])
+                        ->whereRaw('cc2.id_usuario = ' . $user->ID_Usuario);
+                });
+            }
+
+            $query->groupBy('u.ID_Usuario', 'u.No_Nombres_Apellidos');
+
+            $data = $query->get()->map(function($item) {
+                $porcentaje_efectividad = $item->total_cotizaciones > 0 
+                    ? ($item->cotizaciones_confirmadas / $item->total_cotizaciones) * 100 
+                    : 0;
+
+                return [
+                    'id_vendedor' => $item->id_vendedor,
+                    'vendedor' => $item->vendedor,
+                    'metricas' => [
+                        'total_cotizaciones' => $item->total_cotizaciones,
+                        'cotizaciones_confirmadas' => $item->cotizaciones_confirmadas,
+                        'porcentaje_efectividad' => round($porcentaje_efectividad, 2)
+                    ],
+                    'volumenes' => [
+                        'total' => round($item->volumen_total, 2),
+                        'vendido' => round($item->volumen_vendido, 2),
+                        'pendiente' => round($item->volumen_total - $item->volumen_vendido, 2)
+                    ],
+                    'totales' => [
+                        'logistica' => round($item->total_logistica, 2),
+                        'fob' => round($item->total_fob, 2),
+                        'impuestos' => round($item->total_impuestos, 2)
+                    ]
+                ];
+            });
+
+            return response()->json([
+                'success' => true,
+                'data' => $data
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error en getVentasPorVendedor: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al obtener las ventas por vendedor',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Obtiene la evolución de ventas por contenedor (solo del usuario autenticado)
+     */
+    public function getEvolucionContenedor(Request $request, $idContenedor)
+    {
+        try {
+            $user = $this->getAuthenticatedUser();
+            
+            // Verificar que el contenedor pertenece al usuario
+            $contenedor = DB::table($this->table_contenedor)
+                ->select('id', 'carga', 'fecha_zarpe')
+                ->where('id', $idContenedor)
+                ->where('empresa', '!=', '1')
+                ->whereExists(function($query) use ($idContenedor, $user) {
+                    $query->select(DB::raw(1))
+                        ->from($this->table_contenedor_cotizacion)
+                        ->whereRaw('id_contenedor = ' . $idContenedor)
+                        ->where('id_usuario', $user->ID_Usuario);
+                })
+                ->first();
+
+            if (!$contenedor) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Contenedor no encontrado o no tienes acceso a este contenedor'
+                ], 404);
+            }
+
+            // Obtener evolución por mes (solo del usuario autenticado)
+            $evolucion = DB::table($this->table_contenedor_cotizacion . ' as cc')
+                ->select([
+                    DB::raw('DATE_FORMAT(cc.fecha, "%Y-%m") as mes'),
+                    DB::raw('COUNT(DISTINCT cc.id) as total_cotizaciones'),
+                    DB::raw('COUNT(DISTINCT CASE WHEN cc.estado_cotizador = "CONFIRMADO" THEN cc.id END) as cotizaciones_confirmadas'),
+                    // Volúmenes
+                    DB::raw('COALESCE(SUM(cccp.cbm_total_china), 0) as volumen_china'),
+                    DB::raw('COALESCE(SUM(cccp.cbm_total), 0) as volumen_total'),
+                    DB::raw('COALESCE(SUM(CASE WHEN cc.estado_cotizador = "CONFIRMADO" THEN cccp.cbm_total ELSE 0 END), 0) as volumen_vendido'),
+                    DB::raw('COALESCE(SUM(CASE WHEN cc.estado_cotizador != "CONFIRMADO" OR cc.estado_cotizador IS NULL THEN cccp.cbm_total ELSE 0 END), 0) as volumen_pendiente'),
+                    // Totales monetarios
+                    DB::raw('COALESCE(SUM(cc.monto), 0) as total_logistica'),
+                    DB::raw('COALESCE(SUM(cc.fob), 0) as total_fob'),
+                    DB::raw('COALESCE(SUM(cc.impuestos), 0) as total_impuestos'),
+                    // Métricas
+                    DB::raw('COUNT(DISTINCT cc.id_usuario) as total_vendedores'),
+                    DB::raw('(COALESCE(SUM(CASE WHEN cc.estado_cotizador = "CONFIRMADO" THEN cccp.cbm_total ELSE 0 END), 0) / 
+                            NULLIF(COALESCE(SUM(cccp.cbm_total), 0), 0)) * 100 as porcentaje_avance')
+                ])
+                ->join($this->table_contenedor_cotizacion_proveedores . ' as cccp', 'cc.id', '=', 'cccp.id_cotizacion')
+                ->where('cc.id_contenedor', $idContenedor)
+                ->where('cc.id_usuario', $user->ID_Usuario) // Solo del usuario autenticado
+                ->groupBy(DB::raw('DATE_FORMAT(cc.fecha, "%Y-%m")'))
+                ->orderBy('mes', 'asc')
+                ->get()
+                ->map(function($item) {
+                    return [
+                        'mes' => $item->mes,
+                        'cotizaciones' => [
+                            'total' => $item->total_cotizaciones,
+                            'confirmadas' => $item->cotizaciones_confirmadas,
+                            'porcentaje_efectividad' => $item->total_cotizaciones > 0 
+                                ? round(($item->cotizaciones_confirmadas / $item->total_cotizaciones) * 100, 2)
+                                : 0
+                        ],
+                        'volumenes' => [
+                            'china' => round($item->volumen_china, 2),
+                            'total' => round($item->volumen_total, 2),
+                            'vendido' => round($item->volumen_vendido, 2),
+                            'pendiente' => round($item->volumen_pendiente, 2)
+                        ],
+                        'totales' => [
+                            'logistica' => round($item->total_logistica, 2),
+                            'fob' => round($item->total_fob, 2),
+                            'impuestos' => round($item->total_impuestos, 2)
+                        ],
+                        'metricas' => [
+                            'vendedores' => $item->total_vendedores,
+                            'porcentaje_avance' => round($item->porcentaje_avance, 2)
+                        ]
+                    ];
+                });
+
+            // Obtener totales acumulados
+            $totales = [
+                'cotizaciones' => [
+                    'total' => $evolucion->sum('cotizaciones.total'),
+                    'confirmadas' => $evolucion->sum('cotizaciones.confirmadas'),
+                    'porcentaje_efectividad' => $evolucion->sum('cotizaciones.total') > 0
+                        ? round(($evolucion->sum('cotizaciones.confirmadas') / $evolucion->sum('cotizaciones.total')) * 100, 2)
+                        : 0
+                ],
+                'volumenes' => [
+                    'china' => round($evolucion->sum('volumenes.china'), 2),
+                    'total' => round($evolucion->sum('volumenes.total'), 2),
+                    'vendido' => round($evolucion->sum('volumenes.vendido'), 2),
+                    'pendiente' => round($evolucion->sum('volumenes.pendiente'), 2)
+                ],
+                'totales' => [
+                    'logistica' => round($evolucion->sum('totales.logistica'), 2),
+                    'fob' => round($evolucion->sum('totales.fob'), 2),
+                    'impuestos' => round($evolucion->sum('totales.impuestos'), 2)
+                ],
+                'metricas' => [
+                    'vendedores' => $evolucion->max('metricas.vendedores'),
+                    'porcentaje_avance' => round($evolucion->avg('metricas.porcentaje_avance'), 2)
+                ]
+            ];
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'contenedor' => [
+                        'id' => $contenedor->id,
+                        'carga' => $contenedor->carga,
+                        'fecha_zarpe' => $contenedor->fecha_zarpe ? Carbon::parse($contenedor->fecha_zarpe)->format('d/m/Y') : null
+                    ],
+                    'evolucion' => $evolucion,
+                    'totales' => $totales
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error en getEvolucionContenedor: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al obtener la evolución del contenedor',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Obtiene la evolución total de volúmenes (solo del usuario autenticado)
+     */
+    public function getEvolucionTotal(Request $request)
+    {
+        try {
+            $user = $this->getAuthenticatedUser();
+            $fechaInicio = $request->input('fecha_inicio');
+            $fechaFin = $request->input('fecha_fin');
+            $idContenedor = $request->input('id_contenedor');
+
+            // Construir condición de fecha para los subqueries
+            $fechaCondition = '';
+            if ($fechaInicio && $fechaFin) {
+                $fechaCondition = ' AND DATE(cc2.fecha_confirmacion) BETWEEN "' . $fechaInicio . '" AND "' . $fechaFin . '"';
+            }
+
+            $query = DB::table($this->table_contenedor . ' as cont')
+                ->select([
+                    'cont.id as id_contenedor',
+                    'cont.carga',
+                    'cont.fecha_zarpe',
+                    // Volumen china: cotizaciones confirmadas que fueron embarcadas (LOADED)
+                    DB::raw('(
+                        SELECT COALESCE(SUM(cccp2.cbm_total_china), 0)
+                        FROM ' . $this->table_contenedor_cotizacion . ' cc2
+                        JOIN ' . $this->table_contenedor_cotizacion_proveedores . ' cccp2 ON cc2.id = cccp2.id_cotizacion
+                        WHERE cc2.id_contenedor = cont.id
+                        AND cc2.id_usuario = ' . $user->ID_Usuario . '
+                        AND cc2.estado_cotizador = "CONFIRMADO"
+                        AND cccp2.estados_proveedor = "LOADED"
+                        ' . $fechaCondition . '
+                    ) as volumen_china'),
+                    
+                    // Volumen vendido: cotizaciones confirmadas en esa fecha
+                    DB::raw('(
+                        SELECT COALESCE(SUM(cccp2.cbm_total), 0)
+                        FROM ' . $this->table_contenedor_cotizacion . ' cc2
+                        JOIN ' . $this->table_contenedor_cotizacion_proveedores . ' cccp2 ON cc2.id = cccp2.id_cotizacion
+                        WHERE cc2.id_contenedor = cont.id
+                        AND cc2.id_usuario = ' . $user->ID_Usuario . '
+                        AND cc2.estado_cotizador = "CONFIRMADO"
+                        ' . $fechaCondition . '
+                    ) as volumen_vendido'),
+                    
+                    // Volumen pendiente: cotizaciones no confirmadas
+                    DB::raw('(
+                        SELECT COALESCE(SUM(cccp2.cbm_total), 0)
+                        FROM ' . $this->table_contenedor_cotizacion . ' cc2
+                        JOIN ' . $this->table_contenedor_cotizacion_proveedores . ' cccp2 ON cc2.id = cccp2.id_cotizacion
+                        WHERE cc2.id_contenedor = cont.id
+                        AND cc2.id_usuario = ' . $user->ID_Usuario . '
+                        AND (cc2.estado_cotizador != "CONFIRMADO" OR cc2.estado_cotizador IS NULL)
+                    ) as volumen_pendiente')
+                ])
+                ->where('cont.empresa', '!=', '1')
+                ->whereExists(function($query) use ($user, $fechaInicio, $fechaFin) {
+                    $query->select(DB::raw(1))
+                        ->from($this->table_contenedor_cotizacion . ' as cc2')
+                        ->whereRaw('cc2.id_contenedor = cont.id')
+                        ->where('cc2.id_usuario', $user->ID_Usuario);
+                    // Si hay fechas, solo mostrar contenedores con cotizaciones confirmadas en ese rango
+                    if ($fechaInicio && $fechaFin) {
+                        $query->where('cc2.estado_cotizador', 'CONFIRMADO')
+                              ->whereBetween(DB::raw('DATE(cc2.fecha_confirmacion)'), [$fechaInicio, $fechaFin]);
+                    }
+                });
+
+            // Filtrar por contenedor
+            if ($idContenedor) {
+                $query->where('cont.id', $idContenedor);
+            }
+
+            $query->orderByRaw('CAST(cont.carga AS UNSIGNED)');
+
+            $data = $query->orderBy('cont.fecha_zarpe', 'asc')
+                ->get()
+                ->map(function($item) {
+                    return [
+                        'contenedor' => [
+                            'id' => $item->id_contenedor,
+                            'carga' => $item->carga,
+                            'fecha' => $item->fecha_zarpe ? Carbon::parse($item->fecha_zarpe)->format('d/m/Y') : null
+                        ],
+                        'volumenes' => [
+                            'china' => round($item->volumen_china, 2),
+                            'vendido' => round($item->volumen_vendido, 2),
+                            'pendiente' => round($item->volumen_pendiente, 2),
+                            'total' => round($item->volumen_vendido + $item->volumen_pendiente, 2)
+                        ]
+                    ];
+                });
+
+            // Calcular totales
+            $totales = [
+                'volumenes' => [
+                    'china' => round($data->sum('volumenes.china'), 2),
+                    'vendido' => round($data->sum('volumenes.vendido'), 2),
+                    'pendiente' => round($data->sum('volumenes.pendiente'), 2),
+                    'total' => round($data->sum('volumenes.total'), 2)
+                ],
+                'porcentajes' => [
+                    'vendido' => $data->sum('volumenes.total') > 0 
+                        ? round(($data->sum('volumenes.vendido') / $data->sum('volumenes.total')) * 100, 2)
+                        : 0,
+                    'pendiente' => $data->sum('volumenes.total') > 0 
+                        ? round(($data->sum('volumenes.pendiente') / $data->sum('volumenes.total')) * 100, 2)
+                        : 0
+                ]
+            ];
+
+            // Calcular promedios por contenedor
+            $promedios = [
+                'volumenes' => [
+                    'china' => round($data->avg('volumenes.china'), 2),
+                    'vendido' => round($data->avg('volumenes.vendido'), 2),
+                    'pendiente' => round($data->avg('volumenes.pendiente'), 2),
+                    'total' => round($data->avg('volumenes.total'), 2)
+                ]
+            ];
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'evolucion' => $data,
+                    'totales' => $totales,
+                    'promedios' => $promedios,
+                    'total_contenedores' => $data->count()
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error en getEvolucionTotal: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al obtener la evolución total',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Obtiene las cotizaciones confirmadas por vendedor agrupadas por día (solo del usuario autenticado)
+     */
+    public function getCotizacionesConfirmadasPorVendedorPorDia(Request $request)
+    {
+        try {
+            $user = $this->getAuthenticatedUser();
+            $fechaInicio = $request->input('fecha_inicio');
+            $fechaFin = $request->input('fecha_fin');
+            $idContenedor = $request->input('id_contenedor');
+
+            // Si no se proporcionan fechas, usar los últimos 180 días
+            if (!$fechaInicio || !$fechaFin) {
+                $fechaFin = Carbon::now()->format('Y-m-d');
+                $fechaInicio = Carbon::now()->subDays(180)->format('Y-m-d');
+            }
+
+            $query = DB::table($this->table_contenedor_cotizacion . ' as cc')
+                ->select([
+                    DB::raw('DATE(cc.fecha_confirmacion) as fecha'),
+                    'u.ID_Usuario as id_vendedor',
+                    'u.No_Nombres_Apellidos as vendedor',
+                    DB::raw('COUNT(DISTINCT cc.id) as total_cotizaciones_confirmadas'),
+                    DB::raw('COALESCE(SUM(cccp.cbm_total), 0) as volumen_total_confirmado'),
+                    DB::raw('COALESCE(SUM(cc.monto), 0) as monto_total_logistica'),
+                    DB::raw('COALESCE(SUM(cc.fob), 0) as monto_total_fob'),
+                    DB::raw('COALESCE(SUM(cc.impuestos), 0) as monto_total_impuestos')
+                ])
+                ->leftJoin('usuario as u', 'cc.id_usuario', '=', 'u.ID_Usuario')
+                ->leftJoin($this->table_contenedor_cotizacion_proveedores . ' as cccp', 'cc.id', '=', 'cccp.id_cotizacion')
+                ->leftJoin($this->table_contenedor . ' as cont', 'cc.id_contenedor', '=', 'cont.id')
+                ->where('cc.estado_cotizador', 'CONFIRMADO')
+                ->where('cont.empresa', '!=', '1')
+                ->where('cc.id_usuario', $user->ID_Usuario) // Solo del usuario autenticado
+                ->whereNotNull('cc.fecha_confirmacion')
+                ->whereBetween(DB::raw('DATE(cc.fecha_confirmacion)'), [$fechaInicio, $fechaFin]);
+
+            // Filtrar por contenedor específico si se proporciona
+            if ($idContenedor) {
+                $query->where('cc.id_contenedor', $idContenedor);
+            }
+
+            $query->groupBy(
+                DB::raw('DATE(cc.fecha_confirmacion)'),
+                'u.ID_Usuario',
+                'u.No_Nombres_Apellidos'
+            )
+            ->orderBy('fecha', 'asc')
+            ->orderBy('vendedor', 'asc');
+
+            $resultados = $query->get();
+
+            // Procesar datos para Chart.js
+            $vendedores = $resultados->pluck('vendedor')->unique()->values();
+            $fechas = $resultados->pluck('fecha')->unique()->sort()->values();
+
+            // Crear estructura de datos para Chart.js
+            $datasets = [];
+            $colores = [
+                '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF',
+                '#FF9F40', '#FF6384', '#C9CBCF', '#4BC0C0', '#FF6384'
+            ];
+
+            // Datasets para conteo de cotizaciones
+            foreach ($vendedores as $index => $vendedor) {
+                $vendedorData = $resultados->where('vendedor', $vendedor);
+                
+                $dataCotizaciones = [];
+                foreach ($fechas as $fecha) {
+                    $cotizacionesDia = $vendedorData->where('fecha', $fecha)->first();
+                    $dataCotizaciones[] = $cotizacionesDia ? (int) $cotizacionesDia->total_cotizaciones_confirmadas : 0;
+                }
+
+                $datasets[] = [
+                    'label' => $vendedor . ' (Cotizaciones)',
+                    'data' => $dataCotizaciones,
+                    'backgroundColor' => $colores[$index % count($colores)],
+                    'borderColor' => $colores[$index % count($colores)],
+                    'borderWidth' => 2,
+                    'fill' => false,
+                    'tension' => 0.1,
+                    'yAxisID' => 'y',
+                    'type' => 'line'
+                ];
+            }
+
+            // Datasets para volumen CBM
+            foreach ($vendedores as $index => $vendedor) {
+                $vendedorData = $resultados->where('vendedor', $vendedor);
+                
+                $dataVolumen = [];
+                foreach ($fechas as $fecha) {
+                    $cotizacionesDia = $vendedorData->where('fecha', $fecha)->first();
+                    $dataVolumen[] = $cotizacionesDia ? round($cotizacionesDia->volumen_total_confirmado, 2) : 0;
+                }
+
+                $datasets[] = [
+                    'label' => $vendedor . ' (CBM)',
+                    'data' => $dataVolumen,
+                    'backgroundColor' => $colores[$index % count($colores)] . '80',
+                    'borderColor' => $colores[$index % count($colores)],
+                    'borderWidth' => 2,
+                    'fill' => false,
+                    'tension' => 0.1,
+                    'borderDash' => [5, 5],
+                    'yAxisID' => 'y1',
+                    'type' => 'line'
+                ];
+            }
+
+            // Formatear fechas para mostrar
+            $labels = $fechas->map(function($fecha) {
+                return Carbon::parse($fecha)->format('d/m/Y');
+            });
+
+            // Calcular estadísticas adicionales
+            $estadisticas = [
+                'total_cotizaciones' => $resultados->sum('total_cotizaciones_confirmadas'),
+                'total_volumen' => round($resultados->sum('volumen_total_confirmado'), 2),
+                'total_monto_logistica' => round($resultados->sum('monto_total_logistica'), 2),
+                'total_monto_fob' => round($resultados->sum('monto_total_fob'), 2),
+                'total_monto_impuestos' => round($resultados->sum('monto_total_impuestos'), 2),
+                'promedio_diario' => $fechas->count() > 0 ? round($resultados->sum('total_cotizaciones_confirmadas') / $fechas->count(), 2) : 0,
+                'total_vendedores' => $vendedores->count(),
+                'periodo' => [
+                    'inicio' => Carbon::parse($fechaInicio)->format('d/m/Y'),
+                    'fin' => Carbon::parse($fechaFin)->format('d/m/Y'),
+                    'dias' => $fechas->count()
+                ]
+            ];
+
+            // Datos detallados por vendedor
+            $detalleVendedores = [];
+            foreach ($vendedores as $vendedor) {
+                $vendedorData = $resultados->where('vendedor', $vendedor);
+                $detalleVendedores[] = [
+                    'vendedor' => $vendedor,
+                    'total_cotizaciones' => $vendedorData->sum('total_cotizaciones_confirmadas'),
+                    'total_volumen' => round($vendedorData->sum('volumen_total_confirmado'), 2),
+                    'total_monto_logistica' => round($vendedorData->sum('monto_total_logistica'), 2),
+                    'promedio_diario' => $fechas->count() > 0 ? round($vendedorData->sum('total_cotizaciones_confirmadas') / $fechas->count(), 2) : 0,
+                    'dias_activos' => $vendedorData->count()
+                ];
+            }
+
+            // Datos para tabla detallada
+            $datosDetalle = $resultados->map(function($item) {
+                return [
+                    'fecha' => Carbon::parse($item->fecha)->format('d/m/Y'),
+                    'vendedor' => $item->vendedor,
+                    'cotizaciones_confirmadas' => (int) $item->total_cotizaciones_confirmadas,
+                    'volumen_confirmado' => round($item->volumen_total_confirmado, 2),
+                    'monto_logistica' => round($item->monto_total_logistica, 2),
+                    'monto_fob' => round($item->monto_total_fob, 2),
+                    'monto_impuestos' => round($item->monto_total_impuestos, 2)
+                ];
+            });
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'chart' => [
+                        'labels' => $labels,
+                        'datasets' => $datasets
+                    ],
+                    'estadisticas' => $estadisticas,
+                    'detalle_vendedores' => $detalleVendedores,
+                    'datos_detalle' => $datosDetalle
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error en getCotizacionesConfirmadasPorVendedorPorDia: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al obtener las cotizaciones confirmadas por vendedor por día',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+}
+

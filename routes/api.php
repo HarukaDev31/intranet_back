@@ -67,6 +67,9 @@ require __DIR__.'/modules/cursos.php';
 // Módulo de Carga Consolidada
 require __DIR__.'/modules/carga-consolidada.php';
 
+// Módulo de Dashboard por Usuario
+require __DIR__.'/modules/dashboard-usuario.php';
+
 // Módulo de Calculadora de Importación
 require __DIR__.'/modules/calculadora-importacion.php';
 
