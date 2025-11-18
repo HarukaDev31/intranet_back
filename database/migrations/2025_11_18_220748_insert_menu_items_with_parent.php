@@ -18,7 +18,7 @@ class InsertMenuItemsWithParent extends Migration
         $padreId = DB::table('menu')->insertGetId([
             'ID_Padre' => 0,
             'Nu_Orden' => 1,
-            'No_Menu' => 'Menú Padre',
+            'No_Menu' => 'Mi Progreso',
             'No_Menu_Url' => '#',
             'No_Class_Controller' => '',
             'Txt_Css_Icons' => 'fa fa-folder',
@@ -28,7 +28,7 @@ class InsertMenuItemsWithParent extends Migration
             'Nu_Tipo_Sistema' => 0,
             'Txt_Url_Video' => null,
             'No_Menu_China' => null,
-            'url_intranet_v2' => null,
+            'url_intranet_v2' => 'mi-progreso',
             'show_father' => 1
         ]);
 
@@ -36,7 +36,7 @@ class InsertMenuItemsWithParent extends Migration
         DB::table('menu')->insert([
             'ID_Padre' => $padreId, // Usa el ID_Menu autogenerado del registro anterior
             'Nu_Orden' => 1,
-            'No_Menu' => 'Menú Hijo',
+            'No_Menu' => 'Mi Progreso',
             'No_Menu_Url' => 'menu-hijo',
             'No_Class_Controller' => '',
             'Txt_Css_Icons' => 'fa fa-file',
@@ -46,7 +46,7 @@ class InsertMenuItemsWithParent extends Migration
             'Nu_Tipo_Sistema' => 0,
             'Txt_Url_Video' => null,
             'No_Menu_China' => null,
-            'url_intranet_v2' => 'menu-hijo',
+            'url_intranet_v2' => null,
             'show_father' => 1
         ]);
     }
