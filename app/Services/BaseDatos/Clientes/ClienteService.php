@@ -509,6 +509,7 @@ class ClienteService
                 'documento' => $cliente->documento,
                 'correo' => $cliente->correo,
                 'telefono' => $cliente->telefono,
+                'provincia' => $cliente->provincia,
                 'fecha' => $cliente->fecha ? $cliente->fecha->format('d/m/Y') : null,
                 'categoria' => $categoria,
                 'primer_servicio' => $primerServicio ? [

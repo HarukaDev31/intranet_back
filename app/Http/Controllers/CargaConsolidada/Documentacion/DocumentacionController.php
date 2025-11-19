@@ -15,6 +15,8 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
+use App\Models\BaseDatos\ProductoImportadoExcel;
+use Carbon\Carbon;
 use Tymon\JWTAuth\Facades\JWTAuth;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Http\Controllers\BaseDatos\ProductosController;
@@ -441,16 +443,29 @@ class DocumentacionController extends Controller
                 ]);
             }
 
-            // Si es el folder 9 (productos), procesar Excel
-            if ($idFolder == 9 && $fileExtension == 'xlsx') {
+            // Si es el folder 9 (productos), procesar Excel xlsx o xlsm
+            if ($idFolder == 9 && ($fileExtension == 'xlsx' || $fileExtension == 'xlsm')) {
                 //instance  ProductosController and call importExcel
+                Log::info('Iniciando importación de productos desde Excel para contenedor: ' . $idContenedor);
                 $productosController = new ProductosController();
                 // Corregido: crear un nuevo Request correctamente y pasar los datos necesarios
-                $newRequest = new Request([
-                    'excel_file' => $file,
-                    'idContenedor' => $idContenedor
-                ]);
+                Log::info('Preparando Request para importExcel con archivo: ' . $file->getClientOriginalName());
+                // Construir Request correctamente: poner idContenedor en el body (request)
+                // y el UploadedFile en la bag de files. Algunos controladores esperan el archivo
+                // en $request->files, no en $request->all().
+                // Pasar el id del registro DocumentacionFile para que el import quede vinculado
+                // y sea posible borrar luego por ese id. Antes se pasaba el id del contenedor,
+                // lo que llevaba a inconsistencias si el request entrante no lo incluía.
+                $newRequest = new Request([], ['idContenedor' => $documentacionFile->id], [], [], ['excel_file' => $file, 'file' => $file]);
+                // Asegurar también explícitamente que los archivos estén en la colección files
+                $newRequest->files->set('excel_file', $file);
+                $newRequest->files->set('file', $file);
+                // Forzar en ambos lugares (request bag y merged data) por si acaso
+                $newRequest->request->set('idContenedor', $documentacionFile->id);
+                $newRequest->merge(['idContenedor' => $documentacionFile->id]);
+                Log::info('Llamando a importExcel con Request: idContenedor(DocumentacionFile id)=' . $newRequest->request->get('idContenedor') . ', original_idContenedor=' . $idContenedor . ', hasFile(excel_file)=' . ($newRequest->files->has('excel_file') ? 'yes' : 'no'));
                 $productosController->importExcel($newRequest);
+                Log::info('Importación de productos desde Excel completada para contenedor: ' . $idContenedor);
             }
 
             return response()->json([
@@ -1545,31 +1560,71 @@ class DocumentacionController extends Controller
             ], 404);
         }
 
-        // Si es el folder 9 (productos), eliminar imports vinculados a este archivo
-        if ($file->id_folder == 9) {
-            try {
-                $productosController = new ProductosController();
+        Log::info('deleteFileDocumentation invoked for idFile=' . $idFile . ', id_folder=' . ($file->id_folder ?? 'NULL') . ', id_contenedor=' . ($file->id_contenedor ?? 'NULL') . ', file_url=' . ($file->file_url ?? 'NULL'));
 
-                // Intentar localizar imports por varios criterios para ser robustos
-                $filename = basename($file->file_url);
+        // Intentar eliminar imports vinculados a este archivo (aplica a folder 9 y también a otros folders)
+        try {
+            $productosController = new ProductosController();
 
-                $imports = ImportProducto::where(function ($q) use ($file, $filename) {
-                    $q->where('id_contenedor_consolidado_documentacion_files', $file->id)
-                      ->orWhere('id_contenedor_consolidado_documentacion_files', $file->id_contenedor)
-                      ->orWhere('ruta_archivo', 'like', '%' . $filename . '%');
-                })->get();
+            // Intentar localizar imports por varios criterios para ser robustos
+            $filename = basename($file->file_url);
 
-                foreach ($imports as $import) {
+            $imports = ImportProducto::where(function ($q) use ($file, $filename) {
+                $q->where('id_contenedor_consolidado_documentacion_files', $file->id)
+                  ->orWhere('id_contenedor_consolidado_documentacion_files', $file->id_contenedor)
+                  ->orWhere('ruta_archivo', 'like', '%' . $filename . '%');
+            })->get();
+
+            Log::info('deleteFileDocumentation: imports query completed, found count=' . ($imports ? $imports->count() : 0));
+            foreach ($imports as $impLog) {
+                Log::info('deleteFileDocumentation: matched import id=' . $impLog->id . ', id_contenedor_consolidado_documentacion_files=' . ($impLog->id_contenedor_consolidado_documentacion_files ?? 'NULL') . ', ruta_archivo=' . ($impLog->ruta_archivo ?? 'NULL'));
+            }
+
+            foreach ($imports as $import) {
+                try {
+                    // Llamar al método existente en ProductosController que elimina la importación por id
+                    Log::info('deleteFileDocumentation: calling ProductosController::deleteExcel for import id=' . $import->id);
+                    $res = $productosController->deleteExcel($import->id);
                     try {
-                        // Llamar al método existente en ProductosController que elimina la importación por id
-                        $productosController->deleteExcel($import->id);
+                        // Intentar loguear el contenido de la respuesta si existe
+                        if (is_object($res) && method_exists($res, 'getContent')) {
+                            Log::info('deleteFileDocumentation: deleteExcel response: ' . $res->getContent());
+                        }
                     } catch (\Exception $e) {
-                        Log::error('Error calling deleteExcel for import id=' . $import->id . ': ' . $e->getMessage());
+                        Log::warning('deleteFileDocumentation: could not log deleteExcel response: ' . $e->getMessage());
+                    }
+                } catch (\Exception $e) {
+                    Log::error('Error calling deleteExcel for import id=' . $import->id . ': ' . $e->getMessage());
+                }
+            }
+
+            // Si no se encontró ningún import vinculado, aplicar borrados alternativos
+            if (count($imports) === 0) {
+                Log::info('deleteFileDocumentation: no imports matched - applying fallback deletion');
+                // Fallback 1: eliminar por idContenedor (si los productos fueron importados con idContenedor)
+                try {
+                    $deletedByCont = ProductoImportadoExcel::where('idContenedor', $file->id_contenedor)->delete();
+                    Log::info('deleteFileDocumentation: fallback deleted productos by idContenedor=' . $file->id_contenedor . ' count=' . $deletedByCont);
+                } catch (\Exception $e) {
+                    Log::warning('deleteFileDocumentation: error deleting productos by idContenedor: ' . $e->getMessage());
+                }
+
+                // Fallback 2: eliminar por ventana temporal alrededor de la fecha de creación del archivo
+                if ($file->created_at) {
+                    try {
+                        $start = Carbon::parse($file->created_at)->subMinutes(5)->toDateTimeString();
+                        $end = Carbon::parse($file->created_at)->addMinutes(60)->toDateTimeString();
+                        $deletedByTime = ProductoImportadoExcel::whereNull('idContenedor')
+                            ->whereBetween('created_at', [$start, $end])
+                            ->delete();
+                        Log::info('deleteFileDocumentation: fallback deleted productos by time window (' . $start . ' - ' . $end . ') count=' . $deletedByTime);
+                    } catch (\Exception $e) {
+                        Log::warning('deleteFileDocumentation: error deleting productos by time window: ' . $e->getMessage());
                     }
                 }
-            } catch (\Exception $e) {
-                Log::error('Error al buscar/eliminar imports asociados al DocumentacionFile id=' . $file->id . ': ' . $e->getMessage());
             }
+        } catch (\Exception $e) {
+            Log::error('Error al buscar/eliminar imports asociados al DocumentacionFile id=' . $file->id . ': ' . $e->getMessage());
         }
 
         // Eliminar el registro del archivo de documentación

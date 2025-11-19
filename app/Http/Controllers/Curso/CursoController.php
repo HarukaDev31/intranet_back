@@ -320,6 +320,20 @@ class CursoController extends Controller
                 'success' => true,
                 'data' => [
                     [
+                        'key' => 'fechaInicio',
+                        'label' => 'Fecha inicio',
+                        'placeholder' => 'Desde',
+                        'type' => 'date',
+                        'options' => []
+                    ],
+                    [
+                        'key' => 'fechaFin',
+                        'label' => 'Fecha fin',
+                        'placeholder' => 'Hasta',
+                        'type' => 'date',
+                        'options' => []
+                    ],
+                    [
                         'key' => 'campanas',
                         'label' => 'Campañas',
                         'placeholder' => 'Selecciona una campaña',

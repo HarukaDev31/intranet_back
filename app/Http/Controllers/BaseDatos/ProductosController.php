@@ -167,6 +167,13 @@ class ProductosController extends Controller
 
             $file = $request->file('excel_file');
             $idContenedor = $request->idContenedor;
+            Log::info('prepared Request idContenedor: ' . $idContenedor);
+            try {
+                Log::info('Request dump (keys): ' . json_encode(array_keys($request->all())));
+                Log::info('Request files keys: ' . json_encode(array_keys($request->files->all())));
+            } catch (\Exception $e) {
+                Log::warning('No se pudo volcar request para debug: ' . $e->getMessage());
+            }
             if (!$file) {
                 Log::error('No se proporcionó archivo');
                 return response()->json([
@@ -179,6 +186,7 @@ class ProductosController extends Controller
             $request->validate([
                 'excel_file' => 'required|file|mimes:xlsx,xls,xlsm'
             ]);
+            Log::info('Validation passed for excel_file: ' . $file->getClientOriginalName());
 
             // Validar tipo de archivo
             $extension = strtolower($file->getClientOriginalExtension());
@@ -209,6 +217,12 @@ class ProductosController extends Controller
                 'id_contenedor_consolidado_documentacion_files' => $idContenedor
             ]);
 
+            // Log para verificar qué se guardó exactamente en el registro de importación
+            try {
+                Log::info('ImportProducto creado - id: ' . $importProducto->id . ', id_contenedor_consolidado_documentacion_files: ' . ($importProducto->id_contenedor_consolidado_documentacion_files ?? 'NULL') . ', id_contenedor (fallback): ' . ($importProducto->id_contenedor ?? 'NULL'));
+            } catch (\Exception $e) {
+                Log::warning('No se pudo loguear ImportProducto creado: ' . $e->getMessage());
+            }
             DB::commit();
 
             ImportProductosExcelJob::dispatch($fullTempPath, $importProducto->id)->onQueue('importaciones');
@@ -441,26 +455,47 @@ class ProductosController extends Controller
     public function deleteExcel($id)
     {
         try {
+            Log::info('ProductosController::deleteExcel called with id=' . $id);
             $importProducto = ImportProducto::find($id);
 
             if (!$importProducto) {
+                Log::warning('ProductosController::deleteExcel - import not found id=' . $id);
                 return response()->json([
                     'success' => false,
                     'message' => 'Importación no encontrada'
                 ], 404);
             }
 
-            // Eliminar el archivo de la base de datos
-            $importProducto->delete();
+            Log::info('ProductosController::deleteExcel - import found id=' . $importProducto->id . ', id_contenedor_consolidado_documentacion_files=' . ($importProducto->id_contenedor_consolidado_documentacion_files ?? 'NULL') . ', ruta_archivo=' . ($importProducto->ruta_archivo ?? 'NULL'));
 
+            // Eliminar productos importados asociados a esta importación (si los hay)
+            try {
+                $deletedCount = ProductoImportadoExcel::where('id_import_producto', $importProducto->id)->delete();
+                Log::info('Productos importados eliminados para import_id=' . $importProducto->id . ': ' . $deletedCount);
+            } catch (\Exception $e) {
+                Log::warning('No se pudieron eliminar productos importados para import_id=' . $importProducto->id . ': ' . $e->getMessage());
+            }
+
+            // Eliminar el registro de importación
+            try {
+                $importProducto->delete();
+            } catch (\Exception $e) {
+                Log::warning('No se pudo eliminar ImportProducto id=' . $importProducto->id . ': ' . $e->getMessage());
+            }
+
+            // Eliminar archivo físico asociado a la importación
             $filePath = storage_path('app/' . $importProducto->ruta_archivo);
-            if (file_exists($filePath)) {
-                unlink($filePath);
+            if (!empty($importProducto->ruta_archivo) && file_exists($filePath)) {
+                try {
+                    unlink($filePath);
+                } catch (\Exception $e) {
+                    Log::warning('No se pudo eliminar el archivo físico de la importación: ' . $e->getMessage());
+                }
             }
 
             return response()->json([
                 'success' => true,
-                'message' => 'Importación eliminada correctamente'
+                'message' => 'Importación y productos asociados eliminados correctamente'
             ]);
         } catch (\Exception $e) {
             Log::error('Error al eliminar importación: ' . $e->getMessage());

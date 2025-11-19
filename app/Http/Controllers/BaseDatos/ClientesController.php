@@ -58,7 +58,7 @@ class ClientesController extends Controller
             $page = $request->get('currentPage', 1);
 
             // Usar el servicio para obtener datos
-            $result = $this->clienteService->obtenerClientes($request, $page, $perPage);
+            $result = $this->clienteService->obtenerClientes($request, $page, $perPage, $search);
 
             return response()->json([
                 'success' => true,
