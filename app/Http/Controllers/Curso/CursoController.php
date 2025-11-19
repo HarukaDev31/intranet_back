@@ -1972,4 +1972,125 @@ class CursoController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Enviar recordatorio de pago por WhatsApp
+     */
+    public function enviarRecordatorioPago($idPedido)
+    {
+        try {
+            // Obtener usuario autenticado
+            $user = JWTAuth::parseToken()->authenticate();
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Usuario no autenticado'
+                ], 401);
+            }
+
+            // Obtener datos del pedido con información del cliente y pagos
+            $pedido = DB::table('pedido_curso AS PC')
+                ->select([
+                    'PC.ID_Pedido_Curso',
+                    'PC.Ss_Total',
+                    'CLI.No_Entidad',
+                    'CLI.Nu_Celular_Entidad',
+                    DB::raw('(
+                        SELECT IFNULL(SUM(cccp.monto), 0)
+                        FROM pedido_curso_pagos AS cccp
+                        JOIN pedido_curso_pagos_concept ccp ON cccp.id_concept = ccp.id
+                        WHERE cccp.id_pedido_curso = PC.ID_Pedido_Curso
+                        AND ccp.name = "ADELANTO"
+                    ) AS total_pagos')
+                ])
+                ->leftJoin('entidad AS CLI', 'CLI.ID_Entidad', '=', 'PC.ID_Entidad')
+                ->where('PC.ID_Pedido_Curso', $idPedido)
+                ->first();
+
+            if (!$pedido) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Pedido no encontrado'
+                ], 404);
+            }
+
+            // Validar que tenga número de teléfono
+            if (empty($pedido->Nu_Celular_Entidad)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'El cliente no tiene número de teléfono registrado'
+                ], 400);
+            }
+
+            // Calcular valores
+            $importe = floatval($pedido->Ss_Total ?? 0);
+            $adelanto = floatval($pedido->total_pagos ?? 0);
+            $deuda = $importe - $adelanto;
+
+            // Formatear números con 2 decimales
+            $importeFormateado = number_format($importe, 2, '.', '');
+            $adelantoFormateado = number_format($adelanto, 2, '.', '');
+            $deudaFormateada = number_format($deuda, 2, '.', '');
+
+            // Construir mensaje
+            $nombreCliente = $pedido->No_Entidad ?? 'Cliente';
+            $mensaje = "Buen día {$nombreCliente} 👋\n\n";
+            $mensaje .= "Hoy estamos comenzando las clases 📚 recordarte que para poder gestionar las credenciales tienes que enviar la captura de la diferencia, quedo a la espera 🚢📦🌎✈️\n\n";
+            $mensaje .= "Importe: S/ {$importeFormateado}\n";
+            $mensaje .= "Adelanto: S/ {$adelantoFormateado}\n";
+            $mensaje .= "Deuda: S/ {$deudaFormateada}";
+
+            // Formatear número de teléfono
+            $phoneNumber = trim($pedido->Nu_Celular_Entidad);
+            // Remover caracteres no numéricos excepto el prefijo
+            $phoneNumber = preg_replace('/[^0-9]/', '', $phoneNumber);
+            
+            // Si tiene 9 dígitos, agregar prefijo 51
+            if (strlen($phoneNumber) == 9) {
+                $phoneNumber = '51' . $phoneNumber . '@c.us';
+            } else {
+                // Si ya tiene prefijo, solo agregar @c.us
+                $phoneNumber = $phoneNumber . '@c.us';
+            }
+
+            // Enviar mensaje por WhatsApp usando sendMessageCurso
+            $response = $this->sendMessageCurso($mensaje, $phoneNumber);
+
+            if ($response && isset($response['status']) && $response['status']) {
+                Log::info('Recordatorio de pago enviado exitosamente', [
+                    'id_pedido' => $idPedido,
+                    'cliente' => $nombreCliente,
+                    'telefono' => $phoneNumber
+                ]);
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Recordatorio de pago enviado correctamente'
+                ]);
+            } else {
+                $errorMessage = $response['response']['error'] ?? 'Error desconocido al enviar WhatsApp';
+                Log::error('Error al enviar recordatorio de pago', [
+                    'id_pedido' => $idPedido,
+                    'response' => $response
+                ]);
+
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Error al enviar el recordatorio',
+                    'error' => $errorMessage
+                ], 500);
+            }
+        } catch (\Exception $e) {
+            Log::error('Error en enviarRecordatorioPago: ' . $e->getMessage(), [
+                'id_pedido' => $idPedido,
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al enviar recordatorio de pago',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
 }

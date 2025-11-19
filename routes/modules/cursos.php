@@ -22,6 +22,7 @@ Route::group(['prefix' => 'cursos', 'middleware' => 'jwt.auth'], function () {
     Route::put('usuario-moodle/{id}', [CursoController::class, 'setUsuarioMoodle']);
     Route::put('pedido/{id}', [CursoController::class, 'actualizarPedido']);
     Route::post('pedido/{id}/generar-constancia', [CursoController::class, 'generarConstanciaPedido']);
+    Route::post('pedido/{id}/enviar-recordatorio-pago', [CursoController::class, 'enviarRecordatorioPago']);
     Route::put('pedido/{id}/importe', [CursoController::class, 'actualizarImportePedido']);
     Route::delete('pedido/{id}', [CursoController::class, 'eliminarPedido']);
     Route::get('pedido/{id}/cliente', [CursoController::class, 'getDatosClientePorPedido']);
