@@ -2557,15 +2557,9 @@ class CotizacionController extends Controller
                 ])
             ]);
 
-            Log::info('Notificaciones creadas para Coordinación y Jefe de Ventas:', [
-                'notificacion_coordinacion_id' => $notificacion->id,
-                'notificacion_jefe_ventas_id' => $notificacionJefeVentas->id,
-                'cotizacion_id' => $cotizacion->id,
-                'contenedor_id' => $contenedor->id,
-                'usuario_creador' => $usuarioCreador->No_Nombres_Apellidos
-            ]);
+           
 
-            return [$notificacion, $notificacionJefeVentas];
+            return [ $notificacionJefeVentas];
         } catch (\Exception $e) {
             Log::error('Error al crear notificaciones para Coordinación y Jefe de Ventas: ' . $e->getMessage());
             // No lanzar excepción para no afectar el flujo principal de creación de cotización

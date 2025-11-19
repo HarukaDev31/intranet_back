@@ -5,11 +5,251 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use App\Helpers\DateHelper;
+use Tymon\JWTAuth\Facades\JWTAuth;
 
 class CampaignController extends Controller
 {
     private $table_campana_curso_dias = 'campana_curso_dias';
 
+    public function getStudents($id, Request $request)
+    {
+        try {
+            $perPage = $request->get('limit', 10);
+            $page = $request->get('page', 1);
+            $search = $request->get('search', '');
+            $fechaInicio = $request->get('fechaInicio', '');
+            $fechaFin = $request->get('fechaFin', '');
+            $estadoPago = $request->get('estados_pago', '');
+            $tipoCurso = $request->get('tipos_curso', '');
+
+            // Obtener usuario autenticado
+            $user = JWTAuth::parseToken()->authenticate();
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Usuario no autenticado'
+                ], 401);
+            }
+
+            // Construir la consulta principal con todos los joins necesarios
+            $query = DB::table('pedido_curso AS PC')
+                ->select([
+                    'PC.*',
+                    'CLI.Fe_Nacimiento',
+                    'CLI.Nu_Como_Entero_Empresa',
+                    'CLI.No_Otros_Como_Entero_Empresa',
+                    'DIST.No_Distrito',
+                    'PROV.No_Provincia',
+                    'DEP.No_Departamento',
+                    'TDI.No_Tipo_Documento_Identidad_Breve',
+                    'P.No_Pais',
+                    'CLI.Nu_Tipo_Sexo',
+                    'CLI.No_Entidad',
+                    'CLI.Nu_Documento_Identidad',
+                    'CLI.Nu_Celular_Entidad',
+                    'CLI.Txt_Email_Entidad',
+                    'CLI.Nu_Edad',
+                    'M.No_Signo',
+                    'USR.ID_Usuario',
+                    'USR.No_Usuario',
+                    'USR.No_Password',
+                    'CAMP.Fe_Fin',
+                    'CAMP.Fe_Inicio',
+                    DB::raw('tipo_curso'), // Por defecto virtual, se puede modificar según la lógica de negocio
+                    DB::raw('(
+                        SELECT COUNT(*)
+                        FROM pedido_curso_pagos AS cccp
+                        JOIN pedido_curso_pagos_concept ccp ON cccp.id_concept = ccp.id
+                        WHERE cccp.id_pedido_curso = PC.ID_Pedido_Curso
+                        AND ccp.name = "ADELANTO"
+                    ) AS pagos_count'),
+                    DB::raw('(
+                        SELECT IFNULL(SUM(cccp.monto), 0)
+                        FROM pedido_curso_pagos AS cccp
+                        JOIN pedido_curso_pagos_concept ccp ON cccp.id_concept = ccp.id
+                        WHERE cccp.id_pedido_curso = PC.ID_Pedido_Curso
+                        AND ccp.name = "ADELANTO"
+                    ) AS total_pagos')
+                ])
+                ->leftJoin('pais AS P', 'P.ID_Pais', '=', 'PC.ID_Pais')
+                ->leftJoin('entidad AS CLI', 'CLI.ID_Entidad', '=', 'PC.ID_Entidad')
+                ->leftJoin('tipo_documento_identidad AS TDI', 'TDI.ID_Tipo_Documento_Identidad', '=', 'CLI.ID_Tipo_Documento_Identidad')
+                ->leftJoin('moneda AS M', 'M.ID_Moneda', '=', 'PC.ID_Moneda')
+                ->leftJoin('usuario AS USR', 'USR.ID_Entidad', '=', 'CLI.ID_Entidad')
+                ->leftJoin('campana_curso AS CAMP', 'CAMP.ID_Campana', '=', 'PC.ID_Campana')
+                ->leftJoin('distrito AS DIST', 'DIST.ID_Distrito', '=', 'CLI.ID_Distrito')
+                ->leftJoin('provincia AS PROV', 'PROV.ID_Provincia', '=', 'CLI.ID_Provincia')
+                ->leftJoin('departamento AS DEP', 'DEP.ID_Departamento', '=', 'CLI.ID_Departamento')
+                ->where('PC.ID_Campana', $id)
+                ->where('PC.ID_Empresa', $user->ID_Empresa);
+
+            // Aplicar filtros
+            if (!empty($search)) {
+                $query->where(function ($q) use ($search) {
+                    $q->where('CLI.No_Entidad', 'like', "%$search%")
+                        ->orWhere('CLI.Nu_Documento_Identidad', 'like', "%$search%")
+                        ->orWhere('PC.ID_Pedido_Curso', 'like', "%$search%")
+                        // Agrega aquí más campos si quieres que el buscador sea más amplio
+                    ;
+                });
+            }
+
+            if ($fechaInicio && $fechaFin) {
+                $query->whereBetween('PC.Fe_Registro', [$fechaInicio, $fechaFin]);
+            }
+
+            // Aplicar filtro de estado de pago
+            if ($estadoPago && $estadoPago != '0') {
+                $query->whereRaw('(
+                    CASE 
+                        WHEN (
+                            SELECT IFNULL(SUM(cccp.monto), 0)
+                            FROM pedido_curso_pagos AS cccp
+                            JOIN pedido_curso_pagos_concept ccp ON cccp.id_concept = ccp.id
+                            WHERE cccp.id_pedido_curso = PC.ID_Pedido_Curso
+                            AND ccp.name = "ADELANTO"
+                        ) = 0 THEN "pendiente"
+                        WHEN (
+                            SELECT IFNULL(SUM(cccp.monto), 0)
+                            FROM pedido_curso_pagos AS cccp
+                            JOIN pedido_curso_pagos_concept ccp ON cccp.id_concept = ccp.id
+                            WHERE cccp.id_pedido_curso = PC.ID_Pedido_Curso
+                            AND ccp.name = "ADELANTO"
+                        ) < PC.Ss_Total AND (
+                            SELECT IFNULL(SUM(cccp.monto), 0)
+                            FROM pedido_curso_pagos AS cccp
+                            JOIN pedido_curso_pagos_concept ccp ON cccp.id_concept = ccp.id
+                            WHERE cccp.id_pedido_curso = PC.ID_Pedido_Curso
+                            AND ccp.name = "ADELANTO"
+                        ) > 0 THEN "adelanto"
+                        WHEN (
+                            SELECT IFNULL(SUM(cccp.monto), 0)
+                            FROM pedido_curso_pagos AS cccp
+                            JOIN pedido_curso_pagos_concept ccp ON cccp.id_concept = ccp.id
+                            WHERE cccp.id_pedido_curso = PC.ID_Pedido_Curso
+                            AND ccp.name = "ADELANTO"
+                        ) = PC.Ss_Total THEN "pagado"
+                        WHEN (
+                            SELECT IFNULL(SUM(cccp.monto), 0)
+                            FROM pedido_curso_pagos AS cccp
+                            JOIN pedido_curso_pagos_concept ccp ON cccp.id_concept = ccp.id
+                            WHERE cccp.id_pedido_curso = PC.ID_Pedido_Curso
+                            AND ccp.name = "ADELANTO"
+                        ) > PC.Ss_Total THEN "sobrepagado"
+                        ELSE "pendiente"
+                    END
+                ) = ?', [$estadoPago]);
+            }
+            // Filtro por tipo de curso
+            if ($tipoCurso && $tipoCurso !== '') {
+                $query->where('PC.tipo_curso', $tipoCurso);
+            }
+
+            // Ordenar por id descendente
+            $query->orderBy('PC.ID_Pedido_Curso', 'desc');
+
+            // Obtener el total antes de paginar para el filtro de estado
+            $totalQuery = clone $query;
+            $totalRecords = $totalQuery->count();
+
+            // Aplicar paginación
+            $offset = ($page - 1) * $perPage;
+            $students = $query->offset($offset)->limit($perPage)->get();
+
+            // Procesar los datos para agregar información adicional
+            $studentsProcessed = $students->map(function ($student) {
+                // Determinar el estado del pago
+                $estado = 'pendiente';
+                if ($student->total_pagos == 0) {
+                    $estado = 'pendiente';
+                } elseif ($student->total_pagos < $student->Ss_Total && $student->total_pagos > 0) {
+                    $estado = 'adelanto';
+                } elseif ($student->total_pagos == $student->Ss_Total) {
+                    $estado = 'pagado';
+                } elseif ($student->total_pagos > $student->Ss_Total) {
+                    $estado = 'sobrepagado';
+                }
+
+                // Verificar si corresponde constancia (curso en vivo y fecha fin pasada)
+                $fechaHoy = now()->toDateString();
+                $fechaFin = $student->Fe_Fin ?? null;
+                $tipoCurso = $student->tipo_curso ?? null;
+
+                if ($tipoCurso == 1 && $fechaFin && strtotime($fechaHoy) > strtotime($fechaFin)) {
+                    $estado = 'constancia';
+                }
+                return [
+                    'ID_Pedido_Curso' => $student->ID_Pedido_Curso,
+                    'Fe_Registro' => DateHelper::formatDate($student->Fe_Registro, '-', 0),
+                    'Fe_Registro_Original' => $student->Fe_Registro,
+                    'No_Entidad' => $student->No_Entidad,
+                    'No_Tipo_Documento_Identidad_Breve' => $student->No_Tipo_Documento_Identidad_Breve,
+                    'Nu_Documento_Identidad' => $student->Nu_Documento_Identidad,
+                    'Nu_Celular_Entidad' => $student->Nu_Celular_Entidad,
+                    'Txt_Email_Entidad' => $student->Txt_Email_Entidad,
+                    'tipo_curso' => strval($student->tipo_curso),
+                    'ID_Campana' => $student->ID_Campana,
+                    'ID_Usuario' => $student->ID_Usuario,
+                    'Nu_Estado_Usuario_Externo' => $student->Nu_Estado_Usuario_Externo ?? 1,
+                    'Ss_Total' => $student->Ss_Total,
+                    'Nu_Estado' => $student->Nu_Estado,
+                    'Fe_Fin' => DateHelper::formatDate($student->Fe_Fin, '-', 0),
+                    'Fe_Fin_Original' => $student->Fe_Fin,
+                    'pagos_count' => $student->pagos_count,
+                    'total_pagos' => $student->total_pagos,
+                    'estado_pago' => $estado,
+                    'puede_constancia' => $student->send_constancia=='SENDED'?true:false,
+                    // Información adicional del cliente
+                    'Fe_Nacimiento' => DateHelper::formatDate($student->Fe_Nacimiento, '-', 0),
+                    'Fe_Nacimiento_Original' => $student->Fe_Nacimiento,
+                    'Nu_Como_Entero_Empresa' => $student->Nu_Como_Entero_Empresa,
+                    'No_Otros_Como_Entero_Empresa' => $student->No_Otros_Como_Entero_Empresa,
+                    'No_Distrito' => $student->No_Distrito,
+                    'No_Provincia' => $student->No_Provincia,
+                    'No_Departamento' => $student->No_Departamento,
+                    'No_Pais' => $student->No_Pais,
+                    'Nu_Tipo_Sexo' => $student->Nu_Tipo_Sexo,
+                    'Nu_Edad' => $student->Nu_Edad,
+                    'No_Signo' => $student->No_Signo,
+                    'No_Usuario' => $student->No_Usuario
+                ];
+            });
+            $totalAmount = $studentsProcessed->sum('total_pagos');
+
+            return response()->json([
+                'success' => true,
+                'data' => $studentsProcessed,
+                'pagination' => [
+                    'current_page' => (int)$page,
+                    'last_page' => ceil($totalRecords / $perPage),
+                    'per_page' => (int)$perPage,
+                    'total' => $totalRecords,
+                    'from' => $offset + 1,
+                    'to' => min($offset + $perPage, $totalRecords),
+                ],
+                'headers' => [
+                    'importe_total' => [
+                        'value' => $totalAmount,
+                        'label' => 'Importe Total'
+                    ],
+                    'total_pedidos' => [
+                        'value' => $totalRecords,
+                        'label' => 'Total Pedidos'
+                    ]
+                ],
+                'importe_total' => $totalAmount,
+                'total_pedidos' => $totalRecords
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error en getStudents: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al obtener los estudiantes',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
     public function store(Request $request)
     {
         try {
