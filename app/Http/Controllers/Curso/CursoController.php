@@ -2093,4 +2093,110 @@ class CursoController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Enviar instrucciones para cambiar contraseña por WhatsApp
+     */
+    public function enviarInstruccionesCambioPassword($idPedido)
+    {
+        try {
+            // Obtener usuario autenticado
+            $user = JWTAuth::parseToken()->authenticate();
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Usuario no autenticado'
+                ], 401);
+            }
+
+            // Obtener datos del pedido con información del cliente
+            $pedido = DB::table('pedido_curso AS PC')
+                ->select([
+                    'PC.ID_Pedido_Curso',
+                    'CLI.No_Entidad',
+                    'CLI.Nu_Celular_Entidad'
+                ])
+                ->leftJoin('entidad AS CLI', 'CLI.ID_Entidad', '=', 'PC.ID_Entidad')
+                ->where('PC.ID_Pedido_Curso', $idPedido)
+                ->first();
+
+            if (!$pedido) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Pedido no encontrado'
+                ], 404);
+            }
+
+            // Validar que tenga número de teléfono
+            if (empty($pedido->Nu_Celular_Entidad)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'El cliente no tiene número de teléfono registrado'
+                ], 400);
+            }
+
+            // Construir mensaje
+            $nombreCliente = $pedido->No_Entidad ?? 'Cliente';
+            $mensaje = "Hola {$nombreCliente} 👋\n\n";
+            $mensaje .= "Para cambiar tu contraseña del aula virtual, sigue estos pasos:\n\n";
+            $mensaje .= "1. Ingresa a: https://aulavirtualprobusiness.com/login/forgot_password.php\n";
+            $mensaje .= "2. Ingresa tu nombre de usuario o correo electrónico\n";
+            $mensaje .= "3. Revisa tu correo para recibir las instrucciones\n\n";
+            $mensaje .= "Si tienes alguna duda, no dudes en contactarnos.\n\n";
+            $mensaje .= "¡Saludos! 🚀\n";
+            $mensaje .= "_Equipo Probusiness_";
+
+            // Formatear número de teléfono
+            $phoneNumber = trim($pedido->Nu_Celular_Entidad);
+            // Remover caracteres no numéricos excepto el prefijo
+            $phoneNumber = preg_replace('/[^0-9]/', '', $phoneNumber);
+            
+            // Si tiene 9 dígitos, agregar prefijo 51
+            if (strlen($phoneNumber) == 9) {
+                $phoneNumber = '51' . $phoneNumber . '@c.us';
+            } else {
+                // Si ya tiene prefijo, solo agregar @c.us
+                $phoneNumber = $phoneNumber . '@c.us';
+            }
+
+            // Enviar mensaje por WhatsApp usando sendMessageCurso
+            $response = $this->sendMessageCurso($mensaje, $phoneNumber);
+
+            if ($response && isset($response['status']) && $response['status']) {
+                Log::info('Instrucciones de cambio de contraseña enviadas exitosamente', [
+                    'id_pedido' => $idPedido,
+                    'cliente' => $nombreCliente,
+                    'telefono' => $phoneNumber
+                ]);
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Instrucciones de cambio de contraseña enviadas correctamente'
+                ]);
+            } else {
+                $errorMessage = $response['response']['error'] ?? 'Error desconocido al enviar WhatsApp';
+                Log::error('Error al enviar instrucciones de cambio de contraseña', [
+                    'id_pedido' => $idPedido,
+                    'response' => $response
+                ]);
+
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Error al enviar las instrucciones',
+                    'error' => $errorMessage
+                ], 500);
+            }
+        } catch (\Exception $e) {
+            Log::error('Error en enviarInstruccionesCambioPassword: ' . $e->getMessage(), [
+                'id_pedido' => $idPedido,
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al enviar instrucciones de cambio de contraseña',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
 }
