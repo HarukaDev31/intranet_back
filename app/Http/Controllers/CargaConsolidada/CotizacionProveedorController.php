@@ -157,6 +157,9 @@ class CotizacionProveedorController extends Controller
                     });
                 });
             }
+            if ($request->has('estado_cotizador') && $request->estado_cotizador != 'todos') {
+                $query->where('main.estado_cotizador', $request->estado_cotizador);
+            }
 
 
             switch ($rol) {
