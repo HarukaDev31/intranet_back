@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use App\Models\Entidad;
 
 class Cliente extends Model
 {
@@ -26,6 +27,43 @@ class Cliente extends Model
     protected $casts = [
         'fecha' => 'date',
     ];
+
+    /**
+     * Intentar resolver la entidad asociada al cliente mediante heurística
+     * (telefono, documento, correo). Devuelve la instancia de Entidad o null.
+     */
+    public function resolveEntidad()
+    {
+        try {
+            $query = Entidad::query();
+
+            $query->where(function ($q) {
+                if (!empty($this->telefono) && $this->telefono !== null) {
+                    $telefonoClean = preg_replace('/[^0-9]/', '', $this->telefono);
+                    // comparar directo y también con LIKE para manejar formatos
+                    $q->where('Nu_Celular_Entidad', $this->telefono)
+                      ->orWhereRaw('REPLACE(REPLACE(TRIM(Nu_Celular_Entidad), " ", ""), "-", "") LIKE ?', ["%{$telefonoClean}%"]);
+                }
+
+                if (!empty($this->documento) && $this->documento !== null) {
+                    $q->orWhere('Nu_Documento_Identidad', $this->documento);
+                }
+
+                if (!empty($this->correo) && $this->correo !== null) {
+                    $q->orWhere(function ($q2) {
+                        $q2->whereNotNull('Txt_Email_Entidad')
+                           ->where('Txt_Email_Entidad', '!=', '')
+                           ->where('Txt_Email_Entidad', $this->correo);
+                    });
+                }
+            });
+
+            return $query->first();
+        } catch (\Exception $e) {
+            Log::warning('resolveEntidad error: ' . $e->getMessage());
+            return null;
+        }
+    }
 
     /**
      * Obtener el primer servicio del cliente (el más antiguo)
