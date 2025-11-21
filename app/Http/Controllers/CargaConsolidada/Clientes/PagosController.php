@@ -236,6 +236,13 @@ class PagosController extends Controller
                         ]
                     ]);
                 }
+                // Actualizar estado de los proveedores a RESERVADO
+                try {
+                    $this->updateProveedoresEstadoReservado($request->idCotizacion);
+                } catch (\Exception $e) {
+                    Log::error('Error actualizando estado de proveedores a RESERVADO: ' . $e->getMessage());
+                }
+
                 // Sincronizar estado de la cotización a partir de los pagos (LOGISTICA / IMPUESTOS)
                 try {
                     app()->make(\App\Http\Controllers\CargaConsolidada\PagosController::class)
@@ -292,14 +299,28 @@ class PagosController extends Controller
             // Eliminar registro del pago
             DB::table($this->table_contenedor_consolidado_cotizacion_coordinacion_pagos)->where('id', $id)->delete();
 
-            // Sincronizar estado de la cotización asociada (recalcula montos tras eliminación)
-            try {
-                if (! empty($pago->id_cotizacion)) {
+            // Verificar si quedan pagos para esta cotización
+            if (! empty($pago->id_cotizacion)) {
+                $remainingPayments = DB::table($this->table_contenedor_consolidado_cotizacion_coordinacion_pagos)
+                    ->where('id_cotizacion', $pago->id_cotizacion)
+                    ->count();
+
+                // Si no quedan pagos, revertir estado de proveedores
+                if ($remainingPayments == 0) {
+                    try {
+                        $this->revertProveedoresEstadoReservado($pago->id_cotizacion);
+                    } catch (\Exception $e) {
+                        Log::error('Error revirtiendo estado de proveedores: ' . $e->getMessage());
+                    }
+                }
+
+                // Sincronizar estado de la cotización asociada (recalcula montos tras eliminación)
+                try {
                     app()->make(\App\Http\Controllers\CargaConsolidada\PagosController::class)
                         ->syncEstadoCotizacionFromPayments($pago->id_cotizacion, false);
+                } catch (\Exception $e) {
+                    Log::error('Error sincronizando estado de cotizacion tras delete pago: ' . $e->getMessage());
                 }
-            } catch (\Exception $e) {
-                Log::error('Error sincronizando estado de cotizacion tras delete pago: ' . $e->getMessage());
             }
 
             return response()->json(['success' => true, 'message' => 'Pago eliminado exitosamente']);
@@ -321,5 +342,151 @@ class PagosController extends Controller
         Log::info('Ruta: ' . $ruta);
         // Generar URL completa desde storage
         return Storage::disk('public')->url($ruta);
+    }
+
+    /**
+     * Actualizar estado de proveedores a RESERVADO cuando se registra un pago
+     */
+    private function updateProveedoresEstadoReservado($idCotizacion)
+    {
+        DB::beginTransaction();
+        try {
+            // Obtener todos los proveedores de esta cotización
+            $proveedores = DB::table('contenedor_consolidado_cotizacion_proveedores')
+                ->where('id_cotizacion', $idCotizacion)
+                ->get();
+
+            foreach ($proveedores as $proveedor) {
+                // Obtener el registro más reciente del tracking para este proveedor
+                $trackingActual = DB::table('contenedor_proveedor_estados_tracking')
+                    ->where('id_proveedor', $proveedor->id)
+                    ->where('id_cotizacion', $idCotizacion)
+                    ->orderBy('created_at', 'desc')
+                    ->orderBy('id', 'desc')
+                    ->first();
+
+                $ahora = now();
+
+                if ($trackingActual) {
+                    // Actualizar el registro existente con updated_at
+                    DB::table('contenedor_proveedor_estados_tracking')
+                        ->where('id', $trackingActual->id)
+                        ->update(['updated_at' => $ahora]);
+                }
+
+                // Insertar nuevo registro con created_at = updated_at del anterior
+                DB::table('contenedor_proveedor_estados_tracking')
+                    ->insert([
+                        'id_proveedor' => $proveedor->id,
+                        'id_cotizacion' => $idCotizacion,
+                        'estado' => 'RESERVADO',
+                        'created_at' => $ahora,
+                        'updated_at' => $ahora
+                    ]);
+
+                // Actualizar el campo estados en la tabla de proveedores
+                DB::table('contenedor_consolidado_cotizacion_proveedores')
+                    ->where('id', $proveedor->id)
+                    ->update(['estados' => 'RESERVADO']);
+            }
+
+            // Actualizar estado_cliente de la cotización
+            DB::table('contenedor_consolidado_cotizacion')
+                ->where('id', $idCotizacion)
+                ->update(['estado_cliente' => 'RESERVADO']);
+
+            DB::commit();
+            Log::info("Estados de proveedores actualizados a RESERVADO para cotización {$idCotizacion}");
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Error en updateProveedoresEstadoReservado: ' . $e->getMessage());
+            throw $e;
+        }
+    }
+
+    /**
+     * Revertir estado de proveedores cuando se eliminan todos los pagos
+     */
+    private function revertProveedoresEstadoReservado($idCotizacion)
+    {
+        DB::beginTransaction();
+        try {
+            // Obtener todos los proveedores de esta cotización
+            $proveedores = DB::table('contenedor_consolidado_cotizacion_proveedores')
+                ->where('id_cotizacion', $idCotizacion)
+                ->get();
+
+            foreach ($proveedores as $proveedor) {
+                // Obtener el registro más reciente (que debería ser RESERVADO)
+                $trackingActual = DB::table('contenedor_proveedor_estados_tracking')
+                    ->where('id_proveedor', $proveedor->id)
+                    ->where('id_cotizacion', $idCotizacion)
+                    ->orderBy('created_at', 'desc')
+                    ->orderBy('id', 'desc')
+                    ->first();
+
+                if (!$trackingActual) {
+                    throw new \Exception("No se encontró registro de tracking actual para proveedor {$proveedor->id}");
+                }
+
+                // Obtener el estado anterior: el registro inmediatamente anterior al actual RESERVADO
+                $estadoAnterior = DB::table('contenedor_proveedor_estados_tracking')
+                    ->where('id_proveedor', $proveedor->id)
+                    ->where('id_cotizacion', $idCotizacion)
+                    ->where('id', '<', $trackingActual->id) // Registros anteriores al actual
+                    ->orderBy('created_at', 'desc')
+                    ->orderBy('id', 'desc')
+                    ->first();
+
+                if (!$estadoAnterior) {
+                    throw new \Exception("No se encontró estado anterior en el tracking para proveedor {$proveedor->id}. No se puede revertir el estado RESERVADO.");
+                }
+
+                $estadoPrevio = $estadoAnterior->estado;
+                $ahora = now();
+
+                if ($trackingActual) {
+                    // Actualizar el registro actual (RESERVADO) con updated_at
+                    DB::table('contenedor_proveedor_estados_tracking')
+                        ->where('id', $trackingActual->id)
+                        ->update(['updated_at' => $ahora]);
+                }
+
+                // Insertar nuevo registro con el estado anterior, created_at = updated_at del anterior
+                DB::table('contenedor_proveedor_estados_tracking')
+                    ->insert([
+                        'id_proveedor' => $proveedor->id,
+                        'id_cotizacion' => $idCotizacion,
+                        'estado' => $estadoPrevio,
+                        'created_at' => $ahora,
+                        'updated_at' => $ahora
+                    ]);
+
+                // Actualizar el campo estados en la tabla de proveedores
+                DB::table('contenedor_consolidado_cotizacion_proveedores')
+                    ->where('id', $proveedor->id)
+                    ->update(['estados' => $estadoPrevio]);
+            }
+
+            // Actualizar estado_cliente de la cotización
+            // Verificar si hay algún proveedor en estado RESERVADO actual
+            $hayReservado = DB::table('contenedor_consolidado_cotizacion_proveedores')
+                ->where('id_cotizacion', $idCotizacion)
+                ->where('estados', 'RESERVADO')
+                ->exists();
+
+            $estadoCliente = $hayReservado ? 'RESERVADO' : 'NO RESERVADO';
+
+            DB::table('contenedor_consolidado_cotizacion')
+                ->where('id', $idCotizacion)
+                ->update(['estado_cliente' => $estadoCliente]);
+
+            DB::commit();
+            Log::info("Estados de proveedores revertidos para cotización {$idCotizacion}");
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Error en revertProveedoresEstadoReservado: ' . $e->getMessage());
+            throw $e;
+        }
     }
 }

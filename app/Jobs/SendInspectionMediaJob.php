@@ -126,6 +126,34 @@ class SendInspectionMediaJob implements ShouldQueue
             $proveedorUpdate->estados = 'INSPECCIONADO';
             $proveedorUpdate->save();
 
+            // Actualizar tracking siguiendo el patrón correcto
+            $ahora = now();
+            
+            // Obtener el registro más reciente del tracking
+            $trackingActual = DB::table('contenedor_proveedor_estados_tracking')
+                ->where('id_proveedor', $this->idProveedor)
+                ->where('id_cotizacion', $this->idCotizacion)
+                ->orderBy('created_at', 'desc')
+                ->orderBy('id', 'desc')
+                ->first();
+
+            if ($trackingActual) {
+                // Actualizar el registro existente con updated_at
+                DB::table('contenedor_proveedor_estados_tracking')
+                    ->where('id', $trackingActual->id)
+                    ->update(['updated_at' => $ahora]);
+            }
+
+            // Insertar nuevo registro con el estado INSPECCIONADO
+            DB::table('contenedor_proveedor_estados_tracking')
+                ->insert([
+                    'id_proveedor' => $this->idProveedor,
+                    'id_cotizacion' => $this->idCotizacion,
+                    'estado' => 'INSPECCIONADO',
+                    'created_at' => $ahora,
+                    'updated_at' => $ahora
+                ]);
+
             Log::info("Estado del proveedor actualizado", [
                 'id_proveedor' => $this->idProveedor,
                 'nuevo_estado' => 'INSPECCIONADO'
