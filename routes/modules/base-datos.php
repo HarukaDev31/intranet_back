@@ -100,6 +100,7 @@ Route::group(['prefix' => 'base-datos', 'middleware' => 'jwt.auth'], function ()
         Route::post('descargar-plantilla', [ClientesController::class, 'descargarPlantilla']);
         Route::get('list-excels', [ClientesController::class, 'obtenerListExcel']);
         Route::delete('delete-excel/{id}', [ClientesController::class, 'deleteExcel']);
+        Route::post('{id}/enviar-instrucciones-recuperacion-contrasena', [ClientesController::class, 'enviarInstruccionesRecuperacionContrasena']);
         Route::get('{id}', [ClientesController::class, 'show']);
         Route::delete('{id}', [ClientesController::class, 'destroy']);
         Route::put('{id}', [ClientesController::class, 'update']);

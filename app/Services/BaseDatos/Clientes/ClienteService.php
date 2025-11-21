@@ -357,6 +357,58 @@ class ClienteService
                 }
             }
 
+            // Buscar usuario en tabla users por whatsapp, email o dni
+            $idUser = null;
+            try {
+                $userQuery = DB::table('users');
+                
+                $telefonoLimpio = null;
+                $telefonoVariantes = [];
+                
+                if (!empty($cliente->telefono)) {
+                    $telefonoLimpio = preg_replace('/[^0-9]/', '', $cliente->telefono);
+                    $telefonoVariantes[] = $telefonoLimpio;
+                    
+                    // Si tiene prefijo 51, también buscar sin prefijo
+                    if (strlen($telefonoLimpio) >= 11 && substr($telefonoLimpio, 0, 2) === '51') {
+                        $telefonoSinPrefijo = substr($telefonoLimpio, 2);
+                        $telefonoVariantes[] = $telefonoSinPrefijo;
+                    } else {
+                        // Si no tiene prefijo, también buscar con prefijo
+                        $telefonoConPrefijo = '51' . $telefonoLimpio;
+                        $telefonoVariantes[] = $telefonoConPrefijo;
+                    }
+                }
+                
+                if (!empty($cliente->correo) || !empty($telefonoLimpio) || !empty($cliente->documento)) {
+                    $userQuery->where(function($q) use ($cliente, $telefonoVariantes) {
+                        if (!empty($cliente->correo)) {
+                            $q->where('email', $cliente->correo);
+                        }
+                        if (!empty($telefonoVariantes)) {
+                            $q->orWhere(function($q2) use ($telefonoVariantes) {
+                                foreach ($telefonoVariantes as $telefono) {
+                                    $q2->orWhere(function($q3) use ($telefono) {
+                                        $q3->where(DB::raw('REPLACE(REPLACE(REPLACE(whatsapp, " ", ""), "-", ""), "+", "")'), 'LIKE', "%{$telefono}%")
+                                           ->orWhere(DB::raw('REPLACE(REPLACE(REPLACE(phone, " ", ""), "-", ""), "+", "")'), 'LIKE', "%{$telefono}%");
+                                    });
+                                }
+                            });
+                        }
+                        if (!empty($cliente->documento)) {
+                            $q->orWhere('dni', $cliente->documento);
+                        }
+                    });
+                    
+                    $user = $userQuery->first();
+                    if ($user) {
+                        $idUser = $user->id;
+                    }
+                }
+            } catch (\Exception $e) {
+                Log::warning('obtenerClientePorId: error buscando usuario en tabla users - ' . $e->getMessage());
+            }
+
             $data = [
                 'id' => $cliente->id,
                 'nombre' => $cliente->nombre,
@@ -369,6 +421,7 @@ class ClienteService
                 'ruc' => $cliente->ruc,
                 'empresa' => $cliente->empresa,
                 'fecha' => $cliente->fecha ? $cliente->fecha->format('d/m/Y') : null,
+                'id_user' => $idUser,
                 'primer_servicio' => $primerServicio ? [
                     'servicio' => $primerServicio['servicio'],
                     'fecha' => Carbon::parse($primerServicio['fecha'])->format('d/m/Y'),
