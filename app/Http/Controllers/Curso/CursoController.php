@@ -105,6 +105,7 @@ class CursoController extends Controller
                 $query->where(function ($q) use ($search) {
                     $q->where('CLI.No_Entidad', 'like', "%$search%")
                         ->orWhere('CLI.Nu_Documento_Identidad', 'like', "%$search%")
+                        ->orWhere('CLI.Nu_Celular_Entidad', 'like', "%$search%")
                         ->orWhere('PC.ID_Pedido_Curso', 'like', "%$search%")
                         // Agrega aquí más campos si quieres que el buscador sea más amplio
                     ;

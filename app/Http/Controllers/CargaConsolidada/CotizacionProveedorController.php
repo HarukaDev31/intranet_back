@@ -398,7 +398,7 @@ class CotizacionProveedorController extends Controller
 
     public function updateContenedorCotizacionProveedoresByUuid($uuid, Request $request)
     {
-
+        
         try {
             $cotizacion = DB::table('contenedor_consolidado_cotizacion')
                 ->where('uuid', $uuid)
