@@ -1221,7 +1221,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                         ->insert([
                             'id_proveedor' => $idProveedor,
                             'id_cotizacion' => $idCotizacion,
-                            'estados' => $this->STATUS_DATOS_PROVEEDOR,
+                            'estado' => $this->STATUS_DATOS_PROVEEDOR,
                             'created_at' => $ahora,
                             'updated_at' => $ahora
                         ]);
@@ -1595,7 +1595,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                 ->insert([
                     'id_proveedor' => $idProveedor,
                     'id_cotizacion' => $idCotizacion,
-                    'estados' => 'ROTULADO',
+                    'estado' => 'ROTULADO',
                     'created_at' => $ahora,
                     'updated_at' => $ahora
                 ]);
