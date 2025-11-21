@@ -363,19 +363,36 @@ class ClienteService
                 $userQuery = DB::table('users');
                 
                 $telefonoLimpio = null;
+                $telefonoVariantes = [];
+                
                 if (!empty($cliente->telefono)) {
                     $telefonoLimpio = preg_replace('/[^0-9]/', '', $cliente->telefono);
+                    $telefonoVariantes[] = $telefonoLimpio;
+                    
+                    // Si tiene prefijo 51, también buscar sin prefijo
+                    if (strlen($telefonoLimpio) >= 11 && substr($telefonoLimpio, 0, 2) === '51') {
+                        $telefonoSinPrefijo = substr($telefonoLimpio, 2);
+                        $telefonoVariantes[] = $telefonoSinPrefijo;
+                    } else {
+                        // Si no tiene prefijo, también buscar con prefijo
+                        $telefonoConPrefijo = '51' . $telefonoLimpio;
+                        $telefonoVariantes[] = $telefonoConPrefijo;
+                    }
                 }
                 
                 if (!empty($cliente->correo) || !empty($telefonoLimpio) || !empty($cliente->documento)) {
-                    $userQuery->where(function($q) use ($cliente, $telefonoLimpio) {
+                    $userQuery->where(function($q) use ($cliente, $telefonoVariantes) {
                         if (!empty($cliente->correo)) {
                             $q->where('email', $cliente->correo);
                         }
-                        if (!empty($telefonoLimpio)) {
-                            $q->orWhere(function($q2) use ($telefonoLimpio) {
-                                $q2->where(DB::raw('REPLACE(REPLACE(whatsapp, " ", ""), "-", "")'), 'LIKE', "%{$telefonoLimpio}%")
-                                   ->orWhere(DB::raw('REPLACE(REPLACE(phone, " ", ""), "-", "")'), 'LIKE', "%{$telefonoLimpio}%");
+                        if (!empty($telefonoVariantes)) {
+                            $q->orWhere(function($q2) use ($telefonoVariantes) {
+                                foreach ($telefonoVariantes as $telefono) {
+                                    $q2->orWhere(function($q3) use ($telefono) {
+                                        $q3->where(DB::raw('REPLACE(REPLACE(REPLACE(whatsapp, " ", ""), "-", ""), "+", "")'), 'LIKE', "%{$telefono}%")
+                                           ->orWhere(DB::raw('REPLACE(REPLACE(REPLACE(phone, " ", ""), "-", ""), "+", "")'), 'LIKE', "%{$telefono}%");
+                                    });
+                                }
                             });
                         }
                         if (!empty($cliente->documento)) {
