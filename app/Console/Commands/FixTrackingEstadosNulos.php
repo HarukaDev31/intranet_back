@@ -42,10 +42,11 @@ class FixTrackingEstadosNulos extends Command
         DB::beginTransaction();
 
         try {
-            // Obtener todos los registros con estados null o vacío
+            // Obtener todos los registros con estado null o vacío
+            // Nota: en la tabla `contenedor_proveedor_estados_tracking` la columna se llama `estado` (singular)
             $trackingNulos = DB::table('contenedor_proveedor_estados_tracking')
-                ->whereNull('estados')
-                ->orWhere('estados', '')
+                ->whereNull('estado')
+                ->orWhere('estado', '')
                 ->orderBy('id_proveedor')
                 ->orderBy('created_at')
                 ->get();
@@ -79,9 +80,10 @@ class FixTrackingEstadosNulos extends Command
                     $this->line("  ├─ Estado inferido del proveedor actual: {$estadoInferido}");
 
                     if (!$dryRun) {
+                        // Actualizar la columna `estado` en la tabla de tracking (singular)
                         DB::table('contenedor_proveedor_estados_tracking')
                             ->where('id', $trackingNulo->id)
-                            ->update(['estados' => $estadoInferido]);
+                            ->update(['estado' => $estadoInferido]);
                     }
 
                     $corregidos++;
