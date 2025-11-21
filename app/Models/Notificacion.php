@@ -275,11 +275,20 @@ class Notificacion extends Model
             $query->porPrioridad($filtros['prioridad_minima']);
         }
 
-        if (isset($filtros['no_leidas']) && $filtros['no_leidas']) {
-            $query->whereDoesntHave('usuarios', function ($q) use ($usuario) {
-                $q->where('usuario_id', $usuario->ID_Usuario)
-                  ->where('leida', true);
-            });
+        if (isset($filtros['no_leidas'])) {
+            if ($filtros['no_leidas']) {
+                // Filtrar solo notificaciones NO leídas
+                $query->whereDoesntHave('usuarios', function ($q) use ($usuario) {
+                    $q->where('usuario_id', $usuario->ID_Usuario)
+                      ->where('leida', true);
+                });
+            } else {
+                // Filtrar solo notificaciones SÍ leídas
+                $query->whereHas('usuarios', function ($q) use ($usuario) {
+                    $q->where('usuario_id', $usuario->ID_Usuario)
+                      ->where('leida', true);
+                });
+            }
         }
 
       

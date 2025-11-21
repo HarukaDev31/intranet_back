@@ -26,23 +26,27 @@ class NotificacionController extends Controller
     {
         try {
             $usuario = Auth::user();
-            
+
             $filtros = [
                 'modulo' => $request->get('modulo'),
                 'tipo' => $request->get('tipo'),
-                'prioridad_minima' => $request->get('prioridad_minima'),
-                'no_leidas' => $request->boolean('no_leidas', false)
+                'prioridad_minima' => $request->get('prioridad_minima')
             ];
 
+            // Solo agregar no_leidas si viene explícitamente en el request
+            if ($request->has('no_leidas')) {
+                $filtros['no_leidas'] = $request->boolean('no_leidas');
+            }
+
             // Filtrar valores null
-            $filtros = array_filter($filtros, function($value) {
+            $filtros = array_filter($filtros, function ($value) {
                 return $value !== null;
             });
 
             $notificaciones = Notificacion::paraUsuario($usuario, $filtros)
                 ->with(['creador', 'usuarioDestinatario'])
                 ->paginate($request->get('per_page', 15));
-            
+
             // Log de notificaciones después de paginar
             Log::info('Notificaciones después de paginar', [
                 'total' => $notificaciones->total(),
@@ -50,6 +54,22 @@ class NotificacionController extends Controller
                 'current_page' => $notificaciones->currentPage(),
                 'notificaciones_ids' => $notificaciones->pluck('id')->toArray()
             ]);
+
+            // Calcular conteos totales (siempre sin filtro de no_leidas para reflejar el total real)
+            // Mantener otros filtros (módulo, tipo, prioridad) si existen
+            $filtrosParaConteo = $filtros;
+            unset($filtrosParaConteo['no_leidas']); // Remover filtro de no_leidas para conteos totales
+            
+            $conteoTotal = Notificacion::paraUsuario($usuario, $filtrosParaConteo)->count();
+            $conteoNoLeidas = Notificacion::paraUsuario($usuario, array_merge($filtrosParaConteo, ['no_leidas' => true]))->count();
+            $conteoLeidas = Notificacion::paraUsuario($usuario, array_merge($filtrosParaConteo, ['no_leidas' => false]))->count();
+
+            $conteos = [
+                'total' => $conteoTotal,
+                'no_leidas' => $conteoNoLeidas,
+                'leidas' => $conteoLeidas
+            ];
+
 
             // Transformar las notificaciones para incluir información específica del usuario
             $notificaciones->getCollection()->transform(function ($notificacion) use ($usuario) {
@@ -90,12 +110,18 @@ class NotificacionController extends Controller
                 ];
             });
 
-            return response()->json([
+            $response = [
                 'success' => true,
                 'data' => $notificaciones,
                 'message' => 'Notificaciones obtenidas exitosamente'
-            ]);
+            ];
 
+            // Agregar conteos si están disponibles
+            if ($conteos !== null) {
+                $response['conteos'] = $conteos;
+            }
+
+            return response()->json($response);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -111,7 +137,7 @@ class NotificacionController extends Controller
     {
         try {
             $usuario = Auth::user();
-            
+
             $conteo = Notificacion::paraUsuario($usuario, ['no_leidas' => true])
                 ->count();
 
@@ -121,7 +147,6 @@ class NotificacionController extends Controller
                     'total_no_leidas' => $conteo
                 ]
             ]);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -145,7 +170,6 @@ class NotificacionController extends Controller
                 'success' => true,
                 'message' => 'Notificación marcada como leída'
             ]);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -187,7 +211,6 @@ class NotificacionController extends Controller
                 'success' => true,
                 'message' => 'Notificaciones marcadas como leídas'
             ]);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -211,7 +234,6 @@ class NotificacionController extends Controller
                 'success' => true,
                 'message' => 'Notificación archivada'
             ]);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -264,7 +286,6 @@ class NotificacionController extends Controller
                 'data' => $notificacion,
                 'message' => 'Notificación creada exitosamente'
             ], 201);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -284,10 +305,10 @@ class NotificacionController extends Controller
                 ->findOrFail($id);
 
             // Verificar si el usuario puede ver esta notificación
-            $puedeVer = $notificacion->usuario_destinatario === null || 
-                       $notificacion->usuario_destinatario === $usuario->ID_Usuario ||
-                       $notificacion->rol_destinatario === null ||
-                       ($usuario->grupo && $notificacion->rol_destinatario === $usuario->grupo->No_Grupo);
+            $puedeVer = $notificacion->usuario_destinatario === null ||
+                $notificacion->usuario_destinatario === $usuario->ID_Usuario ||
+                $notificacion->rol_destinatario === null ||
+                ($usuario->grupo && $notificacion->rol_destinatario === $usuario->grupo->No_Grupo);
 
             if (!$puedeVer) {
                 return response()->json([
@@ -335,7 +356,6 @@ class NotificacionController extends Controller
                 'success' => true,
                 'data' => $data
             ]);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
