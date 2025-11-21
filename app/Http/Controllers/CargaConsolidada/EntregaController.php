@@ -195,7 +195,6 @@ class EntregaController extends Controller
                 'capacity' => (int)$row->delivery_count,
                 'assigned' => (int)$row->assigned_count,
                 'available' => (int)$row->available,
-                'is_hidden' => (int)$row->is_hidden,
             ];
         }
 
