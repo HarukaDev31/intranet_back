@@ -166,7 +166,7 @@ class EntregaController extends Controller
                 DB::raw('COALESCE(a.assigned_count, 0) as assigned_count'),
                 DB::raw('(r.delivery_count - COALESCE(a.assigned_count, 0)) as available')
             ])
-
+            
             ->orderBy('d.year')
             ->orderBy('d.month')
             ->orderBy('d.day')
