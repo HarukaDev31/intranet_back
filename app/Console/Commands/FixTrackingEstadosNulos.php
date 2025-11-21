@@ -79,6 +79,44 @@ class FixTrackingEstadosNulos extends Command
                     
                     $this->line("  ├─ Estado inferido del proveedor actual: {$estadoInferido}");
 
+                    // Verificar que la cotización exista
+                    $cotizacionExists = DB::table('contenedor_consolidado_cotizacion')
+                        ->where('id', $trackingNulo->id_cotizacion)
+                        ->exists();
+
+                    if (!$cotizacionExists) {
+                        $this->warn("  └─ ⛔ Cotización {$trackingNulo->id_cotizacion} no encontrada en contenedor_consolidado_cotizacion, se omite la actualización.");
+                        $sinSolucion++;
+                        $problemasPorProveedor[] = [
+                            'tracking_id' => $trackingNulo->id,
+                            'proveedor_id' => $trackingNulo->id_proveedor,
+                            'cotizacion_id' => $trackingNulo->id_cotizacion,
+                            'created_at' => $trackingNulo->created_at,
+                            'motivo' => 'cotizacion_no_existente'
+                        ];
+                        continue;
+                    }
+
+                    // Validar que la cotización asociada esté en estado 'CONFIRMADO'
+                    $estadoCotizador = DB::table('contenedor_consolidado_cotizacion')
+                        ->where('id', $trackingNulo->id_cotizacion)
+                        ->value('estado_cotizador');
+
+                    if ($estadoCotizador !== 'CONFIRMADO') {
+                        $this->warn("  └─ ⛔ Cotización {$trackingNulo->id_cotizacion} no está CONFIRMADO ({$estadoCotizador}), se omite la actualización.");
+                        // Contabilizar como sin solución automática para revisión manual
+                        $sinSolucion++;
+                        $problemasPorProveedor[] = [
+                            'tracking_id' => $trackingNulo->id,
+                            'proveedor_id' => $trackingNulo->id_proveedor,
+                            'cotizacion_id' => $trackingNulo->id_cotizacion,
+                            'created_at' => $trackingNulo->created_at,
+                            'motivo' => 'cotizacion_no_confirmada',
+                            'estado_cotizador' => $estadoCotizador
+                        ];
+                        continue;
+                    }
+
                     if (!$dryRun) {
                         // Actualizar la columna `estado` en la tabla de tracking (singular)
                         DB::table('contenedor_proveedor_estados_tracking')
