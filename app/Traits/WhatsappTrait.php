@@ -11,6 +11,7 @@ trait WhatsappTrait
     private function _callApi($endpoint, $data)
     {
         try {
+            Log::info('Llamando a la API de WhatsApp', ['endpoint' => $endpoint, 'data' => $data]);
             $url = 'https://redis.probusiness.pe/api/whatsapp' . $endpoint;
             $envUrl = env('APP_URL');
             $defaultWhatsapNumber=env('DEFAULT_WHATSAPP_NUMBER','51912705923@c.us');
@@ -80,7 +81,7 @@ trait WhatsappTrait
     public function sendWelcome($carga, $phoneNumberId = null, $sleep = 0): array
     {
         $phoneNumberId = $phoneNumberId ? $phoneNumberId : $this->phoneNumberId;
-        return $this->_callApi('/welcome', [
+        return $this->_callApi('/welcomeV2', [
             'carga' => $carga,
             'phoneNumberId' => $phoneNumberId,
             'sleep' => $sleep
@@ -134,7 +135,7 @@ trait WhatsappTrait
     {
         $phoneNumberId = $phoneNumberId ? $phoneNumberId : $this->phoneNumberId;
 
-        return $this->_callApi('/message', [
+        return $this->_callApi('/messageV2', [
             'message' => $message,
             'phoneNumberId' => $phoneNumberId,
             'sleep' => $sleep
@@ -185,7 +186,7 @@ trait WhatsappTrait
             
             $fileContent = base64_encode($fileContent);
 
-            return $this->_callApi('/media', [
+            return $this->_callApi('/mediaV2', [
                 'fileContent' => $fileContent,
                 'fileName' => $fileName ?? basename($filePath),
                 'mimeType' => $mimeType,
@@ -239,7 +240,7 @@ trait WhatsappTrait
                 'inspectionId' => $inspection_id
             ]);
             
-            return $this->_callApi('/media-inspection', [
+            return $this->_callApi('/media-inspectionV2', [
                 'fileContent' => $fileContent,
                 'fileName' => $fileName ?? basename($filePath),
                 'mimeType' => $mimeType,
