@@ -601,7 +601,7 @@ class GeneralController extends Controller
             $carga = $cont->carga ?? '';
             $cargaCode = is_numeric($carga) ? str_pad($carga, 2, '0', STR_PAD_LEFT) : $carga;
 
-            $message = "Hola 🙋🏻‍♀, según lo conversado en la reunión virtual, necesitamos los siguiente documentos:\n \n*Documentación: CONSOLIDADO #{$cargaCode}\n\n☑ PASO 1: Llenar el Excel de confirmación con las características de los productos que estás importando para poder declarar correctamente tus productos 📄 y evitar multas o pérdidas en aduanas.\n\n📢 IMPORTANTE:  Ver el video sobre el Excel de confirmación. 📋\nVideo:  https://youtu.be/rvhwblBEbXQ";
+            $message = "⚠️IMPORTANTE⚠️\n\nEl siguiente paso es la recopilación de tus documentos para la declaración en Aduanas. Para ello, te solicitaré los siguientes documento.\n\nDocumentación: CONSOLIDADO #{$cargaCode}\n\n☑ PASO 1: Llenar el Excel de confirmación con las características de los productos que estás importando para poder declarar correctamente tus productos 📄 y evitar multas o pérdidas en aduanas.\n\n📢 IMPORTANTE:  Ver el video sobre el Excel de confirmación. 📋\n\nVideo:  https://youtu.be/rvhwblBEbXQ";
 
             $response = $this->sendMessage($message, $telefono, 5);
             Log::info('Respuesta de WhatsApp: ' . json_encode($response));

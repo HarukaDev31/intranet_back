@@ -22,9 +22,14 @@ use App\Http\Controllers\Controller;
 use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
 use Tymon\JWTAuth\Facades\JWTAuth;
+use App\Traits\WhatsappTrait;
+use Illuminate\Support\Facades\Mail;
+use App\Mail\RecuperarContrasenaMail;
 
 class ClientesController extends Controller
 {
+    use WhatsappTrait;
+    
     protected $clienteService;
     protected $clienteExportService;
     protected $clienteImportService;
@@ -99,6 +104,90 @@ class ClientesController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Error al obtener cliente: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Enviar instrucciones de recuperación de contraseña
+     */
+    public function enviarInstruccionesRecuperacionContrasena($id): JsonResponse
+    {
+        try {
+            $cliente = Cliente::find($id);
+            
+            if (!$cliente) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Cliente no encontrado'
+                ], 404);
+            }
+
+            // Obtener URL base de clientes desde .env
+            $baseUrl = env('APP_URL_CLIENTES', 'https://clientes.probusiness.pe');
+            $recuperarContrasenaUrl = rtrim($baseUrl, '/') . '/recuperar-contrasena';
+
+            // Enviar mensaje por WhatsApp
+            if (!empty($cliente->telefono)) {
+                $telefono = trim($cliente->telefono);
+                $telefono = preg_replace('/[^0-9]/', '', $telefono);
+                
+                if (strlen($telefono) == 9) {
+                    $telefono = '51' . $telefono . '@c.us';
+                } else {
+                    $telefono = $telefono . '@c.us';
+                }
+
+                $whatsappMessage = "¡Hola {$cliente->nombre}! 👋\n\n";
+                $whatsappMessage .= "Para recuperar tu contraseña, puedes hacerlo a través del siguiente enlace:\n";
+                $whatsappMessage .= "{$recuperarContrasenaUrl}\n\n";
+                $whatsappMessage .= "Si tienes algún problema, no dudes en contactarnos.\n\n";
+                $whatsappMessage .= "¡Saludos!\nEquipo Probusiness";
+
+                $response = $this->sendMessageCurso($whatsappMessage, $telefono);
+
+                if (!$response['status']) {
+                    Log::error('Error al enviar WhatsApp de recuperación de contraseña', [
+                        'cliente_id' => $id,
+                        'response' => $response
+                    ]);
+                }
+            }
+
+            // Enviar correo electrónico
+            if (!empty($cliente->correo)) {
+                try {
+                    $logo_header = public_path('storage/logo_icons/logo_header.png');
+                    $logo_footer = public_path('storage/logo_icons/logo_footer.png');
+
+                    Mail::to($cliente->correo)->send(
+                        new RecuperarContrasenaMail(
+                            $cliente->nombre,
+                            $recuperarContrasenaUrl,
+                            $logo_header,
+                            $logo_footer
+                        )
+                    );
+                } catch (\Exception $e) {
+                    Log::error('Error al enviar correo de recuperación de contraseña', [
+                        'cliente_id' => $id,
+                        'error' => $e->getMessage()
+                    ]);
+                }
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Instrucciones de recuperación de contraseña enviadas exitosamente'
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error en enviarInstruccionesRecuperacionContrasena: ' . $e->getMessage(), [
+                'cliente_id' => $id,
+                'trace' => $e->getTraceAsString()
+            ]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al enviar instrucciones de recuperación de contraseña: ' . $e->getMessage()
             ], 500);
         }
     }

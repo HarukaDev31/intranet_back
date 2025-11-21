@@ -357,6 +357,41 @@ class ClienteService
                 }
             }
 
+            // Buscar usuario en tabla users por whatsapp, email o dni
+            $idUser = null;
+            try {
+                $userQuery = DB::table('users');
+                
+                $telefonoLimpio = null;
+                if (!empty($cliente->telefono)) {
+                    $telefonoLimpio = preg_replace('/[^0-9]/', '', $cliente->telefono);
+                }
+                
+                if (!empty($cliente->correo) || !empty($telefonoLimpio) || !empty($cliente->documento)) {
+                    $userQuery->where(function($q) use ($cliente, $telefonoLimpio) {
+                        if (!empty($cliente->correo)) {
+                            $q->where('email', $cliente->correo);
+                        }
+                        if (!empty($telefonoLimpio)) {
+                            $q->orWhere(function($q2) use ($telefonoLimpio) {
+                                $q2->where(DB::raw('REPLACE(REPLACE(whatsapp, " ", ""), "-", "")'), 'LIKE', "%{$telefonoLimpio}%")
+                                   ->orWhere(DB::raw('REPLACE(REPLACE(phone, " ", ""), "-", "")'), 'LIKE', "%{$telefonoLimpio}%");
+                            });
+                        }
+                        if (!empty($cliente->documento)) {
+                            $q->orWhere('dni', $cliente->documento);
+                        }
+                    });
+                    
+                    $user = $userQuery->first();
+                    if ($user) {
+                        $idUser = $user->id;
+                    }
+                }
+            } catch (\Exception $e) {
+                Log::warning('obtenerClientePorId: error buscando usuario en tabla users - ' . $e->getMessage());
+            }
+
             $data = [
                 'id' => $cliente->id,
                 'nombre' => $cliente->nombre,
@@ -369,6 +404,7 @@ class ClienteService
                 'ruc' => $cliente->ruc,
                 'empresa' => $cliente->empresa,
                 'fecha' => $cliente->fecha ? $cliente->fecha->format('d/m/Y') : null,
+                'id_user' => $idUser,
                 'primer_servicio' => $primerServicio ? [
                     'servicio' => $primerServicio['servicio'],
                     'fecha' => Carbon::parse($primerServicio['fecha'])->format('d/m/Y'),
