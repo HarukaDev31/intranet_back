@@ -163,6 +163,7 @@ class EntregaController extends Controller
                 'r.start_time',
                 'r.end_time',
                 'r.delivery_count',
+                'r.is_hidden',
                 DB::raw('COALESCE(a.assigned_count, 0) as assigned_count'),
                 DB::raw('(r.delivery_count - COALESCE(a.assigned_count, 0)) as available')
             ])
