@@ -69,6 +69,7 @@ class EntregaController extends Controller
                 'r.start_time',
                 'r.end_time',
                 'r.delivery_count',
+                'r.is_hidden',
                 DB::raw('COALESCE(a.assigned_count, 0) as assigned_count'),
                 DB::raw('(r.delivery_count - COALESCE(a.assigned_count, 0)) as available')
             ])
@@ -106,6 +107,7 @@ class EntregaController extends Controller
                 'capacity' => (int)$row->delivery_count,
                 'assigned' => (int)$row->assigned_count,
                 'available' => (int)$row->available,
+                'is_hidden' => (int)$row->is_hidden,
             ];
         }
 
@@ -151,6 +153,7 @@ class EntregaController extends Controller
             })
             ->where('d.id_contenedor', $idContenedor)
             ->whereNull('lima.id')
+            ->where('r.is_hidden', 0)
             ->select([
                 'd.id as date_id',
                 'd.day',
@@ -160,9 +163,11 @@ class EntregaController extends Controller
                 'r.start_time',
                 'r.end_time',
                 'r.delivery_count',
+                'r.is_hidden',
                 DB::raw('COALESCE(a.assigned_count, 0) as assigned_count'),
                 DB::raw('(r.delivery_count - COALESCE(a.assigned_count, 0)) as available')
             ])
+            
             ->orderBy('d.year')
             ->orderBy('d.month')
             ->orderBy('d.day')
@@ -2490,6 +2495,35 @@ class EntregaController extends Controller
                 'message' => 'Error al eliminar horarios: ' . $e->getMessage(),
                 'success' => false
             ], 500);
+        }
+    }
+    public function seleccionHorarios(Request $request){
+        try {
+            $arrayTimes=$request->slots;
+            //array with objects with id and selected
+            $arrayTimes = array_map(function ($time) {
+                return (object) [
+                    'id' => $time['id'],
+                    'selected' => $time['selected']
+                ];
+            }, $arrayTimes);
+
+            DB::beginTransaction();
+            foreach ($arrayTimes as $time) {
+                if ($time->selected) {
+                    DB::table('consolidado_delivery_range_date')
+                        ->where('id', $time->id)
+                        ->update(['is_hidden' => 1]);
+                } else {
+                    DB::table('consolidado_delivery_range_date')
+                        ->where('id', $time->id)
+                        ->update(['is_hidden' => 0]);
+                }
+            }
+            DB::commit();
+            return response()->json(['message' => 'Horarios seleccionados correctamente', 'success' => true], 200);
+        } catch (\Exception $e) {
+            return response()->json(['message' => 'Error al seleccionar horarios: ' . $e->getMessage(), 'success' => false], 500);
         }
     }
 }

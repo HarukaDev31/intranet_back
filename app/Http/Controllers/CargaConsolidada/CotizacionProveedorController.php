@@ -157,6 +157,9 @@ class CotizacionProveedorController extends Controller
                     });
                 });
             }
+            if ($request->has('estado_cotizador') && $request->estado_cotizador != 'todos') {
+                $query->where('main.estado_cotizador', $request->estado_cotizador);
+            }
 
 
             switch ($rol) {
@@ -437,6 +440,34 @@ class CotizacionProveedorController extends Controller
                         'estados_proveedor' => $this->STATUS_NOT_CONTACTED
                     ]);
 
+                // Actualizar tracking siguiendo el patrón correcto
+                $ahora = now();
+                
+                // Obtener el registro más reciente del tracking
+                $trackingActual = DB::table($this->table_conteneodr_proveedor_estados_tracking)
+                    ->where('id_proveedor', $proveedor->id)
+                    ->where('id_cotizacion', $cotizacion->id)
+                    ->orderBy('created_at', 'desc')
+                    ->orderBy('id', 'desc')
+                    ->first();
+
+                if ($trackingActual) {
+                    // Actualizar el registro existente con updated_at
+                    DB::table($this->table_conteneodr_proveedor_estados_tracking)
+                        ->where('id', $trackingActual->id)
+                        ->update(['updated_at' => $ahora]);
+                }
+
+                // Insertar nuevo registro con el estado DATOS PROVEEDOR
+                DB::table($this->table_conteneodr_proveedor_estados_tracking)
+                    ->insert([
+                        'id_proveedor' => $proveedor->id,
+                        'id_cotizacion' => $cotizacion->id,
+                        'estados' => $this->STATUS_DATOS_PROVEEDOR,
+                        'created_at' => $ahora,
+                        'updated_at' => $ahora
+                    ]);
+
                 $proveedoresActualizados[] = $proveedor->id;
             }
 
@@ -634,10 +665,33 @@ class CotizacionProveedorController extends Controller
                     ->update(['estados' => $estado]);
             }
 
-            // Actualizar timestamp en tracking
-            DB::table($this->table_conteneodr_proveedor_estados_tracking)
+            // Actualizar tracking siguiendo el patrón correcto
+            $ahora = now();
+            
+            // Obtener el registro más reciente del tracking
+            $trackingActual = DB::table($this->table_conteneodr_proveedor_estados_tracking)
                 ->where('id_proveedor', $idProveedor)
-                ->update(['updated_at' => now()]);
+                ->where('id_cotizacion', $idCotizacion)
+                ->orderBy('created_at', 'desc')
+                ->orderBy('id', 'desc')
+                ->first();
+
+            if ($trackingActual) {
+                // Actualizar el registro existente con updated_at
+                DB::table($this->table_conteneodr_proveedor_estados_tracking)
+                    ->where('id', $trackingActual->id)
+                    ->update(['updated_at' => $ahora]);
+            }
+
+            // Insertar nuevo registro con el nuevo estado
+            DB::table($this->table_conteneodr_proveedor_estados_tracking)
+                ->insert([
+                    'id_proveedor' => $idProveedor,
+                    'id_cotizacion' => $idCotizacion,
+                    'estado' => $estado,
+                    'created_at' => $ahora,
+                    'updated_at' => $ahora
+                ]);
 
 
 
@@ -1143,6 +1197,34 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                     $proveedor->supplier_phone = $data['supplier_phone'] ?? null;
                     $proveedor->supplier = $data['supplier'] ?? null;
                     $proveedor->save();
+
+                    // Actualizar tracking siguiendo el patrón correcto
+                    $ahora = now();
+                    
+                    // Obtener el registro más reciente del tracking
+                    $trackingActual = DB::table($this->table_conteneodr_proveedor_estados_tracking)
+                        ->where('id_proveedor', $idProveedor)
+                        ->where('id_cotizacion', $idCotizacion)
+                        ->orderBy('created_at', 'desc')
+                        ->orderBy('id', 'desc')
+                        ->first();
+
+                    if ($trackingActual) {
+                        // Actualizar el registro existente con updated_at
+                        DB::table($this->table_conteneodr_proveedor_estados_tracking)
+                            ->where('id', $trackingActual->id)
+                            ->update(['updated_at' => $ahora]);
+                    }
+
+                    // Insertar nuevo registro con el estado DATOS PROVEEDOR
+                    DB::table($this->table_conteneodr_proveedor_estados_tracking)
+                        ->insert([
+                            'id_proveedor' => $idProveedor,
+                            'id_cotizacion' => $idCotizacion,
+                            'estados' => $this->STATUS_DATOS_PROVEEDOR,
+                            'created_at' => $ahora,
+                            'updated_at' => $ahora
+                        ]);
                 }
 
 
@@ -1489,6 +1571,34 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
             $proveedor->estados = 'ROTULADO';
             $proveedor->send_rotulado_status = 'PENDING';
             $proveedor->save();
+
+            // Actualizar tracking siguiendo el patrón correcto
+            $ahora = now();
+            
+            // Obtener el registro más reciente del tracking
+            $trackingActual = DB::table($this->table_conteneodr_proveedor_estados_tracking)
+                ->where('id_proveedor', $idProveedor)
+                ->where('id_cotizacion', $idCotizacion)
+                ->orderBy('created_at', 'desc')
+                ->orderBy('id', 'desc')
+                ->first();
+
+            if ($trackingActual) {
+                // Actualizar el registro existente con updated_at
+                DB::table($this->table_conteneodr_proveedor_estados_tracking)
+                    ->where('id', $trackingActual->id)
+                    ->update(['updated_at' => $ahora]);
+            }
+
+            // Insertar nuevo registro con el estado ROTULADO
+            DB::table($this->table_conteneodr_proveedor_estados_tracking)
+                ->insert([
+                    'id_proveedor' => $idProveedor,
+                    'id_cotizacion' => $idCotizacion,
+                    'estados' => 'ROTULADO',
+                    'created_at' => $ahora,
+                    'updated_at' => $ahora
+                ]);
 
             return response()->json([
                 'success' => true,

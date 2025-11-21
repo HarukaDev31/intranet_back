@@ -37,6 +37,8 @@ class RegisterRequest extends FormRequest
             'provincia_id' => 'nullable|integer|exists:provincia,ID_Provincia',
             'departamento_id' => 'nullable|integer|exists:departamento,ID_Departamento',
             'distrito_id' => 'nullable|integer|exists:distrito,ID_Distrito',
+            'no_como_entero' => 'nullable|integer',
+            'no_otros_como_entero_empresa' => 'nullable|string',
         ];
     }
 

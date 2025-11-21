@@ -236,6 +236,34 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                     // Solo actualizar estados a 'ROTULADO' si el estado actual es 'DATOS PROVEEDOR' or null or ''
                     if ($proveedorDB->estados === 'DATOS PROVEEDOR' || $proveedorDB->estados === null || $proveedorDB->estados === '') {
                         $updateData['estados'] = 'ROTULADO';
+                        
+                        // Actualizar tracking siguiendo el patrón correcto
+                        $ahora = now();
+                        
+                        // Obtener el registro más reciente del tracking
+                        $trackingActual = DB::table('contenedor_proveedor_estados_tracking')
+                            ->where('id_proveedor', $proveedorDB->id)
+                            ->where('id_cotizacion', $this->idCotizacion)
+                            ->orderBy('created_at', 'desc')
+                            ->orderBy('id', 'desc')
+                            ->first();
+
+                        if ($trackingActual) {
+                            // Actualizar el registro existente con updated_at
+                            DB::table('contenedor_proveedor_estados_tracking')
+                                ->where('id', $trackingActual->id)
+                                ->update(['updated_at' => $ahora]);
+                        }
+
+                        // Insertar nuevo registro con el estado ROTULADO
+                        DB::table('contenedor_proveedor_estados_tracking')
+                            ->insert([
+                                'id_proveedor' => $proveedorDB->id,
+                                'id_cotizacion' => $this->idCotizacion,
+                                'estado' => 'ROTULADO',
+                                'created_at' => $ahora,
+                                'updated_at' => $ahora
+                            ]);
                     }
 
                     $proveedorDB->update($updateData);

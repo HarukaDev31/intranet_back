@@ -186,6 +186,8 @@ class CotizacionController extends Controller
                     'estado' => $cotizacion->estado,
                     'estado_cliente' => $cotizacion->name,
                     'estado_cotizador' => $cotizacion->estado_cotizador,
+                    'cotizacion_contrato_firmado_url' => $cotizacion->cotizacion_contrato_firmado_url ? $this->generateImageUrl($cotizacion->cotizacion_contrato_firmado_url) : null,
+                    'cod_contract' => $cotizacion->cod_contract,
                     'monto' => $cotizacion->monto,
                     'monto_final' => $cotizacion->monto_final,
                     'volumen' => $cotizacion->volumen,
@@ -222,7 +224,7 @@ class CotizacionController extends Controller
             ], 500);
         }
     }
-    private function generateImageUrl($ruta)
+    public function generateImageUrl($ruta)
     {
         if (empty($ruta)) {
             return null;

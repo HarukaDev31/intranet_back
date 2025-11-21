@@ -169,6 +169,7 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
         Route::group(['prefix' => 'entrega'], function () {
             Route::post('/horarios', [EntregaController::class, 'storeHorarios']);
             Route::post('/horarios/edit', [EntregaController::class, 'editHorarios']);
+            Route::post('/horarios/seleccion', [EntregaController::class, 'seleccionHorarios']);
             Route::delete('/horarios/delete', [EntregaController::class, 'deleteHorarios']);
             Route::get('/agencias', [EntregaController::class, 'getAgencias']);
             Route::post('/entregas/conformidad', [EntregaController::class, 'uploadConformidad']);

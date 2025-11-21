@@ -145,8 +145,16 @@ class GeneralController extends Controller
         // Paginación
         $data = $query->paginate($perPage, ['*'], 'page', $page);
 
+        // Transformar los items para aplicar generateImageUrl a cotizacion_contrato_firmado_url
+        $transformedItems = collect($data->items())->map(function ($item) {
+            if (isset($item->cotizacion_contrato_firmado_url) && !empty($item->cotizacion_contrato_firmado_url)) {
+                $item->cotizacion_contrato_firmado_url = $this->generateImageUrl($item->cotizacion_contrato_firmado_url);
+            }
+            return $item;
+        })->toArray();
+
         return response()->json([
-            'data' => $data->items(),
+            'data' => $transformedItems,
             'success' => true,
             'pagination' => [
                 'current_page' => $data->currentPage(),
@@ -950,9 +958,71 @@ class GeneralController extends Controller
             Log::error('Error en recordatoriosDocumentos: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
-                'message' => 'Error en el procesamiento',
-                'error' => $e->getMessage()
+                'message' => 'Error al enviar recordatorio: ' . $e->getMessage()
             ], 500);
         }
+    }
+
+    /**
+     * Generate full URL for image/file paths
+     * Copied from CotizacionController for consistency
+     */
+    public function generateImageUrl($ruta)
+    {
+        if (empty($ruta)) {
+            return null;
+        }
+
+        // Si ya es una URL completa, verificar si tiene doble storage y corregirlo
+        if (filter_var($ruta, FILTER_VALIDATE_URL)) {
+            // Corregir URLs con doble storage
+            if (strpos($ruta, '/storage//storage/') !== false) {
+                $ruta = str_replace('/storage//storage/', '/storage/', $ruta);
+            }
+            return $ruta;
+        }
+
+        // Limpiar la ruta de barras iniciales para evitar doble slash
+        $ruta = ltrim($ruta, '/');
+
+        // Corregir rutas con doble storage
+        if (strpos($ruta, 'storage//storage/') !== false) {
+            $ruta = str_replace('storage//storage/', 'storage/', $ruta);
+        }
+
+        // Si la ruta ya contiene 'storage/', no agregar otro 'storage/'
+        if (strpos($ruta, 'storage/') === 0) {
+            $baseUrl = config('app.url');
+            return rtrim($baseUrl, '/') . '/' . $ruta;
+        }
+
+        // Si la ruta empieza con 'contratos/', usar ruta con CORS para desarrollo
+        if (strpos($ruta, 'contratos/') === 0) {
+            $baseUrl = config('app.url');
+            // En desarrollo, usar /files/ para que pase por el FileController con CORS
+            if (config('app.env') === 'local') {
+                return rtrim($baseUrl, '/') . '/files/' . $ruta;
+            }
+            // En producción, usar /storage/ directamente
+            return rtrim($baseUrl, '/') . '/storage/' . $ruta;
+        }
+
+        // Si la ruta empieza con 'public/', remover 'public/' y agregar 'storage/'
+        if (strpos($ruta, 'public/') === 0) {
+            $ruta = substr($ruta, 7); // Remover 'public/'
+            $baseUrl = config('app.url');
+            return rtrim($baseUrl, '/') . '/storage/' . $ruta;
+        }
+
+        // Construir URL manualmente para evitar problemas con Storage::url()
+        $baseUrl = config('app.url');
+        $storagePath = 'storage/';
+
+        // Asegurar que no haya doble slash
+        $baseUrl = rtrim($baseUrl, '/');
+        $storagePath = ltrim($storagePath, '/');
+        $ruta = ltrim($ruta, '/');
+
+        return $baseUrl . '/' . $storagePath . $ruta;
     }
 }
