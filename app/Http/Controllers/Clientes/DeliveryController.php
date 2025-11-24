@@ -21,13 +21,27 @@ class DeliveryController extends Controller
     public function getClientesConsolidado($idConsolidado)
     {
         try {
+            // Obtener cotizaciones que:
+            // 1. No tienen formulario registrado, O
+            // 2. Tienen formulario de Lima pero sin horario asignado (id_range_date es null)
             $cotizaciones = Cotizacion::where('id_contenedor', $idConsolidado)
-                ->whereNull('delivery_form_registered_at')
                 ->whereNull('id_cliente_importacion')
                 ->where('estado_cotizador', 'CONFIRMADO')
                 ->whereNotNull('estado_cliente')
                 ->cotizacionesEnPasoClientes()
+                ->where(function ($query) {
+                    // No tienen formulario registrado
+                    $query->whereNull('delivery_form_registered_at')
+                        // O tienen formulario de Lima pero sin horario asignado
+                        ->orWhereExists(function ($subQuery) {
+                            $subQuery->select(DB::raw(1))
+                                ->from('consolidado_delivery_form_lima')
+                                ->whereColumn('consolidado_delivery_form_lima.id_cotizacion', 'contenedor_consolidado_cotizacion.id')
+                                ->whereNull('consolidado_delivery_form_lima.id_range_date');
+                        });
+                })
                 ->get();
+            
             $contenedor = Contenedor::find($idConsolidado);
             if (!$contenedor) {
                 return response()->json(['error' => 'Carga no encontrada'], 404);
@@ -48,6 +62,93 @@ class DeliveryController extends Controller
             return response()->json($response);
         } catch (\Exception $e) {
             return response()->json(['message' => $e->getMessage(), 'success' => false], 500);
+        }
+    }
+
+    /**
+     * Obtiene el estado del formulario de delivery de Lima guardado para una cotización
+     * Devuelve el formulario sin horario (sin fechaEntrega ni horarioSeleccionado)
+     */
+    public function getFormularioLimaByCotizacion($cotizacionUuid)
+    {
+        try {
+            // Buscar la cotización por UUID
+            $cotizacion = Cotizacion::where('uuid', $cotizacionUuid)->first();
+            
+            if (!$cotizacion) {
+                return response()->json([
+                    'message' => 'Cotización no encontrada',
+                    'success' => false
+                ], 404);
+            }
+
+            // Buscar el formulario de delivery de Lima asociado
+            $deliveryForm = ConsolidadoDeliveryFormLima::where('id_cotizacion', $cotizacion->id)
+                ->first();
+
+            if (!$deliveryForm) {
+                return response()->json([
+                    'message' => 'No se encontró formulario guardado',
+                    'success' => false,
+                    'data' => null
+                ], 404);
+            }
+
+            // Solo devolver el formulario si NO tiene horario asignado (id_range_date es null)
+            if ($deliveryForm->id_range_date !== null) {
+                return response()->json([
+                    'message' => 'El formulario ya tiene un horario asignado',
+                    'success' => false,
+                    'data' => null
+                ], 400);
+            }
+
+            // Mapear los datos del formulario al formato esperado por el frontend
+            $formData = [
+                'nombreCompleto' => $deliveryForm->pick_name ?? '',
+                'dni' => $deliveryForm->pick_doc ?? '',
+                'importador' => [
+                    'label' => $cotizacion->nombre ?? '',
+                    'value' => $cotizacion->uuid ?? ''
+                ],
+                'tipoComprobante' => [
+                    'label' => $deliveryForm->voucher_doc_type ?? 'BOLETA',
+                    'value' => $deliveryForm->voucher_doc_type ?? 'BOLETA'
+                ],
+                'tiposProductos' => $deliveryForm->productos ?? '',
+                'clienteDni' => $deliveryForm->voucher_doc_type === 'BOLETA' ? $deliveryForm->voucher_doc : '',
+                'clienteNombre' => $deliveryForm->voucher_doc_type === 'BOLETA' ? $deliveryForm->voucher_name : '',
+                'clienteCorreo' => $deliveryForm->voucher_email ?? '',
+                'clienteRuc' => $deliveryForm->voucher_doc_type === 'FACTURA' ? $deliveryForm->voucher_doc : '',
+                'clienteRazonSocial' => $deliveryForm->voucher_doc_type === 'FACTURA' ? $deliveryForm->voucher_name : '',
+                'choferNombre' => $deliveryForm->drver_name ?? '',
+                'choferDni' => $deliveryForm->driver_doc ?? '',
+                'choferLicencia' => $deliveryForm->driver_license ?? '',
+                'choferPlaca' => $deliveryForm->driver_plate ?? '',
+                'direccionDestino' => $deliveryForm->final_destination_place ?? '',
+                'distritoDestino' => $deliveryForm->final_destination_district ?? '',
+                // No incluir fechaEntrega ni horarioSeleccionado
+            ];
+
+            return response()->json([
+                'message' => 'Formulario obtenido correctamente',
+                'success' => true,
+                'data' => [
+                    'formData' => $formData,
+                    'currentStep' => 4, // Siempre devolver en el paso 4 (selección de fecha)
+                    'timestamp' => $deliveryForm->updated_at->timestamp * 1000
+                ]
+            ], 200);
+        } catch (\Exception $e) {
+            Log::error('Error obteniendo formulario de Lima por cotización', [
+                'cotizacion_uuid' => $cotizacionUuid,
+                'error' => $e->getMessage()
+            ]);
+            return response()->json([
+                'message' => 'Error al obtener el formulario',
+                'success' => false,
+                'error' => $e->getMessage()
+            ], 500);
         }
     }
     public function getAgencies()
@@ -161,39 +262,42 @@ class DeliveryController extends Controller
             if ($otherDeliveryFormProvince) {
                 return response()->json(['message' => 'Ya existe otro formulario de delivery registrado', 'success' => false], 400);
             }
-            // Obtener el rango de horario desde BD (fuente de la verdad)
+            // Obtener el rango de horario desde BD (fuente de la verdad) - Opcional
             $rangeId = $request->horarioSeleccionado['range_id'] ?? null;
-            if (!$rangeId) {
-                return response()->json(['message' => 'Falta el range_id en el horario seleccionado', 'success' => false], 422);
-            }
-            $rangeDate = DB::table('consolidado_delivery_range_date')
-                ->select('id', 'id_date', 'delivery_count')
-                ->where('id', $rangeId)
-                ->first();
-            if (!$rangeDate) {
-                return response()->json(['message' => 'Horario seleccionado no válido', 'success' => false], 400);
-            }
-            // Validar que el id_date referenciado exista para no romper la FK
-            $rangeDateExists = DB::table('consolidado_delivery_date')
-                ->where('id', $rangeDate->id_date)
-                ->exists();
-            if (!$rangeDateExists) {
-                return response()->json(['message' => 'Fecha de entrega no válida para el horario seleccionado', 'success' => false], 400);
-            }
-            $existsDelivery = DB::table('consolidado_delivery_form_lima')
-                ->where('id_range_date', $rangeDate->id)
-                ->count();
-            Log::info($existsDelivery);
-            Log::info($rangeDate->delivery_count);
-            if ($existsDelivery >= $rangeDate->delivery_count) {
-                return response()->json(['message' => 'El Horario ya no se encuentra disponible', 'success' => false], 400);
+            $rangeDate = null;
+            
+            // Solo validar horario si se proporciona range_id
+            if ($rangeId) {
+                $rangeDate = DB::table('consolidado_delivery_range_date')
+                    ->select('id', 'id_date', 'delivery_count')
+                    ->where('id', $rangeId)
+                    ->first();
+                if (!$rangeDate) {
+                    return response()->json(['message' => 'Horario seleccionado no válido', 'success' => false], 400);
+                }
+                // Validar que el id_date referenciado exista para no romper la FK
+                $rangeDateExists = DB::table('consolidado_delivery_date')
+                    ->where('id', $rangeDate->id_date)
+                    ->exists();
+                if (!$rangeDateExists) {
+                    return response()->json(['message' => 'Fecha de entrega no válida para el horario seleccionado', 'success' => false], 400);
+                }
+                // Validar disponibilidad del horario
+                $existsDelivery = DB::table('consolidado_delivery_form_lima')
+                    ->where('id_range_date', $rangeDate->id)
+                    ->count();
+                Log::info($existsDelivery);
+                Log::info($rangeDate->delivery_count);
+                if ($existsDelivery >= $rangeDate->delivery_count) {
+                    return response()->json(['message' => 'El Horario ya no se encuentra disponible', 'success' => false], 400);
+                }
             }
             $idUser = JWTAuth::user()->id;
             $formData = [
                 'id_contenedor' => $cotizacion->id_contenedor,
                 'id_user' => $idUser,
                 'id_cotizacion' => $cotizacion->id,
-                'id_range_date' => $request->horarioSeleccionado['range_id'] ?? null,
+                'id_range_date' => $rangeId, // Puede ser null si no se proporciona
                 'pick_name' => $request->nombreCompleto,
                 'pick_doc' => $request->dni,
                 'import_name' => $request->importador,
@@ -211,21 +315,23 @@ class DeliveryController extends Controller
                 'final_destination_district' => $request->distritoDestino,
             ];
 
-            // Crear el formulario de delivery}
-           $deliveryForm = ConsolidadoDeliveryFormLima::create($formData);
+            // Crear el formulario de delivery
+            $deliveryForm = ConsolidadoDeliveryFormLima::create($formData);
 
             // Actualizar la cotización para marcar que el formulario fue registrado
             $cotizacion->update([
                 'delivery_form_registered_at' => now()->toDateString()
             ]);
 
-            //insert in consolidado_user_range_delivery
-            DB::table('consolidado_user_range_delivery')->insert([
-                'id_date' => $rangeDate->id_date, // usar el id_date real del rango
-                'id_range_date' => $rangeDate->id,
-                'id_cotizacion' => $cotizacion->id,
-                'id_user' => $idUser,
-            ]);
+            // Insertar en consolidado_user_range_delivery solo si hay range_id
+            if ($rangeId && $rangeDate) {
+                DB::table('consolidado_user_range_delivery')->insert([
+                    'id_date' => $rangeDate->id_date, // usar el id_date real del rango
+                    'id_range_date' => $rangeDate->id,
+                    'id_cotizacion' => $cotizacion->id,
+                    'id_user' => $idUser,
+                ]);
+            }
             // Despachar job para enviar mensaje de WhatsApp
             SendDeliveryConfirmationWhatsAppLimaJob::dispatch($deliveryForm->id)->onQueue('emails');
             DB::commit();

@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Jobs\ValidateCotizacionesWithLoadedProveedoresJob;
 use App\Models\CargaConsolidada\Contenedor;
 use App\Models\CargaConsolidada\Cotizacion;
+use App\Models\Notificacion;
 use App\Models\Usuario;
 use App\Traits\GoogleSheetsHelper;
 use Illuminate\Bus\Queueable;
@@ -78,7 +79,9 @@ class ProcessPackingListUploadJob implements ShouldQueue
             ValidateCotizacionesWithLoadedProveedoresJob::dispatch($this->contenedorId)
                 ->onQueue('importaciones');
 
+            // Procesar sheet y notificaciones de forma independiente
             $this->handleConsolidadoSheet($contenedor);
+            $this->validarYNotificarCotizacionesSinEstado($contenedor);
         } catch (\Exception $e) {
             Log::error('Error procesando packing list en job', [
                 'contenedor_id' => $this->contenedorId,
@@ -166,6 +169,9 @@ class ProcessPackingListUploadJob implements ShouldQueue
         }
     }
 
+    /**
+     * Obtiene las cotizaciones para poblar el Excel (sin validar estado RESERVADO)
+     */
     private function getCotizacionesForSheet($idContenedor): array
     {
         try {
@@ -248,6 +254,116 @@ class ProcessPackingListUploadJob implements ShouldQueue
             ]);
 
             return [];
+        }
+    }
+
+    /**
+     * Valida y crea notificaciones para cotizaciones sin estado RESERVADO en tracking
+     */
+    private function validarYNotificarCotizacionesSinEstado(Contenedor $contenedor): void
+    {
+        try {
+            $contenedorNombre = $contenedor->carga ?? 'Contenedor';
+
+            // Obtener todas las cotizaciones confirmadas con proveedores LOADED
+            $cotizaciones = DB::table('contenedor_consolidado_cotizacion AS main')
+                ->select([
+                    'main.id',
+                    'main.nombre',
+                    'main.documento',
+                    'main.telefono',
+                ])
+                ->where('main.id_contenedor', $contenedor->id)
+                ->whereNull('main.id_cliente_importacion')
+                ->where('main.estado_cotizador', 'CONFIRMADO')
+                ->whereExists(function ($sub) {
+                    $sub->select(DB::raw(1))
+                        ->from('contenedor_consolidado_cotizacion_proveedores as proveedores')
+                        ->whereRaw('proveedores.id_cotizacion = main.id')
+                        ->where('proveedores.estados_proveedor', 'LOADED');
+                })
+                ->orderBy('main.id', 'asc')
+                ->get();
+
+            $cotizacionesSinEstado = [];
+
+            foreach ($cotizaciones as $cotizacion) {
+                // Verificar si hay algún registro con estado RESERVADO en tracking
+                $tieneEstadoReservado = DB::table('contenedor_proveedor_estados_tracking')
+                    ->where('id_cotizacion', $cotizacion->id)
+                    ->where('estado', 'RESERVADO')
+                    ->exists();
+
+                // Si no tiene estado RESERVADO, agregarla a la lista para notificar
+                if (!$tieneEstadoReservado) {
+                    $cotizacionesSinEstado[] = $cotizacion;
+                }
+            }
+
+            if (!empty($cotizacionesSinEstado)) {
+                Log::info('Cotizaciones sin estado RESERVADO encontradas', [
+                    'contenedor_id' => $contenedor->id,
+                    'cantidad' => count($cotizacionesSinEstado),
+                ]);
+
+                $this->crearNotificacionesParaCotizacionesSinEstado(
+                    $cotizacionesSinEstado,
+                    $contenedor->id,
+                    $contenedorNombre
+                );
+            }
+        } catch (\Exception $e) {
+            Log::error('Error validando cotizaciones sin estado RESERVADO', [
+                'contenedor_id' => $contenedor->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * Crea notificaciones para cotizaciones que no tienen estado RESERVADO en tracking
+     */
+    private function crearNotificacionesParaCotizacionesSinEstado(array $cotizaciones, int $idContenedor, string $contenedorNombre): void
+    {
+        try {
+            foreach ($cotizaciones as $cotizacion) {
+                Notificacion::create([
+                    'titulo' => 'Cotización sin estado RESERVADO',
+                    'mensaje' => "La cotización de {$cotizacion->nombre} no tiene estado RESERVADO en tracking",
+                    'descripcion' => "La cotización ID {$cotizacion->id} del cliente {$cotizacion->nombre} no tiene un estado RESERVADO en la tabla de tracking y no fue incluida en el sheet del consolidado {$contenedorNombre}.",
+                    'modulo' => Notificacion::MODULO_CARGA_CONSOLIDADA,
+                    'rol_destinatario' => Usuario::ROL_COORDINACION,
+                    'navigate_to' => "cargaconsolidada/completados/cotizaciones/{$idContenedor}",
+                    'navigate_params' => [
+                        'tab' => 'prospectos',
+                        'idCotizacion' => $cotizacion->id
+                    ],
+                    'tipo' => Notificacion::TIPO_WARNING,
+                    'icono' => 'mdi:alert',
+                    'prioridad' => Notificacion::PRIORIDAD_MEDIA,
+                    'referencia_tipo' => 'cotizacion_sin_estado',
+                    'referencia_id' => $cotizacion->id,
+                    'activa' => true,
+                    'creado_por' => $this->uploadedByUserId,
+                    'configuracion_roles' => [
+                        Usuario::ROL_COORDINACION => [
+                            'titulo' => 'Cotización sin estado RESERVADO',
+                            'mensaje' => "Cotización de {$cotizacion->nombre} requiere revisión",
+                            'descripcion' => "La cotización ID {$cotizacion->id} no tiene estado RESERVADO en tracking. Contenedor: {$contenedorNombre}"
+                        ]
+                    ]
+                ]);
+
+                Log::info('Notificación creada para cotización sin estado RESERVADO', [
+                    'cotizacion_id' => $cotizacion->id,
+                    'contenedor_id' => $idContenedor,
+                ]);
+            }
+        } catch (\Exception $e) {
+            Log::error('Error creando notificaciones para cotizaciones sin estado', [
+                'contenedor_id' => $idContenedor,
+                'error' => $e->getMessage(),
+            ]);
         }
     }
 }
