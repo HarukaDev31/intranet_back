@@ -1679,7 +1679,7 @@ class EntregaController extends Controller
             $carga = $contenedor->carga;
             $message = "Hola $nombre 👋
 Adjunto el sustento de entrega correspondiente a su importación del consolidado $carga.
-Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, estaremos encantados de ayudarlo nuevamente. No dude en escribirnos ✈️📦 and all photos uploaded";
+Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, estaremos encantados de ayudarlo nuevamente. No dude en escribirnos ✈️📦";
             $this->sendMessage($message, $numeroWhatsapp);
             if ($photo1Path) {
                 $this->sendMedia($photo1Path, $photo1MimeType, $message, $numeroWhatsapp);
