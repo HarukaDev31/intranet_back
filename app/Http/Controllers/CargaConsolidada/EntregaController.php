@@ -149,7 +149,7 @@ class EntregaController extends Controller
             )
             ->leftJoin('consolidado_delivery_form_lima as lima', function ($join) use ($idContenedor) {
                 $join->on('lima.id_range_date', '=', 'r.id')
-                     ->where('lima.id_contenedor', '=', $idContenedor);
+                    ->where('lima.id_contenedor', '=', $idContenedor);
             })
             ->where('d.id_contenedor', $idContenedor)
             ->whereNull('lima.id')
@@ -167,7 +167,7 @@ class EntregaController extends Controller
                 DB::raw('COALESCE(a.assigned_count, 0) as assigned_count'),
                 DB::raw('(r.delivery_count - COALESCE(a.assigned_count, 0)) as available')
             ])
-            
+
             ->orderBy('d.year')
             ->orderBy('d.month')
             ->orderBy('d.day')
@@ -957,7 +957,7 @@ class EntregaController extends Controller
                 Log::warning('Dompdf not available, skipping PDF generation.');
             } else {
                 foreach ($rowsQuery as $r) {
-                try {
+                    try {
                         // Sanitize cliente nombre for filename: ASCII, underscores, max length
                         $rawName = $r->cliente ?? ('cotizacion_' . $r->id_cotizacion);
                         $trans = @iconv('UTF-8', 'ASCII//TRANSLIT', $rawName);
@@ -972,28 +972,28 @@ class EntregaController extends Controller
                         $pdfName = 'CARGO_ENTREGA_' . $trans . '_' . $suffix . '.pdf';
                         $pdfPath = $tempDir . DIRECTORY_SEPARATOR . $pdfName;
 
-                    // Render Blade view
-                    $html = view('entrega.cargo_entrega', [
-                        'cliente' => $r->cliente,
-                        'cotizacion_id' => $r->id_cotizacion,
-                        'qty' => (int)($r->qty_box_china ?? 0),
-                        'carga' => $suffix,
-                    ])->render();
+                        // Render Blade view
+                        $html = view('entrega.cargo_entrega', [
+                            'cliente' => $r->cliente,
+                            'cotizacion_id' => $r->id_cotizacion,
+                            'qty' => (int)($r->qty_box_china ?? 0),
+                            'carga' => $suffix,
+                        ])->render();
 
-                    $options = new Options();
-                    $options->set('isRemoteEnabled', true);
-                    $options->set('defaultFont', 'DejaVu Sans');
-                    $dompdf = new Dompdf($options);
-                    $dompdf->loadHtml($html);
-                    $dompdf->setPaper('A4', 'landscape');
-                    $dompdf->render();
-                    $output = $dompdf->output();
-                    file_put_contents($pdfPath, $output);
-                    $pdfFiles[] = $pdfPath;
-                } catch (\Exception $e) {
-                    Log::error('Error generating PDF for cotizacion ' . $r->id_cotizacion . ': ' . $e->getMessage());
-                    // continue generating others
-                }
+                        $options = new Options();
+                        $options->set('isRemoteEnabled', true);
+                        $options->set('defaultFont', 'DejaVu Sans');
+                        $dompdf = new Dompdf($options);
+                        $dompdf->loadHtml($html);
+                        $dompdf->setPaper('A4', 'landscape');
+                        $dompdf->render();
+                        $output = $dompdf->output();
+                        file_put_contents($pdfPath, $output);
+                        $pdfFiles[] = $pdfPath;
+                    } catch (\Exception $e) {
+                        Log::error('Error generating PDF for cotizacion ' . $r->id_cotizacion . ': ' . $e->getMessage());
+                        // continue generating others
+                    }
                 }
             }
 
@@ -1044,7 +1044,7 @@ class EntregaController extends Controller
             return response()->json(['success' => false, 'message' => 'Error generando ROTULADO PARED', 'error' => $e->getMessage()], 500);
         }
     }
-    
+
     public function getAllDelivery(Request $request)
     {
         // Lo obtiene de la tabla de clientes asociados al contenedor
@@ -1230,7 +1230,7 @@ class EntregaController extends Controller
             $cargas = $cargas->sortBy(function ($carga) {
                 return (int) $carga->carga;
             });
-            return $cargas->values()->map(function($carga) {
+            return $cargas->values()->map(function ($carga) {
                 return ['value' => (int) $carga->id, 'label' => "Contenedor #" . $carga->carga];
             });
         } catch (\Exception $e) {
@@ -1615,12 +1615,18 @@ class EntregaController extends Controller
         DB::beginTransaction();
         try {
             $inserted = [];
+            $photo1Path = null;
+            $photo1MimeType = null;
+            $photo2Path = null;
+            $photo2MimeType = null;
 
             // Procesar photo_1 si existe
             if ($request->hasFile('photo_1')) {
                 $file = $request->file('photo_1');
                 $filename = time() . '_1_' . $file->getClientOriginalName();
                 $storedPath = $file->storeAs($folder, $filename, $disk);
+                $photo1Path = storage_path('app/public/' . $storedPath);
+                $photo1MimeType = $file->getClientMimeType();
 
                 $insert = [
                     $formIdField => $formId,
@@ -1642,6 +1648,8 @@ class EntregaController extends Controller
                 $file = $request->file('photo_2');
                 $filename = time() . '_2_' . $file->getClientOriginalName();
                 $storedPath = $file->storeAs($folder, $filename, $disk);
+                $photo2Path = storage_path('app/public/' . $storedPath);
+                $photo2MimeType = $file->getClientMimeType();
 
                 $insert = [
                     $formIdField => $formId,
@@ -1657,8 +1665,28 @@ class EntregaController extends Controller
                 $newId = DB::table($tableName)->insertGetId($insert);
                 $inserted[] = $newId;
             }
-
             DB::commit();
+            $cotizacion = Cotizacion::find($idCotizacion);
+            $nombre = $cotizacion->nombre;
+            $numeroWhatsapp = $cotizacion->telefono;
+            //remvoe empty spaces and special characters
+            $numeroWhatsapp = preg_replace('/[^0-9]/', '', $numeroWhatsapp);
+            if (strlen($numeroWhatsapp) < 9) {
+                $numeroWhatsapp = '51' . $numeroWhatsapp;
+            }
+            $numeroWhatsapp = $numeroWhatsapp . '@c.us';
+            $contenedor = Contenedor::find($idContenedor);
+            $carga = $contenedor->carga;
+            $message = "Hola $nombre 👋
+Adjunto el sustento de entrega correspondiente a su importación del consolidado $carga.
+Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, estaremos encantados de ayudarlo nuevamente. No dude en escribirnos ✈️📦 and all photos uploaded";
+            $this->sendMessage($message, $numeroWhatsapp);
+            if ($photo1Path) {
+                $this->sendMedia($photo1Path, $photo1MimeType, $message, $numeroWhatsapp);
+            }
+            if ($photo2Path) {
+                $this->sendMedia($photo2Path, $photo2MimeType, $message, $numeroWhatsapp);
+            }
 
             return response()->json([
                 'message' => 'Fotos de conformidad subidas correctamente',
@@ -1935,7 +1963,6 @@ class EntregaController extends Controller
             if ($assignments->count() > 0) {
                 // Borrar todas las asignaciones del usuario para esta cotización
                 DB::table('consolidado_user_range_delivery')->where('id_cotizacion', $idCotizacion)->delete();
-
             }
 
             // 3) Actualizar la tabla contenedor_consolidado_cotizacion y hacer que delivery_form_registered_at sea NULL
@@ -2021,8 +2048,8 @@ class EntregaController extends Controller
             $urlProvincia = $urlClientes . '/formulario-entrega/provincia/' . $idContenedor;
             $urlLima = $urlClientes . '/formulario-entrega/lima/' . $idContenedor;
             $message = "Hola " . $cotizacion->nombre_cliente . ", somos de Pro Business y este mensaje es para informarte que estamos esperando a que llene el formulario para entregar tu pedido\n\n" .
-            "del consolidado #" . $contenedor->carga . "\n\n" .
-            "Link Provincia: " . $urlProvincia . "\n\n Link Lima: " . $urlLima;
+                "del consolidado #" . $contenedor->carga . "\n\n" .
+                "Link Provincia: " . $urlProvincia . "\n\n Link Lima: " . $urlLima;
             $telefono = preg_replace('/\s+/', '', $cotizacion->telefono);
             $this->phoneNumberId = $telefono ? $telefono . '@c.us' : '';
             $this->sendMessage($message);
@@ -2497,9 +2524,10 @@ class EntregaController extends Controller
             ], 500);
         }
     }
-    public function seleccionHorarios(Request $request){
+    public function seleccionHorarios(Request $request)
+    {
         try {
-            $arrayTimes=$request->slots;
+            $arrayTimes = $request->slots;
             //array with objects with id and selected
             $arrayTimes = array_map(function ($time) {
                 return (object) [
