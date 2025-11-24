@@ -1682,10 +1682,10 @@ Adjunto el sustento de entrega correspondiente a su importación del consolidado
 Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, estaremos encantados de ayudarlo nuevamente. No dude en escribirnos ✈️📦";
             $this->sendMessage($message, $numeroWhatsapp);
             if ($photo1Path) {
-                $this->sendMedia($photo1Path, $photo1MimeType, $message, $numeroWhatsapp);
+                $this->sendMedia($photo1Path, $photo1MimeType, null, $numeroWhatsapp);
             }
             if ($photo2Path) {
-                $this->sendMedia($photo2Path, $photo2MimeType, $message, $numeroWhatsapp);
+                $this->sendMedia($photo2Path, $photo2MimeType, null, $numeroWhatsapp);
             }
 
             return response()->json([
