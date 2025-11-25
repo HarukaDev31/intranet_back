@@ -328,12 +328,12 @@ class ProcessPackingListUploadJob implements ShouldQueue
         try {
             foreach ($cotizaciones as $cotizacion) {
                 Notificacion::create([
-                    'titulo' => 'Cotización sin estado RESERVADO',
+                    'titulo' => 'Cotización No Reservada',
                     'mensaje' => "La cotización de {$cotizacion->nombre} no tiene estado RESERVADO en tracking",
                     'descripcion' => "La cotización ID {$cotizacion->id} del cliente {$cotizacion->nombre} no tiene un estado RESERVADO en la tabla de tracking y no fue incluida en el sheet del consolidado {$contenedorNombre}.",
                     'modulo' => Notificacion::MODULO_CARGA_CONSOLIDADA,
                     'rol_destinatario' => Usuario::ROL_COORDINACION,
-                    'navigate_to' => "cargaconsolidada/completados/cotizaciones/{$idContenedor}",
+                    'navigate_to' => "cargaconsolidada/completados/clientes/{$idContenedor}?tab=general&idCotizacion={$cotizacion->id}",
                     'navigate_params' => [
                         'tab' => 'prospectos',
                         'idCotizacion' => $cotizacion->id
@@ -347,7 +347,7 @@ class ProcessPackingListUploadJob implements ShouldQueue
                     'creado_por' => $this->uploadedByUserId,
                     'configuracion_roles' => [
                         Usuario::ROL_COORDINACION => [
-                            'titulo' => 'Cotización sin estado RESERVADO',
+                            'titulo' => 'Cotización No Reservada',
                             'mensaje' => "Cotización de {$cotizacion->nombre} requiere revisión",
                             'descripcion' => "La cotización ID {$cotizacion->id} no tiene estado RESERVADO en tracking. Contenedor: {$contenedorNombre}"
                         ]

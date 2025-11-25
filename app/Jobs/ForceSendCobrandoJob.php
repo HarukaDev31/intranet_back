@@ -20,7 +20,6 @@ class ForceSendCobrandoJob implements ShouldQueue
 
     protected $idCotizacion;
     protected $idContainer;
-    protected $phoneNumberId;
 
     /**
      * Create a new job instance.
