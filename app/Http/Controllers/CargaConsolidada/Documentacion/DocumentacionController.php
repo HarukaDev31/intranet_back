@@ -2678,7 +2678,7 @@ class DocumentacionController extends Controller
             // - clientes/entregas (campos de cliente y contacto)
             if (is_array($item)) {
                 // Cliente/Entrega: columnas A..P según la plantilla de tus capturas
-                $docNumber = $item['documento'] ?? ($item['r_doc'] ?? ($item['agency_ruc'] ?? ''));
+                $docNumber = $item['documento'] ?? ($item['r_doc'] ?? ($item['voucher_doc'] ?? ($item['pick_doc'] ?? '')));
                 $docDigits = preg_replace('/\D+/', '', (string)$docNumber);
                 $docType = $this->inferDocumentTypeCode($docNumber);
                 $name = $item['nombre'] ?? ($item['cliente'] ?? ($item['r_name'] ?? ''));
@@ -2705,7 +2705,7 @@ class DocumentacionController extends Controller
                     $sheet->getStyle('B' . $row)->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_TEXT);
                 }
                 $sheet->setCellValue('C' . $row, $name);
-                $sheet->setCellValue('D' . $row, $item['home_adress_delivery'] ?? '');
+                $sheet->setCellValue('D' . $row, $isLima ? $item['final_destination_place'] : ($item['home_adress_delivery'] ?? ''));
                 $sheet->setCellValue('E' . $row, $phone);
                 $sheet->setCellValue('F' . $row, $cell);
                 $sheet->setCellValue('G' . $row, $email);
