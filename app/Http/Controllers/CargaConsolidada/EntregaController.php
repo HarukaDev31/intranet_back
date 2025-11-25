@@ -1569,6 +1569,7 @@ class EntregaController extends Controller
      */
     public function uploadConformidad(Request $request)
     {
+        try {
         $request->validate([
             'id_contenedor' => 'required|integer',
             'id_cotizacion' => 'required|integer',
@@ -1695,6 +1696,13 @@ Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, 
                 'success' => true
             ], 201);
         } catch (\Throwable $e) {
+            DB::rollBack();
+            return response()->json([
+                'message' => 'Error al guardar la conformidad: ' . $e->getMessage(),
+                'success' => false
+            ], 500);
+        }
+        }catch (\Throwable $e) {
             DB::rollBack();
             return response()->json([
                 'message' => 'Error al guardar la conformidad: ' . $e->getMessage(),
