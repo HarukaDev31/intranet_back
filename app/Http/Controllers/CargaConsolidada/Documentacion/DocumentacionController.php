@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
 use App\Models\BaseDatos\ProductoImportadoExcel;
+use App\Models\Distrito;
 use Carbon\Carbon;
 use Tymon\JWTAuth\Facades\JWTAuth;
 use Maatwebsite\Excel\Facades\Excel;
@@ -2482,7 +2483,7 @@ class DocumentacionController extends Controller
                     // Province form
                     if (isset($detalle['province']) && is_array($detalle['province'])) {
                         $prov = $detalle['province'];
-                        $direccion = $prov['agency_address'] ?? $prov['importer_address'] ?? ($prov['r_address'] ?? $direccion);
+                        $direccion = $prov['agency_address_final_delivery'] ?? $prov['importer_address'] ?? ($prov['r_address'] ?? $direccion);
                         $provinciaName = $prov['province_name'] ?? '';
                         $distritoName = $prov['district_name'] ?? '';
                         $departamentoName = $prov['department_name'] ?? $departamentoName;
@@ -2490,14 +2491,31 @@ class DocumentacionController extends Controller
                     // Lima form
                     if (empty($direccion) && isset($detalle['lima']) && is_array($detalle['lima'])) {
                         $lima = $detalle['lima'];
-                        $direccion = $lima['destination_address'] ?? $lima['conductor_address'] ?? $direccion;
+                        $direccion = $lima['final_destination_place'] ?? $lima['conductor_address'] ?? $direccion;
                         // Lima usa departamento/provincia/distrito LIMA por defecto
                         if (!empty($direccion)) {
                             $departamentoName = 'LIMA';
                             $provinciaName = 'LIMA';
+                            if (isset($lima['final_destination_district'])) {
+                                $distritoKey = $lima['final_destination_district'];
+                                $distrito = null;
+                                // Si viene como ID numérico, buscar por PK
+                                if (is_numeric($distritoKey)) {
+                                    $distrito = Distrito::find($distritoKey);
+                                }
+                                // Si viene como texto, intentar coincidencia exacta por nombre
+                                if (!$distrito && is_string($distritoKey) && $distritoKey !== '') {
+                                    $distrito = Distrito::where('No_Distrito', trim($distritoKey))->first();
+                                }
+                                if ($distrito) {
+                                    $distritoName = $distrito->No_Distrito;
+                                }
+                            }
                         }
                     }
                 }
+                    
+                
 
                 // Añadir campos normalizados para la plantilla
                 $row['direccion'] = $direccion;

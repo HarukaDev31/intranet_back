@@ -1,8 +1,9 @@
 
-!.gitignore
+.gitignore
 cargaconsolidada/
 imports/
 temp/
 Rotulado.zip
 *.csv
 *.pdf
+public/
