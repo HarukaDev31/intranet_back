@@ -92,7 +92,7 @@ class ForceSendCobrandoJob implements ShouldQueue
 
             // Enviar imagen de pagos
             $pagosUrl = public_path('assets/images/pagos-full.jpg');
-            $this->sendMedia($pagosUrl, 'image/jpg');
+            $this->sendMedia($pagosUrl, 'image/jpg',null,$telefono,10);
 
             Log::info("Mensaje de cobranza enviado exitosamente via Job", [
                 'id_cotizacion' => $this->idCotizacion,
