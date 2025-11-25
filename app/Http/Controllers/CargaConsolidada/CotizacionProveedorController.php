@@ -2964,7 +2964,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
             ]);
 
             // Despachar el job para procesar en segundo plano
-            ForceSendCobrandoJob::dispatch($idCotizacion, $idContainer);
+            ForceSendCobrandoJob::dispatch($idCotizacion, $idContainer)->onQueue('importaciones');
 
             Log::info("Job ForceSendCobrandoJob despachado", [
                 'id_cotizacion' => $idCotizacion,
