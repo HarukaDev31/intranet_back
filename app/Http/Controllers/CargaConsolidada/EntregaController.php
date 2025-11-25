@@ -1886,7 +1886,7 @@ Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, 
                 'driver_plate' => 'sometimes|string',
                 // Destinos
                 'final_destination_place' => 'sometimes|string',
-                'final_destination_district' => 'sometimes|string',
+                'final_destination_district' => 'sometimes|integer',
             ];
             $data = $request->validate($rules);
 
