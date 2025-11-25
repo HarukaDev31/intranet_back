@@ -2705,7 +2705,9 @@ class DocumentacionController extends Controller
                     $sheet->getStyle('B' . $row)->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_TEXT);
                 }
                 $sheet->setCellValue('C' . $row, $name);
-                $sheet->setCellValue('D' . $row, $isLima ? $item['final_destination_place'] : ($item['home_adress_delivery'] ?? ''));
+                $direccionLima = $item['final_destination_place'] ?? ($item['home_adress_delivery'] ?? ($item['direccion'] ?? ''));
+                $direccionProvincia = $item['home_adress_delivery'] ?? ($item['final_destination_place'] ?? ($item['direccion'] ?? ''));
+                $sheet->setCellValue('D' . $row, $isLima ? $direccionLima : $direccionProvincia);
                 $sheet->setCellValue('E' . $row, $phone);
                 $sheet->setCellValue('F' . $row, $cell);
                 $sheet->setCellValue('G' . $row, $email);
