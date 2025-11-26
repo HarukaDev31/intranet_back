@@ -178,7 +178,9 @@ class CotizacionFinalController extends Controller
                     'pagado_verificado' => $pagado_verificado,
                     'id_cotizacion' => $row->id_cotizacion,
                     'cotizacion_final_url' =>$this->generateImageUrl($row->cotizacion_final_url),
-                    'pagos' => $pagos
+                    'pagos' => $pagos,
+                    'cotizacion_contrato_firmado_url' => $row->cotizacion_contrato_firmado_url ? $this->generateImageUrl($row->cotizacion_contrato_firmado_url) : null,
+                    'cod_contract' => $row->cod_contract,
                 ];
 
                 $transformedData[] = $subdata;

@@ -9,6 +9,7 @@ use App\Models\CargaConsolidada\Contenedor;
 use App\Models\DeliveryAgency;
 use App\Models\CargaConsolidada\ConsolidadoDeliveryFormProvince;
 use App\Models\CargaConsolidada\ConsolidadoDeliveryFormLima;
+use App\Traits\WhatsappTrait;
 use App\Jobs\SendDeliveryConfirmationWhatsAppLimaJob;
 use App\Jobs\SendDeliveryConfirmationWhatsAppProvinceJob;
 use Tymon\JWTAuth\Facades\JWTAuth;
@@ -18,6 +19,7 @@ use Illuminate\Support\Facades\Log;
 
 class DeliveryController extends Controller
 {
+    use WhatsappTrait;
     public function getClientesConsolidado($idConsolidado)
     {
         try {
@@ -41,7 +43,7 @@ class DeliveryController extends Controller
                         });
                 })
                 ->get();
-            
+
             $contenedor = Contenedor::find($idConsolidado);
             if (!$contenedor) {
                 return response()->json(['error' => 'Carga no encontrada'], 404);
@@ -74,7 +76,7 @@ class DeliveryController extends Controller
         try {
             // Buscar la cotización por UUID
             $cotizacion = Cotizacion::where('uuid', $cotizacionUuid)->first();
-            
+
             if (!$cotizacion) {
                 return response()->json([
                     'message' => 'Cotización no encontrada',
@@ -168,6 +170,7 @@ class DeliveryController extends Controller
     }
     public function storeProvinciaForm(Request $request)
     {
+        Log::info("Formulario de delivery de Lima: " . json_encode($request->all()));
         DB::beginTransaction();
         try {
             $idUser = JWTAuth::user()->id;
@@ -175,16 +178,42 @@ class DeliveryController extends Controller
             if (!$cotizacion) {
                 return response()->json(['message' => 'Cotizacion no encontrada', 'success' => false], 404);
             }
-            //if exists other delivery form registered with same id_cotizacion
             $otherDeliveryForm = ConsolidadoDeliveryFormProvince::where('id_cotizacion', $cotizacion->id)->first();
             if ($otherDeliveryForm) {
-                return response()->json(['message' => 'Ya existe otro formulario de delivery registrado', 'success' => false], 400);
+                //if exists and not have id_range_date, update the record
+                if (!$otherDeliveryForm->id_range_date) {
+                    $otherDeliveryForm->update([
+                        'id_cotizacion' => $cotizacion->id,
+                        'id_user' => $idUser,
+                        'id_contenedor' => $cotizacion->id_contenedor,
+                        'importer_nmae' => $request->clienteNombre ?? $request->clienteRazonSocial,
+                        'productos' => is_array($request->tiposProductos) ? implode(', ', $request->tiposProductos) : $request->tiposProductos,
+                        'voucher_doc' => $request->clienteDni ?? $request->clienteRuc,
+                        'voucher_doc_type' => $request->tipoComprobante,
+                        'voucher_name' => $request->clienteNombre ?? $request->clienteRazonSocial,
+                        'voucher_email' => $request->clienteCorreo,
+                        'id_agency' => $request->agenciaEnvio,
+                        'agency_ruc' => $request->rucAgencia,
+                        'agency_name' => $request->nombreAgencia,
+                        'r_type' => $request->tipoDestinatario,
+                        'r_doc' => $request->destinatarioDni ?? $request->destinatarioRuc,
+                        'r_name' => $request->destinatarioNombre ?? $request->destinatarioRazonSocial,
+                        'r_phone' => $request->destinatarioCelular,
+                        'id_department' => is_array($request->destinatarioDepartamento) ? $request->destinatarioDepartamento['value'] : $request->destinatarioDepartamento,
+                        'id_province' => is_array($request->destinatarioProvincia) ? $request->destinatarioProvincia['value'] : $request->destinatarioProvincia,
+                        'id_district' => is_array($request->destinatarioDistrito) ? $request->destinatarioDistrito['value'] : $request->destinatarioDistrito,
+                        'r_ruc' => $request->destinatarioRuc,
+                        'r_razon_social' => $request->destinatarioRazonSocial,
+                        'r_direccion' => $request->direccionDomicilio,
+                        'agency_address_initial_delivery' => $request->direccionAgenciaLima,
+                        'agency_address_final_delivery' => $request->direccionAgenciaDestino,
+                        'home_adress_delivery' => $request->direccionDomicilio,
+                    ]);
+                } else {
+                    return response()->json(['message' => 'Ya existe otro formulario de delivery registrado', 'success' => false], 400);
+                }
             }
-            $otherDeliveryFormLima = ConsolidadoDeliveryFormLima::where('id_cotizacion', $cotizacion->id)->first();
-            if ($otherDeliveryFormLima) {
-                return response()->json(['message' => 'Ya existe otro formulario de delivery registrado', 'success' => false], 400);
-            }
-            ///validate if existe equal or more deliveries for this date , use delivery_count column in table consolidado_delivery_range_date use query builder
+
 
             $data = [
                 'id_cotizacion' => $cotizacion->id,
@@ -239,7 +268,7 @@ class DeliveryController extends Controller
     public function storeLimaForm(Request $request)
     {
         /**
-     * {"nombreCompleto":"Miguel Villegas Perez","dni":"48558558","importador":"miguel_villegas","tipoComprobante":"boleta","tiposProductos":"Juguetes, stickers, botellas de agua, artículos de oficina","clienteDni":"48558558","clienteNombre":"Miguel Villegas Perez","clienteCorreo":"mvillegas@probusiness.pe","clienteRuc":"20603287721","clienteRazonSocial":"Grupo Pro Business sac","choferNombre":"","choferDni":"456457457","choferLicencia":"456457457","choferPlaca":"456457457","direccionDestino":"","distritoDestino":"","fechaEntrega":"2025-09-30T05:00:00.000Z","horarioSeleccionado":{"range_id":1,"start_time":"10:00:00","end_time":"13:00:00","capacity":2,"assigned":0,"available":2}}
+         * {"nombreCompleto":"Miguel Villegas Perez","dni":"48558558","importador":"miguel_villegas","tipoComprobante":"boleta","tiposProductos":"Juguetes, stickers, botellas de agua, artículos de oficina","clienteDni":"48558558","clienteNombre":"Miguel Villegas Perez","clienteCorreo":"mvillegas@probusiness.pe","clienteRuc":"20603287721","clienteRazonSocial":"Grupo Pro Business sac","choferNombre":"","choferDni":"456457457","choferLicencia":"456457457","choferPlaca":"456457457","direccionDestino":"","distritoDestino":"","fechaEntrega":"2025-09-30T05:00:00.000Z","horarioSeleccionado":{"range_id":1,"start_time":"10:00:00","end_time":"13:00:00","capacity":2,"assigned":0,"available":2}}
          */
         DB::beginTransaction();
         try {
@@ -252,20 +281,21 @@ class DeliveryController extends Controller
                 ], 404);
             }
 
-           
-            //validate if exists other delivery form registered with same id_cotizacion on table province or lima
-            $otherDeliveryForm = ConsolidadoDeliveryFormLima::where('id_cotizacion', $cotizacion->id)->first();
-            if ($otherDeliveryForm) {
-                return response()->json(['message' => 'Ya existe otro formulario de delivery registrado', 'success' => false], 400);
-            }
             $otherDeliveryFormProvince = ConsolidadoDeliveryFormProvince::where('id_cotizacion', $cotizacion->id)->first();
             if ($otherDeliveryFormProvince) {
                 return response()->json(['message' => 'Ya existe otro formulario de delivery registrado', 'success' => false], 400);
             }
+            $existingLimaForm = ConsolidadoDeliveryFormLima::where('id_cotizacion', $cotizacion->id)->first();
+            if ($existingLimaForm && !empty($existingLimaForm->id_range_date)) {
+                return response()->json([
+                    'message' => 'Esta cotización ya tiene un formulario registrado con horario asignado',
+                    'success' => false
+                ], 400);
+            }
             // Obtener el rango de horario desde BD (fuente de la verdad) - Opcional
             $rangeId = $request->horarioSeleccionado['range_id'] ?? null;
             $rangeDate = null;
-            
+
             // Solo validar horario si se proporciona range_id
             if ($rangeId) {
                 $rangeDate = DB::table('consolidado_delivery_range_date')
@@ -315,16 +345,28 @@ class DeliveryController extends Controller
                 'final_destination_district' => $request->distritoDestino,
             ];
 
-            // Crear el formulario de delivery
-            $deliveryForm = ConsolidadoDeliveryFormLima::create($formData);
+            $wasCreated = false;
+            $previousRangeId = null;
+            if ($existingLimaForm) {
+                $previousRangeId = $existingLimaForm->id_range_date;
+                $existingLimaForm->update($formData);
+                $deliveryForm = $existingLimaForm->fresh();
+            } else {
+                // Crear el formulario de delivery
+                $deliveryForm = ConsolidadoDeliveryFormLima::create($formData);
+                $wasCreated = true;
 
-            // Actualizar la cotización para marcar que el formulario fue registrado
-            $cotizacion->update([
-                'delivery_form_registered_at' => now()->toDateString()
-            ]);
+                // Actualizar la cotización para marcar que el formulario fue registrado
+                $cotizacion->update([
+                    'delivery_form_registered_at' => now()->toDateString()
+                ]);
+            }
 
             // Insertar en consolidado_user_range_delivery solo si hay range_id
             if ($rangeId && $rangeDate) {
+                DB::table('consolidado_user_range_delivery')
+                    ->where('id_cotizacion', $cotizacion->id)
+                    ->delete();
                 DB::table('consolidado_user_range_delivery')->insert([
                     'id_date' => $rangeDate->id_date, // usar el id_date real del rango
                     'id_range_date' => $rangeDate->id,
@@ -332,8 +374,12 @@ class DeliveryController extends Controller
                     'id_user' => $idUser,
                 ]);
             }
-            // Despachar job para enviar mensaje de WhatsApp
-            SendDeliveryConfirmationWhatsAppLimaJob::dispatch($deliveryForm->id)->onQueue('emails');
+            if ($wasCreated) {
+                $this->sendInitialDeliveryFormMessage($cotizacion);
+            }
+            if ($rangeId && $rangeDate) {
+                SendDeliveryConfirmationWhatsAppLimaJob::dispatch($deliveryForm->id)->onQueue('emails');
+            }
             DB::commit();
 
             return response()->json([
@@ -352,6 +398,45 @@ class DeliveryController extends Controller
                 'success' => false,
                 'error' => $e->getMessage()
             ], 500);
-        } 
+        }
+    }
+
+    private function sendInitialDeliveryFormMessage(Cotizacion $cotizacion): void
+    {
+        try {
+            if (empty($cotizacion->telefono)) {
+                return;
+            }
+            $phoneNumber = $this->formatWhatsappNumber($cotizacion->telefono);
+            if (!$phoneNumber) {
+                return;
+            }
+            $contenedor = Contenedor::find($cotizacion->id_contenedor);
+            $carga = $contenedor ? $contenedor->carga : '';
+            $message = "Hola {$cotizacion->nombre}.\n\nGracias por llenar nuestro formulario del consolidado #{$carga}, le estaremos avisando de nuevos avances.";
+            $this->sendMessage($message, $phoneNumber);
+        } catch (\Throwable $th) {
+            Log::warning('No se pudo enviar el mensaje inicial del formulario de Lima', [
+                'cotizacion_id' => $cotizacion->id,
+                'error' => $th->getMessage()
+            ]);
+        }
+    }
+
+    private function formatWhatsappNumber(?string $telefono): ?string
+    {
+        if (empty($telefono)) {
+            return null;
+        }
+        $telefono = preg_replace('/[^0-9]/', '', $telefono);
+        if (strlen($telefono) === 9) {
+            $telefono = '51' . $telefono;
+        } elseif (strlen($telefono) === 10 && substr($telefono, 0, 1) === '0') {
+            $telefono = '51' . substr($telefono, 1);
+        }
+        if (strlen($telefono) < 11) {
+            return null;
+        }
+        return $telefono . '@c.us';
     }
 }

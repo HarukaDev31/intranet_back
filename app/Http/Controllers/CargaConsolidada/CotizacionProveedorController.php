@@ -2057,7 +2057,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
             ->count();
 
         // Solo enviar si es el primer proveedor inspeccionado y hay más de 1 proveedor en total
-        return $inspectedProviders === 1 && $totalProviders > 1;
+        return $inspectedProviders >= 1 && $totalProviders >= 1;
     }
 
     private function sendReservationMessage($cotizacion, $telefono)

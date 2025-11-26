@@ -1872,19 +1872,16 @@ Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, 
 
         if ($typeForm === 1) { // Lima
             $rules = [
-                // Comprobante (aplica a ambas tablas)
                 'productos' => 'sometimes|string',
                 'voucher_doc' => 'sometimes|string',
                 'voucher_doc_type' => 'sometimes|in:BOLETA,FACTURA',
                 'voucher_name' => 'sometimes|string',
                 'voucher_email' => 'sometimes',
-                // Datos del conductor
                 'drver_name' => 'sometimes|string',
                 'driver_doc_type' => 'sometimes|in:DNI,PASAPORTE',
                 'driver_doc' => 'sometimes|string',
                 'driver_license' => 'sometimes|string',
                 'driver_plate' => 'sometimes|string',
-                // Destinos
                 'final_destination_place' => 'sometimes|string',
                 'final_destination_district' => 'sometimes|integer',
             ];
