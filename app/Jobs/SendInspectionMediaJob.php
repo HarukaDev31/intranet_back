@@ -191,7 +191,7 @@ class SendInspectionMediaJob implements ShouldQueue
                 if (filter_var($image->file_path, FILTER_VALIDATE_URL)) {
                     // Es una URL absoluta, enviarla directamente como mensaje
                     $urlMessage = "📷 Imagen: " . $image->file_path;
-                    $this->sendMessage($urlMessage, $telefono);
+                    $this->sendMediaInspection($image->file_path, $image->file_type, $urlMessage, $telefono, 0, $image->id);
                     $urlsEnviadas++;
                     Log::info('Archivo imagen con URL absoluta, enviando URL directamente', [
                         'file_path' => $image->file_path,
@@ -212,7 +212,7 @@ class SendInspectionMediaJob implements ShouldQueue
                         $publicUrl = $this->generatePublicUrl($image->file_path);
                         if ($publicUrl) {
                             $urlMessage = "📷 Imagen: " . $publicUrl;
-                            $this->sendMessage($urlMessage, $telefono);
+                            $this->sendMediaInspection($publicUrl, $image->file_type, $urlMessage, $telefono, 0, $image->id);
                             $urlsEnviadas++;
                             Log::info('Archivo imagen muy grande, enviando URL como mensaje (sin base64)', [
                                 'file_path' => $image->file_path,
