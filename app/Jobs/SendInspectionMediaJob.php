@@ -185,12 +185,14 @@ class SendInspectionMediaJob implements ShouldQueue
 
             // Procesar y enviar imágenes
             $imagenesEnviadas = 0;
-            $urlsEnviadas = [];
+            $urlsEnviadas = 0;
             foreach ($imagesUrls as $image) {
                 // Verificar si ya es una URL absoluta
                 if (filter_var($image->file_path, FILTER_VALIDATE_URL)) {
-                    // Es una URL absoluta, enviarla directamente
-                    $urlsEnviadas[] = $image->file_path;
+                    // Es una URL absoluta, enviarla directamente como mensaje
+                    $urlMessage = "📷 Imagen: " . $image->file_path;
+                    $this->sendMessage($urlMessage, $telefono);
+                    $urlsEnviadas++;
                     Log::info('Archivo imagen con URL absoluta, enviando URL directamente', [
                         'file_path' => $image->file_path,
                         'url' => $image->file_path
@@ -206,19 +208,21 @@ class SendInspectionMediaJob implements ShouldQueue
                     $maxSize = 5 * 1024 * 1024; // 5MB
 
                     if ($fileSize > $maxSize) {
-                        // Archivo muy grande, enviar URL pública
+                        // Archivo muy grande, enviar URL pública como mensaje (no base64)
                         $publicUrl = $this->generatePublicUrl($image->file_path);
                         if ($publicUrl) {
-                            $urlsEnviadas[] = $publicUrl;
-                            Log::info('Archivo imagen muy grande, enviando URL en lugar de archivo', [
+                            $urlMessage = "📷 Imagen: " . $publicUrl;
+                            $this->sendMessage($urlMessage, $telefono);
+                            $urlsEnviadas++;
+                            Log::info('Archivo imagen muy grande, enviando URL como mensaje (sin base64)', [
                                 'file_path' => $image->file_path,
                                 'file_size' => $fileSize,
                                 'url' => $publicUrl
                             ]);
                         }
                     } else {
-                        // Archivo pequeño, enviar normalmente
-                        $this->sendMediaInspection($filePath, $image->file_type, '', $telefono, 0, $image->id);
+                        // Archivo pequeño, enviar normalmente como media usando el controlador
+                        $this->sendMediaInspectionToController($filePath, $image->file_type, '', $telefono, 0, $image->id);
                         $imagenesEnviadas++;
                     }
 
@@ -236,8 +240,10 @@ class SendInspectionMediaJob implements ShouldQueue
             foreach ($videosUrls as $video) {
                 // Verificar si ya es una URL absoluta
                 if (filter_var($video->file_path, FILTER_VALIDATE_URL)) {
-                    // Es una URL absoluta, enviarla directamente
-                    $urlsEnviadas[] = $video->file_path;
+                    // Es una URL absoluta, enviarla directamente como mensaje
+                    $urlMessage = "🎥 Video: " . $video->file_path;
+                    $this->sendMessage($urlMessage, $telefono);
+                    $urlsEnviadas++;
                     Log::info('Archivo video con URL absoluta, enviando URL directamente', [
                         'file_path' => $video->file_path,
                         'url' => $video->file_path
@@ -253,19 +259,21 @@ class SendInspectionMediaJob implements ShouldQueue
                     $maxSize = 5 * 1024 * 1024; // 5MB
 
                     if ($fileSize > $maxSize) {
-                        // Archivo muy grande, enviar URL pública
+                        // Archivo muy grande, enviar URL pública como mensaje (no base64)
                         $publicUrl = $this->generatePublicUrl($video->file_path);
                         if ($publicUrl) {
-                            $urlsEnviadas[] = $publicUrl;
-                            Log::info('Archivo video muy grande, enviando URL en lugar de archivo', [
+                            $urlMessage = "🎥 Video: " . $publicUrl;
+                            $this->sendMessage($urlMessage, $telefono);
+                            $urlsEnviadas++;
+                            Log::info('Archivo video muy grande, enviando URL como mensaje (sin base64)', [
                                 'file_path' => $video->file_path,
                                 'file_size' => $fileSize,
                                 'url' => $publicUrl
                             ]);
                         }
                     } else {
-                        // Archivo pequeño, enviar normalmente
-                        $this->sendMediaInspection($filePath, $video->file_type, '', $telefono, 0, $video->id);
+                        // Archivo pequeño, enviar normalmente como media usando el controlador
+                        $this->sendMediaInspectionToController($filePath, $video->file_type, '', $telefono, 0, $video->id);
                         $videosEnviados++;
                     }
 
@@ -278,24 +286,11 @@ class SendInspectionMediaJob implements ShouldQueue
                 }
             }
 
-            // Si hay URLs para enviar, enviarlas en un mensaje
-            if (!empty($urlsEnviadas)) {
-                $urlsMessage = "📎 Los siguientes archivos son muy grandes para enviar directamente. Puedes descargarlos desde estos enlaces:\n\n";
-                foreach ($urlsEnviadas as $index => $url) {
-                    $urlsMessage .= ($index + 1) . ". " . $url . "\n";
-                }
-                $this->sendMessage($urlsMessage, $telefono);
-                Log::info("URLs de archivos grandes enviadas", [
-                    'total_urls' => count($urlsEnviadas),
-                    'telefono' => $telefono
-                ]);
-            }
-
             Log::info("Job de inspección completado exitosamente", [
                 'id_proveedor' => $this->idProveedor,
                 'imagenes_enviadas' => $imagenesEnviadas,
                 'videos_enviados' => $videosEnviados,
-                'urls_enviadas' => count($urlsEnviadas),
+                'urls_enviadas' => $urlsEnviadas,
                 'mensaje_principal_enviado' => $sendStatus
             ]);
         } catch (\Exception $e) {

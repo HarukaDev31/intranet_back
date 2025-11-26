@@ -258,4 +258,124 @@ trait WhatsappTrait
             return false;
         }
     }
+
+    /**
+     * Envía datos de media de inspección directamente al controlador local
+     * El controlador procesará y encolará el job SendMediaInspectionMessageJobV2
+     * Envía solo la URL pública del archivo (no base64)
+     * 
+     * @param string $filePath Ruta del archivo a enviar
+     * @param string|null $mimeType Tipo MIME del archivo
+     * @param string|null $message Mensaje opcional
+     * @param string|null $phoneNumberId Número de teléfono
+     * @param int $sleep Tiempo de espera
+     * @param int|null $inspection_id ID de la inspección
+     * @param string|null $fileName Nombre del archivo
+     * @return array|false Respuesta del controlador o false en caso de error
+     */
+    public function sendMediaInspectionToController($filePath, $mimeType = null, $message = null, $phoneNumberId = null, $sleep = 0, $inspection_id = null, $fileName = null)
+    {
+        try {
+            $phoneNumberId = $phoneNumberId ? $phoneNumberId : $this->phoneNumberId;
+            
+            // Validar que inspection_id esté presente
+            if ($inspection_id === null) {
+                Log::error('Error al enviar media de inspección al controlador: inspection_id es requerido');
+                return false;
+            }
+
+            // Generar URL pública del archivo
+            $publicUrl = $this->generatePublicUrlFromPath($filePath);
+            
+            if (!$publicUrl) {
+                Log::error('Error al generar URL pública del archivo: ' . $filePath);
+                return false;
+            }
+
+            Log::info('Enviando media de inspección al controlador local (URL)', [
+                'filePath' => $filePath,
+                'publicUrl' => $publicUrl,
+                'fileName' => $fileName ?? basename($filePath),
+                'mimeType' => $mimeType,
+                'inspectionId' => $inspection_id
+            ]);
+
+            // Usar _callApi para enviar la URL al controlador
+            return $this->_callApi('/media-inspectionV2', [
+                'fileContent' => $publicUrl, // Enviar URL en lugar de base64
+                'fileName' => $fileName ?? basename($filePath),
+                'phoneNumberId' => $phoneNumberId,
+                'mimeType' => $mimeType,
+                'message' => $message,
+                'inspectionId' => $inspection_id
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Excepción al enviar media de inspección al controlador: ' . $e->getMessage(), [
+                'filePath' => $filePath,
+                'inspectionId' => $inspection_id,
+                'trace' => $e->getTraceAsString()
+            ]);
+            return false;
+        }
+    }
+
+    /**
+     * Genera una URL pública para un archivo desde su ruta
+     * 
+     * @param string $filePath Ruta del archivo (puede ser absoluta o relativa)
+     * @return string|null URL pública del archivo o null si falla
+     */
+    private function generatePublicUrlFromPath($filePath)
+    {
+        try {
+            // Si ya es una URL completa, devolverla tal como está
+            if (filter_var($filePath, FILTER_VALIDATE_URL)) {
+                return $filePath;
+            }
+
+            // Si es una ruta absoluta del sistema, convertirla a ruta relativa
+            if (strpos($filePath, storage_path('app/public')) === 0) {
+                // Es una ruta absoluta en storage/app/public
+                $relativePath = str_replace(storage_path('app/public'), '', $filePath);
+                $relativePath = ltrim($relativePath, '/\\');
+            } elseif (strpos($filePath, public_path('storage')) === 0) {
+                // Es una ruta absoluta en public/storage
+                $relativePath = str_replace(public_path('storage'), '', $filePath);
+                $relativePath = ltrim($relativePath, '/\\');
+            } else {
+                // Asumir que es una ruta relativa
+                $relativePath = ltrim($filePath, '/\\');
+            }
+
+            // Limpiar la ruta
+            $relativePath = str_replace('\\', '/', $relativePath);
+
+            // Si la ruta empieza con 'public/', removerlo
+            if (strpos($relativePath, 'public/') === 0) {
+                $relativePath = substr($relativePath, 7);
+            }
+
+            // Construir URL manualmente
+            $baseUrl = config('app.url');
+            $baseUrl = rtrim($baseUrl, '/');
+            $relativePath = ltrim($relativePath, '/');
+
+            // Generar URL completa
+            $publicUrl = $baseUrl . '/storage/' . $relativePath;
+
+            Log::info("URL pública generada desde ruta", [
+                'file_path' => $filePath,
+                'relative_path' => $relativePath,
+                'public_url' => $publicUrl
+            ]);
+
+            return $publicUrl;
+        } catch (\Exception $e) {
+            Log::error("Error al generar URL pública desde ruta: " . $e->getMessage(), [
+                'file_path' => $filePath,
+                'trace' => $e->getTraceAsString()
+            ]);
+            return null;
+        }
+    }
 }
