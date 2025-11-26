@@ -26,6 +26,9 @@ class EntregaController extends Controller
     use FileTrait;
     private $table_contenedor_consolidado_cotizacion_coordinacion_pagos = "contenedor_consolidado_cotizacion_coordinacion_pagos";
     private $table_pagos_concept = "cotizacion_coordinacion_pagos_concept";
+    private $CONCEPT_PAGO_LOGISTICA = 1;
+    private $CONCEPT_PAGO_IMPUESTOS = 2;
+    private $CONCEPT_PAGO_DELIVERY = 3;
 
     /**
      * Listar horarios disponibles (rangos de entrega) para un contenedor.
@@ -549,6 +552,7 @@ class EntregaController extends Controller
                 $join->on('P.id_cotizacion', '=', 'CC.id')
                     ->where('P.id_contenedor', '=', $idContenedor);
             })
+
             ->where('CC.id_contenedor', $idContenedor)
             ->whereNotNull('CC.estado_cliente')
             ->whereNull('CC.id_cliente_importacion')
@@ -573,6 +577,43 @@ class EntregaController extends Controller
                         WHERE cccp.id_cotizacion = CC.id
                         AND (ccp.name = 'LOGISTICA' OR ccp.name = 'IMPUESTOS')
                     ) AS total_pagos"),
+                DB::raw("(
+                    SELECT IFNULL(JSON_ARRAYAGG(
+                        JSON_OBJECT(
+                            'id_pago', cccp2.id,
+                            'monto', cccp2.monto,
+                            'concepto', ccp2.name,
+                            'status', cccp2.status,
+                            'payment_date', cccp2.payment_date,
+                            'banco', cccp2.banco,
+                            'voucher_url', cccp2.voucher_url
+                        )
+                    ), JSON_ARRAY())
+                    FROM {$this->table_contenedor_consolidado_cotizacion_coordinacion_pagos} cccp2
+                    JOIN {$this->table_pagos_concept} ccp2 ON cccp2.id_concept = ccp2.id
+                    WHERE cccp2.id_cotizacion = CC.id
+                    AND (ccp2.id = {$this->CONCEPT_PAGO_LOGISTICA} OR ccp2.id = {$this->CONCEPT_PAGO_IMPUESTOS})
+                    ORDER BY cccp2.payment_date ASC, cccp2.id ASC
+                ) AS pagos_details"),
+                //same but pagos concept delivery
+                DB::raw("(
+                    SELECT IFNULL(JSON_ARRAYAGG(
+                        JSON_OBJECT(
+                            'id_pago', cccp2.id,
+                            'monto', cccp2.monto,
+                            'concepto', ccp2.name,
+                            'status', cccp2.status,
+                            'payment_date', cccp2.payment_date,
+                            'banco', cccp2.banco,
+                            'voucher_url', cccp2.voucher_url
+                        )
+                    ), JSON_ARRAY())
+                    FROM {$this->table_contenedor_consolidado_cotizacion_coordinacion_pagos} cccp2
+                    JOIN {$this->table_pagos_concept} ccp2 ON cccp2.id_concept = ccp2.id
+                    WHERE cccp2.id_cotizacion = CC.id
+                    AND ccp2.id = {$this->CONCEPT_PAGO_DELIVERY}
+                    ORDER BY cccp2.payment_date ASC, cccp2.id ASC
+                ) AS pagos_details_delivery"),
             ]);
 
         // Filtros adicionales
@@ -818,24 +859,24 @@ class EntregaController extends Controller
                 $query->where(function ($q) {
                     $q->whereExists(function ($sq) {
                         $sq->select(DB::raw(1))
-                           ->from('consolidado_delivery_form_lima_conformidad')
-                           ->whereColumn('consolidado_delivery_form_lima_conformidad.id_cotizacion', 'CC.id');
+                            ->from('consolidado_delivery_form_lima_conformidad')
+                            ->whereColumn('consolidado_delivery_form_lima_conformidad.id_cotizacion', 'CC.id');
                     })->orWhereExists(function ($sq) {
                         $sq->select(DB::raw(1))
-                           ->from('consolidado_delivery_form_province_conformidad')
-                           ->whereColumn('consolidado_delivery_form_province_conformidad.id_cotizacion', 'CC.id');
+                            ->from('consolidado_delivery_form_province_conformidad')
+                            ->whereColumn('consolidado_delivery_form_province_conformidad.id_cotizacion', 'CC.id');
                     });
                 });
-            } elseif (in_array($ee, ['PENDIENTE','NO_ENTREGADO','NOENTREGADO'])) {
+            } elseif (in_array($ee, ['PENDIENTE', 'NO_ENTREGADO', 'NOENTREGADO'])) {
                 $query->where(function ($q) {
                     $q->whereNotExists(function ($sq) {
                         $sq->select(DB::raw(1))
-                           ->from('consolidado_delivery_form_lima_conformidad')
-                           ->whereColumn('consolidado_delivery_form_lima_conformidad.id_cotizacion', 'CC.id');
+                            ->from('consolidado_delivery_form_lima_conformidad')
+                            ->whereColumn('consolidado_delivery_form_lima_conformidad.id_cotizacion', 'CC.id');
                     })->whereNotExists(function ($sq) {
                         $sq->select(DB::raw(1))
-                           ->from('consolidado_delivery_form_province_conformidad')
-                           ->whereColumn('consolidado_delivery_form_province_conformidad.id_cotizacion', 'CC.id');
+                            ->from('consolidado_delivery_form_province_conformidad')
+                            ->whereColumn('consolidado_delivery_form_province_conformidad.id_cotizacion', 'CC.id');
                     });
                 });
             }
@@ -902,8 +943,101 @@ class EntregaController extends Controller
             }
         }
 
+        // Calcular estadísticas de headers
+        // Subconsulta para sumar bultos de proveedores embarcados (no importados) por cotización
+        $proveedoresBultos = DB::table('contenedor_consolidado_cotizacion_proveedores as CP')
+            ->select(
+                'CP.id_cotizacion',
+                DB::raw('SUM(COALESCE(CP.qty_box_china, CP.qty_box, 0)) as sum_qty_box')
+            )
+            ->where('CP.id_contenedor', $idContenedor)
+            ->groupBy('CP.id_cotizacion');
+
+        $statsProvincia = DB::table('contenedor_consolidado_cotizacion as CC')
+            ->join('consolidado_delivery_form_province as P', function ($join) use ($idContenedor) {
+                $join->on('P.id_cotizacion', '=', 'CC.id')
+                    ->where('P.id_contenedor', '=', $idContenedor);
+            })
+            ->leftJoinSub($proveedoresBultos, 'PB', function ($join) {
+                $join->on('PB.id_cotizacion', '=', 'CC.id');
+            })
+            ->where('CC.id_contenedor', $idContenedor)
+            ->whereNotNull('CC.estado_cliente')
+            ->whereNull('CC.id_cliente_importacion')
+            ->where('CC.estado_cotizador', 'CONFIRMADO')
+            ->whereExists(function ($query) {
+                $query->select(DB::raw(1))
+                    ->from('contenedor_consolidado_cotizacion_proveedores')
+                    ->whereColumn('contenedor_consolidado_cotizacion_proveedores.id_cotizacion', 'CC.id');
+            })
+            ->select([
+                DB::raw('COUNT(DISTINCT CC.id) as qty'),
+                DB::raw('COALESCE(SUM(CC.volumen), 0) as cbm'),
+                DB::raw('COALESCE(SUM(PB.sum_qty_box), 0) as bultos')
+            ])
+            ->first();
+
+        $statsLima = DB::table('contenedor_consolidado_cotizacion as CC')
+            ->join('consolidado_delivery_form_lima as L', function ($join) use ($idContenedor) {
+                $join->on('L.id_cotizacion', '=', 'CC.id')
+                    ->where('L.id_contenedor', '=', $idContenedor);
+            })
+            ->leftJoinSub($proveedoresBultos, 'PB', function ($join) {
+                $join->on('PB.id_cotizacion', '=', 'CC.id');
+            })
+            ->where('CC.id_contenedor', $idContenedor)
+            ->whereNotNull('CC.estado_cliente')
+            ->whereNull('CC.id_cliente_importacion')
+            ->where('CC.estado_cotizador', 'CONFIRMADO')
+            ->whereExists(function ($query) {
+                $query->select(DB::raw(1))
+                    ->from('contenedor_consolidado_cotizacion_proveedores')
+                    ->whereColumn('contenedor_consolidado_cotizacion_proveedores.id_cotizacion', 'CC.id');
+            })
+            ->select([
+                DB::raw('COUNT(DISTINCT CC.id) as qty'),
+                DB::raw('COALESCE(SUM(CC.volumen), 0) as cbm'),
+                DB::raw('COALESCE(SUM(PB.sum_qty_box), 0) as bultos')
+            ])
+            ->first();
+
+        // Preparar headers
+        $headers = [
+            [
+                'value' => (int)($statsProvincia->qty ?? 0),
+                'label' => 'Qty Provincia',
+                'icon' => 'i-heroicons-users'
+            ],
+            [
+                'value' => number_format((float)($statsProvincia->cbm ?? 0), 2, '.', ''),
+                'label' => 'CBM Provincia',
+                'icon' => 'mage:box-3d'
+            ],
+            [
+                'value' => (int)($statsProvincia->bultos ?? 0),
+                'label' => 'Bultos Provincia',
+                'icon' => 'bi:boxes'
+            ],
+            [
+                'value' => (int)($statsLima->qty ?? 0),
+                'label' => 'Qty Lima',
+                'icon' => 'i-heroicons-users'
+            ],
+            [
+                'value' => number_format((float)($statsLima->cbm ?? 0), 2, '.', ''),
+                'label' => 'CBM Lima',
+                'icon' => 'mage:box-3d'
+            ],
+            [
+                'value' => (int)($statsLima->bultos ?? 0),
+                'label' => 'Bultos Lima',
+                'icon' => 'bi:boxes'
+            ]
+        ];
+
         return response()->json([
             'data' => $items,
+            'headers' => $headers,
             'success' => true,
             'pagination' => [
                 'current_page' => $data->currentPage(),
@@ -1647,139 +1781,139 @@ class EntregaController extends Controller
     public function uploadConformidad(Request $request)
     {
         try {
-        $request->validate([
-            'id_contenedor' => 'required|integer',
-            'id_cotizacion' => 'required|integer',
-            'type_form' => 'required|in:0,1',
-            'photo_1' => 'sometimes|image|max:8192',
-            'photo_2' => 'sometimes|image|max:8192',
-        ]);
+            $request->validate([
+                'id_contenedor' => 'required|integer',
+                'id_cotizacion' => 'required|integer',
+                'type_form' => 'required|in:0,1',
+                'photo_1' => 'sometimes|image|max:8192',
+                'photo_2' => 'sometimes|image|max:8192',
+            ]);
 
-        // Requiere al menos una imagen
-        if (!$request->hasFile('photo_1') && !$request->hasFile('photo_2')) {
-            return response()->json([
-                'message' => 'Debe enviar al menos una imagen (photo_1 o photo_2) para guardar la conformidad',
-                'success' => false
-            ], 422);
-        }
-
-        $typeForm = (int) $request->input('type_form');
-        $idContenedor = (int) $request->input('id_contenedor');
-        $idCotizacion = (int) $request->input('id_cotizacion');
-
-        // Determinar tabla y campo según el tipo de formulario
-        // type_form: 0 = Provincia, 1 = Lima
-        $tableName = $typeForm === 1 ? 'consolidado_delivery_form_lima_conformidad' : 'consolidado_delivery_form_province_conformidad';
-        $formTableName = $typeForm === 1 ? 'consolidado_delivery_form_lima' : 'consolidado_delivery_form_province';
-        $formIdField = $typeForm === 1 ? 'consolidado_delivery_form_lima_id' : 'consolidado_delivery_form_province_id';
-
-        // Obtener el ID del formulario correspondiente
-        $formId = DB::table($formTableName)
-            ->where('id_cotizacion', $idCotizacion)
-            ->where('id_contenedor', $idContenedor)
-            ->value('id');
-
-        if (!$formId) {
-            return response()->json([
-                'message' => 'No se encontró el formulario de delivery correspondiente',
-                'success' => false
-            ], 404);
-        }
-
-        // Definir disco y carpeta
-        $disk = 'public';
-        $folder = 'delivery_conformidad/' . $idCotizacion;
-
-        DB::beginTransaction();
-        try {
-            $inserted = [];
-            $photo1Path = null;
-            $photo1MimeType = null;
-            $photo2Path = null;
-            $photo2MimeType = null;
-
-            // Procesar photo_1 si existe
-            if ($request->hasFile('photo_1')) {
-                $file = $request->file('photo_1');
-                $filename = time() . '_1_' . $file->getClientOriginalName();
-                $storedPath = $file->storeAs($folder, $filename, $disk);
-                $photo1Path = storage_path('app/public/' . $storedPath);
-                $photo1MimeType = $file->getClientMimeType();
-
-                $insert = [
-                    $formIdField => $formId,
-                    'id_cotizacion' => $idCotizacion,
-                    'id_contenedor' => $idContenedor,
-                    'file_path' => $storedPath,
-                    'file_type' => $file->getClientMimeType(),
-                    'file_size' => $file->getSize(),
-                    'file_original_name' => $file->getClientOriginalName(),
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ];
-                $newId = DB::table($tableName)->insertGetId($insert);
-                $inserted[] = $newId;
+            // Requiere al menos una imagen
+            if (!$request->hasFile('photo_1') && !$request->hasFile('photo_2')) {
+                return response()->json([
+                    'message' => 'Debe enviar al menos una imagen (photo_1 o photo_2) para guardar la conformidad',
+                    'success' => false
+                ], 422);
             }
 
-            // Procesar photo_2 si existe
-            if ($request->hasFile('photo_2')) {
-                $file = $request->file('photo_2');
-                $filename = time() . '_2_' . $file->getClientOriginalName();
-                $storedPath = $file->storeAs($folder, $filename, $disk);
-                $photo2Path = storage_path('app/public/' . $storedPath);
-                $photo2MimeType = $file->getClientMimeType();
+            $typeForm = (int) $request->input('type_form');
+            $idContenedor = (int) $request->input('id_contenedor');
+            $idCotizacion = (int) $request->input('id_cotizacion');
 
-                $insert = [
-                    $formIdField => $formId,
-                    'id_cotizacion' => $idCotizacion,
-                    'id_contenedor' => $idContenedor,
-                    'file_path' => $storedPath,
-                    'file_type' => $file->getClientMimeType(),
-                    'file_size' => $file->getSize(),
-                    'file_original_name' => $file->getClientOriginalName(),
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ];
-                $newId = DB::table($tableName)->insertGetId($insert);
-                $inserted[] = $newId;
+            // Determinar tabla y campo según el tipo de formulario
+            // type_form: 0 = Provincia, 1 = Lima
+            $tableName = $typeForm === 1 ? 'consolidado_delivery_form_lima_conformidad' : 'consolidado_delivery_form_province_conformidad';
+            $formTableName = $typeForm === 1 ? 'consolidado_delivery_form_lima' : 'consolidado_delivery_form_province';
+            $formIdField = $typeForm === 1 ? 'consolidado_delivery_form_lima_id' : 'consolidado_delivery_form_province_id';
+
+            // Obtener el ID del formulario correspondiente
+            $formId = DB::table($formTableName)
+                ->where('id_cotizacion', $idCotizacion)
+                ->where('id_contenedor', $idContenedor)
+                ->value('id');
+
+            if (!$formId) {
+                return response()->json([
+                    'message' => 'No se encontró el formulario de delivery correspondiente',
+                    'success' => false
+                ], 404);
             }
-            DB::commit();
-            $cotizacion = Cotizacion::find($idCotizacion);
-            $nombre = $cotizacion->nombre;
-            $numeroWhatsapp = $cotizacion->telefono;
-            //remvoe empty spaces and special characters
-            $numeroWhatsapp = preg_replace('/[^0-9]/', '', $numeroWhatsapp);
-            if (strlen($numeroWhatsapp) < 9) {
-                $numeroWhatsapp = '51' . $numeroWhatsapp;
-            }
-            $numeroWhatsapp = $numeroWhatsapp . '@c.us';
-            $contenedor = Contenedor::find($idContenedor);
-            $carga = $contenedor->carga;
-            $message = "Hola $nombre 👋
+
+            // Definir disco y carpeta
+            $disk = 'public';
+            $folder = 'delivery_conformidad/' . $idCotizacion;
+
+            DB::beginTransaction();
+            try {
+                $inserted = [];
+                $photo1Path = null;
+                $photo1MimeType = null;
+                $photo2Path = null;
+                $photo2MimeType = null;
+
+                // Procesar photo_1 si existe
+                if ($request->hasFile('photo_1')) {
+                    $file = $request->file('photo_1');
+                    $filename = time() . '_1_' . $file->getClientOriginalName();
+                    $storedPath = $file->storeAs($folder, $filename, $disk);
+                    $photo1Path = storage_path('app/public/' . $storedPath);
+                    $photo1MimeType = $file->getClientMimeType();
+
+                    $insert = [
+                        $formIdField => $formId,
+                        'id_cotizacion' => $idCotizacion,
+                        'id_contenedor' => $idContenedor,
+                        'file_path' => $storedPath,
+                        'file_type' => $file->getClientMimeType(),
+                        'file_size' => $file->getSize(),
+                        'file_original_name' => $file->getClientOriginalName(),
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ];
+                    $newId = DB::table($tableName)->insertGetId($insert);
+                    $inserted[] = $newId;
+                }
+
+                // Procesar photo_2 si existe
+                if ($request->hasFile('photo_2')) {
+                    $file = $request->file('photo_2');
+                    $filename = time() . '_2_' . $file->getClientOriginalName();
+                    $storedPath = $file->storeAs($folder, $filename, $disk);
+                    $photo2Path = storage_path('app/public/' . $storedPath);
+                    $photo2MimeType = $file->getClientMimeType();
+
+                    $insert = [
+                        $formIdField => $formId,
+                        'id_cotizacion' => $idCotizacion,
+                        'id_contenedor' => $idContenedor,
+                        'file_path' => $storedPath,
+                        'file_type' => $file->getClientMimeType(),
+                        'file_size' => $file->getSize(),
+                        'file_original_name' => $file->getClientOriginalName(),
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ];
+                    $newId = DB::table($tableName)->insertGetId($insert);
+                    $inserted[] = $newId;
+                }
+                DB::commit();
+                $cotizacion = Cotizacion::find($idCotizacion);
+                $nombre = $cotizacion->nombre;
+                $numeroWhatsapp = $cotizacion->telefono;
+                //remvoe empty spaces and special characters
+                $numeroWhatsapp = preg_replace('/[^0-9]/', '', $numeroWhatsapp);
+                if (strlen($numeroWhatsapp) < 9) {
+                    $numeroWhatsapp = '51' . $numeroWhatsapp;
+                }
+                $numeroWhatsapp = $numeroWhatsapp . '@c.us';
+                $contenedor = Contenedor::find($idContenedor);
+                $carga = $contenedor->carga;
+                $message = "Hola $nombre 👋
 Adjunto el sustento de entrega correspondiente a su importación del consolidado #$carga.\n
 Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, estaremos encantados de ayudarlo nuevamente. No dude en escribirnos ✈️📦";
-            $this->sendMessage($message, $numeroWhatsapp);
-            if ($photo1Path) {
-                $this->sendMedia($photo1Path, $photo1MimeType, null, $numeroWhatsapp);
-            }
-            if ($photo2Path) {
-                $this->sendMedia($photo2Path, $photo2MimeType, null, $numeroWhatsapp);
-            }
+                $this->sendMessage($message, $numeroWhatsapp);
+                if ($photo1Path) {
+                    $this->sendMedia($photo1Path, $photo1MimeType, null, $numeroWhatsapp);
+                }
+                if ($photo2Path) {
+                    $this->sendMedia($photo2Path, $photo2MimeType, null, $numeroWhatsapp);
+                }
 
-            return response()->json([
-                'message' => 'Fotos de conformidad subidas correctamente',
-                'inserted_ids' => $inserted,
-                'count' => count($inserted),
-                'success' => true
-            ], 201);
+                return response()->json([
+                    'message' => 'Fotos de conformidad subidas correctamente',
+                    'inserted_ids' => $inserted,
+                    'count' => count($inserted),
+                    'success' => true
+                ], 201);
+            } catch (\Throwable $e) {
+                DB::rollBack();
+                return response()->json([
+                    'message' => 'Error al guardar la conformidad: ' . $e->getMessage(),
+                    'success' => false
+                ], 500);
+            }
         } catch (\Throwable $e) {
-            DB::rollBack();
-            return response()->json([
-                'message' => 'Error al guardar la conformidad: ' . $e->getMessage(),
-                'success' => false
-            ], 500);
-        }
-        }catch (\Throwable $e) {
             DB::rollBack();
             return response()->json([
                 'message' => 'Error al guardar la conformidad: ' . $e->getMessage(),
