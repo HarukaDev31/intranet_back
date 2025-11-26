@@ -1381,6 +1381,19 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                     $cotizacion->save();
                 }
             }
+            // Permitir al frontend enviar y actualizar los nuevos estados de documentos
+            $allowedDocumentStatuses = ['Pendiente', 'Recibido', 'Observado', 'Revisado'];
+            if (isset($data['invoice_status']) && in_array($data['invoice_status'], $allowedDocumentStatuses)) {
+                $proveedor->invoice_status = $data['invoice_status'];
+            }
+            if (isset($data['packing_status']) && in_array($data['packing_status'], $allowedDocumentStatuses)) {
+                $proveedor->packing_status = $data['packing_status'];
+            }
+            if (isset($data['excel_conf_status']) && in_array($data['excel_conf_status'], $allowedDocumentStatuses)) {
+                $proveedor->excel_conf_status = $data['excel_conf_status'];
+            }
+
+            // Actualizaciones masivas restantes
             $proveedor->update($data);
             $volumenChina = CotizacionProveedor::where('id_cotizacion', $idCotizacion)
                 ->where('estados_proveedor', "LOADED")

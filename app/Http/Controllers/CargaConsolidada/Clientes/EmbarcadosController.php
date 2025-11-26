@@ -88,7 +88,10 @@ class EmbarcadosController extends Controller
                     'cbm_total_china as vol_china',
                     'factura_comercial',
                     'packing_list',
-                    'excel_confirmacion'
+                    'excel_confirmacion',
+                    'invoice_status',
+                    'packing_status',
+                    'excel_conf_status',
                 ])
                 ->get()
                 ->groupBy('id_cotizacion');
@@ -111,6 +114,10 @@ class EmbarcadosController extends Controller
                             'factura_comercial' => $this->generateImageUrl($p->factura_comercial),
                             'packing_list' => $this->generateImageUrl($p->packing_list),
                             'excel_confirmacion' => $this->generateImageUrl($p->excel_confirmacion),
+                            //Devolver status de documentos
+                            'invoice_status' => $p->invoice_status,
+                            'packing_status' => $p->packing_status,
+                            'excel_conf_status' => $p->excel_conf_status,
                         ];
                     })->values();
                 }

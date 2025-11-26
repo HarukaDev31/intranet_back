@@ -764,6 +764,83 @@ class EntregaController extends Controller
             });
         }
 
+        //Filtros adicionales (fecha de inicio y fin)
+        // Soportar dos formas desde el front:
+        //  - parámetros separados: ?tipo_entrega=Lima&estado_entrega=ENTREGADO&fecha_inicio=...
+        //  - un único parámetro `filters` con JSON: ?filters={"tipo_entrega":"Lima","fecha_inicio":"2025-11-12"}
+        $filtersRaw = $request->query('filters', null);
+        $filters = [];
+        if ($filtersRaw) {
+            $decoded = json_decode($filtersRaw, true);
+            if (is_array($decoded)) $filters = $decoded;
+        }
+
+        // Merge direct params (direct params override JSON)
+        $directKeys = ['tipo_entrega', 'estado_entrega', 'fecha_inicio', 'fecha_fin', 'estado_cotizador'];
+        foreach ($directKeys as $k) {
+            $v = $request->query($k, null);
+            if (!is_null($v) && $v !== '') $filters[$k] = $v;
+        }
+
+        // Whitelist - only allow expected filters
+        $allowed = ['tipo_entrega', 'estado_entrega', 'fecha_inicio', 'fecha_fin', 'estado_cotizador'];
+        $filters = array_intersect_key($filters, array_flip($allowed));
+
+        // Aplicar filtros conocidos
+        if (!empty($filters['tipo_entrega'])) {
+            $tipo = strtoupper(trim($filters['tipo_entrega']));
+            if ($tipo === 'LIMA') {
+                $query->whereNotNull('L.id');
+            } elseif (in_array($tipo, ['PROVINCIA', 'PROVINCE'])) {
+                $query->whereNotNull('P.id');
+            }
+        }
+
+        if (!empty($filters['estado_cotizador'])) {
+            $query->where('CC.estado_cotizador', $filters['estado_cotizador']);
+        }
+
+        // Filtrar por fecha de entrega asignada (usa D2.year/month/day)
+        if (!empty($filters['fecha_inicio'])) {
+            $fechaInicio = $filters['fecha_inicio'];
+            $query->whereRaw("CONCAT(D2.year,'-',LPAD(D2.month,2,'0'),'-',LPAD(D2.day,2,'0')) >= ?", [$fechaInicio]);
+        }
+        if (!empty($filters['fecha_fin'])) {
+            $fechaFin = $filters['fecha_fin'];
+            $query->whereRaw("CONCAT(D2.year,'-',LPAD(D2.month,2,'0'),'-',LPAD(D2.day,2,'0')) <= ?", [$fechaFin]);
+        }
+
+        // Estado de entrega: implementamos una convención mínima
+        // 'ENTREGADO' => existe al menos una foto de conformidad (tabla *_conformidad)
+        if (!empty($filters['estado_entrega'])) {
+            $ee = strtoupper(trim($filters['estado_entrega']));
+            if ($ee === 'ENTREGADO') {
+                $query->where(function ($q) {
+                    $q->whereExists(function ($sq) {
+                        $sq->select(DB::raw(1))
+                           ->from('consolidado_delivery_form_lima_conformidad')
+                           ->whereColumn('consolidado_delivery_form_lima_conformidad.id_cotizacion', 'CC.id');
+                    })->orWhereExists(function ($sq) {
+                        $sq->select(DB::raw(1))
+                           ->from('consolidado_delivery_form_province_conformidad')
+                           ->whereColumn('consolidado_delivery_form_province_conformidad.id_cotizacion', 'CC.id');
+                    });
+                });
+            } elseif (in_array($ee, ['PENDIENTE','NO_ENTREGADO','NOENTREGADO'])) {
+                $query->where(function ($q) {
+                    $q->whereNotExists(function ($sq) {
+                        $sq->select(DB::raw(1))
+                           ->from('consolidado_delivery_form_lima_conformidad')
+                           ->whereColumn('consolidado_delivery_form_lima_conformidad.id_cotizacion', 'CC.id');
+                    })->whereNotExists(function ($sq) {
+                        $sq->select(DB::raw(1))
+                           ->from('consolidado_delivery_form_province_conformidad')
+                           ->whereColumn('consolidado_delivery_form_province_conformidad.id_cotizacion', 'CC.id');
+                    });
+                });
+            }
+        }
+
         // Orden: Provincia primero (type_form=0), luego por fecha/hora de entrega (asignadas primero), luego por ID
         $page = (int) $request->input('currentPage', 1);
         $perPage = (int) $request->input('itemsPerPage', 100);

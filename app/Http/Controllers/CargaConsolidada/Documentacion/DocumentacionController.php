@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
 use App\Models\BaseDatos\ProductoImportadoExcel;
+use App\Models\Distrito;
 use Carbon\Carbon;
 use Tymon\JWTAuth\Facades\JWTAuth;
 use Maatwebsite\Excel\Facades\Excel;
@@ -24,6 +25,7 @@ use App\Models\ImportProducto;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Cell\DataType;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
@@ -2052,6 +2054,7 @@ class DocumentacionController extends Controller
                 'plantilla_productos.xlsx', 
                 'plantilla_stock.xlsx',
                 'plantilla_precios.xlsx',
+                'plantilla_clientes.xlsx'
             ];
             
             $templatePath = public_path('assets/templates/');
@@ -2089,8 +2092,11 @@ class DocumentacionController extends Controller
                 throw new \Exception("No se pudo crear el archivo ZIP. Código de error: {$result}");
             }
             
-            // Generar plantillas pobladas
-            $poblatedFiles = $this->generatePoblatedTemplates($productosData, $contenedor->carga);
+            // Obtener datos de entregas (clientes) desde EntregaController
+            $clientesEntregaData = $this->getEntregasData($idContenedor);
+
+            // Generar plantillas pobladas (ahora también reciben datos de clientes/entregas)
+            $poblatedFiles = $this->generatePoblatedTemplates($productosData, $contenedor->carga, $clientesEntregaData);
             
             // Agregar solo plantillas pobladas al ZIP
             foreach ($poblatedFiles as $filePath) {
@@ -2418,9 +2424,135 @@ class DocumentacionController extends Controller
     }
 
     /**
+     * Obtiene los datos de entregas (clientes) reutilizando la lógica de EntregaController::getEntregas
+     */
+    private function getEntregasData($idContenedor, $queryParams = [])
+    {
+        try {
+            // Crear una Request con parámetros de consulta si se proporcionan
+            $req = \Illuminate\Http\Request::create('/', 'GET', $queryParams);
+
+            // Instanciar el controller de Entrega y llamar al método
+            $entregaController = new \App\Http\Controllers\CargaConsolidada\EntregaController();
+            $resp = $entregaController->getEntregas($req, $idContenedor);
+
+            // Extraer datos del JsonResponse
+            if ($resp instanceof \Illuminate\Http\JsonResponse) {
+                $arr = $resp->getData(true);
+            } else {
+                $arr = json_decode($resp->getContent(), true);
+            }
+
+            $baseItems = isset($arr['data']) && is_array($arr['data']) ? $arr['data'] : [];
+
+            // Enriquecer cada fila con datos adicionales de getEntregasDetalle
+            $enriched = [];
+            foreach ($baseItems as $row) {
+                $cotizacionId = $row['id'] ?? null; // en getEntregas la cotización está en CC.id -> id
+                $detalle = null;
+                if ($cotizacionId) {
+                    try {
+                        $detalleResp = $entregaController->getEntregasDetalle($cotizacionId);
+                        if ($detalleResp instanceof \Illuminate\Http\JsonResponse) {
+                            $detalleArr = $detalleResp->getData(true);
+                        } else {
+                            $detalleArr = json_decode($detalleResp->getContent(), true);
+                        }
+                        $detalle = $detalleArr['data'] ?? null;
+                    } catch (\Exception $e) {
+                        Log::warning('No se pudo obtener detalle para cotizacion ' . $cotizacionId . ': ' . $e->getMessage());
+                    }
+                }
+
+                // Preparar campos adicionales seguros
+                $direccion = '';
+                $provinciaName = '';
+                $distritoName = '';
+                $departamentoName = $row['department_name'] ?? '';
+                $deliveryDateStruct = null;
+                $formUserStruct = null;
+
+                if (is_array($detalle)) {
+                    // delivery struct
+                    if (isset($detalle['delivery']) && is_array($detalle['delivery'])) {
+                        $deliveryDateStruct = $detalle['delivery'];
+                    }
+                    if (isset($detalle['form_user']) && is_array($detalle['form_user'])) {
+                        $formUserStruct = $detalle['form_user'];
+                    }
+                    // Province form
+                    if (isset($detalle['province']) && is_array($detalle['province'])) {
+                        $prov = $detalle['province'];
+                        $direccion = $prov['agency_address_final_delivery'] ?? $prov['importer_address'] ?? ($prov['r_address'] ?? $direccion);
+                        $provinciaName = $prov['province_name'] ?? '';
+                        $distritoName = $prov['district_name'] ?? '';
+                        $departamentoName = $prov['department_name'] ?? $departamentoName;
+                    }
+                    // Lima form
+                    if (empty($direccion) && isset($detalle['lima']) && is_array($detalle['lima'])) {
+                        $lima = $detalle['lima'];
+                        $direccion = $lima['final_destination_place'] ?? $lima['conductor_address'] ?? $direccion;
+                        // Lima usa departamento/provincia/distrito LIMA por defecto
+                        if (!empty($direccion)) {
+                            $departamentoName = 'LIMA';
+                            $provinciaName = 'LIMA';
+                            if (isset($lima['final_destination_district'])) {
+                                $distritoKey = $lima['final_destination_district'];
+                                $distrito = null;
+                                // Si viene como ID numérico, buscar por PK
+                                if (is_numeric($distritoKey)) {
+                                    $distrito = Distrito::find($distritoKey);
+                                }
+                                // Si viene como texto, intentar coincidencia exacta por nombre
+                                if (!$distrito && is_string($distritoKey) && $distritoKey !== '') {
+                                    $distrito = Distrito::where('No_Distrito', trim($distritoKey))->first();
+                                }
+                                if ($distrito) {
+                                    $distritoName = $distrito->No_Distrito;
+                                }
+                            }
+                        }
+                    }
+                }
+                    
+                
+
+                // Añadir campos normalizados para la plantilla
+                $row['direccion'] = $direccion;
+                $row['departamento_name'] = $departamentoName; // mantener campo original y actualizado
+                $row['provincia_name'] = $provinciaName;
+                $row['distrito_name'] = $distritoName;
+                if ($formUserStruct) {
+                    $row['form_user_name'] = $formUserStruct['name'] ?? ($row['form_user_name'] ?? null);
+                    $row['form_user_email'] = $formUserStruct['email'] ?? ($row['form_user_email'] ?? null);
+                }
+                if ($deliveryDateStruct) {
+                    // Prefiera delivery_date ya existente; si falta usar struct
+                    if (empty($row['delivery_date'])) {
+                        $row['delivery_date'] = $deliveryDateStruct['date'] ?? null;
+                    }
+                    if (empty($row['delivery_start_time'])) {
+                        $row['delivery_start_time'] = $deliveryDateStruct['start_time'] ?? null;
+                    }
+                    if (empty($row['delivery_end_time'])) {
+                        $row['delivery_end_time'] = $deliveryDateStruct['end_time'] ?? null;
+                    }
+                }
+
+                $enriched[] = $row;
+            }
+
+            return $enriched;
+        } catch (\Exception $e) {
+            Log::error('Error obteniendo entregas: ' . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
      * Genera las plantillas pobladas
      */
-    private function generatePoblatedTemplates($productosData, $carga)
+    private function generatePoblatedTemplates($productosData, $carga, $clientesData = [])
     {
         $templatePath = public_path('assets/templates/');
         $tempPath = storage_path('app/temp/');
@@ -2455,6 +2587,16 @@ class DocumentacionController extends Controller
                 $writer = new Xlsx($preciosPoblado);
                 $writer->save($preciosPath);
                 $poblatedFiles[] = $preciosPath;
+            }
+
+            // Plantilla de formularios (puede recibir datos de clientes/entregas)
+            $formsTemplate = $templatePath . 'plantilla_clientes.xlsx';
+            if (file_exists($formsTemplate)) {
+                $formsPoblado = $this->populateFormulariosTemplate($formsTemplate, $clientesData);
+                $formsPath = $tempPath . '1_Laesystems_Plantilla_Clientes.xlsx';
+                $writer = new Xlsx($formsPoblado);
+                $writer->save($formsPath);
+                $poblatedFiles[] = $formsPath;
             }
             
         } catch (\Exception $e) {
@@ -2539,5 +2681,101 @@ class DocumentacionController extends Controller
         }
         
         return $excel;
+    }
+
+    /**
+     * Pobla la plantilla de formularios
+     */
+    private function populateFormulariosTemplate($templatePath, $formularioData)
+    {
+        $excel = IOFactory::load($templatePath);
+        $sheet = $excel->getActiveSheet();
+        
+        $row = 2; // Empezar en la fila 2
+        foreach ($formularioData as $item) {
+            // - clientes/entregas (campos de cliente y contacto)
+            if (is_array($item)) {
+                // Cliente/Entrega: columnas A..P según la plantilla de tus capturas
+                $docNumber = $item['documento'] ?? ($item['r_doc'] ?? ($item['voucher_doc'] ?? ($item['pick_doc'] ?? '')));
+                $docDigits = preg_replace('/\D+/', '', (string)$docNumber);
+                $docType = $this->inferDocumentTypeCode($docNumber);
+                $name = $item['nombre'] ?? ($item['cliente'] ?? ($item['r_name'] ?? ''));
+                $phone = $this->normalizePhoneDigits($item['telefono'] ?? '');
+                $cell = $phone; // Si no hay celular separado, usamos el mismo
+                $email = $item['correo'] ?? '';
+                $contactName = $item['form_user_name'] ?? '';
+                $contactPhone = $this->normalizePhoneDigits($item['telefono'] ?? ''); // sin campo específico, reusar
+                $contactEmail = $item['form_user_email'] ?? '';
+                $pais = 'PERU';
+                $isLima = isset($item['type_form']) && ((int)$item['type_form'] === 1);
+                $departamento = $isLima ? 'LIMA' : ($item['departamento_name'] ?? ($item['department_name'] ?? ''));
+                $provincia = $isLima ? 'LIMA' : ($item['provincia_name'] ?? '');
+                $distrito = $item['distrito_name'] ?? '';
+                $nota = $item['nota'] ?? '';
+                $diasCredito = '';
+
+                $sheet->setCellValue('A' . $row, $docType);
+                // Documento: solo dígitos y como texto; si queda vacío, dejar celda en blanco
+                if ($docDigits === '') {
+                    $sheet->setCellValue('B' . $row, null);
+                } else {
+                    $sheet->setCellValueExplicit('B' . $row, $docDigits, DataType::TYPE_STRING);
+                    $sheet->getStyle('B' . $row)->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_TEXT);
+                }
+                $sheet->setCellValue('C' . $row, $name);
+                $direccionLima = $item['final_destination_place'] ?? ($item['home_adress_delivery'] ?? ($item['direccion'] ?? ''));
+                $direccionProvincia = $item['home_adress_delivery'] ?? ($item['final_destination_place'] ?? ($item['direccion'] ?? ''));
+                $sheet->setCellValue('D' . $row, $isLima ? $direccionLima : $direccionProvincia);
+                $sheet->setCellValue('E' . $row, $phone);
+                $sheet->setCellValue('F' . $row, $cell);
+                $sheet->setCellValue('G' . $row, $email);
+                $sheet->setCellValue('H' . $row, $contactName);
+                $sheet->setCellValue('I' . $row, $contactPhone);
+                $sheet->setCellValue('J' . $row, $contactEmail);
+                $sheet->setCellValue('K' . $row, $pais);
+                $sheet->setCellValue('L' . $row, $departamento);
+                $sheet->setCellValue('M' . $row, $provincia);
+                $sheet->setCellValue('N' . $row, $distrito);
+                $sheet->setCellValue('O' . $row, $nota);
+                $sheet->setCellValue('P' . $row, $diasCredito);
+            }
+
+            $row++;
+        }
+        
+        return $excel;
+    }
+
+    /**
+     * Inferir tipo de documento de identidad para la plantilla (1..6)
+     * 1=OTROS, 2=DNI, 3=CARNET EXTRANJERIA, 4=RUC, 5=PASAPORTE, 6=CÉDULA DIPLOMÁTICA
+     */
+    private function inferDocumentTypeCode($doc)
+    {
+        if (empty($doc)) return 1; // OTROS
+        $digits = preg_replace('/\D+/', '', (string)$doc);
+        if (strlen($digits) === 11) return 4; // RUC
+        if (strlen($digits) === 8) return 2;  // DNI
+        if (strlen($digits) === 9) return 5;  // PASAPORTE
+        if (strlen($digits) === 12) return 3; // CARNET EXTRANJERIA
+        // sin mejor señal, OTROS
+        return 1;
+    }
+
+    /**
+     * Normaliza teléfono a solo dígitos (sin prefijos internacionales)
+     */
+    private function normalizePhoneDigits($raw)
+    {
+        if (is_null($raw)) return '';
+        $digits = preg_replace('/\D+/', '', (string)$raw);
+        if ($digits === null) return '';
+        // Quitar prefijo 0051 o 51 si existe
+        if (strpos($digits, '0051') === 0) {
+            $digits = substr($digits, 4);
+        } elseif (strpos($digits, '51') === 0) {
+            $digits = substr($digits, 2);
+        }
+        return $digits;
     }
 }
