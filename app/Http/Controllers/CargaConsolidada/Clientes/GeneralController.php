@@ -68,6 +68,15 @@ class GeneralController extends Controller
 
     public function index(Request $request, $idContenedor)
     {
+        // Obtener usuario para condicionar campos según rol
+        $user = null;
+        try {
+            $user = JWTAuth::parseToken()->authenticate();
+        } catch (\Exception $e) {
+            // no autenticado, seguir sin usuario
+            $user = null;
+        }
+
         // Convertir la consulta SQL de CodeIgniter a Query Builder de Laravel
         $query = DB::table('contenedor_consolidado_cotizacion as CC')
             ->select([
@@ -145,16 +154,93 @@ class GeneralController extends Controller
         // Paginación
         $data = $query->paginate($perPage, ['*'], 'page', $page);
 
-        // Transformar los items para aplicar generateImageUrl a cotizacion_contrato_firmado_url
-        $transformedItems = collect($data->items())->map(function ($item) {
-            if (isset($item->cotizacion_contrato_firmado_url) && !empty($item->cotizacion_contrato_firmado_url)) {
-                $item->cotizacion_contrato_firmado_url = $this->generateImageUrl($item->cotizacion_contrato_firmado_url);
+        // Obtener cotizaciones de la página actual
+        $cotizaciones = $data->items();
+
+        // Obtener IDs de cotización para consultar proveedores relacionados
+        // usar 'id_cotizacion' porque 'id' puede venir ambigua por el join con C.*
+        $ids = collect($cotizaciones)->pluck('id_cotizacion')->filter()->all();
+
+        // Obtener proveedores relacionados en una sola consulta y agrupar por id_cotizacion
+        // Nota: sólo cargar proveedores si el usuario es del rol Documentacion
+        $proveedores = collect();
+        if (!empty($ids) && $user && $user->getNombreGrupo() == Usuario::ROL_DOCUMENTACION) {
+            $proveedores = DB::table('contenedor_consolidado_cotizacion_proveedores')
+                ->whereIn('id_cotizacion', $ids)
+                ->where('id_contenedor', $idContenedor)
+                ->select([
+                    'id',
+                    'id_cotizacion',
+                    'products',
+                    'supplier',
+                    'code_supplier',
+                    'cbm_total as vol_peru',
+                    'cbm_total_china as vol_china',
+                    'factura_comercial',
+                    'packing_list',
+                    'excel_confirmacion',
+                    'invoice_status',
+                    'packing_status',
+                    'excel_conf_status',
+                ])
+                ->get()
+                ->groupBy('id_cotizacion');
+        }
+
+        // Mapear cotizaciones devolviendo todas las columnas originales
+        // y, si el usuario es Documentacion, añadir el array 'proveedores' por cotización
+        $dataTransformed = collect($cotizaciones)->map(function ($cot) use ($proveedores, $user) {
+            // Convertir el objeto a array para mantener todos los campos originales
+            $itemArr = (array) $cot;
+
+            // Asegurar que cotizacion_contrato_firmado_url sea una URL completa cuando exista
+            if (isset($itemArr['cotizacion_contrato_firmado_url']) && !empty($itemArr['cotizacion_contrato_firmado_url'])) {
+                $itemArr['cotizacion_contrato_firmado_url'] = $this->generateImageUrl($itemArr['cotizacion_contrato_firmado_url']);
             }
-            return $item;
-        })->toArray();
+
+            // Devolver el teléfono tal como está en la BD (sin formatear)
+            $itemArr['whatsapp'] = $cot->telefono ?? '';
+
+            // Por defecto, devolver proveedores vacío
+            $itemArr['proveedores'] = [];
+
+            // Si el usuario es Documentacion, incluir proveedores completos (id, code_supplier, archivos y estados)
+            if ($user && $user->getNombreGrupo() == Usuario::ROL_DOCUMENTACION && $proveedores) {
+                // clave usada en groupBy es id_cotizacion
+                $cotKey = $cot->id_cotizacion ?? $cot->id ?? null;
+                if ($cotKey !== null && (is_array($proveedores) ? isset($proveedores[$cotKey]) : $proveedores->has($cotKey))) {
+                    if (is_array($proveedores)) {
+                        $provCollection = collect($proveedores[$cotKey]);
+                    } else {
+                        $provCollection = collect($proveedores->get($cotKey));
+                    }
+
+                    $itemArr['proveedores'] = $provCollection->map(function ($p) {
+                        return [
+                            'id' => $p->id,
+                            'products' => $p->products,
+                            'supplier' => $p->supplier,
+                            'code_supplier' => $p->code_supplier,
+                            'vol_peru' => $p->vol_peru,
+                            'vol_china' => $p->vol_china,
+                            // Devolver URLs completas para los archivos si existen
+                            'factura_comercial' => $this->generateImageUrl($p->factura_comercial),
+                            'packing_list' => $this->generateImageUrl($p->packing_list),
+                            'excel_confirmacion' => $this->generateImageUrl($p->excel_confirmacion),
+                            // Devolver status de documentos
+                            'invoice_status' => $p->invoice_status,
+                            'packing_status' => $p->packing_status,
+                            'excel_conf_status' => $p->excel_conf_status,
+                        ];
+                    })->values()->toArray();
+                }
+            }
+
+            return $itemArr;
+        })->values()->toArray();
 
         return response()->json([
-            'data' => $transformedItems,
+            'data' => $dataTransformed,
             'success' => true,
             'pagination' => [
                 'current_page' => $data->currentPage(),
