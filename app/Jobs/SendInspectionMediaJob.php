@@ -10,6 +10,7 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use App\Models\CargaConsolidada\CotizacionProveedor;
 use App\Models\CargaConsolidada\Cotizacion;
 use App\Models\CargaConsolidada\AlmacenInspection;
@@ -184,12 +185,42 @@ class SendInspectionMediaJob implements ShouldQueue
 
             // Procesar y enviar imágenes
             $imagenesEnviadas = 0;
+            $urlsEnviadas = [];
             foreach ($imagesUrls as $image) {
+                // Verificar si ya es una URL absoluta
+                if (filter_var($image->file_path, FILTER_VALIDATE_URL)) {
+                    // Es una URL absoluta, enviarla directamente
+                    $urlsEnviadas[] = $image->file_path;
+                    Log::info('Archivo imagen con URL absoluta, enviando URL directamente', [
+                        'file_path' => $image->file_path,
+                        'url' => $image->file_path
+                    ]);
+                    continue;
+                }
+
                 $filePath = $this->resolveMediaPath($image->file_path);
 
                 if ($filePath) {
-                    $this->sendMediaInspection($filePath, $image->file_type, '', $telefono, 0, $image->id);
-                    $imagenesEnviadas++;
+                    // Verificar tamaño del archivo (5MB = 5 * 1024 * 1024 bytes)
+                    $fileSize = filesize($filePath);
+                    $maxSize = 5 * 1024 * 1024; // 5MB
+
+                    if ($fileSize > $maxSize) {
+                        // Archivo muy grande, enviar URL pública
+                        $publicUrl = $this->generatePublicUrl($image->file_path);
+                        if ($publicUrl) {
+                            $urlsEnviadas[] = $publicUrl;
+                            Log::info('Archivo imagen muy grande, enviando URL en lugar de archivo', [
+                                'file_path' => $image->file_path,
+                                'file_size' => $fileSize,
+                                'url' => $publicUrl
+                            ]);
+                        }
+                    } else {
+                        // Archivo pequeño, enviar normalmente
+                        $this->sendMediaInspection($filePath, $image->file_type, '', $telefono, 0, $image->id);
+                        $imagenesEnviadas++;
+                    }
 
                     // Si es archivo temporal, eliminarlo después del envío
                     if (strpos($filePath, sys_get_temp_dir()) !== false) {
@@ -203,11 +234,40 @@ class SendInspectionMediaJob implements ShouldQueue
             // Procesar y enviar videos
             $videosEnviados = 0;
             foreach ($videosUrls as $video) {
+                // Verificar si ya es una URL absoluta
+                if (filter_var($video->file_path, FILTER_VALIDATE_URL)) {
+                    // Es una URL absoluta, enviarla directamente
+                    $urlsEnviadas[] = $video->file_path;
+                    Log::info('Archivo video con URL absoluta, enviando URL directamente', [
+                        'file_path' => $video->file_path,
+                        'url' => $video->file_path
+                    ]);
+                    continue;
+                }
+
                 $filePath = $this->resolveMediaPath($video->file_path);
 
                 if ($filePath) {
-                    $this->sendMediaInspection($filePath, $video->file_type, '', $telefono, 0, $video->id);
-                    $videosEnviados++;
+                    // Verificar tamaño del archivo (5MB = 5 * 1024 * 1024 bytes)
+                    $fileSize = filesize($filePath);
+                    $maxSize = 5 * 1024 * 1024; // 5MB
+
+                    if ($fileSize > $maxSize) {
+                        // Archivo muy grande, enviar URL pública
+                        $publicUrl = $this->generatePublicUrl($video->file_path);
+                        if ($publicUrl) {
+                            $urlsEnviadas[] = $publicUrl;
+                            Log::info('Archivo video muy grande, enviando URL en lugar de archivo', [
+                                'file_path' => $video->file_path,
+                                'file_size' => $fileSize,
+                                'url' => $publicUrl
+                            ]);
+                        }
+                    } else {
+                        // Archivo pequeño, enviar normalmente
+                        $this->sendMediaInspection($filePath, $video->file_type, '', $telefono, 0, $video->id);
+                        $videosEnviados++;
+                    }
 
                     // Si es archivo temporal, eliminarlo después del envío
                     if (strpos($filePath, sys_get_temp_dir()) !== false) {
@@ -218,10 +278,24 @@ class SendInspectionMediaJob implements ShouldQueue
                 }
             }
 
+            // Si hay URLs para enviar, enviarlas en un mensaje
+            if (!empty($urlsEnviadas)) {
+                $urlsMessage = "📎 Los siguientes archivos son muy grandes para enviar directamente. Puedes descargarlos desde estos enlaces:\n\n";
+                foreach ($urlsEnviadas as $index => $url) {
+                    $urlsMessage .= ($index + 1) . ". " . $url . "\n";
+                }
+                $this->sendMessage($urlsMessage, $telefono);
+                Log::info("URLs de archivos grandes enviadas", [
+                    'total_urls' => count($urlsEnviadas),
+                    'telefono' => $telefono
+                ]);
+            }
+
             Log::info("Job de inspección completado exitosamente", [
                 'id_proveedor' => $this->idProveedor,
                 'imagenes_enviadas' => $imagenesEnviadas,
                 'videos_enviados' => $videosEnviados,
+                'urls_enviadas' => count($urlsEnviadas),
                 'mensaje_principal_enviado' => $sendStatus
             ]);
         } catch (\Exception $e) {
@@ -443,5 +517,50 @@ class SendInspectionMediaJob implements ShouldQueue
 
         // Por defecto, usar extensión genérica
         return 'tmp';
+    }
+
+    /**
+     * Genera una URL pública para un archivo almacenado
+     * 
+     * @param string $filePath Ruta del archivo (puede ser relativa o absoluta)
+     * @return string|null URL pública del archivo o null si falla
+     */
+    private function generatePublicUrl($filePath)
+    {
+        try {
+            // Si ya es una URL completa, devolverla tal como está
+            if (filter_var($filePath, FILTER_VALIDATE_URL)) {
+                return $filePath;
+            }
+
+            // Limpiar la ruta
+            $ruta = ltrim($filePath, '/');
+
+            // Si la ruta empieza con 'public/', removerlo
+            if (strpos($ruta, 'public/') === 0) {
+                $ruta = substr($ruta, 7);
+            }
+
+            // Construir URL manualmente
+            $baseUrl = config('app.url');
+            $baseUrl = rtrim($baseUrl, '/');
+            $ruta = ltrim($ruta, '/');
+
+            // Generar URL completa
+            $publicUrl = $baseUrl . '/storage/' . $ruta;
+
+            Log::info("URL pública generada", [
+                'file_path' => $filePath,
+                'public_url' => $publicUrl
+            ]);
+
+            return $publicUrl;
+        } catch (\Exception $e) {
+            Log::error("Error al generar URL pública: " . $e->getMessage(), [
+                'file_path' => $filePath,
+                'trace' => $e->getTraceAsString()
+            ]);
+            return null;
+        }
     }
 }
