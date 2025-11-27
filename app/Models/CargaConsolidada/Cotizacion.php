@@ -75,6 +75,7 @@ class Cotizacion extends Model
         'id_cliente_importacion',
         'delivery_form_registered_at',
         'total_pago_delivery',
+        'tipo_servicio',
         'send_alert_difference_cbm_status',
         'cod_contract'
     ];

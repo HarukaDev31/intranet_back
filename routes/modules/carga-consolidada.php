@@ -203,8 +203,12 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
             //delivery pagos /id
             Route::delete('/delivery/pagos/{idCotizacion}',  [ClientesPagosController::class, 'delete']);
             Route::post('/delivery/importe', [EntregaController::class, 'saveImporteDelivery']);
+            Route::post('/delivery/servicio', [EntregaController::class, 'saveServicioDelivery']);
             Route::post('/delivery/pagos', [EntregaController::class, 'savePagosDelivery']);
             Route::post('/delivery/send-message/{idCotizacion}', [EntregaController::class, 'sendMessageDelivery']);
+            Route::post('/delivery/recordatorio-formulario/{idCotizacion}', [EntregaController::class, 'sendRecordatorioFormularioDelivery']);
+            Route::post('/delivery/cobro-cotizacion-final/{idCotizacion}', [EntregaController::class, 'sendCobroCotizacionFinalDelivery']);
+            Route::post('/delivery/cobro-delivery/{idCotizacion}', [EntregaController::class, 'sendCobroDeliveryDelivery']);
             Route::get('/delivery/all', [EntregaController::class, 'getAllDelivery']);
 
             Route::get('/delivery/{idContenedor}', [EntregaController::class, 'getDelivery']);

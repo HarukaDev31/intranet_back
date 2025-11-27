@@ -1472,6 +1472,8 @@ class EntregaController extends Controller
                 DB::raw("CASE WHEN P.id IS NOT NULL THEN P.r_doc WHEN L.id IS NOT NULL THEN L.driver_doc ELSE NULL END as documento"),
                 // Para razón social: usar r_name para provincia y driver_name para lima
                 DB::raw("CASE WHEN P.id IS NOT NULL THEN P.r_name WHEN L.id IS NOT NULL THEN L.drver_name ELSE NULL END as razon_social"),
+                // Tipo de servicio (DELIVERY o MONTACARGA)
+                DB::raw("COALESCE(CC.tipo_servicio, 'DELIVERY') as tipo_servicio"),
                 // Subquery para obtener pagos de DELIVERY
                 DB::raw("CC.total_pago_delivery as importe"),
                 DB::raw("(
@@ -1508,10 +1510,6 @@ class EntregaController extends Controller
             ->where('CC.estado_cotizador', 'CONFIRMADO');
         // Solo filas que tengan algún formulario asociado
 
-
-        $page = $request->input('currentPage', 1);
-        $perPage = $request->input('itemsPerPage', 100);
-        $clientes = $query->paginate($perPage, ['*'], 'currentPage', $page);
         // Aplicar filtros adicionales si se proporcionan
         if ($request->has('search')) {
             $search = $request->search;
@@ -1521,15 +1519,28 @@ class EntregaController extends Controller
                     ->orWhere('CC.correo', 'LIKE', "%{$search}%");
             });
         }
+
+        // Calcular total_importes antes de paginar (de los registros filtrados)
+        $totalImportes = (clone $query)->sum('CC.total_pago_delivery');
+
         // Ordenamiento
         $sortField = $request->input('sort_by', 'CC.id');
         $sortOrder = $request->input('sort_order', 'asc');
+        $query->orderBy($sortField, $sortOrder);
 
-        // Paginación
+        // Paginación   
+        $page = $request->input('currentPage', 1);
+        $perPage = $request->input('itemsPerPage', 100);
         $data = $query->paginate($perPage, ['*'], 'page', $page);
+
+        // Preparar headers
+        $headers = [
+            'total_importes' => $totalImportes ?? 0
+        ];
 
         return response()->json([
             'data' => $data->items(),
+            'headers' => $headers,
             'success' => true,
             'pagination' => [
                 'current_page' => $data->currentPage(),
@@ -2214,6 +2225,32 @@ Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, 
             return response()->json(['message' => $e->getMessage(), 'success' => false]);
         }
     }
+    public function saveServicioDelivery(Request $request)
+    {
+        try {
+            $idCotizacion = $request->id_cotizacion;
+            $tipoServicio = $request->tipo_servicio;
+            
+            // Validar que el tipo de servicio sea válido
+            if (!in_array($tipoServicio, ['DELIVERY', 'MONTACARGA'])) {
+                return response()->json(['message' => 'Tipo de servicio inválido. Debe ser DELIVERY o MONTACARGA', 'success' => false], 422);
+            }
+            
+            $cotizacion = Cotizacion::find($idCotizacion);
+            if (!$cotizacion) {
+                return response()->json(['message' => 'Cotización no encontrada', 'success' => false], 404);
+            }
+            
+            // Actualizar el campo tipo_servicio en la tabla
+            DB::table('contenedor_consolidado_cotizacion')
+                ->where('id', $idCotizacion)
+                ->update(['tipo_servicio' => $tipoServicio]);
+            
+            return response()->json(['message' => 'Servicio guardado correctamente', 'success' => true]);
+        } catch (\Exception $e) {
+            return response()->json(['message' => $e->getMessage(), 'success' => false], 500);
+        }
+    }
     public function savePagosDelivery(Request $request)
     {
         try {
@@ -2272,6 +2309,114 @@ Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, 
             return response()->json(['message' => 'Mensaje enviado correctamente', 'success' => true]);
         } catch (\Exception $e) {
             return response()->json(['message' => $e->getMessage(), 'success' => false]);
+        }
+    }
+
+    public function sendRecordatorioFormularioDelivery(Request $request, $idCotizacion)
+    {
+        try {
+            $cotizacion = Cotizacion::find($idCotizacion);
+            if (!$cotizacion) {
+                return response()->json(['message' => 'Cotización no encontrada', 'success' => false], 404);
+            }
+
+            $idContenedor = $cotizacion->id_contenedor;
+            $contenedor = Contenedor::find($idContenedor);
+            if (!$contenedor) {
+                return response()->json(['message' => 'Contenedor no encontrado', 'success' => false], 404);
+            }
+
+            $message = $request->input('message');
+            if (!$message) {
+                return response()->json(['message' => 'El mensaje es requerido', 'success' => false], 422);
+            }
+
+            $telefono = preg_replace('/\D+/', '', $cotizacion->telefono);
+            if (strlen($telefono) < 9) {
+                $telefono = '51' . $telefono;
+            }
+            $numeroWhatsapp = $telefono . '@c.us';
+
+            $result = $this->sendMessage($message, $numeroWhatsapp);
+            
+            if ($result['status']) {
+                return response()->json(['message' => 'Mensaje enviado correctamente', 'success' => true]);
+            } else {
+                return response()->json(['message' => 'Error al enviar mensaje: ' . ($result['response']['error'] ?? 'Error desconocido'), 'success' => false], 500);
+            }
+        } catch (\Exception $e) {
+            Log::error('Error en sendRecordatorioFormularioDelivery: ' . $e->getMessage());
+            return response()->json(['message' => $e->getMessage(), 'success' => false], 500);
+        }
+    }
+
+    public function sendCobroCotizacionFinalDelivery(Request $request, $idCotizacion)
+    {
+        try {
+            $cotizacion = Cotizacion::find($idCotizacion);
+            if (!$cotizacion) {
+                return response()->json(['message' => 'Cotización no encontrada', 'success' => false], 404);
+            }
+
+            $message = $request->input('message');
+            if (!$message) {
+                return response()->json(['message' => 'El mensaje es requerido', 'success' => false], 422);
+            }
+
+            $telefono = preg_replace('/\D+/', '', $cotizacion->telefono);
+            if (strlen($telefono) < 9) {
+                $telefono = '51' . $telefono;
+            }
+            $numeroWhatsapp = $telefono . '@c.us';
+
+            $result = $this->sendMessage($message, $numeroWhatsapp);
+            
+            if ($result['status']) {
+                return response()->json(['message' => 'Mensaje enviado correctamente', 'success' => true]);
+            } else {
+                return response()->json(['message' => 'Error al enviar mensaje: ' . ($result['response']['error'] ?? 'Error desconocido'), 'success' => false], 500);
+            }
+        } catch (\Exception $e) {
+            Log::error('Error en sendCobroCotizacionFinalDelivery: ' . $e->getMessage());
+            return response()->json(['message' => $e->getMessage(), 'success' => false], 500);
+        }
+    }
+
+    public function sendCobroDeliveryDelivery(Request $request, $idCotizacion)
+    {
+        try {
+            $cotizacion = Cotizacion::find($idCotizacion);
+            if (!$cotizacion) {
+                return response()->json(['message' => 'Cotización no encontrada', 'success' => false], 404);
+            }
+
+            /**message Hola #nombrecliente, por favor proceder con el pago del #servicio  .
+            
+Monto: ##
+
+Envio nuestra cuenta bancaria.  */
+            $message = "Hola " . $cotizacion->nombre . ", por favor proceder con el pago del " . $cotizacion->tipo_servicio . ".
+Monto: " . $cotizacion->total_pago_delivery . "
+Envio nuestra cuenta bancaria. ";
+
+            $telefono = preg_replace('/\D+/', '', $cotizacion->telefono);
+            if (strlen($telefono) < 9) {
+                $telefono = '51' . $telefono;
+            }
+            $numeroWhatsapp = $telefono . '@c.us';
+
+            $result = $this->sendMessage($message, $numeroWhatsapp);
+            $pagosUrl = public_path('assets/images/pagos-full.jpg');
+
+            $this->sendMedia($pagosUrl, 'image/jpg', null, $telefono, 15, 'consolidado', 'Numeros_de_cuenta.jpg');
+            if ($result['status']) {
+                return response()->json(['message' => 'Mensaje enviado correctamente', 'success' => true]);
+            } else {
+                return response()->json(['message' => 'Error al enviar mensaje: ' . ($result['response']['error'] ?? 'Error desconocido'), 'success' => false], 500);
+            }
+        } catch (\Exception $e) {
+            Log::error('Error en sendCobroDeliveryDelivery: ' . $e->getMessage());
+            return response()->json(['message' => $e->getMessage(), 'success' => false], 500);
         }
     }
 
