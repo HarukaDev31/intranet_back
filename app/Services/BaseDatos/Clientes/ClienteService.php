@@ -195,32 +195,34 @@ class ClienteService
                     // 2) cotizaciones -> usuario (si no hay provincia todavía)
                     if (!$provinciaName) {
                         try {
-                            $cotizacionQuery = DB::table('contenedor_consolidado_cotizacion')
-                                ->where('estado_cotizador', 'CONFIRMADO')
-                                ->whereNotNull('estado_cliente');
+                            $cotizacionQuery = DB::table('contenedor_consolidado_cotizacion as CC')
+                                ->join('carga_consolidada_contenedor as C', 'C.id', '=', 'CC.id_contenedor')
+                                ->where('CC.estado_cotizador', 'CONFIRMADO')
+                                ->whereNotNull('CC.estado_cliente');
 
                             if (!empty($cliente->telefono)) {
                                 $telefonoLimpio = preg_replace('/[^0-9]/', '', $cliente->telefono);
                                 $cotizacionQuery->where(function($q) use ($telefonoLimpio) {
-                                    $q->where(DB::raw('REPLACE(REPLACE(telefono, " ", ""), "-", "")'), 'LIKE', "%{$telefonoLimpio}%")
-                                      ->orWhere(DB::raw('REPLACE(REPLACE(telefono, " ", ""), "-", "")'), 'LIKE', "%" . preg_replace('/^51/', '', $telefonoLimpio) . "%");
+                                    $q->where(DB::raw('REPLACE(REPLACE(CC.telefono, " ", ""), "-", "")'), 'LIKE', "%{$telefonoLimpio}%")
+                                      ->orWhere(DB::raw('REPLACE(REPLACE(CC.telefono, " ", ""), "-", "")'), 'LIKE', "%" . preg_replace('/^51/', '', $telefonoLimpio) . "%");
                                 });
                             }
 
                             if (!empty($cliente->documento)) {
-                                $cotizacionQuery->orWhere('documento', $cliente->documento);
+                                $cotizacionQuery->orWhere('CC.documento', $cliente->documento);
                             }
 
                             if (!empty($cliente->correo)) {
                                 $cotizacionQuery->orWhere(function($q2) use ($cliente) {
-                                    $q2->whereNotNull('correo')
-                                       ->where('correo', '!=', '')
-                                       ->where('correo', $cliente->correo);
+                                    $q2->whereNotNull('CC.correo')
+                                       ->where('CC.correo', '!=', '')
+                                       ->where('CC.correo', $cliente->correo);
                                 });
                             }
 
-                            $cotizacion = $cotizacionQuery->orderBy('fecha', 'asc')
-                                ->orderByRaw('CAST(carga_consolidada_contenedor.carga AS UNSIGNED)')
+                            $cotizacion = $cotizacionQuery->select('CC.*')
+                                ->orderBy('CC.fecha', 'asc')
+                                ->orderByRaw('CAST(C.carga AS UNSIGNED)')
                                 ->first();
 
                             if ($cotizacion && isset($cotizacion->id_usuario)) {
@@ -853,32 +855,34 @@ class ClienteService
 
                     if (!$provinciaName) {
                         try {
-                            $cotizacionQuery = DB::table('contenedor_consolidado_cotizacion')
-                                ->where('estado_cotizador', 'CONFIRMADO')
-                                ->whereNotNull('estado_cliente');
+                            $cotizacionQuery = DB::table('contenedor_consolidado_cotizacion as CC')
+                                ->join('carga_consolidada_contenedor as C', 'C.id', '=', 'CC.id_contenedor')
+                                ->where('CC.estado_cotizador', 'CONFIRMADO')
+                                ->whereNotNull('CC.estado_cliente');
 
                             if (!empty($cliente->telefono)) {
                                 $telefonoLimpio = preg_replace('/[^0-9]/', '', $cliente->telefono);
                                 $cotizacionQuery->where(function($q) use ($telefonoLimpio) {
-                                    $q->where(DB::raw('REPLACE(REPLACE(telefono, " ", ""), "-", "")'), 'LIKE', "%{$telefonoLimpio}%")
-                                      ->orWhere(DB::raw('REPLACE(REPLACE(telefono, " ", ""), "-", "")'), 'LIKE', "%" . preg_replace('/^51/', '', $telefonoLimpio) . "%");
+                                    $q->where(DB::raw('REPLACE(REPLACE(CC.telefono, " ", ""), "-", "")'), 'LIKE', "%{$telefonoLimpio}%")
+                                      ->orWhere(DB::raw('REPLACE(REPLACE(CC.telefono, " ", ""), "-", "")'), 'LIKE', "%" . preg_replace('/^51/', '', $telefonoLimpio) . "%");
                                 });
                             }
 
                             if (!empty($cliente->documento)) {
-                                $cotizacionQuery->orWhere('documento', $cliente->documento);
+                                $cotizacionQuery->orWhere('CC.documento', $cliente->documento);
                             }
 
                             if (!empty($cliente->correo)) {
                                 $cotizacionQuery->orWhere(function($q2) use ($cliente) {
-                                    $q2->whereNotNull('correo')
-                                       ->where('correo', '!=', '')
-                                       ->where('correo', $cliente->correo);
+                                    $q2->whereNotNull('CC.correo')
+                                       ->where('CC.correo', '!=', '')
+                                       ->where('CC.correo', $cliente->correo);
                                 });
                             }
 
-                            $cotizacion = $cotizacionQuery->orderBy('fecha', 'asc')
-                                ->orderByRaw('CAST(carga_consolidada_contenedor.carga AS UNSIGNED)')
+                            $cotizacion = $cotizacionQuery->select('CC.*')
+                                ->orderBy('CC.fecha', 'asc')
+                                ->orderByRaw('CAST(C.carga AS UNSIGNED)')
                                 ->first();
 
                             if ($cotizacion && isset($cotizacion->id_usuario)) {
