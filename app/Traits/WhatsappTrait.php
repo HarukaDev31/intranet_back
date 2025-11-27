@@ -67,7 +67,7 @@ trait WhatsappTrait
             // Obtener dominio desde donde se hace la petición
             $domain = $this->getRequestDomain();
             $defaultWhatsapNumber = env('DEFAULT_WHATSAPP_NUMBER', '51912705923@c.us');
-            
+            Log::info('Domain: ' . $domain);
             // Validar dominio similar a DatabaseSelectionMiddleware
             // Si es localhost, desarrollo o QA, usar número por defecto
             $domainsForDefaultNumber = ['localhost', '127.0.0.1', 'qaintranet.probusiness.pe'];
