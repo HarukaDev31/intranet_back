@@ -2726,18 +2726,18 @@ class DocumentacionController extends Controller
                 $direccionLima = $item['final_destination_place'] ?? ($item['home_adress_delivery'] ?? ($item['direccion'] ?? ''));
                 $direccionProvincia = $item['home_adress_delivery'] ?? ($item['final_destination_place'] ?? ($item['direccion'] ?? ''));
                 $sheet->setCellValue('D' . $row, $isLima ? $direccionLima : $direccionProvincia);
-                $sheet->setCellValue('E' . $row, $phone);
+                $sheet->setCellValue('E' . $row, '');
                 $sheet->setCellValue('F' . $row, $cell);
                 $sheet->setCellValue('G' . $row, $email);
-                $sheet->setCellValue('H' . $row, $contactName);
-                $sheet->setCellValue('I' . $row, $contactPhone);
-                $sheet->setCellValue('J' . $row, $contactEmail);
-                $sheet->setCellValue('K' . $row, $pais);
-                $sheet->setCellValue('L' . $row, $departamento);
-                $sheet->setCellValue('M' . $row, $provincia);
-                $sheet->setCellValue('N' . $row, $distrito);
-                $sheet->setCellValue('O' . $row, $nota);
-                $sheet->setCellValue('P' . $row, $diasCredito);
+                $sheet->setCellValue('H' . $row, '');
+                $sheet->setCellValue('I' . $row, '');
+                $sheet->setCellValue('J' . $row, '');
+                $sheet->setCellValue('K' . $row, '');
+                $sheet->setCellValue('L' . $row, '');
+                $sheet->setCellValue('M' . $row, '');
+                $sheet->setCellValue('N' . $row, '');
+                $sheet->setCellValue('O' . $row, '');
+                $sheet->setCellValue('P' . $row, '');
             }
 
             $row++;
