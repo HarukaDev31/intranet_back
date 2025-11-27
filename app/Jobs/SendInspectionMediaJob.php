@@ -15,16 +15,18 @@ use App\Models\CargaConsolidada\CotizacionProveedor;
 use App\Models\CargaConsolidada\Cotizacion;
 use App\Models\CargaConsolidada\AlmacenInspection;
 use App\Traits\WhatsappTrait;
+use App\Traits\DatabaseConnectionTrait;
 use Carbon\Carbon;
 
 class SendInspectionMediaJob implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, WhatsappTrait;
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, WhatsappTrait, DatabaseConnectionTrait;
 
     protected $idProveedor;
     protected $idCotizacion;
     protected $idsProveedores;
     protected $userId;
+    protected $domain;
 
     /**
      * Número de intentos antes de fallar
@@ -45,12 +47,13 @@ class SendInspectionMediaJob implements ShouldQueue
      *
      * @return void
      */
-    public function __construct($idProveedor, $idCotizacion, $idsProveedores, $userId = null)
+    public function __construct($idProveedor, $idCotizacion, $idsProveedores, $userId = null, $domain = null)
     {
         $this->idProveedor = $idProveedor;
         $this->idCotizacion = $idCotizacion;
         $this->idsProveedores = $idsProveedores;
         $this->userId = $userId;
+        $this->domain = $domain;
     }
 
     /**
@@ -61,10 +64,14 @@ class SendInspectionMediaJob implements ShouldQueue
     public function handle()
     {
         try {
+            // Establecer la conexión de BD basándose en el dominio
+            $this->setDatabaseConnection($this->domain);
+
             Log::info("Iniciando job de envío de inspección", [
                 'id_proveedor' => $this->idProveedor,
                 'id_cotizacion' => $this->idCotizacion,
-                'user_id' => $this->userId
+                'user_id' => $this->userId,
+                'domain' => $this->domain
             ]);
 
             // Obtener imágenes del proveedor

@@ -251,8 +251,11 @@ class DeliveryController extends Controller
                 'delivery_form_registered_at' => now(),
             ]);
 
+            // Obtener dominio del frontend
+            $domain = WhatsappTrait::getCurrentRequestDomain();
+            
             // Despachar job para enviar mensaje de WhatsApp
-            SendDeliveryConfirmationWhatsAppProvinceJob::dispatch($deliveryForm->id)->onQueue('emails');
+            SendDeliveryConfirmationWhatsAppProvinceJob::dispatch($deliveryForm->id, $domain)->onQueue('emails');
 
             DB::commit();
             return response()->json([

@@ -1051,8 +1051,11 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
             $idContenedor = Cotizacion::where('id', $idCotizacion)->first()->id_contenedor;
             $carga = Contenedor::where('id', $idContenedor)->first()->carga;
 
+            // Obtener dominio del frontend
+            $domain = WhatsappTrait::getCurrentRequestDomain();
+            
             // Dispatch del Job para procesamiento asíncrono
-            SendRotuladoJob::dispatch($cliente, $carga, $proveedores, $idCotizacion, $total_movilidad_personal)->onQueue('importaciones');
+            SendRotuladoJob::dispatch($cliente, $carga, $proveedores, $idCotizacion, $total_movilidad_personal, $domain)->onQueue('importaciones');
 
             Log::info('SendRotuladoJob dispatchado exitosamente');
 
@@ -2699,13 +2702,17 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                 'user_id' => $user->ID_Usuario
             ]);
 
+            // Obtener dominio del frontend
+            $domain = WhatsappTrait::getCurrentRequestDomain();
+            
             // Despachar jobs para cada proveedor
             foreach ($idsProveedores as $idProveedor) {
                 SendInspectionMediaJob::dispatch(
                     $idProveedor,
                     $idCotizacion,
                     $idsProveedores,
-                    $user->ID_Usuario
+                    $user->ID_Usuario,
+                    $domain
                 )->onQueue('importaciones');
 
                 Log::info("Job de inspección despachado", [
@@ -2947,8 +2954,11 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                 'user_id' => $user->ID_Usuario
             ]);
 
+            // Obtener dominio del frontend
+            $domain = WhatsappTrait::getCurrentRequestDomain();
+            
             // Despachar el job para procesar en segundo plano
-            ForceSendRotuladoJob::dispatch($idCotizacion, $idsProveedores, $idContainer)->onQueue('importaciones');
+            ForceSendRotuladoJob::dispatch($idCotizacion, $idsProveedores, $idContainer, $domain)->onQueue('importaciones');
 
             Log::info("Job ForceSendRotuladoJob despachado", [
                 'id_cotizacion' => $idCotizacion,
@@ -3000,8 +3010,11 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                 'user_id' => $user->ID_Usuario
             ]);
 
+            // Obtener dominio del frontend
+            $domain = WhatsappTrait::getCurrentRequestDomain();
+            
             // Despachar el job para procesar en segundo plano
-            ForceSendCobrandoJob::dispatch($idCotizacion, $idContainer)->onQueue('importaciones');
+            ForceSendCobrandoJob::dispatch($idCotizacion, $idContainer, $domain)->onQueue('importaciones');
 
             Log::info("Job ForceSendCobrandoJob despachado", [
                 'id_cotizacion' => $idCotizacion,
@@ -3110,8 +3123,11 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                 ], 401);
             }
 
+            // Obtener dominio del frontend
+            $domain = WhatsappTrait::getCurrentRequestDomain();
+            
             // Despachar el Job para procesar el envío de manera asíncrona
-            SendRecordatorioDatosProveedorJob::dispatch($idCotizacion, $idContainer, $proveedores)->onQueue('importaciones');
+            SendRecordatorioDatosProveedorJob::dispatch($idCotizacion, $idContainer, $proveedores, $domain)->onQueue('importaciones');
 
             return response()->json([
                 'success' => true,

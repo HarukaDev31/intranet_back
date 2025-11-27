@@ -14,6 +14,7 @@ use Dompdf\Options;
 use App\Models\CargaConsolidada\CotizacionProveedor;
 use App\Models\CargaConsolidada\Cotizacion;
 use App\Traits\WhatsappTrait;
+use App\Traits\DatabaseConnectionTrait;
 use App\Traits\GoogleSheetsHelper;
 use Maatwebsite\Excel\Facades\Excel;
 use Maatwebsite\Excel\Concerns\FromCollection;
@@ -32,24 +33,26 @@ use App\Models\CargaConsolidada\Contenedor;
 
 class SendRotuladoJob implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, WhatsappTrait, GoogleSheetsHelper;
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, WhatsappTrait, DatabaseConnectionTrait, GoogleSheetsHelper;
 
     protected $cliente;
     protected $carga;
     protected $proveedores;
     protected $idCotizacion;
     protected $total_movilidad_personal;
+    protected $domain;
 
     /**
      * Create a new job instance.
      */
-    public function __construct($cliente, $carga, $proveedores, $idCotizacion, $total_movilidad_personal)
+    public function __construct($cliente, $carga, $proveedores, $idCotizacion, $total_movilidad_personal, $domain = null)
     {
         $this->cliente = $cliente;
         $this->carga = $carga;
         $this->proveedores = $proveedores;
         $this->idCotizacion = $idCotizacion;
         $this->total_movilidad_personal = $total_movilidad_personal;
+        $this->domain = $domain;
     }
 
     /**
@@ -58,11 +61,15 @@ class SendRotuladoJob implements ShouldQueue
     public function handle(): void
     {
         try {
+            // Establecer la conexión de BD basándose en el dominio
+            $this->setDatabaseConnection($this->domain);
+
             Log::info('Iniciando SendRotuladoJob', [
                 'cliente' => $this->cliente,
                 'carga' => $this->carga,
                 'proveedores_count' => count($this->proveedores),
-                'id_cotizacion' => $this->idCotizacion
+                'id_cotizacion' => $this->idCotizacion,
+                'domain' => $this->domain
             ]);
 
             // Obtener información de la cotización para configurar el teléfono

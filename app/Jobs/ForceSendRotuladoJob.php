@@ -11,6 +11,7 @@ use App\Models\CargaConsolidada\Cotizacion;
 use App\Models\CargaConsolidada\Contenedor;
 use App\Models\CargaConsolidada\CotizacionProveedor;
 use App\Traits\WhatsappTrait;
+use App\Traits\DatabaseConnectionTrait;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
@@ -21,20 +22,22 @@ use Dompdf\Options;
 
 class ForceSendRotuladoJob implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, WhatsappTrait;
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, WhatsappTrait, DatabaseConnectionTrait;
 
     protected $idCotizacion;
     protected $proveedoresIds;
     protected $idContainer;
+    protected $domain;
 
     /**
      * Create a new job instance.
      */
-    public function __construct($idCotizacion, $proveedoresIds, $idContainer)
+    public function __construct($idCotizacion, $proveedoresIds, $idContainer, $domain = null)
     {
         $this->idCotizacion = $idCotizacion;
         $this->proveedoresIds = $proveedoresIds;
         $this->idContainer = $idContainer;
+        $this->domain = $domain;
     }
 
     /**
@@ -43,10 +46,14 @@ class ForceSendRotuladoJob implements ShouldQueue
     public function handle()
     {
         try {
+            // Establecer la conexión de BD basándose en el dominio
+            $this->setDatabaseConnection($this->domain);
+
             Log::info("Iniciando ForceSendRotuladoJob", [
                 'id_cotizacion' => $this->idCotizacion,
                 'proveedores_ids' => $this->proveedoresIds,
-                'id_container' => $this->idContainer
+                'id_container' => $this->idContainer,
+                'domain' => $this->domain
             ]);
 
             DB::beginTransaction();

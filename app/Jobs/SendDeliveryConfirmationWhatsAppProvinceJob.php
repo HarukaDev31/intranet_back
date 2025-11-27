@@ -8,6 +8,7 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use App\Traits\WhatsappTrait;
+use App\Traits\DatabaseConnectionTrait;
 use App\Models\CargaConsolidada\ConsolidadoDeliveryFormProvince;
 use App\Models\CargaConsolidada\Contenedor;
 use App\Models\CargaConsolidada\Cotizacion;
@@ -17,19 +18,22 @@ use App\Models\User;
 
 class SendDeliveryConfirmationWhatsAppProvinceJob implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, WhatsappTrait;
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, WhatsappTrait, DatabaseConnectionTrait;
 
     protected $deliveryFormId;
+    protected $domain;
 
     /**
      * Create a new job instance.
      *
      * @param int $deliveryFormId
+     * @param string|null $domain
      * @return void
      */
-    public function __construct($deliveryFormId)
+    public function __construct($deliveryFormId, $domain = null)
     {
         $this->deliveryFormId = $deliveryFormId;
+        $this->domain = $domain;
     }
 
     /**
@@ -40,6 +44,8 @@ class SendDeliveryConfirmationWhatsAppProvinceJob implements ShouldQueue
     public function handle()
     {
         try {
+            // Establecer la conexión de BD basándose en el dominio
+            $this->setDatabaseConnection($this->domain);
             // Obtener el formulario de delivery con las relaciones necesarias
             $deliveryForm = ConsolidadoDeliveryFormProvince::with([
                 'cotizacion',

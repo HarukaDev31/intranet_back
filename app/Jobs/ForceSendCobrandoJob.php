@@ -10,24 +10,27 @@ use Illuminate\Queue\SerializesModels;
 use App\Models\CargaConsolidada\Cotizacion;
 use App\Models\CargaConsolidada\Contenedor;
 use App\Traits\WhatsappTrait;
+use App\Traits\DatabaseConnectionTrait;
 use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
 use Exception;
 
 class ForceSendCobrandoJob implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, WhatsappTrait;
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, WhatsappTrait, DatabaseConnectionTrait;
 
     protected $idCotizacion;
     protected $idContainer;
+    protected $domain;
 
     /**
      * Create a new job instance.
      */
-    public function __construct($idCotizacion, $idContainer)
+    public function __construct($idCotizacion, $idContainer, $domain = null)
     {
         $this->idCotizacion = $idCotizacion;
         $this->idContainer = $idContainer;
+        $this->domain = $domain;
     }
 
     /**
@@ -36,9 +39,13 @@ class ForceSendCobrandoJob implements ShouldQueue
     public function handle(): void
     {
         try {
+            // Establecer la conexión de BD basándose en el dominio
+            $this->setDatabaseConnection($this->domain);
+
             Log::info("Iniciando Job ForceSendCobrando", [
                 'id_cotizacion' => $this->idCotizacion,
-                'id_container' => $this->idContainer
+                'id_container' => $this->idContainer,
+                'domain' => $this->domain
             ]);
 
             // Obtener información de la cotización

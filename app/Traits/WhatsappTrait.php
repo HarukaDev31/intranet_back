@@ -91,6 +91,47 @@ trait WhatsappTrait
         return $domain;
     }
 
+    /**
+     * Obtener el dominio del frontend desde la request actual
+     * Método público para ser usado desde controladores al despachar Jobs
+     * 
+     * @return string|null
+     */
+    public static function getCurrentRequestDomain()
+    {
+        try {
+            $request = request();
+            if (!$request) {
+                return null;
+            }
+
+            // Priorizar el dominio proveniente de Origin/Referer
+            $origin = $request->headers->get('origin');
+            $referer = $request->headers->get('referer');
+
+            $sourceHost = null;
+            if ($origin) {
+                $sourceHost = parse_url($origin, PHP_URL_HOST);
+            }
+            if (!$sourceHost && $referer) {
+                $sourceHost = parse_url($referer, PHP_URL_HOST);
+            }
+
+            if ($sourceHost) {
+                // Remover el puerto si existe
+                $domain = explode(':', $sourceHost)[0];
+                // Si tiene www, removerlo
+                $domain = preg_replace('/^www\./', '', $domain);
+                return $domain;
+            }
+
+            return null;
+        } catch (\Exception $e) {
+            Log::warning('Error al obtener dominio desde request: ' . $e->getMessage());
+            return null;
+        }
+    }
+
     private function _callApi($endpoint, $data)
     {
         try {
