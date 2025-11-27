@@ -8,15 +8,86 @@ trait WhatsappTrait
 {
     private $phoneNumberId = null;
 
+    /**
+     * Obtener el dominio desde donde se hace la petición
+     * Similar a DatabaseSelectionMiddleware
+     */
+    private function getRequestDomain()
+    {
+        try {
+            $request = request();
+            if (!$request) {
+                return null;
+            }
+
+            // Priorizar el dominio proveniente de Origin/Referer
+            $origin = $request->headers->get('origin');
+            $referer = $request->headers->get('referer');
+
+            $sourceHost = null;
+            if ($origin) {
+                $sourceHost = parse_url($origin, PHP_URL_HOST);
+            }
+            if (!$sourceHost && $referer) {
+                $sourceHost = parse_url($referer, PHP_URL_HOST);
+            }
+
+            // Si no hay Origin/Referer válidos, usar el host de la request
+            $host = $sourceHost ?: $request->getHost();
+
+            // Extraer solo el dominio (sin puerto o subdirectorios)
+            return $this->extractDomain($host);
+        } catch (\Exception $e) {
+            Log::warning('Error al obtener dominio de la request: ' . $e->getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Extraer el dominio del host
+     * Similar a DatabaseSelectionMiddleware
+     */
+    private function extractDomain($host)
+    {
+        // Remover el puerto si existe (ej: localhost:8000 -> localhost)
+        $domain = explode(':', $host)[0];
+        
+        // Si tiene www, removerlo
+        $domain = preg_replace('/^www\./', '', $domain);
+        
+        return $domain;
+    }
+
     private function _callApi($endpoint, $data)
     {
         try {
             Log::info('Llamando a la API de WhatsApp', ['endpoint' => $endpoint, 'data' => $data]);
             $url = 'https://redis.probusiness.pe/api/whatsapp' . $endpoint;
-            $envUrl = env('APP_URL');
-            $defaultWhatsapNumber=env('DEFAULT_WHATSAPP_NUMBER','51912705923@c.us');
-            if (strpos($envUrl, 'localhost') !== false) {
+            
+            // Obtener dominio desde donde se hace la petición
+            $domain = $this->getRequestDomain();
+            $defaultWhatsapNumber = env('DEFAULT_WHATSAPP_NUMBER', '51912705923@c.us');
+            
+            // Validar dominio similar a DatabaseSelectionMiddleware
+            // Si es localhost, desarrollo o QA, usar número por defecto
+            $domainsForDefaultNumber = ['localhost', '127.0.0.1', 'qaintranet.probusiness.pe'];
+            $shouldUseDefaultNumber = false;
+            
+            if ($domain) {
+                foreach ($domainsForDefaultNumber as $allowedDomain) {
+                    if (strpos($domain, $allowedDomain) !== false || $domain === $allowedDomain) {
+                        $shouldUseDefaultNumber = true;
+                        break;
+                    }
+                }
+            }
+            
+            if ($shouldUseDefaultNumber) {
                 $data['phoneNumberId'] = $defaultWhatsapNumber;
+                Log::info('Dominio detectado para usar número por defecto', [
+                    'domain' => $domain,
+                    'phoneNumberId' => $defaultWhatsapNumber
+                ]);
             }
            
             $ch = curl_init();

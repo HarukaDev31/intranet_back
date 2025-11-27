@@ -91,7 +91,6 @@ class DatabaseSelectionMiddleware
      */
     private function getDatabaseConnection($domain)
     {
-        Log::info('Getting database connection for domain: ' . $domain);
         // Buscar en el mapa de dominios
         if (isset($this->domainDatabaseMap[$domain])) {
             return $this->domainDatabaseMap[$domain];

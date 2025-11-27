@@ -2027,33 +2027,57 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
     }
 
     /**
-     * Enviar un archivo individual de inspección
+     * Enviar un archivo individual de inspección usando URLs públicas
+     * Similar a cómo lo hace SendInspectionMediaJob
      */
     private function sendSingleInspectionFile($file, $message, $telefono, $codeSupplier = null)
     {
-        $fileSystemPath = storage_path('app/public/' . $file->file_path);
-
-        if (!file_exists($fileSystemPath)) {
-            Log::error('Archivo no encontrado: ' . $fileSystemPath);
+        // Validar que el archivo tenga una ruta
+        if (empty($file->file_path)) {
+            Log::error('Archivo de inspección no tiene ruta: ' . $file->id);
             return false;
         }
+
+        // Generar nombre del archivo con el código del proveedor (como en SendInspectionMediaJob)
         $extension = pathinfo($file->file_path, PATHINFO_EXTENSION);
-        $fileName = $codeSupplier . '.' . $extension;
-        // No enviar mensaje con los archivos, solo el archivo
-        $response = $this->sendMediaInspection($fileSystemPath, $file->file_type, '', $telefono, 2, $file->id, $fileName);
+        $fileName = $codeSupplier ? $codeSupplier . '.' . $extension : basename($file->file_path);
+
+        Log::info('Enviando archivo de inspección con URL pública', [
+            'file_id' => $file->id,
+            'file_path' => $file->file_path,
+            'code_supplier' => $codeSupplier,
+            'file_name' => $fileName
+        ]);
+
+        // Mensaje con código del proveedor (como en SendInspectionMediaJob)
+        $messageToSend = $codeSupplier ?? '';
+
+        // Usar sendMediaInspectionToController para enviar con URL pública
+        // Este método internamente genera la URL pública desde la ruta relativa
+        $response = $this->sendMediaInspectionToController(
+            $file->file_path,  // Ruta relativa almacenada en BD (ej: 'inspection/archivo.jpg')
+            $file->file_type,
+            $messageToSend,
+            $telefono,
+            0,  // Sin sleep (como en SendInspectionMediaJob)
+            $file->id,
+            $fileName
+        );
 
         // Verificar que la respuesta sea exitosa antes de actualizar el estado
         if ($response && isset($response['status']) && $response['status'] === true) {
             $file->update(['send_status' => 'SENDED']);
-            Log::info('Archivo de inspección enviado exitosamente', [
+            Log::info('Archivo de inspección enviado exitosamente con URL pública', [
                 'file_id' => $file->id,
-                'file_path' => $file->file_path
+                'file_path' => $file->file_path,
+                'code_supplier' => $codeSupplier
             ]);
             return true;
         } else {
             Log::warning('Error al enviar archivo de inspección', [
                 'file_id' => $file->id,
                 'file_path' => $file->file_path,
+                'code_supplier' => $codeSupplier,
                 'response' => $response
             ]);
         }
