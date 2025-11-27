@@ -279,6 +279,8 @@ class ClienteService
                                 if (empty($nuOtrosComoEnteroEmpresa) && isset($user->no_otros_como_entero_empresa)) {
                                     $nuOtrosComoEnteroEmpresa = $user->no_otros_como_entero_empresa;
                                 }
+                                Log::info('obtenerClientePorId: nuComoEnteroEmpresa: ' . $nuComoEnteroEmpresa);
+                                Log::info('obtenerClientePorId: nuOtrosComoEnteroEmpresa: ' . $nuOtrosComoEnteroEmpresa);
                             }
                         } catch (\Exception $e) {
                             Log::warning('obtenerClientePorId: error resolviendo provincia/campos empresa desde users - ' . $e->getMessage());
