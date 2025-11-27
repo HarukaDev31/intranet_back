@@ -932,6 +932,8 @@ class ClienteService
                                 if (empty($nuOtrosComoEnteroEmpresa) && isset($user->no_otros_como_entero_empresa)) {
                                     $nuOtrosComoEnteroEmpresa = $user->no_otros_como_entero_empresa;
                                 }
+                                Log::info('transformarDatosClientes: nuComoEnteroEmpresa: ' . $nuComoEnteroEmpresa);
+                                Log::info('transformarDatosClientes: nuOtrosComoEnteroEmpresa: ' . $nuOtrosComoEnteroEmpresa);
                             }
                         } catch (\Exception $e) {
                             Log::warning('transformarDatosClientes: error resolviendo provincia/campos empresa desde users para cliente ' . $cliente->id . ' - ' . $e->getMessage());
