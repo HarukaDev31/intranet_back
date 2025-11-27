@@ -221,6 +221,7 @@
             <p class="bullet">• No Hay Opción de Reembolso: EL CLIENTE reconoce que no existe opción de reembolso por los servicios prestados o mercadería adquirida.</p>
             <p class="bullet">• Contratación de operadores de comercio exterior: EL GESTOR podrá seleccionar operadores sin autorización previa del CLIENTE para garantizar importación exitosa.</p>
             <p class="bullet">• Tiempo de entrega: Las fechas de entrega son estimadas y sujetas a variaciones por factores externos (procesos aduaneros, condiciones climáticas, etc.).</p>
+            <p class="bullet">• El traslado de la mercancía del CLIENTE a otro contenedor está sujeto a las condiciones operativas del servicio (llega de carga fuera de tiempo, falta de pago, mal rotulado, falta de documentos, etc).</p>
         </div>
 
         <div class="section">
