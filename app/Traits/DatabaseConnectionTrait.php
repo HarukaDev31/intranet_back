@@ -42,20 +42,6 @@ trait DatabaseConnectionTrait
     }
 
     /**
-     * Extraer el dominio del host
-     */
-    private function extractDomain($host)
-    {
-        // Remover el puerto si existe (ej: localhost:8000 -> localhost)
-        $domain = explode(':', $host)[0];
-        
-        // Si tiene www, removerlo
-        $domain = preg_replace('/^www\./', '', $domain);
-        
-        return $domain;
-    }
-
-    /**
      * Establecer la conexión de base de datos basándose en el dominio
      * 
      * @param string|null $domain Dominio del frontend. Si es null, intenta obtenerlo desde la request
@@ -81,7 +67,9 @@ trait DatabaseConnectionTrait
                     }
 
                     if ($sourceHost) {
-                        $domain = $this->extractDomain($sourceHost);
+                        // Extraer el dominio del host (implementación inline para evitar conflicto con WhatsappTrait)
+                        $domain = explode(':', $sourceHost)[0];
+                        $domain = preg_replace('/^www\./', '', $domain);
                     }
                 }
             }
