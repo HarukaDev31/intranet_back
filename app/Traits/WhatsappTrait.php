@@ -9,8 +9,8 @@ trait WhatsappTrait
     private $phoneNumberId = null;
 
     /**
-     * Obtener el dominio desde donde se hace la petición
-     * Similar a DatabaseSelectionMiddleware
+     * Obtener el dominio del frontend desde donde se hace la petición
+     * Solo usa Origin/Referer, nunca el host del backend
      */
     private function getRequestDomain()
     {
@@ -20,7 +20,7 @@ trait WhatsappTrait
                 return null;
             }
 
-            // Priorizar el dominio proveniente de Origin/Referer
+            // Obtener el dominio del frontend desde Origin/Referer
             $origin = $request->headers->get('origin');
             $referer = $request->headers->get('referer');
 
@@ -32,13 +32,16 @@ trait WhatsappTrait
                 $sourceHost = parse_url($referer, PHP_URL_HOST);
             }
 
-            // Si no hay Origin/Referer válidos, usar el host de la request
-            $host = $sourceHost ?: $request->getHost();
+            // Si no hay Origin/Referer válidos, retornar null (no usar el host del backend)
+            if (!$sourceHost) {
+                Log::warning('No se pudo obtener el dominio del frontend: Origin y Referer no disponibles');
+                return null;
+            }
 
             // Extraer solo el dominio (sin puerto o subdirectorios)
-            return $this->extractDomain($host);
+            return $this->extractDomain($sourceHost);
         } catch (\Exception $e) {
-            Log::warning('Error al obtener dominio de la request: ' . $e->getMessage());
+            Log::warning('Error al obtener dominio del frontend: ' . $e->getMessage());
             return null;
         }
     }
