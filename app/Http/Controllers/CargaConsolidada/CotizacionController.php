@@ -362,12 +362,12 @@ class CotizacionController extends Controller
         $headersData = [
             'cbm_total_china' => [
                 'value' => $headers ? $headers->cbm_total_china : 0,
-                'label' => 'CBM Total ',
+                'label' => '',
                 'icon' => 'https://upload.wikimedia.org/wikipedia/commons/f/fa/Flag_of_the_People%27s_Republic_of_China.svg'
             ],
             'cbm_total_peru' => [
                 'value' => $headers ? $headers->cbm_total_peru : 0,
-                'label' => 'CBM Total ',
+                'label' => '',
                 'icon' => 'https://upload.wikimedia.org/wikipedia/commons/c/cf/Flag_of_Peru.svg'
             ],
             'cbm_vendido' => [
@@ -385,20 +385,20 @@ class CotizacionController extends Controller
                 'label' => 'CBM Embarcado',
                 'icon' => 'mage:box-3d'
             ],
+            'qty_items' => [
+                'value' => $headers ? $headers->total_qty_items : 0,
+                'label' => 'Items',
+                'icon' => 'bi:boxes'
+            ],
             'total_logistica_pagado' => [
                 'value' => $headers ? $headers->total_logistica_pagado : 0,
-                'label' => 'Total Logistica Pagado',
+                'label' => 'Logist. Pagado',
                 'icon' => 'cryptocurrency-color:soc'
             ],
             'total_logistica' => [
                 'value' => $headers ? $headers->total_logistica : 0,
-                'label' => 'Total Logistica',
+                'label' => 'Logist.',
                 'icon' => 'cryptocurrency-color:soc'
-            ],
-            'qty_items' => [
-                'value' => $headers ? $headers->total_qty_items : 0,
-                'label' => 'Cantidad de Items',
-                'icon' => 'bi:boxes'
             ],
 
 
