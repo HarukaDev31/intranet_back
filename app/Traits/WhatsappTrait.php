@@ -3,43 +3,73 @@
 namespace App\Traits;
 
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 
 trait WhatsappTrait
 {
     private $phoneNumberId = null;
 
     /**
+     * Mapeo inverso de conexión de BD a dominio del frontend
+     * Múltiples dominios pueden usar la misma conexión (mysql)
+     */
+    private function getDomainFromDatabaseConnection($connection)
+    {
+        $connectionDomainMap = [
+            'mysql' => 'intranetv2.probusiness.pe', // Dominio principal para producción
+            'mysql_qa' => 'qaintranet.probusiness.pe',
+            'mysql_local' => 'localhost',
+        ];
+        
+        return $connectionDomainMap[$connection] ?? null;
+    }
+
+    /**
      * Obtener el dominio del frontend desde donde se hace la petición
-     * Solo usa Origin/Referer, nunca el host del backend
+     * Prioriza Origin/Referer, luego infiere desde la conexión de BD actual
      */
     private function getRequestDomain()
     {
         try {
+            // Primero intentar obtener desde headers HTTP (Origin/Referer)
             $request = request();
-            if (!$request) {
-                return null;
+            if ($request) {
+                $origin = $request->headers->get('origin');
+                $referer = $request->headers->get('referer');
+
+                $sourceHost = null;
+                if ($origin) {
+                    $sourceHost = parse_url($origin, PHP_URL_HOST);
+                }
+                if (!$sourceHost && $referer) {
+                    $sourceHost = parse_url($referer, PHP_URL_HOST);
+                }
+
+                if ($sourceHost) {
+                    // Extraer solo el dominio (sin puerto o subdirectorios)
+                    return $this->extractDomain($sourceHost);
+                }
             }
 
-            // Obtener el dominio del frontend desde Origin/Referer
-            $origin = $request->headers->get('origin');
-            $referer = $request->headers->get('referer');
-
-            $sourceHost = null;
-            if ($origin) {
-                $sourceHost = parse_url($origin, PHP_URL_HOST);
-            }
-            if (!$sourceHost && $referer) {
-                $sourceHost = parse_url($referer, PHP_URL_HOST);
-            }
-
-            // Si no hay Origin/Referer válidos, retornar null (no usar el host del backend)
-            if (!$sourceHost) {
-                Log::warning('No se pudo obtener el dominio del frontend: Origin y Referer no disponibles');
-                return null;
+            // Si no hay headers disponibles (ej: Jobs), inferir desde la conexión de BD actual
+            try {
+                $currentConnection = DB::getDefaultConnection();
+                $domain = $this->getDomainFromDatabaseConnection($currentConnection);
+                
+                if ($domain) {
+                    Log::info('Dominio inferido desde conexión de BD', [
+                        'connection' => $currentConnection,
+                        'domain' => $domain
+                    ]);
+                    return $domain;
+                }
+            } catch (\Exception $dbException) {
+                Log::debug('No se pudo obtener conexión de BD: ' . $dbException->getMessage());
             }
 
-            // Extraer solo el dominio (sin puerto o subdirectorios)
-            return $this->extractDomain($sourceHost);
+            // Si no se pudo obtener de ninguna forma
+            Log::warning('No se pudo obtener el dominio del frontend: Origin/Referer no disponibles y no se pudo inferir desde BD');
+            return null;
         } catch (\Exception $e) {
             Log::warning('Error al obtener dominio del frontend: ' . $e->getMessage());
             return null;
