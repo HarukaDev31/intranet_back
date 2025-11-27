@@ -2635,27 +2635,27 @@ class CotizacionFinalController extends Controller
                 $dataHeaders = [
                     'cbm_total_peru' => [
                         "value" => $result->cbm_total_peru,
-                        "label" => "CBM Total Perú",
+                        "label" => "",
                         "icon" => "https://upload.wikimedia.org/wikipedia/commons/c/cf/Flag_of_Peru.svg"
                     ],
                     'total_logistica' => [
                         "value" => $result->total_logistica,
-                        "label" => "Total Logistica",
+                        "label" => "Logist.",
                         "icon" => "cryptocurrency-color:soc"
                     ],
                     'total_logistica_pagado' => [
                         "value" => $result->total_logistica_pagado,
-                        "label" => "Total Logistica Pagado",
+                        "label" => "Logist. Pagado",
                         "icon" => "cryptocurrency-color:soc"
                     ],
                     'total_impuestos' => [
                         "value" => $result->total_impuestos,
-                        "label" => "Total Impuestos",
+                        "label" => "Impuestos",
                         "icon" => "cryptocurrency-color:soc"
                     ],
                     'total_fob' => [
                         "value" => $result->total_fob,
-                        "label" => "Total FOB",
+                        "label" => "FOB",
                         "icon" => "cryptocurrency-color:soc"
                     ],
                 ];
@@ -2671,32 +2671,32 @@ class CotizacionFinalController extends Controller
                 $dataHeaders = [
                     'cbm_total' => [
                         "value" => $result->cbm_total_peru,
-                        "label" => "CBM Total Perú",
+                        "label" => "",
                         "icon" => "https://upload.wikimedia.org/wikipedia/commons/c/cf/Flag_of_Peru.svg"
                     ],
                     'total_logistica' => [
                         "value" => $result->total_logistica,
-                        "label" => "Total Logistica",
+                        "label" => "Logist.",
                         "icon" => "cryptocurrency-color:soc"
                     ],
                     'total_impuestos' => [
                         "value" => $result->total_impuestos,
-                        "label" => "Total Impuestos",
+                        "label" => "Impuestos",
                         "icon" => "cryptocurrency-color:soc"
                     ],
                     'total_fob' => [
                         "value" => $result->total_fob,
-                        "label" => "Total FOB",
+                        "label" => "FOB",
                         "icon" => "cryptocurrency-color:soc"
                     ],
                     'total_pagado' => [
                         "value" => $result->total_pagado,
-                        "label" => "Total Pagado",
+                        "label" => "Pagado",
                         "icon" => "cryptocurrency-color:soc"
                     ],
                     'total_vendido_logistica_impuestos' => [
                         "value" => $result->total_vendido_logistica_impuestos,
-                        "label" => "Total Vendido",
+                        "label" => "Vendido",
                         "icon" => "cryptocurrency-color:soc"
                     ],
                 ];
@@ -2712,10 +2712,10 @@ class CotizacionFinalController extends Controller
                     'data' => [
                         'cbm_total' => ["value" => 0, "label" => "CBM Pendiente", "icon" => "fas fa-cube"],
                         'cbm_embarcado' => ["value" => 0, "label" => "CBM Embarcado", "icon" => "fas fa-ship"],
-                        'total_logistica' => ["value" => 0, "label" => "Total Logistica", "icon" => "fas fa-dollar-sign"],
-                        'qty_items' => ["value" => 0, "label" => "Cantidad de Items", "icon" => "bi:boxes"],
+                        'total_logistica' => ["value" => 0, "label" => "Logistica", "icon" => "fas fa-dollar-sign"],
+                        'qty_items' => ["value" => 0, "label" => "Items", "icon" => "bi:boxes"],
                         'cbm_total_peru' => ["value" => 0, "label" => "CBM Total Perú", "icon" => "https://upload.wikimedia.org/wikipedia/commons/c/cf/Flag_of_Peru.svg"],
-                        'total_fob' => ["value" => 0, "label" => "Total FOB", "icon" => "fas fa-dollar-sign"]
+                        'total_fob' => ["value" => 0, "label" => "FOB", "icon" => "fas fa-dollar-sign"]
                     ],
                     'carga' => ''
                 ]);

@@ -470,22 +470,22 @@ class GeneralController extends Controller
                 $headersData = [
                     'cbm_total_china' => [
                         'value' => $result->cbm_total_china,
-                        'label' => 'CBM Total China',
+                        'label' => '',
                         'icon' => 'https://upload.wikimedia.org/wikipedia/commons/f/fa/Flag_of_the_People%27s_Republic_of_China.svg'
                     ],
                     'cbm_total' => [
                         'value' => $result->cbm_total,
-                        'label' => 'CBM Total',
+                        'label' => '',
                         'icon' => 'https://upload.wikimedia.org/wikipedia/commons/c/cf/Flag_of_Peru.svg'
                     ],
+                    'qty_items' => ['value' => $result->total_qty_items, 'label' => 'Items', 'icon' => 'bi:boxes'],
                     /*cbm_total_pendiente' => ['value' => $result->cbm_total_pendiente ?? 0, 'label' => 'CBM Total Pendiente', 'icon' => 'i-heroicons-currency-dollar'],*/
-                    'total_logistica' => ['value' => $result->total_logistica, 'label' => 'Total Logistica', 'icon' => 'cryptocurrency-color:soc'],
-                    'total_logistica_pagado' => ['value' => round($result->total_logistica_pagado, 2), 'label' => 'Total Logistica Pagado', 'icon' => 'cryptocurrency-color:soc'],
+                    'total_logistica' => ['value' => $result->total_logistica, 'label' => 'Logist.', 'icon' => 'cryptocurrency-color:soc'],
+                    'total_logistica_pagado' => ['value' => round($result->total_logistica_pagado, 2), 'label' => 'Logist. Pagado', 'icon' => 'cryptocurrency-color:soc'],
                     /*'bl_file_url' => ['value' => $result2->bl_file_url ?? '', 'label' => 'BL File URL', 'icon' => 'i-heroicons-currency-dollar'],*/
                     /*'lista_embarque_url' => ['value' => $result2->lista_embarque_url ?? '', 'label' => 'Lista Embarque URL', 'icon' => 'i-heroicons-currency-dollar'],*/
-                    'total_fob' => ['value' => $result->total_fob, 'label' => 'Total FOB', 'icon' => 'cryptocurrency-color:soc'],
-                    'total_impuestos' => ['value' => $result3->total_impuestos, 'label' => 'Total Impuestos', 'icon' => 'cryptocurrency-color:soc'],
-                    'qty_items' => ['value' => $result->total_qty_items, 'label' => 'Cantidad de Items', 'icon' => 'bi:boxes']
+                    'total_fob' => ['value' => $result->total_fob, 'label' => 'FOB', 'icon' => 'cryptocurrency-color:soc'],
+                    'total_impuestos' => ['value' => $result3->total_impuestos, 'label' => 'Impuestos', 'icon' => 'cryptocurrency-color:soc'],
                 ];
                 if (array_key_exists($userIdCheck, $roleAllowedMap)) {
                     $allowedKeys = $roleAllowedMap[$userIdCheck];
@@ -507,12 +507,12 @@ class GeneralController extends Controller
                     'data' => $this->addCurrencyFormatting([
                         'cbm_total_china' => ['value' => 0, 'label' => 'CBM Total China', 'icon' => 'i-heroicons-currency-dollar'],
                         'cbm_total_pendiente' => ['value' => 0, 'label' => 'CBM Total Pendiente', 'icon' => 'i-heroicons-currency-dollar'],
-                        'total_logistica' => ['value' => 0, 'label' => 'Total Logistica', 'icon' => 'cryptocurrency-color:soc'],
-                        'total_logistica_pagado' => ['value' => 0, 'label' => 'Total Logistica Pagado', 'icon' => 'cryptocurrency-color:soc'],
+                        'total_logistica' => ['value' => 0, 'label' => 'Logistica', 'icon' => 'cryptocurrency-color:soc'],
+                        'total_logistica_pagado' => ['value' => 0, 'label' => 'Logistica Pagado', 'icon' => 'cryptocurrency-color:soc'],
                         'cbm_total' => ['value' => 0, 'label' => 'CBM Total', 'icon' => 'i-heroicons-currency-dollar'],
-                        'total_fob' => ['value' => 0, 'label' => 'Total FOB', 'icon' => 'i-heroicons-currency-dollar'],
-                        'total_impuestos' => ['value' => 0, 'label' => 'Total Impuestos', 'icon' => 'i-heroicons-currency-dollar'],
-                        'qty_items' => ['value' => 0, 'label' => 'Cantidad de Items', 'icon' => 'bi:boxes'],
+                        'total_fob' => ['value' => 0, 'label' => 'FOB', 'icon' => 'i-heroicons-currency-dollar'],
+                        'total_impuestos' => ['value' => 0, 'label' => 'Impuestos', 'icon' => 'i-heroicons-currency-dollar'],
+                        'qty_items' => ['value' => 0, 'label' => 'Items', 'icon' => 'bi:boxes'],
                         'bl_file_url' => ['value' => '', 'label' => 'BL File URL', 'icon' => 'i-heroicons-currency-dollar'],
                         'lista_embarque_url' => ['value' => '', 'label' => 'Lista Embarque URL', 'icon' => 'i-heroicons-currency-dollar']
                     ]),

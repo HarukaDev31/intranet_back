@@ -1454,15 +1454,15 @@ class ClientesController extends Controller
             return [
                 'total_clientes' => [
                     'value' => 0,
-                    'label' => 'Total Clientes'
+                    'label' => 'Clientes'
                 ],
                 'total_clientes_curso' => [
                     'value' => 0,
-                    'label' => 'Total Clientes Curso'
+                    'label' => 'Curso'
                 ],
                 'total_clientes_consolidado' => [
                     'value' => 0,
-                    'label' => 'Total Clientes Consolidado'
+                    'label' => 'Consolidado'
                 ]
             ];
         }
@@ -1491,15 +1491,15 @@ class ClientesController extends Controller
         return [
             'total_clientes' => [
                 'value' => $totalClientes,
-                'label' => 'Total Clientes'
+                'label' => 'Clientes'
             ],
             'total_clientes_curso' => [
                 'value' => $clientesCurso,
-                'label' => 'Total Clientes Curso'
+                'label' => 'Curso'
             ],
             'total_clientes_consolidado' => [
                 'value' => $clientesConsolidado,
-                'label' => 'Total Clientes Consolidado'
+                'label' => 'Consolidado'
             ]
         ];
     }
