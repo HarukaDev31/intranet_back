@@ -1009,24 +1009,24 @@ class EntregaController extends Controller
                 'icon' => 'i-heroicons-users'
             ],
             [
+                'value' => (int)($statsLima->qty ?? 0),
+                'label' => 'Qty Lima',
+                'icon' => 'i-heroicons-users'
+            ],
+            [
                 'value' => number_format((float)($statsProvincia->cbm ?? 0), 2, '.', ''),
                 'label' => 'CBM Provincia',
+                'icon' => 'mage:box-3d'
+            ],
+            [
+                'value' => number_format((float)($statsLima->cbm ?? 0), 2, '.', ''),
+                'label' => 'CBM Lima',
                 'icon' => 'mage:box-3d'
             ],
             [
                 'value' => (int)($statsProvincia->bultos ?? 0),
                 'label' => 'Bultos Provincia',
                 'icon' => 'bi:boxes'
-            ],
-            [
-                'value' => (int)($statsLima->qty ?? 0),
-                'label' => 'Qty Lima',
-                'icon' => 'i-heroicons-users'
-            ],
-            [
-                'value' => number_format((float)($statsLima->cbm ?? 0), 2, '.', ''),
-                'label' => 'CBM Lima',
-                'icon' => 'mage:box-3d'
             ],
             [
                 'value' => (int)($statsLima->bultos ?? 0),
