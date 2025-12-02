@@ -518,12 +518,18 @@ class ContenedorController extends Controller
           
             $message = "Hola @nombrecliente, tu carga que estaba proyectado subir en el consolidado @cargaOrigen estamos pasándolo al @contenedorDestino,ya que al parecer tu pedido no llego a la fecha de cierre. 
 Le estaré informando cualquier avance 🫡.";
+/**if cargaDestino to int < carga origen use this message instead Hola (nombre), tu carga que estaba proyectado subir en el consolidado # , estará lista antes de lo previsto. Para agilizar tu importación, la hemos pasado al consolidado #
+Le estaré informando cualquier avance 🫡 */
+            if ($contenedorDestino->carga < $cargaOrigen) {
+                $message = "Hola @nombrecliente, tu carga que estaba proyectado subir en el consolidado @cargaOrigen estará lista antes de lo previsto. Para agilizar tu importación, la hemos pasado al consolidado @contenedorDestino
+Le estaré informando cualquier avance 🫡.";
+            }
             $message = str_replace('@nombrecliente', $cotizacion->nombre, $message);
             $message = str_replace('@contenedorDestino', '#'.$contenedorDestino->carga, $message);
             $message = str_replace('@cargaOrigen', '#'.$cargaOrigen, $message);
             $telefono = preg_replace('/\s+/', '', $cotizacion->telefono);
             $telefono = $telefono ? $telefono . '@c.us' : '';
-            $this->sendMessage($message, $telefono, 3);
+            $this->sendMessageVentas($message, $telefono, 3);
             return response()->json(['message' => 'Cotización movida a consolidado correctamente', 'success' => true]);
         } catch (\Exception $e) {
             return response()->json(['message' => 'Error al mover cotización a consolidado: ' . $e->getMessage(), 'success' => false], 500);

@@ -77,7 +77,9 @@ class Cotizacion extends Model
         'total_pago_delivery',
         'tipo_servicio',
         'send_alert_difference_cbm_status',
-        'cod_contract'
+        'cod_contract',
+        'autosigned_contract_at',
+        'cotizacion_contrato_autosigned_url'
     ];
 
     /**
@@ -88,6 +90,7 @@ class Cotizacion extends Model
     protected $casts = [
         'fecha' => 'datetime',
         'fecha_confirmacion' => 'datetime',
+        'autosigned_contract_at' => 'datetime',
         'volumen' => 'decimal:2',
         'valor_doc' => 'decimal:2',
         'valor_cot' => 'decimal:2',

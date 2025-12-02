@@ -18,6 +18,8 @@ class Kernel extends ConsoleKernel
         // Ejecutar la notificación diaria a las 02:00
         $schedule->command('notify:arrive-date-today')->dailyAt('02:00');
         $schedule->command('clientes:populate --force')->dailyAt('03:00');
+        // Ejecutar auto-firma de contratos cada 5 minutos
+        $schedule->command('contracts:auto-sign')->everyFiveMinutes();
     }
 
     /**

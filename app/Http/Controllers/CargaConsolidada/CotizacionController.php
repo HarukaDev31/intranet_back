@@ -2664,4 +2664,73 @@ class CotizacionController extends Controller
             return null;
         }
     }
+
+    /**
+     * Envía un recordatorio de firma de contrato por WhatsApp
+     * @param int $id ID de la cotización
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function sendRecordatorioFirmaContrato($id)
+    {
+        try {
+            $cotizacion = Cotizacion::find($id);
+            
+            if (!$cotizacion) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Cotización no encontrada'
+                ], 404);
+            }
+
+            // Obtener el contenedor
+            $contenedor = $cotizacion->contenedor;
+            if (!$contenedor) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Contenedor no encontrado'
+                ], 404);
+            }
+
+            // Construir el mensaje
+            $nombreCliente = $cotizacion->nombre;
+            $carga = $contenedor->carga;
+            $signUrl = rtrim(env('APP_URL_CLIENTES', 'http://localhost:3001'), '/') . '/firma-acuerdo-servicio/' . ($cotizacion->uuid ?? '');
+            
+            $message = "Hola {$nombreCliente} porfavor firmar su contrato del consolidado #{$carga} {$signUrl}";
+
+            // Preparar el teléfono del cliente
+            $telefono = preg_replace('/\s+/', '', $cotizacion->telefono);
+            $telefono = $telefono ? $telefono . '@c.us' : '';
+
+            // Enviar mensaje usando sendMessageVentas (desde el número de ventas)
+            $wspMessageData = $this->sendMessageVentas($message, $telefono);
+            
+            if (!(is_array($wspMessageData) && isset($wspMessageData['status']) && $wspMessageData['status'] === true)) {
+                Log::warning('Respuesta inesperada al enviar recordatorio de firma por WhatsApp: ' . json_encode($wspMessageData));
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Error al enviar el mensaje de WhatsApp'
+                ], 500);
+            }
+
+            Log::info('Recordatorio de firma enviado exitosamente:', [
+                'cotizacion_id' => $cotizacion->id,
+                'cliente' => $nombreCliente,
+                'telefono' => $telefono,
+                'carga' => $carga
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Recordatorio de firma enviado correctamente'
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error al enviar recordatorio de firma: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al enviar el recordatorio: ' . $e->getMessage()
+            ], 500);
+        }
+    }
 }
