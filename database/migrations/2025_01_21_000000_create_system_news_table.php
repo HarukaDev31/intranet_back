@@ -13,6 +13,7 @@ class CreateSystemNewsTable extends Migration
      */
     public function up()
     {
+        Schema::dropIfExists('system_news');
         Schema::create('system_news', function (Blueprint $table) {
             $table->id();
             $table->string('title');
@@ -22,7 +23,7 @@ class CreateSystemNewsTable extends Migration
             $table->enum('priority', ['low', 'medium', 'high'])->default('medium');
             $table->boolean('is_published')->default(false);
             $table->date('published_at')->nullable();
-            $table->unsignedBigInteger('created_by');
+            $table->unsignedInteger('created_by');
             $table->string('created_by_name')->nullable();
             $table->timestamps();
             $table->softDeletes();
