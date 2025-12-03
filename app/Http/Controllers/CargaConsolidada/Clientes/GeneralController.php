@@ -797,6 +797,20 @@ class GeneralController extends Controller
                     'Tipo de Bateria:',
                     'Incluye:',
                 ],
+                'MAQUINARIA' => [
+                    'Material:',
+                    'Marca:',
+                    'Modelo:',
+                    'Tamaño:',
+                    'Potencia:',
+                    'Voltaje:',
+                    'Amperaje:',
+                    'Peso',
+                    'Incluye:',
+                    'Funcion:',
+                    '',
+                    '',
+                ],
             ];
 
             $generated = [];
