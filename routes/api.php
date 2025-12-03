@@ -85,6 +85,9 @@ require __DIR__.'/modules/options.php';
 // Módulo de Calendario
 require __DIR__.'/modules/calendar.php';
 
+// Módulo de Noticias del Sistema
+require __DIR__.'/modules/news.php';
+
 //Clientes
 // Módulo de Delivery
 require __DIR__.'/modules/external/delivery.php';
