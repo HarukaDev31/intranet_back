@@ -20,6 +20,8 @@ class InsertSystemNewsConsolidadoBusqueda extends Migration
             $firstUserId = 1;
         }
 
+        //type: feature, update, fix, announcement
+
         // Noticia 1: Implementacion de año del consolidado y nuevo ordenamiento a la base de productos
         DB::table('system_news')->insert([
             'title' => 'Implementacion de año del consolidado y nuevo ordenamiento a la base de productos',
@@ -41,7 +43,7 @@ class InsertSystemNewsConsolidadoBusqueda extends Migration
             'title' => 'Se mejoró la velocidad en la que responde el buscador de la base de datos',
             'content' => 'Hemos optimizado las consultas del buscador de la base de datos para reducir tiempos de respuesta. Los cambios incluyen ajustes en consultas SQL, reducción de operaciones N+1, y la adición de índices en las columnas más consultadas. Como resultado, las búsquedas devuelven resultados más rápido y con menor carga en la base de datos, mejorando la experiencia del usuario en listados y filtros. Si detectas algún caso con rendimiento subóptimo, por favor reportarlo con un ejemplo concreto para investigarlo.',
             'summary' => 'Optimización del buscador: consultas mejoradas, índices y reducción de N+1 para respuestas más rápidas.',
-            'type' => 'improvement',
+            'type' => 'update',
             'is_published' => true,
             'published_at' => now()->toDateString(),
             'created_by' => $firstUserId,
