@@ -36,7 +36,9 @@ class ProductosController extends Controller
                     'productos_importados_excel.tipo_producto',
                     'productos_importados_excel.foto',
                     'productos_importados_excel.unidad_comercial',
-                 'carga_consolidada_contenedor.carga as carga_contenedor');
+                    'carga_consolidada_contenedor.carga as carga_contenedor',
+                    DB::raw('YEAR(carga_consolidada_contenedor.f_cierre) as anio')
+                );
 
             // Aplicar filtros si están presentes (reemplaza el bloque actual)
             if ($request->has('search') && $request->search) {
@@ -60,6 +62,10 @@ class ProductosController extends Controller
             if ($request->has('campana') && $request->campana && $request->campana !== 'todos') {
                 $query->where('carga_consolidada_contenedor.carga', $request->campana);
             }
+
+            // Ordenar por carga consolidada más reciente y por año de cierre (descendente)
+            $query->orderByRaw('CAST(carga_consolidada_contenedor.carga AS UNSIGNED) DESC')
+                ->orderByRaw('YEAR(carga_consolidada_contenedor.f_cierre) DESC');
 
             $data = $query->paginate($perPage, ['*'], 'page', $page);
             //for each foto add the url if url cannot contains http or https    
