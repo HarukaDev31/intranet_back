@@ -205,9 +205,15 @@ class FacturaGuiaController extends Controller
             // Crear mensaje
             $contenedor = Contenedor::find($cotizacion->id_contenedor);
             $carga = $contenedor ? $contenedor->carga : 'N/A';
-            $message = "Hola " . $cotizacion->nombre_cliente . ",\n\n" .
-                       "Te enviamos la factura comercial del consolidado #" . $carga . ".\n\n" .
-                       "Saludos,\nPro Business";
+            /**message: Buenos tardes #nombrecliente 🙋🏻‍♀, te adjunto la factura de tu consolidado ##
+
+✅ Verificar que el monto de crédito fiscal sea el correcto.
+✅ Recordar, solo recuperan como crédito fiscal el 18% (IGV + IPM) que esta contemplado en su cotización final.
+✅ El plazo máximo para notificar una observación de su comprobante es de 24 h. Después de este periodo, no será posible realizar modificaciones de ningún tipo. */
+            $message = "Buenas tardes " . $cotizacion->nombre . " 🙋🏻‍♀, te adjunto la factura de tu consolidado #" . $carga . ".\n\n"  .
+            "✅ Verificar que el monto de crédito fiscal sea el correcto.\n\n" .
+            "✅ Recordar, solo recuperan como crédito fiscal el 18% (IGV + IPM) que esta contemplado en su cotización final.\n\n" .
+            "✅ El plazo máximo para notificar una observación de su comprobante es de 24 h. Después de este periodo, no será posible realizar modificaciones de ningún tipo.";
 
             // Detectar MIME type del archivo
             $mimeType = mime_content_type($filePath);
@@ -216,7 +222,7 @@ class FacturaGuiaController extends Controller
                 $mimeType = 'application/pdf';
             }
 
-            $result = $this->sendMedia($filePath, $mimeType, $message, $numeroWhatsapp, 0, 'consolidado', $cotizacion->factura_comercial);
+            $result = $this->sendMedia($filePath, $mimeType, $message, $numeroWhatsapp, 0, 'administracion', $cotizacion->factura_comercial);
 
             if ($result === false) {
                 Log::error('Error al enviar factura por WhatsApp: sendMedia devolvió false', [
@@ -336,9 +342,22 @@ class FacturaGuiaController extends Controller
             // Crear mensaje
             $contenedor = Contenedor::find($cotizacion->id_contenedor);
             $carga = $contenedor ? $contenedor->carga : 'N/A';
-            $message = "Hola " . $cotizacion->nombre_cliente . ",\n\n" .
-                       "Te enviamos la guía de remisión del consolidado #" . $carga . ".\n\n" .
-                       "Saludos,\nPro Business";
+            /**Hola [Nombre] 😊
+
+Te envío tu Guía de Remisión del consolidado ## para que puedas realizar el recojo de tu mercadería.
+
+🏢 Dirección de recojo:
+Calle Río Nazca 243 – San Luis
+📍 Referencia: Al costado de la Agencia Antezana
+
+➡ MAPS: https://maps.app.goo.gl/5raLmkX65nNHB2Fr9
+
+Cualquier duda nos escribe.  ¡Gracias! */
+            $message =  "Hola " . $cotizacion->nombre . " 😊,\n\n" .
+                       "Te envío tu Guía de Remisión del consolidado #" . $carga . " para que puedas realizar el recojo de tu mercadería.\n\n" .
+                       "🏢 Dirección de recojo:\nCalle Río Nazca 243 – San Luis\n📍 Referencia: Al costado de la Agencia Antezana\n\n" .
+                       "➡ MAPS: https://maps.app.goo.gl/5raLmkX65nNHB2Fr9\n\n" .
+                       "Cualquier duda nos escribe.  ¡Gracias!";
 
             // Detectar MIME type del archivo
             $mimeType = mime_content_type($filePath);
@@ -349,7 +368,7 @@ class FacturaGuiaController extends Controller
 
             // Enviar documento por WhatsApp
             // sendMedia($filePath, $mimeType = null, $message = null, $phoneNumberId = null, $sleep = 0, $fromNumber = 'consolidado', $fileName = null)
-            $result = $this->sendMedia($filePath, $mimeType, $message, $numeroWhatsapp, 0, 'consolidado', $cotizacion->guia_remision_url);
+            $result = $this->sendMedia($filePath, $mimeType, $message, $numeroWhatsapp, 0, 'administracion', $cotizacion->guia_remision_url);
 
             // Verificar si sendMedia devolvió false (error)
             if ($result === false) {
