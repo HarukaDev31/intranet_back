@@ -69,22 +69,6 @@ class InsertSystemNewsConsolidadoBusqueda extends Migration
             'created_at' => now(),
             'updated_at' => now()
         ]);
-
-        // Noticia 4: Envío de mensajes desde el perfil administración
-        DB::table('system_news')->insert([
-            'title' => 'Envío de mensajes desde el perfil administración',
-            'content' => 'Se ha implementado la funcionalidad de envío de mensajes desde el perfil de administración. Ahora los usuarios con permisos de administración pueden enviar mensajes de recordatorio y cobro directamente desde la plataforma, facilitando la comunicación con los clientes durante el proceso de entrega y gestión de pagos. Esta mejora permite un mejor control y seguimiento de las comunicaciones enviadas, optimizando el flujo de trabajo del equipo administrativo.',
-            'summary' => 'Nueva funcionalidad para enviar mensajes de recordatorio y cobro desde el perfil administración.',
-            'type' => 'feature',
-            'is_published' => true,
-            'published_at' => now()->toDateString(),
-            'created_by' => $firstUserId,
-            'created_by_name' => 'Sistema',
-            'solicitada_por' => SystemNews::SOLICITADA_POR_CEO,
-            'redirect' => '/news',
-            'created_at' => now(),
-            'updated_at' => now()
-        ]);
     }
 
     /**
@@ -98,8 +82,7 @@ class InsertSystemNewsConsolidadoBusqueda extends Migration
             ->whereIn('title', [
                 'Implementacion de año del consolidado y nuevo ordenamiento a la base de productos',
                 'Se mejoró la velocidad en la que responde el buscador de la base de datos',
-                'Visualizacion Responsiva Mobile Completada para perfil Coordinación',
-                'Envío de mensajes desde el perfil administración'
+                'Visualizacion Responsiva Mobile Completada para perfil Coordinación'
             ])
             ->delete();
     }
