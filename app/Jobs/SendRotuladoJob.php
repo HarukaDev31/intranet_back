@@ -105,6 +105,7 @@ class SendRotuladoJob implements ShouldQueue
             // Filtrar proveedores según estado desde BD
             $providersHasSended = [];
             $providersHasNoSended = [];
+            $hasForceSend = false;
             Log::info('Proveedores from DB: ' . json_encode($proveedoresFromDB));
             Log::info('Proveedores: ' . json_encode($proveedores));
             foreach ($proveedores as $proveedor) {
@@ -115,7 +116,16 @@ class SendRotuladoJob implements ShouldQueue
                 }
 
                 $proveedorDB = $proveedoresFromDB->get($proveedor['id']);
-                if ($proveedorDB && $proveedorDB->send_rotulado_status === 'SENDED') {
+                
+                // Verificar si tiene force_send = 1 en el array del proveedor (parámetro del job)
+                $forceSend = isset($proveedor['force_send']) && $proveedor['force_send'] == 1;
+                
+                if ($forceSend) {
+                    // Si tiene force_send = 1, tratarlo como no enviado
+                    $hasForceSend = true;
+                    $providersHasNoSended[] = $proveedor;
+                    Log::info('Proveedor con force_send = 1 encontrado: ' . $proveedor['id']);
+                } elseif ($proveedorDB && $proveedorDB->send_rotulado_status === 'SENDED') {
                     $providersHasSended[] = $proveedor;
                 } else {
                     $providersHasNoSended[] = $proveedor;
@@ -126,9 +136,11 @@ class SendRotuladoJob implements ShouldQueue
                 Log::warning('No hay proveedores pendientes de envío');
                 return;
             }
+            
             // Enviar mensaje de bienvenida si es necesario
-            if (count($providersHasSended) == 0) {
-                Log::info('Enviando mensaje de bienvenida - no hay proveedores enviados previamente');
+            // Si hay proveedores con force_send = 1, enviar mensaje de bienvenida completo
+            if (count($providersHasSended) == 0 || $hasForceSend) {
+                Log::info('Enviando mensaje de bienvenida - no hay proveedores enviados previamente o hay proveedores con force_send');
                 $result = $this->sendWelcome($this->carga);
                 Log::info('Resultado del envío de bienvenida: ' . json_encode($result));
             } elseif (count($providersHasSended) > 0 && count($providersHasNoSended) > 0) {
@@ -233,7 +245,7 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                     // PASO 2: Enviar archivo adicional por tipo (si aplica)
                     $sleepSendMedia += 1;
                     $this->sendRotuladoByType($tipoRotulado, $supplierCode, $products, $sleepSendMedia, $proveedor);
-
+                    
                     // Actualizar estado del proveedor y tipo de rotulado
                     $updateData = [
                         "send_rotulado_status" => "SENDED",
