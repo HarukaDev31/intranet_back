@@ -16,6 +16,9 @@ class MakeImporterNmaeNullableInConsolidadoDeliveryFormProvinceTable extends Mig
     {
         Schema::table('consolidado_delivery_form_province', function (Blueprint $table) {
             $table->string('importer_nmae')->nullable()->change();
+            $table->string('voucher_doc')->nullable()->change();
+            $table->string('voucher_name')->nullable()->change();
+            $table->string('agency_address_final_delivery')->nullable()->change();
         });
     }
 
@@ -28,6 +31,9 @@ class MakeImporterNmaeNullableInConsolidadoDeliveryFormProvinceTable extends Mig
     {
         Schema::table('consolidado_delivery_form_province', function (Blueprint $table) {
             $table->string('importer_nmae')->nullable(false)->change();
+            $table->string('voucher_doc')->nullable(false)->change();
+            $table->string('voucher_name')->nullable(false)->change();
+            $table->string('agency_address_final_delivery')->nullable(false)->change();
         });
     }
 }
