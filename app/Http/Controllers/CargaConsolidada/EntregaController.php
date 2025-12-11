@@ -817,14 +817,14 @@ class EntregaController extends Controller
         }
 
         // Merge direct params (direct params override JSON)
-        $directKeys = ['tipo_entrega', 'estado_entrega', 'fecha_inicio', 'fecha_fin', 'estado_cotizador'];
+        $directKeys = ['tipo_entrega', 'estado_entrega', 'fecha_inicio', 'fecha_fin', 'estado_cotizador', 'tipo_servicio'];
         foreach ($directKeys as $k) {
             $v = $request->query($k, null);
             if (!is_null($v) && $v !== '') $filters[$k] = $v;
         }
 
         // Whitelist - only allow expected filters
-        $allowed = ['tipo_entrega', 'estado_entrega', 'fecha_inicio', 'fecha_fin', 'estado_cotizador'];
+        $allowed = ['tipo_entrega', 'estado_entrega', 'fecha_inicio', 'fecha_fin', 'estado_cotizador', 'tipo_servicio'];
         $filters = array_intersect_key($filters, array_flip($allowed));
 
         // Aplicar filtros conocidos
@@ -879,6 +879,14 @@ class EntregaController extends Controller
                             ->whereColumn('consolidado_delivery_form_province_conformidad.id_cotizacion', 'CC.id');
                     });
                 });
+            }
+        }
+
+        // Filtrar por tipo de servicio (DELIVERY o MONTACARGA)
+        if (!empty($filters['tipo_servicio'])) {
+            $tipo = strtoupper(trim($filters['tipo_servicio']));
+            if (in_array($tipo, ['DELIVERY', 'MONTACARGA'])) {
+                $query->where('CC.tipo_servicio', $tipo);
             }
         }
 
@@ -1452,12 +1460,30 @@ class EntregaController extends Controller
 
     public function getDelivery(Request $request, $idContenedor)
     {
+        // Subconsulta: asignación de rango/fecha por cotización (si hubiera varias, tomamos la última por id)
+        $asignacionAgg = DB::table('consolidado_user_range_delivery as UR')
+            ->select(
+                'UR.id_cotizacion',
+                DB::raw('MAX(UR.id_date) as id_date'),
+                DB::raw('MAX(UR.id_range_date) as id_range_date')
+            )
+            ->groupBy('UR.id_cotizacion');
+
         // Lo obtiene de la tabla de clientes asociados al contenedor
         $query = DB::table('contenedor_consolidado_cotizacion as CC')
             ->join('carga_consolidada_contenedor as C', 'C.id', '=', 'CC.id_contenedor')
             ->leftJoin('consolidado_delivery_form_lima as L', 'L.id_cotizacion', '=', 'CC.id')
             ->leftJoin('consolidado_delivery_form_province as P', 'P.id_cotizacion', '=', 'CC.id')
             ->leftJoin('distrito as DIST', 'DIST.ID_Distrito', '=', 'P.id_district')
+            // Asignación de horario de entrega por cotización
+            ->leftJoinSub($asignacionAgg, 'UR2', function ($join) {
+                $join->on('UR2.id_cotizacion', '=', 'CC.id');
+            })
+            ->leftJoin('consolidado_delivery_date as D2', function ($join) use ($idContenedor) {
+                $join->on('D2.id', '=', 'UR2.id_date')
+                    ->where('D2.id_contenedor', '=', $idContenedor);
+            })
+            ->leftJoin('consolidado_delivery_range_date as R2', 'R2.id', '=', 'UR2.id_range_date')
             ->select(
                 'C.*',
                 'CC.*',
@@ -1474,6 +1500,12 @@ class EntregaController extends Controller
                 DB::raw("CASE WHEN P.id IS NOT NULL THEN P.r_name WHEN L.id IS NOT NULL THEN L.drver_name ELSE NULL END as razon_social"),
                 // Tipo de servicio (DELIVERY o MONTACARGA)
                 DB::raw("COALESCE(CC.tipo_servicio, 'DELIVERY') as tipo_servicio"),
+                // Datos de entrega desde la asignación (fecha y hora) - se traen para todos, el frontend decide mostrarlos
+                DB::raw("CASE WHEN UR2.id_date IS NOT NULL THEN CONCAT(D2.year, '-', LPAD(D2.month, 2, '0'), '-', LPAD(D2.day, 2, '0')) ELSE NULL END as delivery_date"),
+                DB::raw('R2.start_time as delivery_start_time'),
+                DB::raw('R2.end_time as delivery_end_time'),
+                DB::raw('UR2.id_date as delivery_date_id'),
+                DB::raw('UR2.id_range_date as delivery_range_id'),
                 // Subquery para obtener pagos de DELIVERY
                 DB::raw("CC.total_pago_delivery as importe"),
                 DB::raw("(
@@ -1520,13 +1552,71 @@ class EntregaController extends Controller
             });
         }
 
+        // Filtros por tipo de entrega y tipo de servicio
+        $filtersRaw = $request->query('filters', null);
+        $filters = [];
+        if ($filtersRaw) {
+            $decoded = json_decode($filtersRaw, true);
+            if (is_array($decoded)) $filters = $decoded;
+        }
+
+        // Merge direct params (direct params override JSON)
+        $directKeys = ['tipo_entrega', 'tipo_servicio', 'fecha_inicio', 'fecha_fin'];
+        foreach ($directKeys as $k) {
+            $v = $request->query($k, null);
+            if (!is_null($v) && $v !== '') $filters[$k] = $v;
+        }
+
+        // Whitelist - only allow expected filters
+        $allowed = ['tipo_entrega', 'tipo_servicio', 'fecha_inicio', 'fecha_fin'];
+        $filters = array_intersect_key($filters, array_flip($allowed));
+
+        // Aplicar filtros conocidos
+        if (!empty($filters['tipo_entrega'])) {
+            $tipo = strtoupper(trim($filters['tipo_entrega']));
+            if ($tipo === 'LIMA') {
+                $query->whereNotNull('L.id');
+            } elseif (in_array($tipo, ['PROVINCIA', 'PROVINCE'])) {
+                $query->whereNotNull('P.id');
+            }
+        }
+
+        // Filtrar por tipo de servicio (DELIVERY o MONTACARGA)
+        if (!empty($filters['tipo_servicio'])) {
+            $tipo = strtoupper(trim($filters['tipo_servicio']));
+            if (in_array($tipo, ['DELIVERY', 'MONTACARGA'])) {
+                $query->where('CC.tipo_servicio', $tipo);
+            }
+        }
+
+        // Filtrar por fecha de entrega asignada (usa D2.year/month/day) - solo para Lima
+        if (!empty($filters['fecha_inicio'])) {
+            $fechaInicio = $filters['fecha_inicio'];
+            $query->whereRaw("CONCAT(D2.year,'-',LPAD(D2.month,2,'0'),'-',LPAD(D2.day,2,'0')) >= ?", [$fechaInicio]);
+        }
+        if (!empty($filters['fecha_fin'])) {
+            $fechaFin = $filters['fecha_fin'];
+            $query->whereRaw("CONCAT(D2.year,'-',LPAD(D2.month,2,'0'),'-',LPAD(D2.day,2,'0')) <= ?", [$fechaFin]);
+        }
+
         // Calcular total_importes antes de paginar (de los registros filtrados)
         $totalImportes = (clone $query)->sum('CC.total_pago_delivery');
 
-        // Ordenamiento
-        $sortField = $request->input('sort_by', 'CC.id');
-        $sortOrder = $request->input('sort_order', 'asc');
-        $query->orderBy($sortField, $sortOrder);
+        // Ordenamiento: Primero por Lima (L), luego por fecha y hora de recojo
+        $query
+            // Lima primero (L.id no nulo primero)
+            ->orderByRaw("CASE WHEN L.id IS NOT NULL THEN 0 ELSE 1 END ASC")
+            // Con fecha asignada primero (no nulos), luego sin asignación
+            ->orderByRaw("CASE WHEN UR2.id_date IS NULL THEN 1 ELSE 0 END ASC")
+            // Por fecha concreta (año, mes, día)
+            ->orderBy('D2.year', 'asc')
+            ->orderBy('D2.month', 'asc')
+            ->orderBy('D2.day', 'asc')
+            // Con hora asignada primero, luego sin hora
+            ->orderByRaw("CASE WHEN R2.start_time IS NULL THEN 1 ELSE 0 END ASC")
+            ->orderBy('R2.start_time', 'asc')
+            // Estable para empates
+            ->orderBy('CC.id', 'asc');
 
         // Paginación   
         $page = $request->input('currentPage', 1);
