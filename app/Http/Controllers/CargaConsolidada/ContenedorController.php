@@ -109,8 +109,9 @@ class ContenedorController extends Controller
                 });
             }
 
-            //order by int(carga) desc
-            $query->orderBy(DB::raw('CAST(carga AS UNSIGNED)'), 'desc');
+            //order by int(carga) desc y en base al año y mes de f_inicio
+            $query->orderBy(DB::raw('YEAR(f_inicio)'), 'DESC');
+            $query->orderByRaw('CAST(carga AS UNSIGNED) DESC');
             $data = $query->paginate(100);
 
             // Optimización: obtener todos los ids de la página y hacer agregaciones en lote.
@@ -185,6 +186,7 @@ class ContenedorController extends Controller
                     'id' => $c->id,
                     'carga' => $c->carga,
                     'mes' => $c->mes,
+                    'anio' => date('Y', strtotime($c->f_inicio)),
                     'f_cierre' => $c->f_cierre,
                     'f_puerto' => $c->f_puerto,
                     'f_entrega' => $c->f_entrega,
@@ -237,12 +239,25 @@ class ContenedorController extends Controller
     {
         try {
             $data = $request->all();
-            if ($data['id']) {
-                $contenedor = Contenedor::find($data['id']);
-                $contenedor->update($data);
-            } else {
-                $contenedor = Contenedor::create($data);
-                $this->generateSteps($contenedor->id);
+                if ($data['id']) {
+                    $contenedor = Contenedor::find($data['id']);
+                    $contenedor->update($data);
+                } else {
+                    // Calcular f_inicio usando mes (campo mes) y año de f_cierre
+                    if (!empty($data['f_cierre'])) {
+                        $year = date('Y', strtotime($data['f_cierre']));
+                        // Determinar mes: si es numérico válido usarlo, sino fallback al mes de f_cierre
+                        $month = null;
+                        if (isset($data['mes']) && is_numeric($data['mes']) && (int)$data['mes'] >= 1 && (int)$data['mes'] <= 12) {
+                            $month = (int)$data['mes'];
+                        } else {
+                            $month = (int)date('m', strtotime($data['f_cierre']));
+                        }
+                        $data['f_inicio'] = sprintf('%04d-%02d-01', $year, $month);
+                    }
+
+                    $contenedor = Contenedor::create($data);
+                    $this->generateSteps($contenedor->id);
             }
 
 
