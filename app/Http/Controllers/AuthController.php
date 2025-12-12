@@ -804,12 +804,12 @@ class AuthController extends Controller
             $noUsuario = $usuario->No_Usuario;
 
             // Configurar condiciones según el usuario
-            $selectDistinct = "";
+            $selectDistinct = "DISTINCT";
             $whereIdGrupo = "AND GRPUSR.ID_Grupo = " . $idGrupo;
             $orderByNuAgregar = "";
 
             if ($noUsuario == 'root') {
-                $selectDistinct = "DISTINCT";
+                $selectDistinct = "DISTINCT";   
                 $whereIdGrupo = "";
                 $orderByNuAgregar = "ORDER BY Nu_Agregar DESC";
             }
@@ -825,7 +825,7 @@ class AuthController extends Controller
                         AND MNU.Nu_Activo = 0
                         {$whereIdGrupo}
                         ORDER BY MNU.ID_Padre ASC, MNU.Nu_Orden, MNU.ID_MENU ASC";
-
+            Log::info('sqlPadre'. $sqlPadre);
             $arrMenuPadre = DB::select($sqlPadre);
             //orde by Nu_Orden
             $arrMenuPadre = collect($arrMenuPadre)->sortBy('Nu_Orden')->toArray();
