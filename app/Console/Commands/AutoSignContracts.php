@@ -40,6 +40,7 @@ class AutoSignContracts extends Command
         
         $cotizaciones = Cotizacion::whereNotNull('fecha_confirmacion')
             ->where('fecha_confirmacion', '<=', $twoDaysAgo)
+            ->whereNull('estado_cliente')
             ->whereNull('autosigned_contract_at')
             ->where('estado_cotizador', '=', 'CONFIRMADO')
             ->whereNotNull('cod_contract')
