@@ -55,7 +55,8 @@ class Contenedor extends Model
         'ajuste_valor',
         'multa',
         'observaciones',
-        'fecha_documentacion_max'
+        'fecha_documentacion_max',
+        'f_inicio'
     ];
 
     /**
@@ -77,6 +78,7 @@ class Contenedor extends Model
         'costo_destino' => 'decimal:2',
         'ajuste_valor' => 'decimal:2',
         'multa' => 'decimal:2',
+        'f_inicio' => 'date',
     ];
 
     /**
