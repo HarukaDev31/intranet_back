@@ -5,7 +5,7 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\DB;
 use App\Models\SystemNews;
-class InsertInitialSystemNews extends Migration
+class AddYearInContainersNotice extends Migration
 {
     /**
      * Run the migrations.
