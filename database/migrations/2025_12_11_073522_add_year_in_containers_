@@ -1,0 +1,58 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\DB;
+use App\Models\SystemNews;
+class InsertInitialSystemNews extends Migration
+{
+    /**
+     * Run the migrations.
+     *
+     * @return void
+     */
+    public function up()
+    {
+        // Obtener el primer usuario disponible para created_by
+        $firstUserId = DB::table('usuario')->value('ID_Usuario');
+        
+        if (!$firstUserId) {
+            // Si no hay usuarios, usar 1 como valor por defecto
+            $firstUserId = 1;
+        }
+
+        // Insertar noticia sobre el apartado de noticias
+        DB::table('system_news')->insert([
+            'title' => 'Nuevo campo año para los contenedores',
+            'content' => 'Hemos creado un nuevo campo año para los contenedores del sistema, que te permitirá gestionar y organizar mejor la información relacionada con los contenedores. Este nuevo campo facilitará la clasificación y búsqueda de contenedores según su año, mejorando así la eficiencia en la gestión de datos. Puedes acceder a este nuevo campo en la sección de contenedores del sistema.',
+            'summary' => 'Nuevo campo año para los contenedores, facilitando la gestión y organización de la información. Accede en la sección de contenedores del sistema.',
+            'type' => 'feature',
+            'is_published' => true,
+            'published_at' => now()->toDateString(),
+            'created_by' => $firstUserId,
+            'created_by_name' => 'Sistema',
+            'solicitada_por' => SystemNews::SOLICITADA_POR_CEO,
+            'redirect' => '/cargaconsolidada/abiertos',
+            'created_at' => now(),
+            'updated_at' => now()
+        ]);
+
+
+    }
+
+    /**
+     * Reverse the migrations.
+     *
+     * @return void
+     */
+    public function down()
+    {
+        // Eliminar las noticias insertadas
+        DB::table('system_news')
+            ->whereIn('title', [
+                'Nuevo campo año para los contenedores',
+            ])
+            ->delete();
+    }
+}
