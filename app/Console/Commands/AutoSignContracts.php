@@ -32,6 +32,7 @@ class AutoSignContracts extends Command
      */
     public function handle()
     {
+        Log::info('Iniciando proceso de auto-firma de contratos');
         $this->info('Buscando cotizaciones para auto-firmar contratos...');
 
         // Buscar cotizaciones donde fecha_confirmacion + 2 días <= ahora y autosigned_contract_at es null

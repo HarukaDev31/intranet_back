@@ -186,6 +186,7 @@ class CotizacionController extends Controller
                     'estado' => $cotizacion->estado,
                     'estado_cliente' => $cotizacion->name,
                     'estado_cotizador' => $cotizacion->estado_cotizador,
+                    'cotizacion_contrato_autosigned_url' => $cotizacion->cotizacion_contrato_autosigned_url ? $this->generateImageUrl($cotizacion->cotizacion_contrato_autosigned_url) : null,
                     'cotizacion_contrato_firmado_url' => $cotizacion->cotizacion_contrato_firmado_url ? $this->generateImageUrl($cotizacion->cotizacion_contrato_firmado_url) : null,
                     'cotizacion_contrato_url' => $cotizacion->cotizacion_contrato_url ? $this->generateImageUrl($cotizacion->cotizacion_contrato_url) : null,
                     'cod_contract' => $cotizacion->cod_contract,
