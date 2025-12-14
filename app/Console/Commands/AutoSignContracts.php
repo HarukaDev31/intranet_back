@@ -42,7 +42,6 @@ class AutoSignContracts extends Command
             ->where('fecha_confirmacion', '<=', $twoDaysAgo)
             ->whereNull('estado_cliente')
             ->where('cotizacion_contrato_firmado_url', '=', null)
-            ->where('cotizacion_contrato_autosigned_url', '=', null)
             ->where('estado_cotizador', '=', 'CONFIRMADO')
             ->whereNotNull('cod_contract')
             ->whereNotNull('uuid')
