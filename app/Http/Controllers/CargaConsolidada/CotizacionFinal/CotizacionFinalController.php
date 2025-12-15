@@ -1078,7 +1078,7 @@ class CotizacionFinalController extends Controller
                 $message = "Resumen de Pago\n" .
                     "✅Cotización final: $" . number_format($total, 2) . "\n" .
                     "✅Adelanto: $" . number_format($totalPagos, 2) . "\n" .
-                    "✅ Pendiente de pago: $" . number_format($totalAPagar, 2) . "\n";
+                    "✅ *Pendiente de pago: $" . number_format($totalAPagar, 2) . "*\n";
                 $this->sendMessage($message, null, 5);
                 $pagosUrl = public_path('assets/images/pagos-full.jpg');
                 $this->sendMedia($pagosUrl, 'image/jpg', null, null, 10);
@@ -1146,7 +1146,7 @@ class CotizacionFinalController extends Controller
                 "Resumen de Pago\n" .
                 "✅ Cotización final: $" . number_format($totalCotizacion, 2, '.', '') . "\n" .
                 "✅ Adelanto: $" . number_format($totalPagos, 2, '.', '') . "\n" .
-                "✅ Pendiente de pago: $" . number_format($pendiente, 2, '.', '') . "\n\n" .
+                "✅ *Pendiente de pago: $" . number_format($pendiente, 2, '.', '') . "*\n\n" .
                 "Por favor debe enviar el comprobante de pago a la brevedad.";
             // Preparar número y enviar (normalizar como en otros lugares del proyecto)
             $rawTelefono = $cotizacion->telefono ?? '';
