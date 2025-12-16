@@ -2435,7 +2435,17 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
             foreach ($files as $file) {
                 if ($file->isValid()) {
                     $filename = time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
-                    $path = $file->storeAs(self::INSPECTION_PATH, $filename, 'inspection');
+                    $path = $file->storeAs(self::INSPECTION_PATH, $filename, 'public');
+                    
+                    // Log detallado para debug (igual que en DocumentacionController)
+                    Log::info('Archivo de inspección guardado:', [
+                        'original_name' => $file->getClientOriginalName(),
+                        'stored_path' => $path,
+                        'full_storage_path' => storage_path('app/public/' . $path),
+                        'exists' => Storage::disk('public')->exists($path),
+                        'inspection_path_const' => self::INSPECTION_PATH
+                    ]);
+                    
                     $inspeccion = new AlmacenInspection();
                     $inspeccion->file_name = $file->getClientOriginalName();
                     $inspeccion->file_type = $file->getMimeType();
@@ -2454,12 +2464,6 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                         'ruta' => $path,
                         'tamaño' => $inspeccion->file_size
                     ];
-
-                    Log::info('Archivo de inspección guardado:', [
-                        'nombre_original' => $file->getClientOriginalName(),
-                        'ruta_storage' => $path,
-                        'tamaño' => $file->getSize()
-                    ]);
                 } else {
                     Log::warning('Archivo de inspección inválido:', ['nombre' => $file->getClientOriginalName()]);
                 }

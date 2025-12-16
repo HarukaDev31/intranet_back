@@ -4,6 +4,7 @@ namespace App\Traits;
 
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 trait WhatsappTrait
 {
@@ -478,39 +479,54 @@ trait WhatsappTrait
                 return $filePath;
             }
 
+            // Limpiar la ruta de barras iniciales para evitar doble slash
+            $ruta = ltrim($filePath, '/');
+
             // Si es una ruta absoluta del sistema, convertirla a ruta relativa
             if (strpos($filePath, storage_path('app/public')) === 0) {
                 // Es una ruta absoluta en storage/app/public
-                $relativePath = str_replace(storage_path('app/public'), '', $filePath);
-                $relativePath = ltrim($relativePath, '/\\');
+                $ruta = str_replace(storage_path('app/public'), '', $filePath);
+                $ruta = ltrim($ruta, '/\\');
             } elseif (strpos($filePath, public_path('storage')) === 0) {
                 // Es una ruta absoluta en public/storage
-                $relativePath = str_replace(public_path('storage'), '', $filePath);
-                $relativePath = ltrim($relativePath, '/\\');
-            } else {
-                // Asumir que es una ruta relativa
-                $relativePath = ltrim($filePath, '/\\');
+                $ruta = str_replace(public_path('storage'), '', $filePath);
+                $ruta = ltrim($ruta, '/\\');
             }
 
             // Limpiar la ruta
-            $relativePath = str_replace('\\', '/', $relativePath);
+            $ruta = str_replace('\\', '/', $ruta);
+            $ruta = ltrim($ruta, '/');
 
-            // Si la ruta empieza con 'public/', removerlo
-            if (strpos($relativePath, 'public/') === 0) {
-                $relativePath = substr($relativePath, 7);
+            // Corregir rutas con doble storage
+            if (strpos($ruta, 'storage//storage/') !== false) {
+                $ruta = str_replace('storage//storage/', 'storage/', $ruta);
             }
 
-            // Construir URL manualmente
-            $baseUrl = config('app.url');
-            $baseUrl = rtrim($baseUrl, '/');
-            $relativePath = ltrim($relativePath, '/');
+            // Si la ruta ya contiene 'storage/', no agregar otro 'storage/'
+            if (strpos($ruta, 'storage/') === 0) {
+                $baseUrl = config('app.url');
+                $publicUrl = rtrim($baseUrl, '/') . '/' . $ruta;
+            } elseif (strpos($ruta, 'public/') === 0) {
+                // Si la ruta empieza con 'public/', remover 'public/' y agregar 'storage/'
+                $ruta = substr($ruta, 7); // Remover 'public/'
+                $baseUrl = config('app.url');
+                $publicUrl = rtrim($baseUrl, '/') . '/storage/' . $ruta;
+            } else {
+                // Construir URL manualmente (igual que generateImageUrl en CotizacionProveedorController)
+                $baseUrl = config('app.url');
+                $storagePath = 'storage/';
 
-            // Generar URL completa
-            $publicUrl = $baseUrl . '/storage/' . $relativePath;
+                // Asegurar que no haya doble slash
+                $baseUrl = rtrim($baseUrl, '/');
+                $storagePath = ltrim($storagePath, '/');
+                $ruta = ltrim($ruta, '/');
+
+                $publicUrl = $baseUrl . '/' . $storagePath . $ruta;
+            }
 
             Log::info("URL pública generada desde ruta", [
                 'file_path' => $filePath,
-                'relative_path' => $relativePath,
+                'relative_path' => $ruta,
                 'public_url' => $publicUrl
             ]);
 
