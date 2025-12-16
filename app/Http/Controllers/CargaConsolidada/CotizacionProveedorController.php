@@ -2437,6 +2437,13 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                     $filename = time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
                     $path = $file->storeAs(self::INSPECTION_PATH, $filename, 'public');
                     
+                    // Normalizar la ruta: asegurar que no tenga 'public/' al inicio
+                    // storeAs con disco 'public' devuelve la ruta relativa al disco (ej: 'inspection/filename.mp4')
+                    $path = ltrim($path, '/');
+                    if (strpos($path, 'public/') === 0) {
+                        $path = substr($path, 7); // Remover 'public/' si existe
+                    }
+                    
                     // Log detallado para debug (igual que en DocumentacionController)
                     Log::info('Archivo de inspección guardado:', [
                         'original_name' => $file->getClientOriginalName(),
