@@ -44,6 +44,12 @@ Route::get('/files/{path}', [FileController::class, 'serveFile'])
     ->where('path', '.*')
     ->name('storage.file');
 
+// Ruta para servir archivos de /storage/ cuando nginx no los encuentra directamente
+// Esto funciona como fallback cuando el enlace simbólico tiene problemas
+Route::get('/storage/{path}', [FileController::class, 'serveFile'])
+    ->where('path', '.*')
+    ->name('storage.fallback');
+
 // Manejar requests OPTIONS para CORS preflight
 Route::options('/files/{path}', function () {
     return response('', 200)
