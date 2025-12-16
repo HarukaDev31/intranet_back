@@ -2435,7 +2435,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
             foreach ($files as $file) {
                 if ($file->isValid()) {
                     $filename = time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
-                    $path = $file->storeAs(self::INSPECTION_PATH, $filename, 'public');
+                    $path = $file->storeAs(self::INSPECTION_PATH, $filename, 'inspection');
                     $inspeccion = new AlmacenInspection();
                     $inspeccion->file_name = $file->getClientOriginalName();
                     $inspeccion->file_type = $file->getMimeType();
