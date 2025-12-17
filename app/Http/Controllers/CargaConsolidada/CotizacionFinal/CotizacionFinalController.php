@@ -4219,7 +4219,9 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
             $objPHPExcel->getActiveSheet()->setTitle('2');
             
             $objWriter = IOFactory::createWriter($objPHPExcel, 'Xlsx');
-            $excelFileName = 'Cotizacion' . ($data['cliente']['nombre'] ?? 'Cliente') . '.xlsx';
+            // Agregar timestamp al nombre del archivo para evitar sobrescrituras
+            $timestamp = date('YmdHis');
+            $excelFileName = 'Cotizacion' . ($data['cliente']['nombre'] ?? 'Cliente') . '_' . $timestamp . '.xlsx';
             
             // Crear directorio si no existe
             $directory = public_path('storage/cotizacion_final/' . $idContenedor);
