@@ -1623,12 +1623,10 @@ class CotizacionFinalController extends Controller
                 'idContenedor' => 'required|integer'
             ]);
 
-            // Aumentar límite de memoria
             $originalMemoryLimit = ini_get('memory_limit');
             ini_set('memory_limit', '2048M');
             $idContainer = $request->idContenedor;
             
-            // Obtener datos del Excel subido
             $data = $this->getMassiveExcelData($request->file('file'));
             
             Log::info('Datos procesados del Excel: ' . json_encode($data));
@@ -1834,7 +1832,12 @@ class CotizacionFinalController extends Controller
                     } else {
                         Log::error('El archivo Excel no existe: ' . $fullExcelPath);
                     }
-
+                    $estadoCotizacionFinal = DB::table($this->table_contenedor_cotizacion)
+                        ->where('id', $result['id'])
+                        ->where('estado_cotizacion_final', '!=', 'PENDIENTE')
+                        ->where('estado_cotizacion_final', '!=', null)
+                        ->first();
+                    
                     // Validar valores antes de actualizar la base de datos
                     $updateData = [
                         'cotizacion_final_url' => $result['cotizacion_final_url'],
@@ -1844,9 +1847,11 @@ class CotizacionFinalController extends Controller
                         'impuestos_final' => $result['impuestos_final'],
                         'logistica_final' => $result['logistica_final'],
                         'fob_final' => $result['fob_final'],
-                        'estado_cotizacion_final' => 'COTIZADO',
                         'peso_final' => $result['peso_final'],
                     ];
+                    if(!$estadoCotizacionFinal) {
+                        $updateData['estado_cotizacion_final'] = 'COTIZADO';
+                    }
                     
                     
                     // Actualizar tabla de cotizaciones con manejo de errores
@@ -3934,14 +3939,15 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
             
             $objPHPExcel->setActiveSheetIndex(2)->setCellValue($InitialColumn . '44', "=SUM(C44" . ":" . $InitialColumnLetter . "44)");
             $productsCount = count($data['cliente']['productos']);
-            $ColumndIndex = Coordinate::stringFromColumnIndex($productsCount + 1);
+            //C column + products count
+            $ColumndIndex = Coordinate::stringFromColumnIndex($productsCount + 3);
             
             $objPHPExcel->setActiveSheetIndex(0)->setCellValue('J20', "=MAX('3'!C27:" . $ColumndIndex . "27)");
             $objPHPExcel->setActiveSheetIndex(2)->setCellValue($InitialColumn . '43', "Total");
             $objPHPExcel->setActiveSheetIndex(2)->setCellValue($InitialColumn . '44', "=SUM(C44:" . $InitialColumnLetter . "44)");
             $objPHPExcel->getActiveSheet()->getStyle($InitialColumn . '44')->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_CURRENCY_USD_SIMPLE);
             
-            $columnaIndex = Coordinate::stringFromColumnIndex($productsCount + 3);
+            $columnaIndex = Coordinate::stringFromColumnIndex($productsCount + 2);
             
             $objPHPExcel->setActiveSheetIndex(0);
             $objPHPExcel->getActiveSheet()->setCellValue('K14', "='3'!" . $columnaIndex . "11");
