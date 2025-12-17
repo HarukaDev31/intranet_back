@@ -232,8 +232,8 @@ class CotizacionController extends Controller
             return null;
         }
         Log::info($ruta);
-        if(strpos($ruta,'files/')!==false){
-            $ruta = str_replace('files/', '', $ruta);
+        if(strpos($ruta,'files//')!==false){
+            $ruta = str_replace('files//', '', $ruta);
 
         }
         // Si ya es una URL completa, verificar si tiene doble storage y corregirlo
