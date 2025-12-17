@@ -244,6 +244,11 @@ class CotizacionController extends Controller
 
         // Limpiar la ruta de barras iniciales para evitar doble slash
         $ruta = ltrim($ruta, '/');
+        //if ruta contains files/ remove it 
+        if(strpos($ruta,'files/')!==false){
+            $ruta = str_replace('files/', '', $ruta);
+
+        }
         // Corregir rutas con doble storage
         if (strpos($ruta, 'storage//storage/') !== false) {
             $ruta = str_replace('storage//storage/', 'storage/', $ruta);
