@@ -232,7 +232,10 @@ class CotizacionController extends Controller
             return null;
         }
         Log::info($ruta);
+        if(strpos($ruta,'files/')!==false){
+            $ruta = str_replace('files/', '', $ruta);
 
+        }
         // Si ya es una URL completa, verificar si tiene doble storage y corregirlo
         if (filter_var($ruta, FILTER_VALIDATE_URL)) {
             // Corregir URLs con doble storage
@@ -245,10 +248,7 @@ class CotizacionController extends Controller
         // Limpiar la ruta de barras iniciales para evitar doble slash
         $ruta = ltrim($ruta, '/');
         //if ruta contains files/ remove it 
-        if(strpos($ruta,'files/')!==false){
-            $ruta = str_replace('files/', '', $ruta);
 
-        }
         // Corregir rutas con doble storage
         if (strpos($ruta, 'storage//storage/') !== false) {
             $ruta = str_replace('storage//storage/', 'storage/', $ruta);
