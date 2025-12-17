@@ -2476,6 +2476,8 @@ Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, 
     {
         try {
             $cotizacion = Cotizacion::find($idCotizacion);
+            $contenedor=Contenedor::find($cotizacion->id_contenedor);
+            $carga=$contenedor->carga ?? '';
             if (!$cotizacion) {
                 return response()->json(['message' => 'Cotización no encontrada', 'success' => false], 404);
             }
@@ -2490,7 +2492,7 @@ Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, 
                  *Costo: S/ 
 
                  *Por favor nos compartes el comprobante de pago para poder gestionar tu envío */
-                $message = "Consolidado #" . $cotizacion->carga . "\n" .
+                $message = "Consolidado #" . $carga . "\n" .
                     "Hola " . $cotizacion->nombre . ", por favor proceder con el pago del " . $cotizacion->tipo_servicio . ".\n" .
                     "Se envía el costo del flete interno (Almacén-agencia)\n" .
                     "Costo: S/ " . $cotizacion->total_pago_delivery . "\n" .
@@ -2503,8 +2505,8 @@ Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, 
  
                  *NOTA: Para poder recoger tu carga debes contar con personal de estiba o indicarnos para poder compartirte el contacto de un montacargas.
                  */
-                $message = "Consolidado #" . $cotizacion->carga . "\n" .
-                    "Hola " . $cotizacion->nombre . ", por favor proceder con el pago del " . $cotizacion->tipo_servicio . ".\n" .
+                $message = "Consolidado #" . $carga . "\n" .
+                    "Hola " . $cotizacion->nombre . "\n" .
                     "Se envía el costo por el uso del montacarga (Descarga del contenedor)\n" .
                     "Costo: S/ " . $cotizacion->total_pago_delivery . "\n" .
                     "NOTA: Para poder recoger tu carga debes contar con personal de estiba o indicarnos para poder compartirte el contacto de un montacargas.";
