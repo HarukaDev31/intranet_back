@@ -273,7 +273,7 @@ class CotizacionController extends Controller
             return rtrim($baseUrl, '/') . '/storage/' . $ruta;
         }
         // Si la ruta contiene 'file/', removerlo
-        if (strpos($ruta, 'file/') === 0) {
+        if (strpos($ruta, 'files/') === 0) {
             $ruta = substr($ruta, 5); // Remueve 'file/'
         }
         
