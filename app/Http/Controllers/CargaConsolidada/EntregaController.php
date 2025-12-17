@@ -2320,22 +2320,22 @@ Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, 
         try {
             $idCotizacion = $request->id_cotizacion;
             $tipoServicio = $request->tipo_servicio;
-            
+
             // Validar que el tipo de servicio sea válido
             if (!in_array($tipoServicio, ['DELIVERY', 'MONTACARGA'])) {
                 return response()->json(['message' => 'Tipo de servicio inválido. Debe ser DELIVERY o MONTACARGA', 'success' => false], 422);
             }
-            
+
             $cotizacion = Cotizacion::find($idCotizacion);
             if (!$cotizacion) {
                 return response()->json(['message' => 'Cotización no encontrada', 'success' => false], 404);
             }
-            
+
             // Actualizar el campo tipo_servicio en la tabla
             DB::table('contenedor_consolidado_cotizacion')
                 ->where('id', $idCotizacion)
                 ->update(['tipo_servicio' => $tipoServicio]);
-            
+
             return response()->json(['message' => 'Servicio guardado correctamente', 'success' => true]);
         } catch (\Exception $e) {
             return response()->json(['message' => $e->getMessage(), 'success' => false], 500);
@@ -2428,7 +2428,7 @@ Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, 
             $numeroWhatsapp = $telefono . '@c.us';
 
             $result = $this->sendMessage($message, $numeroWhatsapp);
-            
+
             if ($result['status']) {
                 return response()->json(['message' => 'Mensaje enviado correctamente', 'success' => true]);
             } else {
@@ -2460,7 +2460,7 @@ Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, 
             $numeroWhatsapp = $telefono . '@c.us';
 
             $result = $this->sendMessage($message, $numeroWhatsapp);
-            
+
             if ($result['status']) {
                 return response()->json(['message' => 'Mensaje enviado correctamente', 'success' => true]);
             } else {
@@ -2480,15 +2480,35 @@ Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, 
                 return response()->json(['message' => 'Cotización no encontrada', 'success' => false], 404);
             }
 
-            /**message Hola #nombrecliente, por favor proceder con el pago del #servicio  .
-            
-Monto: ##
+            //fOR tipo_servicio DELIVERY
+            if ($cotizacion->tipo_servicio == 'DELIVERY') {
 
-Envio nuestra cuenta bancaria.  */
-            $message = "Hola " . $cotizacion->nombre . ", por favor proceder con el pago del " . $cotizacion->tipo_servicio . ".
-Monto: " . $cotizacion->total_pago_delivery . "
-Envio nuestra cuenta bancaria. ";
+                /**
+                 * Consolidado #carga
+                 * Hola #nombrecliente, por favor proceder con el pago del #servicio  .
+                 *Se envía el costo del flete interno (Almacén-agencia)
+                 *Costo: S/ 
 
+                 *Por favor nos compartes el comprobante de pago para poder gestionar tu envío */
+                $message = "Consolidado #" . $cotizacion->carga . "\n" .
+                    "Hola " . $cotizacion->nombre . ", por favor proceder con el pago del " . $cotizacion->tipo_servicio . ".\n" .
+                    "Se envía el costo del flete interno (Almacén-agencia)\n" .
+                    "Costo: S/ " . $cotizacion->total_pago_delivery . "\n" .
+                    "Por favor nos compartes el comprobante de pago para poder gestionar tu envío";
+            } elseif ($cotizacion->tipo_servicio == 'MONTACARGA') {
+                /**
+                 * [2:44 PM, 12/17/2025] Dani Vega🐰: Hola XXXXX
+                 *Se envía el costo por el uso del montacarga (Descarga del contenedor)
+                 *Costo: S/
+ 
+                 *NOTA: Para poder recoger tu carga debes contar con personal de estiba o indicarnos para poder compartirte el contacto de un montacargas.
+                 */
+                $message = "Consolidado #" . $cotizacion->carga . "\n" .
+                    "Hola " . $cotizacion->nombre . ", por favor proceder con el pago del " . $cotizacion->tipo_servicio . ".\n" .
+                    "Se envía el costo por el uso del montacarga (Descarga del contenedor)\n" .
+                    "Costo: S/ " . $cotizacion->total_pago_delivery . "\n" .
+                    "NOTA: Para poder recoger tu carga debes contar con personal de estiba o indicarnos para poder compartirte el contacto de un montacargas.";
+            }
             $telefono = preg_replace('/\D+/', '', $cotizacion->telefono);
             if (strlen($telefono) < 9) {
                 $telefono = '51' . $telefono;
@@ -2496,7 +2516,7 @@ Envio nuestra cuenta bancaria. ";
             $numeroWhatsapp = $telefono . '@c.us';
 
             $result = $this->sendMessage($message, $numeroWhatsapp);
-            $pagosUrl = public_path('assets/images/pagos-full.jpg');
+            $pagosUrl = public_path('assets/images/pagos-full-soles.jpeg');
 
             $this->sendMedia($pagosUrl, 'image/jpg', null, $telefono, 15, 'consolidado', 'Numeros_de_cuenta.jpg');
             if ($result['status']) {
