@@ -231,6 +231,7 @@ class CotizacionController extends Controller
         if (empty($ruta)) {
             return null;
         }
+        Log::info($ruta);
 
         // Si ya es una URL completa, verificar si tiene doble storage y corregirlo
         if (filter_var($ruta, FILTER_VALIDATE_URL)) {
@@ -243,7 +244,6 @@ class CotizacionController extends Controller
 
         // Limpiar la ruta de barras iniciales para evitar doble slash
         $ruta = ltrim($ruta, '/');
-        Log::info($ruta);
         // Corregir rutas con doble storage
         if (strpos($ruta, 'storage//storage/') !== false) {
             $ruta = str_replace('storage//storage/', 'storage/', $ruta);
