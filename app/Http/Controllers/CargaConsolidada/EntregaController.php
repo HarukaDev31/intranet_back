@@ -2505,7 +2505,7 @@ Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, 
  
                  *NOTA: Para poder recoger tu carga debes contar con personal de estiba o indicarnos para poder compartirte el contacto de un montacargas.
                  */
-                $message = "Consolidado #" . $carga . "\n" .
+                $message = "Consolidado #" . $cotizacion->carga . "\n" .
                     "Hola " . $cotizacion->nombre . "\n" .
                     "Se envía el costo por el uso del montacarga (Descarga del contenedor)\n" .
                     "Costo: S/ " . $cotizacion->total_pago_delivery . "\n" .

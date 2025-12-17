@@ -272,7 +272,11 @@ class CotizacionController extends Controller
             $baseUrl = config('app.url');
             return rtrim($baseUrl, '/') . '/storage/' . $ruta;
         }
-
+        // Si la ruta contiene 'file/', removerlo
+        if (strpos($ruta, 'file/') === 0) {
+            $ruta = substr($ruta, 5); // Remueve 'file/'
+        }
+        
         // Construir URL manualmente para evitar problemas con Storage::url()
         $baseUrl = config('app.url');
         $storagePath = 'storage/';
