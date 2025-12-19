@@ -569,6 +569,7 @@ class EntregaController extends Controller
                 DB::raw('CASE WHEN P.id IS NOT NULL THEN 0 WHEN L.id IS NOT NULL THEN 1 ELSE NULL END as type_form'),
                 // voucher_doc normalizado según type_form (0 Provincia, 1 Lima)
                 DB::raw('CASE WHEN P.id IS NOT NULL THEN P.voucher_doc WHEN L.id IS NOT NULL THEN L.voucher_doc ELSE NULL END as voucher_doc'),
+                DB::raw('CASE WHEN P.id IS NOT NULL THEN P.isVerified WHEN L.id IS NOT NULL THEN L.isVerified ELSE NULL END as isVerified'),
                 DB::raw('(CC.logistica_final + CC.impuestos_final) as total_logistica_impuestos'),
                 DB::raw("(
                         SELECT IFNULL(SUM(cccp.monto), 0) 
@@ -772,6 +773,8 @@ class EntregaController extends Controller
                 // Tipo de formulario 0 provincia / 1 lima
                 DB::raw('CASE WHEN P.id IS NOT NULL THEN 0 WHEN L.id IS NOT NULL THEN 1 ELSE NULL END as type_form'),
                 DB::raw('CASE WHEN P.id IS NOT NULL THEN P.voucher_doc WHEN L.id IS NOT NULL THEN L.voucher_doc ELSE NULL END as voucher_doc'),
+                DB::raw('CASE WHEN P.id IS NOT NULL THEN P.created_at WHEN L.id IS NOT NULL THEN L.created_at ELSE NULL END as fecha_creacion_formulario'),
+                DB::raw('CASE WHEN P.id IS NOT NULL THEN P.isVerified WHEN L.id IS NOT NULL THEN L.isVerified ELSE NULL END as isVerified'),
                 // Usuario del formulario (normalizado)
                 DB::raw('CASE WHEN P.id IS NOT NULL THEN P.id_user WHEN L.id IS NOT NULL THEN L.id_user ELSE NULL END as form_user_id'),
                 DB::raw('CASE WHEN P.id IS NOT NULL THEN UP.name WHEN L.id IS NOT NULL THEN UL.name ELSE NULL END as form_user_name'),
@@ -1713,6 +1716,8 @@ class EntregaController extends Controller
                 // Agregados por cotización desde proveedores
                 DB::raw('COALESCE(CPA.sum_cbm_china, 0) as cbm_total_china'),
                 DB::raw('COALESCE(CPA.sum_qty_box, 0) as qty_box_china'),
+                // Campo de si esta verificado
+                DB::raw('CASE WHEN P.id IS NOT NULL THEN P.isVerified WHEN L.id IS NOT NULL THEN L.isVerified ELSE NULL END as isVerified'),
 
                 // Campos LIMA
                 'L.pick_name',
@@ -1836,6 +1841,7 @@ class EntregaController extends Controller
                 'driver_plate' => $row->driver_plate,
                 'final_destination_place' => $row->final_destination_place,
                 'final_destination_district' => $row->final_destination_district,
+                'isVerified' => isset($row->isVerified) ? (bool)$row->isVerified : null,
             ];
         } elseif ($typeForm === 0) { // Provincia
             $payload['province'] = [
@@ -1861,6 +1867,7 @@ class EntregaController extends Controller
                 'agency_address_initial_delivery' => $row->agency_address_initial_delivery,
                 'agency_address_final_delivery' => $row->agency_address_final_delivery,
                 'home_adress_delivery' => $row->home_adress_delivery,
+                'isVerified' => isset($row->isVerified) ? (bool)$row->isVerified : null,
             ];
         } else {
             // Sin formulario: devolver vacío pero consistente
@@ -2196,6 +2203,7 @@ Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, 
                 'driver_plate' => 'sometimes|string',
                 'final_destination_place' => 'sometimes|string',
                 'final_destination_district' => 'sometimes|integer',
+                'isVerified' => 'sometimes|integer',
             ];
             $data = $request->validate($rules);
 
@@ -2231,6 +2239,8 @@ Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, 
                 'voucher_doc_type' => 'sometimes|in:BOLETA,FACTURA',
                 'voucher_name' => 'sometimes|string',
                 'voucher_email' => 'sometimes',
+                // Verificación
+                'isVerified' => 'sometimes|integer',
             ];
             $data = $request->validate($rules);
             $data['importer_nmae'] = $request->import_name ?? $request->r_name;
