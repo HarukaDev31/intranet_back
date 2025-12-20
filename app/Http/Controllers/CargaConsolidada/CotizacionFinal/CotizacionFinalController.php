@@ -1074,13 +1074,14 @@ class CotizacionFinalController extends Controller
                     "Último día de pago: " . date('d/m/Y', strtotime($fechaArribo)) . "\n";
                 $this->sendMessage($message);
                 $pathCotizacionFinalPDF = $this->getBoletaForSend($request->idCotizacion);
+                Log::info('pathCotizacionFinalPDF: ' . $pathCotizacionFinalPDF);
                 $this->sendMedia($pathCotizacionFinalPDF, null, null, null, 3);
                 $message = "Resumen de Pago\n" .
                     "✅Cotización final: $" . number_format($total, 2) . "\n" .
                     "✅Adelanto: $" . number_format($totalPagos, 2) . "\n" .
                     "✅ *Pendiente de pago: $" . number_format($totalAPagar, 2) . "*\n";
                 $this->sendMessage($message, null, 5);
-                $pagosUrl = public_path('assets/images/pagos-full.jpg');
+                $pagosUrl = public_path('assets/images/pagos-full.jpg');    
                 $this->sendMedia($pagosUrl, 'image/jpg', null, null, 10);
             }
             return response()->json([
