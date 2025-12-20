@@ -136,7 +136,6 @@ trait WhatsappTrait
     private function _callApi($endpoint, $data)
     {
         try {
-            Log::info('Llamando a la API de WhatsApp', ['endpoint' => $endpoint, 'data' => $data]);
             $url = 'https://redis.probusiness.pe/api/whatsapp' . $endpoint;
             
             // Obtener dominio desde donde se hace la petición
@@ -184,10 +183,7 @@ trait WhatsappTrait
             $error = curl_error($ch);
             curl_close($ch);
             if ($error) {
-                Log::error('Error de cURL en API de WhatsApp: ' . $error, [
-                    'endpoint' => $endpoint,
-                    'url' => $url
-                ]);
+             
                 return [
                     'status' => false,
                     'response' => ['error' => 'Error de conexión: ' . $error]
