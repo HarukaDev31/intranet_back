@@ -357,6 +357,12 @@ class CotizacionFinalController extends Controller
             // Nueva ubicación: storage/app/public/CargaConsolidada/cotizacionfinal/{idContenedor}
             $possiblePaths[] = storage_path('app/public/' . $originalUrl);
             
+            // Procesar ruta de la DB con generateImageUrl
+            $generatedUrl = $this->generateImageUrl($originalUrl);
+            if ($generatedUrl) {
+                $possiblePaths[] = $generatedUrl;
+            }
+            
             // Verificar si es una URL completa
             $isValidUrl = filter_var($originalUrl, FILTER_VALIDATE_URL) || preg_match('/^https?:\/\//', $originalUrl);
             
@@ -390,6 +396,7 @@ class CotizacionFinalController extends Controller
                 }
             }
 
+            
             if ($fileContent === false) {
                 Log::error('No se pudo leer el archivo de cotización final');
                 throw new \Exception("No se pudo leer el archivo Excel desde ninguna ubicación.");
