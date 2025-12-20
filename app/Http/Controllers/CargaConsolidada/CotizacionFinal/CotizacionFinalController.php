@@ -384,6 +384,8 @@ class CotizacionFinalController extends Controller
             foreach ($possiblePaths as $path) {
                 if (strpos($path, 'http') === 0) {
                     // Es una URL, usar downloadFileFromUrl
+                    //fix malformed url
+                    $path = str_replace(' ', '%20', $path);
                     $fileContent = $this->downloadFileFromUrl($path);
                 } else if (file_exists($path)) {
                     // Es un archivo local
