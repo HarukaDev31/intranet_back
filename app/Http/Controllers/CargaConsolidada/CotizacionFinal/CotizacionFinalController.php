@@ -1138,9 +1138,10 @@ class CotizacionFinalController extends Controller
                 return response()->json(['message' => 'Cotización no encontrada', 'success' => false], 404);
             }
 
-            // Obtener contenedor para número de consolidado
-            $contenedor = Contenedor::select('carga')->where('id', $cotizacion->id_contenedor)->first();
+            // Obtener contenedor para número de consolidado y fecha de arribo
+            $contenedor = Contenedor::select('carga', 'fecha_arribo')->where('id', $cotizacion->id_contenedor)->first();
             $carga = $contenedor ? $contenedor->carga : 'N/A';
+            $fechaArribo = $contenedor ? $contenedor->fecha_arribo : null;
 
             // Calculos de montos
             $logisticaFinal = $cotizacion->logistica_final ?? 0;
@@ -1156,8 +1157,9 @@ class CotizacionFinalController extends Controller
                 "Resumen de Pago\n" .
                 "✅ Cotización final: $" . number_format($totalCotizacion, 2, '.', '') . "\n" .
                 "✅ Adelanto: $" . number_format($totalPagos, 2, '.', '') . "\n" .
-                "✅ *Pendiente de pago: $" . number_format($pendiente, 2, '.', '') . "*\n\n" .
-                "Por favor debe enviar el comprobante de pago a la brevedad.";
+                "✅ *Pendiente de pago: $" . number_format($pendiente, 2, '.', '') . "*\n" .
+                ($fechaArribo ? "Último día de pago: " . date('d/m/Y', strtotime($fechaArribo)) . "\n" : "") .
+                "\nPor favor debe enviar el comprobante de pago a la brevedad.";
             // Preparar número y enviar (normalizar como en otros lugares del proyecto)
             $rawTelefono = $cotizacion->telefono ?? '';
             // Remover todo lo que no sea dígito
