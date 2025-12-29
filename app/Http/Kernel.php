@@ -71,5 +71,6 @@ class Kernel extends HttpKernel
         'verified' => \Illuminate\Auth\Middleware\EnsureEmailIsVerified::class,
         'jwt.auth' => \App\Http\Middleware\JWTMiddleware::class,
         'jwt.external' => \App\Http\Middleware\JWTExternalMiddleware::class,
+        'logviewer.auth' => \App\Http\Middleware\LogViewerAuth::class,
     ];
 }

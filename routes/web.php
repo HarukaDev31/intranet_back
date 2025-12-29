@@ -58,3 +58,18 @@ Route::options('/files/{path}', function () {
         ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With')
         ->header('Access-Control-Allow-Credentials', 'true');
 })->where('path', '.*');
+
+// Rutas para el visor de logs con autenticación por usuario y contraseña
+Route::get('logviewer/login', [\App\Http\Controllers\LogViewerLoginController::class, 'showLoginForm'])
+    ->name('logviewer.login');
+
+Route::post('logviewer/login', [\App\Http\Controllers\LogViewerLoginController::class, 'login'])
+    ->name('logviewer.login.post');
+
+Route::get('logviewer/logout', [\App\Http\Controllers\LogViewerLoginController::class, 'logout'])
+    ->name('logviewer.logout');
+
+// Ruta para el visor de logs (protegida con autenticación por sesión)
+Route::get('logs', [\Rap2hpoutre\LaravelLogViewer\LogViewerController::class, 'index'])
+    ->middleware('logviewer.auth')
+    ->name('logs');
