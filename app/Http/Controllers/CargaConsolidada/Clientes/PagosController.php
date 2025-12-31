@@ -22,7 +22,22 @@ class PagosController extends Controller
     private $CONCEPT_PAGO_LOGISTICA = 1;
     private $CONCEPT_PAGO_IMPUESTO = 2;
 
-
+    /**
+     * @OA\Get(
+     *     path="/carga-consolidada/contenedores/{idContenedor}/clientes/pagos",
+     *     tags={"Clientes Carga Consolidada"},
+     *     summary="Listar pagos de clientes",
+     *     description="Obtiene la lista de clientes con sus pagos de logística para un contenedor",
+     *     operationId="getClientesPagos",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="idContenedor", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Parameter(name="search", in="query", @OA\Schema(type="string")),
+     *     @OA\Parameter(name="limit", in="query", @OA\Schema(type="integer", default=100)),
+     *     @OA\Parameter(name="page", in="query", @OA\Schema(type="integer", default=1)),
+     *     @OA\Response(response=200, description="Pagos obtenidos exitosamente"),
+     *     @OA\Response(response=401, description="No autenticado")
+     * )
+     */
     public function index(Request $request, $idContenedor)
     {
         try {

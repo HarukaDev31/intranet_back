@@ -8,6 +8,18 @@ use App\Models\BaseDatos\Regulaciones\Entidad;
 
 class EntidadesController extends Controller
 {
+    /**
+     * @OA\Get(
+     *     path="/regulaciones/entidades/dropdown",
+     *     tags={"Regulaciones"},
+     *     summary="Obtener entidades para dropdown",
+     *     description="Obtiene la lista de entidades reguladoras para usar en dropdowns",
+     *     operationId="getEntidadesDropdown",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="search", in="query", @OA\Schema(type="string")),
+     *     @OA\Response(response=200, description="Entidades obtenidas exitosamente")
+     * )
+     */
     public function getDropdown(Request $request)
     {
         try{

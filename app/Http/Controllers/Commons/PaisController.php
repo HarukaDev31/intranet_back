@@ -7,6 +7,16 @@ use Illuminate\Http\Request;
 use App\Models\Pais;
 class PaisController extends Controller
 {
+    /**
+     * @OA\Get(
+     *     path="/commons/paises/dropdown",
+     *     tags={"Commons"},
+     *     summary="Obtener países para dropdown",
+     *     description="Obtiene la lista de países formateada para usar en dropdowns",
+     *     operationId="getPaisDropdown",
+     *     @OA\Response(response=200, description="Países obtenidos exitosamente")
+     * )
+     */
     public function getPaisDropdown()
     {
         $paises = Pais::all();

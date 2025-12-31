@@ -15,6 +15,19 @@ use App\Models\BaseDatos\Regulaciones\ProductoRubro;
 class EtiquetadoController extends Controller
 {
     /**
+     * @OA\Get(
+     *     path="/regulaciones/etiquetado",
+     *     tags={"Regulaciones"},
+     *     summary="Listar regulaciones de etiquetado",
+     *     description="Obtiene la lista de rubros con sus regulaciones de etiquetado",
+     *     operationId="getEtiquetado",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="limit", in="query", @OA\Schema(type="integer", default=50)),
+     *     @OA\Parameter(name="page", in="query", @OA\Schema(type="integer", default=1)),
+     *     @OA\Parameter(name="search", in="query", @OA\Schema(type="string")),
+     *     @OA\Response(response=200, description="Regulaciones obtenidas exitosamente")
+     * )
+     *
      * Obtener lista de rubros con sus regulaciones de etiquetado
      */
     public function index(Request $request)

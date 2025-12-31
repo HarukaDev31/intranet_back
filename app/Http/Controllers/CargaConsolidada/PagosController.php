@@ -26,6 +26,23 @@ use Illuminate\Support\Facades\Log;
 class PagosController extends Controller
 {
     /**
+     * @OA\Get(
+     *     path="/carga-consolidada/pagos",
+     *     tags={"Pagos"},
+     *     summary="Obtener consolidado de pagos",
+     *     description="Obtiene el consolidado de pagos de cotizaciones con filtros opcionales",
+     *     operationId="getConsolidadoPagos",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="search", in="query", @OA\Schema(type="string")),
+     *     @OA\Parameter(name="limit", in="query", @OA\Schema(type="integer", default=100)),
+     *     @OA\Parameter(name="page", in="query", @OA\Schema(type="integer", default=1)),
+     *     @OA\Parameter(name="idCotizacion", in="query", @OA\Schema(type="integer")),
+     *     @OA\Parameter(name="Filtro_Fe_Inicio", in="query", @OA\Schema(type="string", format="date")),
+     *     @OA\Parameter(name="Filtro_Fe_Fin", in="query", @OA\Schema(type="string", format="date")),
+     *     @OA\Parameter(name="campana", in="query", @OA\Schema(type="string")),
+     *     @OA\Response(response=200, description="Pagos obtenidos exitosamente")
+     * )
+     *
      * Obtener consolidado de pagos
      */
     public function getConsolidadoPagos(Request $request)
@@ -279,6 +296,19 @@ class PagosController extends Controller
             ], 500);
         }
     }
+    /**
+     * @OA\Get(
+     *     path="/carga-consolidada/pagos/delivery",
+     *     tags={"Pagos"},
+     *     summary="Obtener pagos de delivery consolidados",
+     *     description="Obtiene los pagos de delivery de una cotización específica",
+     *     operationId="getConsolidadoDeliveryPagos",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="idCotizacion", in="query", required=true, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Pagos obtenidos exitosamente"),
+     *     @OA\Response(response=422, description="Validación fallida")
+     * )
+     */
     public function getConsolidadoDeliveryPagos(Request $request)
     {
         $request->validate([
@@ -580,6 +610,34 @@ class PagosController extends Controller
             ];
         }
     }
+    /**
+     * @OA\Put(
+     *     path="/carga-consolidada/pagos/coordinacion/{idPago}",
+     *     tags={"Pagos"},
+     *     summary="Actualizar pago de coordinación",
+     *     description="Actualiza un pago de coordinación específico",
+     *     operationId="actualizarPagoCoordinacion",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(
+     *         name="idPago",
+     *         in="path",
+     *         required=true,
+     *         @OA\Schema(type="integer")
+     *     ),
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             required={"status"},
+     *             @OA\Property(property="status", type="string"),
+     *             @OA\Property(property="monto", type="number"),
+     *             @OA\Property(property="payment_date", type="string", format="date")
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Pago actualizado exitosamente"),
+     *     @OA\Response(response=404, description="Pago no encontrado"),
+     *     @OA\Response(response=500, description="Error interno")
+     * )
+     */
     public function actualizarPagoCoordinacion(Request $request, $idPago)
     {
         $request->validate([
@@ -641,6 +699,28 @@ class PagosController extends Controller
         }
     }
     /**
+     * @OA\Put(
+     *     path="/carga-consolidada/pagos/nota/{idCotizacion}",
+     *     tags={"Pagos"},
+     *     summary="Actualizar nota de cotización consolidado",
+     *     description="Actualiza la nota de administración de una cotización",
+     *     operationId="updateNotaConsolidado",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(
+     *         name="idCotizacion",
+     *         in="path",
+     *         required=true,
+     *         @OA\Schema(type="integer")
+     *     ),
+     *     @OA\RequestBody(
+     *         @OA\JsonContent(
+     *             @OA\Property(property="note_administracion", type="string", maxLength=255)
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Nota actualizada exitosamente"),
+     *     @OA\Response(response=404, description="Cotización no encontrada")
+     * )
+     *
      * Actualizar la nota de administración de una cotización
      */
     public function updateNotaConsolidado(Request $request, $idCotizacion)
@@ -666,6 +746,23 @@ class PagosController extends Controller
     }
 
     /**
+     * @OA\Get(
+     *     path="/carga-consolidada/pagos/{idCotizacion}/detalles",
+     *     tags={"Pagos"},
+     *     summary="Obtener detalles de pagos consolidados",
+     *     description="Obtiene los detalles de los pagos de una cotización",
+     *     operationId="getDetailsPagosConsolidado",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(
+     *         name="idCotizacion",
+     *         in="path",
+     *         required=true,
+     *         @OA\Schema(type="integer")
+     *     ),
+     *     @OA\Response(response=200, description="Detalles obtenidos exitosamente"),
+     *     @OA\Response(response=500, description="Error interno")
+     * )
+     *
      * Obtener detalles de pagos consolidados
      */
     public function getDetailsPagosConsolidado($idCotizacion)
@@ -704,6 +801,24 @@ class PagosController extends Controller
             ], 500);
         }
     }
+    /**
+     * @OA\Get(
+     *     path="/carga-consolidada/pagos/{idCotizacion}/detalles-delivery",
+     *     tags={"Pagos"},
+     *     summary="Obtener detalles de pagos de delivery consolidados",
+     *     description="Obtiene los detalles de los pagos de delivery de una cotización",
+     *     operationId="getDetailsPagosConsolidadoDelivery",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(
+     *         name="idCotizacion",
+     *         in="path",
+     *         required=true,
+     *         @OA\Schema(type="integer")
+     *     ),
+     *     @OA\Response(response=200, description="Detalles obtenidos exitosamente"),
+     *     @OA\Response(response=500, description="Error interno")
+     * )
+     */
     public function getDetailsPagosConsolidadoDelivery($idCotizacion)
     {
         try {
@@ -741,6 +856,25 @@ class PagosController extends Controller
     }
 
     /**
+     * @OA\Get(
+     *     path="/carga-consolidada/pagos/cursos",
+     *     tags={"Pagos"},
+     *     summary="Obtener pagos de cursos",
+     *     description="Obtiene los pagos de cursos con filtros opcionales",
+     *     operationId="getCursosPagos",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="search", in="query", @OA\Schema(type="string")),
+     *     @OA\Parameter(name="limit", in="query", @OA\Schema(type="integer", default=10)),
+     *     @OA\Parameter(name="page", in="query", @OA\Schema(type="integer", default=1)),
+     *     @OA\Parameter(name="idPedido", in="query", @OA\Schema(type="integer")),
+     *     @OA\Parameter(name="Filtro_Fe_Inicio", in="query", @OA\Schema(type="string", format="date")),
+     *     @OA\Parameter(name="Filtro_Fe_Fin", in="query", @OA\Schema(type="string", format="date")),
+     *     @OA\Parameter(name="campana", in="query", @OA\Schema(type="string")),
+     *     @OA\Parameter(name="estado_pago", in="query", @OA\Schema(type="string")),
+     *     @OA\Response(response=200, description="Pagos de cursos obtenidos exitosamente"),
+     *     @OA\Response(response=500, description="Error interno")
+     * )
+     *
      * Obtener pagos de cursos
      */
     public function getCursosPagos(Request $request)
@@ -1071,6 +1205,24 @@ class PagosController extends Controller
     }
 
     /**
+     * @OA\Get(
+     *     path="/carga-consolidada/pagos/cursos/{idPedidoCurso}/detalles",
+     *     tags={"Pagos"},
+     *     summary="Obtener detalles de pagos de curso",
+     *     description="Obtiene los detalles de los pagos de un pedido de curso",
+     *     operationId="getDetailsPagosCurso",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(
+     *         name="idPedidoCurso",
+     *         in="path",
+     *         required=true,
+     *         @OA\Schema(type="integer")
+     *     ),
+     *     @OA\Response(response=200, description="Detalles obtenidos exitosamente"),
+     *     @OA\Response(response=404, description="Pedido de curso no encontrado"),
+     *     @OA\Response(response=500, description="Error interno")
+     * )
+     *
      * Obtener detalles de pagos de curso
      */
     public function getDetailsPagosCurso($idPedidoCurso)
@@ -1116,6 +1268,30 @@ class PagosController extends Controller
     }
 
     /**
+     * @OA\Put(
+     *     path="/carga-consolidada/pagos/cursos/{idPedidoCurso}/status",
+     *     tags={"Pagos"},
+     *     summary="Actualizar estado de curso",
+     *     description="Actualiza el estado de un pago de curso",
+     *     operationId="updateStatusCurso",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(
+     *         name="idPedidoCurso",
+     *         in="path",
+     *         required=true,
+     *         @OA\Schema(type="integer")
+     *     ),
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             required={"status"},
+     *             @OA\Property(property="status", type="string")
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Estado actualizado exitosamente"),
+     *     @OA\Response(response=404, description="Pedido de curso no encontrado")
+     * )
+     *
      * Actualizar pagos de curso
      */
     public function updateStatusCurso(Request $request, $idPedidoCurso)
@@ -1138,6 +1314,28 @@ class PagosController extends Controller
     }
 
     /**
+     * @OA\Put(
+     *     path="/carga-consolidada/pagos/cursos/{idPedidoCurso}/nota",
+     *     tags={"Pagos"},
+     *     summary="Actualizar nota de curso",
+     *     description="Actualiza la nota de administración de un pedido de curso",
+     *     operationId="updateNotaCurso",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(
+     *         name="idPedidoCurso",
+     *         in="path",
+     *         required=true,
+     *         @OA\Schema(type="integer")
+     *     ),
+     *     @OA\RequestBody(
+     *         @OA\JsonContent(
+     *             @OA\Property(property="note_administracion", type="string", maxLength=255)
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Nota actualizada exitosamente"),
+     *     @OA\Response(response=404, description="Pedido de curso no encontrado")
+     * )
+     *
      * Actualizar nota de curso
      */
     public function updateNotaCurso(Request $request, $idPedidoCurso)

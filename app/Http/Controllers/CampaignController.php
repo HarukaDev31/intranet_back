@@ -12,6 +12,26 @@ class CampaignController extends Controller
 {
     private $table_campana_curso_dias = 'campana_curso_dias';
 
+    /**
+     * @OA\Get(
+     *     path="/campaigns/{id}/students",
+     *     tags={"Campañas"},
+     *     summary="Obtener estudiantes de una campaña",
+     *     description="Obtiene la lista de estudiantes asociados a una campaña de curso",
+     *     operationId="getCampaignStudents",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="id", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Parameter(name="limit", in="query", @OA\Schema(type="integer", default=10)),
+     *     @OA\Parameter(name="page", in="query", @OA\Schema(type="integer", default=1)),
+     *     @OA\Parameter(name="search", in="query", @OA\Schema(type="string")),
+     *     @OA\Parameter(name="fechaInicio", in="query", @OA\Schema(type="string", format="date")),
+     *     @OA\Parameter(name="fechaFin", in="query", @OA\Schema(type="string", format="date")),
+     *     @OA\Parameter(name="estados_pago", in="query", @OA\Schema(type="string")),
+     *     @OA\Parameter(name="tipos_curso", in="query", @OA\Schema(type="string")),
+     *     @OA\Response(response=200, description="Estudiantes obtenidos exitosamente"),
+     *     @OA\Response(response=401, description="No autenticado")
+     * )
+     */
     public function getStudents($id, Request $request)
     {
         try {
@@ -250,6 +270,28 @@ class CampaignController extends Controller
             ], 500);
         }
     }
+    
+    /**
+     * @OA\Post(
+     *     path="/campaigns",
+     *     tags={"Campañas"},
+     *     summary="Crear una nueva campaña",
+     *     description="Crea una nueva campaña de curso con sus fechas y días seleccionados",
+     *     operationId="storeCampaign",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             required={"Fe_Inicio", "Fe_Fin", "Dias_Seleccionados"},
+     *             @OA\Property(property="Fe_Inicio", type="string", format="date"),
+     *             @OA\Property(property="Fe_Fin", type="string", format="date"),
+     *             @OA\Property(property="Dias_Seleccionados", type="string")
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Campaña creada exitosamente"),
+     *     @OA\Response(response=422, description="Error de validación")
+     * )
+     */
     public function store(Request $request)
     {
         try {
@@ -359,6 +401,17 @@ class CampaignController extends Controller
         }
     }
 
+    /**
+     * @OA\Get(
+     *     path="/campaigns",
+     *     tags={"Campañas"},
+     *     summary="Listar campañas",
+     *     description="Obtiene la lista de todas las campañas de cursos",
+     *     operationId="getCampaigns",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Response(response=200, description="Campañas obtenidas exitosamente")
+     * )
+     */
     public function index(Request $request)
     {
         try {
@@ -422,6 +475,20 @@ class CampaignController extends Controller
             ], 500);
         }
     }
+    
+    /**
+     * @OA\Delete(
+     *     path="/campaigns/{id}",
+     *     tags={"Campañas"},
+     *     summary="Eliminar una campaña",
+     *     description="Elimina una campaña de curso y sus días relacionados",
+     *     operationId="destroyCampaign",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="id", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Campaña eliminada exitosamente"),
+     *     @OA\Response(response=404, description="Campaña no encontrada")
+     * )
+     */
     public function destroy($id)
     {
         try {

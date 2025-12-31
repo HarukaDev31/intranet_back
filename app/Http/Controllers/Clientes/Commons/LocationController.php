@@ -12,6 +12,22 @@ use App\Models\Pais;
 class LocationController extends Controller
 {
     /**
+     * @OA\Get(
+     *     path="/external/location/paises",
+     *     tags={"Ubicaciones"},
+     *     summary="Obtener países",
+     *     description="Obtiene la lista de todos los países",
+     *     operationId="getPaises",
+     *     @OA\Response(
+     *         response=200,
+     *         description="Países obtenidos exitosamente",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=true),
+     *             @OA\Property(property="data", type="array", @OA\Items(type="object"))
+     *         )
+     *     )
+     * )
+     *
      * Obtiene todos los países
      */
     public function getPaises()
@@ -21,6 +37,25 @@ class LocationController extends Controller
     }
 
     /**
+     * @OA\Get(
+     *     path="/external/location/departamentos",
+     *     tags={"Ubicaciones"},
+     *     summary="Obtener departamentos",
+     *     description="Obtiene la lista de todos los departamentos",
+     *     operationId="getDepartamentos",
+     *     @OA\Response(
+     *         response=200,
+     *         description="Departamentos obtenidos exitosamente",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=true),
+     *             @OA\Property(property="data", type="array", @OA\Items(type="object",
+     *                 @OA\Property(property="id", type="integer"),
+     *                 @OA\Property(property="nombre", type="string")
+     *             ))
+     *         )
+     *     )
+     * )
+     *
      * Obtiene todos los departamentos
      */
     public function getDepartamentos()
@@ -44,6 +79,32 @@ class LocationController extends Controller
     }
 
     /**
+     * @OA\Get(
+     *     path="/external/location/provincias/{idDepartamento}",
+     *     tags={"Ubicaciones"},
+     *     summary="Obtener provincias por departamento",
+     *     description="Obtiene la lista de provincias de un departamento específico",
+     *     operationId="getProvincias",
+     *     @OA\Parameter(
+     *         name="idDepartamento",
+     *         in="path",
+     *         description="ID del departamento",
+     *         required=true,
+     *         @OA\Schema(type="integer")
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Provincias obtenidas exitosamente",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=true),
+     *             @OA\Property(property="data", type="array", @OA\Items(type="object",
+     *                 @OA\Property(property="id", type="integer"),
+     *                 @OA\Property(property="nombre", type="string")
+     *             ))
+     *         )
+     *     )
+     * )
+     *
      * Obtiene todas las provincias de un departamento específico
      */
     public function  getProvincias($idDepartamento)
@@ -68,6 +129,32 @@ class LocationController extends Controller
     }
 
     /**
+     * @OA\Get(
+     *     path="/external/location/distritos/{idProvincia}",
+     *     tags={"Ubicaciones"},
+     *     summary="Obtener distritos por provincia",
+     *     description="Obtiene la lista de distritos de una provincia específica",
+     *     operationId="getDistritos",
+     *     @OA\Parameter(
+     *         name="idProvincia",
+     *         in="path",
+     *         description="ID de la provincia",
+     *         required=true,
+     *         @OA\Schema(type="integer")
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Distritos obtenidos exitosamente",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=true),
+     *             @OA\Property(property="data", type="array", @OA\Items(type="object",
+     *                 @OA\Property(property="id", type="integer"),
+     *                 @OA\Property(property="nombre", type="string")
+     *             ))
+     *         )
+     *     )
+     * )
+     *
      * Obtiene todos los distritos de una provincia específica
      */
     public function getDistritos($idProvincia)

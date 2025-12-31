@@ -42,6 +42,12 @@ use App\Events\CotizacionChinaReceived;
 use App\Events\CotizacionChinaInspected;
 use App\Models\Notificacion;
 
+/**
+ * @OA\Tag(
+ *     name="Proveedores",
+ *     description="Gestión de proveedores en cotizaciones"
+ * )
+ */
 class CotizacionProveedorController extends Controller
 {
     use WhatsappTrait;
@@ -106,6 +112,24 @@ class CotizacionProveedorController extends Controller
     private $cambioEstadoProveedor = "cambio-estado-proveedor";
     private $table_contenedor_cotizacion_final = "contenedor_consolidado_cotizacion_final";
     /**
+     * @OA\Get(
+     *     path="/carga-consolidada/cotizaciones-proveedores/contenedor/{idContenedor}",
+     *     tags={"Proveedores"},
+     *     summary="Obtener cotizaciones con proveedores",
+     *     description="Lista las cotizaciones con sus proveedores por contenedor",
+     *     operationId="getContenedorCotizacionProveedores",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="idContenedor", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Parameter(name="estado_china", in="query", @OA\Schema(type="string")),
+     *     @OA\Parameter(name="estado_coordinacion", in="query", @OA\Schema(type="string")),
+     *     @OA\Parameter(name="estado_cotizador", in="query", @OA\Schema(type="string")),
+     *     @OA\Parameter(name="search", in="query", @OA\Schema(type="string")),
+     *     @OA\Parameter(name="page", in="query", @OA\Schema(type="integer")),
+     *     @OA\Parameter(name="limit", in="query", @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Cotizaciones obtenidas exitosamente"),
+     *     @OA\Response(response=401, description="No autenticado")
+     * )
+     *
      * Obtener cotizaciones con proveedores por contenedor
      */
     public function getContenedorCotizacionProveedores(Request $request, $idContenedor)
@@ -588,6 +612,25 @@ class CotizacionProveedorController extends Controller
     }
 
     /**
+     * @OA\Post(
+     *     path="/carga-consolidada/cotizaciones-proveedores/proveedor/estado",
+     *     tags={"Proveedores"},
+     *     summary="Actualizar estado de proveedor",
+     *     description="Cambia el estado de la cotización de un proveedor",
+     *     operationId="updateEstadoCotizacionProveedor",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             required={"id", "estado"},
+     *             @OA\Property(property="id", type="integer", description="ID del proveedor"),
+     *             @OA\Property(property="estado", type="string", description="Nuevo estado")
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Estado actualizado exitosamente"),
+     *     @OA\Response(response=404, description="Proveedor no encontrado")
+     * )
+     *
      * Actualizar estado de cotización proveedor
      */
     public function updateEstadoCotizacionProveedor(Request $request)
@@ -1157,6 +1200,28 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
         }
     }
     /**
+     * @OA\Post(
+     *     path="/carga-consolidada/cotizaciones-proveedores/proveedor",
+     *     tags={"Proveedores"},
+     *     summary="Actualizar datos del proveedor",
+     *     description="Actualiza la información de un proveedor específico",
+     *     operationId="updateProveedorData",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             required={"id"},
+     *             @OA\Property(property="id", type="integer", description="ID del proveedor"),
+     *             @OA\Property(property="supplier", type="string", description="Nombre del proveedor"),
+     *             @OA\Property(property="supplier_phone", type="string", description="Teléfono del proveedor"),
+     *             @OA\Property(property="cbm_total_china", type="number"),
+     *             @OA\Property(property="qty_box_china", type="integer")
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Proveedor actualizado exitosamente"),
+     *     @OA\Response(response=404, description="Proveedor no encontrado")
+     * )
+     *
      * Actualizar datos del proveedor
      */
     public function updateProveedorData(Request $request)
@@ -1447,6 +1512,24 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
     }
 
     /**
+     * @OA\Patch(
+     *     path="/carga-consolidada/cotizaciones-proveedores/proveedor/{idProveedor}/arrive-date",
+     *     tags={"Proveedores"},
+     *     summary="Actualizar fecha de llegada",
+     *     description="Actualiza únicamente el arrive_date de un proveedor",
+     *     operationId="updateArriveDate",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="idProveedor", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             @OA\Property(property="arrive_date", type="string", format="date")
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Fecha actualizada exitosamente"),
+     *     @OA\Response(response=403, description="Sin permisos")
+     * )
+     *
      * Actualiza únicamente el arrive_date de un proveedor.
      * Solo roles Cotizador y Coordinación pueden hacerlo.
      */
@@ -1678,6 +1761,18 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
     }
 
     /**
+     * @OA\Get(
+     *     path="/carga-consolidada/cotizaciones-proveedores/proveedor/documentos/{idProveedor}",
+     *     tags={"Proveedores"},
+     *     summary="Obtener documentos del almacén",
+     *     description="Lista los archivos de documentación del almacén para un proveedor",
+     *     operationId="getFilesAlmacenDocument",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="idProveedor", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Archivos obtenidos exitosamente"),
+     *     @OA\Response(response=401, description="No autenticado")
+     * )
+     *
      * Obtener archivos de documentación del almacén
      */
     public function getFilesAlmacenDocument($idProveedor)
@@ -2408,6 +2503,29 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
             ], 500);
         }
     }
+    /**
+     * @OA\Post(
+     *     path="/carga-consolidada/cotizaciones-proveedores/proveedor/inspeccion",
+     *     tags={"Proveedores"},
+     *     summary="Guardar archivos de inspección",
+     *     description="Sube y guarda archivos de inspección para un proveedor",
+     *     operationId="saveInspection",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\MediaType(
+     *             mediaType="multipart/form-data",
+     *             @OA\Schema(
+     *                 @OA\Property(property="idProveedor", type="integer"),
+     *                 @OA\Property(property="idCotizacion", type="integer"),
+     *                 @OA\Property(property="files", type="array", @OA\Items(type="string", format="binary"))
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Inspección guardada exitosamente"),
+     *     @OA\Response(response=400, description="No se enviaron archivos")
+     * )
+     */
     public function saveInspection(Request $request)
     {
         try {
@@ -2501,6 +2619,29 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
             ], 500);
         }
     }
+    /**
+     * @OA\Post(
+     *     path="/carga-consolidada/cotizaciones-proveedores/proveedor/documento",
+     *     tags={"Proveedores"},
+     *     summary="Guardar documentación",
+     *     description="Sube y guarda archivos de documentación para un proveedor",
+     *     operationId="saveDocumentation",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\MediaType(
+     *             mediaType="multipart/form-data",
+     *             @OA\Schema(
+     *                 @OA\Property(property="idProveedor", type="integer"),
+     *                 @OA\Property(property="idCotizacion", type="integer"),
+     *                 @OA\Property(property="files", type="array", @OA\Items(type="string", format="binary"))
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Documentación guardada exitosamente"),
+     *     @OA\Response(response=400, description="No se enviaron archivos")
+     * )
+     */
     public function saveDocumentation(Request $request)
     {
         try {

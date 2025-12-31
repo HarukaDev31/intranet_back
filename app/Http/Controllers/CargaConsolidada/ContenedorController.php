@@ -76,6 +76,34 @@ class ContenedorController extends Controller
             ["name" => "FACTURA Y GUIA", "iconURL" => $host . '/assets/icons/factura.png']
         );
     }
+
+    /**
+     * @OA\Get(
+     *     path="/carga-consolidada/contenedores",
+     *     tags={"Carga Consolidada"},
+     *     summary="Listar contenedores",
+     *     description="Obtiene la lista de contenedores de carga consolidada",
+     *     operationId="getContenedores",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(
+     *         name="completado",
+     *         in="query",
+     *         description="Filtrar contenedores completados",
+     *         required=false,
+     *         @OA\Schema(type="boolean", default=false)
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Lista de contenedores obtenida exitosamente",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=true),
+     *             @OA\Property(property="data", type="array", @OA\Items(type="object"))
+     *         )
+     *     ),
+     *     @OA\Response(response=401, description="No autenticado"),
+     *     @OA\Response(response=500, description="Error del servidor")
+     * )
+     */
     public function index(Request $request)
     {
         try {
@@ -233,7 +261,28 @@ class ContenedorController extends Controller
         }
     }
 
-
+    /**
+     * @OA\Post(
+     *     path="/carga-consolidada/contenedor",
+     *     tags={"Carga Consolidada"},
+     *     summary="Crear o actualizar contenedor",
+     *     description="Crea un nuevo contenedor o actualiza uno existente",
+     *     operationId="storeContenedor",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             @OA\Property(property="id", type="integer", nullable=true),
+     *             @OA\Property(property="carga", type="string"),
+     *             @OA\Property(property="mes", type="integer"),
+     *             @OA\Property(property="f_cierre", type="string", format="date"),
+     *             @OA\Property(property="ID_Pais", type="integer")
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Contenedor creado/actualizado exitosamente"),
+     *     @OA\Response(response=500, description="Error al crear contenedor")
+     * )
+     */
     public function store(Request $request)
 
     {
@@ -346,6 +395,19 @@ class ContenedorController extends Controller
             ], 500);
         }
     }
+    
+    /**
+     * @OA\Get(
+     *     path="/carga-consolidada/contenedor/{id}",
+     *     tags={"Carga Consolidada"},
+     *     summary="Obtener contenedor",
+     *     description="Obtiene los detalles de un contenedor específico",
+     *     operationId="showContenedor",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="id", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Contenedor obtenido exitosamente")
+     * )
+     */
     public function show($id)
     {
         // Implementación básica
@@ -361,6 +423,19 @@ class ContenedorController extends Controller
         return response()->json(['message' => 'Contenedor update']);
     }
 
+    /**
+     * @OA\Delete(
+     *     path="/carga-consolidada/contenedor/{id}",
+     *     tags={"Carga Consolidada"},
+     *     summary="Eliminar contenedor",
+     *     description="Elimina un contenedor y todos sus datos asociados",
+     *     operationId="destroyContenedor",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="id", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Contenedor eliminado exitosamente"),
+     *     @OA\Response(response=500, description="Error al eliminar")
+     * )
+     */
     public function destroy($id)
     {
         try {
@@ -381,11 +456,34 @@ class ContenedorController extends Controller
         }
     }
 
+    /**
+     * @OA\Get(
+     *     path="/carga-consolidada/contenedores/filter-options",
+     *     tags={"Contenedor"},
+     *     summary="Obtener opciones de filtro",
+     *     description="Obtiene las opciones de filtro disponibles para contenedores",
+     *     operationId="filterOptionsContenedor",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Response(response=200, description="Opciones obtenidas exitosamente")
+     * )
+     */
     public function filterOptions()
     {
         // Implementación básica
         return response()->json(['message' => 'Contenedor filter options']);
     }
+    /**
+     * @OA\Get(
+     *     path="/carga-consolidada/contenedores/{idContenedor}/pasos",
+     *     tags={"Contenedor"},
+     *     summary="Obtener pasos del contenedor",
+     *     description="Obtiene los pasos de proceso del contenedor según el rol del usuario",
+     *     operationId="getContenedorPasos",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="idContenedor", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Pasos obtenidos exitosamente")
+     * )
+     */
     public function getContenedorPasos($idContenedor)
     {
         try {
@@ -491,6 +589,17 @@ class ContenedorController extends Controller
 
         return response()->json(['data' => $data, 'success' => true]);
     }
+    /**
+     * @OA\Get(
+     *     path="/carga-consolidada/contenedores/cargas-disponibles",
+     *     tags={"Contenedor"},
+     *     summary="Obtener cargas disponibles",
+     *     description="Obtiene la lista de cargas disponibles",
+     *     operationId="getCargasDisponibles",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Response(response=200, description="Cargas obtenidas exitosamente")
+     * )
+     */
     public function getCargasDisponibles()
     {
         $hoy = date('Y-m-d');
@@ -498,6 +607,25 @@ class ContenedorController extends Controller
             ->orderByRaw('CAST(carga AS UNSIGNED) DESC');
         return $query->get();
     }
+    /**
+     * @OA\Post(
+     *     path="/carga-consolidada/cotizaciones/mover-consolidado",
+     *     tags={"Contenedor"},
+     *     summary="Mover cotización a consolidado",
+     *     description="Mueve una cotización de un contenedor a otro (consolidado)",
+     *     operationId="moveCotizacionToConsolidado",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             @OA\Property(property="idCotizacion", type="integer"),
+     *             @OA\Property(property="idContenedorDestino", type="integer")
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Cotización movida exitosamente"),
+     *     @OA\Response(response=404, description="Cotización no encontrada")
+     * )
+     */
     public function moveCotizacionToConsolidado(Request $request)
     {
         try {
@@ -550,6 +678,25 @@ Le estaré informando cualquier avance 🫡.";
             return response()->json(['message' => 'Error al mover cotización a consolidado: ' . $e->getMessage(), 'success' => false], 500);
         }
     }
+    /**
+     * @OA\Post(
+     *     path="/carga-consolidada/cotizaciones/mover-calculadora",
+     *     tags={"Contenedor"},
+     *     summary="Mover cotización a calculadora",
+     *     description="Mueve una cotización a la calculadora de importación",
+     *     operationId="moveCotizacionToCalculadora",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             @OA\Property(property="idCotizacion", type="integer"),
+     *             @OA\Property(property="idContenedorDestino", type="integer")
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Cotización movida exitosamente"),
+     *     @OA\Response(response=404, description="Calculadora no encontrada")
+     * )
+     */
     public function moveCotizacionToCalculadora(Request $request)
     {
         try {
@@ -568,6 +715,25 @@ Le estaré informando cualquier avance 🫡.";
             return response()->json(['message' => 'Error al mover cotización a calculadora: ' . $e->getMessage(), 'success' => false], 500);
         }
     }
+    /**
+     * @OA\Put(
+     *     path="/carga-consolidada/contenedores/estado-documentacion",
+     *     tags={"Contenedor"},
+     *     summary="Actualizar estado de documentación",
+     *     description="Actualiza el estado de documentación de un contenedor",
+     *     operationId="updateEstadoDocumentacion",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             @OA\Property(property="id", type="integer"),
+     *             @OA\Property(property="estado_documentacion", type="string")
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Estado actualizado exitosamente"),
+     *     @OA\Response(response=404, description="Contenedor no encontrado")
+     * )
+     */
     public function updateEstadoDocumentacion(Request $request)
     {
         try {
@@ -594,6 +760,25 @@ Le estaré informando cualquier avance 🫡.";
         }
     }
     /**
+     * @OA\Put(
+     *     path="/carga-consolidada/contenedores/{idcontenedor}/fecha-documentacion-max",
+     *     tags={"Contenedor"},
+     *     summary="Actualizar fecha máxima de documentación",
+     *     description="Actualiza la fecha máxima de documentación de un contenedor",
+     *     operationId="updateFechaDocumentacionMax",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="idcontenedor", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             @OA\Property(property="fecha_documentacion_max", type="string", format="date")
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Fecha actualizada exitosamente"),
+     *     @OA\Response(response=404, description="Contenedor no encontrado"),
+     *     @OA\Response(response=422, description="Validación fallida")
+     * )
+     *
      * Actualiza la columna fecha_documentacion_max de un contenedor.
      * Espera un body { "fecha_documentacion_max": "YYYY-MM-DD" } y el id del contenedor en la ruta.
      */
@@ -624,6 +809,28 @@ Le estaré informando cualquier avance 🫡.";
             return response()->json(['success' => false, 'message' => 'Error al actualizar fecha_documentacion_max: ' . $e->getMessage()], 500);
         }
     }
+    /**
+     * @OA\Post(
+     *     path="/carga-consolidada/contenedores/packing-list",
+     *     tags={"Contenedor"},
+     *     summary="Subir packing list",
+     *     description="Sube un archivo de packing list para un contenedor",
+     *     operationId="uploadPackingListContenedor",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\MediaType(
+     *             mediaType="multipart/form-data",
+     *             @OA\Schema(
+     *                 @OA\Property(property="idContenedor", type="integer"),
+     *                 @OA\Property(property="file", type="string", format="binary")
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Archivo subido exitosamente"),
+     *     @OA\Response(response=400, description="Archivo no enviado o tipo no permitido")
+     * )
+     */
     public function uploadPackingList(Request $request)
     {
         try {
@@ -683,6 +890,18 @@ Le estaré informando cualquier avance 🫡.";
         }
     }
 
+    /**
+     * @OA\Post(
+     *     path="/carga-consolidada/contenedores/{idcontenedor}/verify-completed",
+     *     tags={"Contenedor"},
+     *     summary="Verificar si contenedor está completado",
+     *     description="Verifica y actualiza el estado del contenedor según su lista de embarque",
+     *     operationId="verifyContainerIsCompleted",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="idcontenedor", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Verificación completada")
+     * )
+     */
     public function verifyContainerIsCompleted($idcontenedor)
     {
         try {
@@ -735,6 +954,19 @@ Le estaré informando cualquier avance 🫡.";
             Log::error('Error en verifyContainerIsCompleted: ' . $e->getMessage());
         }
     }
+    /**
+     * @OA\Delete(
+     *     path="/carga-consolidada/contenedores/{idContenedor}/packing-list",
+     *     tags={"Contenedor"},
+     *     summary="Eliminar packing list",
+     *     description="Elimina el packing list de un contenedor",
+     *     operationId="deletePackingListContenedor",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="idContenedor", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Packing list eliminado exitosamente"),
+     *     @OA\Response(response=500, description="Error al eliminar")
+     * )
+     */
     public function deletePackingList($idContenedor)
     {
         try {

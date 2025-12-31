@@ -13,6 +13,18 @@ use Illuminate\Support\Facades\DB;
 class NewsController extends Controller
 {
     /**
+     * @OA\Get(
+     *     path="/news",
+     *     tags={"Noticias"},
+     *     summary="Listar noticias públicas",
+     *     description="Obtiene la lista de noticias publicadas",
+     *     operationId="getNews",
+     *     @OA\Parameter(name="type", in="query", description="Tipo de noticia", @OA\Schema(type="string")),
+     *     @OA\Parameter(name="solicitada_por", in="query", @OA\Schema(type="string")),
+     *     @OA\Parameter(name="per_page", in="query", @OA\Schema(type="integer", default=10)),
+     *     @OA\Response(response=200, description="Noticias obtenidas exitosamente")
+     * )
+     *
      * Obtener lista de noticias (público - solo publicadas)
      */
     public function index(Request $request)
@@ -55,6 +67,21 @@ class NewsController extends Controller
     }
 
     /**
+     * @OA\Get(
+     *     path="/news/admin",
+     *     tags={"Noticias"},
+     *     summary="Listar todas las noticias (admin)",
+     *     description="Obtiene todas las noticias incluyendo las no publicadas (requiere permisos de administrador)",
+     *     operationId="getNewsAdmin",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="type", in="query", @OA\Schema(type="string")),
+     *     @OA\Parameter(name="solicitada_por", in="query", @OA\Schema(type="string")),
+     *     @OA\Parameter(name="is_published", in="query", @OA\Schema(type="boolean")),
+     *     @OA\Parameter(name="per_page", in="query", @OA\Schema(type="integer", default=10)),
+     *     @OA\Response(response=200, description="Noticias obtenidas exitosamente"),
+     *     @OA\Response(response=403, description="Sin permisos de administrador")
+     * )
+     *
      * Obtener todas las noticias (admin - incluye no publicadas)
      */
     public function adminIndex(Request $request)

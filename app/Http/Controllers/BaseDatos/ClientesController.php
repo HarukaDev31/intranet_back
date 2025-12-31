@@ -51,7 +51,54 @@ class ClientesController extends Controller
     /**
      * Ruta física para archivos Excel importados (sistema de archivos)
      */
+
     /**
+     * @OA\Get(
+     *     path="/clientes",
+     *     tags={"Clientes"},
+     *     summary="Listar clientes",
+     *     description="Obtiene una lista paginada de clientes con búsqueda opcional",
+     *     operationId="getClientes",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(
+     *         name="search",
+     *         in="query",
+     *         description="Término de búsqueda",
+     *         required=false,
+     *         @OA\Schema(type="string")
+     *     ),
+     *     @OA\Parameter(
+     *         name="itemsPerPage",
+     *         in="query",
+     *         description="Cantidad de items por página",
+     *         required=false,
+     *         @OA\Schema(type="integer", default=100)
+     *     ),
+     *     @OA\Parameter(
+     *         name="currentPage",
+     *         in="query",
+     *         description="Página actual",
+     *         required=false,
+     *         @OA\Schema(type="integer", default=1)
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Lista de clientes obtenida exitosamente",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=true),
+     *             @OA\Property(property="data", type="array", @OA\Items(type="object")),
+     *             @OA\Property(property="pagination", type="object",
+     *                 @OA\Property(property="current_page", type="integer"),
+     *                 @OA\Property(property="last_page", type="integer"),
+     *                 @OA\Property(property="per_page", type="integer"),
+     *                 @OA\Property(property="total", type="integer")
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(response=401, description="No autenticado"),
+     *     @OA\Response(response=500, description="Error del servidor")
+     * )
+     *
      * Obtener lista de clientes con paginación
      */
     public function index(Request $request): JsonResponse
@@ -81,6 +128,33 @@ class ClientesController extends Controller
     }
 
     /**
+     * @OA\Get(
+     *     path="/clientes/{id}",
+     *     tags={"Clientes"},
+     *     summary="Obtener cliente por ID",
+     *     description="Obtiene la información detallada de un cliente específico con todos sus servicios",
+     *     operationId="getClienteById",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(
+     *         name="id",
+     *         in="path",
+     *         description="ID del cliente",
+     *         required=true,
+     *         @OA\Schema(type="integer")
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Cliente obtenido exitosamente",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=true),
+     *             @OA\Property(property="data", type="object"),
+     *             @OA\Property(property="message", type="string")
+     *         )
+     *     ),
+     *     @OA\Response(response=404, description="Cliente no encontrado"),
+     *     @OA\Response(response=500, description="Error del servidor")
+     * )
+     *
      * Obtener un cliente específico con todos sus servicios
      */
     public function show($id): JsonResponse

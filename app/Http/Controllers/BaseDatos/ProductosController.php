@@ -19,6 +19,68 @@ use App\Jobs\ImportProductosExcelJob;
 class ProductosController extends Controller
 {
     /**
+     * @OA\Get(
+     *     path="/productos",
+     *     tags={"Productos"},
+     *     summary="Listar productos",
+     *     description="Obtiene una lista paginada de productos importados con filtros opcionales",
+     *     operationId="getProductos",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(
+     *         name="limit",
+     *         in="query",
+     *         description="Cantidad de items por página",
+     *         required=false,
+     *         @OA\Schema(type="integer", default=10)
+     *     ),
+     *     @OA\Parameter(
+     *         name="page",
+     *         in="query",
+     *         description="Número de página",
+     *         required=false,
+     *         @OA\Schema(type="integer", default=1)
+     *     ),
+     *     @OA\Parameter(
+     *         name="search",
+     *         in="query",
+     *         description="Búsqueda por nombre comercial o subpartida",
+     *         required=false,
+     *         @OA\Schema(type="string")
+     *     ),
+     *     @OA\Parameter(
+     *         name="rubro",
+     *         in="query",
+     *         description="Filtrar por rubro",
+     *         required=false,
+     *         @OA\Schema(type="string")
+     *     ),
+     *     @OA\Parameter(
+     *         name="tipoProducto",
+     *         in="query",
+     *         description="Filtrar por tipo de producto",
+     *         required=false,
+     *         @OA\Schema(type="string")
+     *     ),
+     *     @OA\Parameter(
+     *         name="campana",
+     *         in="query",
+     *         description="Filtrar por campaña/carga",
+     *         required=false,
+     *         @OA\Schema(type="string")
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Lista de productos obtenida exitosamente",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=true),
+     *             @OA\Property(property="data", type="array", @OA\Items(type="object")),
+     *             @OA\Property(property="pagination", type="object"),
+     *             @OA\Property(property="headers", type="object")
+     *         )
+     *     ),
+     *     @OA\Response(response=500, description="Error del servidor")
+     * )
+     *
      * Obtener lista de productos
      */
     public function index(Request $request)
@@ -103,6 +165,26 @@ class ProductosController extends Controller
     }
 
     /**
+     * @OA\Get(
+     *     path="/productos/filter-options",
+     *     tags={"Productos"},
+     *     summary="Obtener opciones de filtro",
+     *     description="Obtiene las opciones disponibles para filtrar productos (rubros, tipos, campañas)",
+     *     operationId="getProductosFilterOptions",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Response(
+     *         response=200,
+     *         description="Opciones de filtro obtenidas exitosamente",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=true),
+     *             @OA\Property(property="rubros", type="array", @OA\Items(type="string")),
+     *             @OA\Property(property="tiposProducto", type="array", @OA\Items(type="string")),
+     *             @OA\Property(property="campanas", type="array", @OA\Items(type="string"))
+     *         )
+     *     ),
+     *     @OA\Response(response=500, description="Error del servidor")
+     * )
+     *
      * Obtener opciones de filtro para productos
      */
     public function filterOptions()

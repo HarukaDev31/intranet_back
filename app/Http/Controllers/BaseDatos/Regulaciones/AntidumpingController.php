@@ -13,6 +13,19 @@ use App\Models\BaseDatos\Regulaciones\ProductoRubro;
 class AntidumpingController extends Controller
 {
     /**
+     * @OA\Get(
+     *     path="/regulaciones/antidumping",
+     *     tags={"Regulaciones"},
+     *     summary="Listar regulaciones antidumping",
+     *     description="Obtiene la lista de rubros con regulaciones antidumping agrupadas",
+     *     operationId="getAntidumping",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="limit", in="query", @OA\Schema(type="integer", default=50)),
+     *     @OA\Parameter(name="page", in="query", @OA\Schema(type="integer", default=1)),
+     *     @OA\Parameter(name="search", in="query", @OA\Schema(type="string")),
+     *     @OA\Response(response=200, description="Regulaciones obtenidas exitosamente")
+     * )
+     *
      * Obtener lista de rubros con regulaciones antidumping agrupadas
      */
     public function index(Request $request)

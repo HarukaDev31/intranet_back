@@ -9,6 +9,18 @@ use Illuminate\Support\Facades\Log;
 
 class FileController extends Controller
 {
+    /**
+     * @OA\Get(
+     *     path="/files/{path}",
+     *     tags={"Archivos"},
+     *     summary="Servir archivo",
+     *     description="Sirve un archivo desde el almacenamiento con headers CORS apropiados",
+     *     operationId="serveFile",
+     *     @OA\Parameter(name="path", in="path", required=true, @OA\Schema(type="string")),
+     *     @OA\Response(response=200, description="Archivo servido exitosamente"),
+     *     @OA\Response(response=404, description="Archivo no encontrado")
+     * )
+     */
     public function serveFile($path)
     {
         try {

@@ -66,6 +66,20 @@ class GeneralController extends Controller
         return $headers;
     }
 
+    /**
+     * @OA\Get(
+     *     path="/carga-consolidada/contenedores/{idContenedor}/clientes/general",
+     *     tags={"Clientes Carga Consolidada"},
+     *     summary="Listar clientes generales",
+     *     description="Obtiene la lista general de clientes de un contenedor",
+     *     operationId="getClientesGeneral",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="idContenedor", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Parameter(name="per_page", in="query", @OA\Schema(type="integer", default=10)),
+     *     @OA\Parameter(name="search", in="query", @OA\Schema(type="string")),
+     *     @OA\Response(response=200, description="Clientes obtenidos exitosamente")
+     * )
+     */
     public function index(Request $request, $idContenedor)
     {
         // Obtener usuario para condicionar campos según rol
@@ -252,6 +266,25 @@ class GeneralController extends Controller
             ]
         ]);
     }
+    /**
+     * @OA\Put(
+     *     path="/carga-consolidada/clientes/status",
+     *     tags={"Clientes Carga Consolidada"},
+     *     summary="Actualizar estado del cliente para documentación",
+     *     description="Actualiza el estado de documentación del cliente",
+     *     operationId="updateStatusCliente",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             @OA\Property(property="id_cotizacion", type="integer"),
+     *             @OA\Property(property="status_cliente_doc", type="string")
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Estado actualizado exitosamente"),
+     *     @OA\Response(response=403, description="Sin permisos")
+     * )
+     */
     public function updateStatusCliente(Request $request)
     {
         try {
@@ -294,6 +327,25 @@ class GeneralController extends Controller
             ];
         }
     }
+    /**
+     * @OA\Put(
+     *     path="/carga-consolidada/clientes/estado",
+     *     tags={"Clientes Carga Consolidada"},
+     *     summary="Actualizar estado general del cliente",
+     *     description="Actualiza el estado general de un cliente en una cotización",
+     *     operationId="updateEstadoCliente",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             @OA\Property(property="id_cotizacion", type="integer"),
+     *             @OA\Property(property="estado_cliente", type="string")
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Estado actualizado exitosamente"),
+     *     @OA\Response(response=404, description="Cotización no encontrada")
+     * )
+     */
     public function updateEstadoCliente(Request $request)
     {
         $id = $request->id_cotizacion;
@@ -314,6 +366,18 @@ class GeneralController extends Controller
             'message' => 'Cotización no encontrada'
         ], 404);
     }
+    /**
+     * @OA\Get(
+     *     path="/carga-consolidada/contenedores/{idContenedor}/clientes/headers",
+     *     tags={"Clientes Carga Consolidada"},
+     *     summary="Obtener headers de datos de clientes",
+     *     description="Obtiene los totales y estadísticas del contenedor para clientes",
+     *     operationId="getHeadersDataGeneral",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="idContenedor", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Headers obtenidos exitosamente")
+     * )
+     */
     public function getHeadersData($idContenedor)
     {
         $headers = DB::table($this->table_contenedor_cotizacion)
@@ -338,6 +402,18 @@ class GeneralController extends Controller
         ]);
     }
 
+    /**
+     * @OA\Get(
+     *     path="/carga-consolidada/contenedores/{idContenedor}/clientes/header",
+     *     tags={"Clientes Carga Consolidada"},
+     *     summary="Obtener header de clientes con CBMs",
+     *     description="Obtiene los totales de CBMs y logística para el header de clientes",
+     *     operationId="getClientesHeader",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="idContenedor", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Header obtenido exitosamente")
+     * )
+     */
     public function getClientesHeader($idContenedor)
     {
         try {
@@ -528,6 +604,18 @@ class GeneralController extends Controller
             ], 500);
         }
     }
+    /**
+     * @OA\Get(
+     *     path="/carga-consolidada/contenedores/{idContenedor}/clientes/exportar",
+     *     tags={"Clientes Carga Consolidada"},
+     *     summary="Exportar clientes a Excel",
+     *     description="Exporta la lista de clientes de un contenedor a Excel",
+     *     operationId="exportarClientes",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="idContenedor", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Archivo Excel generado exitosamente")
+     * )
+     */
     public function exportarClientes(Request $request, $idContenedor)
     {
         try {
@@ -537,6 +625,18 @@ class GeneralController extends Controller
             return response()->json(['message' => $e->getMessage()], 500);
         }
     }
+    /**
+     * @OA\Get(
+     *     path="/carga-consolidada/cotizaciones/{idCotizacion}/proveedores-items",
+     *     tags={"Clientes Carga Consolidada"},
+     *     summary="Obtener proveedores e items de cotización",
+     *     description="Obtiene los proveedores e items asociados a una cotización",
+     *     operationId="getProveedoresItemsCotizacion",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="idCotizacion", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Proveedores obtenidos exitosamente")
+     * )
+     */
     public function getProveedoresItemsCotizacion(Request $request, $idCotizacion)
     {
         try {
@@ -591,6 +691,18 @@ class GeneralController extends Controller
             ], 500);
         }
     }
+    /**
+     * @OA\Get(
+     *     path="/carga-consolidada/cotizaciones/{idCotizacion}/documentos-pendientes",
+     *     tags={"Clientes Carga Consolidada"},
+     *     summary="Obtener documentos pendientes de proveedor",
+     *     description="Obtiene los documentos pendientes de cada proveedor de una cotización",
+     *     operationId="getProveedorPendingDocuments",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="idCotizacion", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Documentos obtenidos exitosamente")
+     * )
+     */
     public function getProveedorPendingDocuments(Request $request, $idCotizacion)
     {
         try {
@@ -622,6 +734,26 @@ class GeneralController extends Controller
             ], 500);
         }
     }
+    /**
+     * @OA\Post(
+     *     path="/carga-consolidada/clientes/solicitar-documentos",
+     *     tags={"Clientes Carga Consolidada"},
+     *     summary="Solicitar documentos a cliente",
+     *     description="Envía solicitud de documentos a un cliente por WhatsApp",
+     *     operationId="solicitarDocumentos",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             @OA\Property(property="id_cotizacion", type="integer"),
+     *             @OA\Property(property="proveedores", type="array", @OA\Items(type="object")),
+     *             @OA\Property(property="validate_max_date", type="boolean")
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Documentos solicitados exitosamente"),
+     *     @OA\Response(response=422, description="Payload inválido")
+     * )
+     */
     public function solicitarDocumentos(Request $request)
     {
         try {
@@ -973,6 +1105,25 @@ class GeneralController extends Controller
             ], 500);
         }
     }
+    /**
+     * @OA\Post(
+     *     path="/carga-consolidada/clientes/recordatorios-documentos",
+     *     tags={"Clientes Carga Consolidada"},
+     *     summary="Enviar recordatorios de documentos",
+     *     description="Envía recordatorios de documentos pendientes a clientes por WhatsApp",
+     *     operationId="recordatoriosDocumentos",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             @OA\Property(property="id_cotizacion", type="integer"),
+     *             @OA\Property(property="proveedores", type="array", @OA\Items(type="object"))
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Recordatorios enviados exitosamente"),
+     *     @OA\Response(response=422, description="Payload inválido")
+     * )
+     */
     public function recordatoriosDocumentos(Request $request){
         try {
             $idCotizacion = $request->input('id_cotizacion');

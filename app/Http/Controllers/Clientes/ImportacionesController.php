@@ -87,6 +87,21 @@ class ImportacionesController extends Controller
             ]
         ];
     }
+
+    /**
+     * @OA\Get(
+     *     path="/clientes/importaciones/trayecto",
+     *     tags={"Importaciones Externo"},
+     *     summary="Obtener trayectos de importación",
+     *     description="Obtiene la lista de trayectos de importación activos del cliente autenticado",
+     *     operationId="getTrayectosExternal",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="per_page", in="query", @OA\Schema(type="integer", default=10)),
+     *     @OA\Parameter(name="page", in="query", @OA\Schema(type="integer", default=1)),
+     *     @OA\Response(response=200, description="Trayectos obtenidos exitosamente"),
+     *     @OA\Response(response=401, description="Usuario no autenticado")
+     * )
+     */
     public function getTrayectos(Request $request)
     {
         try {
@@ -204,6 +219,21 @@ class ImportacionesController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * @OA\Get(
+     *     path="/clientes/importaciones/entregados",
+     *     tags={"Importaciones Externo"},
+     *     summary="Obtener importaciones entregadas",
+     *     description="Obtiene la lista de importaciones ya entregadas del cliente autenticado",
+     *     operationId="getEntregadosExternal",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="per_page", in="query", @OA\Schema(type="integer", default=10)),
+     *     @OA\Parameter(name="page", in="query", @OA\Schema(type="integer", default=1)),
+     *     @OA\Response(response=200, description="Entregados obtenidos exitosamente"),
+     *     @OA\Response(response=401, description="Usuario no autenticado")
+     * )
+     */
     public function getEntregados(Request $request)
     {
         try {
@@ -312,6 +342,22 @@ class ImportacionesController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * @OA\Get(
+     *     path="/clientes/importaciones/trayecto/inspeccion/{uuid}",
+     *     tags={"Importaciones Externo"},
+     *     summary="Obtener inspecciones de una cotización",
+     *     description="Obtiene las fotos de inspección de una cotización específica",
+     *     operationId="getInspeccionesExternal",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="uuid", in="path", required=true, @OA\Schema(type="string")),
+     *     @OA\Response(response=200, description="Inspecciones obtenidas exitosamente"),
+     *     @OA\Response(response=401, description="Usuario no autenticado"),
+     *     @OA\Response(response=403, description="Sin acceso a esta cotización"),
+     *     @OA\Response(response=404, description="Cotización no encontrada")
+     * )
+     */
     public function getInspecciones(Request $request, $uuid)
     {
         try {
@@ -421,6 +467,21 @@ class ImportacionesController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * @OA\Get(
+     *     path="/clientes/importaciones/trayecto/seguimiento/{uuid}",
+     *     tags={"Importaciones Externo"},
+     *     summary="Obtener seguimiento de una cotización",
+     *     description="Obtiene el estado de seguimiento de una importación específica",
+     *     operationId="getSeguimientoExternal",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="uuid", in="path", required=true, @OA\Schema(type="string")),
+     *     @OA\Response(response=200, description="Seguimiento obtenido exitosamente"),
+     *     @OA\Response(response=401, description="Usuario no autenticado"),
+     *     @OA\Response(response=404, description="Cotización no encontrada")
+     * )
+     */
     public function getSeguimiento(Request $request, $uuid)
     {
         try {

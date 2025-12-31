@@ -76,6 +76,21 @@ class CotizacionFinalController extends Controller
     private $CONCEPT_PAGO_IMPUESTOS = 2;
     private $CONCEPT_PAGO_LOGISTICA = 1;
     /**
+     * @OA\Get(
+     *     path="/carga-consolidada/contenedores/{idContenedor}/cotizaciones-finales",
+     *     tags={"Cotización Final"},
+     *     summary="Obtener cotizaciones finales",
+     *     description="Obtiene las cotizaciones finales de un contenedor específico",
+     *     operationId="getContenedorCotizacionesFinales",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="idContenedor", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Parameter(name="search", in="query", @OA\Schema(type="string")),
+     *     @OA\Parameter(name="estado_cotizacion_final", in="query", @OA\Schema(type="string")),
+     *     @OA\Parameter(name="per_page", in="query", @OA\Schema(type="integer", default=10)),
+     *     @OA\Response(response=200, description="Cotizaciones finales obtenidas exitosamente"),
+     *     @OA\Response(response=401, description="No autenticado")
+     * )
+     *
      * Obtiene las cotizaciones finales de un contenedor específico
      */
     public function getContenedorCotizacionesFinales(Request $request, $idContenedor)
@@ -1019,6 +1034,26 @@ class CotizacionFinalController extends Controller
 
         return strtr($string, $accents);
     }
+    /**
+     * @OA\Put(
+     *     path="/carga-consolidada/contenedor/cotizacion-final/general/update-estado",
+     *     tags={"Cotización Final"},
+     *     summary="Actualizar estado de cotización final",
+     *     description="Cambia el estado de una cotización final",
+     *     operationId="updateEstadoCotizacionFinal",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             required={"idCotizacion", "estado"},
+     *             @OA\Property(property="idCotizacion", type="integer"),
+     *             @OA\Property(property="estado", type="string", description="Nuevo estado")
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Estado actualizado exitosamente"),
+     *     @OA\Response(response=500, description="Error interno")
+     * )
+     */
     public function updateEstadoCotizacionFinal(Request $request)
     {
         try {
@@ -1256,6 +1291,32 @@ class CotizacionFinalController extends Controller
             throw $e;
         }
     }
+    /**
+     * @OA\Post(
+     *     path="/carga-consolidada/contenedor/cotizacion-final/pagos",
+     *     tags={"Cotización Final"},
+     *     summary="Registrar pago de cotización final",
+     *     description="Guarda un nuevo pago para una cotización final",
+     *     operationId="storeCotizacionFinalPago",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\MediaType(
+     *             mediaType="multipart/form-data",
+     *             @OA\Schema(
+     *                 @OA\Property(property="voucher", type="string", format="binary"),
+     *                 @OA\Property(property="idCotizacion", type="integer"),
+     *                 @OA\Property(property="idContenedor", type="integer"),
+     *                 @OA\Property(property="monto", type="number"),
+     *                 @OA\Property(property="fecha", type="string", format="date"),
+     *                 @OA\Property(property="banco", type="string")
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Pago registrado exitosamente"),
+     *     @OA\Response(response=422, description="Datos inválidos")
+     * )
+     */
     public function store(Request $request)
     {
         try {
@@ -1371,6 +1432,28 @@ class CotizacionFinalController extends Controller
             ], 500);
         }
     }
+    /**
+     * @OA\Post(
+     *     path="/carga-consolidada/contenedor/cotizacion-final/general/upload-factura-comercial",
+     *     tags={"Cotización Final"},
+     *     summary="Subir factura comercial",
+     *     description="Sube una factura comercial general para un contenedor",
+     *     operationId="uploadFacturaComercialCF",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\MediaType(
+     *             mediaType="multipart/form-data",
+     *             @OA\Schema(
+     *                 @OA\Property(property="idContenedor", type="integer"),
+     *                 @OA\Property(property="file", type="string", format="binary")
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Factura subida exitosamente"),
+     *     @OA\Response(response=500, description="Error interno")
+     * )
+     */
     public function uploadFacturaComercial(Request $request)
     {
         try {
@@ -1395,6 +1478,27 @@ class CotizacionFinalController extends Controller
     }
 
     /**
+     * @OA\Post(
+     *     path="/carga-consolidada/contenedor/cotizacion-final/general/upload-cotizacion-final/{idCotizacion}",
+     *     tags={"Cotización Final"},
+     *     summary="Subir cotización final",
+     *     description="Sube un archivo Excel de cotización final para una cotización específica",
+     *     operationId="uploadCotizacionFinalFile",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="idCotizacion", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\MediaType(
+     *             mediaType="multipart/form-data",
+     *             @OA\Schema(
+     *                 @OA\Property(property="file", type="string", format="binary")
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Archivo subido exitosamente"),
+     *     @OA\Response(response=404, description="Cotización no encontrada")
+     * )
+     *
      * Subir una cotización final a partir de un archivo (Excel) para una cotización específica.
      * Campos esperados: file (xlsx/xls), idCotizacion (int)
      */
@@ -1613,6 +1717,14 @@ class CotizacionFinalController extends Controller
     }
 
     /**
+     * @OA\Options(
+     *     path="/carga-consolidada/contenedor/cotizacion-final/general/upload-plantilla-final",
+     *     tags={"Cotización Final"},
+     *     summary="Options CORS",
+     *     description="Maneja peticiones OPTIONS para CORS",
+     *     @OA\Response(response=200, description="OK")
+     * )
+     *
      * Maneja peticiones OPTIONS para CORS
      */
     public function handleOptions()
@@ -1624,6 +1736,27 @@ class CotizacionFinalController extends Controller
     }
 
     /**
+     * @OA\Post(
+     *     path="/carga-consolidada/contenedor/cotizacion-final/general/upload-plantilla-final",
+     *     tags={"Cotización Final"},
+     *     summary="Generar Excel masivo",
+     *     description="Genera Excel masivo de cotizaciones para múltiples clientes",
+     *     operationId="generateMassiveExcelPayrolls",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\MediaType(
+     *             mediaType="multipart/form-data",
+     *             @OA\Schema(
+     *                 @OA\Property(property="file", type="string", format="binary"),
+     *                 @OA\Property(property="idContenedor", type="integer")
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Excel generado exitosamente"),
+     *     @OA\Response(response=422, description="Datos inválidos")
+     * )
+     *
      * Genera Excel masivo de cotizaciones para múltiples clientes
      */
     public function generateMassiveExcelPayrolls(Request $request)
@@ -2473,6 +2606,17 @@ class CotizacionFinalController extends Controller
     }
 
     /**
+     * @OA\Get(
+     *     path="/carga-consolidada/contenedor/cotizacion-final/general/check-temp-directory",
+     *     tags={"Cotización Final"},
+     *     summary="Verificar directorio temporal",
+     *     description="Verifica el directorio temporal y permisos del sistema",
+     *     operationId="checkTempDirectory",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Response(response=200, description="Información del directorio"),
+     *     @OA\Response(response=500, description="Error interno")
+     * )
+     *
      * Verifica el directorio temporal y permisos
      */
     public function checkTempDirectory()
@@ -2544,6 +2688,18 @@ class CotizacionFinalController extends Controller
     }
 
     /**
+     * @OA\Get(
+     *     path="/carga-consolidada/contenedor/cotizacion-final/general/{idContenedor}/headers",
+     *     tags={"Cotización Final"},
+     *     summary="Obtener headers de cotización final",
+     *     description="Obtiene los totales y métricas de cotizaciones finales de un contenedor",
+     *     operationId="getCotizacionFinalHeaders",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="idContenedor", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Headers obtenidos exitosamente"),
+     *     @OA\Response(response=500, description="Error interno")
+     * )
+     *
      * Obtiene los headers de cotizaciones finales para un contenedor
      */
     public function getCotizacionFinalHeaders($idContenedor)
@@ -2745,6 +2901,19 @@ class CotizacionFinalController extends Controller
             ], 500);
         }
     }
+    /**
+     * @OA\Delete(
+     *     path="/carga-consolidada/contenedor/cotizacion-final/general/delete-cotizacion-final-file/{idCotizacion}",
+     *     tags={"Cotización Final"},
+     *     summary="Eliminar archivo de cotización final",
+     *     description="Elimina el archivo de cotización final de una cotización",
+     *     operationId="deleteCotizacionFinalFile",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="idCotizacion", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Archivo eliminado exitosamente"),
+     *     @OA\Response(response=404, description="Cotización no encontrada")
+     * )
+     */
     public function deleteCotizacionFinalFile($idCotizacionFinal)
     {
         try {
@@ -2780,6 +2949,18 @@ class CotizacionFinalController extends Controller
     }
 
     /**
+     * @OA\Get(
+     *     path="/carga-consolidada/contenedor/cotizacion-final/general/download-cotizacion-excel/{idCotizacion}",
+     *     tags={"Cotización Final"},
+     *     summary="Descargar Excel de cotización final",
+     *     description="Descarga el archivo Excel de cotización final individual",
+     *     operationId="downloadCotizacionFinalExcel",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="idCotizacion", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Archivo Excel descargado"),
+     *     @OA\Response(response=404, description="Cotización o archivo no encontrado")
+     * )
+     *
      * Descarga el archivo Excel de cotización final individual
      */
     public function downloadCotizacionFinalExcel($idCotizacion)

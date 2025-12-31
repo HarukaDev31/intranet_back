@@ -10,6 +10,18 @@ use Illuminate\Support\Facades\Log;
 class UsuarioGrupoController extends Controller
 {
     /**
+     * @OA\Get(
+     *     path="/usuarios/{id}/grupos",
+     *     tags={"Usuarios"},
+     *     summary="Obtener usuario con sus grupos",
+     *     description="Obtiene la información de un usuario incluyendo todos sus grupos asignados",
+     *     operationId="getUsuarioConGrupos",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="id", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Usuario obtenido exitosamente"),
+     *     @OA\Response(response=404, description="Usuario no encontrado")
+     * )
+     *
      * Obtener información del usuario con sus grupos
      */
     public function getUsuarioConGrupos($id)

@@ -41,6 +41,19 @@ class DashboardUsuarioController extends Controller
     }
 
     /**
+     * @OA\Get(
+     *     path="/carga-consolidada/dashboard-usuario/contenedores",
+     *     tags={"Dashboard Usuario"},
+     *     summary="Obtener contenedores para filtro de usuario",
+     *     description="Obtiene la lista de contenedores asociados al usuario autenticado para el filtro",
+     *     operationId="getDashboardUsuarioContenedores",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="fecha_inicio", in="query", @OA\Schema(type="string", format="date")),
+     *     @OA\Parameter(name="fecha_fin", in="query", @OA\Schema(type="string", format="date")),
+     *     @OA\Response(response=200, description="Contenedores obtenidos exitosamente"),
+     *     @OA\Response(response=401, description="No autenticado")
+     * )
+     *
      * Obtiene la lista de contenedores para el filtro (solo del usuario autenticado)
      */
     public function getContenedoresFiltro(Request $request)
@@ -93,6 +106,20 @@ class DashboardUsuarioController extends Controller
     }
 
     /**
+     * @OA\Get(
+     *     path="/carga-consolidada/dashboard-usuario/vendedores",
+     *     tags={"Dashboard Usuario"},
+     *     summary="Obtener información del vendedor",
+     *     description="Obtiene información del usuario autenticado como vendedor con métricas",
+     *     operationId="getDashboardUsuarioVendedores",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="fecha_inicio", in="query", @OA\Schema(type="string", format="date")),
+     *     @OA\Parameter(name="fecha_fin", in="query", @OA\Schema(type="string", format="date")),
+     *     @OA\Parameter(name="id_contenedor", in="query", @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Vendedores obtenidos exitosamente"),
+     *     @OA\Response(response=401, description="No autenticado")
+     * )
+     *
      * Obtiene la lista de vendedores para el filtro (solo el usuario autenticado)
      */
     public function getVendedoresFiltro(Request $request)

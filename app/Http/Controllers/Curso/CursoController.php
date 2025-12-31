@@ -27,6 +27,28 @@ class CursoController extends Controller
 {
     use CodeIgniterEncryption, MoodleRestProTrait, FileTrait, WhatsappTrait;
     public $table_pedido_curso_pagos = 'pedido_curso_pagos';
+    
+    /**
+     * @OA\Get(
+     *     path="/cursos",
+     *     tags={"Cursos"},
+     *     summary="Listar cursos y pedidos",
+     *     description="Obtiene la lista de pedidos de cursos con filtros y paginación",
+     *     operationId="getCursos",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="limit", in="query", @OA\Schema(type="integer", default=10)),
+     *     @OA\Parameter(name="page", in="query", @OA\Schema(type="integer", default=1)),
+     *     @OA\Parameter(name="search", in="query", @OA\Schema(type="string")),
+     *     @OA\Parameter(name="campanas", in="query", @OA\Schema(type="string")),
+     *     @OA\Parameter(name="fechaInicio", in="query", @OA\Schema(type="string", format="date")),
+     *     @OA\Parameter(name="fechaFin", in="query", @OA\Schema(type="string", format="date")),
+     *     @OA\Parameter(name="estados_pago", in="query", @OA\Schema(type="string")),
+     *     @OA\Parameter(name="tipos_curso", in="query", @OA\Schema(type="string")),
+     *     @OA\Parameter(name="sobrepagado", in="query", @OA\Schema(type="string")),
+     *     @OA\Response(response=200, description="Cursos obtenidos exitosamente"),
+     *     @OA\Response(response=401, description="No autenticado")
+     * )
+     */
     public function index(Request $request)
     {
         try {
@@ -281,6 +303,16 @@ class CursoController extends Controller
     }
 
     /**
+     * @OA\Get(
+     *     path="/cursos/filter-options",
+     *     tags={"Cursos"},
+     *     summary="Obtener opciones de filtro para cursos",
+     *     description="Obtiene las opciones disponibles para filtrar cursos (campañas, estados, tipos)",
+     *     operationId="filterOptions",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Response(response=200, description="Opciones obtenidas exitosamente")
+     * )
+     *
      * Obtener opciones de filtro para cursos
      */
     public function filterOptions()
@@ -364,6 +396,23 @@ class CursoController extends Controller
     }
 
     /**
+     * @OA\Delete(
+     *     path="/cursos/{idPedido}",
+     *     tags={"Cursos"},
+     *     summary="Eliminar pedido de curso",
+     *     description="Elimina un pedido de curso por su ID",
+     *     operationId="eliminarPedido",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(
+     *         name="idPedido",
+     *         in="path",
+     *         required=true,
+     *         @OA\Schema(type="integer")
+     *     ),
+     *     @OA\Response(response=200, description="Pedido eliminado exitosamente"),
+     *     @OA\Response(response=404, description="Pedido no encontrado")
+     * )
+     *
      * Eliminar pedido (migrado de CodeIgniter)
      */
     public function eliminarPedido($idPedido)
@@ -407,6 +456,23 @@ class CursoController extends Controller
      */
   
     /**
+     * @OA\Get(
+     *     path="/cursos/{idPedido}/cliente",
+     *     tags={"Cursos"},
+     *     summary="Obtener datos del cliente por pedido",
+     *     description="Obtiene los datos del cliente asociado a un pedido de curso",
+     *     operationId="getDatosClientePorPedido",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(
+     *         name="idPedido",
+     *         in="path",
+     *         required=true,
+     *         @OA\Schema(type="integer")
+     *     ),
+     *     @OA\Response(response=200, description="Datos del cliente obtenidos exitosamente"),
+     *     @OA\Response(response=404, description="Pedido no encontrado")
+     * )
+     *
      * Obtener datos del cliente por pedido
      */
     public function getDatosClientePorPedido($idPedido)
@@ -480,6 +546,23 @@ class CursoController extends Controller
 
 
     /**
+     * @OA\Put(
+     *     path="/cursos/usuario-moodle/{idUsuario}",
+     *     tags={"Cursos"},
+     *     summary="Actualizar usuario Moodle",
+     *     description="Actualiza los datos del usuario en Moodle",
+     *     operationId="setUsuarioMoodle",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="idUsuario", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\RequestBody(
+     *         @OA\JsonContent(
+     *             @OA\Property(property="usuario_moodle", type="string"),
+     *             @OA\Property(property="No_Password", type="string")
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Usuario actualizado exitosamente")
+     * )
+     *
      * Actualizar usuario Moodle
      */
     public function setUsuarioMoodle(Request $request, $idUsuario)
@@ -493,6 +576,18 @@ class CursoController extends Controller
     }
 
     /**
+     * @OA\Put(
+     *     path="/cursos/{idPedido}",
+     *     tags={"Cursos"},
+     *     summary="Actualizar pedido de curso",
+     *     description="Actualiza los datos de un pedido de curso",
+     *     operationId="actualizarPedidoPublic",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="idPedido", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\RequestBody(required=true, @OA\JsonContent(type="object")),
+     *     @OA\Response(response=200, description="Pedido actualizado exitosamente")
+     * )
+     *
      * Actualizar pedido
      */
     public function actualizarPedidoPublic(Request $request, $idPedido)
@@ -505,6 +600,23 @@ class CursoController extends Controller
         return response()->json(['status' => 'error', 'message' => 'Error al modificar']);
     }
 
+    /**
+     * @OA\Put(
+     *     path="/cursos/{idPedido}/importe",
+     *     tags={"Cursos"},
+     *     summary="Actualizar importe de pedido",
+     *     description="Actualiza el importe total de un pedido de curso",
+     *     operationId="actualizarImportePedido",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="idPedido", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\RequestBody(
+     *         @OA\JsonContent(
+     *             @OA\Property(property="Ss_Total", type="number")
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Importe actualizado exitosamente")
+     * )
+     */
     public function actualizarImportePedido(Request $request, $idPedido)
     {
         $importe = $request->input('importe');
@@ -517,6 +629,18 @@ class CursoController extends Controller
 
 
     /**
+     * @OA\Delete(
+     *     path="/cursos/pago/{idPagoCurso}",
+     *     tags={"Cursos"},
+     *     summary="Eliminar pago de curso",
+     *     description="Elimina un pago de curso y su voucher asociado",
+     *     operationId="borrarPagoCurso",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="idPagoCurso", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Pago eliminado exitosamente"),
+     *     @OA\Response(response=404, description="Pago no encontrado")
+     * )
+     *
      * Eliminar pago de curso y borrar voucher (migrado de CodeIgniter)
      */
     public function borrarPagoCurso($idPagoCurso)
@@ -569,6 +693,31 @@ class CursoController extends Controller
     }
 
     /**
+     * @OA\Post(
+     *     path="/cursos/pagos",
+     *     tags={"Cursos"},
+     *     summary="Guardar pago de cliente",
+     *     description="Guarda un pago de cliente con voucher adjunto",
+     *     operationId="saveClientePagosCurso",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\MediaType(
+     *             mediaType="multipart/form-data",
+     *             @OA\Schema(
+     *                 required={"voucher", "idPedido", "monto", "fecha", "banco"},
+     *                 @OA\Property(property="voucher", type="string", format="binary"),
+     *                 @OA\Property(property="idPedido", type="integer"),
+     *                 @OA\Property(property="monto", type="number"),
+     *                 @OA\Property(property="fecha", type="string", format="date"),
+     *                 @OA\Property(property="banco", type="string")
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Pago guardado exitosamente"),
+     *     @OA\Response(response=422, description="Validación fallida")
+     * )
+     *
      * Guardar pago de cliente (con voucher)
      */
     public function saveClientePagosCurso(Request $request)
@@ -647,6 +796,17 @@ class CursoController extends Controller
     }
 
     /**
+     * @OA\Get(
+     *     path="/cursos/{idPedidoCurso}/pagos",
+     *     tags={"Cursos"},
+     *     summary="Obtener pagos de un pedido de curso",
+     *     description="Obtiene todos los pagos detallados de un pedido de curso",
+     *     operationId="getPagosCursoPedido",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="idPedidoCurso", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Pagos obtenidos exitosamente")
+     * )
+     *
      * Obtener pagos detallados de un pedido
      */
     public function getPagosCursoPedido($idPedidoCurso)
@@ -666,6 +826,24 @@ class CursoController extends Controller
     }
 
     /**
+     * @OA\Post(
+     *     path="/cursos/campanas",
+     *     tags={"Cursos - Campañas"},
+     *     summary="Crear campaña de curso",
+     *     description="Crea una nueva campaña de curso con fechas y días",
+     *     operationId="crearCampana",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             @OA\Property(property="fe_inicio", type="string", format="date"),
+     *             @OA\Property(property="fe_fin", type="string", format="date"),
+     *             @OA\Property(property="dias", type="array", @OA\Items(type="string", format="date"))
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Campaña creada exitosamente")
+     * )
+     *
      * Métodos de campañas: crear, editar, borrar, obtener
      */
     public function crearCampana(Request $request)
@@ -685,6 +863,26 @@ class CursoController extends Controller
         return response()->json(['status' => 'success', 'message' => 'Campaña registrada correctamente', 'id' => $id]);
     }
 
+    /**
+     * @OA\Put(
+     *     path="/cursos/campanas/{id}",
+     *     tags={"Cursos - Campañas"},
+     *     summary="Editar campaña de curso",
+     *     description="Actualiza una campaña de curso existente",
+     *     operationId="editarCampana",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="id", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             @OA\Property(property="fe_inicio", type="string", format="date"),
+     *             @OA\Property(property="fe_fin", type="string", format="date"),
+     *             @OA\Property(property="dias", type="array", @OA\Items(type="string", format="date"))
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Campaña actualizada exitosamente")
+     * )
+     */
     public function editarCampana(Request $request, $id)
     {
         $data = [
@@ -699,12 +897,35 @@ class CursoController extends Controller
         return response()->json(['status' => 'success', 'message' => 'Campaña actualizada correctamente']);
     }
 
+    /**
+     * @OA\Delete(
+     *     path="/cursos/campanas/{id}",
+     *     tags={"Cursos - Campañas"},
+     *     summary="Eliminar campaña de curso",
+     *     description="Elimina (soft delete) una campaña de curso",
+     *     operationId="borrarCampana",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="id", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Campaña eliminada exitosamente")
+     * )
+     */
     public function borrarCampana($id)
     {
         DB::table('campana_curso')->where('ID_Campana', $id)->update(['Fe_Borrado' => now()]);
         return response()->json(['status' => 'success', 'message' => 'Campaña eliminada correctamente']);
     }
 
+    /**
+     * @OA\Get(
+     *     path="/cursos/campanas",
+     *     tags={"Cursos - Campañas"},
+     *     summary="Obtener campañas de cursos",
+     *     description="Lista todas las campañas de cursos activas",
+     *     operationId="getCampanas",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Response(response=200, description="Campañas obtenidas exitosamente")
+     * )
+     */
     public function getCampanas()
     {
         $campanas = DB::table('campana_curso')
@@ -731,6 +952,18 @@ class CursoController extends Controller
         return response()->json(['status' => 'success', 'data' => $campanas]);
     }
 
+    /**
+     * @OA\Get(
+     *     path="/cursos/campanas/{id}",
+     *     tags={"Cursos - Campañas"},
+     *     summary="Obtener campaña por ID",
+     *     description="Obtiene una campaña específica con sus días",
+     *     operationId="getCampanaById",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="id", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Campaña obtenida exitosamente")
+     * )
+     */
     public function getCampanaById($id)
     {
         $campana = DB::table('campana_curso as c')
@@ -743,6 +976,23 @@ class CursoController extends Controller
     }
 
     /**
+     * @OA\Post(
+     *     path="/cursos/tipo-curso",
+     *     tags={"Cursos"},
+     *     summary="Asignar tipo de curso",
+     *     description="Asigna un tipo de curso a un pedido",
+     *     operationId="asignarTipoCurso",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             @OA\Property(property="id_pedido", type="integer"),
+     *             @OA\Property(property="id_tipo_curso", type="integer")
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Tipo de curso asignado exitosamente")
+     * )
+     *
      * Asignar tipo de curso (migrado de CodeIgniter)
      */
     public function asignarTipoCurso(Request $request)
@@ -785,6 +1035,23 @@ class CursoController extends Controller
     }
 
     /**
+     * @OA\Post(
+     *     path="/cursos/asignar-campana",
+     *     tags={"Cursos"},
+     *     summary="Asignar campaña a pedido de curso",
+     *     description="Asigna una campaña a un pedido de curso",
+     *     operationId="asignarCampanaPedidoCurso",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             @OA\Property(property="id_pedido", type="integer"),
+     *             @OA\Property(property="estado_pedido", type="integer")
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Campaña asignada exitosamente")
+     * )
+     *
      * Asignar campaña a pedido (migrado de CodeIgniter)
      */
     public function asignarCampanaPedidoCurso(Request $request)
@@ -815,6 +1082,20 @@ class CursoController extends Controller
     }
 
     /**
+     * @OA\Get(
+     *     path="/cursos/pagos-general",
+     *     tags={"Cursos"},
+     *     summary="Obtener pagos de cursos general",
+     *     description="Obtiene la lista general de pagos de cursos con filtros",
+     *     operationId="getPagosCurso",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="limit", in="query", @OA\Schema(type="integer", default=10)),
+     *     @OA\Parameter(name="page", in="query", @OA\Schema(type="integer", default=1)),
+     *     @OA\Parameter(name="search", in="query", @OA\Schema(type="string")),
+     *     @OA\Response(response=200, description="Pagos obtenidos exitosamente"),
+     *     @OA\Response(response=401, description="No autenticado")
+     * )
+     *
      * Obtener pagos de cursos (migrado de CodeIgniter)
      */
     public function getPagosCurso(Request $request)
@@ -944,6 +1225,24 @@ class CursoController extends Controller
             ], 500);
         }
     }
+    /**
+     * @OA\Post(
+     *     path="/cursos/change-importe",
+     *     tags={"Cursos"},
+     *     summary="Cambiar importe de pedido",
+     *     description="Cambia el importe total de un pedido de curso",
+     *     operationId="changeImportePedido",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             @OA\Property(property="id_pedido", type="integer"),
+     *             @OA\Property(property="importe", type="number")
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Importe actualizado exitosamente")
+     * )
+     */
     public function changeImportePedido(Request $request)
     {
         try {
@@ -961,6 +1260,24 @@ class CursoController extends Controller
         }
     }
 
+    /**
+     * @OA\Post(
+     *     path="/cursos/crear-usuario-moodle",
+     *     tags={"Cursos"},
+     *     summary="Crear usuario en Moodle",
+     *     description="Crea un usuario en la plataforma Moodle para cursos",
+     *     operationId="crearUsuarioCursosMoodle",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             @OA\Property(property="id_usuario", type="integer"),
+     *             @OA\Property(property="id_pedido", type="integer")
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Usuario Moodle creado exitosamente")
+     * )
+     */
     public function crearUsuarioCursosMoodle(Request $request)
     {
         try {
@@ -1406,6 +1723,20 @@ class CursoController extends Controller
         return $results;
     }
 
+    /**
+     * @OA\Post(
+     *     path="/cursos/enviar-email-moodle/{id}/{ID_Pedido_Curso}",
+     *     tags={"Cursos"},
+     *     summary="Enviar email de usuario Moodle",
+     *     description="Envía las credenciales de Moodle al usuario por email y WhatsApp",
+     *     operationId="enviarEmailUsuarioMoodle",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="id", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Parameter(name="ID_Pedido_Curso", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Email enviado exitosamente"),
+     *     @OA\Response(response=404, description="Entidad no encontrada")
+     * )
+     */
     public function enviarEmailUsuarioMoodle($id, $ID_Pedido_Curso)
     {
         try {
@@ -1485,6 +1816,34 @@ class CursoController extends Controller
         }
     }
 
+    /**
+     * @OA\Put(
+     *     path="/cursos/clientes/{id}",
+     *     tags={"Cursos"},
+     *     summary="Actualizar datos de cliente",
+     *     description="Actualiza los datos personales de un cliente de cursos",
+     *     operationId="actualizarDatosCliente",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="id", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             @OA\Property(property="nombres", type="string"),
+     *             @OA\Property(property="dni", type="string"),
+     *             @OA\Property(property="sexo", type="integer"),
+     *             @OA\Property(property="red_social", type="integer"),
+     *             @OA\Property(property="correo", type="string"),
+     *             @OA\Property(property="id_pais", type="integer"),
+     *             @OA\Property(property="whatsapp", type="string"),
+     *             @OA\Property(property="id_departamento", type="integer"),
+     *             @OA\Property(property="nacimiento", type="string", format="date"),
+     *             @OA\Property(property="id_provincia", type="integer"),
+     *             @OA\Property(property="id_distrito", type="integer")
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Cliente actualizado exitosamente")
+     * )
+     */
     public function actualizarDatosCliente(Request $request,$id)
     {
         try {
@@ -1605,6 +1964,19 @@ class CursoController extends Controller
     }
 
     /**
+     * @OA\Post(
+     *     path="/cursos/{idPedidoCurso}/constancia",
+     *     tags={"Cursos"},
+     *     summary="Generar constancia de pedido",
+     *     description="Genera y envía la constancia de un pedido de curso",
+     *     operationId="generarConstanciaPedido",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="idPedidoCurso", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Constancia generada exitosamente"),
+     *     @OA\Response(response=404, description="Pedido no encontrado"),
+     *     @OA\Response(response=400, description="Pedido no confirmado o sin teléfono")
+     * )
+     *
      * Genera y envía la constancia de un pedido de curso
      */
     public function generarConstanciaPedido($idPedidoCurso)
@@ -1745,6 +2117,22 @@ class CursoController extends Controller
         }
     }
     /**
+     * @OA\Get(
+     *     path="/cursos/exportar-excel",
+     *     tags={"Cursos"},
+     *     summary="Exportar cursos a Excel",
+     *     description="Exporta la lista de cursos a un archivo Excel con los mismos filtros que el listado",
+     *     operationId="exportarExcel",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="search", in="query", @OA\Schema(type="string")),
+     *     @OA\Parameter(name="campanas", in="query", @OA\Schema(type="string")),
+     *     @OA\Parameter(name="fechaInicio", in="query", @OA\Schema(type="string", format="date")),
+     *     @OA\Parameter(name="fechaFin", in="query", @OA\Schema(type="string", format="date")),
+     *     @OA\Parameter(name="estados_pago", in="query", @OA\Schema(type="string")),
+     *     @OA\Parameter(name="tipos_curso", in="query", @OA\Schema(type="string")),
+     *     @OA\Response(response=200, description="Archivo Excel generado exitosamente")
+     * )
+     *
      * Exportar cursos a Excel usando los mismos filtros que index
      */
     public function exportarExcel(Request $request)
@@ -1989,6 +2377,19 @@ class CursoController extends Controller
     }
 
     /**
+     * @OA\Post(
+     *     path="/cursos/{idPedido}/recordatorio-pago",
+     *     tags={"Cursos"},
+     *     summary="Enviar recordatorio de pago",
+     *     description="Envía un recordatorio de pago por WhatsApp al cliente",
+     *     operationId="enviarRecordatorioPago",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="idPedido", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Recordatorio enviado exitosamente"),
+     *     @OA\Response(response=404, description="Pedido no encontrado"),
+     *     @OA\Response(response=400, description="Cliente sin teléfono registrado")
+     * )
+     *
      * Enviar recordatorio de pago por WhatsApp
      */
     public function enviarRecordatorioPago($idPedido)
@@ -2110,6 +2511,19 @@ class CursoController extends Controller
     }
 
     /**
+     * @OA\Post(
+     *     path="/cursos/{idPedido}/instrucciones-password",
+     *     tags={"Cursos"},
+     *     summary="Enviar instrucciones de cambio de contraseña",
+     *     description="Envía instrucciones para cambiar la contraseña por WhatsApp",
+     *     operationId="enviarInstruccionesCambioPassword",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="idPedido", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Instrucciones enviadas exitosamente"),
+     *     @OA\Response(response=404, description="Pedido no encontrado"),
+     *     @OA\Response(response=400, description="Cliente sin teléfono registrado")
+     * )
+     *
      * Enviar instrucciones para cambiar contraseña por WhatsApp
      */
     public function enviarInstruccionesCambioPassword($idPedido)

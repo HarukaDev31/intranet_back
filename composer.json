@@ -8,6 +8,7 @@
         "php": "^7.3|^8.0",
         "barryvdh/laravel-snappy": "^1.0",
         "beyondcode/laravel-websockets": "^1.14",
+        "darkaonline/l5-swagger": "^8.6",
         "doctrine/dbal": "^3.10",
         "dompdf/dompdf": "^3.1",
         "fruitcake/laravel-cors": "^2.0",

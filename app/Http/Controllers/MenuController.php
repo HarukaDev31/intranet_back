@@ -19,6 +19,32 @@ class MenuController extends Controller
     }
 
     /**
+     * @OA\Get(
+     *     path="/menu/listar",
+     *     tags={"Menú"},
+     *     summary="Listar menús del usuario",
+     *     description="Obtiene la estructura jerárquica de menús disponibles para el usuario autenticado",
+     *     operationId="listarMenu",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Response(
+     *         response=200,
+     *         description="Menús obtenidos exitosamente",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="status", type="string", example="success"),
+     *             @OA\Property(property="message", type="string", example="Menús obtenidos exitosamente"),
+     *             @OA\Property(property="data", type="array",
+     *                 @OA\Items(type="object",
+     *                     @OA\Property(property="ID_Menu", type="integer"),
+     *                     @OA\Property(property="No_Menu", type="string"),
+     *                     @OA\Property(property="Hijos", type="array", @OA\Items(type="object"))
+     *                 )
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(response=401, description="No autenticado"),
+     *     @OA\Response(response=500, description="Error del servidor")
+     * )
+     *
      * Listar menús del usuario autenticado
      *
      * @return \Illuminate\Http\JsonResponse

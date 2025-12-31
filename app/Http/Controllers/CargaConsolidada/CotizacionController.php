@@ -65,6 +65,50 @@ class CotizacionController extends Controller
         }
         return $headers;
     }
+
+    /**
+     * @OA\Get(
+     *     path="/carga-consolidada/contenedores/{idContenedor}/cotizaciones",
+     *     tags={"Carga Consolidada"},
+     *     summary="Listar cotizaciones de un contenedor",
+     *     description="Obtiene las cotizaciones asociadas a un contenedor específico",
+     *     operationId="getCotizacionesByContenedor",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(
+     *         name="idContenedor",
+     *         in="path",
+     *         description="ID del contenedor",
+     *         required=true,
+     *         @OA\Schema(type="integer")
+     *     ),
+     *     @OA\Parameter(
+     *         name="search",
+     *         in="query",
+     *         description="Buscar por nombre, documento o teléfono",
+     *         required=false,
+     *         @OA\Schema(type="string")
+     *     ),
+     *     @OA\Parameter(
+     *         name="idCotizacion",
+     *         in="query",
+     *         description="Filtrar por ID de cotización específica",
+     *         required=false,
+     *         @OA\Schema(type="integer")
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Cotizaciones obtenidas exitosamente",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=true),
+     *             @OA\Property(property="data", type="array", @OA\Items(type="object")),
+     *             @OA\Property(property="pagination", type="object"),
+     *             @OA\Property(property="headers", type="object")
+     *         )
+     *     ),
+     *     @OA\Response(response=401, description="No autenticado"),
+     *     @OA\Response(response=404, description="Contenedor no encontrado")
+     * )
+     */
     public function index(Request $request, $idContenedor)
     {
         try {
@@ -568,6 +612,30 @@ class CotizacionController extends Controller
             'lista_embarque_url' => $this->generateImageUrl($contenedor->lista_embarque_url) ? $this->generateImageUrl($contenedor->lista_embarque_url) : null
         ]);
     }
+    
+    /**
+     * @OA\Post(
+     *     path="/carga-consolidada/contenedor/cotizaciones",
+     *     tags={"Cotizaciones"},
+     *     summary="Crear cotización",
+     *     description="Crea una nueva cotización para un contenedor subiendo un archivo Excel",
+     *     operationId="storeCotizacion",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\MediaType(
+     *             mediaType="multipart/form-data",
+     *             @OA\Schema(
+     *                 @OA\Property(property="id_contenedor", type="integer"),
+     *                 @OA\Property(property="cotizacion", type="string", format="binary")
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Cotización creada exitosamente"),
+     *     @OA\Response(response=400, description="Datos inválidos"),
+     *     @OA\Response(response=404, description="Contenedor no encontrado")
+     * )
+     */
     public function store(Request $request)
     {
         try {
@@ -800,6 +868,19 @@ class CotizacionController extends Controller
         return response()->json(['message' => 'Cotizacion update']);
     }
 
+    /**
+     * @OA\Delete(
+     *     path="/carga-consolidada/contenedor/cotizaciones/{id}",
+     *     tags={"Cotizaciones"},
+     *     summary="Eliminar cotización",
+     *     description="Elimina una cotización y sus proveedores asociados",
+     *     operationId="destroyCotizacion",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="id", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Cotización eliminada exitosamente"),
+     *     @OA\Response(response=500, description="Error al eliminar")
+     * )
+     */
     public function destroy($id)
     {
         try {
@@ -816,6 +897,17 @@ class CotizacionController extends Controller
         }
     }
 
+    /**
+     * @OA\Get(
+     *     path="/carga-consolidada/cotizaciones/filter-options",
+     *     tags={"Cotización"},
+     *     summary="Obtener opciones de filtro",
+     *     description="Obtiene las opciones de filtro disponibles para cotizaciones",
+     *     operationId="filterOptionsCotizacion",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Response(response=200, description="Opciones obtenidas exitosamente")
+     * )
+     */
     public function filterOptions()
     {
         // Implementación básica
@@ -823,6 +915,18 @@ class CotizacionController extends Controller
     }
 
     /**
+     * @OA\Get(
+     *     path="/carga-consolidada/cotizaciones/{id}/documentacion",
+     *     tags={"Cotización"},
+     *     summary="Obtener documentación de cliente",
+     *     description="Obtiene la documentación completa de una cotización para el cliente",
+     *     operationId="showClientesDocumentacion",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="id", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Documentación obtenida exitosamente"),
+     *     @OA\Response(response=404, description="Cotización no encontrada")
+     * )
+     *
      * Obtener documentación de clientes para una cotización específica
      * Replica la funcionalidad del método showClientesDocumentacion de CodeIgniter
      */
@@ -1275,6 +1379,16 @@ class CotizacionController extends Controller
     }
 
     /**
+     * @OA\Get(
+     *     path="/carga-consolidada/cotizaciones/tipos-cliente",
+     *     tags={"Cotización"},
+     *     summary="Obtener tipos de cliente",
+     *     description="Obtiene todos los tipos de cliente disponibles para cotizaciones",
+     *     operationId="getTipoClienteCotizacion",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Response(response=200, description="Tipos de cliente obtenidos exitosamente")
+     * )
+     *
      * Obtiene todos los tipos de cliente
      */
     public function getTipoCliente()
@@ -1283,11 +1397,19 @@ class CotizacionController extends Controller
     }
 
     /**
-     * Elimina el archivo de cotización
-     */
-
-
-    /**
+     * @OA\Delete(
+     *     path="/carga-consolidada/cotizaciones/{id}",
+     *     tags={"Cotización"},
+     *     summary="Eliminar cotización",
+     *     description="Elimina una cotización completa y sus archivos asociados",
+     *     operationId="deleteCotizacion",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="id", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Cotización eliminada exitosamente"),
+     *     @OA\Response(response=404, description="Cotización no encontrada"),
+     *     @OA\Response(response=500, description="Error al eliminar cotización")
+     * )
+     *
      * Elimina una cotización completa
      */
     public function deleteCotizacion($id)
@@ -1321,11 +1443,19 @@ class CotizacionController extends Controller
     }
 
     /**
-     * Actualiza el estado del cliente
-     */
-
-
-    /**
+     * @OA\Post(
+     *     path="/carga-consolidada/cotizaciones/{id}/refresh-file",
+     *     tags={"Cotización"},
+     *     summary="Refrescar archivo de cotización",
+     *     description="Refresca y reprocesa el archivo de cotización desde el archivo Excel existente",
+     *     operationId="refreshCotizacionFile",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="id", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Cotización refrescada exitosamente"),
+     *     @OA\Response(response=404, description="Cotización no encontrada"),
+     *     @OA\Response(response=500, description="Error al refrescar cotización")
+     * )
+     *
      * Refresca el archivo de cotización
      */
     public function refreshCotizacionFile($id)
@@ -1759,17 +1889,29 @@ class CotizacionController extends Controller
     }
 
     /**
-     * Muestra una cotización específica
-     */
-    public function showCotizacion($id)
-    {
-        return Cotizacion::find($id);
-    }
-
-    /**
-     * Actualiza una cotización
-     */
-    /**
+     * @OA\Post(
+     *     path="/carga-consolidada/cotizaciones/{id}/update-file",
+     *     tags={"Cotización"},
+     *     summary="Actualizar archivo de cotización",
+     *     description="Sube y actualiza el archivo Excel de una cotización existente",
+     *     operationId="updateCotizacionFile",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="id", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\MediaType(
+     *             mediaType="multipart/form-data",
+     *             @OA\Schema(
+     *                 @OA\Property(property="cotizacion", type="string", format="binary", description="Archivo Excel de cotización")
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Archivo actualizado exitosamente"),
+     *     @OA\Response(response=400, description="Archivo no proporcionado"),
+     *     @OA\Response(response=404, description="Cotización no encontrada"),
+     *     @OA\Response(response=500, description="Error al actualizar archivo")
+     * )
+     *
      * Actualiza el archivo de una cotización existente
      * @param Request $request
      * @param int $id ID de la cotización
@@ -1866,6 +2008,26 @@ class CotizacionController extends Controller
     }
 
     /**
+     * @OA\Put(
+     *     path="/carga-consolidada/cotizaciones/{id}/estado",
+     *     tags={"Cotización"},
+     *     summary="Actualizar estado de cotización",
+     *     description="Actualiza el estado de una cotización (CONTACTADO, INTERESADO, CONFIRMADO, etc.)",
+     *     operationId="updateEstadoCotizacion",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="id", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             required={"estado"},
+     *             @OA\Property(property="estado", type="string", example="CONFIRMADO", description="Estado de la cotización")
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Estado actualizado exitosamente"),
+     *     @OA\Response(response=400, description="No se puede cambiar estado - proveedores sin productos"),
+     *     @OA\Response(response=500, description="Error al actualizar estado")
+     * )
+     *
      * Actualiza el estado de una cotización
      */
     public function updateEstadoCotizacion($id, Request $request)
@@ -2497,6 +2659,20 @@ class CotizacionController extends Controller
         return $value;
     }
 
+    /**
+     * @OA\Delete(
+     *     path="/carga-consolidada/cotizaciones/{id}/file",
+     *     tags={"Cotización"},
+     *     summary="Eliminar archivo de cotización",
+     *     description="Elimina el archivo Excel asociado a una cotización",
+     *     operationId="deleteCotizacionFile",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="id", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Archivo eliminado exitosamente"),
+     *     @OA\Response(response=404, description="Cotización no encontrada"),
+     *     @OA\Response(response=500, description="Error al eliminar archivo")
+     * )
+     */
     public function deleteCotizacionFile($id)
     {
         try {
@@ -2520,6 +2696,19 @@ class CotizacionController extends Controller
         }
     }
 
+    /**
+     * @OA\Get(
+     *     path="/carga-consolidada/cotizaciones/{idContenedor}/exportar",
+     *     tags={"Cotización"},
+     *     summary="Exportar cotizaciones a Excel",
+     *     description="Exporta las cotizaciones de un contenedor a archivo Excel",
+     *     operationId="exportarCotizacion",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="idContenedor", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Archivo Excel generado exitosamente"),
+     *     @OA\Response(response=500, description="Error al exportar cotizaciones")
+     * )
+     */
     public function exportarCotizacion(Request $request, $idContenedor)
     {
         try {
@@ -2674,6 +2863,19 @@ class CotizacionController extends Controller
     }
 
     /**
+     * @OA\Post(
+     *     path="/carga-consolidada/cotizaciones/{id}/recordatorio-firma",
+     *     tags={"Cotización"},
+     *     summary="Enviar recordatorio de firma de contrato",
+     *     description="Envía un recordatorio de firma de contrato al cliente por WhatsApp",
+     *     operationId="sendRecordatorioFirmaContrato",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="id", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Recordatorio enviado exitosamente"),
+     *     @OA\Response(response=404, description="Cotización o contenedor no encontrado"),
+     *     @OA\Response(response=500, description="Error al enviar recordatorio")
+     * )
+     *
      * Envía un recordatorio de firma de contrato por WhatsApp
      * @param int $id ID de la cotización
      * @return \Illuminate\Http\JsonResponse

@@ -13,7 +13,31 @@ use Carbon\Carbon;
 class ContainersController extends Controller
 {
     protected $TOTAL_CBM_CONSOLIDADO_2025 = 67;
+
     /**
+     * @OA\Get(
+     *     path="/external/containers",
+     *     tags={"Contenedores"},
+     *     summary="Listar contenedores para clientes externos",
+     *     description="Obtiene la lista de contenedores no completados disponibles para clientes externos",
+     *     operationId="getContainersExternal",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Response(
+     *         response=200,
+     *         description="Contenedores obtenidos exitosamente",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=true),
+     *             @OA\Property(property="data", type="array", @OA\Items(type="object",
+     *                 @OA\Property(property="id", type="integer"),
+     *                 @OA\Property(property="carga", type="string"),
+     *                 @OA\Property(property="cbm_confirmado", type="number"),
+     *                 @OA\Property(property="progress", type="number")
+     *             ))
+     *         )
+     *     ),
+     *     @OA\Response(response=401, description="No autenticado")
+     * )
+     *
      * Obtener lista de contenedores no completados para clientes externos
      * 
      * @return \Illuminate\Http\JsonResponse

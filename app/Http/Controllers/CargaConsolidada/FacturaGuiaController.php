@@ -13,6 +13,20 @@ use Illuminate\Support\Facades\Storage;
 class FacturaGuiaController extends Controller
 {
     use WhatsappTrait;
+
+    /**
+     * @OA\Get(
+     *     path="/carga-consolidada/contenedores/{idContenedor}/factura-guia",
+     *     tags={"Factura y Guía"},
+     *     summary="Obtener cotizaciones para factura y guía",
+     *     description="Obtiene las cotizaciones confirmadas de un contenedor para gestión de facturas y guías",
+     *     operationId="getContenedorFacturaGuia",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="idContenedor", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Parameter(name="per_page", in="query", @OA\Schema(type="integer", default=10)),
+     *     @OA\Response(response=200, description="Cotizaciones obtenidas exitosamente")
+     * )
+     */
     public function getContenedorFacturaGuia(Request $request, $idContenedor)
     {
         $perPage = $request->input('per_page', 10);
@@ -49,6 +63,27 @@ class FacturaGuiaController extends Controller
             'success' => true
         ]);
     }
+    /**
+     * @OA\Post(
+     *     path="/carga-consolidada/contenedor/factura-guia/general/upload-guia-remision",
+     *     tags={"Factura y Guía"},
+     *     summary="Subir guía de remisión",
+     *     description="Sube un archivo de guía de remisión para una cotización",
+     *     operationId="uploadGuiaRemision",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\MediaType(
+     *             mediaType="multipart/form-data",
+     *             @OA\Schema(
+     *                 @OA\Property(property="idCotizacion", type="integer"),
+     *                 @OA\Property(property="file", type="string", format="binary")
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Guía subida exitosamente")
+     * )
+     */
     public function uploadGuiaRemision(Request $request)
     {
         try {
@@ -71,6 +106,27 @@ class FacturaGuiaController extends Controller
             ]);
         }
     }
+    /**
+     * @OA\Post(
+     *     path="/carga-consolidada/contenedor/factura-guia/general/upload-factura-comercial",
+     *     tags={"Factura y Guía"},
+     *     summary="Subir factura comercial",
+     *     description="Sube un archivo de factura comercial para una cotización",
+     *     operationId="uploadFacturaComercialFG",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\MediaType(
+     *             mediaType="multipart/form-data",
+     *             @OA\Schema(
+     *                 @OA\Property(property="idCotizacion", type="integer"),
+     *                 @OA\Property(property="file", type="string", format="binary")
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Factura subida exitosamente")
+     * )
+     */
     public function uploadFacturaComercial(Request $request)
     {
         try {
@@ -93,7 +149,18 @@ class FacturaGuiaController extends Controller
             ]);
         }
     }
-    //create function to get headers data get empty headers but carga 
+    /**
+     * @OA\Get(
+     *     path="/carga-consolidada/contenedor/factura-guia/general/{idContenedor}/headers",
+     *     tags={"Factura y Guía"},
+     *     summary="Obtener headers de factura y guía",
+     *     description="Obtiene los headers de datos para factura y guía",
+     *     operationId="getHeadersDataFG",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="idContenedor", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Headers obtenidos exitosamente")
+     * )
+     */
     public function getHeadersData($idContenedor)
     {
         try {
@@ -111,6 +178,19 @@ class FacturaGuiaController extends Controller
             ]);
         }
     }
+    /**
+     * @OA\Delete(
+     *     path="/carga-consolidada/contenedor/factura-guia/general/delete-factura-comercial/{idContenedor}",
+     *     tags={"Factura y Guía"},
+     *     summary="Eliminar factura comercial",
+     *     description="Elimina la factura comercial de una cotización",
+     *     operationId="deleteFacturaComercialFG",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="idContenedor", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Factura eliminada exitosamente"),
+     *     @OA\Response(response=404, description="Factura no encontrada")
+     * )
+     */
     public function deleteFacturaComercial($idContenedor)
     {
         $cotizacion = Cotizacion::find($idContenedor);
@@ -132,6 +212,19 @@ class FacturaGuiaController extends Controller
             'message' => 'Factura comercial eliminada correctamente'
         ]);
     }
+    /**
+     * @OA\Delete(
+     *     path="/carga-consolidada/contenedor/factura-guia/general/delete-guia-remision/{idContenedor}",
+     *     tags={"Factura y Guía"},
+     *     summary="Eliminar guía de remisión",
+     *     description="Elimina la guía de remisión de una cotización",
+     *     operationId="deleteGuiaRemision",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="idContenedor", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Guía eliminada exitosamente"),
+     *     @OA\Response(response=404, description="Guía no encontrada")
+     * )
+     */
     public function deleteGuiaRemision($idContenedor)
     {
         $cotizacion = Cotizacion::find($idContenedor);
@@ -155,6 +248,18 @@ class FacturaGuiaController extends Controller
     }
 
     /**
+     * @OA\Post(
+     *     path="/carga-consolidada/contenedor/factura-guia/send-factura/{idCotizacion}",
+     *     tags={"Factura y Guía"},
+     *     summary="Enviar factura por WhatsApp",
+     *     description="Envía la factura comercial al cliente por WhatsApp",
+     *     operationId="sendFactura",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="idCotizacion", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Factura enviada exitosamente"),
+     *     @OA\Response(response=404, description="Cotización no encontrada")
+     * )
+     *
      * Enviar factura comercial por WhatsApp
      */
     public function sendFactura($idCotizacion)
@@ -292,6 +397,18 @@ class FacturaGuiaController extends Controller
     }
 
     /**
+     * @OA\Post(
+     *     path="/carga-consolidada/contenedor/factura-guia/send-guia/{idCotizacion}",
+     *     tags={"Factura y Guía"},
+     *     summary="Enviar guía por WhatsApp",
+     *     description="Envía la guía de remisión al cliente por WhatsApp",
+     *     operationId="sendGuia",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="idCotizacion", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Guía enviada exitosamente"),
+     *     @OA\Response(response=404, description="Cotización no encontrada")
+     * )
+     *
      * Enviar guía de remisión por WhatsApp
      */
     public function sendGuia($idCotizacion)

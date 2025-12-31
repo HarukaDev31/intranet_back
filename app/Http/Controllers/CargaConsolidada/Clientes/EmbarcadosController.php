@@ -18,7 +18,22 @@ class EmbarcadosController extends Controller
     private $table_contenedor_consolidado_cotizacion_coordinacion_pagos = "contenedor_consolidado_cotizacion_coordinacion_pagos";
     private $table_pagos_concept = "cotizacion_coordinacion_pagos_concept";
     private $table = "carga_consolidada_contenedor";
+    
     /**
+     * @OA\Get(
+     *     path="/carga-consolidada/contenedores/{idContenedor}/clientes/embarcados",
+     *     tags={"Clientes Carga Consolidada"},
+     *     summary="Obtener embarcados de un contenedor",
+     *     description="Obtiene la lista de clientes embarcados para un contenedor específico",
+     *     operationId="getEmbarcados",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="idContenedor", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Parameter(name="currentPage", in="query", @OA\Schema(type="integer", default=1)),
+     *     @OA\Parameter(name="itemsPerPage", in="query", @OA\Schema(type="integer", default=100)),
+     *     @OA\Parameter(name="search", in="query", @OA\Schema(type="string")),
+     *     @OA\Response(response=200, description="Embarcados obtenidos exitosamente")
+     * )
+     *
      * Obtener la lista de embarcados para un contenedor específico.
      *
      * @param int $idContenedor
@@ -147,6 +162,18 @@ class EmbarcadosController extends Controller
     }
 
     /**
+     * @OA\Delete(
+     *     path="/carga-consolidada/contenedor/clientes/embarcados/{idProveedor}/factura-comercial",
+     *     tags={"Clientes Carga Consolidada"},
+     *     summary="Eliminar factura comercial del proveedor",
+     *     description="Elimina la factura comercial de un proveedor",
+     *     operationId="deleteFacturaComercialEmb",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="idProveedor", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Factura eliminada exitosamente"),
+     *     @OA\Response(response=404, description="Proveedor no encontrado")
+     * )
+     *
      * Elimina la factura comercial de un proveedor (borra archivo en storage si aplica y deja el campo en null).
      * @param int $idProveedor
      */
@@ -180,6 +207,18 @@ class EmbarcadosController extends Controller
     }
 
     /**
+     * @OA\Delete(
+     *     path="/carga-consolidada/contenedor/clientes/embarcados/{idProveedor}/packing-list",
+     *     tags={"Clientes Carga Consolidada"},
+     *     summary="Eliminar packing list del proveedor",
+     *     description="Elimina el packing list de un proveedor",
+     *     operationId="deletePackingListEmb",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="idProveedor", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Packing list eliminado exitosamente"),
+     *     @OA\Response(response=404, description="Proveedor no encontrado")
+     * )
+     *
      * Elimina el packing list de un proveedor (borra archivo en storage si aplica y deja el campo en null).
      * @param int $idProveedor
      */
@@ -211,6 +250,18 @@ class EmbarcadosController extends Controller
     }
 
     /**
+     * @OA\Delete(
+     *     path="/carga-consolidada/contenedor/clientes/embarcados/{idProveedor}/excel-confirmacion",
+     *     tags={"Clientes Carga Consolidada"},
+     *     summary="Eliminar excel de confirmación del proveedor",
+     *     description="Elimina el excel de confirmación de un proveedor",
+     *     operationId="deleteExcelConfirmacionEmb",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="idProveedor", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Excel eliminado exitosamente"),
+     *     @OA\Response(response=404, description="Proveedor no encontrado")
+     * )
+     *
      * Elimina el excel de confirmación de un proveedor (borra archivo en storage si aplica y deja el campo en null).
      * @param int $idProveedor
      */
@@ -242,6 +293,27 @@ class EmbarcadosController extends Controller
     }
 
     /**
+     * @OA\Post(
+     *     path="/carga-consolidada/contenedor/clientes/embarcados/{idProveedor}/factura-comercial",
+     *     tags={"Clientes Carga Consolidada"},
+     *     summary="Subir factura comercial del proveedor",
+     *     description="Sube un archivo de factura comercial para un proveedor",
+     *     operationId="uploadFacturaComercialEmb",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="idProveedor", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\MediaType(
+     *             mediaType="multipart/form-data",
+     *             @OA\Schema(
+     *                 @OA\Property(property="file", type="string", format="binary")
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Factura subida exitosamente"),
+     *     @OA\Response(response=404, description="Proveedor no encontrado")
+     * )
+     *
      * Sube la factura comercial para un proveedor, almacena el archivo en disk 'public' y actualiza la BD.
      * Si ya existía un archivo local, lo elimina antes de guardar el nuevo.
      * @param Request $request
@@ -288,6 +360,27 @@ class EmbarcadosController extends Controller
     }
 
     /**
+     * @OA\Post(
+     *     path="/carga-consolidada/contenedor/clientes/embarcados/{idProveedor}/packing-list",
+     *     tags={"Clientes Carga Consolidada"},
+     *     summary="Subir packing list del proveedor",
+     *     description="Sube un archivo de packing list para un proveedor",
+     *     operationId="uploadPackingListEmb",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="idProveedor", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\MediaType(
+     *             mediaType="multipart/form-data",
+     *             @OA\Schema(
+     *                 @OA\Property(property="file", type="string", format="binary")
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Packing list subido exitosamente"),
+     *     @OA\Response(response=404, description="Proveedor no encontrado")
+     * )
+     *
      * Sube el packing list para un proveedor, almacena el archivo en disk 'public' y actualiza la BD.
      */
     public function uploadPackingList(Request $request, $idProveedor)
@@ -331,6 +424,27 @@ class EmbarcadosController extends Controller
     }
 
     /**
+     * @OA\Post(
+     *     path="/carga-consolidada/contenedor/clientes/embarcados/{idProveedor}/excel-confirmacion",
+     *     tags={"Clientes Carga Consolidada"},
+     *     summary="Subir excel de confirmación del proveedor",
+     *     description="Sube un archivo excel de confirmación para un proveedor",
+     *     operationId="uploadExcelConfirmacionEmb",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="idProveedor", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\MediaType(
+     *             mediaType="multipart/form-data",
+     *             @OA\Schema(
+     *                 @OA\Property(property="file", type="string", format="binary")
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Excel subido exitosamente"),
+     *     @OA\Response(response=404, description="Proveedor no encontrado")
+     * )
+     *
      * Sube el excel de confirmación para un proveedor, almacena el archivo en disk 'public' y actualiza la BD.
      */
     public function uploadExcelConfirmacion(Request $request, $idProveedor)

@@ -16,6 +16,20 @@ class CotizacionPagosController extends Controller
     private $table_contenedor_consolidado_cotizacion_coordinacion_pagos = "contenedor_consolidado_cotizacion_coordinacion_pagos";
     private $table_pagos_concept = "contenedor_consolidado_pagos_concept";
 
+    /**
+     * @OA\Get(
+     *     path="/carga-consolidada/contenedores/{idContenedor}/clientes-pagos",
+     *     tags={"Pagos"},
+     *     summary="Obtener clientes con información de pagos",
+     *     description="Obtiene la lista de clientes de un contenedor con su información de pagos de documentación",
+     *     operationId="getClientesDocumentacionPagos",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="idContenedor", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Parameter(name="search", in="query", description="Búsqueda por nombre, documento o teléfono", @OA\Schema(type="string")),
+     *     @OA\Response(response=200, description="Clientes obtenidos exitosamente"),
+     *     @OA\Response(response=401, description="No autenticado")
+     * )
+     */
     public function getClientesDocumentacionPagos(Request $request, $idContenedor)
     {
         try {

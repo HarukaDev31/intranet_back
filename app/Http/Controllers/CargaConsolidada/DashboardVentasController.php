@@ -12,6 +12,19 @@ use Carbon\Carbon;
 class DashboardVentasController extends Controller
 {
     /**
+     * @OA\Get(
+     *     path="/dashboard-ventas/contenedores-filtro",
+     *     tags={"Dashboard Ventas"},
+     *     summary="Obtener contenedores para filtro",
+     *     description="Obtiene la lista de contenedores disponibles para usar como filtro en el dashboard de ventas",
+     *     operationId="getContenedoresFiltroVentas",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="fecha_inicio", in="query", description="Fecha de inicio", @OA\Schema(type="string", format="date")),
+     *     @OA\Parameter(name="fecha_fin", in="query", description="Fecha de fin", @OA\Schema(type="string", format="date")),
+     *     @OA\Response(response=200, description="Contenedores obtenidos exitosamente"),
+     *     @OA\Response(response=500, description="Error del servidor")
+     * )
+     *
      * Obtiene la lista de contenedores para el filtro
      */
     public function getContenedoresFiltro(Request $request)
@@ -57,6 +70,19 @@ class DashboardVentasController extends Controller
     }
 
     /**
+     * @OA\Get(
+     *     path="/dashboard-ventas/vendedores-filtro",
+     *     tags={"Dashboard Ventas"},
+     *     summary="Obtener vendedores para filtro",
+     *     description="Obtiene la lista de vendedores para usar como filtro en el dashboard",
+     *     operationId="getVendedoresFiltroVentas",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="fecha_inicio", in="query", @OA\Schema(type="string", format="date")),
+     *     @OA\Parameter(name="fecha_fin", in="query", @OA\Schema(type="string", format="date")),
+     *     @OA\Parameter(name="id_contenedor", in="query", @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Vendedores obtenidos exitosamente")
+     * )
+     *
      * Obtiene la lista de vendedores para el filtro
      */
     public function getVendedoresFiltro(Request $request)

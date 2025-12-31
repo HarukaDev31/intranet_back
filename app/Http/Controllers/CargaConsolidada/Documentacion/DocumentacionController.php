@@ -72,6 +72,19 @@ class DocumentacionController extends Controller
     private $cambioEstadoProveedor = "cambio-estado-proveedor";
     private $table_contenedor_cotizacion_final = "contenedor_consolidado_cotizacion_final";
     /**
+     * @OA\Get(
+     *     path="/carga-consolidada/contenedores/{id}/documentacion/folders",
+     *     tags={"Documentación"},
+     *     summary="Obtener carpetas de documentación",
+     *     description="Obtiene las carpetas de documentación y sus archivos para un contenedor específico",
+     *     operationId="getDocumentationFolderFiles",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="id", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Carpetas obtenidas exitosamente"),
+     *     @OA\Response(response=401, description="No autenticado"),
+     *     @OA\Response(response=500, description="Error al obtener carpetas")
+     * )
+     *
      * Obtiene las carpetas de documentación y sus archivos para un contenedor específico
      */
     public function getDocumentationFolderFiles($id)
@@ -342,6 +355,28 @@ class DocumentacionController extends Controller
     }
 
     /**
+     * @OA\Post(
+     *     path="/carga-consolidada/contenedor/documentacion/upload-file-documentation",
+     *     tags={"Documentación"},
+     *     summary="Subir archivo de documentación",
+     *     description="Sube un archivo a una carpeta de documentación existente",
+     *     operationId="uploadFileDocumentation",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\MediaType(
+     *             mediaType="multipart/form-data",
+     *             @OA\Schema(
+     *                 @OA\Property(property="idFolder", type="integer"),
+     *                 @OA\Property(property="idContenedor", type="integer"),
+     *                 @OA\Property(property="file", type="string", format="binary")
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Archivo subido exitosamente"),
+     *     @OA\Response(response=400, description="Archivo no enviado o muy grande")
+     * )
+     *
      * Sube un archivo de documentación
      */
     public function uploadFileDocumentation(Request $request)
@@ -1552,6 +1587,19 @@ class DocumentacionController extends Controller
 
         return strtr($text, $accents);
     }
+    /**
+     * @OA\Delete(
+     *     path="/carga-consolidada/contenedor/documentacion/delete/{idFile}",
+     *     tags={"Documentación"},
+     *     summary="Eliminar archivo de documentación",
+     *     description="Elimina un archivo de documentación específico",
+     *     operationId="deleteFileDocumentation",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="idFile", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Archivo eliminado exitosamente"),
+     *     @OA\Response(response=404, description="Archivo no encontrado")
+     * )
+     */
     public function deleteFileDocumentation(Request $request, $idFile)
     {
         $file = DocumentacionFile::find($idFile);
@@ -1647,6 +1695,18 @@ class DocumentacionController extends Controller
     }
 
     /**
+     * @OA\Get(
+     *     path="/carga-consolidada/contenedor/documentacion/download-zip/{idContenedor}",
+     *     tags={"Documentación"},
+     *     summary="Descargar documentación en ZIP",
+     *     description="Descarga toda la documentación de un contenedor en formato ZIP",
+     *     operationId="downloadDocumentacionZip",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="idContenedor", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Archivo ZIP descargado"),
+     *     @OA\Response(response=404, description="No se encontraron archivos")
+     * )
+     *
      * Descarga la documentación completa en formato ZIP
      */
     public function downloadDocumentacionZip($id)
@@ -1928,6 +1988,30 @@ class DocumentacionController extends Controller
     }
 
     /**
+     * @OA\Post(
+     *     path="/carga-consolidada/contenedor/documentacion/create-folder",
+     *     tags={"Documentación"},
+     *     summary="Crear carpeta de documentación",
+     *     description="Crea una nueva carpeta de documentación con su archivo asociado",
+     *     operationId="createDocumentacionFolder",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\MediaType(
+     *             mediaType="multipart/form-data",
+     *             @OA\Schema(
+     *                 @OA\Property(property="folder_name", type="string"),
+     *                 @OA\Property(property="idContenedor", type="integer"),
+     *                 @OA\Property(property="file", type="string", format="binary"),
+     *                 @OA\Property(property="categoria", type="string"),
+     *                 @OA\Property(property="icon", type="string")
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Carpeta creada exitosamente"),
+     *     @OA\Response(response=400, description="Tipo de archivo no permitido")
+     * )
+     *
      * Crea una nueva carpeta de documentación con su archivo asociado
      */
     public function createDocumentacionFolder(Request $request)

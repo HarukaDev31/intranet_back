@@ -31,6 +31,19 @@ class EntregaController extends Controller
     private $CONCEPT_PAGO_DELIVERY = 3;
 
     /**
+     * @OA\Get(
+     *     path="/carga-consolidada/contenedores/{idContenedor}/entregas/horarios",
+     *     tags={"Entregas"},
+     *     summary="Obtener horarios disponibles para entrega",
+     *     description="Lista los rangos de horarios disponibles para entrega de un contenedor, agrupados por fecha",
+     *     operationId="getHorariosDisponibles",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="idContenedor", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Parameter(name="include_full", in="query", description="Incluir horarios llenos", @OA\Schema(type="boolean", default=false)),
+     *     @OA\Response(response=200, description="Horarios obtenidos exitosamente"),
+     *     @OA\Response(response=404, description="Contenedor no encontrado")
+     * )
+     *
      * Listar horarios disponibles (rangos de entrega) para un contenedor.
      * Calcula la disponibilidad como delivery_count - asignados.
      * Devuelve agrupado por fecha.
@@ -215,6 +228,19 @@ class EntregaController extends Controller
         ]);
     }
 
+    /**
+     * @OA\Get(
+     *     path="/carga-consolidada/contenedor/entrega/{idContenedor}/headers",
+     *     tags={"Entregas"},
+     *     summary="Obtener cabeceras de entrega",
+     *     description="Obtiene información del contenedor para la vista de entregas",
+     *     operationId="getEntregaHeaders",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="idContenedor", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Headers obtenidos exitosamente"),
+     *     @OA\Response(response=404, description="Contenedor no encontrado")
+     * )
+     */
     public function getHeaders($idContenedor)
     {
         $contenedor = DB::table('carga_consolidada_contenedor')
@@ -230,6 +256,27 @@ class EntregaController extends Controller
     }
 
     /**
+     * @OA\Post(
+     *     path="/carga-consolidada/contenedor/entrega/{idContenedor}/fechas",
+     *     tags={"Entregas"},
+     *     summary="Crear fecha de entrega",
+     *     description="Crea una fecha de entrega para un contenedor",
+     *     operationId="createFechaEntrega",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="idContenedor", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             @OA\Property(property="date", type="string", format="date", description="Fecha YYYY-MM-DD"),
+     *             @OA\Property(property="day", type="integer"),
+     *             @OA\Property(property="month", type="integer"),
+     *             @OA\Property(property="year", type="integer")
+     *         )
+     *     ),
+     *     @OA\Response(response=201, description="Fecha creada exitosamente"),
+     *     @OA\Response(response=422, description="Datos inválidos")
+     * )
+     *
      * Crear una fecha de entrega para un contenedor.
      * Acepta { day, month, year } o un único { date: 'YYYY-MM-DD' }.
      */
@@ -538,6 +585,20 @@ class EntregaController extends Controller
 
         return $digits;
     }
+    /**
+     * @OA\Get(
+     *     path="/carga-consolidada/contenedor/entrega/clientes/{idContenedor}",
+     *     tags={"Entregas"},
+     *     summary="Obtener clientes para entrega",
+     *     description="Lista los clientes asociados al contenedor para gestión de entregas",
+     *     operationId="getClientesEntrega",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="idContenedor", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Parameter(name="search", in="query", @OA\Schema(type="string")),
+     *     @OA\Parameter(name="per_page", in="query", @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Clientes obtenidos exitosamente")
+     * )
+     */
     public function getClientesEntrega(Request $request, $idContenedor)
     {
         // Lo obtiene de la tabla de clientes asociados al contenedor
@@ -1267,6 +1328,21 @@ class EntregaController extends Controller
         }
     }
 
+    /**
+     * @OA\Get(
+     *     path="/carga-consolidada/contenedor/entrega/delivery/all",
+     *     tags={"Entregas"},
+     *     summary="Obtener todas las entregas",
+     *     description="Lista todas las entregas de todos los contenedores con filtros",
+     *     operationId="getAllDelivery",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="search", in="query", @OA\Schema(type="string")),
+     *     @OA\Parameter(name="id_contenedor", in="query", @OA\Schema(type="integer")),
+     *     @OA\Parameter(name="currentPage", in="query", @OA\Schema(type="integer")),
+     *     @OA\Parameter(name="itemsPerPage", in="query", @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Entregas obtenidas exitosamente")
+     * )
+     */
     public function getAllDelivery(Request $request)
     {
         // Lo obtiene de la tabla de clientes asociados al contenedor
@@ -1461,6 +1537,20 @@ class EntregaController extends Controller
         }
     }
 
+    /**
+     * @OA\Get(
+     *     path="/carga-consolidada/contenedor/entrega/delivery/{idContenedor}",
+     *     tags={"Entregas"},
+     *     summary="Obtener entregas (delivery)",
+     *     description="Lista las entregas programadas de un contenedor",
+     *     operationId="getDelivery",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="idContenedor", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Parameter(name="currentPage", in="query", @OA\Schema(type="integer")),
+     *     @OA\Parameter(name="itemsPerPage", in="query", @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Entregas obtenidas exitosamente")
+     * )
+     */
     public function getDelivery(Request $request, $idContenedor)
     {
         // Subconsulta: asignación de rango/fecha por cotización (si hubiera varias, tomamos la última por id)
@@ -1645,6 +1735,19 @@ class EntregaController extends Controller
             ]
         ]);
     }
+    /**
+     * @OA\Get(
+     *     path="/carga-consolidada/contenedor/entrega/entregas/detalle/{idCotizacion}",
+     *     tags={"Entregas"},
+     *     summary="Obtener detalle de entrega",
+     *     description="Obtiene el detalle de entrega de una cotización",
+     *     operationId="getEntregasDetalle",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="idCotizacion", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Detalle obtenido exitosamente"),
+     *     @OA\Response(response=404, description="Cotización no encontrada")
+     * )
+     */
     public function getEntregasDetalle($idCotizacion)
     {
         // Subconsulta: sumar cbm y qty por id_cotizacion (puede haber múltiples proveedores por cotización)
@@ -1879,6 +1982,30 @@ class EntregaController extends Controller
     }
 
     /**
+     * @OA\Post(
+     *     path="/carga-consolidada/contenedor/entrega/entregas/conformidad",
+     *     tags={"Entregas"},
+     *     summary="Subir conformidad de entrega",
+     *     description="Guarda fotos de conformidad de entrega para Lima o Provincia",
+     *     operationId="uploadConformidad",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\MediaType(
+     *             mediaType="multipart/form-data",
+     *             @OA\Schema(
+     *                 @OA\Property(property="type_form", type="integer", enum={0, 1}, description="0=Provincia, 1=Lima"),
+     *                 @OA\Property(property="id_contenedor", type="integer"),
+     *                 @OA\Property(property="id_cotizacion", type="integer"),
+     *                 @OA\Property(property="photo_1", type="string", format="binary"),
+     *                 @OA\Property(property="photo_2", type="string", format="binary")
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Conformidad guardada exitosamente"),
+     *     @OA\Response(response=422, description="Datos inválidos")
+     * )
+     *
      * Guarda 2 fotos de conformidad de entrega (para Lima o Provincia).
      * Body (multipart/form-data):
      *  - type_form: 0 (Provincia) | 1 (Lima)

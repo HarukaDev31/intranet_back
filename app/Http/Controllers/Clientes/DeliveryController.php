@@ -20,6 +20,37 @@ use Illuminate\Support\Facades\Log;
 class DeliveryController extends Controller
 {
     use WhatsappTrait;
+
+    /**
+     * @OA\Get(
+     *     path="/external/delivery/clientes/{idConsolidado}",
+     *     tags={"Delivery"},
+     *     summary="Obtener clientes de un consolidado para delivery",
+     *     description="Obtiene las cotizaciones confirmadas de un consolidado que requieren formulario de delivery",
+     *     operationId="getClientesConsolidado",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(
+     *         name="idConsolidado",
+     *         in="path",
+     *         description="ID del contenedor consolidado",
+     *         required=true,
+     *         @OA\Schema(type="integer")
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Cotizaciones obtenidas exitosamente",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=true),
+     *             @OA\Property(property="data", type="array", @OA\Items(type="object",
+     *                 @OA\Property(property="value", type="string"),
+     *                 @OA\Property(property="label", type="string")
+     *             )),
+     *             @OA\Property(property="carga", type="string")
+     *         )
+     *     ),
+     *     @OA\Response(response=404, description="Carga no encontrada")
+     * )
+     */
     public function getClientesConsolidado($idConsolidado)
     {
         try {
@@ -68,6 +99,19 @@ class DeliveryController extends Controller
     }
 
     /**
+     * @OA\Get(
+     *     path="/clientes/delivery/formulario-lima/{cotizacionUuid}",
+     *     tags={"Delivery Externo"},
+     *     summary="Obtener formulario de Lima guardado",
+     *     description="Obtiene el estado del formulario de delivery de Lima guardado para una cotización",
+     *     operationId="getFormularioLimaByCotizacion",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="cotizacionUuid", in="path", required=true, @OA\Schema(type="string")),
+     *     @OA\Response(response=200, description="Formulario obtenido exitosamente"),
+     *     @OA\Response(response=404, description="Cotización o formulario no encontrado"),
+     *     @OA\Response(response=400, description="Formulario ya tiene horario asignado")
+     * )
+     *
      * Obtiene el estado del formulario de delivery de Lima guardado para una cotización
      * Devuelve el formulario sin horario (sin fechaEntrega ni horarioSeleccionado)
      */
@@ -153,6 +197,18 @@ class DeliveryController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * @OA\Get(
+     *     path="/clientes/delivery/agencies",
+     *     tags={"Delivery Externo"},
+     *     summary="Obtener agencias de delivery",
+     *     description="Obtiene lista de agencias de delivery disponibles para envíos a provincia",
+     *     operationId="getAgenciesExternal",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Response(response=200, description="Agencias obtenidas exitosamente")
+     * )
+     */
     public function getAgencies()
     {
         $agencies = DeliveryAgency::all();
@@ -168,6 +224,28 @@ class DeliveryController extends Controller
             'message' => 'Agencias obtenidas correctamente',
         ]);
     }
+
+    /**
+     * @OA\Post(
+     *     path="/clientes/delivery/provincia",
+     *     tags={"Delivery Externo"},
+     *     summary="Guardar formulario de delivery provincia",
+     *     description="Guarda el formulario de entrega para envíos a provincia",
+     *     operationId="storeProvinciaFormExternal",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             @OA\Property(property="importador", type="string", description="UUID de la cotización"),
+     *             @OA\Property(property="clienteNombre", type="string"),
+     *             @OA\Property(property="clienteRuc", type="string"),
+     *             @OA\Property(property="agencyId", type="integer")
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Formulario guardado exitosamente"),
+     *     @OA\Response(response=404, description="Cotización no encontrada")
+     * )
+     */
     public function storeProvinciaForm(Request $request)
     {
         Log::info("Formulario de delivery de Lima: " . json_encode($request->all()));
@@ -268,6 +346,30 @@ class DeliveryController extends Controller
             return response()->json(['message' => $e->getMessage(), 'success' => false], 500);
         }
     }
+
+    /**
+     * @OA\Post(
+     *     path="/clientes/delivery/lima",
+     *     tags={"Delivery Externo"},
+     *     summary="Guardar formulario de delivery Lima",
+     *     description="Guarda el formulario de entrega para entregas en Lima con horario programado",
+     *     operationId="storeLimaFormExternal",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             @OA\Property(property="importador", type="string", description="UUID de la cotización"),
+     *             @OA\Property(property="nombreCompleto", type="string"),
+     *             @OA\Property(property="dni", type="string"),
+     *             @OA\Property(property="tipoComprobante", type="string"),
+     *             @OA\Property(property="fechaEntrega", type="string", format="date-time"),
+     *             @OA\Property(property="horarioSeleccionado", type="object")
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Formulario guardado exitosamente"),
+     *     @OA\Response(response=404, description="Cotización no encontrada")
+     * )
+     */
     public function storeLimaForm(Request $request)
     {
         /**

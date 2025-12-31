@@ -11,6 +11,19 @@ use Illuminate\Support\Facades\Log;
 
 class AduanaController extends Controller
 {
+    /**
+     * @OA\Get(
+     *     path="/carga-consolidada/contenedores/{idContenedor}/aduana",
+     *     tags={"Aduana"},
+     *     summary="Ver formulario de aduana",
+     *     description="Obtiene el formulario de aduana y archivos asociados a un contenedor",
+     *     operationId="viewFormularioAduana",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="idContenedor", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Formulario obtenido exitosamente"),
+     *     @OA\Response(response=404, description="Formulario no encontrado")
+     * )
+     */
     public function viewFormularioAduana($idContenedor)
     {
 
@@ -85,6 +98,29 @@ class AduanaController extends Controller
         
         return $baseUrl . '/' . $storagePath . '/' . $rutaEncoded;
     }
+    /**
+     * @OA\Post(
+     *     path="/carga-consolidada/contenedor/aduana",
+     *     tags={"Aduana"},
+     *     summary="Guardar formulario de aduana",
+     *     description="Guarda el formulario de aduana y los archivos asociados",
+     *     operationId="saveFormularioAduana",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\MediaType(
+     *             mediaType="multipart/form-data",
+     *             @OA\Schema(
+     *                 @OA\Property(property="idContainer", type="integer"),
+     *                 @OA\Property(property="files", type="array", @OA\Items(type="string", format="binary")),
+     *                 @OA\Property(property="impuestos_pagados", type="array", @OA\Items(type="string", format="binary"))
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Formulario guardado exitosamente"),
+     *     @OA\Response(response=500, description="Error interno")
+     * )
+     */
     public function saveFormularioAduana(Request $request)
     {
         DB::beginTransaction();
@@ -140,6 +176,25 @@ class AduanaController extends Controller
             DB::commit();
         }
     }
+    /**
+     * @OA\Delete(
+     *     path="/carga-consolidada/contenedor/aduana/file/{idFile}",
+     *     tags={"Aduana"},
+     *     summary="Eliminar archivo de aduana",
+     *     description="Elimina un archivo asociado al formulario de aduana",
+     *     operationId="deleteFileAduana",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(
+     *         name="idFile",
+     *         in="path",
+     *         required=true,
+     *         description="ID del archivo a eliminar",
+     *         @OA\Schema(type="integer")
+     *     ),
+     *     @OA\Response(response=200, description="Archivo eliminado correctamente"),
+     *     @OA\Response(response=404, description="Archivo no encontrado")
+     * )
+     */
     public function deleteFileAduana($idFile)
     {
         $file = DB::table('carga_consolidada_aduana_files')->where('id', $idFile)->first();

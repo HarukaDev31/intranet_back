@@ -31,6 +31,32 @@ class CalculadoraImportacionController extends Controller
         $this->calculadoraImportacionService = $calculadoraImportacionService;
     }
 
+    /**
+     * @OA\Get(
+     *     path="/calculadora-importacion/clientes",
+     *     tags={"Calculadora Importación"},
+     *     summary="Buscar clientes por WhatsApp",
+     *     description="Obtiene la lista de clientes que coinciden con un número de WhatsApp",
+     *     operationId="getClientesByWhatsapp",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(
+     *         name="whatsapp",
+     *         in="query",
+     *         description="Número de WhatsApp a buscar",
+     *         required=true,
+     *         @OA\Schema(type="string")
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Clientes encontrados",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=true),
+     *             @OA\Property(property="data", type="array", @OA\Items(type="object"))
+     *         )
+     *     ),
+     *     @OA\Response(response=401, description="No autenticado")
+     * )
+     */
     public function getClientesByWhatsapp(Request $request)
     {
         try {

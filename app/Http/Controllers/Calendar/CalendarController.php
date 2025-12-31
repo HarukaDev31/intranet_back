@@ -16,6 +16,52 @@ use Illuminate\Support\Facades\DB;
 class CalendarController extends Controller
 {
     /**
+     * @OA\Get(
+     *     path="/calendar/events",
+     *     tags={"Calendario"},
+     *     summary="Obtener eventos del calendario",
+     *     description="Obtiene eventos y tareas del calendario para el usuario autenticado",
+     *     operationId="getCalendarEvents",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(
+     *         name="start_date",
+     *         in="query",
+     *         description="Fecha de inicio del rango (Y-m-d)",
+     *         required=false,
+     *         @OA\Schema(type="string", format="date")
+     *     ),
+     *     @OA\Parameter(
+     *         name="end_date",
+     *         in="query",
+     *         description="Fecha de fin del rango (Y-m-d)",
+     *         required=false,
+     *         @OA\Schema(type="string", format="date")
+     *     ),
+     *     @OA\Parameter(
+     *         name="role_id",
+     *         in="query",
+     *         description="Filtrar por ID de rol",
+     *         required=false,
+     *         @OA\Schema(type="integer")
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Eventos obtenidos exitosamente",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=true),
+     *             @OA\Property(property="data", type="array", @OA\Items(type="object",
+     *                 @OA\Property(property="id", type="integer"),
+     *                 @OA\Property(property="title", type="string"),
+     *                 @OA\Property(property="description", type="string"),
+     *                 @OA\Property(property="start_date", type="string", format="date"),
+     *                 @OA\Property(property="end_date", type="string", format="date"),
+     *                 @OA\Property(property="type", type="string", enum={"evento", "tarea"})
+     *             ))
+     *         )
+     *     ),
+     *     @OA\Response(response=401, description="No autenticado")
+     * )
+     *
      * Obtener eventos con filtros
      */
     public function getEvents(Request $request)
@@ -158,6 +204,33 @@ class CalendarController extends Controller
     }
 
     /**
+     * @OA\Post(
+     *     path="/calendar/events",
+     *     tags={"Calendario"},
+     *     summary="Crear evento",
+     *     description="Crea un nuevo evento o tarea en el calendario",
+     *     operationId="createCalendarEvent",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             required={"title", "start_date", "end_date"},
+     *             @OA\Property(property="title", type="string"),
+     *             @OA\Property(property="description", type="string"),
+     *             @OA\Property(property="start_date", type="string", format="date"),
+     *             @OA\Property(property="end_date", type="string", format="date"),
+     *             @OA\Property(property="start_time", type="string", format="time"),
+     *             @OA\Property(property="end_time", type="string", format="time"),
+     *             @OA\Property(property="is_all_day", type="boolean"),
+     *             @OA\Property(property="is_for_me", type="boolean"),
+     *             @OA\Property(property="is_public", type="boolean"),
+     *             @OA\Property(property="type", type="string", enum={"evento", "tarea"})
+     *         )
+     *     ),
+     *     @OA\Response(response=201, description="Evento creado exitosamente"),
+     *     @OA\Response(response=422, description="Error de validación")
+     * )
+     *
      * Crear un nuevo evento
      */
     public function createEvent(Request $request)
@@ -275,6 +348,25 @@ class CalendarController extends Controller
     }
 
     /**
+     * @OA\Put(
+     *     path="/calendar/events/{id}",
+     *     tags={"Calendario"},
+     *     summary="Actualizar evento",
+     *     description="Actualiza un evento o día de tarea existente",
+     *     operationId="updateCalendarEvent",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="id", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\RequestBody(required=true, @OA\JsonContent(
+     *         @OA\Property(property="title", type="string"),
+     *         @OA\Property(property="description", type="string"),
+     *         @OA\Property(property="start_date", type="string", format="date"),
+     *         @OA\Property(property="end_date", type="string", format="date")
+     *     )),
+     *     @OA\Response(response=200, description="Evento actualizado exitosamente"),
+     *     @OA\Response(response=404, description="Evento no encontrado"),
+     *     @OA\Response(response=403, description="Sin permiso para editar")
+     * )
+     *
      * Actualizar un evento o día de tarea
      */
     public function updateEvent(Request $request, $id)
@@ -518,6 +610,20 @@ class CalendarController extends Controller
     }
 
     /**
+     * @OA\Delete(
+     *     path="/calendar/events/{id}",
+     *     tags={"Calendario"},
+     *     summary="Eliminar evento",
+     *     description="Elimina un evento o día de tarea",
+     *     operationId="deleteCalendarEvent",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="id", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Parameter(name="task_day_id", in="query", @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Evento eliminado exitosamente"),
+     *     @OA\Response(response=404, description="Evento no encontrado"),
+     *     @OA\Response(response=403, description="Sin permiso para eliminar")
+     * )
+     *
      * Eliminar un evento o día de tarea
      */
     public function deleteEvent(Request $request, $id)
