@@ -148,7 +148,22 @@ trait MoodleRestProTrait
             $hasDigit = preg_match('/\d/', $password);
             $hasLowercase = preg_match('/[a-z]/', $password);
             $hasUppercase = preg_match('/[A-Z]/', $password);
-            $hasSpecial = preg_match('/[*\-#]/', $password); // *, -, o #
+            $hasSpecial = preg_match('/[*\-#]/', $password); // *, -, o # (SOLO estos caracteres especiales)
+            
+            // Verificar que NO tenga otros caracteres especiales que Moodle rechaza
+            $hasInvalidSpecial = preg_match('/[!@$%^&*()+=\[\]{}|;:"<>?\/~`]/', $password);
+            if ($hasInvalidSpecial && !preg_match('/[*\-#]/', $password)) {
+                // Si tiene caracteres especiales inválidos y no tiene los válidos, rechazar
+                $hasSpecial = false;
+            } else if ($hasInvalidSpecial) {
+                // Si tiene caracteres especiales inválidos PERO también tiene válidos, limpiar los inválidos
+                Log::warning("Password contiene caracteres especiales no permitidos, limpiando: " . $password);
+                // Remover caracteres especiales inválidos, mantener solo *, -, #
+                $password = preg_replace('/[!@$%^&*()+=\[\]{}|;:"<>?\/~`]/', '', $password);
+                // Verificar nuevamente después de limpiar
+                $hasSpecial = preg_match('/[*\-#]/', $password);
+                $hasMinLength = strlen($password) >= 8;
+            }
             
             $requirements = [
                 'min_length' => $hasMinLength,
@@ -465,16 +480,14 @@ trait MoodleRestProTrait
             Log::info("Form data para Moodle (body): " . $body);
             Log::info("Form data para Moodle (array): " . json_encode($formData, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
             
-            // Enviar el body como string raw usando withOptions para control total
+            // Enviar el body como string raw usando withBody para control total
             // Esto asegura que Moodle reciba los datos exactamente en el formato que espera
             // En lugar de usar asForm() que puede modificar la codificación de arrays anidados
             $response = Http::timeout(30)
-                ->withOptions([
-                    'body' => $body,
-                    'headers' => [
-                        'Content-Type' => 'application/x-www-form-urlencoded',
-                    ],
+                ->withHeaders([
+                    'Content-Type' => 'application/x-www-form-urlencoded',
                 ])
+                ->withBody($body, 'application/x-www-form-urlencoded')
                 ->post($serverurl);
                 
             Log::info("Respuesta de Moodle: " . $response->body());

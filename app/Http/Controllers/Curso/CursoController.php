@@ -1607,13 +1607,40 @@ class CursoController extends Controller
         $clean = preg_replace('/[<>"\'\\\]/', '', $password);
 
         // Si es muy corta o tiene caracteres problemáticos, generar nueva que cumpla requisitos de Moodle
-        if (strlen($clean) < 8 || preg_match('/[^\w\d!@#%&*]/', $clean)) {
-            return 'TempPass#' . rand(1000, 9999) . '!';
+        // Moodle solo permite caracteres especiales: *, -, o #
+        if (strlen($clean) < 8 || preg_match('/[^\w\d*\-#]/', $clean)) {
+            // Generar password que cumpla requisitos: al menos 8 chars, 1 dígito, 1 minúscula, 1 mayúscula, 1 especial (*, -, o #)
+            $lowercase = 'abcdefghijklmnopqrstuvwxyz';
+            $uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+            $digits = '0123456789';
+            $special = '*-#'; // Solo estos caracteres especiales permitidos
+            
+            $newPassword = '';
+            $newPassword .= $lowercase[random_int(0, strlen($lowercase) - 1)];
+            $newPassword .= $uppercase[random_int(0, strlen($uppercase) - 1)];
+            $newPassword .= $digits[random_int(0, strlen($digits) - 1)];
+            $newPassword .= $special[random_int(0, strlen($special) - 1)];
+            
+            $allChars = $lowercase . $uppercase . $digits . $special;
+            for ($i = strlen($newPassword); $i < 12; $i++) {
+                $newPassword .= $allChars[random_int(0, strlen($allChars) - 1)];
+            }
+            return str_shuffle($newPassword);
         }
 
-        // Verificar que tenga al menos un caracter especial
-        if (!preg_match('/[!@#$%^&*(),.?":{}|<>]/', $clean)) {
-            return $clean . '#' . rand(10, 99) . '!';
+        // Verificar que tenga al menos un caracter especial válido (*, -, o #)
+        if (!preg_match('/[*\-#]/', $clean)) {
+            // Agregar un carácter especial válido
+            $special = '*-#';
+            return $clean . $special[random_int(0, strlen($special) - 1)] . rand(10, 99);
+        }
+        
+        // Remover caracteres especiales inválidos si los hay
+        $clean = preg_replace('/[!@$%^&*()+=\[\]{}|;:"<>?\/~`]/', '', $clean);
+        // Asegurar que tenga al menos un carácter especial válido después de limpiar
+        if (!preg_match('/[*\-#]/', $clean)) {
+            $special = '*-#';
+            $clean .= $special[random_int(0, strlen($special) - 1)];
         }
 
         return $clean;
