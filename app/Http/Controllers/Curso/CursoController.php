@@ -1408,7 +1408,8 @@ class CursoController extends Controller
                     'lastname'     => $lastname,
                     'email'        => $email,
                     'auth'         => 'manual',
-                    'lang'         => 'es',
+                    // lang se omite por defecto para evitar errores si el idioma no está instalado en Moodle
+                    // 'lang'         => 'es',
                 ];
 
                 // Log para debug - verificar que todos los campos estén presentes

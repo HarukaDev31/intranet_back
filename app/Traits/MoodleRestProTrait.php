@@ -28,7 +28,7 @@ trait MoodleRestProTrait
         }
 
         // Crear usuario según formato exacto de Moodle
-        // NOTA: calendartype puede no ser válido en todas las versiones de Moodle
+        // Solo incluir campos requeridos y opcionales válidos
         $user = [
             'username' => strtolower(trim($arrPost['username'])),
             'password' => trim($arrPost['password']),
@@ -36,8 +36,12 @@ trait MoodleRestProTrait
             'lastname' => trim($arrPost['lastname']),
             'email' => strtolower(trim($arrPost['email'])),
             'auth' => isset($arrPost['auth']) ? $arrPost['auth'] : 'manual',
-            'lang' => isset($arrPost['lang']) ? $arrPost['lang'] : 'es',
         ];
+        
+        // Solo agregar lang si está especificado (puede causar error si el idioma no está instalado)
+        if (isset($arrPost['lang']) && !empty($arrPost['lang'])) {
+            $user['lang'] = $arrPost['lang'];
+        }
         
         // Solo agregar calendartype si está explícitamente solicitado
         // (puede causar "invalid parameter" en algunas versiones de Moodle)
@@ -242,16 +246,21 @@ trait MoodleRestProTrait
 
         $serverurl = $domain . '/webservice/rest/server.php'. '?wstoken=' . $token . '&wsfunction='.$function_name;
 
-        // Usar Laravel HTTP Client en lugar de curl.php
-        // Enviar como form data (application/x-www-form-urlencoded) que es lo que espera Moodle REST
-        // Laravel HTTP Client maneja automáticamente arrays anidados en el formato correcto
+        // Moodle REST API requiere un formato específico para arrays anidados
+        // Construir manualmente el formato que Moodle espera: users[0][username]=value
         try {
             Log::info("Llamando a Moodle: {$function_name}");
             Log::info("Parámetros enviados a Moodle: " . json_encode($params, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
             
+            // Convertir arrays anidados al formato que Moodle espera
+            $formData = $this->buildMoodleFormData($params);
+            
+            // Log del formato final que se enviará
+            Log::info("Form data para Moodle: " . http_build_query($formData));
+            
             $response = Http::timeout(30)
                 ->asForm()
-                ->post($serverurl, $params);
+                ->post($serverurl, $formData);
                 
             Log::info("Respuesta de Moodle: " . $response->body());
             
@@ -267,6 +276,37 @@ trait MoodleRestProTrait
             Log::error('Stack trace: ' . $e->getTraceAsString());
             return '<EXCEPTION>' . $e->getMessage() . '</EXCEPTION>';
         }
+    }
+    
+    /**
+     * Construye el formato de datos que Moodle REST API espera
+     * Convierte arrays anidados al formato: users[0][username]=value
+     */
+    private function buildMoodleFormData($params)
+    {
+        $formData = [];
+        
+        foreach ($params as $key => $value) {
+            if (is_array($value)) {
+                // Para arrays anidados como users[0][username]
+                foreach ($value as $index => $item) {
+                    if (is_array($item)) {
+                        // Array anidado: users[0][username], users[0][password], etc.
+                        foreach ($item as $subKey => $subValue) {
+                            $formData["{$key}[{$index}][{$subKey}]"] = $subValue;
+                        }
+                    } else {
+                        // Array simple: values[0], values[1], etc.
+                        $formData["{$key}[{$index}]"] = $item;
+                    }
+                }
+            } else {
+                // Valor simple
+                $formData[$key] = $value;
+            }
+        }
+        
+        return $formData;
     }
 
     private function xmlresponse_to_id($xml_string)
