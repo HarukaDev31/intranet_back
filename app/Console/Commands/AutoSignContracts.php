@@ -153,12 +153,13 @@ class AutoSignContracts extends Command
 
         // Guardar ruta relativa en la base de datos
         $relativePath = 'contratos/' . $pdfFilename;
+        $fullUrl = url('storage/' . $relativePath);
         
         DB::table('contenedor_consolidado_cotizacion')
             ->where('id', $cotizacion->id)
             ->update([
                 'autosigned_contract_at' => now(),
-                'cotizacion_contrato_autosigned_url' => $relativePath
+                'cotizacion_contrato_autosigned_url' => $fullUrl
             ]);
 
         Log::info('Contrato auto-firmado guardado exitosamente', [
