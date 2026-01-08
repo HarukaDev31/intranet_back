@@ -1766,7 +1766,7 @@ class CursoController extends Controller
                     $message .= "Tu cuenta en ProBusiness ha sido creada exitosamente.\n\n";
                     $message .= "Usuario: " . (isset($result->usuario_moodle) && $result->usuario_moodle ? $result->usuario_moodle : $result->No_Usuario) . "\n";
                     $message .= "Contraseña: {$this->ciDecrypt($result->No_Password)}\n\n";
-                    $message .= "Puedes acceder a tu cuenta en el siguiente enlace: https://aulavirtualprobusiness.com/login/\n\n";
+                    $message .= "Puedes acceder a tu cuenta en el siguiente enlace: https://aulavirtual.probusiness.pe/login/\n\n";
                     $mensaje = "El día del inicio del curso, te agregaremos a un grupo de whatsapp por donde compartiremos los links de acceso al zoom, los materiales de trabajo y las grabaciones de las clases dictadas.\n\n";
                     $message .= "Saludos,\nEl equipo de ProBusiness";
                     
@@ -2060,7 +2060,7 @@ class CursoController extends Controller
     {
         try {
             // URL de Moodle desde configuración o variable de entorno
-            $moodleUrl = env('MOODLE_URL', 'https://aulavirtualprobusiness.com/login/index.php');
+            $moodleUrl = env('MOODLE_URL', 'https://aulavirtual.probusiness.pe/login/index.php');
             
             // Rutas de los logos
             $logo_header = public_path('storage/logo_icons/logo_header.png');
@@ -2568,7 +2568,7 @@ class CursoController extends Controller
             $nombreCliente = $pedido->No_Entidad ?? 'Cliente';
             $mensaje = "Hola {$nombreCliente} 👋\n\n";
             $mensaje .= "Para cambiar tu contraseña del aula virtual, sigue estos pasos:\n\n";
-            $mensaje .= "1. Ingresa a: https://aulavirtualprobusiness.com/login/forgot_password.php\n";
+            $mensaje .= "1. Ingresa a: https://aulavirtual.probusiness.pe/login/forgot_password.php\n";
             $mensaje .= "2. Ingresa tu nombre de usuario o correo electrónico\n";
             $mensaje .= "3. Revisa tu correo para recibir las instrucciones\n\n";
             $mensaje .= "Si tienes alguna duda, no dudes en contactarnos.\n\n";
