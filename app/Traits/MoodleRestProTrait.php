@@ -28,16 +28,158 @@ trait MoodleRestProTrait
         }
 
         // Crear usuario según formato exacto de Moodle
+        // Solo incluir campos requeridos y opcionales válidos
+        
+        // Normalizar y validar email más estrictamente
+        $email = strtolower(trim($arrPost['email']));
+        
+        // Remover espacios y caracteres problemáticos, pero mantener puntos válidos
+        $email = filter_var($email, FILTER_SANITIZE_EMAIL);
+        
+        // Validar que el email sea válido después de la limpieza
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            Log::error("Email inválido después de normalización: " . $arrPost['email']);
+            throw new \Exception('Email inválido: ' . $arrPost['email']);
+        }
+        
+        // Validar que el email no tenga caracteres problemáticos para Moodle
+        // Moodle puede rechazar emails con ciertos caracteres especiales
+        if (preg_match('/[<>"\']/', $email)) {
+            Log::error("Email contiene caracteres no permitidos: " . $email);
+            throw new \Exception('Email contiene caracteres no permitidos');
+        }
+        
+        // IMPORTANTE: Asegurar que el email esté correctamente codificado
+        // Algunas versiones de Moodle pueden tener problemas con emails que tienen puntos
+        // especialmente si hay múltiples puntos consecutivos o al inicio/fin de la parte local
+        // Normalizar: remover puntos duplicados y puntos al inicio/fin de la parte local
+        $emailParts = explode('@', $email);
+        if (count($emailParts) === 2) {
+            $localPart = $emailParts[0];
+            $domain = $emailParts[1];
+            
+            // Remover puntos al inicio y final de la parte local
+            $localPart = trim($localPart, '.');
+            
+            // Remover puntos duplicados consecutivos (aunque esto es válido en emails, Moodle puede rechazarlo)
+            // Pero NO lo hacemos porque es válido según RFC
+            
+            // Reconstruir el email
+            $email = $localPart . '@' . $domain;
+            
+            // Validar nuevamente después de la normalización
+            if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                Log::error("Email inválido después de normalización de puntos: " . $email);
+                // Si falla, usar el email original
+                $email = strtolower(trim($arrPost['email']));
+            }
+        }
+        
+        // Limpiar y validar firstname y lastname más estrictamente
+        // Moodle puede rechazar ciertos caracteres o formatos
+        $firstname = trim($arrPost['firstname']);
+        $lastname = trim($arrPost['lastname']);
+        
+        // Remover caracteres problemáticos que Moodle puede rechazar
+        // Permitir solo letras, números, espacios y algunos caracteres especiales comunes
+        $firstname = preg_replace('/[^\p{L}\p{N}\s\-\'\.]/u', '', $firstname);
+        $lastname = preg_replace('/[^\p{L}\p{N}\s\-\'\.]/u', '', $lastname);
+        
+        // Normalizar espacios múltiples a uno solo
+        $firstname = preg_replace('/\s+/', ' ', $firstname);
+        $lastname = preg_replace('/\s+/', ' ', $lastname);
+        
+        // Trim nuevamente después de la limpieza
+        $firstname = trim($firstname);
+        $lastname = trim($lastname);
+        
+        // Validar que no estén vacíos después de la limpieza
+        if (empty($firstname)) {
+            $firstname = 'Usuario';
+        }
+        if (empty($lastname)) {
+            $lastname = 'Usuario';
+        }
+        
+        // Limitar longitud según documentación de Moodle (máximo 100 caracteres)
+        if (strlen($firstname) > 100) {
+            $firstname = substr($firstname, 0, 100);
+        }
+        if (strlen($lastname) > 100) {
+            $lastname = substr($lastname, 0, 100);
+        }
+        
+        // Validar username según políticas de Moodle
+        // Según documentación: "Username policy is defined in Moodle security config"
+        $username = strtolower(trim($arrPost['username']));
+        
+        // Asegurar que username solo tenga caracteres permitidos comúnmente en Moodle
+        // Generalmente: letras, números, punto, guión, guión bajo
+        if (preg_match('/[^a-z0-9._-]/', $username)) {
+            Log::warning("Username contiene caracteres no estándar, limpiando: " . $username);
+            $username = preg_replace('/[^a-z0-9._-]/', '', $username);
+        }
+        
+        // Validar que username no esté vacío después de limpieza
+        if (empty($username)) {
+            throw new \Exception('Username no puede estar vacío después de la limpieza');
+        }
+        
+        // Construir objeto usuario con SOLO campos requeridos según documentación
+        // Campos requeridos: username, firstname, lastname, email
+        // Campos opcionales: password, auth (pero necesarios para crear usuario funcional)
+        
+        // Validar password - debe ser string plano según documentación
+        $password = isset($arrPost['password']) ? trim($arrPost['password']) : '';
+        
+        // Construir usuario con campos en el orden que Moodle espera
+        // Campos requeridos: username, firstname, lastname, email
         $user = [
-            'username' => strtolower(trim($arrPost['username'])),
-            'password' => trim($arrPost['password']),
-            'firstname' => trim($arrPost['firstname']),
-            'lastname' => trim($arrPost['lastname']),
-            'email' => strtolower(trim($arrPost['email'])),
-            'auth' => isset($arrPost['auth']) ? $arrPost['auth'] : 'manual',
-            'lang' => isset($arrPost['lang']) ? $arrPost['lang'] : 'es',
-            'calendartype' => isset($arrPost['calendartype']) ? $arrPost['calendartype'] : 'gregorian',
+            'username' => $username,
+            'firstname' => $firstname,
+            'lastname' => $lastname,
+            'email' => $email,
         ];
+        
+        // Agregar password si está presente
+        // Según documentación: "Plain text password consisting of any characters"
+        // Pero algunos caracteres especiales pueden causar problemas en la codificación URL
+        if (!empty($password)) {
+            // Asegurar que el password no tenga caracteres de control
+            $password = preg_replace('/[\x00-\x1F\x7F]/', '', $password);
+            if (!empty($password)) {
+                $user['password'] = $password;
+            }
+        }
+        
+        // Agregar auth (default "manual" según documentación)
+        $user['auth'] = isset($arrPost['auth']) && !empty($arrPost['auth']) 
+            ? $arrPost['auth'] 
+            : 'manual';
+            
+        // NOTA: No usamos createpassword=1 porque requiere configuración adicional en Moodle
+        // y el password que generamos es más seguro
+        
+        // Log detallado de todos los campos que se enviarán
+        Log::info("=== Datos finales para Moodle ===");
+        Log::info("Username: '{$username}' (longitud: " . strlen($username) . ")");
+        Log::info("Firstname: '{$firstname}' (longitud: " . strlen($firstname) . ")");
+        Log::info("Lastname: '{$lastname}' (longitud: " . strlen($lastname) . ")");
+        Log::info("Email: '{$email}' (longitud: " . strlen($email) . ")");
+        Log::info("Auth: '{$user['auth']}'");
+        Log::info("Password: " . (isset($user['password']) ? "presente (longitud: " . strlen($user['password']) . ")" : "no presente"));
+        Log::info("Usuario completo: " . json_encode($user, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+        
+        // Solo agregar lang si está especificado (puede causar error si el idioma no está instalado)
+        if (isset($arrPost['lang']) && !empty($arrPost['lang'])) {
+            $user['lang'] = $arrPost['lang'];
+        }
+        
+        // Solo agregar calendartype si está explícitamente solicitado
+        // (puede causar "invalid parameter" en algunas versiones de Moodle)
+        if (isset($arrPost['calendartype']) && !empty($arrPost['calendartype'])) {
+            $user['calendartype'] = $arrPost['calendartype'];
+        }
 
         // Campos opcionales según documentación
         if (isset($arrPost['city'])) {
@@ -232,26 +374,96 @@ trait MoodleRestProTrait
 
     private function call_moodle($function_name, $params, $token)
     {
-        $domain = 'https://aulavirtualprobusiness.com';
+        $domain = 'https://aulavirtual.probusiness.pe';
 
         $serverurl = $domain . '/webservice/rest/server.php'. '?wstoken=' . $token . '&wsfunction='.$function_name;
 
-        // Usar Laravel HTTP Client en lugar de curl.php
-        // Enviar como form data (application/x-www-form-urlencoded) que es lo que espera Moodle REST
+        // Moodle REST API requiere un formato específico para arrays anidados
+        // Construir manualmente el formato que Moodle espera: users[0][username]=value
         try {
             Log::info("Llamando a Moodle: {$function_name}");
-            Log::info("Parámetros enviados a Moodle: " . json_encode($params));
+            Log::info("Parámetros enviados a Moodle: " . json_encode($params, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
             
+            // Convertir arrays anidados al formato que Moodle espera según documentación REST
+            // Formato: users[0][username]=string, users[0][password]=string, etc.
+            $formData = $this->buildMoodleFormData($params);
+            
+            // Construir el body manualmente usando http_build_query para asegurar formato exacto
+            // Según documentación REST de Moodle: users[0][username]=string
+            $body = http_build_query($formData, '', '&', PHP_QUERY_RFC1738);
+            
+            // Log del formato final que se enviará
+            Log::info("Form data para Moodle (body): " . $body);
+            Log::info("Form data para Moodle (array): " . json_encode($formData, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+            
+            // Enviar usando asForm() que maneja correctamente la codificación URL
+            // Laravel HTTP Client con asForm() debería manejar arrays anidados correctamente
+            // El body construido manualmente es solo para logging/debug
             $response = Http::timeout(30)
                 ->asForm()
-                ->post($serverurl, $params);
+                ->post($serverurl, $formData);
                 
             Log::info("Respuesta de Moodle: " . $response->body());
+            
+            // Si hay error, loggear más detalles
+            if ($response->status() !== 200 || strpos($response->body(), 'EXCEPTION') !== false) {
+                Log::error("Error en respuesta de Moodle - Status: " . $response->status());
+                Log::error("Body completo: " . $response->body());
+            }
+            
             return $response->body();
         } catch (\Exception $e) {
             Log::error('Error en call_moodle: ' . $e->getMessage());
+            Log::error('Stack trace: ' . $e->getTraceAsString());
             return '<EXCEPTION>' . $e->getMessage() . '</EXCEPTION>';
         }
+    }
+    
+    /**
+     * Construye el formato de datos que Moodle REST API espera
+     * Convierte arrays anidados al formato: users[0][username]=value
+     */
+    private function buildMoodleFormData($params)
+    {
+        $formData = [];
+        
+        foreach ($params as $key => $value) {
+            if (is_array($value)) {
+                // Para arrays anidados como users[0][username]
+                foreach ($value as $index => $item) {
+                    if (is_array($item)) {
+                        // Array anidado: users[0][username], users[0][password], etc.
+                        foreach ($item as $subKey => $subValue) {
+                            // Asegurar que los valores estén correctamente codificados
+                            // Para emails, asegurar que se envíen sin codificación adicional
+                            // Laravel HTTP Client con asForm() manejará la codificación URL automáticamente
+                            $formData["{$key}[{$index}][{$subKey}]"] = $subValue;
+                            
+                            // Log especial para email para debug
+                            if ($subKey === 'email') {
+                                Log::info("Email en form data: '{$subValue}' (longitud: " . strlen($subValue) . ", bytes: " . bin2hex($subValue) . ")");
+                                // Verificar si el email tiene puntos que puedan causar problemas
+                                if (strpos($subValue, '.') !== false) {
+                                    $dotCount = substr_count($subValue, '.');
+                                    Log::warning("Email contiene {$dotCount} punto(s) - puede causar problemas en Moodle");
+                                }
+                            }
+                        }
+                    } else {
+                        // Array simple: values[0], values[1], etc.
+                        $formData["{$key}[{$index}]"] = $item;
+                    }
+                }
+            } else {
+                // Valor simple
+                $formData[$key] = $value;
+            }
+        }
+        
+        // Log del form data completo para debug
+        Log::info("Form data construido: " . json_encode($formData, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+        
+        return $formData;
     }
 
     private function xmlresponse_to_id($xml_string)
