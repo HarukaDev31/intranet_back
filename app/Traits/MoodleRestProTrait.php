@@ -480,25 +480,44 @@ trait MoodleRestProTrait
             Log::info("Form data para Moodle (body): " . $body);
             Log::info("Form data para Moodle (array): " . json_encode($formData, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
             
-            // Enviar el body como string raw usando withBody para control total
-            // Esto asegura que Moodle reciba los datos exactamente en el formato que espera
-            // En lugar de usar asForm() que puede modificar la codificación de arrays anidados
-            $response = Http::timeout(30)
-                ->withHeaders([
-                    'Content-Type' => 'application/x-www-form-urlencoded',
-                ])
-                ->withBody($body, 'application/x-www-form-urlencoded')
-                ->post($serverurl);
-                
-            Log::info("Respuesta de Moodle: " . $response->body());
+            // Usar cURL directamente para tener control total sobre el formato
+            // Esto asegura que el body se envíe exactamente como Moodle lo espera
+            $ch = curl_init();
+            curl_setopt($ch, CURLOPT_URL, $serverurl);
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                'Content-Type: application/x-www-form-urlencoded',
+                'Content-Length: ' . strlen($body)
+            ]);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
             
-            // Si hay error, loggear más detalles
-            if ($response->status() !== 200 || strpos($response->body(), 'EXCEPTION') !== false) {
-                Log::error("Error en respuesta de Moodle - Status: " . $response->status());
-                Log::error("Body completo: " . $response->body());
+            $responseBody = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $curlError = curl_error($ch);
+            curl_close($ch);
+            
+            if ($curlError) {
+                Log::error("Error cURL: " . $curlError);
+                return '<EXCEPTION>Error cURL: ' . $curlError . '</EXCEPTION>';
             }
             
-            return $response->body();
+            Log::info("Respuesta de Moodle (cURL): " . $responseBody);
+            Log::info("HTTP Code: " . $httpCode);
+            
+            // Si hay error, loggear el request completo para debug
+            if ($httpCode !== 200 || strpos($responseBody, 'EXCEPTION') !== false) {
+                Log::error("Request URL completa: " . $serverurl);
+                Log::error("Request body (raw): " . $body);
+                Log::error("Request formData (array): " . json_encode($formData, JSON_UNESCAPED_UNICODE));
+                Log::error("HTTP Code: " . $httpCode);
+                Log::error("Body completo: " . $responseBody);
+            }
+            
+            return $responseBody;
         } catch (\Exception $e) {
             Log::error('Error en call_moodle: ' . $e->getMessage());
             Log::error('Stack trace: ' . $e->getTraceAsString());
