@@ -75,17 +75,87 @@ trait MoodleRestProTrait
             }
         }
         
+        // Limpiar y validar firstname y lastname más estrictamente
+        // Moodle puede rechazar ciertos caracteres o formatos
+        $firstname = trim($arrPost['firstname']);
+        $lastname = trim($arrPost['lastname']);
+        
+        // Remover caracteres problemáticos que Moodle puede rechazar
+        // Permitir solo letras, números, espacios y algunos caracteres especiales comunes
+        $firstname = preg_replace('/[^\p{L}\p{N}\s\-\'\.]/u', '', $firstname);
+        $lastname = preg_replace('/[^\p{L}\p{N}\s\-\'\.]/u', '', $lastname);
+        
+        // Normalizar espacios múltiples a uno solo
+        $firstname = preg_replace('/\s+/', ' ', $firstname);
+        $lastname = preg_replace('/\s+/', ' ', $lastname);
+        
+        // Trim nuevamente después de la limpieza
+        $firstname = trim($firstname);
+        $lastname = trim($lastname);
+        
+        // Validar que no estén vacíos después de la limpieza
+        if (empty($firstname)) {
+            $firstname = 'Usuario';
+        }
+        if (empty($lastname)) {
+            $lastname = 'Usuario';
+        }
+        
+        // Limitar longitud según documentación de Moodle (máximo 100 caracteres)
+        if (strlen($firstname) > 100) {
+            $firstname = substr($firstname, 0, 100);
+        }
+        if (strlen($lastname) > 100) {
+            $lastname = substr($lastname, 0, 100);
+        }
+        
+        // Validar username según políticas de Moodle
+        // Según documentación: "Username policy is defined in Moodle security config"
+        $username = strtolower(trim($arrPost['username']));
+        
+        // Asegurar que username solo tenga caracteres permitidos comúnmente en Moodle
+        // Generalmente: letras, números, punto, guión, guión bajo
+        if (preg_match('/[^a-z0-9._-]/', $username)) {
+            Log::warning("Username contiene caracteres no estándar, limpiando: " . $username);
+            $username = preg_replace('/[^a-z0-9._-]/', '', $username);
+        }
+        
+        // Validar que username no esté vacío después de limpieza
+        if (empty($username)) {
+            throw new \Exception('Username no puede estar vacío después de la limpieza');
+        }
+        
+        // Construir objeto usuario con SOLO campos requeridos según documentación
+        // Campos requeridos: username, firstname, lastname, email
+        // Campos opcionales pero que estamos enviando: password, auth
         $user = [
-            'username' => strtolower(trim($arrPost['username'])),
-            'password' => trim($arrPost['password']),
-            'firstname' => trim($arrPost['firstname']),
-            'lastname' => trim($arrPost['lastname']),
+            'username' => $username,
+            'firstname' => $firstname,
+            'lastname' => $lastname,
             'email' => $email, // Email ya normalizado y validado
-            'auth' => isset($arrPost['auth']) ? $arrPost['auth'] : 'manual',
         ];
         
-        // Log del email que se enviará para debug
-        Log::info("Email normalizado para Moodle: " . $email . " (original: " . $arrPost['email'] . ")");
+        // Agregar password solo si está presente (es opcional según doc, pero necesario para crear usuario)
+        if (isset($arrPost['password']) && !empty($arrPost['password'])) {
+            $user['password'] = trim($arrPost['password']);
+        }
+        
+        // Agregar auth solo si está presente (default es "manual" según doc)
+        if (isset($arrPost['auth']) && !empty($arrPost['auth'])) {
+            $user['auth'] = $arrPost['auth'];
+        } else {
+            $user['auth'] = 'manual'; // Default según documentación
+        }
+        
+        // Log detallado de todos los campos que se enviarán
+        Log::info("=== Datos finales para Moodle ===");
+        Log::info("Username: '{$username}' (longitud: " . strlen($username) . ")");
+        Log::info("Firstname: '{$firstname}' (longitud: " . strlen($firstname) . ")");
+        Log::info("Lastname: '{$lastname}' (longitud: " . strlen($lastname) . ")");
+        Log::info("Email: '{$email}' (longitud: " . strlen($email) . ")");
+        Log::info("Auth: '{$user['auth']}'");
+        Log::info("Password: " . (isset($user['password']) ? "presente (longitud: " . strlen($user['password']) . ")" : "no presente"));
+        Log::info("Usuario completo: " . json_encode($user, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
         
         // Solo agregar lang si está especificado (puede causar error si el idioma no está instalado)
         if (isset($arrPost['lang']) && !empty($arrPost['lang'])) {
@@ -301,12 +371,20 @@ trait MoodleRestProTrait
             Log::info("Llamando a Moodle: {$function_name}");
             Log::info("Parámetros enviados a Moodle: " . json_encode($params, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
             
-            // Convertir arrays anidados al formato que Moodle espera
+            // Convertir arrays anidados al formato que Moodle espera según documentación REST
+            // Formato: users[0][username]=string, users[0][password]=string, etc.
             $formData = $this->buildMoodleFormData($params);
             
-            // Log del formato final que se enviará
-            Log::info("Form data para Moodle: " . http_build_query($formData));
+            // Construir el body manualmente usando http_build_query para asegurar formato exacto
+            // Según documentación REST de Moodle: users[0][username]=string
+            $body = http_build_query($formData, '', '&', PHP_QUERY_RFC1738);
             
+            // Log del formato final que se enviará
+            Log::info("Form data para Moodle (body): " . $body);
+            Log::info("Form data para Moodle (array): " . json_encode($formData, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+            
+            // Enviar usando asForm() que debería manejar arrays anidados correctamente
+            // Si esto falla, el problema puede estar en los valores de los campos
             $response = Http::timeout(30)
                 ->asForm()
                 ->post($serverurl, $formData);
