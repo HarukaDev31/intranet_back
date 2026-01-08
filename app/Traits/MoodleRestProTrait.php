@@ -28,6 +28,7 @@ trait MoodleRestProTrait
         }
 
         // Crear usuario según formato exacto de Moodle
+        // NOTA: calendartype puede no ser válido en todas las versiones de Moodle
         $user = [
             'username' => strtolower(trim($arrPost['username'])),
             'password' => trim($arrPost['password']),
@@ -36,8 +37,13 @@ trait MoodleRestProTrait
             'email' => strtolower(trim($arrPost['email'])),
             'auth' => isset($arrPost['auth']) ? $arrPost['auth'] : 'manual',
             'lang' => isset($arrPost['lang']) ? $arrPost['lang'] : 'es',
-            'calendartype' => isset($arrPost['calendartype']) ? $arrPost['calendartype'] : 'gregorian',
         ];
+        
+        // Solo agregar calendartype si está explícitamente solicitado
+        // (puede causar "invalid parameter" en algunas versiones de Moodle)
+        if (isset($arrPost['calendartype']) && !empty($arrPost['calendartype'])) {
+            $user['calendartype'] = $arrPost['calendartype'];
+        }
 
         // Campos opcionales según documentación
         if (isset($arrPost['city'])) {
@@ -238,18 +244,27 @@ trait MoodleRestProTrait
 
         // Usar Laravel HTTP Client en lugar de curl.php
         // Enviar como form data (application/x-www-form-urlencoded) que es lo que espera Moodle REST
+        // Laravel HTTP Client maneja automáticamente arrays anidados en el formato correcto
         try {
             Log::info("Llamando a Moodle: {$function_name}");
-            Log::info("Parámetros enviados a Moodle: " . json_encode($params));
+            Log::info("Parámetros enviados a Moodle: " . json_encode($params, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
             
             $response = Http::timeout(30)
                 ->asForm()
                 ->post($serverurl, $params);
                 
             Log::info("Respuesta de Moodle: " . $response->body());
+            
+            // Si hay error, loggear más detalles
+            if ($response->status() !== 200 || strpos($response->body(), 'EXCEPTION') !== false) {
+                Log::error("Error en respuesta de Moodle - Status: " . $response->status());
+                Log::error("Body completo: " . $response->body());
+            }
+            
             return $response->body();
         } catch (\Exception $e) {
             Log::error('Error en call_moodle: ' . $e->getMessage());
+            Log::error('Stack trace: ' . $e->getTraceAsString());
             return '<EXCEPTION>' . $e->getMessage() . '</EXCEPTION>';
         }
     }
