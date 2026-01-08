@@ -232,7 +232,7 @@ trait MoodleRestProTrait
 
     private function call_moodle($function_name, $params, $token)
     {
-        $domain = 'https://aulavirtualprobusiness.com';
+        $domain = 'https://aulavirtual.probusiness.pe';
 
         $serverurl = $domain . '/webservice/rest/server.php'. '?wstoken=' . $token . '&wsfunction='.$function_name;
 
