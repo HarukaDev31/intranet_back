@@ -29,14 +29,63 @@ trait MoodleRestProTrait
 
         // Crear usuario según formato exacto de Moodle
         // Solo incluir campos requeridos y opcionales válidos
+        
+        // Normalizar y validar email más estrictamente
+        $email = strtolower(trim($arrPost['email']));
+        
+        // Remover espacios y caracteres problemáticos, pero mantener puntos válidos
+        $email = filter_var($email, FILTER_SANITIZE_EMAIL);
+        
+        // Validar que el email sea válido después de la limpieza
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            Log::error("Email inválido después de normalización: " . $arrPost['email']);
+            throw new \Exception('Email inválido: ' . $arrPost['email']);
+        }
+        
+        // Validar que el email no tenga caracteres problemáticos para Moodle
+        // Moodle puede rechazar emails con ciertos caracteres especiales
+        if (preg_match('/[<>"\']/', $email)) {
+            Log::error("Email contiene caracteres no permitidos: " . $email);
+            throw new \Exception('Email contiene caracteres no permitidos');
+        }
+        
+        // IMPORTANTE: Asegurar que el email esté correctamente codificado
+        // Algunas versiones de Moodle pueden tener problemas con emails que tienen puntos
+        // especialmente si hay múltiples puntos consecutivos o al inicio/fin de la parte local
+        // Normalizar: remover puntos duplicados y puntos al inicio/fin de la parte local
+        $emailParts = explode('@', $email);
+        if (count($emailParts) === 2) {
+            $localPart = $emailParts[0];
+            $domain = $emailParts[1];
+            
+            // Remover puntos al inicio y final de la parte local
+            $localPart = trim($localPart, '.');
+            
+            // Remover puntos duplicados consecutivos (aunque esto es válido en emails, Moodle puede rechazarlo)
+            // Pero NO lo hacemos porque es válido según RFC
+            
+            // Reconstruir el email
+            $email = $localPart . '@' . $domain;
+            
+            // Validar nuevamente después de la normalización
+            if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                Log::error("Email inválido después de normalización de puntos: " . $email);
+                // Si falla, usar el email original
+                $email = strtolower(trim($arrPost['email']));
+            }
+        }
+        
         $user = [
             'username' => strtolower(trim($arrPost['username'])),
             'password' => trim($arrPost['password']),
             'firstname' => trim($arrPost['firstname']),
             'lastname' => trim($arrPost['lastname']),
-            'email' => strtolower(trim($arrPost['email'])),
+            'email' => $email, // Email ya normalizado y validado
             'auth' => isset($arrPost['auth']) ? $arrPost['auth'] : 'manual',
         ];
+        
+        // Log del email que se enviará para debug
+        Log::info("Email normalizado para Moodle: " . $email . " (original: " . $arrPost['email'] . ")");
         
         // Solo agregar lang si está especificado (puede causar error si el idioma no está instalado)
         if (isset($arrPost['lang']) && !empty($arrPost['lang'])) {
@@ -293,7 +342,20 @@ trait MoodleRestProTrait
                     if (is_array($item)) {
                         // Array anidado: users[0][username], users[0][password], etc.
                         foreach ($item as $subKey => $subValue) {
+                            // Asegurar que los valores estén correctamente codificados
+                            // Para emails, asegurar que se envíen sin codificación adicional
+                            // Laravel HTTP Client con asForm() manejará la codificación URL automáticamente
                             $formData["{$key}[{$index}][{$subKey}]"] = $subValue;
+                            
+                            // Log especial para email para debug
+                            if ($subKey === 'email') {
+                                Log::info("Email en form data: '{$subValue}' (longitud: " . strlen($subValue) . ", bytes: " . bin2hex($subValue) . ")");
+                                // Verificar si el email tiene puntos que puedan causar problemas
+                                if (strpos($subValue, '.') !== false) {
+                                    $dotCount = substr_count($subValue, '.');
+                                    Log::warning("Email contiene {$dotCount} punto(s) - puede causar problemas en Moodle");
+                                }
+                            }
                         }
                     } else {
                         // Array simple: values[0], values[1], etc.
@@ -305,6 +367,9 @@ trait MoodleRestProTrait
                 $formData[$key] = $value;
             }
         }
+        
+        // Log del form data completo para debug
+        Log::info("Form data construido: " . json_encode($formData, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
         
         return $formData;
     }
