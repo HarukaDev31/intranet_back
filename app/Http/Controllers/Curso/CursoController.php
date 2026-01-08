@@ -1798,8 +1798,9 @@ class CursoController extends Controller
                     $mensaje = "El día del inicio del curso, te agregaremos a un grupo de whatsapp por donde compartiremos los links de acceso al zoom, los materiales de trabajo y las grabaciones de las clases dictadas.\n\n";
                     $message .= "Saludos,\nEl equipo de ProBusiness";
                     
-                    $this->sendMessageVentas($message, $telefono);
-                    $this->sendMessageVentas($mensaje, $telefono, 2);
+                    // TEMPORALMENTE DESHABILITADO: Número de ventas bloqueado
+                    // $this->sendMessageVentas($message, $telefono);
+                    // $this->sendMessageVentas($mensaje, $telefono, 2);
                 } else {
                     return response()->json([
                         'status'  => 'error',

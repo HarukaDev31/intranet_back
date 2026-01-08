@@ -2911,8 +2911,9 @@ class CotizacionController extends Controller
             $telefono = preg_replace('/\s+/', '', $cotizacion->telefono);
             $telefono = $telefono ? $telefono . '@c.us' : '';
 
+            // TEMPORALMENTE DESHABILITADO: Número de ventas bloqueado
             // Enviar mensaje usando sendMessageVentas (desde el número de ventas)
-            $wspMessageData = $this->sendMessageVentas($message, $telefono);
+            // $wspMessageData = $this->sendMessageVentas($message, $telefono);
             
             if (!(is_array($wspMessageData) && isset($wspMessageData['status']) && $wspMessageData['status'] === true)) {
                 Log::warning('Respuesta inesperada al enviar recordatorio de firma por WhatsApp: ' . json_encode($wspMessageData));
