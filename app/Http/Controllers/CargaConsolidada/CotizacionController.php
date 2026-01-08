@@ -2106,6 +2106,7 @@ class CotizacionController extends Controller
 
                 $this->crearNotificacionCotizacionConfirmada($cotizacion);
                 //if current env not is production, send message to whatsapp
+                /*
                 $wspMessage = "Hola {$cotizacion->nombre} gracias por formar parte de nuestra comunidad de importadores; antes de derivarte con el equipo de Coordinaciones por favor recuerda lo siguiente:\n\n" .
                     "1. Envío el contrato para formalizar el servicio de importación. Tiene dos (2) días hábiles para enviar observaciones. De no recibirlas, daremos el contrato por aceptado.\n" .
                     "2. Si el producto tiene marca, logo y/o contiene una imagen de una marca o personaje conocido o patentado en INDECOPI no se podrá transportar.\n" .
@@ -2138,6 +2139,7 @@ class CotizacionController extends Controller
                 } catch (\Throwable $ex) {
                     Log::warning('Error enviando texto WhatsApp al cliente confirmado: ' . $ex->getMessage());
                 }
+                */
 
                 try {
                     $contenedor = isset($cotizacion->contenedor) ? $cotizacion->contenedor : Contenedor::find($cotizacion->id_contenedor);
