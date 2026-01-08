@@ -458,18 +458,24 @@ trait MoodleRestProTrait
             
             // Construir el body manualmente usando http_build_query para asegurar formato exacto
             // Según documentación REST de Moodle: users[0][username]=string
+            // IMPORTANTE: Enviar como string raw para que Moodle lo reciba exactamente como espera
             $body = http_build_query($formData, '', '&', PHP_QUERY_RFC1738);
             
             // Log del formato final que se enviará
             Log::info("Form data para Moodle (body): " . $body);
             Log::info("Form data para Moodle (array): " . json_encode($formData, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
             
-            // Enviar usando asForm() que maneja correctamente la codificación URL
-            // Laravel HTTP Client con asForm() debería manejar arrays anidados correctamente
-            // El body construido manualmente es solo para logging/debug
+            // Enviar el body como string raw usando withOptions para control total
+            // Esto asegura que Moodle reciba los datos exactamente en el formato que espera
+            // En lugar de usar asForm() que puede modificar la codificación de arrays anidados
             $response = Http::timeout(30)
-                ->asForm()
-                ->post($serverurl, $formData);
+                ->withOptions([
+                    'body' => $body,
+                    'headers' => [
+                        'Content-Type' => 'application/x-www-form-urlencoded',
+                    ],
+                ])
+                ->post($serverurl);
                 
             Log::info("Respuesta de Moodle: " . $response->body());
             
