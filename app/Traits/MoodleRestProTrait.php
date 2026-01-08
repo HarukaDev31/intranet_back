@@ -127,25 +127,38 @@ trait MoodleRestProTrait
         
         // Construir objeto usuario con SOLO campos requeridos según documentación
         // Campos requeridos: username, firstname, lastname, email
-        // Campos opcionales pero que estamos enviando: password, auth
+        // Campos opcionales: password, auth (pero necesarios para crear usuario funcional)
+        
+        // Validar password - debe ser string plano según documentación
+        $password = isset($arrPost['password']) ? trim($arrPost['password']) : '';
+        
+        // Construir usuario con campos en el orden que Moodle espera
+        // Campos requeridos: username, firstname, lastname, email
         $user = [
             'username' => $username,
             'firstname' => $firstname,
             'lastname' => $lastname,
-            'email' => $email, // Email ya normalizado y validado
+            'email' => $email,
         ];
         
-        // Agregar password solo si está presente (es opcional según doc, pero necesario para crear usuario)
-        if (isset($arrPost['password']) && !empty($arrPost['password'])) {
-            $user['password'] = trim($arrPost['password']);
+        // Agregar password si está presente
+        // Según documentación: "Plain text password consisting of any characters"
+        // Pero algunos caracteres especiales pueden causar problemas en la codificación URL
+        if (!empty($password)) {
+            // Asegurar que el password no tenga caracteres de control
+            $password = preg_replace('/[\x00-\x1F\x7F]/', '', $password);
+            if (!empty($password)) {
+                $user['password'] = $password;
+            }
         }
         
-        // Agregar auth solo si está presente (default es "manual" según doc)
-        if (isset($arrPost['auth']) && !empty($arrPost['auth'])) {
-            $user['auth'] = $arrPost['auth'];
-        } else {
-            $user['auth'] = 'manual'; // Default según documentación
-        }
+        // Agregar auth (default "manual" según documentación)
+        $user['auth'] = isset($arrPost['auth']) && !empty($arrPost['auth']) 
+            ? $arrPost['auth'] 
+            : 'manual';
+            
+        // NOTA: No usamos createpassword=1 porque requiere configuración adicional en Moodle
+        // y el password que generamos es más seguro
         
         // Log detallado de todos los campos que se enviarán
         Log::info("=== Datos finales para Moodle ===");
@@ -383,8 +396,9 @@ trait MoodleRestProTrait
             Log::info("Form data para Moodle (body): " . $body);
             Log::info("Form data para Moodle (array): " . json_encode($formData, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
             
-            // Enviar usando asForm() que debería manejar arrays anidados correctamente
-            // Si esto falla, el problema puede estar en los valores de los campos
+            // Enviar usando asForm() que maneja correctamente la codificación URL
+            // Laravel HTTP Client con asForm() debería manejar arrays anidados correctamente
+            // El body construido manualmente es solo para logging/debug
             $response = Http::timeout(30)
                 ->asForm()
                 ->post($serverurl, $formData);
