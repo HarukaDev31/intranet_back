@@ -129,8 +129,51 @@ trait MoodleRestProTrait
         // Campos requeridos: username, firstname, lastname, email
         // Campos opcionales: password, auth (pero necesarios para crear usuario funcional)
         
-        // Validar password - debe ser string plano según documentación
+        // Validar password según políticas de Moodle
+        // Requisitos de Moodle:
+        // - Al menos 8 caracteres
+        // - Al menos 1 dígito
+        // - Al menos 1 minúscula
+        // - Al menos 1 mayúscula
+        // - Al menos 1 carácter especial como *, -, o #
         $password = isset($arrPost['password']) ? trim($arrPost['password']) : '';
+        
+        // Validar que el password cumpla con los requisitos de Moodle
+        if (!empty($password)) {
+            // Remover caracteres de control
+            $password = preg_replace('/[\x00-\x1F\x7F]/', '', $password);
+            
+            // Validar requisitos de Moodle
+            $hasMinLength = strlen($password) >= 8;
+            $hasDigit = preg_match('/\d/', $password);
+            $hasLowercase = preg_match('/[a-z]/', $password);
+            $hasUppercase = preg_match('/[A-Z]/', $password);
+            $hasSpecial = preg_match('/[*\-#]/', $password); // *, -, o #
+            
+            $requirements = [
+                'min_length' => $hasMinLength,
+                'digit' => $hasDigit,
+                'lowercase' => $hasLowercase,
+                'uppercase' => $hasUppercase,
+                'special' => $hasSpecial,
+            ];
+            
+            $missingRequirements = array_filter($requirements, function($met) { return !$met; });
+            
+            if (!empty($missingRequirements)) {
+                Log::warning("Password no cumple con requisitos de Moodle. Faltantes: " . implode(', ', array_keys($missingRequirements)));
+                Log::warning("Generando nueva contraseña que cumpla con todos los requisitos");
+                
+                // Generar contraseña que cumpla con todos los requisitos
+                $password = $this->generateMoodleCompliantPassword();
+            } else {
+                Log::info("Password cumple con todos los requisitos de Moodle");
+            }
+        } else {
+            // Si no hay password, generar uno que cumpla con los requisitos
+            Log::warning("Password vacío, generando uno que cumpla con requisitos de Moodle");
+            $password = $this->generateMoodleCompliantPassword();
+        }
         
         // Construir usuario con campos en el orden que Moodle espera
         // Campos requeridos: username, firstname, lastname, email
@@ -139,18 +182,8 @@ trait MoodleRestProTrait
             'firstname' => $firstname,
             'lastname' => $lastname,
             'email' => $email,
+            'password' => $password, // Siempre incluir password válido
         ];
-        
-        // Agregar password si está presente
-        // Según documentación: "Plain text password consisting of any characters"
-        // Pero algunos caracteres especiales pueden causar problemas en la codificación URL
-        if (!empty($password)) {
-            // Asegurar que el password no tenga caracteres de control
-            $password = preg_replace('/[\x00-\x1F\x7F]/', '', $password);
-            if (!empty($password)) {
-                $user['password'] = $password;
-            }
-        }
         
         // Agregar auth (default "manual" según documentación)
         $user['auth'] = isset($arrPost['auth']) && !empty($arrPost['auth']) 
@@ -221,6 +254,41 @@ trait MoodleRestProTrait
         
         Log::info('Usuario Moodle preparado: ' . json_encode($user));
         return $user;
+    }
+    
+    /**
+     * Genera una contraseña que cumple con los requisitos de Moodle:
+     * - Al menos 8 caracteres
+     * - Al menos 1 dígito
+     * - Al menos 1 minúscula
+     * - Al menos 1 mayúscula
+     * - Al menos 1 carácter especial (*, -, o #)
+     */
+    private function generateMoodleCompliantPassword()
+    {
+        $lowercase = 'abcdefghijklmnopqrstuvwxyz';
+        $uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+        $digits = '0123456789';
+        $special = '*-#'; // Caracteres especiales permitidos por Moodle
+        
+        $password = '';
+        
+        // Asegurar al menos un carácter de cada tipo
+        $password .= $lowercase[random_int(0, strlen($lowercase) - 1)];
+        $password .= $uppercase[random_int(0, strlen($uppercase) - 1)];
+        $password .= $digits[random_int(0, strlen($digits) - 1)];
+        $password .= $special[random_int(0, strlen($special) - 1)];
+        
+        // Completar hasta 12 caracteres con caracteres aleatorios de todos los tipos
+        $allChars = $lowercase . $uppercase . $digits . $special;
+        for ($i = strlen($password); $i < 12; $i++) {
+            $password .= $allChars[random_int(0, strlen($allChars) - 1)];
+        }
+        
+        // Mezclar los caracteres para que no sea predecible
+        $password = str_shuffle($password);
+        
+        return $password;
     }
 
     private function make_test_course($n) 
