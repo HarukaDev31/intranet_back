@@ -458,7 +458,7 @@ trait MoodleRestProTrait
     public function createUser($arrPost)
     {
         try {
-            $token = '2a41772b01afcf26da875fc1ab59bf45';
+            $token = 'b582ae9ecd4e4e47794f4c27a091d775';
             
             // Validar datos antes de crear usuario
             if (empty($arrPost['username']) || empty($arrPost['password']) || 
@@ -556,7 +556,7 @@ trait MoodleRestProTrait
     public function getUser($arrParams)
     {
         try {
-            $token = '2a41772b01afcf26da875fc1ab59bf45';
+            $token = 'b582ae9ecd4e4e47794f4c27a091d775';
             $user_id_1 = $this->get_user_field($arrParams, $token);
             return $user_id_1;
         } 
@@ -574,7 +574,7 @@ trait MoodleRestProTrait
     public function crearCursoUsuario($arrParams)
     {
         try {
-            $token = '2a41772b01afcf26da875fc1ab59bf45';
+            $token = 'b582ae9ecd4e4e47794f4c27a091d775';
 
             $user_id_1 = $arrParams['id_usuario'];
             $role_id = 5;//usuario invitado
