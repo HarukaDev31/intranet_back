@@ -468,6 +468,7 @@ trait MoodleRestProTrait
                             : 'Usuario existente actualizado',
                         'user_id' => $user_id,
                         'username' => $existing_username, // ✅ Retornar el username real de Moodle
+                        'password' => $arrPost['password'], // ✅ Retornar la contraseña que se intentó actualizar
                         'password_updated' => !(isset($update_result['warning']) && $update_result['warning']),
                         'user_exists' => true // ✅ Indicar que el usuario ya existía
                     ];
@@ -489,9 +490,10 @@ trait MoodleRestProTrait
             
             $user_id_1 = $this->create_user($user_data_1, $token);
             
-            // Si se creó exitosamente, agregar el username al resultado
+            // Si se creó exitosamente, agregar el username y password al resultado
             if ($user_id_1['status'] == 'success') {
                 $user_id_1['username'] = $arrPost['username']; // Username que se usó para crear
+                $user_id_1['password'] = $arrPost['password']; // ✅ Retornar la contraseña que se usó para crear
                 $user_id_1['user_exists'] = false; // Indicar que es un usuario nuevo
             }
             
