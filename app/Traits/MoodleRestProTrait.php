@@ -232,7 +232,7 @@ trait MoodleRestProTrait
 
     private function call_moodle($function_name, $params, $token)
     {
-        $domain = 'https://aulavirtualprobusiness.com';
+        $domain = 'https://aulavirtual.probusiness.pe';
 
         $serverurl = $domain . '/webservice/rest/server.php'. '?wstoken=' . $token . '&wsfunction='.$function_name;
 
@@ -240,16 +240,33 @@ trait MoodleRestProTrait
         // Enviar como form data (application/x-www-form-urlencoded) que es lo que espera Moodle REST
         try {
             Log::info("Llamando a Moodle: {$function_name}");
+            Log::info("Token usado: " . substr($token, 0, 8) . '...' . substr($token, -8)); // Mostrar solo parte del token por seguridad
+            Log::info("URL completa: {$serverurl}");
             Log::info("Parámetros enviados a Moodle: " . json_encode($params));
             
             $response = Http::timeout(30)
                 ->asForm()
                 ->post($serverurl, $params);
-                
-            Log::info("Respuesta de Moodle: " . $response->body());
+            
+            // Log detallado de la respuesta
+            Log::info("HTTP Code: " . $response->status());
+            Log::info("Respuesta de Moodle (cURL): " . $response->body());
+            
+            // Si hay un error de acceso, loggear más detalles
+            if (strpos($response->body(), 'accessexception') !== false || 
+                strpos($response->body(), 'Access to the function') !== false) {
+                Log::error("=== ERROR DE ACCESO EN MOODLE ===");
+                Log::error("Función: {$function_name}");
+                Log::error("Token: " . substr($token, 0, 8) . '...' . substr($token, -8));
+                Log::error("URL: {$serverurl}");
+                Log::error("Respuesta completa: " . $response->body());
+                Log::error("HTTP Status: " . $response->status());
+            }
+            
             return $response->body();
         } catch (\Exception $e) {
             Log::error('Error en call_moodle: ' . $e->getMessage());
+            Log::error('Stack trace: ' . $e->getTraceAsString());
             return '<EXCEPTION>' . $e->getMessage() . '</EXCEPTION>';
         }
     }
@@ -379,12 +396,37 @@ trait MoodleRestProTrait
         $users = [$user_data];
         $params = ['users' => $users];
         
+        // Log detallado antes de intentar actualizar
+        Log::info('=== INTENTANDO ACTUALIZAR USUARIO EN MOODLE ===');
+        Log::info('Token usado: ' . substr($token, 0, 8) . '...' . substr($token, -8));
+        Log::info('Datos del usuario a actualizar: ' . json_encode($user_data));
+        
         $response = $this->call_moodle('core_user_update_users', $params, $token);
 
         if ($this->xmlresponse_is_exception($response)) {
             // Verificar si es un error de permisos (accessexception)
             if (strpos($response, 'accessexception') !== false || 
                 strpos($response, 'Access to the function core_user_update_users() is not allowed') !== false) {
+                
+                // Log detallado del error de permisos
+                Log::error('=== ERROR DE PERMISOS EN MOODLE ===');
+                Log::error('Función: core_user_update_users');
+                Log::error('Token: ' . substr($token, 0, 8) . '...' . substr($token, -8));
+                Log::error('Respuesta completa: ' . $response);
+                
+                // Intentar extraer más información del error
+                try {
+                    $xml_tree = new \SimpleXMLElement($response);
+                    if (isset($xml_tree->MESSAGE)) {
+                        Log::error('Mensaje de error: ' . (string)$xml_tree->MESSAGE);
+                    }
+                    if (isset($xml_tree->DEBUGINFO)) {
+                        Log::error('Debug info: ' . (string)$xml_tree->DEBUGINFO);
+                    }
+                } catch (\Exception $e) {
+                    Log::error('No se pudo parsear el XML del error: ' . $e->getMessage());
+                }
+                
                 // Si es un error de permisos, retornar éxito con advertencia
                 // porque el usuario ya existe en Moodle (que es el objetivo principal)
                 Log::warning('No se pudo actualizar contraseña en Moodle por falta de permisos, pero el usuario ya existe: ' . json_encode($user_data));
@@ -396,12 +438,14 @@ trait MoodleRestProTrait
             }
             
             // Para otros errores, retornar error
+            Log::error('Error al actualizar usuario en Moodle (no es de permisos): ' . $response);
             return [
                 'status' => 'error',
                 'message' => "Error al actualizar: " . $response
             ];
         }
         
+        Log::info('Usuario actualizado exitosamente en Moodle');
         return [
             'status' => 'success',
             'message' => "Usuario actualizado exitosamente"
