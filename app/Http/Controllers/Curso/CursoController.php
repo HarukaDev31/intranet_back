@@ -1408,8 +1408,7 @@ class CursoController extends Controller
                     'lastname'     => $lastname,
                     'email'        => $email,
                     'auth'         => 'manual',
-                    // lang se omite por defecto para evitar errores si el idioma no está instalado en Moodle
-                    // 'lang'         => 'es',
+                    'lang'         => 'es',
                 ];
 
                 // Log para debug - verificar que todos los campos estén presentes
@@ -1441,16 +1440,74 @@ class CursoController extends Controller
 
                 // Log de respuesta de Moodle
                 Log::error('Respuesta de Moodle: ' . json_encode($response_usuario_moodle));
+                Log::error('Respuesta de Moodle (var_dump): ' . print_r($response_usuario_moodle, true));
 
                 if ($response_usuario_moodle['status'] == 'success') {
-                    // Buscar el usuario creado usando el nuevo username
-                    $arrParams['criteria'][0]['key']   = 'username';
-                    $arrParams['criteria'][0]['value'] = $username;
+                    // ✅ Usar el username real de Moodle si el usuario ya existía, sino usar el generado
+                    $moodle_username = $response_usuario_moodle['username'] ?? $username;
                     
-                    // Set No_Usuario to $username
+                    // ✅ Usar la contraseña de la respuesta si está disponible (para usuarios existentes actualizados)
+                    // Si no, usar la contraseña original que se preparó
+                    $moodle_password = $response_usuario_moodle['password'] ?? $cleaned_password;
+                    
+                    // Log para debug - VERIFICAR VALORES
+                    Log::error("=== DEBUG: ASIGNACIÓN DE VARIABLES ===");
+                    Log::error("response_usuario_moodle completo: " . json_encode($response_usuario_moodle));
+                    Log::error("response_usuario_moodle['username']: " . ($response_usuario_moodle['username'] ?? 'NO DEFINIDO'));
+                    Log::error("username (generado): {$username}");
+                    Log::error("moodle_username (asignado): {$moodle_username}");
+                    Log::error("Password de respuesta: " . ($response_usuario_moodle['password'] ?? 'NO ENCONTRADO'));
+                    Log::error("cleaned_password: {$cleaned_password}");
+                    Log::error("moodle_password (asignado): {$moodle_password}");
+                    Log::error("¿Coinciden las contraseñas? " . ($moodle_password === $cleaned_password ? 'SÍ' : 'NO'));
+                    
+                    // Si el usuario ya existía, usar su username real; si es nuevo, usar el generado
+                    if (isset($response_usuario_moodle['user_exists']) && $response_usuario_moodle['user_exists']) {
+                        Log::info("Usuario existente en Moodle, usando username real: {$moodle_username}");
+                    } else {
+                        Log::info("Usuario nuevo en Moodle, usando username generado: {$moodle_username}");
+                    }
+                    
+                    // Buscar el usuario usando el username correcto (real o generado)
+                    // ✅ FORZAR el uso del username de la respuesta si el usuario existe
+                    if (isset($response_usuario_moodle['user_exists']) && $response_usuario_moodle['user_exists']) {
+                        // Si el usuario ya existía, SIEMPRE usar el username de la respuesta
+                        if (!empty($response_usuario_moodle['username'])) {
+                            $moodle_username = $response_usuario_moodle['username'];
+                            Log::error("✅ FORZADO: Usando username real de usuario existente: {$moodle_username}");
+                        } else {
+                            Log::error("⚠️ ERROR: Usuario existe pero no se encontró username en respuesta");
+                        }
+                    }
+                    
+                    // Verificación final
+                    if (empty($moodle_username)) {
+                        $moodle_username = $response_usuario_moodle['username'] ?? $username;
+                        Log::error("⚠️ ADVERTENCIA: moodle_username estaba vacío, se reasignó a: {$moodle_username}");
+                    }
+                    
+                    // ✅ Asegurar que $arrParams esté inicializado correctamente
+                    $arrParams = [
+                        'criteria' => [
+                            [
+                                'key' => 'username',
+                                'value' => $moodle_username
+                            ]
+                        ]
+                    ];
+                    
+                    // Log para verificar el valor que se va a usar
+                    Log::error("=== ANTES DE BUSCAR USUARIO EN MOODLE ===");
+                    Log::error("moodle_username FINAL a buscar: {$moodle_username}");
+                    Log::error("username generado (NO usar): {$username}");
+                    Log::error("arrParams completo: " . json_encode($arrParams));
+                    Log::error("Verificación: arrParams['criteria'][0]['value'] = " . $arrParams['criteria'][0]['value']);
+                    
+                    // Set No_Usuario to $moodle_username (username real de Moodle)
+                    // ✅ Usar la contraseña correcta (la de la respuesta si existe, sino la original)
                     $this->setUsuarioModdle(
-                        $username,
-                        $this->ciEncrypt($cleaned_password),
+                        $moodle_username,
+                        $this->ciEncrypt($moodle_password),
                         $id
                     );
                     
@@ -1476,10 +1533,19 @@ class CursoController extends Controller
                         } else {
                             $this->actualizarPedido(['ID_Pedido_Curso' => $id_pedido_curso], ['Nu_Estado_Usuario_Externo' => '2']);
 
-                            // Enviar credenciales por email y WhatsApp
+                            // Log para verificar credenciales antes de enviar
+                            Log::info('=== CREDENCIALES A ENVIAR ===');
+                            Log::info('Username Moodle: ' . $moodle_username);
+                            Log::info('Password a enviar (longitud): ' . strlen($moodle_password) . ' caracteres');
+                            Log::info('Password a enviar (valor completo): ' . $moodle_password);
+                            Log::info('Email: ' . $email);
+                            Log::info('Password usado en arrPost: ' . ($arrPost['password'] ?? 'NO DEFINIDO'));
+                            Log::info('¿Coinciden las contraseñas? ' . ($moodle_password === ($arrPost['password'] ?? '') ? 'SÍ' : 'NO'));
+                            
+                            // ✅ Enviar credenciales por email y WhatsApp usando el username y password correctos de Moodle
                             $this->enviarCredencialesMoodle(
-                                $username,
-                                $cleaned_password,
+                                $moodle_username,
+                                $moodle_password, // ✅ Usar la contraseña correcta
                                 $email,
                                 $nombres,
                                 $phoneNumber
@@ -1491,9 +1557,10 @@ class CursoController extends Controller
                                 'message' => 'Usuario y curso creados exitosamente. Credenciales enviadas por email y WhatsApp.',
                                 'data' => [
                                     'original_username' => $original_username,
-                                    'moodle_username' => $username,
+                                    'moodle_username' => $moodle_username, // ✅ Usar el username real de Moodle
                                     'moodle_id' => $id_usuario,
                                     'moodle_password' => $cleaned_password, // Contraseña sin encriptar para el admin
+                                    'user_existed' => $response_usuario_moodle['user_exists'] ?? false
                                 ]
                             ]);
                         }
@@ -1607,40 +1674,13 @@ class CursoController extends Controller
         $clean = preg_replace('/[<>"\'\\\]/', '', $password);
 
         // Si es muy corta o tiene caracteres problemáticos, generar nueva que cumpla requisitos de Moodle
-        // Moodle solo permite caracteres especiales: *, -, o #
-        if (strlen($clean) < 8 || preg_match('/[^\w\d*\-#]/', $clean)) {
-            // Generar password que cumpla requisitos: al menos 8 chars, 1 dígito, 1 minúscula, 1 mayúscula, 1 especial (*, -, o #)
-            $lowercase = 'abcdefghijklmnopqrstuvwxyz';
-            $uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-            $digits = '0123456789';
-            $special = '*-#'; // Solo estos caracteres especiales permitidos
-            
-            $newPassword = '';
-            $newPassword .= $lowercase[random_int(0, strlen($lowercase) - 1)];
-            $newPassword .= $uppercase[random_int(0, strlen($uppercase) - 1)];
-            $newPassword .= $digits[random_int(0, strlen($digits) - 1)];
-            $newPassword .= $special[random_int(0, strlen($special) - 1)];
-            
-            $allChars = $lowercase . $uppercase . $digits . $special;
-            for ($i = strlen($newPassword); $i < 12; $i++) {
-                $newPassword .= $allChars[random_int(0, strlen($allChars) - 1)];
-            }
-            return str_shuffle($newPassword);
+        if (strlen($clean) < 8 || preg_match('/[^\w\d!@#%&*]/', $clean)) {
+            return 'TempPass#' . rand(1000, 9999) . '!';
         }
 
-        // Verificar que tenga al menos un caracter especial válido (*, -, o #)
-        if (!preg_match('/[*\-#]/', $clean)) {
-            // Agregar un carácter especial válido
-            $special = '*-#';
-            return $clean . $special[random_int(0, strlen($special) - 1)] . rand(10, 99);
-        }
-        
-        // Remover caracteres especiales inválidos si los hay
-        $clean = preg_replace('/[!@$%^&*()+=\[\]{}|;:"<>?\/~`]/', '', $clean);
-        // Asegurar que tenga al menos un carácter especial válido después de limpiar
-        if (!preg_match('/[*\-#]/', $clean)) {
-            $special = '*-#';
-            $clean .= $special[random_int(0, strlen($special) - 1)];
+        // Verificar que tenga al menos un caracter especial
+        if (!preg_match('/[!@#$%^&*(),.?":{}|<>]/', $clean)) {
+            return $clean . '#' . rand(10, 99) . '!';
         }
 
         return $clean;
@@ -1794,13 +1834,12 @@ class CursoController extends Controller
                     $message .= "Tu cuenta en ProBusiness ha sido creada exitosamente.\n\n";
                     $message .= "Usuario: " . (isset($result->usuario_moodle) && $result->usuario_moodle ? $result->usuario_moodle : $result->No_Usuario) . "\n";
                     $message .= "Contraseña: {$this->ciDecrypt($result->No_Password)}\n\n";
-                    $message .= "Puedes acceder a tu cuenta en el siguiente enlace: https://aulavirtual.probusiness.pe/login/\n\n";
+                    $message .= "Puedes acceder a tu cuenta en el siguiente enlace: https://aulavirtualprobusiness.com/login/\n\n";
                     $mensaje = "El día del inicio del curso, te agregaremos a un grupo de whatsapp por donde compartiremos los links de acceso al zoom, los materiales de trabajo y las grabaciones de las clases dictadas.\n\n";
                     $message .= "Saludos,\nEl equipo de ProBusiness";
                     
-                    // TEMPORALMENTE DESHABILITADO: Número de ventas bloqueado
-                    // $this->sendMessageVentas($message, $telefono);
-                    // $this->sendMessageVentas($mensaje, $telefono, 2);
+                    $this->sendMessageVentas($message, $telefono);
+                    $this->sendMessageVentas($mensaje, $telefono, 2);
                 } else {
                     return response()->json([
                         'status'  => 'error',
@@ -2088,8 +2127,15 @@ class CursoController extends Controller
     private function enviarCredencialesMoodle($username, $password, $email, $nombre, $phoneNumber = null)
     {
         try {
+            // Log para verificar credenciales recibidas
+            Log::info('=== ENVIAR CREDENCIALES MOODLE ===');
+            Log::info('Username recibido: ' . $username);
+            Log::info('Password recibido (longitud): ' . strlen($password) . ' caracteres');
+            Log::info('Password recibido (valor completo): ' . $password);
+            Log::info('Email: ' . $email);
+            
             // URL de Moodle desde configuración o variable de entorno
-            $moodleUrl = env('MOODLE_URL', 'https://aulavirtual.probusiness.pe/login/index.php');
+            $moodleUrl = env('MOODLE_URL', 'https://aulavirtualprobusiness.com/login/index.php');
             
             // Rutas de los logos
             $logo_header = public_path('storage/logo_icons/logo_header.png');
@@ -2597,7 +2643,7 @@ class CursoController extends Controller
             $nombreCliente = $pedido->No_Entidad ?? 'Cliente';
             $mensaje = "Hola {$nombreCliente} 👋\n\n";
             $mensaje .= "Para cambiar tu contraseña del aula virtual, sigue estos pasos:\n\n";
-            $mensaje .= "1. Ingresa a: https://aulavirtual.probusiness.pe/login/forgot_password.php\n";
+            $mensaje .= "1. Ingresa a: https://aulavirtualprobusiness.com/login/forgot_password.php\n";
             $mensaje .= "2. Ingresa tu nombre de usuario o correo electrónico\n";
             $mensaje .= "3. Revisa tu correo para recibir las instrucciones\n\n";
             $mensaje .= "Si tienes alguna duda, no dudes en contactarnos.\n\n";
