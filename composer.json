@@ -5,7 +5,7 @@
     "keywords": ["framework", "laravel"],
     "license": "MIT",
     "require": {
-        "php": "^7.3|^8.0",
+        "php": "^7.3",
         "barryvdh/laravel-snappy": "^1.0",
         "beyondcode/laravel-websockets": "^1.14",
         "darkaonline/l5-swagger": "^8.6",
