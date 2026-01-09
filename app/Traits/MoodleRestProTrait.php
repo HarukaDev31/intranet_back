@@ -28,206 +28,16 @@ trait MoodleRestProTrait
         }
 
         // Crear usuario según formato exacto de Moodle
-        // Solo incluir campos requeridos y opcionales válidos
-        
-        // Normalizar y validar email más estrictamente
-        $email = strtolower(trim($arrPost['email']));
-        
-        // Remover espacios y caracteres problemáticos, pero mantener puntos válidos
-        $email = filter_var($email, FILTER_SANITIZE_EMAIL);
-        
-        // Validar que el email sea válido después de la limpieza
-        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            Log::error("Email inválido después de normalización: " . $arrPost['email']);
-            throw new \Exception('Email inválido: ' . $arrPost['email']);
-        }
-        
-        // Validar que el email no tenga caracteres problemáticos para Moodle
-        // Moodle puede rechazar emails con ciertos caracteres especiales
-        if (preg_match('/[<>"\']/', $email)) {
-            Log::error("Email contiene caracteres no permitidos: " . $email);
-            throw new \Exception('Email contiene caracteres no permitidos');
-        }
-        
-        // IMPORTANTE: Asegurar que el email esté correctamente codificado
-        // Algunas versiones de Moodle pueden tener problemas con emails que tienen puntos
-        // especialmente si hay múltiples puntos consecutivos o al inicio/fin de la parte local
-        // Normalizar: remover puntos duplicados y puntos al inicio/fin de la parte local
-        $emailParts = explode('@', $email);
-        if (count($emailParts) === 2) {
-            $localPart = $emailParts[0];
-            $domain = $emailParts[1];
-            
-            // Remover puntos al inicio y final de la parte local
-            $localPart = trim($localPart, '.');
-            
-            // Remover puntos duplicados consecutivos (aunque esto es válido en emails, Moodle puede rechazarlo)
-            // Pero NO lo hacemos porque es válido según RFC
-            
-            // Reconstruir el email
-            $email = $localPart . '@' . $domain;
-            
-            // Validar nuevamente después de la normalización
-            if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-                Log::error("Email inválido después de normalización de puntos: " . $email);
-                // Si falla, usar el email original
-                $email = strtolower(trim($arrPost['email']));
-            }
-        }
-        
-        // Limpiar y validar firstname y lastname más estrictamente
-        // Moodle puede rechazar ciertos caracteres o formatos
-        $firstname = trim($arrPost['firstname']);
-        $lastname = trim($arrPost['lastname']);
-        
-        // Remover caracteres problemáticos que Moodle puede rechazar
-        // Permitir solo letras, números, espacios y algunos caracteres especiales comunes
-        $firstname = preg_replace('/[^\p{L}\p{N}\s\-\'\.]/u', '', $firstname);
-        $lastname = preg_replace('/[^\p{L}\p{N}\s\-\'\.]/u', '', $lastname);
-        
-        // Normalizar espacios múltiples a uno solo
-        $firstname = preg_replace('/\s+/', ' ', $firstname);
-        $lastname = preg_replace('/\s+/', ' ', $lastname);
-        
-        // Trim nuevamente después de la limpieza
-        $firstname = trim($firstname);
-        $lastname = trim($lastname);
-        
-        // Validar que no estén vacíos después de la limpieza
-        if (empty($firstname)) {
-            $firstname = 'Usuario';
-        }
-        if (empty($lastname)) {
-            $lastname = 'Usuario';
-        }
-        
-        // Limitar longitud según documentación de Moodle (máximo 100 caracteres)
-        if (strlen($firstname) > 100) {
-            $firstname = substr($firstname, 0, 100);
-        }
-        if (strlen($lastname) > 100) {
-            $lastname = substr($lastname, 0, 100);
-        }
-        
-        // Validar username según políticas de Moodle
-        // Según documentación: "Username policy is defined in Moodle security config"
-        $username = strtolower(trim($arrPost['username']));
-        
-        // Asegurar que username solo tenga caracteres permitidos comúnmente en Moodle
-        // Generalmente: letras, números, punto, guión, guión bajo
-        if (preg_match('/[^a-z0-9._-]/', $username)) {
-            Log::warning("Username contiene caracteres no estándar, limpiando: " . $username);
-            $username = preg_replace('/[^a-z0-9._-]/', '', $username);
-        }
-        
-        // Validar que username no esté vacío después de limpieza
-        if (empty($username)) {
-            throw new \Exception('Username no puede estar vacío después de la limpieza');
-        }
-        
-        // Construir objeto usuario con SOLO campos requeridos según documentación
-        // Campos requeridos: username, firstname, lastname, email
-        // Campos opcionales: password, auth (pero necesarios para crear usuario funcional)
-        
-        // Validar password según políticas de Moodle
-        // Requisitos de Moodle:
-        // - Al menos 8 caracteres
-        // - Al menos 1 dígito
-        // - Al menos 1 minúscula
-        // - Al menos 1 mayúscula
-        // - Al menos 1 carácter especial como *, -, o #
-        $password = isset($arrPost['password']) ? trim($arrPost['password']) : '';
-        
-        // Validar que el password cumpla con los requisitos de Moodle
-        if (!empty($password)) {
-            // Remover caracteres de control
-            $password = preg_replace('/[\x00-\x1F\x7F]/', '', $password);
-            
-            // Validar requisitos de Moodle
-            $hasMinLength = strlen($password) >= 8;
-            $hasDigit = preg_match('/\d/', $password);
-            $hasLowercase = preg_match('/[a-z]/', $password);
-            $hasUppercase = preg_match('/[A-Z]/', $password);
-            $hasSpecial = preg_match('/[*\-#]/', $password); // *, -, o # (SOLO estos caracteres especiales)
-            
-            // Verificar que NO tenga otros caracteres especiales que Moodle rechaza
-            $hasInvalidSpecial = preg_match('/[!@$%^&*()+=\[\]{}|;:"<>?\/~`]/', $password);
-            if ($hasInvalidSpecial && !preg_match('/[*\-#]/', $password)) {
-                // Si tiene caracteres especiales inválidos y no tiene los válidos, rechazar
-                $hasSpecial = false;
-            } else if ($hasInvalidSpecial) {
-                // Si tiene caracteres especiales inválidos PERO también tiene válidos, limpiar los inválidos
-                Log::warning("Password contiene caracteres especiales no permitidos, limpiando: " . $password);
-                // Remover caracteres especiales inválidos, mantener solo *, -, #
-                $password = preg_replace('/[!@$%^&*()+=\[\]{}|;:"<>?\/~`]/', '', $password);
-                // Verificar nuevamente después de limpiar
-                $hasSpecial = preg_match('/[*\-#]/', $password);
-                $hasMinLength = strlen($password) >= 8;
-            }
-            
-            $requirements = [
-                'min_length' => $hasMinLength,
-                'digit' => $hasDigit,
-                'lowercase' => $hasLowercase,
-                'uppercase' => $hasUppercase,
-                'special' => $hasSpecial,
-            ];
-            
-            $missingRequirements = array_filter($requirements, function($met) { return !$met; });
-            
-            if (!empty($missingRequirements)) {
-                Log::warning("Password no cumple con requisitos de Moodle. Faltantes: " . implode(', ', array_keys($missingRequirements)));
-                Log::warning("Generando nueva contraseña que cumpla con todos los requisitos");
-                
-                // Generar contraseña que cumpla con todos los requisitos
-                $password = $this->generateMoodleCompliantPassword();
-            } else {
-                Log::info("Password cumple con todos los requisitos de Moodle");
-            }
-        } else {
-            // Si no hay password, generar uno que cumpla con los requisitos
-            Log::warning("Password vacío, generando uno que cumpla con requisitos de Moodle");
-            $password = $this->generateMoodleCompliantPassword();
-        }
-        
-        // Construir usuario con campos en el orden que Moodle espera
-        // Campos requeridos: username, firstname, lastname, email
         $user = [
-            'username' => $username,
-            'firstname' => $firstname,
-            'lastname' => $lastname,
-            'email' => $email,
-            'password' => $password, // Siempre incluir password válido
+            'username' => strtolower(trim($arrPost['username'])),
+            'password' => trim($arrPost['password']),
+            'firstname' => trim($arrPost['firstname']),
+            'lastname' => trim($arrPost['lastname']),
+            'email' => strtolower(trim($arrPost['email'])),
+            'auth' => isset($arrPost['auth']) ? $arrPost['auth'] : 'manual',
+            'lang' => isset($arrPost['lang']) ? $arrPost['lang'] : 'es',
+            'calendartype' => isset($arrPost['calendartype']) ? $arrPost['calendartype'] : 'gregorian',
         ];
-        
-        // Agregar auth (default "manual" según documentación)
-        $user['auth'] = isset($arrPost['auth']) && !empty($arrPost['auth']) 
-            ? $arrPost['auth'] 
-            : 'manual';
-            
-        // NOTA: No usamos createpassword=1 porque requiere configuración adicional en Moodle
-        // y el password que generamos es más seguro
-        
-        // Log detallado de todos los campos que se enviarán
-        Log::info("=== Datos finales para Moodle ===");
-        Log::info("Username: '{$username}' (longitud: " . strlen($username) . ")");
-        Log::info("Firstname: '{$firstname}' (longitud: " . strlen($firstname) . ")");
-        Log::info("Lastname: '{$lastname}' (longitud: " . strlen($lastname) . ")");
-        Log::info("Email: '{$email}' (longitud: " . strlen($email) . ")");
-        Log::info("Auth: '{$user['auth']}'");
-        Log::info("Password: " . (isset($user['password']) ? "presente (longitud: " . strlen($user['password']) . ")" : "no presente"));
-        Log::info("Usuario completo: " . json_encode($user, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
-        
-        // Solo agregar lang si está especificado (puede causar error si el idioma no está instalado)
-        if (isset($arrPost['lang']) && !empty($arrPost['lang'])) {
-            $user['lang'] = $arrPost['lang'];
-        }
-        
-        // Solo agregar calendartype si está explícitamente solicitado
-        // (puede causar "invalid parameter" en algunas versiones de Moodle)
-        if (isset($arrPost['calendartype']) && !empty($arrPost['calendartype'])) {
-            $user['calendartype'] = $arrPost['calendartype'];
-        }
 
         // Campos opcionales según documentación
         if (isset($arrPost['city'])) {
@@ -269,41 +79,6 @@ trait MoodleRestProTrait
         
         Log::info('Usuario Moodle preparado: ' . json_encode($user));
         return $user;
-    }
-    
-    /**
-     * Genera una contraseña que cumple con los requisitos de Moodle:
-     * - Al menos 8 caracteres
-     * - Al menos 1 dígito
-     * - Al menos 1 minúscula
-     * - Al menos 1 mayúscula
-     * - Al menos 1 carácter especial (*, -, o #)
-     */
-    private function generateMoodleCompliantPassword()
-    {
-        $lowercase = 'abcdefghijklmnopqrstuvwxyz';
-        $uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-        $digits = '0123456789';
-        $special = '*-#'; // Caracteres especiales permitidos por Moodle
-        
-        $password = '';
-        
-        // Asegurar al menos un carácter de cada tipo
-        $password .= $lowercase[random_int(0, strlen($lowercase) - 1)];
-        $password .= $uppercase[random_int(0, strlen($uppercase) - 1)];
-        $password .= $digits[random_int(0, strlen($digits) - 1)];
-        $password .= $special[random_int(0, strlen($special) - 1)];
-        
-        // Completar hasta 12 caracteres con caracteres aleatorios de todos los tipos
-        $allChars = $lowercase . $uppercase . $digits . $special;
-        for ($i = strlen($password); $i < 12; $i++) {
-            $password .= $allChars[random_int(0, strlen($allChars) - 1)];
-        }
-        
-        // Mezclar los caracteres para que no sea predecible
-        $password = str_shuffle($password);
-        
-        return $password;
     }
 
     private function make_test_course($n) 
@@ -457,119 +232,26 @@ trait MoodleRestProTrait
 
     private function call_moodle($function_name, $params, $token)
     {
-        $domain = 'https://aulavirtual.probusiness.pe';
+        $domain = 'https://aulavirtualprobusiness.com';
 
         $serverurl = $domain . '/webservice/rest/server.php'. '?wstoken=' . $token . '&wsfunction='.$function_name;
 
-        // Moodle REST API requiere un formato específico para arrays anidados
-        // Construir manualmente el formato que Moodle espera: users[0][username]=value
+        // Usar Laravel HTTP Client en lugar de curl.php
+        // Enviar como form data (application/x-www-form-urlencoded) que es lo que espera Moodle REST
         try {
             Log::info("Llamando a Moodle: {$function_name}");
-            Log::info("Parámetros enviados a Moodle: " . json_encode($params, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+            Log::info("Parámetros enviados a Moodle: " . json_encode($params));
             
-            // Convertir arrays anidados al formato que Moodle espera según documentación REST
-            // Formato: users[0][username]=string, users[0][password]=string, etc.
-            $formData = $this->buildMoodleFormData($params);
-            
-            // Construir el body manualmente usando http_build_query para asegurar formato exacto
-            // Según documentación REST de Moodle: users[0][username]=string
-            // IMPORTANTE: Enviar como string raw para que Moodle lo reciba exactamente como espera
-            $body = http_build_query($formData, '', '&', PHP_QUERY_RFC1738);
-            
-            // Log del formato final que se enviará
-            Log::info("Form data para Moodle (body): " . $body);
-            Log::info("Form data para Moodle (array): " . json_encode($formData, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
-            
-            // Usar cURL directamente para tener control total sobre el formato
-            // Esto asegura que el body se envíe exactamente como Moodle lo espera
-            $ch = curl_init();
-            curl_setopt($ch, CURLOPT_URL, $serverurl);
-            curl_setopt($ch, CURLOPT_POST, true);
-            curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-            curl_setopt($ch, CURLOPT_HTTPHEADER, [
-                'Content-Type: application/x-www-form-urlencoded',
-                'Content-Length: ' . strlen($body)
-            ]);
-            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
-            curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
-            
-            $responseBody = curl_exec($ch);
-            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            $curlError = curl_error($ch);
-            curl_close($ch);
-            
-            if ($curlError) {
-                Log::error("Error cURL: " . $curlError);
-                return '<EXCEPTION>Error cURL: ' . $curlError . '</EXCEPTION>';
-            }
-            
-            Log::info("Respuesta de Moodle (cURL): " . $responseBody);
-            Log::info("HTTP Code: " . $httpCode);
-            
-            // Si hay error, loggear el request completo para debug
-            if ($httpCode !== 200 || strpos($responseBody, 'EXCEPTION') !== false) {
-                Log::error("Request URL completa: " . $serverurl);
-                Log::error("Request body (raw): " . $body);
-                Log::error("Request formData (array): " . json_encode($formData, JSON_UNESCAPED_UNICODE));
-                Log::error("HTTP Code: " . $httpCode);
-                Log::error("Body completo: " . $responseBody);
-            }
-            
-            return $responseBody;
+            $response = Http::timeout(30)
+                ->asForm()
+                ->post($serverurl, $params);
+                
+            Log::info("Respuesta de Moodle: " . $response->body());
+            return $response->body();
         } catch (\Exception $e) {
             Log::error('Error en call_moodle: ' . $e->getMessage());
-            Log::error('Stack trace: ' . $e->getTraceAsString());
             return '<EXCEPTION>' . $e->getMessage() . '</EXCEPTION>';
         }
-    }
-    
-    /**
-     * Construye el formato de datos que Moodle REST API espera
-     * Convierte arrays anidados al formato: users[0][username]=value
-     */
-    private function buildMoodleFormData($params)
-    {
-        $formData = [];
-        
-        foreach ($params as $key => $value) {
-            if (is_array($value)) {
-                // Para arrays anidados como users[0][username]
-                foreach ($value as $index => $item) {
-                    if (is_array($item)) {
-                        // Array anidado: users[0][username], users[0][password], etc.
-                        foreach ($item as $subKey => $subValue) {
-                            // Asegurar que los valores estén correctamente codificados
-                            // Para emails, asegurar que se envíen sin codificación adicional
-                            // Laravel HTTP Client con asForm() manejará la codificación URL automáticamente
-                            $formData["{$key}[{$index}][{$subKey}]"] = $subValue;
-                            
-                            // Log especial para email para debug
-                            if ($subKey === 'email') {
-                                Log::info("Email en form data: '{$subValue}' (longitud: " . strlen($subValue) . ", bytes: " . bin2hex($subValue) . ")");
-                                // Verificar si el email tiene puntos que puedan causar problemas
-                                if (strpos($subValue, '.') !== false) {
-                                    $dotCount = substr_count($subValue, '.');
-                                    Log::warning("Email contiene {$dotCount} punto(s) - puede causar problemas en Moodle");
-                                }
-                            }
-                        }
-                    } else {
-                        // Array simple: values[0], values[1], etc.
-                        $formData["{$key}[{$index}]"] = $item;
-                    }
-                }
-            } else {
-                // Valor simple
-                $formData[$key] = $value;
-            }
-        }
-        
-        // Log del form data completo para debug
-        Log::info("Form data construido: " . json_encode($formData, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
-        
-        return $formData;
     }
 
     private function xmlresponse_to_id($xml_string)
@@ -657,9 +339,18 @@ trait MoodleRestProTrait
                 $user = [];
                 foreach ($xml_tree->MULTIPLE->SINGLE->KEY as $key) {
                     $name = (string)$key['name'];
-                    $value = (string)$key->VALUE;
+                    // Manejar valores null explícitamente
+                    if (isset($key->VALUE['null']) && (string)$key->VALUE['null'] === 'null') {
+                        $value = null;
+                    } else {
+                        $value = (string)$key->VALUE;
+                    }
                     $user[$name] = $value;
                 }
+                
+                // Log para debug: verificar que el username se extrajo correctamente
+                Log::info('Usuario extraído de Moodle - username: ' . ($user['username'] ?? 'NO ENCONTRADO'));
+                Log::info('Usuario extraído completo: ' . json_encode($user));
                 
                 return [
                     'status' => 'success',
@@ -691,6 +382,20 @@ trait MoodleRestProTrait
         $response = $this->call_moodle('core_user_update_users', $params, $token);
 
         if ($this->xmlresponse_is_exception($response)) {
+            // Verificar si es un error de permisos (accessexception)
+            if (strpos($response, 'accessexception') !== false || 
+                strpos($response, 'Access to the function core_user_update_users() is not allowed') !== false) {
+                // Si es un error de permisos, retornar éxito con advertencia
+                // porque el usuario ya existe en Moodle (que es el objetivo principal)
+                Log::warning('No se pudo actualizar contraseña en Moodle por falta de permisos, pero el usuario ya existe: ' . json_encode($user_data));
+                return [
+                    'status' => 'success',
+                    'message' => "Usuario existe en Moodle (no se pudo actualizar contraseña por permisos)",
+                    'warning' => true
+                ];
+            }
+            
+            // Para otros errores, retornar error
             return [
                 'status' => 'error',
                 'message' => "Error al actualizar: " . $response
@@ -709,7 +414,7 @@ trait MoodleRestProTrait
     public function createUser($arrPost)
     {
         try {
-            $token = 'b582ae9ecd4e4e47794f4c27a091d775';
+            $token = '2a41772b01afcf26da875fc1ab59bf45';
             
             // Validar datos antes de crear usuario
             if (empty($arrPost['username']) || empty($arrPost['password']) || 
@@ -725,10 +430,20 @@ trait MoodleRestProTrait
             $existing_user = $this->get_user_by_field('email', $arrPost['email'], $token);
             
             if ($existing_user['status'] == 'success') {
-                // Usuario existe, actualizarlo con nueva contraseña
-                Log::info('Usuario ya existe en Moodle, actualizando contraseña: ' . $arrPost['email']);
+                // Usuario existe, intentar actualizarlo con nueva contraseña
+                Log::info('Usuario ya existe en Moodle, intentando actualizar contraseña: ' . $arrPost['email']);
                 
                 $user_id = $existing_user['response']['id'];
+                $existing_username = isset($existing_user['response']['username']) 
+                    ? (string)$existing_user['response']['username'] 
+                    : null;
+                
+                // Validar que tenemos el username
+                if (empty($existing_username)) {
+                    Log::error('ERROR: No se pudo extraer el username del usuario existente en Moodle');
+                    Log::error('Respuesta completa de get_user_by_field: ' . json_encode($existing_user));
+                }
+                
                 $update_data = [
                     'id' => (int)$user_id,
                     'password' => $arrPost['password']
@@ -737,13 +452,32 @@ trait MoodleRestProTrait
                 $update_result = $this->update_user($update_data, $token);
                 
                 if ($update_result['status'] == 'success') {
-                    return [
+                    // Si tiene warning, significa que no se pudo actualizar pero el usuario existe
+                    if (isset($update_result['warning']) && $update_result['warning']) {
+                        Log::warning('Usuario existe en Moodle pero no se pudo actualizar contraseña por permisos. Continuando...');
+                    }
+                    
+                    // Log para debug: verificar que tenemos el username
+                    Log::info('Username real de Moodle extraído: ' . ($existing_username ?? 'NO ENCONTRADO'));
+                    Log::info('Datos completos del usuario existente: ' . json_encode($existing_user['response']));
+                    
+                    $result = [
                         'status' => 'success',
-                        'message' => 'Usuario existente actualizado',
-                        'user_id' => $user_id
+                        'message' => isset($update_result['warning']) && $update_result['warning'] 
+                            ? 'Usuario existe en Moodle (contraseña no actualizada por permisos)' 
+                            : 'Usuario existente actualizado',
+                        'user_id' => $user_id,
+                        'username' => $existing_username, // ✅ Retornar el username real de Moodle
+                        'password_updated' => !(isset($update_result['warning']) && $update_result['warning']),
+                        'user_exists' => true // ✅ Indicar que el usuario ya existía
                     ];
+                    
+                    Log::info('Resultado que se retorna de createUser: ' . json_encode($result));
+                    
+                    return $result;
                 }
                 
+                // Si falla por otra razón que no sea permisos, retornar el error
                 return $update_result;
             }
             
@@ -754,6 +488,13 @@ trait MoodleRestProTrait
             Log::info('Creando nuevo usuario Moodle: ' . json_encode($user_data_1));
             
             $user_id_1 = $this->create_user($user_data_1, $token);
+            
+            // Si se creó exitosamente, agregar el username al resultado
+            if ($user_id_1['status'] == 'success') {
+                $user_id_1['username'] = $arrPost['username']; // Username que se usó para crear
+                $user_id_1['user_exists'] = false; // Indicar que es un usuario nuevo
+            }
+            
             return $user_id_1;
         } 
         catch (\Exception $e) {
@@ -769,7 +510,7 @@ trait MoodleRestProTrait
     public function getUser($arrParams)
     {
         try {
-            $token = 'b582ae9ecd4e4e47794f4c27a091d775';
+            $token = '2a41772b01afcf26da875fc1ab59bf45';
             $user_id_1 = $this->get_user_field($arrParams, $token);
             return $user_id_1;
         } 
@@ -787,7 +528,7 @@ trait MoodleRestProTrait
     public function crearCursoUsuario($arrParams)
     {
         try {
-            $token = 'b582ae9ecd4e4e47794f4c27a091d775';
+            $token = '2a41772b01afcf26da875fc1ab59bf45';
 
             $user_id_1 = $arrParams['id_usuario'];
             $role_id = 5;//usuario invitado
