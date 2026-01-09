@@ -1542,6 +1542,32 @@ class CursoController extends Controller
                             Log::info('Password usado en arrPost: ' . ($arrPost['password'] ?? 'NO DEFINIDO'));
                             Log::info('¿Coinciden las contraseñas? ' . ($moodle_password === ($arrPost['password'] ?? '') ? 'SÍ' : 'NO'));
                             
+                            // ✅ Verificar si la contraseña se actualizó correctamente
+                            $password_updated = $response_usuario_moodle['password_updated'] ?? true;
+                            
+                            // Si el usuario existía y la contraseña NO se actualizó, no enviar credenciales nuevas
+                            // porque la contraseña que tenemos no es la real del usuario
+                            if (isset($response_usuario_moodle['user_exists']) && 
+                                $response_usuario_moodle['user_exists'] && 
+                                !$password_updated) {
+                                
+                                Log::warning('⚠️ No se enviarán credenciales: Usuario existe pero contraseña no se pudo actualizar por permisos');
+                                
+                                return response()->json([
+                                    'success' => true,
+                                    'status' => 'warning',
+                                    'message' => 'Usuario ya existe en Moodle pero no se pudo actualizar la contraseña por falta de permisos. El usuario debe usar su contraseña actual o solicitar recuperación de contraseña.',
+                                    'data' => [
+                                        'original_username' => $original_username,
+                                        'moodle_username' => $moodle_username,
+                                        'moodle_id' => $id_usuario,
+                                        'user_existed' => true,
+                                        'password_updated' => false,
+                                        'warning' => 'Las credenciales no se enviaron porque la contraseña no se pudo actualizar. El usuario debe usar su contraseña actual en Moodle.'
+                                    ]
+                                ]);
+                            }
+                            
                             // ✅ Enviar credenciales por email y WhatsApp usando el username y password correctos de Moodle
                             $this->enviarCredencialesMoodle(
                                 $moodle_username,
@@ -1559,8 +1585,9 @@ class CursoController extends Controller
                                     'original_username' => $original_username,
                                     'moodle_username' => $moodle_username, // ✅ Usar el username real de Moodle
                                     'moodle_id' => $id_usuario,
-                                    'moodle_password' => $cleaned_password, // Contraseña sin encriptar para el admin
-                                    'user_existed' => $response_usuario_moodle['user_exists'] ?? false
+                                    'moodle_password' => $moodle_password, // ✅ Usar la contraseña correcta (no cleaned_password)
+                                    'user_existed' => $response_usuario_moodle['user_exists'] ?? false,
+                                    'password_updated' => $password_updated
                                 ]
                             ]);
                         }
