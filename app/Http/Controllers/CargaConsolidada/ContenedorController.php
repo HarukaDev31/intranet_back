@@ -672,7 +672,8 @@ Le estaré informando cualquier avance 🫡.";
             $message = str_replace('@cargaOrigen', '#'.$cargaOrigen, $message);
             $telefono = preg_replace('/\s+/', '', $cotizacion->telefono);
             $telefono = $telefono ? $telefono . '@c.us' : '';
-            $this->sendMessageVentas($message, $telefono, 3);
+            // TEMPORALMENTE DESHABILITADO: Número de ventas bloqueado
+            // $this->sendMessageVentas($message, $telefono, 3);
             return response()->json(['message' => 'Cotización movida a consolidado correctamente', 'success' => true]);
         } catch (\Exception $e) {
             return response()->json(['message' => 'Error al mover cotización a consolidado: ' . $e->getMessage(), 'success' => false], 500);

@@ -222,6 +222,7 @@ class CotizacionController extends Controller
             $data = $results->map(function ($cotizacion) use ($files) {
                 return [
                     'id' => $cotizacion->id,
+                    'uuid' => $cotizacion->uuid,
                     'nombre' => $cotizacion->nombre,
                     'documento' => $cotizacion->documento,
                     'telefono' => $cotizacion->telefono,
@@ -2105,7 +2106,29 @@ class CotizacionController extends Controller
                 }
 
                 $this->crearNotificacionCotizacionConfirmada($cotizacion);
+
+                // Generar código de contrato automáticamente
+                try {
+                    $lastCotizacion = Cotizacion::where('cod_contract', 'like', 'PRO%')
+                        ->where('uuid', '!=', $cotizacion->uuid)
+                        ->orderBy('id', 'desc')
+                        ->first();
+                    
+                    $lastSequentialNumber = 0;
+                    if ($lastCotizacion && preg_match('/(\d{4})$/', $lastCotizacion->cod_contract, $matches)) {
+                        $lastSequentialNumber = intval($matches[1]);
+                    }
+                    
+                    $newSequentialNumber = $lastSequentialNumber + 1;
+                    $newCotizacionCode = 'PRO' . date('m') . date('y') . str_pad($newSequentialNumber, 4, '0', STR_PAD_LEFT);
+                    $cotizacion->update(['cod_contract' => $newCotizacionCode]);
+                    Log::info('Código de contrato generado: ' . $newCotizacionCode . ' para cotización ' . $cotizacion->id);
+                } catch (\Exception $ex) {
+                    Log::warning('Error generando código de contrato para cotización ' . $cotizacion->id . ': ' . $ex->getMessage());
+                }
+
                 //if current env not is production, send message to whatsapp
+                /*
                 $wspMessage = "Hola {$cotizacion->nombre} gracias por formar parte de nuestra comunidad de importadores; antes de derivarte con el equipo de Coordinaciones por favor recuerda lo siguiente:\n\n" .
                     "1. Envío el contrato para formalizar el servicio de importación. Tiene dos (2) días hábiles para enviar observaciones. De no recibirlas, daremos el contrato por aceptado.\n" .
                     "2. Si el producto tiene marca, logo y/o contiene una imagen de una marca o personaje conocido o patentado en INDECOPI no se podrá transportar.\n" .
@@ -2113,31 +2136,7 @@ class CotizacionController extends Controller
                     "4. Recuerda que las tarifas que te brindé son válidas solo para esta importación.\n" .
                     "5. Te recuerdo que en el escenario en el que llegue menor y/o mayor carga a lo cotizado, existirá un ajuste en el precio final.\n" .
                     "6. Al mismo tiempo si deseas una nueva importación, no dudes en comunicarte conmigo.";
-
-                $telefonoCliente = preg_replace('/\s+/', '', $cotizacion->telefono);
-                $telefonoCliente = $telefonoCliente ? $telefonoCliente . '@c.us' : '';
-                try {
-
-                    $signUrl = rtrim(env('APP_URL_CLIENTES', 'http://localhost:3001'), '/') . '/firma-acuerdo-servicio/' . ($cotizacion->uuid ?? '');
-                    $wspMessage .= "\n\nPara firmar el acuerdo ve a este enlace: \n" . $signUrl;
-
-                    $wspMessageData = $this->sendMessageVentas($wspMessage, $telefonoCliente);
-                    if (!(is_array($wspMessageData) && isset($wspMessageData['status']) && $wspMessageData['status'] === true)) {
-                        Log::warning('Respuesta inesperada al enviar texto por WhatsApp al cliente confirmado: ' . json_encode($wspMessageData));
-                    }
-                    $lastCotizacion = Cotizacion::where('cod_contract', 'like', 'PRO%')->
-                    where('uuid', '!=', $cotizacion->uuid)->
-                    orderBy('id', 'desc')->first();
-                    $lastSequentialNumber = 0;
-                    if ($lastCotizacion && preg_match('/(\d{4})$/', $lastCotizacion->cod_contract, $matches)) {
-                        $lastSequentialNumber = intval($matches[1]);
-                    }
-                    $newSequentialNumber = $lastSequentialNumber + 1;
-                    $newCotizacionCode = 'PRO' . date('m') . date('y') . str_pad($newSequentialNumber, 4, '0', STR_PAD_LEFT);
-                    $cotizacion->update(['cod_contract' => $newCotizacionCode]);
-                } catch (\Throwable $ex) {
-                    Log::warning('Error enviando texto WhatsApp al cliente confirmado: ' . $ex->getMessage());
-                }
+                */
 
                 try {
                     $contenedor = isset($cotizacion->contenedor) ? $cotizacion->contenedor : Contenedor::find($cotizacion->id_contenedor);
@@ -2912,8 +2911,9 @@ class CotizacionController extends Controller
             $telefono = preg_replace('/\s+/', '', $cotizacion->telefono);
             $telefono = $telefono ? $telefono . '@c.us' : '';
 
+            // TEMPORALMENTE DESHABILITADO: Número de ventas bloqueado
             // Enviar mensaje usando sendMessageVentas (desde el número de ventas)
-            $wspMessageData = $this->sendMessageVentas($message, $telefono);
+            // $wspMessageData = $this->sendMessageVentas($message, $telefono);
             
             if (!(is_array($wspMessageData) && isset($wspMessageData['status']) && $wspMessageData['status'] === true)) {
                 Log::warning('Respuesta inesperada al enviar recordatorio de firma por WhatsApp: ' . json_encode($wspMessageData));

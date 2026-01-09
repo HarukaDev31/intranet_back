@@ -1408,7 +1408,8 @@ class CursoController extends Controller
                     'lastname'     => $lastname,
                     'email'        => $email,
                     'auth'         => 'manual',
-                    'lang'         => 'es',
+                    // lang se omite por defecto para evitar errores si el idioma no está instalado en Moodle
+                    // 'lang'         => 'es',
                 ];
 
                 // Log para debug - verificar que todos los campos estén presentes
@@ -1606,13 +1607,40 @@ class CursoController extends Controller
         $clean = preg_replace('/[<>"\'\\\]/', '', $password);
 
         // Si es muy corta o tiene caracteres problemáticos, generar nueva que cumpla requisitos de Moodle
-        if (strlen($clean) < 8 || preg_match('/[^\w\d!@#%&*]/', $clean)) {
-            return 'TempPass#' . rand(1000, 9999) . '!';
+        // Moodle solo permite caracteres especiales: *, -, o #
+        if (strlen($clean) < 8 || preg_match('/[^\w\d*\-#]/', $clean)) {
+            // Generar password que cumpla requisitos: al menos 8 chars, 1 dígito, 1 minúscula, 1 mayúscula, 1 especial (*, -, o #)
+            $lowercase = 'abcdefghijklmnopqrstuvwxyz';
+            $uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+            $digits = '0123456789';
+            $special = '*-#'; // Solo estos caracteres especiales permitidos
+            
+            $newPassword = '';
+            $newPassword .= $lowercase[random_int(0, strlen($lowercase) - 1)];
+            $newPassword .= $uppercase[random_int(0, strlen($uppercase) - 1)];
+            $newPassword .= $digits[random_int(0, strlen($digits) - 1)];
+            $newPassword .= $special[random_int(0, strlen($special) - 1)];
+            
+            $allChars = $lowercase . $uppercase . $digits . $special;
+            for ($i = strlen($newPassword); $i < 12; $i++) {
+                $newPassword .= $allChars[random_int(0, strlen($allChars) - 1)];
+            }
+            return str_shuffle($newPassword);
         }
 
-        // Verificar que tenga al menos un caracter especial
-        if (!preg_match('/[!@#$%^&*(),.?":{}|<>]/', $clean)) {
-            return $clean . '#' . rand(10, 99) . '!';
+        // Verificar que tenga al menos un caracter especial válido (*, -, o #)
+        if (!preg_match('/[*\-#]/', $clean)) {
+            // Agregar un carácter especial válido
+            $special = '*-#';
+            return $clean . $special[random_int(0, strlen($special) - 1)] . rand(10, 99);
+        }
+        
+        // Remover caracteres especiales inválidos si los hay
+        $clean = preg_replace('/[!@$%^&*()+=\[\]{}|;:"<>?\/~`]/', '', $clean);
+        // Asegurar que tenga al menos un carácter especial válido después de limpiar
+        if (!preg_match('/[*\-#]/', $clean)) {
+            $special = '*-#';
+            $clean .= $special[random_int(0, strlen($special) - 1)];
         }
 
         return $clean;
@@ -1766,12 +1794,13 @@ class CursoController extends Controller
                     $message .= "Tu cuenta en ProBusiness ha sido creada exitosamente.\n\n";
                     $message .= "Usuario: " . (isset($result->usuario_moodle) && $result->usuario_moodle ? $result->usuario_moodle : $result->No_Usuario) . "\n";
                     $message .= "Contraseña: {$this->ciDecrypt($result->No_Password)}\n\n";
-                    $message .= "Puedes acceder a tu cuenta en el siguiente enlace: https://aulavirtualprobusiness.com/login/\n\n";
+                    $message .= "Puedes acceder a tu cuenta en el siguiente enlace: https://aulavirtual.probusiness.pe/login/\n\n";
                     $mensaje = "El día del inicio del curso, te agregaremos a un grupo de whatsapp por donde compartiremos los links de acceso al zoom, los materiales de trabajo y las grabaciones de las clases dictadas.\n\n";
                     $message .= "Saludos,\nEl equipo de ProBusiness";
                     
-                    $this->sendMessageVentas($message, $telefono);
-                    $this->sendMessageVentas($mensaje, $telefono, 2);
+                    // TEMPORALMENTE DESHABILITADO: Número de ventas bloqueado
+                    // $this->sendMessageVentas($message, $telefono);
+                    // $this->sendMessageVentas($mensaje, $telefono, 2);
                 } else {
                     return response()->json([
                         'status'  => 'error',
@@ -2060,7 +2089,7 @@ class CursoController extends Controller
     {
         try {
             // URL de Moodle desde configuración o variable de entorno
-            $moodleUrl = env('MOODLE_URL', 'https://aulavirtualprobusiness.com/login/index.php');
+            $moodleUrl = env('MOODLE_URL', 'https://aulavirtual.probusiness.pe/login/index.php');
             
             // Rutas de los logos
             $logo_header = public_path('storage/logo_icons/logo_header.png');
@@ -2568,7 +2597,7 @@ class CursoController extends Controller
             $nombreCliente = $pedido->No_Entidad ?? 'Cliente';
             $mensaje = "Hola {$nombreCliente} 👋\n\n";
             $mensaje .= "Para cambiar tu contraseña del aula virtual, sigue estos pasos:\n\n";
-            $mensaje .= "1. Ingresa a: https://aulavirtualprobusiness.com/login/forgot_password.php\n";
+            $mensaje .= "1. Ingresa a: https://aulavirtual.probusiness.pe/login/forgot_password.php\n";
             $mensaje .= "2. Ingresa tu nombre de usuario o correo electrónico\n";
             $mensaje .= "3. Revisa tu correo para recibir las instrucciones\n\n";
             $mensaje .= "Si tienes alguna duda, no dudes en contactarnos.\n\n";
