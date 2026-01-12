@@ -1011,6 +1011,7 @@ class EntregaController extends Controller
                         'created_at' => $p->created_at,
                     ];
                 })->toArray();
+                
                 $row->conformidad_count = $total;
             }
         }
@@ -1715,6 +1716,33 @@ class EntregaController extends Controller
         $page = $request->input('currentPage', 1);
         $perPage = $request->input('itemsPerPage', 100);
         $data = $query->paginate($perPage, ['*'], 'page', $page);
+
+        // Procesar pagos_details para generar URLs de vouchers
+        foreach ($data->items() as $item) {
+            if (isset($item->pagos_details) && $item->pagos_details !== null) {
+                try {
+                    $pagosDetails = json_decode($item->pagos_details, true);
+                    if (is_array($pagosDetails) && !empty($pagosDetails)) {
+                        foreach ($pagosDetails as $key => $pago) {
+                            if (isset($pago['voucher_url']) && !empty($pago['voucher_url']) && is_string($pago['voucher_url'])) {
+                                $pagosDetails[$key]['voucher_url'] = $this->generateImageUrl($pago['voucher_url']);
+                            }
+                        }
+                        $item->pagos_details = $pagosDetails;
+                    } else {
+                        // Si no es un array válido o está vacío, asignar array vacío
+                        $item->pagos_details = [];
+                    }
+                } catch (\Exception $e) {
+                    // Si hay error al parsear JSON, asignar array vacío
+                    Log::warning('Error al procesar pagos_details: ' . $e->getMessage());
+                    $item->pagos_details = [];
+                }
+            } else {
+                // Si pagos_details es null o no existe, asignar array vacío
+                $item->pagos_details = [];
+            }
+        }
 
         // Preparar headers
         $headers = [
