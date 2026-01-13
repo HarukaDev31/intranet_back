@@ -68,6 +68,7 @@ class DashboardUsuarioController extends Controller
                     'cont.id',
                     'cont.carga',
                     'cont.fecha_zarpe',
+                    'cont.f_inicio',
                     DB::raw("CONCAT('Consolidado #',cont.carga) as label")
                 ])
                 ->join($this->table_contenedor_cotizacion . ' as cc', 'cont.id', '=', 'cc.id_contenedor')
@@ -84,7 +85,7 @@ class DashboardUsuarioController extends Controller
             $contenedores = $query->get()->map(function($item) {
                 return [
                     'value' => $item->id,
-                    'label' => $item->label,
+                    'label' => $item->label.' - '.Carbon::parse($item->f_inicio??'2025-01-01')->format('Y'),
                     'carga' => $item->carga,
                     'fecha_zarpe' => $item->fecha_zarpe ? Carbon::parse($item->fecha_zarpe)->format('d/m/Y') : null
                 ];
@@ -259,7 +260,6 @@ class DashboardUsuarioController extends Controller
                         WHERE cc2.id_contenedor = cont.id
                         AND cc2.id_usuario = ' . $user->ID_Usuario . '
                         AND cc2.estado_cotizador = "CONFIRMADO"
-                        AND cc2.estado_cliente IS NOT NULL
                         AND cc2.id_cliente_importacion IS NULL
                         ' . $fechaCondition . '
                     ) as total_logistica'),
@@ -270,7 +270,6 @@ class DashboardUsuarioController extends Controller
                         WHERE cc2.id_contenedor = cont.id
                         AND cc2.id_usuario = ' . $user->ID_Usuario . '
                         AND cc2.estado_cotizador = "CONFIRMADO"
-                        AND cc2.estado_cliente IS NOT NULL
                         AND cc2.id_cliente_importacion IS NULL
                         ' . $fechaCondition . '
                     ) as total_fob'),
@@ -281,7 +280,6 @@ class DashboardUsuarioController extends Controller
                         WHERE cc2.id_contenedor = cont.id
                         AND cc2.id_usuario = ' . $user->ID_Usuario . '
                         AND cc2.estado_cotizador = "CONFIRMADO"
-                        AND cc2.estado_cliente IS NOT NULL
                         AND cc2.id_cliente_importacion IS NULL
                         ' . $fechaCondition . '
                     ) as total_impuestos'),

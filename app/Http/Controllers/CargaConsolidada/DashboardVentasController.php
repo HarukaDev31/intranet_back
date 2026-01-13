@@ -38,6 +38,7 @@ class DashboardVentasController extends Controller
                     'cont.id',
                     'cont.carga',
                     'cont.fecha_zarpe',
+                    'cont.f_inicio',
                     DB::raw("CONCAT('Consolidado #',cont.carga) as label")
                 ])
                 ->where('cont.empresa', '!=', '1');
@@ -48,7 +49,7 @@ class DashboardVentasController extends Controller
             $contenedores = $query->get()->map(function($item) {
                 return [
                     'value' => $item->id,
-                    'label' => $item->label,
+                    'label' => $item->label.' - '.Carbon::parse($item->f_inicio??'2025-01-01')->format('Y'),
                     'carga' => $item->carga,
                     'fecha_zarpe' => $item->fecha_zarpe ? Carbon::parse($item->fecha_zarpe)->format('d/m/Y') : null
                 ];
