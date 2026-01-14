@@ -27,18 +27,26 @@ class CalculadoraImportacionService
             // Crear o actualizar cliente si existe
             $cliente = $this->buscarOcrearCliente($data['clienteInfo']);
 
+            // Determinar campos según tipo de documento
+            $tipoDocumento = $data['clienteInfo']['tipoDocumento'] ?? 'DNI';
+            
             // Crear registro principal
             $calculadora = CalculadoraImportacion::create([
                 'id_cliente' => $cliente ? $cliente->id : null,
+                'id_usuario' => $data['id_usuario'] ?? null,
                 'nombre_cliente' => $data['clienteInfo']['nombre'],
-                'dni_cliente' => $data['clienteInfo']['dni'],
+                'tipo_documento' => $tipoDocumento,
+                'dni_cliente' => $tipoDocumento === 'DNI' ? ($data['clienteInfo']['dni'] ?? null) : null,
+                'ruc_cliente' => $tipoDocumento === 'RUC' ? ($data['clienteInfo']['ruc'] ?? null) : null,
+                'razon_social' => $tipoDocumento === 'RUC' ? ($data['clienteInfo']['empresa'] ?? $data['clienteInfo']['razonSocial'] ?? null) : null,
                 'correo_cliente' => $data['clienteInfo']['correo'] ?: null,
-                'whatsapp_cliente' => $data['clienteInfo']['whatsapp']['value'] ?? null,
+                'whatsapp_cliente' => is_array($data['clienteInfo']['whatsapp']) ? ($data['clienteInfo']['whatsapp']['value'] ?? null) : ($data['clienteInfo']['whatsapp'] ?? null),
                 'tipo_cliente' => $data['clienteInfo']['tipoCliente'],
                 'qty_proveedores' => $data['clienteInfo']['qtyProveedores'],
                 'tarifa_total_extra_proveedor' => $data['tarifaTotalExtraProveedor'] ?? 0,
                 'tarifa_total_extra_item' => $data['tarifaTotalExtraItem'] ?? 0,
                 'tarifa' => $data['tarifa']['tarifa'] ?? 0,
+                'tarifa_descuento' => $data['tarifa']['descuento'] ?? 0,
                 'estado' => CalculadoraImportacion::ESTADO_PENDIENTE
             ]);
             $totalProductos = 0;
@@ -165,7 +173,8 @@ class CalculadoraImportacionService
             'total_antidumping' => 0,
             'total_ad_valorem' => 0,
             'tarifa_total_extra_proveedor' => $calculadora->tarifa_total_extra_proveedor,
-            'tarifa_total_extra_item' => $calculadora->tarifa_total_extra_item
+            'tarifa_total_extra_item' => $calculadora->tarifa_total_extra_item,
+            'tarifa_descuento' => $calculadora->tarifa_descuento
         ];
 
         foreach ($calculadora->proveedores as $proveedor) {
@@ -495,10 +504,16 @@ class CalculadoraImportacionService
             $sheetCalculos->setCellValue($totalColumn . $rowCostoUnitarioPEN, '=(' . $totalColumn . $rowCostoUnitarioUSD . ')*' . $this->TCAMBIO);
             //Resumen
             $sheetResumen->setCellValue('E11', $data['tarifa']['value']);
-            $sheetResumen->setCellValue('B8', $data['clienteInfo']['nombre']);
-            $sheetResumen->setCellValue('B9', $data['clienteInfo']['dni']);
+            // Determinar qué datos mostrar según tipo de documento
+            $tipoDocumento = $data['clienteInfo']['tipoDocumento'] ?? 'DNI';
+            $nombreMostrar = $tipoDocumento === 'RUC' ? ($data['clienteInfo']['empresa'] ?? $data['clienteInfo']['razonSocial'] ?? '') : $data['clienteInfo']['nombre'];
+            $documentoMostrar = $tipoDocumento === 'RUC' ? ($data['clienteInfo']['ruc'] ?? '') : $data['clienteInfo']['dni'];
+            $whatsappValue = is_array($data['clienteInfo']['whatsapp']) ? ($data['clienteInfo']['whatsapp']['value'] ?? '') : ($data['clienteInfo']['whatsapp'] ?? '');
+            
+            $sheetResumen->setCellValue('B8', $nombreMostrar);
+            $sheetResumen->setCellValue('B9', $documentoMostrar);
             $sheetResumen->setCellValue('B10', $data['clienteInfo']['correo']);
-            $sheetResumen->setCellValue('B11', $data['clienteInfo']['whatsapp']['value']);
+            $sheetResumen->setCellValue('B11', $whatsappValue);
             $sheetResumen->setCellValue('I11', "='2'!" . ($totalColumn . $rowVolProveedor));
             $sheetResumen->setCellValue('J11', "='2'!" . ($totalColumn . $rowVolProveedor));
             $sheetResumen->setCellValue('J14', "='2'!" . ($totalColumn . $rowValorFob));

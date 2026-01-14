@@ -81,7 +81,7 @@ class CalculadoraImportacionController extends Controller
                             ->orWhereRaw('REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(telefono, " ", ""), "-", ""), "(", ""), ")", ""), "+", "") LIKE ?', ["%51{$telefonoNormalizado}%"]);
                     }
                 })
-                ->limit(50)
+                ->limit(100)
                 ->get();
 
             if ($clientes->isEmpty()) {
@@ -375,8 +375,11 @@ class CalculadoraImportacionController extends Controller
         try {
             $request->validate([
                 'clienteInfo.nombre' => 'required|string',
-                'clienteInfo.dni' => 'required|string',
-                'clienteInfo.whatsapp.value' => 'nullable|string',
+                'clienteInfo.tipoDocumento' => 'required|string|in:DNI,RUC',
+                'clienteInfo.dni' => 'required_if:clienteInfo.tipoDocumento,DNI|string|nullable',
+                'clienteInfo.ruc' => 'required_if:clienteInfo.tipoDocumento,RUC|string|nullable',
+                'clienteInfo.empresa' => 'required_if:clienteInfo.tipoDocumento,RUC|string|nullable',
+                'clienteInfo.whatsapp' => 'nullable|string',
                 'clienteInfo.correo' => 'nullable|email',
                 'clienteInfo.tipoCliente' => 'required|string',
                 'clienteInfo.qtyProveedores' => 'required|integer|min:1',

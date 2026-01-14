@@ -15,8 +15,12 @@ class CalculadoraImportacion extends Model
 
     protected $fillable = [
         'id_cliente',
+        'id_usuario',
         'nombre_cliente',
+        'tipo_documento',
         'dni_cliente',
+        'ruc_cliente',
+        'razon_social',
         'correo_cliente',
         'whatsapp_cliente',
         'tipo_cliente',
@@ -26,6 +30,7 @@ class CalculadoraImportacion extends Model
         'url_cotizacion',
         'url_cotizacion_pdf',
         'tarifa',
+        'tarifa_descuento',
         'total_fob',
         'total_impuestos',
         'logistica',
@@ -38,6 +43,7 @@ class CalculadoraImportacion extends Model
         'tarifa_total_extra_proveedor' => 'decimal:2',
         'tarifa_total_extra_item' => 'decimal:2',
         'tarifa' => 'decimal:2',
+        'tarifa_descuento' => 'decimal:2',
         'total_fob' => 'decimal:2',
         'total_impuestos' => 'decimal:2',
         'logistica' => 'decimal:2',
