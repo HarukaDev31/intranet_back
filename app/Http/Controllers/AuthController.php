@@ -969,11 +969,23 @@ class AuthController extends Controller
         try {
             $idGrupo = $usuario->ID_Grupo;
             $noUsuario = $usuario->No_Usuario;
+            $idUsuario = $usuario->ID_Usuario;
+
+            // Obtener ID_Grupo_Usuario del usuario (si existe)
+            $grupoUsuarioRow = DB::table('grupo_usuario')->where('ID_Usuario', $idUsuario)->first();
+            $idGrupoUsuario = $grupoUsuarioRow ? $grupoUsuarioRow->ID_Grupo_Usuario : null;
 
             // Configurar condiciones según el usuario
             $selectDistinct = "DISTINCT";
-            $whereIdGrupo = "AND GRPUSR.ID_Grupo = " . $idGrupo;
             $orderByNuAgregar = "";
+
+            // Por defecto filtramos por el `ID_Grupo` (todos los usuarios del grupo)
+            if (!empty($idGrupo)) {
+                $whereIdGrupo = "AND GRPUSR.ID_Grupo = " . (int)$idGrupo;
+            } else {
+                // Si no hay grupo definido, no aplicamos filtro por grupo
+                $whereIdGrupo = "";
+            }
 
             if ($noUsuario == 'root') {
                 $selectDistinct = "DISTINCT";   
@@ -995,6 +1007,46 @@ class AuthController extends Controller
             $arrMenuPadre = DB::select($sqlPadre);
             //orde by Nu_Orden
             $arrMenuPadre = collect($arrMenuPadre)->sortBy('Nu_Orden')->toArray();
+
+            // Si hay menús asignados específicamente al usuario 28911 (vía su registro en `grupo_usuario`),
+            // esos menús deben ocultarse a todos los demás usuarios del mismo grupo.
+            // Los menús marcados específicamente para uno o varios usuarios (ej. 28911, 28791)
+            // deben permanecer exclusivos y ocultos para el resto de usuarios del mismo grupo.
+            $exclusiveUserIds = [28911, 28791];
+
+            if (!in_array($idUsuario, $exclusiveUserIds, true)) {
+                $exclusiveMenuIds = DB::table('menu_acceso')
+                    ->join('grupo_usuario', 'menu_acceso.ID_Grupo_Usuario', '=', 'grupo_usuario.ID_Grupo_Usuario')
+                    ->whereIn('grupo_usuario.ID_Usuario', $exclusiveUserIds)
+                    ->distinct()
+                    ->pluck('menu_acceso.ID_Menu')
+                    ->toArray();
+
+                if (!empty($exclusiveMenuIds)) {
+                    // Filtrar padres
+                    $arrMenuPadre = array_values(array_filter($arrMenuPadre, function ($m) use ($exclusiveMenuIds) {
+                        return isset($m->ID_Menu) && !in_array((int)$m->ID_Menu, $exclusiveMenuIds, true);
+                    }));
+
+                    // También filtrar hijos y sub-hijos si existen
+                    foreach ($arrMenuPadre as $idx => $rowPadre) {
+                        if (!empty($rowPadre->Hijos)) {
+                            $rowPadre->Hijos = array_values(array_filter($rowPadre->Hijos, function ($h) use ($exclusiveMenuIds) {
+                                return isset($h->ID_Menu) && !in_array((int)$h->ID_Menu, $exclusiveMenuIds, true);
+                            }));
+
+                            foreach ($rowPadre->Hijos as $hIdx => $h) {
+                                if (!empty($h->SubHijos)) {
+                                    $h->SubHijos = array_values(array_filter($h->SubHijos, function ($sh) use ($exclusiveMenuIds) {
+                                        return isset($sh->ID_Menu) && !in_array((int)$sh->ID_Menu, $exclusiveMenuIds, true);
+                                    }));
+                                }
+                            }
+                        }
+                        $arrMenuPadre[$idx] = $rowPadre;
+                    }
+                }
+            }
             // Obtener hijos para cada menú padre
             foreach ($arrMenuPadre as $rowPadre) {
                 $sqlHijos = "SELECT {$selectDistinct}
