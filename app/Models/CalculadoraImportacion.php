@@ -157,6 +157,10 @@ class CalculadoraImportacion extends Model
         return $this->belongsTo(\App\Models\Usuario::class, 'created_by', 'ID_Usuario');
     }
    
+    public function vendedor(): BelongsTo
+    {
+        return $this->belongsTo(\App\Models\Usuario::class, 'id_usuario', 'ID_Usuario');
+    }
     /**
      * Calcular total de CBM de todos los proveedores
      */

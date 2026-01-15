@@ -304,7 +304,7 @@ class CalculadoraImportacionController extends Controller
     public function index(Request $request)
     {
         try {
-            $query = CalculadoraImportacion::with(['proveedores.productos', 'cliente', 'contenedor', 'creador']);
+            $query = CalculadoraImportacion::with(['proveedores.productos', 'cliente', 'contenedor', 'creador', 'vendedor']);
 
             //filter optional campania=54&estado_calculadora=PENDIENTE
             if ($request->has('campania') && $request->campania) {
@@ -332,7 +332,9 @@ class CalculadoraImportacionController extends Controller
                 $calculadora->url_cotizacion = $this->generateUrl($calculadora->url_cotizacion);
                 $calculadora->url_cotizacion_pdf = $this->generateUrl($calculadora->url_cotizacion_pdf);
                 $calculadora->nombre_creador = optional($calculadora->creador)->No_Nombres_Apellidos;
-
+                //vendedor id_usuario
+                $calculadora->nombre_vendedor = optional($calculadora->vendedor)->No_Nombres_Apellidos;
+                $calculadora->carga_contenedor = 'Contenedor #'.optional($calculadora->contenedor)->carga.'-'.($calculadora->contenedor? Carbon::parse($calculadora->contenedor->f_inicio)->format('Y') : '2025');
             }
             //get filters estado calculadora, all contenedores carga id,
             //get all containers label=carga value=id
