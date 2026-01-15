@@ -857,18 +857,7 @@ class CotizacionController extends Controller
     }
 
 
-    public function show($id)
-    {
-        // Implementación básica
-        return response()->json(['message' => 'Cotizacion show']);
-    }
-
-    public function update(Request $request, $id)
-    {
-        // Implementación básica
-        return response()->json(['message' => 'Cotizacion update']);
-    }
-
+  
     /**
      * @OA\Delete(
      *     path="/carga-consolidada/contenedor/cotizaciones/{id}",

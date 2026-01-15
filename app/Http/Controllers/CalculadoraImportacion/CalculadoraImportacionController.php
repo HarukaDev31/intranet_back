@@ -388,12 +388,13 @@ class CalculadoraImportacionController extends Controller
         return null;
     }
     /**
-     * Guardar cálculo de importación
+     * Guardar o actualizar cálculo de importación
      */
     public function store(Request $request)
     {
         try {
             $request->validate([
+                'id' => 'nullable|integer|exists:calculadora_importacion,id',
                 'clienteInfo.nombre' => 'required|string',
                 'clienteInfo.tipoDocumento' => 'required|string|in:DNI,RUC',
                 'clienteInfo.dni' => 'required_if:clienteInfo.tipoDocumento,DNI|string|nullable',
@@ -419,6 +420,41 @@ class CalculadoraImportacionController extends Controller
             $data = $request->all();
             $data['created_by'] = auth()->id();
 
+            // Si viene ID, es una actualización
+            if ($request->has('id') && $request->id) {
+                $calculadora = CalculadoraImportacion::find($request->id);
+                
+                if (!$calculadora) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Calculadora no encontrada'
+                    ], 404);
+                }
+
+                // Validar que no tenga cotización asignada
+                if ($calculadora->id_cotizacion) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'No se puede modificar una calculadora que ya tiene una cotización asignada'
+                    ], 400);
+                }
+
+                // Actualizar usando el servicio
+                $calculadora = $this->calculadoraImportacionService->actualizarCalculo($calculadora, $data);
+                
+                $totales = $this->calculadoraImportacionService->calcularTotales($calculadora);
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Cálculo actualizado exitosamente',
+                    'data' => [
+                        'calculadora' => $calculadora,
+                        'totales' => $totales
+                    ]
+                ]);
+            }
+
+            // Si no viene ID, es una creación
             $calculadora = $this->calculadoraImportacionService->guardarCalculo($data);
             $totales = $this->calculadoraImportacionService->calcularTotales($calculadora);
 
@@ -439,10 +475,87 @@ class CalculadoraImportacionController extends Controller
     }
 
     /**
+     * Actualizar cotización existente desde calculadora
+     */
+    private function actualizarCotizacionDesdeCalculadora($calculadora)
+    {
+        try {
+            $fileUrl = $calculadora->url_cotizacion;
+            $fileContents = $this->downloadFileFromUrl($fileUrl);
+
+            if (!$fileContents) {
+                Log::error('No se pudo descargar archivo para actualizar cotización', [
+                    'calculadora_id' => $calculadora->id,
+                    'url' => $fileUrl
+                ]);
+                return false;
+            }
+
+            // Crear archivo temporal
+            $tempPath = storage_path('app/temp');
+            if (!file_exists($tempPath)) {
+                mkdir($tempPath, 0755, true);
+            }
+
+            $extension = pathinfo($fileUrl, PATHINFO_EXTENSION) ?: 'xlsx';
+            $tempFileName = uniqid('calculadora_update_') . '.' . $extension;
+            $tempFilePath = $tempPath . '/' . $tempFileName;
+            file_put_contents($tempFilePath, $fileContents);
+
+            // Preparar datos del archivo
+            $fileData = [
+                'name' => basename($fileUrl),
+                'type' => mime_content_type($tempFilePath),
+                'tmp_name' => $tempFilePath,
+                'error' => 0,
+                'size' => filesize($tempFilePath)
+            ];
+
+            // Llamar a uploadCotizacionFile del CotizacionController
+            $cotizacionController = app(CotizacionController::class);
+            $result = $cotizacionController->uploadCotizacionFile($calculadora->id_cotizacion, $fileData);
+
+            // Limpiar archivo temporal
+            if (file_exists($tempFilePath)) {
+                unlink($tempFilePath);
+            }
+
+            if ($result === "success") {
+                // Actualizar from_calculator y id_usuario
+                Cotizacion::where('id', $calculadora->id_cotizacion)->update([
+                    'id_usuario' => $calculadora->id_usuario,
+                    'from_calculator' => true
+                ]);
+
+                Log::info('Cotización actualizada desde calculadora', [
+                    'calculadora_id' => $calculadora->id,
+                    'cotizacion_id' => $calculadora->id_cotizacion
+                ]);
+                return true;
+            }
+
+            Log::error('Error al actualizar cotización desde calculadora', [
+                'calculadora_id' => $calculadora->id,
+                'cotizacion_id' => $calculadora->id_cotizacion,
+                'result' => $result
+            ]);
+            return false;
+
+        } catch (\Exception $e) {
+            Log::error('Excepción al actualizar cotización: ' . $e->getMessage(), [
+                'calculadora_id' => $calculadora->id
+            ]);
+            return false;
+        }
+    }
+
+    /**
      * @OA\Get(
      *     path="/calculadora-importacion/{id}",
      *     summary="Obtener cálculo por ID",
      *     tags={"Calculadora Importación"},
+     * security={{"bearerAuth":{}}},
+
      *     @OA\Parameter(
      *         name="id",
      *         in="path",
@@ -489,6 +602,7 @@ class CalculadoraImportacionController extends Controller
      *         )
      *     )
      * )
+     */
     public function show($id)
     {
         try {
@@ -668,19 +782,19 @@ class CalculadoraImportacionController extends Controller
                     // Descargar el archivo Excel desde la URL
                     $fileUrl = $calculadora->url_cotizacion;
                     $fileContents = $this->downloadFileFromUrl($fileUrl);
-                    
+
                     if ($fileContents) {
                         // Crear archivo temporal
                         $tempPath = storage_path('app/temp');
                         if (!file_exists($tempPath)) {
                             mkdir($tempPath, 0755, true);
                         }
-                        
+
                         $extension = pathinfo($fileUrl, PATHINFO_EXTENSION) ?: 'xlsx';
                         $tempFileName = uniqid('calculadora_') . '.' . $extension;
                         $tempFilePath = $tempPath . '/' . $tempFileName;
                         file_put_contents($tempFilePath, $fileContents);
-                        
+
                         // Crear un UploadedFile simulado
                         $uploadedFile = new \Illuminate\Http\UploadedFile(
                             $tempFilePath,
@@ -689,37 +803,37 @@ class CalculadoraImportacionController extends Controller
                             null,
                             true
                         );
-                        
+
                         // Crear Request con el archivo
                         $storeRequest = new Request();
                         $storeRequest->merge(['id_contenedor' => $calculadora->id_carga_consolidada_contenedor]);
                         $storeRequest->files->set('cotizacion', $uploadedFile);
-                        
+
                         // Guardar el usuario actual
                         $currentUserId = auth()->id();
-                        
+
                         // Llamar al método store del CotizacionController
                         $cotizacionController = app(CotizacionController::class);
                         $response = $cotizacionController->store($storeRequest);
                         $responseData = json_decode($response->getContent(), true);
-                        
+
                         // Limpiar archivo temporal
                         if (file_exists($tempFilePath)) {
                             unlink($tempFilePath);
                         }
-                        
+
                         if (isset($responseData['id']) && $responseData['status'] === 'success') {
                             $cotizacionId = $responseData['id'];
-                            
+
                             // Actualizar la cotización con el id_usuario de la calculadora y marcar from_calculator
                             Cotizacion::where('id', $cotizacionId)->update([
                                 'id_usuario' => $calculadora->id_usuario ?? $currentUserId,
                                 'from_calculator' => true
                             ]);
-                            
+
                             $calculadora->id_cotizacion = $cotizacionId;
                             $calculadora->save();
-                            
+
                             Log::info('Cotización creada desde calculadora via store()', [
                                 'calculadora_id' => $calculadora->id,
                                 'cotizacion_id' => $cotizacionId,
@@ -899,12 +1013,12 @@ class CalculadoraImportacionController extends Controller
                         'verify_peer_name' => false
                     ]
                 ]);
-                
+
                 $content = @file_get_contents($fileUrl, false, $context);
                 if ($content !== false && strlen($content) > 0) {
                     return $content;
                 }
-                
+
                 // Fallback con cURL
                 if (function_exists('curl_init')) {
                     $ch = curl_init();
@@ -914,17 +1028,17 @@ class CalculadoraImportacionController extends Controller
                     curl_setopt($ch, CURLOPT_TIMEOUT, 60);
                     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
                     curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
-                    
+
                     $content = curl_exec($ch);
                     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
                     curl_close($ch);
-                    
+
                     if ($content !== false && $httpCode == 200 && strlen($content) > 0) {
                         return $content;
                     }
                 }
             }
-            
+
             // Si es una ruta de storage
             if (strpos($fileUrl, '/storage/') !== false) {
                 $path = preg_replace('#^.*/storage/#', '', $fileUrl);
@@ -933,21 +1047,20 @@ class CalculadoraImportacionController extends Controller
                     return file_get_contents($storagePath);
                 }
             }
-            
+
             // Si es una ruta local directa
             if (file_exists($fileUrl)) {
                 return file_get_contents($fileUrl);
             }
-            
+
             // Intentar en storage público
             $publicPath = storage_path('app/public/' . ltrim($fileUrl, '/'));
             if (file_exists($publicPath)) {
                 return file_get_contents($publicPath);
             }
-            
+
             Log::error('No se pudo encontrar el archivo: ' . $fileUrl);
             return null;
-            
         } catch (\Exception $e) {
             Log::error('Error al descargar archivo: ' . $e->getMessage(), ['url' => $fileUrl]);
             return null;

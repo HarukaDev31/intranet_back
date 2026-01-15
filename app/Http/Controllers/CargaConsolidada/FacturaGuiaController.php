@@ -10,11 +10,11 @@ use App\Models\CargaConsolidada\FacturaComercial;
 use App\Traits\WhatsappTrait;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
-
+use App\Traits\FileTrait;
 class FacturaGuiaController extends Controller
 {
     use WhatsappTrait;
-
+    use FileTrait;
     /**
      * @OA\Get(
      *     path="/carga-consolidada/contenedores/{idContenedor}/factura-guia",
@@ -34,8 +34,7 @@ class FacturaGuiaController extends Controller
 
         $query = Cotizacion::select(
             'contenedor_consolidado_cotizacion.*',
-            'contenedor_consolidado_tipo_cliente.*',
-            'contenedor_consolidado_cotizacion.id as id_cotizacion'
+            'contenedor_consolidado_tipo_cliente.name as tipo_cliente_nombre',
         )
             ->with(['facturasComerciales' => function ($q) {
                 $q->select('id', 'quotation_id', 'file_name', 'file_path', 'size', 'mime_type', 'created_at');
@@ -47,15 +46,17 @@ class FacturaGuiaController extends Controller
                 'contenedor_consolidado_tipo_cliente.id'
             )
             ->orderBy('contenedor_consolidado_cotizacion.id', 'asc')
-            ->where('id_contenedor', $idContenedor)
-            ->whereNotNull('estado_cliente')
-            ->whereNull('id_cliente_importacion')
-            ->where('estado_cotizador',"CONFIRMADO")
+            ->where('contenedor_consolidado_cotizacion.id_contenedor', $idContenedor)
+            ->whereNotNull('contenedor_consolidado_cotizacion.estado_cliente')
+            ->whereNull('contenedor_consolidado_cotizacion.id_cliente_importacion')
+            ->where('contenedor_consolidado_cotizacion.estado_cotizador', "CONFIRMADO")
             ->paginate($perPage);
 
         // Agregar facturas_comerciales a cada item
         $items = collect($query->items())->map(function ($item) {
             $item->facturas_comerciales = $item->facturasComerciales;
+            $item->id_cotizacion = $item->id;
+            $item->file_path = $this->generateImageUrl($item->file_path);
             unset($item->facturasComerciales);
             return $item;
         });
@@ -218,7 +219,6 @@ class FacturaGuiaController extends Controller
 
                     // Mantener compatibilidad: actualizar el campo factura_comercial en la cotización
                     // con el último archivo subido (para no romper funcionalidad existente)
-                    $cotizacion->factura_comercial = $originalName;
                     $cotizacion->save();
 
                 } catch (\Exception $e) {
@@ -317,14 +317,26 @@ class FacturaGuiaController extends Controller
             $facturaComercial = FacturaComercial::find($idFactura);
             
             if (!$facturaComercial) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Factura comercial no encontrada'
-                ], 404);
+                //find factura comercial by id_cotizacion in table contenedor_consolidado_cotizacion
+                $facturaComercial = Cotizacion::find($idFactura)->factura_comercial;
+                if (!$facturaComercial) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Factura comercial no encontrada'
+                    ], 404);
+                }else{
+                    unlink($this->generateImageUrl($facturaComercial));
+                    Cotizacion::find($idFactura)->factura_comercial = null;
+                    Cotizacion::find($idFactura)->save();
+                    return response()->json([
+                        'success' => true,
+                        'message' => 'Factura comercial eliminada correctamente'
+                    ]);
+                }
             }
 
             // Eliminar el archivo físico
-            $filePath = storage_path('app/' . $facturaComercial->ruta_archivo);
+            $filePath = storage_path('app/' . $facturaComercial->file_path);
             if (file_exists($filePath)) {
                 unlink($filePath);
             }
@@ -333,8 +345,8 @@ class FacturaGuiaController extends Controller
             $facturaComercial->delete();
 
             // Verificar si quedan más facturas para esta cotización
-            $cotizacion = Cotizacion::find($facturaComercial->id_cotizacion);
-            $facturasRestantes = FacturaComercial::where('id_cotizacion', $facturaComercial->id_cotizacion)->count();
+            $cotizacion = Cotizacion::find($facturaComercial->quotation_id);
+            $facturasRestantes = FacturaComercial::where('quotation_id', $facturaComercial->id_cotizacion)->count();
             
             // Si no quedan facturas, limpiar el campo legacy en la cotización
             if ($cotizacion && $facturasRestantes === 0) {
@@ -342,7 +354,7 @@ class FacturaGuiaController extends Controller
                 $cotizacion->save();
             } elseif ($cotizacion && $facturasRestantes > 0) {
                 // Si quedan facturas, actualizar con la última factura (más reciente)
-                $ultimaFactura = FacturaComercial::where('id_cotizacion', $facturaComercial->id_cotizacion)
+                $ultimaFactura = FacturaComercial::where('quotation_id', $facturaComercial->id_cotizacion)
                     ->orderBy('created_at', 'desc')
                     ->first();
                 if ($ultimaFactura) {
@@ -384,7 +396,7 @@ class FacturaGuiaController extends Controller
     public function getFacturasComerciales($idCotizacion)
     {
         try {
-            $facturas = FacturaComercial::where('id_cotizacion', $idCotizacion)
+            $facturas = FacturaComercial::where('quotation_id', $idCotizacion)
                 ->orderBy('created_at', 'desc')
                 ->get();
 

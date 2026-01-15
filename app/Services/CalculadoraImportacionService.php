@@ -120,6 +120,92 @@ class CalculadoraImportacionService
     }
 
     /**
+     * Actualizar cálculo de importación existente
+     */
+    public function actualizarCalculo(CalculadoraImportacion $calculadora, array $data): CalculadoraImportacion
+    {
+        try {
+            DB::beginTransaction();
+
+            // Actualizar cliente si existe
+            $cliente = $this->buscarOcrearCliente($data['clienteInfo']);
+
+            // Determinar campos según tipo de documento
+            $tipoDocumento = $data['clienteInfo']['tipoDocumento'] ?? 'DNI';
+
+            // Actualizar registro principal
+            $calculadora->update([
+                'id_cliente' => $cliente ? $cliente->id : $calculadora->id_cliente,
+                'nombre_cliente' => $data['clienteInfo']['nombre'],
+                'tipo_documento' => $tipoDocumento,
+                'id_carga_consolidada_contenedor' => $data['id_carga_consolidada_contenedor'] ?? $calculadora->id_carga_consolidada_contenedor,
+                'dni_cliente' => $tipoDocumento === 'DNI' ? ($data['clienteInfo']['dni'] ?? null) : null,
+                'ruc_cliente' => $tipoDocumento === 'RUC' ? ($data['clienteInfo']['ruc'] ?? null) : null,
+                'razon_social' => $tipoDocumento === 'RUC' ? ($data['clienteInfo']['empresa'] ?? $data['clienteInfo']['razonSocial'] ?? null) : null,
+                'correo_cliente' => $data['clienteInfo']['correo'] ?: null,
+                'whatsapp_cliente' => is_array($data['clienteInfo']['whatsapp']) ? ($data['clienteInfo']['whatsapp']['value'] ?? null) : ($data['clienteInfo']['whatsapp'] ?? null),
+                'tipo_cliente' => $data['clienteInfo']['tipoCliente'],
+                'qty_proveedores' => $data['clienteInfo']['qtyProveedores'],
+                'tarifa_total_extra_proveedor' => $data['tarifaTotalExtraProveedor'] ?? 0,
+                'tarifa_total_extra_item' => $data['tarifaTotalExtraItem'] ?? 0,
+                'tarifa' => $data['tarifa']['tarifa'] ?? $calculadora->tarifa,
+                'tarifa_descuento' => $data['tarifa']['descuento'] ?? $calculadora->tarifa_descuento,
+            ]);
+
+            // Eliminar proveedores y productos existentes
+            foreach ($calculadora->proveedores as $proveedor) {
+                $proveedor->productos()->delete();
+            }
+            $calculadora->proveedores()->delete();
+
+            // Crear nuevos proveedores y productos
+            foreach ($data['proveedores'] as $index => $proveedorData) {
+                $proveedor = $calculadora->proveedores()->create([
+                    'nombre' => $proveedorData['nombre'] ?? "Proveedor " . ($index + 1),
+                    'cbm' => $proveedorData['cbm'] ?? 0,
+                    'peso' => $proveedorData['peso'] ?? 0,
+                ]);
+
+                foreach ($proveedorData['productos'] as $productoData) {
+                    $proveedor->productos()->create([
+                        'nombre' => $productoData['nombre'],
+                        'precio' => $productoData['precio'],
+                        'cantidad' => $productoData['cantidad'],
+                        'antidumping_cu' => $productoData['antidumpingCU'] ?? 0,
+                        'ad_valorem_p' => $productoData['adValoremP'] ?? 0,
+                    ]);
+                }
+            }
+
+            // Recalcular totales
+            $totales = $this->calcularTotales($calculadora);
+
+            // Actualizar totales en la calculadora
+            $calculadora->update([
+                'total_fob' => $totales['totalFOB'] ?? 0,
+                'total_impuestos' => $totales['totalImpuestos'] ?? 0,
+                'logistica' => $totales['logistica'] ?? 0,
+            ]);
+
+            // Regenerar PDF si tiene URL de cotización
+            if ($calculadora->url_cotizacion) {
+                $boletaInfo = $this->generarBoletaPDF($calculadora);
+                if ($boletaInfo && isset($boletaInfo['path'])) {
+                    $calculadora->url_cotizacion_pdf = $boletaInfo['url'];
+                    $calculadora->save();
+                }
+            }
+
+            DB::commit();
+            return $calculadora->load(['proveedores.productos']);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Error al actualizar cálculo de importación: ' . $e->getMessage());
+            throw $e;
+        }
+    }
+
+    /**
      * Buscar o crear cliente basado en la información proporcionada
      */
     private function buscarOcrearCliente(array $clienteInfo): ?Cliente

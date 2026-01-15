@@ -148,6 +148,8 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
         
         // Factura y guía
         Route::group(['prefix' => 'factura-guia'], function () {
+            Route::get('/general/get-facturas-comerciales/{idCotizacion}', [FacturaGuiaController::class, 'getFacturasComerciales']);
+
             Route::get('/general/{idContenedor}/headers', [FacturaGuiaController::class, 'getHeadersData']);
             Route::post('/general/upload-guia-remision', [FacturaGuiaController::class, 'uploadGuiaRemision']);
             Route::post('/general/upload-factura-comercial', [FacturaGuiaController::class, 'uploadFacturaComercial']);
