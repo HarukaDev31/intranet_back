@@ -43,6 +43,7 @@ class ClearAllCache extends Command
         // Limpiar cache
         $this->info('🗑️  Limpiando cache...');
         $this->call('cache:clear');
+
         $this->line('   ✅ Cache limpiada');
         $this->newLine();
 
@@ -55,6 +56,7 @@ class ClearAllCache extends Command
         // Limpiar route cache
         $this->info('🗑️  Limpiando route cache...');
         $this->call('route:clear');
+        $this->call('route:cache');
         $this->line('   ✅ Route cache limpiada');
         $this->newLine();
 

@@ -20,6 +20,7 @@ use App\Models\Notificacion;
 use App\Events\CotizacionChangeContainer;
 use App\Traits\WhatsappTrait;
 use App\Traits\GoogleSheetsHelper;
+use Carbon\Carbon;
 
 class ContenedorController extends Controller
 {
@@ -458,7 +459,7 @@ class ContenedorController extends Controller
 
     /**
      * @OA\Get(
-     *     path="/carga-consolidada/contenedores/filter-options",
+     *     path="/carga-consolidada/contenedor/filter-options",
      *     tags={"Contenedor"},
      *     summary="Obtener opciones de filtro",
      *     description="Obtiene las opciones de filtro disponibles para contenedores",
@@ -474,7 +475,7 @@ class ContenedorController extends Controller
     }
     /**
      * @OA\Get(
-     *     path="/carga-consolidada/contenedores/{idContenedor}/pasos",
+     *     path="/carga-consolidada/contenedor/{idContenedor}/pasos",
      *     tags={"Contenedor"},
      *     summary="Obtener pasos del contenedor",
      *     description="Obtiene los pasos de proceso del contenedor según el rol del usuario",
@@ -591,7 +592,7 @@ class ContenedorController extends Controller
     }
     /**
      * @OA\Get(
-     *     path="/carga-consolidada/contenedores/cargas-disponibles",
+     *     path="/carga-consolidada/contenedor/cargas-disponibles",
      *     tags={"Contenedor"},
      *     summary="Obtener cargas disponibles",
      *     description="Obtiene la lista de cargas disponibles",
@@ -606,6 +607,38 @@ class ContenedorController extends Controller
         $query = Contenedor::where('empresa', '!=', 1)
             ->orderByRaw('CAST(carga AS UNSIGNED) DESC');
         return $query->get();
+    }
+    /**
+     * @OA\Get(
+     *     path="/carga-consolidada/contenedor/cargas-disponibles-dropdown",
+     *     tags={"Contenedor"},
+     *     summary="Obtener cargas disponibles dropdown",
+     *     @OA\Parameter(name="year", in="query", required=false, @OA\Schema(type="integer")),
+     *     description="Obtiene la lista de cargas disponibles para dropdown",
+     *     operationId="getCargasDisponiblesDropdown",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Response(response=200, description="Cargas obtenidas exitosamente")
+     * )
+     */
+    public function getCargasDisponiblesDropdown(Request $request){
+        $year = $request->year?$request->year:date('Y');
+        $cargas = Contenedor::where('empresa', '!=', 1)
+            ->whereYear('f_inicio', $year)
+            //get row with f_inicio null where year is 2025
+            ->where(function($query) use ($year){
+                $query->whereYear('f_inicio', $year)
+                    ->orWhereNull('f_inicio');
+            })
+            ->orderByRaw('CAST(carga AS UNSIGNED) DESC')
+            ->get();
+        //return value label 
+        return $cargas->map(function($carga){
+            return [
+                'value' => $carga->carga,
+                'label' => 'Contenedor #'.$carga->carga.' - '.Carbon::parse($carga->f_inicio??'2025-01-01')->format('Y'),
+            ];
+        });
+        return response()->json(['data' => $cargas, 'success' => true]);
     }
     /**
      * @OA\Post(
@@ -717,24 +750,89 @@ Le estaré informando cualquier avance 🫡.";
         }
     }
     /**
-     * @OA\Put(
-     *     path="/carga-consolidada/contenedores/estado-documentacion",
+     * @OA\Get(
+     *     path="/carga-consolidada/contenedor/vendedores-dropdown",
      *     tags={"Contenedor"},
-     *     summary="Actualizar estado de documentación",
-     *     description="Actualiza el estado de documentación de un contenedor",
-     *     operationId="updateEstadoDocumentacion",
+     *     @OA\Parameter(name="fecha_inicio", in="query", required=false, @OA\Schema(type="string", format="date")),
+     *     @OA\Parameter(name="fecha_fin", in="query", required=false, @OA\Schema(type="string", format="date")),
+     *     @OA\Parameter(name="id_contenedor", in="query", required=false, @OA\Schema(type="integer")),
+     *     summary="Obtener vendedores para dropdown",
+     *     description="Obtiene la lista de vendedores para usar como dropdown",
+     *     operationId="getVendedoresDropdown",
      *     security={{"bearerAuth":{}}},
-     *     @OA\RequestBody(
-     *         required=true,
-     *         @OA\JsonContent(
-     *             @OA\Property(property="id", type="integer"),
-     *             @OA\Property(property="estado_documentacion", type="string")
-     *         )
-     *     ),
-     *     @OA\Response(response=200, description="Estado actualizado exitosamente"),
-     *     @OA\Response(response=404, description="Contenedor no encontrado")
+     *     @OA\Response(response=200, description="Vendedores obtenidos exitosamente")
      * )
      */
+    public function getVendedoresDropdown(Request $request)
+    {
+        try {
+            $fechaInicio = $request->input('fecha_inicio');
+            $fechaFin = $request->input('fecha_fin');
+            $idContenedor = $request->input('id_contenedor');
+
+            $query = DB::table('usuario as u')
+                ->select([
+                    'u.ID_Usuario as id',
+                    'u.No_Nombres_Apellidos as nombre',
+                    DB::raw('COUNT(DISTINCT cc.id) as total_cotizaciones'),
+                    DB::raw('COALESCE(SUM(cccp.cbm_total), 0) as volumen_total')
+                ])
+                ->join('contenedor_consolidado_cotizacion as cc', 'u.ID_Usuario', '=', 'cc.id_usuario')
+                ->join('contenedor_consolidado_cotizacion_proveedores as cccp', 'cc.id', '=', 'cccp.id_cotizacion')
+                ->join('carga_consolidada_contenedor as cont', 'cc.id_contenedor', '=', 'cont.id')
+                ->groupBy('u.ID_Usuario', 'u.No_Nombres_Apellidos');
+
+            if ($fechaInicio && $fechaFin) {
+                $query->whereBetween('cont.fecha_zarpe', [$fechaInicio, $fechaFin]);
+            }
+
+            if ($idContenedor) {
+                $query->where('cc.id_contenedor', $idContenedor);
+            }
+
+            $vendedores = $query->get()->map(function($item) {
+                return [
+                    'value' => $item->id,
+                    'label' => $item->nombre,
+                    'total_cotizaciones' => $item->total_cotizaciones,
+                    'volumen_total' => round($item->volumen_total, 2)
+                ];
+            });
+
+            return response()->json([
+                'success' => true,
+                'data' => $vendedores
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error en getVendedoresFiltro: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al obtener vendedores para filtro',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+/**
+    * @OA\Put(
+    *     path="/carga-consolidada/contenedor/estado-documentacion",
+    *     tags={"Contenedor"},
+    *     summary="Actualizar estado de documentación",
+    *     description="Actualiza el estado de documentación de un contenedor",
+    *     operationId="updateEstadoDocumentacion",
+    *     security={{"bearerAuth":{}}},
+    *     @OA\RequestBody(
+    *         required=true,
+    *         @OA\JsonContent(
+    *             @OA\Property(property="id", type="integer"),
+    *             @OA\Property(property="estado_documentacion", type="string")
+    *         )
+    *     ),
+    *     @OA\Response(response=200, description="Estado actualizado exitosamente"),
+    *     @OA\Response(response=404, description="Contenedor no encontrado")
+    * )
+    */
+    
     public function updateEstadoDocumentacion(Request $request)
     {
         try {
@@ -762,7 +860,7 @@ Le estaré informando cualquier avance 🫡.";
     }
     /**
      * @OA\Put(
-     *     path="/carga-consolidada/contenedores/{idcontenedor}/fecha-documentacion-max",
+     *     path="/carga-consolidada/contenedor/{idcontenedor}/fecha-documentacion-max",
      *     tags={"Contenedor"},
      *     summary="Actualizar fecha máxima de documentación",
      *     description="Actualiza la fecha máxima de documentación de un contenedor",
@@ -812,7 +910,7 @@ Le estaré informando cualquier avance 🫡.";
     }
     /**
      * @OA\Post(
-     *     path="/carga-consolidada/contenedores/packing-list",
+     *     path="/carga-consolidada/contenedor/packing-list",
      *     tags={"Contenedor"},
      *     summary="Subir packing list",
      *     description="Sube un archivo de packing list para un contenedor",
@@ -893,7 +991,7 @@ Le estaré informando cualquier avance 🫡.";
 
     /**
      * @OA\Post(
-     *     path="/carga-consolidada/contenedores/{idcontenedor}/verify-completed",
+     *     path="/carga-consolidada/contenedor/{idcontenedor}/verify-completed",
      *     tags={"Contenedor"},
      *     summary="Verificar si contenedor está completado",
      *     description="Verifica y actualiza el estado del contenedor según su lista de embarque",
@@ -957,7 +1055,7 @@ Le estaré informando cualquier avance 🫡.";
     }
     /**
      * @OA\Delete(
-     *     path="/carga-consolidada/contenedores/{idContenedor}/packing-list",
+     *     path="/carga-consolidada/contenedor/{idContenedor}/packing-list",
      *     tags={"Contenedor"},
      *     summary="Eliminar packing list",
      *     description="Elimina el packing list de un contenedor",

@@ -2979,7 +2979,7 @@
                 ]
             }
         },
-        "/carga-consolidada/contenedores/filter-options": {
+        "/carga-consolidada/contenedor/filter-options": {
             "get": {
                 "tags": [
                     "Contenedor"
@@ -2999,7 +2999,7 @@
                 ]
             }
         },
-        "/carga-consolidada/contenedores/{idContenedor}/pasos": {
+        "/carga-consolidada/contenedor/{idContenedor}/pasos": {
             "get": {
                 "tags": [
                     "Contenedor"
@@ -3029,7 +3029,7 @@
                 ]
             }
         },
-        "/carga-consolidada/contenedores/cargas-disponibles": {
+        "/carga-consolidada/contenedor/cargas-disponibles": {
             "get": {
                 "tags": [
                     "Contenedor"
@@ -3037,6 +3037,36 @@
                 "summary": "Obtener cargas disponibles",
                 "description": "Obtiene la lista de cargas disponibles",
                 "operationId": "getCargasDisponibles",
+                "responses": {
+                    "200": {
+                        "description": "Cargas obtenidas exitosamente"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/carga-consolidada/contenedor/cargas-disponibles-dropdown": {
+            "get": {
+                "tags": [
+                    "Contenedor"
+                ],
+                "summary": "Obtener cargas disponibles dropdown",
+                "description": "Obtiene la lista de cargas disponibles para dropdown",
+                "operationId": "getCargasDisponiblesDropdown",
+                "parameters": [
+                    {
+                        "name": "year",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "Cargas obtenidas exitosamente"
@@ -3131,7 +3161,27 @@
                 ]
             }
         },
-        "/carga-consolidada/contenedores/estado-documentacion": {
+        "/carga-consolidada/contenedor/vendedores-dropdown": {
+            "get": {
+                "tags": [
+                    "Contenedor"
+                ],
+                "summary": "Obtener vendedores para dropdown",
+                "description": "Obtiene la lista de vendedores para usar como dropdown",
+                "operationId": "getVendedoresDropdown",
+                "responses": {
+                    "200": {
+                        "description": "Vendedores obtenidos exitosamente"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/carga-consolidada/contenedor/estado-documentacion": {
             "put": {
                 "tags": [
                     "Contenedor"
@@ -3172,7 +3222,7 @@
                 ]
             }
         },
-        "/carga-consolidada/contenedores/{idcontenedor}/fecha-documentacion-max": {
+        "/carga-consolidada/contenedor/{idcontenedor}/fecha-documentacion-max": {
             "put": {
                 "tags": [
                     "Contenedor"
@@ -3224,7 +3274,7 @@
                 ]
             }
         },
-        "/carga-consolidada/contenedores/packing-list": {
+        "/carga-consolidada/contenedor/packing-list": {
             "post": {
                 "tags": [
                     "Contenedor"
@@ -3266,7 +3316,7 @@
                 ]
             }
         },
-        "/carga-consolidada/contenedores/{idcontenedor}/verify-completed": {
+        "/carga-consolidada/contenedor/{idcontenedor}/verify-completed": {
             "post": {
                 "tags": [
                     "Contenedor"
@@ -3296,7 +3346,7 @@
                 ]
             }
         },
-        "/carga-consolidada/contenedores/{idContenedor}/packing-list": {
+        "/carga-consolidada/contenedor/{idContenedor}/packing-list": {
             "delete": {
                 "tags": [
                     "Contenedor"
@@ -4804,7 +4854,7 @@
                 ]
             }
         },
-        "/dashboard-ventas/vendedores-filtro": {
+        "/dashboard-ventas/filtros/vendedores": {
             "get": {
                 "tags": [
                     "Dashboard Ventas"

@@ -72,7 +72,7 @@ class DashboardVentasController extends Controller
 
     /**
      * @OA\Get(
-     *     path="/dashboard-ventas/vendedores-filtro",
+     *     path="/dashboard-ventas/filtros/vendedores",
      *     tags={"Dashboard Ventas"},
      *     summary="Obtener vendedores para filtro",
      *     description="Obtiene la lista de vendedores para usar como filtro en el dashboard",
