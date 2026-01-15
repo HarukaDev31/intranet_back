@@ -3217,7 +3217,6 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
             $cotizacionDestino = $cotizacion->replicate();
             $cotizacion->id_contenedor_pago = $idContainerDestino;
             $cotizacion->save();
-            //generate new uuid
             $uuid = Str::uuid()->toString();
             $cotizacionDestino->uuid = $uuid;
             $cotizacionDestino->id_contenedor = $idContainerDestino;

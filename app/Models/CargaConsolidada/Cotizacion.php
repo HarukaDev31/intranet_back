@@ -79,7 +79,8 @@ class Cotizacion extends Model
         'send_alert_difference_cbm_status',
         'cod_contract',
         'autosigned_contract_at',
-        'cotizacion_contrato_autosigned_url'
+        'cotizacion_contrato_autosigned_url',
+        'from_calculator'
     ];
 
     /**
@@ -109,6 +110,7 @@ class Cotizacion extends Model
         'qty_item' => 'integer',
         'delivery_form_registered_at' => 'date',
         'total_pago_delivery' => 'decimal:2',
+        'from_calculator' => 'boolean',
     ];
 
     /**

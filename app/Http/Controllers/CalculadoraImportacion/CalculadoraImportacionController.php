@@ -16,6 +16,9 @@ use Carbon\Carbon;
 use Illuminate\Support\Facades\Storage;
 use App\Traits\WhatsappTrait;
 use App\Models\CargaConsolidada\Contenedor;
+use App\Models\CargaConsolidada\Cotizacion;
+use App\Http\Controllers\CargaConsolidada\CotizacionController;
+use Illuminate\Support\Str;
 
 class CalculadoraImportacionController extends Controller
 {
@@ -62,20 +65,20 @@ class CalculadoraImportacionController extends Controller
         try {
             // Obtener clientes con teléfono
             $whatsapp = $request->whatsapp;
-            
+
             // Normalizar el número de búsqueda
             $telefonoNormalizado = preg_replace('/[\s\-\(\)\.\+]/', '', $whatsapp);
-            
+
             // Si empieza con 51 y tiene más de 9 dígitos, remover prefijo
             if (preg_match('/^51(\d{9})$/', $telefonoNormalizado, $matches)) {
                 $telefonoNormalizado = $matches[1];
             }
-            
+
             $clientes = Cliente::where('telefono', '!=', null)
                 ->where('telefono', '!=', '')
-                ->where(function($query) use ($whatsapp, $telefonoNormalizado) {
+                ->where(function ($query) use ($whatsapp, $telefonoNormalizado) {
                     $query->where('telefono', 'like', '%' . $whatsapp . '%');
-                    
+
                     if (!empty($telefonoNormalizado)) {
                         $query->orWhereRaw('REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(telefono, " ", ""), "-", ""), "(", ""), ")", ""), "+", "") LIKE ?', ["%{$telefonoNormalizado}%"])
                             ->orWhereRaw('REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(telefono, " ", ""), "-", ""), "(", ""), ")", ""), "+", "") LIKE ?', ["%51{$telefonoNormalizado}%"]);
@@ -334,7 +337,7 @@ class CalculadoraImportacionController extends Controller
                 $calculadora->nombre_creador = optional($calculadora->creador)->No_Nombres_Apellidos;
                 //vendedor id_usuario
                 $calculadora->nombre_vendedor = optional($calculadora->vendedor)->No_Nombres_Apellidos;
-                $calculadora->carga_contenedor = 'Contenedor #'.optional($calculadora->contenedor)->carga.'-'.($calculadora->contenedor? Carbon::parse($calculadora->contenedor->f_inicio)->format('Y') : '2025');
+                $calculadora->carga_contenedor = 'Contenedor #' . optional($calculadora->contenedor)->carga . '-' . ($calculadora->contenedor ? Carbon::parse($calculadora->contenedor->f_inicio)->format('Y') : '2025');
             }
             //get filters estado calculadora, all contenedores carga id,
             //get all containers label=carga value=id
@@ -415,7 +418,7 @@ class CalculadoraImportacionController extends Controller
 
             $data = $request->all();
             $data['created_by'] = auth()->id();
-            
+
             $calculadora = $this->calculadoraImportacionService->guardarCalculo($data);
             $totales = $this->calculadoraImportacionService->calcularTotales($calculadora);
 
@@ -436,8 +439,56 @@ class CalculadoraImportacionController extends Controller
     }
 
     /**
-     * Obtener cálculo por ID
-     */
+     * @OA\Get(
+     *     path="/api/calculadora-importacion/{id}",
+     *     summary="Obtener cálculo por ID",
+     *     tags={"Calculadora Importación"},
+     *     @OA\Parameter(
+     *         name="id",
+     *         in="path",
+     *         required=true,
+     *         @OA\Schema(type="integer")
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Cálculo encontrado",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean"),
+     *             @OA\Property(property="data", type="object",
+     *                 @OA\Property(property="calculadora", type="object",
+     *                     @OA\Property(property="id", type="integer"),
+     *                     @OA\Property(property="nombre_cliente", type="string"),
+     *                     @OA\Property(property="tipo_cliente", type="string"),
+     *                     @OA\Property(property="qty_proveedores", type="integer"),
+     *                     @OA\Property(property="proveedores", type="array",
+     *                         @OA\Items(type="object",
+     *                             @OA\Property(property="id", type="integer"),
+     *                             @OA\Property(property="nombre", type="string"),
+     *                             @OA\Property(property="productos", type="array",
+     *                                 @OA\Items(type="object",
+     *                                     @OA\Property(property="id", type="integer"),
+     *                                     @OA\Property(property="nombre", type="string"),
+     *                                     @OA\Property(property="precio", type="number"),
+     *                                     @OA\Property(property="cantidad", type="integer"),
+     *                                     @OA\Property(property="antidumpingCU", type="number"),
+     *                                     @OA\Property(property="adValoremP", type="number")
+     *                                 )
+     *                             )
+     *                         )
+     *                     )
+     *                 )
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=404,
+     *         description="Cálculo no encontrado",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean"),
+     *             @OA\Property(property="message", type="string")
+     *         )
+     *     )
+     * )
     public function show($id)
     {
         try {
@@ -541,7 +592,7 @@ class CalculadoraImportacionController extends Controller
             $newCalculadora = $calculadora->replicate();
             $newCalculadora->id_carga_consolidada_contenedor = null;
             $newCalculadora->estado = 'PENDIENTE'; // Resetear estado
-
+            $newCalculadora->id_cotizacion = null;
             $newCalculadora->save();
 
             Log::info("Nueva calculadora creada con ID: {$newCalculadora->id}");
@@ -595,12 +646,100 @@ class CalculadoraImportacionController extends Controller
             $estado = $request->estado;
             $calculadora = CalculadoraImportacion::find($id);
             $calculadora->estado = $estado;
-            $calculadora->save();
 
             if ($estado === 'COTIZADO') {
-                $this->sendWhatsAppMessage($calculadora->whatsapp_cliente, $calculadora);
-            }
+                //validate if cod_cotizacion is not null
+                if (!$calculadora->cod_cotizacion) {
+                    $lastCotizacion = CalculadoraImportacion::where('cod_cotizacion', 'like', 'CO%')
+                        ->where('id', '!=', $id)
+                        ->orderBy('cod_cotizacion', 'desc')
+                        ->first();
 
+                    $lastSequentialNumber = 0;
+                    if ($lastCotizacion && preg_match('/(\d{4})$/', $lastCotizacion->cod_cotizacion, $matches)) {
+                        $lastSequentialNumber = intval($matches[1]);
+                    }
+                    $newSequentialNumber = $lastSequentialNumber ? $lastSequentialNumber + 1 : 1;
+                    $calculadora->cod_cotizacion = 'CO' . date('m') . date('y') . str_pad($newSequentialNumber, 4, '0', STR_PAD_LEFT);
+
+                    $calculadora->save();
+                }
+                if (!$calculadora->id_cotizacion && $calculadora->id_carga_consolidada_contenedor && $calculadora->url_cotizacion) {
+                    // Descargar el archivo Excel desde la URL
+                    $fileUrl = $calculadora->url_cotizacion;
+                    $fileContents = $this->downloadFileFromUrl($fileUrl);
+                    
+                    if ($fileContents) {
+                        // Crear archivo temporal
+                        $tempPath = storage_path('app/temp');
+                        if (!file_exists($tempPath)) {
+                            mkdir($tempPath, 0755, true);
+                        }
+                        
+                        $extension = pathinfo($fileUrl, PATHINFO_EXTENSION) ?: 'xlsx';
+                        $tempFileName = uniqid('calculadora_') . '.' . $extension;
+                        $tempFilePath = $tempPath . '/' . $tempFileName;
+                        file_put_contents($tempFilePath, $fileContents);
+                        
+                        // Crear un UploadedFile simulado
+                        $uploadedFile = new \Illuminate\Http\UploadedFile(
+                            $tempFilePath,
+                            basename($fileUrl),
+                            mime_content_type($tempFilePath),
+                            null,
+                            true
+                        );
+                        
+                        // Crear Request con el archivo
+                        $storeRequest = new Request();
+                        $storeRequest->merge(['id_contenedor' => $calculadora->id_carga_consolidada_contenedor]);
+                        $storeRequest->files->set('cotizacion', $uploadedFile);
+                        
+                        // Guardar el usuario actual
+                        $currentUserId = auth()->id();
+                        
+                        // Llamar al método store del CotizacionController
+                        $cotizacionController = app(CotizacionController::class);
+                        $response = $cotizacionController->store($storeRequest);
+                        $responseData = json_decode($response->getContent(), true);
+                        
+                        // Limpiar archivo temporal
+                        if (file_exists($tempFilePath)) {
+                            unlink($tempFilePath);
+                        }
+                        
+                        if (isset($responseData['id']) && $responseData['status'] === 'success') {
+                            $cotizacionId = $responseData['id'];
+                            
+                            // Actualizar la cotización con el id_usuario de la calculadora y marcar from_calculator
+                            Cotizacion::where('id', $cotizacionId)->update([
+                                'id_usuario' => $calculadora->id_usuario ?? $currentUserId,
+                                'from_calculator' => true
+                            ]);
+                            
+                            $calculadora->id_cotizacion = $cotizacionId;
+                            $calculadora->save();
+                            
+                            Log::info('Cotización creada desde calculadora via store()', [
+                                'calculadora_id' => $calculadora->id,
+                                'cotizacion_id' => $cotizacionId,
+                                'id_usuario_calculadora' => $calculadora->id_usuario
+                            ]);
+                        } else {
+                            Log::error('Error al crear cotización desde calculadora', [
+                                'calculadora_id' => $calculadora->id,
+                                'response' => $responseData
+                            ]);
+                        }
+                    } else {
+                        Log::error('No se pudo descargar el archivo de cotización', [
+                            'calculadora_id' => $calculadora->id,
+                            'url' => $fileUrl
+                        ]);
+                    }
+                }
+            }
+            $calculadora->save();
             return response()->json(['success' => true, 'message' => 'Estado cambiado exitosamente']);
         } catch (\Exception $e) {
             return response()->json(['success' => false, 'message' => 'Error al cambiar el estado: ' . $e->getMessage()], 500);
@@ -736,6 +875,81 @@ class CalculadoraImportacionController extends Controller
             return storage_path('app/public/boletas/' . $url);
         } catch (\Exception $e) {
             Log::error('Error al obtener ruta del PDF: ' . $e->getMessage(), ['url' => $url]);
+            return null;
+        }
+    }
+
+    /**
+     * Descargar archivo desde URL (local o remota)
+     */
+    private function downloadFileFromUrl($fileUrl)
+    {
+        try {
+            // Si es una URL completa
+            if (filter_var($fileUrl, FILTER_VALIDATE_URL)) {
+                // Intentar con file_get_contents
+                $context = stream_context_create([
+                    'http' => [
+                        'timeout' => 60,
+                        'method' => 'GET',
+                        'header' => 'User-Agent: Mozilla/5.0'
+                    ],
+                    'ssl' => [
+                        'verify_peer' => false,
+                        'verify_peer_name' => false
+                    ]
+                ]);
+                
+                $content = @file_get_contents($fileUrl, false, $context);
+                if ($content !== false && strlen($content) > 0) {
+                    return $content;
+                }
+                
+                // Fallback con cURL
+                if (function_exists('curl_init')) {
+                    $ch = curl_init();
+                    curl_setopt($ch, CURLOPT_URL, $fileUrl);
+                    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+                    curl_setopt($ch, CURLOPT_TIMEOUT, 60);
+                    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+                    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+                    
+                    $content = curl_exec($ch);
+                    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                    curl_close($ch);
+                    
+                    if ($content !== false && $httpCode == 200 && strlen($content) > 0) {
+                        return $content;
+                    }
+                }
+            }
+            
+            // Si es una ruta de storage
+            if (strpos($fileUrl, '/storage/') !== false) {
+                $path = preg_replace('#^.*/storage/#', '', $fileUrl);
+                $storagePath = storage_path('app/public/' . $path);
+                if (file_exists($storagePath)) {
+                    return file_get_contents($storagePath);
+                }
+            }
+            
+            // Si es una ruta local directa
+            if (file_exists($fileUrl)) {
+                return file_get_contents($fileUrl);
+            }
+            
+            // Intentar en storage público
+            $publicPath = storage_path('app/public/' . ltrim($fileUrl, '/'));
+            if (file_exists($publicPath)) {
+                return file_get_contents($publicPath);
+            }
+            
+            Log::error('No se pudo encontrar el archivo: ' . $fileUrl);
+            return null;
+            
+        } catch (\Exception $e) {
+            Log::error('Error al descargar archivo: ' . $e->getMessage(), ['url' => $fileUrl]);
             return null;
         }
     }

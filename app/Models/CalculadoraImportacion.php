@@ -17,6 +17,8 @@ class CalculadoraImportacion extends Model
         'id_cliente',
         'id_usuario',
         'created_by',
+        'cod_cotizacion',
+        'id_cotizacion',
         'nombre_cliente',
         'tipo_documento',
         'dni_cliente',
@@ -194,5 +196,13 @@ class CalculadoraImportacion extends Model
             ['value' => self::ESTADO_COTIZADO, 'label' => 'COTIZADO'],
             ['value' => self::ESTADO_CONFIRMADO, 'label' => 'CONFIRMADO']
         ];
+    }
+
+    /**
+     * Relación con la cotización de carga consolidada
+     */
+    public function cotizacion(): BelongsTo
+    {
+        return $this->belongsTo(\App\Models\CargaConsolidada\Cotizacion::class, 'id_cotizacion');
     }
 }
