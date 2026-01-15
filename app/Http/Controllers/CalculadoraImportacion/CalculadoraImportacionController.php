@@ -257,10 +257,23 @@ class CalculadoraImportacionController extends Controller
 
         return 'INACTIVO';
     }
+    /**
+     * @OA\Get(
+     *     path="/calculadora-importacion/tarifas",
+     *     tags={"Calculadora Importación"},
+     *     summary="Obtener tarifas",
+     *     description="Obtiene la lista de tarifas",
+     *     operationId="getTarifas",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Response(response=200, description="Tarifas obtenidas exitosamente")
+     * )
+     */
     public function getTarifas()
     {
         try {
-            $tarifas = CalculadoraTarifasConsolidado::with('tipoCliente')->get();
+            $tarifas = CalculadoraTarifasConsolidado::with('tipoCliente')
+                ->whereHas('tipoCliente')
+                ->get();
             $tarifas = $tarifas->map(function ($tarifa) {
                 return [
                     'id' => $tarifa->id,

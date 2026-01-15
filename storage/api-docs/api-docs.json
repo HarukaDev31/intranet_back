@@ -1439,6 +1439,26 @@
                 ]
             }
         },
+        "/calculadora-importacion/tarifas": {
+            "get": {
+                "tags": [
+                    "Calculadora Importación"
+                ],
+                "summary": "Obtener tarifas",
+                "description": "Obtiene la lista de tarifas",
+                "operationId": "getTarifas",
+                "responses": {
+                    "200": {
+                        "description": "Tarifas obtenidas exitosamente"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
         "/calendar/events": {
             "get": {
                 "tags": [
@@ -3169,6 +3189,34 @@
                 "summary": "Obtener vendedores para dropdown",
                 "description": "Obtiene la lista de vendedores para usar como dropdown",
                 "operationId": "getVendedoresDropdown",
+                "parameters": [
+                    {
+                        "name": "fecha_inicio",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    },
+                    {
+                        "name": "fecha_fin",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    },
+                    {
+                        "name": "id_contenedor",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "Vendedores obtenidos exitosamente"

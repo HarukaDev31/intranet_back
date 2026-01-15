@@ -31,7 +31,7 @@ class CalculadoraTarifasConsolidado extends Model
      * Relación con el tipo de cliente
      */
     public function tipoCliente(): BelongsTo
-    {
-        return $this->belongsTo(CalculadoraTipoCliente::class, 'calculadora_tipo_cliente_id');
+    {   //where deleted_at is null
+        return $this->belongsTo(CalculadoraTipoCliente::class, 'calculadora_tipo_cliente_id')->whereNull('deleted_at');
     }
 }
