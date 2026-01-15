@@ -634,7 +634,7 @@ class ContenedorController extends Controller
         //return value label 
         return $cargas->map(function($carga){
             return [
-                'value' => $carga->carga,
+                'value' => $carga->id,
                 'label' => 'Contenedor #'.$carga->carga.' - '.Carbon::parse($carga->f_inicio??'2025-01-01')->format('Y'),
             ];
         });

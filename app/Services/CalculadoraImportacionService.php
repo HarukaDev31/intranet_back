@@ -37,6 +37,7 @@ class CalculadoraImportacionService
                 'created_by' => $data['created_by'] ?? null,
                 'nombre_cliente' => $data['clienteInfo']['nombre'],
                 'tipo_documento' => $tipoDocumento,
+                'id_carga_consolidada_contenedor' => $data['id_carga_consolidada_contenedor'] ?? null,
                 'dni_cliente' => $tipoDocumento === 'DNI' ? ($data['clienteInfo']['dni'] ?? null) : null,
                 'ruc_cliente' => $tipoDocumento === 'RUC' ? ($data['clienteInfo']['ruc'] ?? null) : null,
                 'razon_social' => $tipoDocumento === 'RUC' ? ($data['clienteInfo']['empresa'] ?? $data['clienteInfo']['razonSocial'] ?? null) : null,

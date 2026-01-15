@@ -36,7 +36,7 @@ class CalculadoraImportacion extends Model
         'total_impuestos',
         'logistica',
         'estado',
-        'id_carga_consolidada_contenedor'
+        'id_carga_consolidada_contenedor',
     ];
 
     protected $casts = [
