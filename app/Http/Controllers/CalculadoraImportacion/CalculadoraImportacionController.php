@@ -440,7 +440,7 @@ class CalculadoraImportacionController extends Controller
 
     /**
      * @OA\Get(
-     *     path="/api/calculadora-importacion/{id}",
+     *     path="/calculadora-importacion/{id}",
      *     summary="Obtener cálculo por ID",
      *     tags={"Calculadora Importación"},
      *     @OA\Parameter(
