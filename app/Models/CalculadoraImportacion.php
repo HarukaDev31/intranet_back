@@ -16,6 +16,7 @@ class CalculadoraImportacion extends Model
     protected $fillable = [
         'id_cliente',
         'id_usuario',
+        'created_by',
         'nombre_cliente',
         'tipo_documento',
         'dni_cliente',
@@ -146,6 +147,14 @@ class CalculadoraImportacion extends Model
     public function contenedor(): BelongsTo
     {
         return $this->belongsTo(\App\Models\CargaConsolidada\Contenedor::class, 'id_carga_consolidada_contenedor');
+    }
+
+    /**
+     * Relación con el usuario creador
+     */
+    public function creador(): BelongsTo
+    {
+        return $this->belongsTo(\App\Models\Usuario::class, 'created_by', 'ID_Usuario');
     }
    
     /**

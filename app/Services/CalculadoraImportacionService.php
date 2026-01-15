@@ -34,6 +34,7 @@ class CalculadoraImportacionService
             $calculadora = CalculadoraImportacion::create([
                 'id_cliente' => $cliente ? $cliente->id : null,
                 'id_usuario' => $data['id_usuario'] ?? null,
+                'created_by' => $data['created_by'] ?? null,
                 'nombre_cliente' => $data['clienteInfo']['nombre'],
                 'tipo_documento' => $tipoDocumento,
                 'dni_cliente' => $tipoDocumento === 'DNI' ? ($data['clienteInfo']['dni'] ?? null) : null,

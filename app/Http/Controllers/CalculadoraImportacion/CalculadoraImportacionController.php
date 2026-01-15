@@ -304,7 +304,7 @@ class CalculadoraImportacionController extends Controller
     public function index(Request $request)
     {
         try {
-            $query = CalculadoraImportacion::with(['proveedores.productos', 'cliente', 'contenedor']);
+            $query = CalculadoraImportacion::with(['proveedores.productos', 'cliente', 'contenedor', 'creador']);
 
             //filter optional campania=54&estado_calculadora=PENDIENTE
             if ($request->has('campania') && $request->campania) {
@@ -331,6 +331,8 @@ class CalculadoraImportacionController extends Controller
                 $calculadora->totales = $totales;
                 $calculadora->url_cotizacion = $this->generateUrl($calculadora->url_cotizacion);
                 $calculadora->url_cotizacion_pdf = $this->generateUrl($calculadora->url_cotizacion_pdf);
+                $calculadora->nombre_creador = optional($calculadora->creador)->No_Nombres_Apellidos;
+
             }
             //get filters estado calculadora, all contenedores carga id,
             //get all containers label=carga value=id
@@ -409,7 +411,10 @@ class CalculadoraImportacionController extends Controller
                 'tarifaTotalExtraItem' => 'nullable|numeric|min:0'
             ]);
 
-            $calculadora = $this->calculadoraImportacionService->guardarCalculo($request->all());
+            $data = $request->all();
+            $data['created_by'] = auth()->id();
+            
+            $calculadora = $this->calculadoraImportacionService->guardarCalculo($data);
             $totales = $this->calculadoraImportacionService->calcularTotales($calculadora);
 
             return response()->json([
