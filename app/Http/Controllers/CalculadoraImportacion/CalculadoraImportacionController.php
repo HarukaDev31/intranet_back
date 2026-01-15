@@ -554,8 +554,7 @@ class CalculadoraImportacionController extends Controller
      *     path="/calculadora-importacion/{id}",
      *     summary="Obtener cálculo por ID",
      *     tags={"Calculadora Importación"},
-     * security={{"bearerAuth":{}}},
-
+     *     security={{"bearerAuth":{}}},
      *     @OA\Parameter(
      *         name="id",
      *         in="path",

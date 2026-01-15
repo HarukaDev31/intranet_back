@@ -1459,6 +1459,127 @@
                 ]
             }
         },
+        "/calculadora-importacion/{id}": {
+            "get": {
+                "tags": [
+                    "Calculadora Importación"
+                ],
+                "summary": "Obtener cálculo por ID",
+                "operationId": "49b24225e26bbd70d4bb03cca54da50d",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Cálculo encontrado",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean"
+                                        },
+                                        "data": {
+                                            "properties": {
+                                                "calculadora": {
+                                                    "properties": {
+                                                        "id": {
+                                                            "type": "integer"
+                                                        },
+                                                        "nombre_cliente": {
+                                                            "type": "string"
+                                                        },
+                                                        "tipo_cliente": {
+                                                            "type": "string"
+                                                        },
+                                                        "qty_proveedores": {
+                                                            "type": "integer"
+                                                        },
+                                                        "proveedores": {
+                                                            "type": "array",
+                                                            "items": {
+                                                                "properties": {
+                                                                    "id": {
+                                                                        "type": "integer"
+                                                                    },
+                                                                    "nombre": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "productos": {
+                                                                        "type": "array",
+                                                                        "items": {
+                                                                            "properties": {
+                                                                                "id": {
+                                                                                    "type": "integer"
+                                                                                },
+                                                                                "nombre": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "precio": {
+                                                                                    "type": "number"
+                                                                                },
+                                                                                "cantidad": {
+                                                                                    "type": "integer"
+                                                                                },
+                                                                                "antidumpingCU": {
+                                                                                    "type": "number"
+                                                                                },
+                                                                                "adValoremP": {
+                                                                                    "type": "number"
+                                                                                }
+                                                                            },
+                                                                            "type": "object"
+                                                                        }
+                                                                    }
+                                                                },
+                                                                "type": "object"
+                                                            }
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Cálculo no encontrado",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean"
+                                        },
+                                        "message": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
         "/calendar/events": {
             "get": {
                 "tags": [
@@ -5589,8 +5710,8 @@
                 "tags": [
                     "Factura y Guía"
                 ],
-                "summary": "Subir factura comercial",
-                "description": "Sube un archivo de factura comercial para una cotización",
+                "summary": "Subir factura(s) comercial(es)",
+                "description": "Sube uno o múltiples archivos de factura comercial para una cotización",
                 "operationId": "uploadFacturaComercialFG",
                 "requestBody": {
                     "required": true,
@@ -5601,9 +5722,13 @@
                                     "idCotizacion": {
                                         "type": "integer"
                                     },
-                                    "file": {
-                                        "type": "string",
-                                        "format": "binary"
+                                    "files[]": {
+                                        "description": "Array de archivos de factura comercial",
+                                        "type": "array",
+                                        "items": {
+                                            "type": "string",
+                                            "format": "binary"
+                                        }
                                     }
                                 },
                                 "type": "object"
@@ -5613,7 +5738,7 @@
                 },
                 "responses": {
                     "200": {
-                        "description": "Factura subida exitosamente"
+                        "description": "Factura(s) subida(s) exitosamente"
                     }
                 },
                 "security": [
@@ -5653,17 +5778,17 @@
                 ]
             }
         },
-        "/carga-consolidada/contenedor/factura-guia/general/delete-factura-comercial/{idContenedor}": {
+        "/carga-consolidada/contenedor/factura-guia/general/delete-factura-comercial/{idFactura}": {
             "delete": {
                 "tags": [
                     "Factura y Guía"
                 ],
                 "summary": "Eliminar factura comercial",
-                "description": "Elimina la factura comercial de una cotización",
+                "description": "Elimina una factura comercial específica por su ID",
                 "operationId": "deleteFacturaComercialFG",
                 "parameters": [
                     {
-                        "name": "idContenedor",
+                        "name": "idFactura",
                         "in": "path",
                         "required": true,
                         "schema": {
@@ -5677,6 +5802,36 @@
                     },
                     "404": {
                         "description": "Factura no encontrada"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/carga-consolidada/contenedor/factura-guia/general/get-facturas-comerciales/{idCotizacion}": {
+            "get": {
+                "tags": [
+                    "Factura y Guía"
+                ],
+                "summary": "Obtener facturas comerciales",
+                "description": "Obtiene todas las facturas comerciales de una cotización",
+                "operationId": "getFacturasComerciales",
+                "parameters": [
+                    {
+                        "name": "idCotizacion",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Facturas obtenidas exitosamente"
                     }
                 },
                 "security": [
