@@ -228,6 +228,14 @@ class Cotizacion extends Model
     }
 
     /**
+     * Relación con Facturas Comerciales
+     */
+    public function facturasComerciales()
+    {
+        return $this->hasMany(FacturaComercial::class, 'quotation_id');
+    }
+
+    /**
      * Scope para filtrar por estado.
      */
     public function scopePorEstado($query, $estado)

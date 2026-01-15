@@ -2518,7 +2518,7 @@ class DocumentacionController extends Controller
 
             // Instanciar el controller de Entrega y llamar al método
             $entregaController = new \App\Http\Controllers\CargaConsolidada\EntregaController();
-            $resp = $entregaController->getEntregas($req, $idContenedor);
+            $resp = $entregaController->getEntregasDocumentacion($req, $idContenedor);
 
             // Extraer datos del JsonResponse
             if ($resp instanceof \Illuminate\Http\JsonResponse) {

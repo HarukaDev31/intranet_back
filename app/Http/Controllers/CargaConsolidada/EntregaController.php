@@ -1122,7 +1122,362 @@ class EntregaController extends Controller
             ]
         ]);
     }
+    public function getEntregasDocumentacion(Request $request, $idContenedor)
+    {
+        // Subconsulta: sumar cbm y qty por id_cotizacion (puede haber múltiples proveedores por cotización)
+        $proveedoresAgg = DB::table('contenedor_consolidado_cotizacion_proveedores as CP')
+            ->select(
+                'CP.id_cotizacion',
+                DB::raw('SUM(COALESCE(CP.cbm_total_china, CP.cbm_total, 0)) as sum_cbm_china'),
+                DB::raw('SUM(COALESCE(CP.qty_box_china, CP.qty_box, 0)) as sum_qty_box')
+            )
+            ->where('CP.id_contenedor', $idContenedor)
+            ->groupBy('CP.id_cotizacion');
 
+        // Subconsulta: asignación de rango/fecha por cotización (si hubiera varias, tomamos la última por id)
+        $asignacionAgg = DB::table('consolidado_user_range_delivery as UR')
+            ->select(
+                'UR.id_cotizacion',
+                DB::raw('MAX(UR.id_date) as id_date'),
+                DB::raw('MAX(UR.id_range_date) as id_range_date')
+            )
+            ->groupBy('UR.id_cotizacion');
+
+        $query = DB::table('contenedor_consolidado_cotizacion as CC')
+            ->join('carga_consolidada_contenedor as C', 'C.id', '=', 'CC.id_contenedor')
+            ->leftJoin('consolidado_delivery_form_lima as L', function ($join) use ($idContenedor) {
+                $join->on('L.id_cotizacion', '=', 'CC.id')
+                    ->where('L.id_contenedor', '=', $idContenedor);
+            })
+            ->leftJoin('consolidado_delivery_form_province as P', function ($join) use ($idContenedor) {
+                $join->on('P.id_cotizacion', '=', 'CC.id')
+                    ->where('P.id_contenedor', '=', $idContenedor);
+            })
+            // Departamento (solo aplica para formulario de provincia)
+            ->leftJoin('departamento as DPT', 'DPT.ID_Departamento', '=', 'P.id_department')
+            // Usuarios asociados a los formularios
+            ->leftJoin('users as UL', 'UL.id', '=', 'L.id_user')
+            ->leftJoin('users as UP', 'UP.id', '=', 'P.id_user')
+            // Sumas de proveedores por cotización
+            ->leftJoinSub($proveedoresAgg, 'CPA', function ($join) {
+                $join->on('CPA.id_cotizacion', '=', 'CC.id');
+            })
+            // Asignación de horario de entrega por cotización
+            ->leftJoinSub($asignacionAgg, 'UR2', function ($join) {
+                $join->on('UR2.id_cotizacion', '=', 'CC.id');
+            })
+            ->leftJoin('consolidado_delivery_date as D2', function ($join) use ($idContenedor) {
+                $join->on('D2.id', '=', 'UR2.id_date')
+                    ->where('D2.id_contenedor', '=', $idContenedor);
+            })
+            ->leftJoin('consolidado_delivery_range_date as R2', 'R2.id', '=', 'UR2.id_range_date')
+            ->where('CC.id_contenedor', $idContenedor)
+            ->whereNotNull('CC.estado_cliente')
+            ->whereNull('CC.id_cliente_importacion')
+            ->where('CC.estado_cotizador', 'CONFIRMADO')
+            ->whereExists(function ($query) {
+                $query->select(DB::raw(1))
+                    ->from('contenedor_consolidado_cotizacion_proveedores')
+                    ->whereColumn('contenedor_consolidado_cotizacion_proveedores.id_cotizacion', 'CC.id');
+            })
+          
+            ->select([
+                'C.*',
+                'CC.*',
+                // Agregados por cotización desde proveedores
+                DB::raw('COALESCE(CPA.sum_cbm_china, 0) as cbm_total_china'),
+                DB::raw('COALESCE(CPA.sum_qty_box, 0) as qty_box_china'),
+                // Tipo de formulario 0 provincia / 1 lima
+                DB::raw('CASE WHEN P.id IS NOT NULL THEN 0 WHEN L.id IS NOT NULL THEN 1 ELSE NULL END as type_form'),
+                DB::raw('CASE WHEN P.id IS NOT NULL THEN P.voucher_doc WHEN L.id IS NOT NULL THEN L.voucher_doc ELSE NULL END as voucher_doc'),
+                DB::raw('CASE WHEN P.id IS NOT NULL THEN P.created_at WHEN L.id IS NOT NULL THEN L.created_at ELSE NULL END as fecha_creacion_formulario'),
+                DB::raw('CASE WHEN P.id IS NOT NULL THEN P.isVerified WHEN L.id IS NOT NULL THEN L.isVerified ELSE NULL END as isVerified'),
+                // Usuario del formulario (normalizado)
+                DB::raw('CASE WHEN P.id IS NOT NULL THEN P.id_user WHEN L.id IS NOT NULL THEN L.id_user ELSE NULL END as form_user_id'),
+                DB::raw('CASE WHEN P.id IS NOT NULL THEN UP.name WHEN L.id IS NOT NULL THEN UL.name ELSE NULL END as form_user_name'),
+                DB::raw('CASE WHEN P.id IS NOT NULL THEN UP.email WHEN L.id IS NOT NULL THEN UL.email ELSE NULL END as form_user_email'),
+                // Nombre del departamento si es Provincia
+                DB::raw('CASE WHEN P.id IS NOT NULL THEN DPT.No_Departamento ELSE NULL END as department_name'),
+                // Ruc de la agencia si es de Provincia
+                DB::raw('CASE WHEN P.id IS NOT NULL THEN P.agency_ruc ELSE NULL END as agency_ruc'),
+                DB::raw('CASE WHEN P.id IS NOT NULL THEN P.agency_name ELSE NULL END as agency_name'),
+                //R_docs si es de Provincia
+                DB::raw('CASE WHEN P.id IS NOT NULL THEN P.r_doc ELSE NULL END as r_doc'),
+                DB::raw('CASE WHEN P.id IS NOT NULL THEN P.r_name ELSE NULL END as r_name'),
+                // Pick doc si es de Lima
+                DB::raw('CASE WHEN L.id IS NOT NULL THEN L.pick_doc ELSE NULL END as pick_doc'),
+                DB::raw('CASE WHEN L.id IS NOT NULL THEN L.pick_name ELSE NULL END as pick_name'),
+                // Datos de entrega desde la asignación (fecha y hora)
+                DB::raw("CASE WHEN UR2.id_date IS NOT NULL THEN CONCAT(D2.year, '-', LPAD(D2.month, 2, '0'), '-', LPAD(D2.day, 2, '0')) ELSE NULL END as delivery_date"),
+                DB::raw('R2.start_time as delivery_start_time'),
+                DB::raw('R2.end_time as delivery_end_time'),
+                DB::raw('UR2.id_date as delivery_date_id'),
+                DB::raw('UR2.id_range_date as delivery_range_id'),
+            ]);
+
+        // Búsqueda
+        if ($request->has('search')) {
+            $search = $request->input('search');
+            $query->where(function ($q) use ($search) {
+                $q->where('CC.nombre', 'LIKE', "%{$search}%")
+                    ->orWhere('CC.documento', 'LIKE', "%{$search}%")
+                    ->orWhere('CC.telefono', 'LIKE', "%{$search}%");
+            });
+        }
+
+        //Filtros adicionales (fecha de inicio y fin)
+        // Soportar dos formas desde el front:
+        //  - parámetros separados: ?tipo_entrega=Lima&estado_entrega=ENTREGADO&fecha_inicio=...
+        //  - un único parámetro `filters` con JSON: ?filters={"tipo_entrega":"Lima","fecha_inicio":"2025-11-12"}
+        $filtersRaw = $request->query('filters', null);
+        $filters = [];
+        if ($filtersRaw) {
+            $decoded = json_decode($filtersRaw, true);
+            if (is_array($decoded)) $filters = $decoded;
+        }
+
+        // Merge direct params (direct params override JSON)
+        $directKeys = ['tipo_entrega', 'estado_entrega', 'fecha_inicio', 'fecha_fin', 'estado_cotizador', 'tipo_servicio'];
+        foreach ($directKeys as $k) {
+            $v = $request->query($k, null);
+            if (!is_null($v) && $v !== '') $filters[$k] = $v;
+        }
+
+        // Whitelist - only allow expected filters
+        $allowed = ['tipo_entrega', 'estado_entrega', 'fecha_inicio', 'fecha_fin', 'estado_cotizador', 'tipo_servicio'];
+        $filters = array_intersect_key($filters, array_flip($allowed));
+
+        // Aplicar filtros conocidos
+        if (!empty($filters['tipo_entrega'])) {
+            $tipo = strtoupper(trim($filters['tipo_entrega']));
+            if ($tipo === 'LIMA') {
+                $query->whereNotNull('L.id');
+            } elseif (in_array($tipo, ['PROVINCIA', 'PROVINCE'])) {
+                $query->whereNotNull('P.id');
+            }
+        }
+
+        if (!empty($filters['estado_cotizador'])) {
+            $query->where('CC.estado_cotizador', $filters['estado_cotizador']);
+        }
+
+        // Filtrar por fecha de entrega asignada (usa D2.year/month/day)
+        if (!empty($filters['fecha_inicio'])) {
+            $fechaInicio = $filters['fecha_inicio'];
+            $query->whereRaw("CONCAT(D2.year,'-',LPAD(D2.month,2,'0'),'-',LPAD(D2.day,2,'0')) >= ?", [$fechaInicio]);
+        }
+        if (!empty($filters['fecha_fin'])) {
+            $fechaFin = $filters['fecha_fin'];
+            $query->whereRaw("CONCAT(D2.year,'-',LPAD(D2.month,2,'0'),'-',LPAD(D2.day,2,'0')) <= ?", [$fechaFin]);
+        }
+
+        // Estado de entrega: implementamos una convención mínima
+        // 'ENTREGADO' => existe al menos una foto de conformidad (tabla *_conformidad)
+        if (!empty($filters['estado_entrega'])) {
+            $ee = strtoupper(trim($filters['estado_entrega']));
+            if ($ee === 'ENTREGADO') {
+                $query->where(function ($q) {
+                    $q->whereExists(function ($sq) {
+                        $sq->select(DB::raw(1))
+                            ->from('consolidado_delivery_form_lima_conformidad')
+                            ->whereColumn('consolidado_delivery_form_lima_conformidad.id_cotizacion', 'CC.id');
+                    })->orWhereExists(function ($sq) {
+                        $sq->select(DB::raw(1))
+                            ->from('consolidado_delivery_form_province_conformidad')
+                            ->whereColumn('consolidado_delivery_form_province_conformidad.id_cotizacion', 'CC.id');
+                    });
+                });
+            } elseif (in_array($ee, ['PENDIENTE', 'NO_ENTREGADO', 'NOENTREGADO'])) {
+                $query->where(function ($q) {
+                    $q->whereNotExists(function ($sq) {
+                        $sq->select(DB::raw(1))
+                            ->from('consolidado_delivery_form_lima_conformidad')
+                            ->whereColumn('consolidado_delivery_form_lima_conformidad.id_cotizacion', 'CC.id');
+                    })->whereNotExists(function ($sq) {
+                        $sq->select(DB::raw(1))
+                            ->from('consolidado_delivery_form_province_conformidad')
+                            ->whereColumn('consolidado_delivery_form_province_conformidad.id_cotizacion', 'CC.id');
+                    });
+                });
+            }
+        }
+
+        // Filtrar por tipo de servicio (DELIVERY o MONTACARGA)
+        if (!empty($filters['tipo_servicio'])) {
+            $tipo = strtoupper(trim($filters['tipo_servicio']));
+            if (in_array($tipo, ['DELIVERY', 'MONTACARGA'])) {
+                $query->where('CC.tipo_servicio', $tipo);
+            }
+        }
+
+        // Orden: Provincia primero (type_form=0), luego por fecha/hora de entrega (asignadas primero), luego por ID
+        $page = (int) $request->input('currentPage', 1);
+        $perPage = (int) $request->input('itemsPerPage', 100);
+
+        $query
+            // Provincia (P) primero, luego Lima (L). Si ninguno, al final.
+            ->orderByRaw("CASE WHEN P.id IS NOT NULL THEN 0 WHEN L.id IS NOT NULL THEN 1 ELSE 2 END ASC")
+            // Con fecha asignada primero (no nulos), luego sin asignación
+            ->orderByRaw("CASE WHEN UR2.id_date IS NULL THEN 1 ELSE 0 END ASC")
+            // Por fecha concreta (año, mes, día)
+            ->orderBy('D2.year', 'asc')
+            ->orderBy('D2.month', 'asc')
+            ->orderBy('D2.day', 'asc')
+            // Con hora asignada primero, luego sin hora
+            ->orderByRaw("CASE WHEN R2.start_time IS NULL THEN 1 ELSE 0 END ASC")
+            ->orderBy('R2.start_time', 'asc')
+            // Estable para empates
+            ->orderBy('CC.id', 'asc');
+
+        $data = $query->paginate($perPage, ['*'], 'page', $page);
+
+        // Agregar fotos de conformidad (hasta 2) y el total por cada fila
+        $items = $data->items();
+        foreach ($items as $row) {
+            $row->conformidad = [];
+            $row->conformidad_count = 0;
+            $typeForm = isset($row->type_form) ? (int)$row->type_form : null;
+            if ($typeForm !== null) {
+                // type_form: 0 = Provincia, 1 = Lima
+                $tableName = $typeForm === 1
+                    ? 'consolidado_delivery_form_lima_conformidad'
+                    : 'consolidado_delivery_form_province_conformidad';
+
+                // Obtener total y hasta 2 últimas fotos
+                $total = DB::table($tableName)
+                    ->where('id_cotizacion', $row->id)
+                    ->where('id_contenedor', $row->id_contenedor)
+                    ->count();
+                $photos = DB::table($tableName)
+                    ->select('id', 'file_path', 'file_type', 'file_size', 'file_original_name', 'created_at')
+                    ->where('id_cotizacion', $row->id)
+                    ->where('id_contenedor', $row->id_contenedor)
+                    ->orderByDesc('created_at')
+                    ->limit(2)
+                    ->get();
+
+                $row->conformidad = $photos->map(function ($p) {
+                    return [
+                        'id' => (int)$p->id,
+                        'file_path' => $p->file_path,
+                        'file_url' => $this->generateImageUrl($p->file_path),
+                        'file_type' => $p->file_type,
+                        'file_size' => $p->file_size ? (int)$p->file_size : null,
+                        'file_original_name' => $p->file_original_name,
+                        'created_at' => $p->created_at,
+                    ];
+                })->toArray();
+                
+                $row->conformidad_count = $total;
+            }
+        }
+
+        // Calcular estadísticas de headers
+        // Subconsulta para sumar bultos de proveedores embarcados (no importados) por cotización
+        $proveedoresBultos = DB::table('contenedor_consolidado_cotizacion_proveedores as CP')
+            ->select(
+                'CP.id_cotizacion',
+                DB::raw('SUM(COALESCE(CP.qty_box_china, CP.qty_box, 0)) as sum_qty_box')
+            )
+            ->where('CP.id_contenedor', $idContenedor)
+            ->groupBy('CP.id_cotizacion');
+
+        $statsProvincia = DB::table('contenedor_consolidado_cotizacion as CC')
+            ->join('consolidado_delivery_form_province as P', function ($join) use ($idContenedor) {
+                $join->on('P.id_cotizacion', '=', 'CC.id')
+                    ->where('P.id_contenedor', '=', $idContenedor);
+            })
+            ->leftJoinSub($proveedoresBultos, 'PB', function ($join) {
+                $join->on('PB.id_cotizacion', '=', 'CC.id');
+            })
+            ->where('CC.id_contenedor', $idContenedor)
+            ->whereNotNull('CC.estado_cliente')
+            ->whereNull('CC.id_cliente_importacion')
+            ->where('CC.estado_cotizador', 'CONFIRMADO')
+            ->whereExists(function ($query) {
+                $query->select(DB::raw(1))
+                    ->from('contenedor_consolidado_cotizacion_proveedores')
+                    ->whereColumn('contenedor_consolidado_cotizacion_proveedores.id_cotizacion', 'CC.id');
+            })
+            ->select([
+                DB::raw('COUNT(DISTINCT CC.id) as qty'),
+                DB::raw('COALESCE(SUM(CC.volumen), 0) as cbm'),
+                DB::raw('COALESCE(SUM(PB.sum_qty_box), 0) as bultos')
+            ])
+            ->first();
+
+        $statsLima = DB::table('contenedor_consolidado_cotizacion as CC')
+            ->join('consolidado_delivery_form_lima as L', function ($join) use ($idContenedor) {
+                $join->on('L.id_cotizacion', '=', 'CC.id')
+                    ->where('L.id_contenedor', '=', $idContenedor);
+            })
+            ->leftJoinSub($proveedoresBultos, 'PB', function ($join) {
+                $join->on('PB.id_cotizacion', '=', 'CC.id');
+            })
+            ->where('CC.id_contenedor', $idContenedor)
+            ->whereNotNull('CC.estado_cliente')
+            ->whereNull('CC.id_cliente_importacion')
+            ->where('CC.estado_cotizador', 'CONFIRMADO')
+            ->whereExists(function ($query) {
+                $query->select(DB::raw(1))
+                    ->from('contenedor_consolidado_cotizacion_proveedores')
+                    ->whereColumn('contenedor_consolidado_cotizacion_proveedores.id_cotizacion', 'CC.id');
+            })
+            ->select([
+                DB::raw('COUNT(DISTINCT CC.id) as qty'),
+                DB::raw('COALESCE(SUM(CC.volumen), 0) as cbm'),
+                DB::raw('COALESCE(SUM(PB.sum_qty_box), 0) as bultos')
+            ])
+            ->first();
+
+        // Preparar headers
+        $headers = [
+            [
+                'value' => (int)($statsProvincia->qty ?? 0),
+                'label' => 'Qty Provincia',
+                'icon' => 'i-heroicons-users'
+            ],
+            [
+                'value' => (int)($statsLima->qty ?? 0),
+                'label' => 'Qty Lima',
+                'icon' => 'i-heroicons-users'
+            ],
+            [
+                'value' => number_format((float)($statsProvincia->cbm ?? 0), 2, '.', ''),
+                'label' => 'CBM Provincia',
+                'icon' => 'mage:box-3d'
+            ],
+            [
+                'value' => number_format((float)($statsLima->cbm ?? 0), 2, '.', ''),
+                'label' => 'CBM Lima',
+                'icon' => 'mage:box-3d'
+            ],
+            [
+                'value' => (int)($statsProvincia->bultos ?? 0),
+                'label' => 'Bultos Provincia',
+                'icon' => 'bi:boxes'
+            ],
+            [
+                'value' => (int)($statsLima->bultos ?? 0),
+                'label' => 'Bultos Lima',
+                'icon' => 'bi:boxes'
+            ]
+        ];
+
+        return response()->json([
+            'data' => $items,
+            'headers' => $headers,
+            'success' => true,
+            'pagination' => [
+                'current_page' => $data->currentPage(),
+                'per_page' => $data->perPage(),
+                'total' => $data->total(),
+                'last_page' => $data->lastPage(),
+                'from' => $data->firstItem(),
+                'to' => $data->lastItem()
+            ]
+        ]);
+    }
     /**
      * Genera y descarga un Excel "ROTULADO PARED" con las columnas:
      * Cliente | CBM Total China | Qty Box China

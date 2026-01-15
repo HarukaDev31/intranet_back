@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\CargaConsolidada\Cotizacion;
 use App\Models\CargaConsolidada\Contenedor;
+use App\Models\CargaConsolidada\FacturaComercial;
 use App\Traits\WhatsappTrait;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -36,6 +37,9 @@ class FacturaGuiaController extends Controller
             'contenedor_consolidado_tipo_cliente.*',
             'contenedor_consolidado_cotizacion.id as id_cotizacion'
         )
+            ->with(['facturasComerciales' => function ($q) {
+                $q->select('id', 'quotation_id', 'file_name', 'file_path', 'size', 'mime_type', 'created_at');
+            }])
             ->join(
                 'contenedor_consolidado_tipo_cliente',
                 'contenedor_consolidado_cotizacion.id_tipo_cliente',
@@ -47,11 +51,17 @@ class FacturaGuiaController extends Controller
             ->whereNotNull('estado_cliente')
             ->whereNull('id_cliente_importacion')
             ->where('estado_cotizador',"CONFIRMADO")
-
             ->paginate($perPage);
 
+        // Agregar facturas_comerciales a cada item
+        $items = collect($query->items())->map(function ($item) {
+            $item->facturas_comerciales = $item->facturasComerciales;
+            unset($item->facturasComerciales);
+            return $item;
+        });
+
         return response()->json([
-            'data' => $query->items(),
+            'data' => $items,
             'pagination' => [
                 'total' => $query->total(),
                 'per_page' => $query->perPage(),
@@ -110,8 +120,8 @@ class FacturaGuiaController extends Controller
      * @OA\Post(
      *     path="/carga-consolidada/contenedor/factura-guia/general/upload-factura-comercial",
      *     tags={"Factura y Guía"},
-     *     summary="Subir factura comercial",
-     *     description="Sube un archivo de factura comercial para una cotización",
+     *     summary="Subir factura(s) comercial(es)",
+     *     description="Sube uno o múltiples archivos de factura comercial para una cotización",
      *     operationId="uploadFacturaComercialFG",
      *     security={{"bearerAuth":{}}},
      *     @OA\RequestBody(
@@ -120,33 +130,143 @@ class FacturaGuiaController extends Controller
      *             mediaType="multipart/form-data",
      *             @OA\Schema(
      *                 @OA\Property(property="idCotizacion", type="integer"),
-     *                 @OA\Property(property="file", type="string", format="binary")
+     *                 @OA\Property(
+     *                     property="files[]",
+     *                     type="array",
+     *                     @OA\Items(type="string", format="binary"),
+     *                     description="Array de archivos de factura comercial"
+     *                 )
      *             )
      *         )
      *     ),
-     *     @OA\Response(response=200, description="Factura subida exitosamente")
+     *     @OA\Response(response=200, description="Factura(s) subida(s) exitosamente")
      * )
      */
     public function uploadFacturaComercial(Request $request)
     {
         try {
-            $idContenedor = $request->idCotizacion;
-            $file = $request->file('file');
-            $file->storeAs('cargaconsolidada/facturacomercial/' . $idContenedor, $file->getClientOriginalName());
-            //update factura comercial 
-            $cotizacion = Cotizacion::find($idContenedor);
-            $cotizacion->factura_comercial = $file->getClientOriginalName();
-            $cotizacion->save();
-            return response()->json([
+            $idCotizacion = $request->idCotizacion;
+            
+            if (!$idCotizacion) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'El ID de cotización es requerido'
+                ], 400);
+            }
+
+            // Verificar que la cotización existe
+            $cotizacion = Cotizacion::find($idCotizacion);
+            if (!$cotizacion) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Cotización no encontrada'
+                ], 404);
+            }
+
+            // Obtener los archivos (puede ser uno o múltiples)
+            $files = $request->file('files');
+            
+            if (!$files || (is_array($files) && count($files) === 0)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No se proporcionaron archivos para subir'
+                ], 400);
+            }
+
+            // Asegurar que siempre sea un array
+            if (!is_array($files)) {
+                $files = [$files];
+            }
+
+            $uploadedFiles = [];
+            $errors = [];
+
+            foreach ($files as $file) {
+                try {
+                    // Validar que el archivo sea válido
+                    if (!$file || !$file->isValid()) {
+                        $errors[] = 'Archivo inválido: ' . ($file ? $file->getClientOriginalName() : 'desconocido');
+                        continue;
+                    }
+
+                    $originalName = $file->getClientOriginalName();
+                    $fileSize = $file->getSize();
+                    $mimeType = $file->getMimeType();
+                    
+                    // Guardar el archivo en el almacenamiento
+                    $storedPath = $file->storeAs(
+                        'cargaconsolidada/facturacomercial/' . $idCotizacion,
+                        $originalName
+                    );
+
+                    // Guardar el registro en la base de datos (tabla contenedor_consolidado_facturas_e)
+                    $facturaComercial = FacturaComercial::create([
+                        'quotation_id' => $idCotizacion,
+                        'file_name' => $originalName,
+                        'file_path' => $storedPath,
+                        'size' => $fileSize,
+                        'mime_type' => $mimeType,
+                    ]);
+
+                    $uploadedFiles[] = [
+                        'id' => $facturaComercial->id,
+                        'file_name' => $originalName,
+                        'file_path' => $storedPath,
+                        'size' => $fileSize,
+                        'mime_type' => $mimeType,
+                    ];
+
+                    // Mantener compatibilidad: actualizar el campo factura_comercial en la cotización
+                    // con el último archivo subido (para no romper funcionalidad existente)
+                    $cotizacion->factura_comercial = $originalName;
+                    $cotizacion->save();
+
+                } catch (\Exception $e) {
+                    $errors[] = 'Error al subir ' . ($file ? $file->getClientOriginalName() : 'archivo') . ': ' . $e->getMessage();
+                    Log::error('Error al subir factura comercial individual', [
+                        'quotation_id' => $idCotizacion,
+                        'file' => $file ? $file->getClientOriginalName() : 'desconocido',
+                        'error' => $e->getMessage()
+                    ]);
+                }
+            }
+
+            if (count($uploadedFiles) === 0) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No se pudo subir ningún archivo',
+                    'errors' => $errors
+                ], 500);
+            }
+
+            $message = count($uploadedFiles) === 1 
+                ? 'Factura comercial subida correctamente'
+                : count($uploadedFiles) . ' facturas comerciales subidas correctamente';
+
+            $response = [
                 'success' => true,
-                'message' => 'Factura comercial actualizada correctamente',
-                'path' => $file->getClientOriginalName()
-            ]);
+                'message' => $message,
+                'files' => $uploadedFiles,
+                'count' => count($uploadedFiles)
+            ];
+
+            if (count($errors) > 0) {
+                $response['warnings'] = $errors;
+            }
+
+            return response()->json($response);
+
         } catch (\Exception $e) {
+            Log::error('Error al subir facturas comerciales', [
+                'quotation_id' => $request->idCotizacion,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
             return response()->json([
                 'success' => false,
-                'message' => 'Error al actualizar factura comercial: ' . $e->getMessage()
-            ]);
+                'message' => 'Error al subir facturas comerciales: ' . $e->getMessage()
+            ], 500);
         }
     }
     /**
@@ -180,37 +300,110 @@ class FacturaGuiaController extends Controller
     }
     /**
      * @OA\Delete(
-     *     path="/carga-consolidada/contenedor/factura-guia/general/delete-factura-comercial/{idContenedor}",
+     *     path="/carga-consolidada/contenedor/factura-guia/general/delete-factura-comercial/{idFactura}",
      *     tags={"Factura y Guía"},
      *     summary="Eliminar factura comercial",
-     *     description="Elimina la factura comercial de una cotización",
+     *     description="Elimina una factura comercial específica por su ID",
      *     operationId="deleteFacturaComercialFG",
      *     security={{"bearerAuth":{}}},
-     *     @OA\Parameter(name="idContenedor", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Parameter(name="idFactura", in="path", required=true, @OA\Schema(type="integer")),
      *     @OA\Response(response=200, description="Factura eliminada exitosamente"),
      *     @OA\Response(response=404, description="Factura no encontrada")
      * )
      */
-    public function deleteFacturaComercial($idContenedor)
+    public function deleteFacturaComercial($idFactura)
     {
-        $cotizacion = Cotizacion::find($idContenedor);
-        if($cotizacion->factura_comercial){
-            $path = storage_path('app/' . $cotizacion->factura_comercial);
-            if(file_exists($path)){
-                unlink($path);
+        try {
+            $facturaComercial = FacturaComercial::find($idFactura);
+            
+            if (!$facturaComercial) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Factura comercial no encontrada'
+                ], 404);
             }
-        }else{
+
+            // Eliminar el archivo físico
+            $filePath = storage_path('app/' . $facturaComercial->ruta_archivo);
+            if (file_exists($filePath)) {
+                unlink($filePath);
+            }
+
+            // Eliminar el registro de la base de datos
+            $facturaComercial->delete();
+
+            // Verificar si quedan más facturas para esta cotización
+            $cotizacion = Cotizacion::find($facturaComercial->id_cotizacion);
+            $facturasRestantes = FacturaComercial::where('id_cotizacion', $facturaComercial->id_cotizacion)->count();
+            
+            // Si no quedan facturas, limpiar el campo legacy en la cotización
+            if ($cotizacion && $facturasRestantes === 0) {
+                $cotizacion->factura_comercial = null;
+                $cotizacion->save();
+            } elseif ($cotizacion && $facturasRestantes > 0) {
+                // Si quedan facturas, actualizar con la última factura (más reciente)
+                $ultimaFactura = FacturaComercial::where('id_cotizacion', $facturaComercial->id_cotizacion)
+                    ->orderBy('created_at', 'desc')
+                    ->first();
+                if ($ultimaFactura) {
+                    $cotizacion->factura_comercial = $ultimaFactura->nombre_archivo;
+                    $cotizacion->save();
+                }
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Factura comercial eliminada correctamente'
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error al eliminar factura comercial', [
+                'id_factura' => $idFactura,
+                'error' => $e->getMessage()
+            ]);
+
             return response()->json([
                 'success' => false,
-                'message' => 'Factura comercial no encontrada'
-            ]);
+                'message' => 'Error al eliminar factura comercial: ' . $e->getMessage()
+            ], 500);
         }
-        $cotizacion->factura_comercial = null;
-        $cotizacion->save();
-        return response()->json([
-            'success' => true,
-            'message' => 'Factura comercial eliminada correctamente'
-        ]);
+    }
+
+    /**
+     * @OA\Get(
+     *     path="/carga-consolidada/contenedor/factura-guia/general/get-facturas-comerciales/{idCotizacion}",
+     *     tags={"Factura y Guía"},
+     *     summary="Obtener facturas comerciales",
+     *     description="Obtiene todas las facturas comerciales de una cotización",
+     *     operationId="getFacturasComerciales",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="idCotizacion", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Facturas obtenidas exitosamente")
+     * )
+     */
+    public function getFacturasComerciales($idCotizacion)
+    {
+        try {
+            $facturas = FacturaComercial::where('id_cotizacion', $idCotizacion)
+                ->orderBy('created_at', 'desc')
+                ->get();
+
+            return response()->json([
+                'success' => true,
+                'data' => $facturas,
+                'count' => $facturas->count()
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error al obtener facturas comerciales', [
+                'id_cotizacion' => $idCotizacion,
+                'error' => $e->getMessage()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al obtener facturas comerciales: ' . $e->getMessage()
+            ], 500);
+        }
     }
     /**
      * @OA\Delete(
