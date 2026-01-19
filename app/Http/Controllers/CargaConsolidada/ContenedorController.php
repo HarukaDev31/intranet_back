@@ -789,7 +789,9 @@ Le estaré informando cualquier avance 🫡.";
             if ($idContenedor) {
                 $query->where('cc.id_contenedor', $idContenedor);
             }
-
+            //not returns row with nombre  contains Danitza Leonardo y frank
+            $query->whereNotIn('u.No_Nombres_Apellidos', ['Danitza', 'Leonardo', 'Frank Oviedo']);
+           
             $vendedores = $query->get()->map(function($item) {
                 return [
                     'value' => $item->id,

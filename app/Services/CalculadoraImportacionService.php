@@ -48,8 +48,9 @@ class CalculadoraImportacionService
                 'tarifa_total_extra_proveedor' => $data['tarifaTotalExtraProveedor'] ?? 0,
                 'tarifa_total_extra_item' => $data['tarifaTotalExtraItem'] ?? 0,
                 'tarifa' => $data['tarifa']['tarifa'] ?? 0,
-                'tarifa_descuento' => $data['tarifa']['descuento'] ?? 0,
-                'estado' => CalculadoraImportacion::ESTADO_PENDIENTE
+                'tarifa_descuento' => $data['tarifaDescuento'] ?? 0,
+                'estado' => CalculadoraImportacion::ESTADO_PENDIENTE,
+                
             ]);
             $totalProductos = 0;
             // Crear proveedores
@@ -149,7 +150,7 @@ class CalculadoraImportacionService
                 'tarifa_total_extra_proveedor' => $data['tarifaTotalExtraProveedor'] ?? 0,
                 'tarifa_total_extra_item' => $data['tarifaTotalExtraItem'] ?? 0,
                 'tarifa' => $data['tarifa']['tarifa'] ?? $calculadora->tarifa,
-                'tarifa_descuento' => $data['tarifa']['descuento'] ?? $calculadora->tarifa_descuento,
+                'tarifa_descuento' => $data['tarifaDescuento'] ?? $calculadora->tarifa_descuento,
             ]);
 
             // Eliminar proveedores y productos existentes

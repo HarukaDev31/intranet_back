@@ -401,7 +401,7 @@ class CalculadoraImportacionController extends Controller
                 'clienteInfo.ruc' => 'required_if:clienteInfo.tipoDocumento,RUC|string|nullable',
                 'clienteInfo.empresa' => 'required_if:clienteInfo.tipoDocumento,RUC|string|nullable',
                 'clienteInfo.whatsapp' => 'nullable|string',
-                'clienteInfo.correo' => 'nullable|email',
+                'clienteInfo.correo' => 'nullable|string',
                 'clienteInfo.tipoCliente' => 'required|string',
                 'clienteInfo.qtyProveedores' => 'required|integer|min:1',
                 'proveedores' => 'required|array|min:1',
