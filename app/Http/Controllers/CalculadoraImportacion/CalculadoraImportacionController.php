@@ -393,6 +393,24 @@ class CalculadoraImportacionController extends Controller
     public function store(Request $request)
     {
         try {
+            // Convertir strings vacíos a null en campos numéricos de productos
+            $data = $request->all();
+            if (isset($data['proveedores']) && is_array($data['proveedores'])) {
+                foreach ($data['proveedores'] as $i => $proveedor) {
+                    if (isset($proveedor['productos']) && is_array($proveedor['productos'])) {
+                        foreach ($proveedor['productos'] as $j => $producto) {
+                            if (isset($producto['antidumpingCU']) && $producto['antidumpingCU'] === '') {
+                                $data['proveedores'][$i]['productos'][$j]['antidumpingCU'] = null;
+                            }
+                            if (isset($producto['adValoremP']) && $producto['adValoremP'] === '') {
+                                $data['proveedores'][$i]['productos'][$j]['adValoremP'] = null;
+                            }
+                        }
+                    }
+                }
+            }
+            $request->merge($data);
+
             $request->validate([
                 'id' => 'nullable|integer|exists:calculadora_importacion,id',
                 'clienteInfo.nombre' => 'required|string',
