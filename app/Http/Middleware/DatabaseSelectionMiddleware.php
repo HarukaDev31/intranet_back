@@ -60,14 +60,6 @@ class DatabaseSelectionMiddleware
         // También puedes establecerlo en DB facade
         DB::setDefaultConnection($databaseConnection);
         
-        // Log para debugging
-        Log::info('Database connection selected', [
-            'resolved_domain' => $domain,
-            'used_host' => $host,
-            'origin' => $origin,
-            'referer' => $referer,
-            'connection' => $databaseConnection
-        ]);
         
         return $next($request);
     }

@@ -415,8 +415,8 @@ class CalculadoraImportacionController extends Controller
                 'id' => 'nullable|integer|exists:calculadora_importacion,id',
                 'clienteInfo.nombre' => 'required|string',
                 'clienteInfo.tipoDocumento' => 'required|string|in:DNI,RUC',
-                'clienteInfo.dni' => 'required_if:clienteInfo.tipoDocumento,DNI|string|nullable',
-                'clienteInfo.ruc' => 'required_if:clienteInfo.tipoDocumento,RUC|string|nullable',
+                'clienteInfo.dni' => 'sometimes:clienteInfo.tipoDocumento,DNI|string|nullable',
+                'clienteInfo.ruc' => 'sometimes:clienteInfo.tipoDocumento,RUC|string|nullable',
                 'clienteInfo.empresa' => 'required_if:clienteInfo.tipoDocumento,RUC|string|nullable',
                 'clienteInfo.whatsapp' => 'nullable|string',
                 'clienteInfo.correo' => 'nullable|string',
@@ -831,7 +831,7 @@ class CalculadoraImportacionController extends Controller
 
                         // Llamar al método store del CotizacionController
                         $cotizacionController = app(CotizacionController::class);
-                        $response = $cotizacionController->store($storeRequest);
+                        $response = $cotizacionController->storeFromCalculadora($storeRequest);
                         $responseData = json_decode($response->getContent(), true);
 
                         // Limpiar archivo temporal
