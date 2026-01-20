@@ -640,7 +640,7 @@ class CalculadoraImportacionService
             $sheetCalculos->setCellValue($totalColumn . $rowIPM, '=ROUND(SUM(' . $initialColumn . $rowIPM . ':' . $sumColumn . $rowIPM . '),2)');
             $sheetCalculos->setCellValue($totalColumn . $rowPercepcion, '=ROUND(SUM(' . $initialColumn . $rowPercepcion . ':' . $sumColumn . $rowPercepcion . '),2)');
             $sheetCalculos->setCellValue($totalColumn . $rowTotalTributos, '=ROUND(SUM(' . $initialColumn . $rowTotalTributos . ':' . $sumColumn . $rowTotalTributos . '),2)');
-            $sheetCalculos->setCellValue($totalColumn . $rowCostoTotal, '=ROUND(' . $totalColumn . $rowValorFob . '+' . $totalColumn . $rowAntidumpingValor . '+' . $totalColumn . $rowTotalTributos . '+' . $totalColumn . $rowItemDestino . ',2)');
+            $sheetCalculos->setCellValue($totalColumn . $rowCostoTotal, '=ROUND(' . $totalColumn . $rowCostoTotal . '+' . $totalColumn . $rowAntidumpingValor . '+' . $totalColumn . $rowTotalTributos . '+' . $totalColumn . $rowItemDestino . ',2)');
             $sheetCalculos->setCellValue($totalColumn . $rowCostoCantidad, '=(' . $totalColumn . $rowCantidad . ')');
             $sheetCalculos->setCellValue($totalColumn . $rowCostoUnitarioUSD, '=ROUND((' . $totalColumn . $rowCostoTotal . ')/(' . $totalColumn . $rowCostoCantidad . '),2)');
             $sheetCalculos->setCellValue($totalColumn . $rowCostoUnitarioPEN, '=ROUND((' . $totalColumn . $rowCostoUnitarioUSD . ')*' . $tipoCambio . ',2)');
