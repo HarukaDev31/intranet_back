@@ -337,11 +337,12 @@ class CalculadoraImportacionController extends Controller
                 $calculadora->nombre_creador = optional($calculadora->creador)->No_Nombres_Apellidos;
                 //vendedor id_usuario
                 $calculadora->nombre_vendedor = optional($calculadora->vendedor)->No_Nombres_Apellidos;
-                $calculadora->carga_contenedor = 'Contenedor #' . optional($calculadora->contenedor)->carga . '-' . ($calculadora->contenedor ? Carbon::parse($calculadora->contenedor->f_inicio)->format('Y') : '2025');
+                $calculadora->carga_contenedor = '  #' . optional($calculadora->contenedor)->carga . '-' . ($calculadora->contenedor ? Carbon::parse($calculadora->contenedor->f_inicio)->format('Y') : '2025');
             }
             //get filters estado calculadora, all contenedores carga id,
-            //get all containers label=carga value=id
-            $contenedores = Contenedor::all();
+            //get all containers label=carga value=id (solo del año actual)
+            $anioActual = Carbon::now()->year;
+            $contenedores = Contenedor::whereYear('f_inicio', $anioActual)->get();
             $contenedores = $contenedores->map(function ($contenedor) {
                 return [
                     'id' => $contenedor->id,
@@ -351,6 +352,10 @@ class CalculadoraImportacionController extends Controller
             });
             //get all estados calculadora label=estado value=estado
             $estadoCalculadora = CalculadoraImportacion::getEstadosDisponiblesFilter();
+            
+            // Contar cotizaciones vendidas (estado COTIZADO)
+            $cotizacionesVendidas = CalculadoraImportacion::where('estado', 'COTIZADO')->count();
+            
             return response()->json([
                 'success' => true,
                 'data' => $data,
@@ -366,6 +371,10 @@ class CalculadoraImportacionController extends Controller
                     'total_clientes' => [
                         'value' => $calculos->total(),
                         'label' => 'Total Cotizaciones Realizadas'
+                    ],
+                    'cotizaciones_vendidas' => [
+                        'value' => $cotizacionesVendidas,
+                        'label' => 'Cotizaciones Vendidas'
                     ],
                 ],
                 'filters' => [
