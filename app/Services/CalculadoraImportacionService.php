@@ -30,6 +30,9 @@ class CalculadoraImportacionService
             // Determinar campos según tipo de documento
             $tipoDocumento = $data['clienteInfo']['tipoDocumento'] ?? 'DNI';
             
+            // Obtener tipo_cambio del request, si es null o 0 usar 3.75 por defecto
+            $tipoCambio = (!empty($data['tipo_cambio']) && $data['tipo_cambio'] > 0) ? $data['tipo_cambio'] : 3.75;
+            
             // Crear registro principal
             $calculadora = CalculadoraImportacion::create([
                 'id_cliente' => $cliente ? $cliente->id : null,
@@ -49,6 +52,7 @@ class CalculadoraImportacionService
                 'tarifa_total_extra_item' => $data['tarifaTotalExtraItem'] ?? 0,
                 'tarifa' => $data['tarifa']['tarifa'] ?? 0,
                 'tarifa_descuento' => $data['tarifaDescuento'] ?? 0,
+                'tc' => $tipoCambio,
                 'estado' => CalculadoraImportacion::ESTADO_PENDIENTE,
                 
             ]);
@@ -159,6 +163,9 @@ class CalculadoraImportacionService
             // Determinar campos según tipo de documento
             $tipoDocumento = $data['clienteInfo']['tipoDocumento'] ?? 'DNI';
 
+            // Obtener tipo_cambio del request, si es null o 0 usar el valor existente o 3.75 por defecto
+            $tipoCambio = (!empty($data['tipo_cambio']) && $data['tipo_cambio'] > 0) ? $data['tipo_cambio'] : ($calculadora->tc ?? 3.75);
+
             // Actualizar registro principal
             $calculadora->update([
                 'id_cliente' => $cliente ? $cliente->id : $calculadora->id_cliente,
@@ -176,6 +183,7 @@ class CalculadoraImportacionService
                 'tarifa_total_extra_item' => $data['tarifaTotalExtraItem'] ?? 0,
                 'tarifa' => $data['tarifa']['tarifa'] ?? $calculadora->tarifa,
                 'tarifa_descuento' => $data['tarifaDescuento'] ?? $calculadora->tarifa_descuento,
+                'tc' => $tipoCambio,
             ]);
 
             // Eliminar proveedores y productos existentes
@@ -211,6 +219,7 @@ class CalculadoraImportacionService
             $calculadora->update([
                 'total_fob' => $totales['totalFOB'] ?? 0,
                 'total_impuestos' => $totales['totalImpuestos'] ?? 0,
+                //extra proveedor + extra item
                 'logistica' => $totales['logistica'] ?? 0,
             ]);
 
@@ -407,81 +416,42 @@ class CalculadoraImportacionService
      */
     public function crearCotizacionInicial(array $data)
     {
-        // Aumentar memoria para procesar archivos Excel grandes
-        Log::info('[CREAR EXCEL] Iniciando crearCotizacionInicial');
-        Log::info('[CREAR EXCEL] Datos recibidos: ' . json_encode([
-            'totalProductos' => $data['totalProductos'] ?? 'N/A',
-            'cliente' => $data['clienteInfo']['nombre'] ?? 'N/A',
-            'tipo_cambio' => $data['tipo_cambio'] ?? 'N/A'
-        ]));
-     
         try {
             // Obtener tipo_cambio del request, si es null o 0 usar 3.75 por defecto
             $tipoCambio = (!empty($data['tipo_cambio']) && $data['tipo_cambio'] > 0) ? $data['tipo_cambio'] : 3.75;
-            Log::info('[CREAR EXCEL] Tipo de cambio: ' . $tipoCambio);
-
-            Log::info('[CREAR EXCEL] Datos completos recibidos en crearCotizacionInicial:', [
-                'data' => $data
-            ]);
             $plantillaPath = public_path('assets/templates/PLANTILLA_COTIZACION_INICIAL_CALCULADORA.xlsx');
 
             if (!file_exists($plantillaPath)) {
-                Log::error('Plantilla de cotización inicial no encontrada en: ' . $plantillaPath);
                 return 'Plantilla de cotización inicial no encontrada: ' . $plantillaPath;
             }
 
-
             try {
-                // Cargar la plantilla sin comentarios para evitar errores de recuperación
-                $reader = \PhpOffice\PhpSpreadsheet\IOFactory::createReaderForFile($plantillaPath);
-                // Configurar el reader para no cargar comentarios
-                if (method_exists($reader, 'setReadEmptyCells')) {
-                    $reader->setReadEmptyCells(false);
-                }
-                // Intentar desactivar la carga de comentarios si el método existe
-                if (method_exists($reader, 'setReadDataOnly')) {
-                    // No usar setReadDataOnly(true) porque necesitamos los formatos
-                }
-                $objPHPExcel = $reader->load($plantillaPath);
+                $objPHPExcel = \PhpOffice\PhpSpreadsheet\IOFactory::load($plantillaPath);
 
-                // Verificar que la plantilla se cargó correctamente
                 if (!$objPHPExcel) {
-                    Log::error('La plantilla Excel no se cargó correctamente');
                     return 'Error: La plantilla Excel no se cargó correctamente';
                 }
 
-                // Verificar que tiene al menos una hoja
                 if ($objPHPExcel->getSheetCount() === 0) {
-                    Log::error('La plantilla Excel no tiene hojas');
                     return 'Error: La plantilla Excel no tiene hojas';
                 }
-
-                Log::info('Plantilla Excel cargada correctamente. Hojas disponibles: ' . $objPHPExcel->getSheetCount());
             } catch (\Exception $e) {
-                Log::error('Error al cargar plantilla Excel: ' . $e->getMessage());
                 return 'Error al cargar plantilla Excel: ' . $e->getMessage();
             }
 
-            // Verificar que existe la hoja 1 (índice 1)
             if ($objPHPExcel->getSheetCount() < 2) {
-                Log::error('La plantilla no tiene suficientes hojas. Se requiere al menos la hoja 1');
                 return 'Error: La plantilla no tiene suficientes hojas';
             }
 
             $sheetCalculos = $objPHPExcel->getSheet(1);
 
-            // Verificar que la hoja se obtuvo correctamente
             if (!$sheetCalculos) {
-                Log::error('No se pudo obtener la hoja de cálculos');
                 return 'Error: No se pudo obtener la hoja de cálculos';
             }
 
-
             $totalProductos = $data['totalProductos'];
             
-            // Validar que totalProductos sea mayor a 0
             if ($totalProductos <= 0) {
-                Log::error('[CREAR EXCEL] ERROR: totalProductos es 0 o negativo. Datos: ' . json_encode($data));
                 return [
                     'url' => null,
                     'totalfob' => null,
@@ -490,8 +460,6 @@ class CalculadoraImportacionService
                     'boleta' => null
                 ];
             }
-            
-            Log::info('[CREAR EXCEL] Total productos validado: ' . $totalProductos);
             
             $rowNProveedor = 4;
             $rowNCaja = 5;
@@ -534,13 +502,10 @@ class CalculadoraImportacionService
                 $totalColumnas += count($proveedor['productos']);
             }
 
-            Log::info("Total de columnas necesarias: $totalColumnas");
-
             // Solo insertar columnas si necesitamos más de 1 (ya que C está disponible)
             if ($totalColumnas > 1) {
                 $columnasAInsertar = $totalColumnas - 1; // Restamos 1 porque ya tenemos la columna C
                 $sheetCalculos->insertNewColumnBefore('D', $columnasAInsertar);
-                Log::info("Se insertaron $columnasAInsertar columnas adicionales después de C");
             }
 
             // Ahora empezar desde columna C (índice 3)
@@ -568,21 +533,12 @@ class CalculadoraImportacionService
             foreach ($data['proveedores'] as $proveedor) {
                 $numProductos = count($proveedor['productos']);
 
-                Log::info("Procesando proveedor $indexProveedor con $numProductos productos");
-
                 // Obtener columna inicial y final para el merge
                 $startColumn = $getColumnLetter($columnIndex);
                 $endColumn = $getColumnLetter($columnIndex + $numProductos - 1);
 
                 // Si el proveedor tiene más de 1 producto, hacer merge de las celdas del proveedor
                 if ($numProductos > 1) {
-                    // Desmergear antes de mergear para evitar errores
-                    try { $sheetCalculos->unmergeCells($startColumn . $rowNProveedor . ':' . $endColumn . $rowNProveedor); } catch (\Exception $e) {}
-                    try { $sheetCalculos->unmergeCells($startColumn . $rowNCaja . ':' . $endColumn . $rowNCaja); } catch (\Exception $e) {}
-                    try { $sheetCalculos->unmergeCells($startColumn . $rowPeso . ':' . $endColumn . $rowPeso); } catch (\Exception $e) {}
-                    try { $sheetCalculos->unmergeCells($startColumn . $rowVolProveedor . ':' . $endColumn . $rowVolProveedor); } catch (\Exception $e) {}
-                    try { $sheetCalculos->unmergeCells($startColumn . $rowHeaderNProveedor . ':' . $endColumn . $rowHeaderNProveedor); } catch (\Exception $e) {}
-                    
                     // Merge para las filas del proveedor
                     $sheetCalculos->mergeCells($startColumn . $rowNProveedor . ':' . $endColumn . $rowNProveedor);
                     $sheetCalculos->mergeCells($startColumn . $rowNCaja . ':' . $endColumn . $rowNCaja);
@@ -592,7 +548,6 @@ class CalculadoraImportacionService
 
                     // Si hay medidas, también hacer merge
                     if (isset($proveedor['medidas'])) {
-                        try { $sheetCalculos->unmergeCells($startColumn . $rowMedida . ':' . $endColumn . $rowMedida); } catch (\Exception $e) {}
                         $sheetCalculos->mergeCells($startColumn . $rowMedida . ':' . $endColumn . $rowMedida);
                     }
                 }
@@ -612,35 +567,7 @@ class CalculadoraImportacionService
                 $productColumnIndex = $columnIndex;
                 $indexP=0;
                 //insert count total productos rows before current row
-                // IMPORTANTE: Insertar filas de una en una y limpiar comentarios inmediatamente
-                $numProductos = count($proveedor['productos']);
-                for ($i = 0; $i < $numProductos; $i++) {
-                    $rowToInsert = $currentRowProducto + $i;
-                    $sheetResumen->insertNewRowBefore($rowToInsert, 1);
-                    
-                    // Limpiar inmediatamente cualquier comentario que se haya copiado en la fila insertada
-                    try {
-                        $highestCol = $sheetResumen->getHighestColumn();
-                        $highestColIndex = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::columnIndexFromString($highestCol);
-                        for ($col = 1; $col <= min($highestColIndex, 26); $col++) { // Limpiar hasta columna Z
-                            $cellCoord = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($col) . $rowToInsert;
-                            try {
-                                $cell = $sheetResumen->getCell($cellCoord);
-                                if ($cell) {
-                                    $reflection = new \ReflectionClass($cell);
-                                    if ($reflection->hasMethod('setComment')) {
-                                        $method = $reflection->getMethod('setComment');
-                                        $method->invoke($cell, null);
-                                    }
-                                }
-                            } catch (\Exception $e) {
-                                // Continuar con la siguiente celda
-                            }
-                        }
-                    } catch (\Exception $e) {
-                        // Continuar si hay error al limpiar
-                    }
-                }
+                $sheetResumen->insertNewRowBefore($currentRowProducto, count($proveedor['productos']));
                 foreach ($proveedor['productos'] as $productoIndex => $producto) {
                     $productColumn = $getColumnLetter($productColumnIndex);
 
@@ -688,20 +615,17 @@ class CalculadoraImportacionService
                     $sheetResumen->setCellValue('A' . $currentRowProducto, $indexProducto);
 
                     $sheetResumen->setCellValue('B' . $currentRowProducto, "='2'!" . $productColumn . $rowProducto);
-                    //merge b to c - desmergear primero
-                    try { $sheetResumen->unmergeCells('B' . $currentRowProducto . ':D' . $currentRowProducto); } catch (\Exception $e) {}
+                    //merge b to c
                     $sheetResumen->mergeCells('B' . $currentRowProducto . ':D' . $currentRowProducto);
                     $sheetResumen->setCellValue('E' . $currentRowProducto, "='2'!" . $productColumn . $rowCantidad);
                     $sheetResumen->setCellValue('F' . $currentRowProducto, "='2'!" . $productColumn . $rowValorUnitario);
-                    //merge f to g - desmergear primero
-                    try { $sheetResumen->unmergeCells('F' . $currentRowProducto . ':G' . $currentRowProducto); } catch (\Exception $e) {}
+                    //merge f to g
                     $sheetResumen->mergeCells('F' . $currentRowProducto . ':G' . $currentRowProducto);
                     $sheetResumen->setCellValue('H' . $currentRowProducto, "='2'!" . $productColumn . $rowCostoUnitarioUSD);
                     $sheetResumen->setCellValue('I' . $currentRowProducto, "=E" . $currentRowProducto . "*H" . $currentRowProducto);
                     $sheetResumen->setCellValue('J' . $currentRowProducto, '=H' . $currentRowProducto . '*' . $tipoCambio);
 
-                    //MERGE J TO K - desmergear primero
-                    try { $sheetResumen->unmergeCells('J' . $currentRowProducto . ':K' . $currentRowProducto); } catch (\Exception $e) {}
+                    //MERGE J TO K
                     $sheetResumen->mergeCells('J' . $currentRowProducto . ':K' . $currentRowProducto);
                     $sheetResumen->duplicateStyle($sheetResumen->getStyle('A'.$startRowProducto), 'A' . $currentRowProducto . ':K' . $currentRowProducto);
                     //APPLY F H I CONTAINS DOLLAR FORMAT
@@ -808,56 +732,30 @@ class CalculadoraImportacionService
             $sheetCalculos->setCellValue($totalColumn . $rowCostoUnitarioPEN, '=ROUND(SUM(' . $initialColumn . $rowCostoUnitarioPEN . ':' . $sumColumn . $rowCostoUnitarioPEN . '),2)');
             
             // Limpiar celdas vacías en la hoja 2 después de la última columna de productos
-            // Limpiar bordes y formato de celdas vacías en columnas después de $sumColumn
             $sumColumnIndex = $initialColumnIndex + $totalProductos - 1;
             $totalColumnIndex = $initialColumnIndex + $totalProductos;
             
             // Limpiar celdas vacías en columnas después de la última columna de productos
-            // Limpiar desde la columna después de sumColumn hasta algunas columnas más adelante
-            // Especial atención a las filas 51-54 (rowCostoTotal, rowCostoCantidad, rowCostoUnitarioUSD, rowCostoUnitarioPEN)
-            for ($colIdx = $sumColumnIndex + 1; $colIdx < $totalColumnIndex + 10; $colIdx++) {
+            for ($colIdx = $sumColumnIndex + 1; $colIdx < $totalColumnIndex + 3; $colIdx++) {
                 $colLetter = $getColumnLetter($colIdx);
-                // Si es la columna de totales, saltarla
                 if ($colIdx == $totalColumnIndex) {
                     continue;
                 }
                 try {
                     $lastRow = max($rowCostoUnitarioPEN, $rowTotalTributos, $rowItemDestino, $rowPercepcion, $rowCostoTotal);
-                    // Limpiar todas las filas, con especial atención a las filas 51-54
                     for ($row = 1; $row <= $lastRow; $row++) {
                         $cell = $colLetter . $row;
                         try {
-                            // Desmergear primero si está mergeada
-                            $mergedCells = $sheetCalculos->getMergeCells();
-                            foreach ($mergedCells as $mergedRange) {
-                                if (strpos($mergedRange, $cell) !== false) {
-                                    try {
-                                        $sheetCalculos->unmergeCells($mergedRange);
-                                    } catch (\Exception $e) {
-                                        // Ignorar errores al desmergear
-                                    }
-                                }
-                            }
-                            
-                            // Limpiar el valor de la celda
                             $cellValue = $sheetCalculos->getCell($cell)->getValue();
-                            // Limpiar siempre las celdas después de la columna de totales en las filas 51-54
-                            if ($row >= $rowCostoTotal && $row <= $rowCostoUnitarioPEN) {
-                                $sheetCalculos->setCellValue($cell, '');
-                                // Limpiar formato
-                                $sheetCalculos->getStyle($cell)->getNumberFormat()->setFormatCode(\PhpOffice\PhpSpreadsheet\Style\NumberFormat::FORMAT_GENERAL);
-                            } elseif ($cellValue === null || $cellValue === '') {
+                            if ($cellValue === null || $cellValue === '') {
                                 $sheetCalculos->setCellValue($cell, '');
                             }
-                            
-                            // Limpiar bordes
-                            $sheetCalculos->getStyle($cell)->getBorders()->getAllBorders()->setBorderStyle(\PhpOffice\PhpSpreadsheet\Style\Border::BORDER_NONE);
                         } catch (\Exception $e) {
-                            // Ignorar errores al limpiar celdas individuales
+                            // Ignorar errores
                         }
                     }
                 } catch (\Exception $e) {
-                    // Ignorar errores al limpiar celdas
+                    // Ignorar errores
                 }
             }
             
@@ -911,115 +809,12 @@ class CalculadoraImportacionService
             $fileName = "COTIZACION_INICIAL_{$data['clienteInfo']['nombre']}_{$timestamp}.xlsx";
             $filePath = storage_path('app/public/templates/' . $fileName);
 
-            Log::info('[CREAR EXCEL] Preparando guardar archivo');
-            Log::info('[CREAR EXCEL] Nombre archivo: ' . $fileName);
-            Log::info('[CREAR EXCEL] Ruta completa: ' . $filePath);
-            Log::info('[CREAR EXCEL] Directorio existe: ' . (is_dir(dirname($filePath)) ? 'Sí' : 'No'));
-
             try {
-                // Eliminar TODOS los comentarios de forma más agresiva para evitar errores de recuperación
-                // Esto es crítico porque los comentarios corruptos causan el error de Excel
-                foreach ($objPHPExcel->getAllSheets() as $sheetIndex => $sheet) {
-                    try {
-                        // Obtener el rango completo de la hoja
-                        $highestRow = $sheet->getHighestRow();
-                        $highestColumn = $sheet->getHighestColumn();
-                        $highestColumnIndex = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::columnIndexFromString($highestColumn);
-                        
-                        // Iterar por todas las celdas y eliminar comentarios
-                        for ($row = 1; $row <= $highestRow; $row++) {
-                            for ($col = 1; $col <= $highestColumnIndex; $col++) {
-                                try {
-                                    $cellCoordinate = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($col) . $row;
-                                    $cell = $sheet->getCell($cellCoordinate);
-                                    
-                                    // Intentar eliminar el comentario usando reflection
-                                    if ($cell) {
-                                        try {
-                                            $reflection = new \ReflectionClass($cell);
-                                            if ($reflection->hasMethod('setComment')) {
-                                                $method = $reflection->getMethod('setComment');
-                                                $method->invoke($cell, null);
-                                            }
-                                        } catch (\ReflectionException $e) {
-                                            // Ignorar errores de reflection
-                                        }
-                                    }
-                                } catch (\Exception $e) {
-                                    // Continuar con la siguiente celda
-                                }
-                            }
-                        }
-                        
-                        // También intentar limpiar usando getComments si existe
-                        if (method_exists($sheet, 'getComments')) {
-                            try {
-                                $comments = $sheet->getComments();
-                                if (is_array($comments) && count($comments) > 0) {
-                                    foreach ($comments as $cellCoordinate => $comment) {
-                                        try {
-                                            $cell = $sheet->getCell($cellCoordinate);
-                                            if ($cell) {
-                                                $reflection = new \ReflectionClass($cell);
-                                                if ($reflection->hasMethod('setComment')) {
-                                                    $method = $reflection->getMethod('setComment');
-                                                    $method->invoke($cell, null);
-                                                }
-                                            }
-                                        } catch (\Exception $e) {
-                                            // Continuar
-                                        }
-                                    }
-                                }
-                            } catch (\Exception $e) {
-                                // Ignorar
-                            }
-                        }
-                    } catch (\Exception $e) {
-                        Log::warning('[CREAR EXCEL] Error al limpiar comentarios en hoja ' . $sheetIndex . ': ' . $e->getMessage());
-                    }
-                }
-                
-                Log::info('[CREAR EXCEL] Comentarios eliminados de todas las hojas');
-                
-                // Forzar recálculo de fórmulas antes de guardar para evitar referencias inválidas
-                try {
-                    $objPHPExcel->getActiveSheet()->getParent()->getCalculationEngine()->flushInstance();
-                } catch (\Exception $e) {
-                    Log::warning('[CREAR EXCEL] No se pudo limpiar el cálculo: ' . $e->getMessage());
-                }
-                
-                // Guardar el archivo con nombre único
-                Log::info('[CREAR EXCEL] Creando writer...');
-                $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($objPHPExcel);
-                
-                // Configurar el writer para no incluir comentarios
-                // Esto evita errores de recuperación en Excel
-                if (method_exists($writer, 'setIncludeCharts')) {
-                    $writer->setIncludeCharts(false);
-                }
-                
-                // Desactivar el cálculo automático temporalmente para evitar problemas
-                try {
-                    $objPHPExcel->getActiveSheet()->getParent()->getCalculationEngine()->disableCalculationCache();
-                } catch (\Exception $e) {
-                    // Ignorar si no está disponible
-                }
-                
-                Log::info('[CREAR EXCEL] Guardando archivo en: ' . $filePath);
+                $writer = \PhpOffice\PhpSpreadsheet\IOFactory::createWriter($objPHPExcel, 'Xlsx');
                 $writer->save($filePath);
-                
-                // Re-habilitar el cálculo después de guardar
-                try {
-                    $objPHPExcel->getActiveSheet()->getParent()->getCalculationEngine()->enableCalculationCache();
-                } catch (\Exception $e) {
-                    // Ignorar si no está disponible
-                }
-                Log::info('[CREAR EXCEL] Archivo guardado exitosamente');
 
                 // Verificar que el archivo se creó correctamente
                 if (!file_exists($filePath)) {
-                    Log::error('[CREAR EXCEL] ERROR: El archivo no se creó correctamente en: ' . $filePath);
                     return [
                         'url' => null,
                         'totalfob' => null,
@@ -1031,9 +826,7 @@ class CalculadoraImportacionService
 
                 // Verificar que el archivo no esté vacío
                 $fileSize = filesize($filePath);
-                Log::info('[CREAR EXCEL] Tamaño del archivo: ' . $fileSize . ' bytes');
                 if ($fileSize === 0) {
-                    Log::error('[CREAR EXCEL] ERROR: El archivo se creó pero está vacío: ' . $filePath);
                     return [
                         'url' => null,
                         'totalfob' => null,
@@ -1047,35 +840,25 @@ class CalculadoraImportacionService
                 $boletaInfo = null;
                 try {
                     $boletaInfo = $this->generateBoleta($objPHPExcel, $data['clienteInfo']);
-                    Log::info('Boleta PDF generada exitosamente: ' . $boletaInfo['filename']);
                 } catch (\Exception $e) {
-                    Log::warning('No se pudo generar la boleta PDF: ' . $e->getMessage());
                     // Continuar sin la boleta
                 }
 
                 $publicUrl = Storage::url('templates/' . $fileName);
-                Log::info('[CREAR EXCEL] URL pública generada: ' . $publicUrl);
                 
-                Log::info('[CREAR EXCEL] Calculando valores del Excel...');
                 $totalFob = $sheetCalculos->getCell($totalColumn . $rowValorFob)->getCalculatedValue();
                 $totalImpuestos = $sheetCalculos->getCell($totalColumn . $rowTotalTributos)->getCalculatedValue();
-                $logistica = $sheetResumen->getCell('J31')->getCalculatedValue();
+                //j30 + j31 if is number else 0
+                $logistica = is_numeric($sheetResumen->getCell('J30')->getCalculatedValue()) && is_numeric($sheetResumen->getCell('J31')->getCalculatedValue()) ? $sheetResumen->getCell('J30')->getCalculatedValue() + $sheetResumen->getCell('J31')->getCalculatedValue() : 0;
                 
-                Log::info('[CREAR EXCEL] Valores calculados - FOB: ' . $totalFob . ', Impuestos: ' . $totalImpuestos . ', Logística: ' . $logistica);
-                
-                $result = [
+                return [
                     'url' => $publicUrl,
                     'totalfob' => $totalFob,
                     'totalimpuestos' => $totalImpuestos,
                     'logistica' => $logistica,
                     'boleta' => $boletaInfo
                 ];
-                
-                Log::info('[CREAR EXCEL] Retornando resultado exitoso: ' . json_encode($result));
-                return $result;
             } catch (\Exception $e) {
-                Log::error('[CREAR EXCEL] ERROR al guardar el archivo: ' . $e->getMessage());
-                Log::error('[CREAR EXCEL] Stack trace: ' . $e->getTraceAsString());
                 return [
                     'url' => null,
                     'totalfob' => null,
@@ -1085,8 +868,6 @@ class CalculadoraImportacionService
                 ];
             }
         } catch (\Exception $e) {
-            Log::error('[CREAR EXCEL] ERROR al leer plantilla de cotización inicial: ' . $e->getMessage());
-            Log::error('[CREAR EXCEL] Stack trace: ' . $e->getTraceAsString());
             return [
                 'url' => null,
                 'totalfob' => null,
