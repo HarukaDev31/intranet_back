@@ -991,6 +991,7 @@ Por lo tanto, dile a tu proveedor #{$supplierCode} que le ponga la etiqueta.
 
             // Empezar desde la fila 3
             $startRow = 3;
+            $endRow = $startRow + count($codes) - 1;
 
             // Agregar datos en las columnas B y F
             foreach ($codes as $index => $code) {
@@ -1002,6 +1003,29 @@ Por lo tanto, dile a tu proveedor #{$supplierCode} que le ponga la etiqueta.
                 // Columna F: Código
                 $worksheet->setCellValue("F{$row}", $code);
             }
+
+            // Hacer más ancha la columna F (VIM number)
+            $worksheet->getColumnDimension('F')->setWidth(25);
+
+            // Mergear la columna B para todo el rango generado
+            if (count($codes) > 1) {
+                $worksheet->mergeCells("B{$startRow}:B{$endRow}");
+                // Centrar vertical y horizontalmente el contenido mergeado
+                $worksheet->getStyle("B{$startRow}")->getAlignment()
+                    ->setHorizontal(Alignment::HORIZONTAL_CENTER)
+                    ->setVertical(Alignment::VERTICAL_CENTER);
+            }
+
+            // Aplicar bordes a todo el rango generado (desde B hasta F)
+            $borderStyle = [
+                'borders' => [
+                    'allBorders' => [
+                        'borderStyle' => Border::BORDER_THIN,
+                        'color' => ['rgb' => '000000']
+                    ]
+                ]
+            ];
+            $worksheet->getStyle("B{$startRow}:F{$endRow}")->applyFromArray($borderStyle);
 
             // Guardar el archivo modificado
             $writer = IOFactory::createWriter($spreadsheet, 'Xlsx');
