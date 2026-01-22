@@ -855,8 +855,247 @@ class CotizacionController extends Controller
             ], 500);
         }
     }
+    /**
+     * @OA\Post(
+     *     path="/carga-consolidada/contenedor/cotizaciones/from-calculadora",
+     *     tags={"Cotizaciones"},
+     *     summary="Crear cotización desde calculadora",
+     *     description="Crea una nueva cotización desde calculadora subiendo un archivo Excel",
+     *     operationId="storeFromCalculadora",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\MediaType(
+     *             mediaType="multipart/form-data",
+     *             @OA\Schema(
+     *                 @OA\Property(property="id_contenedor", type="integer"),
+     *                 @OA\Property(property="cotizacion", type="string", format="binary")
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Cotización creada exitosamente"),
+     *     @OA\Response(response=400, description="Datos inválidos"),
+     *     @OA\Response(response=404, description="Contenedor no encontrado")
+     * )
+     */
+    public function storeFromCalculadora(Request $request)
+    {
+        try {
+            // Validar los datos requeridos
+            if (!$request->has('id_contenedor')) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'El ID del contenedor es requerido'
+                ], 400);
+            }
+
+            // Validar que el contenedor existe
+            $contenedor = Contenedor::find($request->id_contenedor);
+            if (!$contenedor) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'El contenedor especificado no existe'
+                ], 404);
+            }
+
+            // Validar el archivo subido
+            if (!$request->hasFile('cotizacion')) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'No se ha proporcionado ningún archivo'
+                ], 400);
+            }
+
+            $file = $request->file('cotizacion');
+
+            // Crear un directorio temporal si no existe
+            $tempPath = storage_path('app/temp');
+            if (!file_exists($tempPath)) {
+                mkdir($tempPath, 0755, true);
+            }
+
+            // Mover el archivo a nuestro directorio temporal
+            $tempFileName = uniqid('cotizacion_') . '.' . $file->getClientOriginalExtension();
+            $tempFilePath = $tempPath . '/' . $tempFileName;
+
+            // Copiar el archivo al directorio temporal
+            copy($file->getRealPath(), $tempFilePath);
 
 
+            $cotizacion = [
+                'name' => $file->getClientOriginalName(),
+                'type' => $file->getMimeType(),
+                'tmp_name' => $tempFilePath,
+                'error' => 0,
+                'size' => $file->getSize()
+            ];
+
+            // Iniciar transacción de base de datos para todo el flujo
+            DB::beginTransaction();
+
+            try {
+                // Subir archivo usando el sistema de almacenamiento de Laravel
+                $fileName = time() . '_' . $file->getClientOriginalName();
+                $fileUrl = $file->storeAs('public/agentecompra', $fileName);
+
+                if (!$fileUrl) {
+                    Log::error('Error al subir archivo usando Laravel Storage');
+                    DB::rollBack();
+                    return response()->json([
+                        'status' => 'error',
+                        'success' => false,
+                        'message' => 'Error al subir el archivo'
+                    ], 500);
+                }
+
+                // Convertir la ruta de storage a URL pública
+                $fileUrl = Storage::url($fileUrl);
+                // Convertir a ruta con CORS habilitado
+                $fileUrl = route('storage.file', ['path' => str_replace('public/', '', $fileUrl)]);
+                Log::info('Cotizacion desde calculadora: ' . json_encode($cotizacion));
+                Log::info('Data: ' . $fileUrl);
+
+                $dataToInsert = $this->getCotizacionDataFromCalculadora($cotizacion);
+
+                // Verificar si getCotizacionDataFromCalculadora devolvió un error
+                if (!is_array($dataToInsert)) {
+                    DB::rollBack();
+                    Storage::delete($fileUrl); // Limpiar el archivo si hay error
+                    return response()->json([
+                        'status' => 'error',
+                        'success' => false,
+                        'message' => 'Error al procesar el archivo: ' . $dataToInsert
+                    ], 500);
+                }
+
+                $dataToInsert['cotizacion_file_url'] = $fileUrl;
+                $dataToInsert['id_contenedor'] = $request->id_contenedor;
+                $dataToInsert['id_usuario'] = Auth::id();
+                $dataToInsert['uuid'] = Str::uuid();
+                // Crear la cotización
+                $cotizacionModel = Cotizacion::create($dataToInsert);
+
+                if (!$cotizacionModel) {
+                    DB::rollBack();
+                    Storage::delete($fileUrl);
+                    return response()->json([
+                        'status' => 'error',
+                        'success' => false,
+                        'message' => 'No se pudo crear la cotización'
+                    ], 500);
+                }
+
+                $idCotizacion = $cotizacionModel->id;
+                $dataToInsert['id_cotizacion'] = $idCotizacion;
+
+                // Obtener datos de proveedores
+                $dataEmbarque = $this->getEmbarqueData($cotizacion, $dataToInsert);
+
+                // Insertar proveedores (uno por uno) y sus items si existen
+                if (!empty($dataEmbarque)) {
+                    try {
+                        $insertedCount = 0;
+                        foreach ($dataEmbarque as $prov) {
+                            $items = isset($prov['items']) ? $prov['items'] : [];
+                            if (isset($prov['items'])) {
+                                unset($prov['items']);
+                            }
+                            $provModel = CotizacionProveedor::create($prov);
+                            $insertedCount++;
+                            if ($provModel && !empty($items)) {
+                                foreach ($items as $item) {
+                                    \App\Models\CargaConsolidada\CotizacionProveedorItem::create([
+                                        'id_contenedor' => $provModel->id_contenedor,
+                                        'id_cotizacion' => $provModel->id_cotizacion,
+                                        'id_proveedor' => $provModel->id,
+                                        'initial_price' => $item['initial_price'] ?? null,
+                                        'initial_qty' => $item['initial_qty'] ?? null,
+                                        'initial_name' => $item['initial_name'] ?? null,
+                                        'final_price' => $item['final_price'] ?? null,
+                                        'final_qty' => $item['final_qty'] ?? null,
+                                        'final_name' => $item['final_name'] ?? null,
+                                        'tipo_producto' => $item['tipo_producto'] ?? 'GENERAL',
+                                    ]);
+                                }
+                            }
+                        }
+                        Log::info('Proveedores insertados correctamente: ' . $insertedCount);
+                    } catch (\Exception $e) {
+                        Log::error('Error al insertar proveedores: ' . $e->getMessage());
+                        DB::rollBack();
+                        Storage::delete($fileUrl);
+                        return response()->json([
+                            'status' => 'error',
+                            'success' => false,
+                            'message' => 'Error al insertar proveedores: ' . $e->getMessage()
+                        ], 500);
+                    }
+                }
+
+                $nombre = $dataToInsert['nombre'];
+
+                // Ya tenemos el contenedor validado desde el inicio
+                $f_cierre = $contenedor->f_cierre;
+
+                $message = 'Hola ' . $nombre . ' pudiste revisar la cotización enviada? 
+                Te comento que cerramos nuestro consolidado este ' . $f_cierre . ' Por favor si cuentas con alguna duda me avisas y puedo llamarte para aclarar tus dudas.';
+
+                $telefono = preg_replace('/\s+/', '', $dataToInsert['telefono']);
+                $telefono = $telefono ? $telefono . '@c.us' : '';
+
+                $data_json = [
+                    'message' => $message,
+                    'phoneNumberId' => $telefono,
+                ];
+
+                // Aquí podrías agregar la lógica para guardar en la tabla de crons si es necesario
+
+                // Si todo salió bien, confirmar la transacción
+                DB::commit();
+
+                // Crear notificación para Coordinación
+                $this->crearNotificacionCoordinacion($cotizacionModel, $contenedor);
+
+                // Limpiar el archivo temporal
+                if (file_exists($cotizacion['tmp_name'])) {
+                    unlink($cotizacion['tmp_name']);
+                }
+
+                return response()->json([
+                    'id' => $idCotizacion,
+                    'status' => 'success',
+                    'success' => true,
+                    'message' => 'Cotización creada exitosamente'
+                ]);
+            } catch (\Exception $e) {
+                // En caso de cualquier error, hacer rollback y limpiar archivos
+                DB::rollBack();
+
+                if (isset($fileUrl)) {
+                    Storage::delete($fileUrl);
+                }
+
+                // Limpiar archivo temporal
+                if (file_exists($cotizacion['tmp_name'])) {
+                    unlink($cotizacion['tmp_name']);
+                }
+
+                Log::error('Error en store de cotizaciones: ' . $e->getMessage());
+                return response()->json([
+                    'status' => 'error',
+                    'success' => false,
+                    'message' => 'Error al procesar la cotización: ' . $e->getMessage()
+                ], 500);
+            }
+        } catch (\Exception $e) {
+            Log::error('Error en store de cotizaciones: ' . $e->getMessage());
+            return response()->json([
+                'status' => 'error',
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 500);
+        }
+    }
   
     /**
      * @OA\Delete(
@@ -1070,6 +1309,11 @@ class CotizacionController extends Controller
     }
 
     /**
+     * Extrae datos de una cotización desde un archivo Excel para calculadora
+     * @param array $cotizacion Array con información del archivo subido
+     * @return array|string Datos extraídos o mensaje de error
+     */
+    /**
      * Extrae datos de una cotización desde un archivo Excel
      * @param array $cotizacion Array con información del archivo subido
      * @return array|string Datos extraídos o mensaje de error
@@ -1156,6 +1400,113 @@ class CotizacionController extends Controller
                 'qty_item' => $qtyItem
             ];
             Log::error('Data: ' . json_encode($data));
+            return $data;
+        } catch (Exception $e) {
+            return $e->getMessage();
+        }
+    }
+
+    /**
+     * Extrae datos de una cotización desde un archivo Excel para calculadora
+     * @param array $cotizacion Array con información del archivo subido
+     * @return array|string Datos extraídos o mensaje de error
+     */
+    public function getCotizacionDataFromCalculadora($cotizacion)
+    {
+        try {
+            if (!file_exists($cotizacion['tmp_name'])) {
+                Log::error('Archivo no encontrado en: ' . $cotizacion['tmp_name']);
+                return 'Archivo no encontrado: ' . $cotizacion['tmp_name'];
+            }
+
+            Log::info('Intentando cargar archivo desde calculadora: ' . $cotizacion['tmp_name']);
+
+            try {
+                $objPHPExcel = IOFactory::load($cotizacion['tmp_name']);
+            } catch (\Exception $e) {
+                Log::error('Error al cargar archivo Excel: ' . $e->getMessage());
+                return 'Error al cargar archivo Excel: ' . $e->getMessage();
+            }
+
+            $sheet = $objPHPExcel->getSheet(0);
+            $nombre = $sheet->getCell('B8')->getValue();
+            $documento = $sheet->getCell('B9')->getValue();
+            $correo = $sheet->getCell('B10')->getValue();
+            $telefono = $sheet->getCell('B11')->getValue();
+            $volumen = $sheet->getCell('I11')->getCalculatedValue();
+            $valorCot = $sheet->getCell('J14')->getCalculatedValue();
+
+            //get calculated value from cell e9
+            $fecha = $sheet->getCell('E9')->getValue();
+            if ($fecha == "=+TODAY()") {
+                $fecha = date("Y-m-d");
+            } else {
+                $fecha = $this->convertDateFormat($fecha);
+            }
+
+            $tipoCliente = $sheet->getCell('E11')->getValue();
+
+            //find if exists in table contenedor_consolidado_tipo_cliente with name = $tipoCliente else create new and get id
+            $tipoClienteModel = TipoCliente::where('name', $tipoCliente)->first();
+            if (!$tipoClienteModel) {
+                $tipoClienteModel = TipoCliente::create(['name' => $tipoCliente]);
+            }
+            $idTipoCliente = $tipoClienteModel->id;
+
+            // Para calculadora: FOB siempre es de J14
+            $fob = $sheet->getCell('J14')->getOldCalculatedValue();
+            
+            // Lógica diferente para calculadora según ANTIDUMPING
+            $antidumping = trim($sheet->getCell('A23')->getValue()) == "ANTIDUMPING";
+            Log::info('ANTIDUMPING: ' . $antidumping);
+            if (!$antidumping) {
+                // Si hay ANTIDUMPING: monto de J30, impuestos de J32
+                $monto = $sheet->getCell('J29')->getOldCalculatedValue();
+                $impuestos = $sheet->getCell('J32')->getOldCalculatedValue();
+                $extra = $sheet->getCell('J30')->getOldCalculatedValue() ?? 0;
+            } else {
+                // Si NO hay ANTIDUMPING: monto de J30 (servicio + cargos - descuento + impuestos), impuestos de J33
+                $monto = $sheet->getCell('J30')->getOldCalculatedValue();
+                $impuestos = $sheet->getCell('J33')->getOldCalculatedValue();
+                $extra = $sheet->getCell('J31')->getOldCalculatedValue() ?? 0;
+                if ($extra == 0) {
+                    $extra = $sheet->getCell('J31')->getCalculatedValue();
+                    Log::info('EXTRA: ' . $extra);
+                }
+                Log::info('EXTRA: ' . $extra);
+            }
+
+            $tarifa = $monto / (($volumen <= 0 ? 1 : $volumen) < 1.00 ? 1 : ($volumen <= 0 ? 1 : $volumen));
+            $peso = $sheet->getCell('I9')->getOldCalculatedValue();
+            $highestRow = $sheet->getHighestRow();
+            $qtyItem = 0;
+            //
+            $monto = $monto + $extra;
+            Log::info('MONTO: ' . $monto);
+            for ($row = 36; $row <= $highestRow; $row++) {
+                $cellValue = $sheet->getCell('A' . $row)->getValue();
+                if (is_numeric($cellValue) && $cellValue > 0) {
+                    $qtyItem++;
+                }
+            }
+
+            $data = [
+                'nombre' => $nombre,
+                'documento' => $documento,
+                'correo' => $correo,
+                'telefono' => $telefono,
+                'volumen' => $volumen,
+                'id_tipo_cliente' => $idTipoCliente,
+                'fecha' => $fecha,
+                'valor_cot' => $valorCot,
+                'monto' => $monto,
+                'tarifa' => $tarifa,
+                'peso' => $peso,
+                'fob' => $fob,
+                'impuestos' => $impuestos,
+                'qty_item' => $qtyItem
+            ];
+            Log::info('Data desde calculadora: ' . json_encode($data));
             return $data;
         } catch (Exception $e) {
             return $e->getMessage();

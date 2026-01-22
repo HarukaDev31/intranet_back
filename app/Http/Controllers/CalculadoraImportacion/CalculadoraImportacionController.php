@@ -337,11 +337,12 @@ class CalculadoraImportacionController extends Controller
                 $calculadora->nombre_creador = optional($calculadora->creador)->No_Nombres_Apellidos;
                 //vendedor id_usuario
                 $calculadora->nombre_vendedor = optional($calculadora->vendedor)->No_Nombres_Apellidos;
-                $calculadora->carga_contenedor = 'Contenedor #' . optional($calculadora->contenedor)->carga . '-' . ($calculadora->contenedor ? Carbon::parse($calculadora->contenedor->f_inicio)->format('Y') : '2025');
+                $calculadora->carga_contenedor = '  #' . optional($calculadora->contenedor)->carga . '-' . ($calculadora->contenedor ? Carbon::parse($calculadora->contenedor->f_inicio)->format('Y') : '2025');
             }
             //get filters estado calculadora, all contenedores carga id,
-            //get all containers label=carga value=id
-            $contenedores = Contenedor::all();
+            //get all containers label=carga value=id (solo del año actual)
+            $anioActual = Carbon::now()->year;
+            $contenedores = Contenedor::whereYear('f_inicio', $anioActual)->get();
             $contenedores = $contenedores->map(function ($contenedor) {
                 return [
                     'id' => $contenedor->id,
@@ -351,6 +352,10 @@ class CalculadoraImportacionController extends Controller
             });
             //get all estados calculadora label=estado value=estado
             $estadoCalculadora = CalculadoraImportacion::getEstadosDisponiblesFilter();
+            
+            // Contar cotizaciones vendidas (estado COTIZADO)
+            $cotizacionesVendidas = CalculadoraImportacion::where('estado', 'COTIZADO')->count();
+            
             return response()->json([
                 'success' => true,
                 'data' => $data,
@@ -365,7 +370,11 @@ class CalculadoraImportacionController extends Controller
                 'headers' => [
                     'total_clientes' => [
                         'value' => $calculos->total(),
-                        'label' => 'Total Cotizaciones Realizadas'
+                        'label' => 'Cotizaciones Realizadas'
+                    ],
+                    'cotizaciones_vendidas' => [
+                        'value' => $cotizacionesVendidas,
+                        'label' => 'Cotizaciones Vendidas'
                     ],
                 ],
                 'filters' => [
@@ -393,15 +402,33 @@ class CalculadoraImportacionController extends Controller
     public function store(Request $request)
     {
         try {
+            // Convertir strings vacíos a null en campos numéricos de productos
+            $data = $request->all();
+            if (isset($data['proveedores']) && is_array($data['proveedores'])) {
+                foreach ($data['proveedores'] as $i => $proveedor) {
+                    if (isset($proveedor['productos']) && is_array($proveedor['productos'])) {
+                        foreach ($proveedor['productos'] as $j => $producto) {
+                            if (isset($producto['antidumpingCU']) && $producto['antidumpingCU'] === '') {
+                                $data['proveedores'][$i]['productos'][$j]['antidumpingCU'] = null;
+                            }
+                            if (isset($producto['adValoremP']) && $producto['adValoremP'] === '') {
+                                $data['proveedores'][$i]['productos'][$j]['adValoremP'] = null;
+                            }
+                        }
+                    }
+                }
+            }
+            $request->merge($data);
+
             $request->validate([
                 'id' => 'nullable|integer|exists:calculadora_importacion,id',
                 'clienteInfo.nombre' => 'required|string',
                 'clienteInfo.tipoDocumento' => 'required|string|in:DNI,RUC',
-                'clienteInfo.dni' => 'required_if:clienteInfo.tipoDocumento,DNI|string|nullable',
-                'clienteInfo.ruc' => 'required_if:clienteInfo.tipoDocumento,RUC|string|nullable',
+                'clienteInfo.dni' => 'sometimes:clienteInfo.tipoDocumento,DNI|string|nullable',
+                'clienteInfo.ruc' => 'sometimes:clienteInfo.tipoDocumento,RUC|string|nullable',
                 'clienteInfo.empresa' => 'required_if:clienteInfo.tipoDocumento,RUC|string|nullable',
                 'clienteInfo.whatsapp' => 'nullable|string',
-                'clienteInfo.correo' => 'nullable|email',
+                'clienteInfo.correo' => 'nullable|string',
                 'clienteInfo.tipoCliente' => 'required|string',
                 'clienteInfo.qtyProveedores' => 'required|integer|min:1',
                 'proveedores' => 'required|array|min:1',
@@ -813,7 +840,7 @@ class CalculadoraImportacionController extends Controller
 
                         // Llamar al método store del CotizacionController
                         $cotizacionController = app(CotizacionController::class);
-                        $response = $cotizacionController->store($storeRequest);
+                        $response = $cotizacionController->storeFromCalculadora($storeRequest);
                         $responseData = json_decode($response->getContent(), true);
 
                         // Limpiar archivo temporal
