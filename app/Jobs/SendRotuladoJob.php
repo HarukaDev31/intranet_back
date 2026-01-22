@@ -1007,6 +1007,15 @@ Por lo tanto, dile a tu proveedor #{$supplierCode} que le ponga la etiqueta.
             // Hacer más ancha la columna F (VIM number)
             $worksheet->getColumnDimension('F')->setWidth(30);
 
+            // Primero desmergear cualquier celda mergeada en el rango de la columna B
+            // Intentar desmergear el rango completo primero
+            try {
+                $worksheet->unmergeCells("B{$startRow}:B{$endRow}");
+            } catch (\Exception $e) {
+                // Si no hay celdas mergeadas, ignorar el error
+                Log::info('No se encontraron celdas mergeadas para desmergear en B' . $startRow . ':B' . $endRow);
+            }
+
             // Mergear la columna B para todo el rango generado
             if (count($codes) > 1) {
                 $worksheet->mergeCells("B{$startRow}:B{$endRow}");
@@ -1016,7 +1025,7 @@ Por lo tanto, dile a tu proveedor #{$supplierCode} que le ponga la etiqueta.
                     ->setVertical(Alignment::VERTICAL_CENTER);
             }
 
-            // Aplicar bordes a todo el rango generado (desde B hasta F)
+            // Aplicar bordes a todo el rango generado (desde B hasta G)
             $borderStyle = [
                 'borders' => [
                     'allBorders' => [
@@ -1025,7 +1034,7 @@ Por lo tanto, dile a tu proveedor #{$supplierCode} que le ponga la etiqueta.
                     ]
                 ]
             ];
-            $worksheet->getStyle("B{$startRow}:F{$endRow}")->applyFromArray($borderStyle);
+            $worksheet->getStyle("B{$startRow}:G{$endRow}")->applyFromArray($borderStyle);
 
             // Guardar el archivo modificado
             $writer = IOFactory::createWriter($spreadsheet, 'Xlsx');
