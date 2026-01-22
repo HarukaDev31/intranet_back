@@ -993,12 +993,15 @@ Por lo tanto, dile a tu proveedor #{$supplierCode} que le ponga la etiqueta.
             $startRow = 3;
             $endRow = $startRow + count($codes) - 1;
 
-            // Agregar datos en las columnas B y F
+            // Agregar datos en las columnas B, C y F
             foreach ($codes as $index => $code) {
                 $row = $startRow + $index;
 
                 // Columna B: Nombre del cliente
                 $worksheet->setCellValue("B{$row}", $clienteNombre);
+
+                // Columna C: Índice (1, 2, 3, etc.)
+                $worksheet->setCellValue("C{$row}", $index + 1);
 
                 // Columna F: Código
                 $worksheet->setCellValue("F{$row}", $code);
