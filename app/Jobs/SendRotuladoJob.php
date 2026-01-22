@@ -840,7 +840,7 @@ Por lo tanto, dile a tu proveedor #{$supplierCode} que le ponga la etiqueta.
 
             for ($i = 0; $i < $qtyBox; $i++) {
                 $newNumber = $startNumber + $i;
-                $newCode = sprintf('L7NES%sMSG%06d', $matches[1], $newNumber);
+                $newCode = sprintf('L7NES%sMTG%06d', $matches[1], $newNumber);
                 $codes[] = $newCode;
             }
 

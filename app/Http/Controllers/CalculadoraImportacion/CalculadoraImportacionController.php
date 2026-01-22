@@ -352,10 +352,10 @@ class CalculadoraImportacionController extends Controller
             });
             //get all estados calculadora label=estado value=estado
             $estadoCalculadora = CalculadoraImportacion::getEstadosDisponiblesFilter();
-            
+
             // Contar cotizaciones vendidas (estado COTIZADO)
             $cotizacionesVendidas = CalculadoraImportacion::where('estado', 'COTIZADO')->count();
-            
+
             return response()->json([
                 'success' => true,
                 'data' => $data,
@@ -450,7 +450,7 @@ class CalculadoraImportacionController extends Controller
             // Si viene ID, es una actualización
             if ($request->has('id') && $request->id) {
                 $calculadora = CalculadoraImportacion::find($request->id);
-                
+
                 if (!$calculadora) {
                     return response()->json([
                         'success' => false,
@@ -468,7 +468,7 @@ class CalculadoraImportacionController extends Controller
 
                 // Actualizar usando el servicio
                 $calculadora = $this->calculadoraImportacionService->actualizarCalculo($calculadora, $data);
-                
+
                 $totales = $this->calculadoraImportacionService->calcularTotales($calculadora);
 
                 return response()->json([
@@ -567,7 +567,6 @@ class CalculadoraImportacionController extends Controller
                 'result' => $result
             ]);
             return false;
-
         } catch (\Exception $e) {
             Log::error('Excepción al actualizar cotización: ' . $e->getMessage(), [
                 'calculadora_id' => $calculadora->id
@@ -803,6 +802,11 @@ class CalculadoraImportacionController extends Controller
                     $calculadora->cod_cotizacion = 'CO' . date('m') . date('y') . str_pad($newSequentialNumber, 4, '0', STR_PAD_LEFT);
 
                     $calculadora->save();
+                }
+
+                // Modificar el Excel para agregar fechas de pago
+                if ($calculadora->url_cotizacion && $calculadora->id_carga_consolidada_contenedor) {
+                    $this->modificarExcelConFechas($calculadora);
                 }
                 if (!$calculadora->id_cotizacion && $calculadora->id_carga_consolidada_contenedor && $calculadora->url_cotizacion) {
                     // Descargar el archivo Excel desde la URL
@@ -1089,6 +1093,151 @@ class CalculadoraImportacionController extends Controller
             return null;
         } catch (\Exception $e) {
             Log::error('Error al descargar archivo: ' . $e->getMessage(), ['url' => $fileUrl]);
+            return null;
+        }
+    }
+
+    /**
+     * Modificar Excel para agregar fechas de pago en columna P
+     */
+    private function modificarExcelConFechas($calculadora)
+    {
+        try {
+            // Cargar relaciones necesarias
+            $calculadora->load(['contenedor', 'proveedores.productos']);
+
+            // Obtener el contenedor
+            $contenedor = $calculadora->contenedor;
+            if (!$contenedor) {
+                Log::warning('No se encontró contenedor para la calculadora', ['calculadora_id' => $calculadora->id]);
+                return;
+            }
+
+            // Obtener fechas del contenedor
+            $fechaCorte = $contenedor->f_cierre ? Carbon::parse($contenedor->f_cierre)->format('d/m/Y') : null;
+            $fechaArribo = $contenedor->f_puerto ? Carbon::parse($contenedor->f_puerto)->format('d/m/Y') : null;
+            Log::info('Fechas del contenedor: ' . $fechaCorte . ' - ' . $fechaArribo);
+            if (!$fechaCorte || !$fechaArribo) {
+                Log::warning('Fechas del contenedor no disponibles', [
+                    'calculadora_id' => $calculadora->id,
+                    'fecha_corte' => $fechaCorte,
+                    'fecha_arribo' => $fechaArribo
+                ]);
+                return;
+            }
+
+            // Contar número de items (productos de todos los proveedores)
+            $totalItems = 0;
+            foreach ($calculadora->proveedores as $proveedor) {
+                $totalItems += $proveedor->productos->count();
+            }
+
+            // Obtener el archivo Excel
+            $fileUrl = $calculadora->url_cotizacion;
+            $fileContents = $this->downloadFileFromUrl($fileUrl);
+
+            if (!$fileContents) {
+                Log::error('No se pudo descargar el archivo Excel para modificar', [
+                    'calculadora_id' => $calculadora->id,
+                    'url' => $fileUrl
+                ]);
+                return;
+            }
+
+            // Crear archivo temporal
+            $tempPath = storage_path('app/temp');
+            if (!file_exists($tempPath)) {
+                mkdir($tempPath, 0755, true);
+            }
+
+            $extension = pathinfo($fileUrl, PATHINFO_EXTENSION) ?: 'xlsx';
+            $tempFileName = uniqid('excel_modify_') . '.' . $extension;
+            $tempFilePath = $tempPath . '/' . $tempFileName;
+            file_put_contents($tempFilePath, $fileContents);
+
+            // Abrir el archivo Excel con PhpSpreadsheet
+            $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($tempFilePath);
+            $sheet = $spreadsheet->getActiveSheet();
+            // Calcular las filas
+            $filaServicioConsolidado = 37 + $totalItems + 4;
+            $filaPagoImpuestos = 37 + $totalItems + 5;
+            // Escribir en las celdas de la columna P
+            $sheet->setCellValue('P' . $filaServicioConsolidado, 'Servicio de Consolidado antes de la Fecha de Corte ' . $fechaCorte);
+            $sheet->setCellValue('P' . $filaPagoImpuestos, 'Pago de Impuestos antes del Arribo ' . $fechaArribo);
+
+            // Guardar el archivo modificado
+            $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
+            $writer->save($tempFilePath);
+
+            // Obtener la ruta de destino del archivo original
+            $destinoPath = $this->getFilePathFromUrl($fileUrl);
+            if ($destinoPath && file_exists(dirname($destinoPath))) {
+                // Copiar el archivo modificado a la ubicación original
+                copy($tempFilePath, $destinoPath);
+                Log::info('Excel modificado exitosamente', [
+                    'calculadora_id' => $calculadora->id,
+                    'fila_servicio' => $filaServicioConsolidado,
+                    'fila_impuestos' => $filaPagoImpuestos,
+                    'total_items' => $totalItems
+                ]);
+            } else {
+                Log::warning('No se pudo determinar la ruta de destino del archivo', [
+                    'calculadora_id' => $calculadora->id,
+                    'url' => $fileUrl
+                ]);
+            }
+
+            // Limpiar archivo temporal
+            if (file_exists($tempFilePath)) {
+                unlink($tempFilePath);
+            }
+        } catch (\Exception $e) {
+            Log::error('Error al modificar Excel con fechas: ' . $e->getMessage(), [
+                'calculadora_id' => $calculadora->id,
+                'trace' => $e->getTraceAsString()
+            ]);
+        }
+    }
+
+    /**
+     * Obtener ruta del archivo desde URL
+     */
+    private function getFilePathFromUrl($url)
+    {
+        try {
+            // Si es una URL completa, extraer la ruta relativa
+            if (strpos($url, 'http') === 0) {
+                $parsedUrl = parse_url($url);
+                $path = $parsedUrl['path'] ?? '';
+
+                // Remover /storage/ del inicio si existe
+                if (strpos($path, '/storage/') === 0) {
+                    $path = substr($path, 9); // Remover '/storage/'
+                }
+
+                return storage_path('app/public/' . $path);
+            }
+
+            // Si es una ruta relativa
+            if (strpos($url, '/storage/') === 0) {
+                $path = substr($url, 9); // Remover '/storage/'
+                return storage_path('app/public/' . $path);
+            }
+
+            // Si es solo el nombre del archivo o ruta directa
+            if (file_exists($url)) {
+                return $url;
+            }
+
+            // Intentar en storage público
+            $publicPath = storage_path('app/public/' . ltrim($url, '/'));
+            if (file_exists($publicPath)) {
+                return $publicPath;
+            }
+
+            return null;
+        } catch (\Exception $e) {
+            Log::error('Error al obtener ruta del archivo: ' . $e->getMessage(), ['url' => $url]);
             return null;
         }
     }

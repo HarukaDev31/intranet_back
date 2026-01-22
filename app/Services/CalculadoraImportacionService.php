@@ -10,12 +10,17 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use App\Models\CargaConsolidada\Cotizacion;
+use App\Models\CargaConsolidada\CotizacionProveedor;
+use App\Models\CargaConsolidada\CotizacionProveedorItem;
+use App\Models\CargaConsolidada\FacturaComercial;
 
 class CalculadoraImportacionService
 {
     public $TCAMBIO = 3.75;
     public $formatoDollar = '"$"#,##0.00_-';
     public $formatoSoles = '"S/." #,##0.00_-';
+    public $formatoTexto = 'General';
     /**
      * Guardar cálculo de importación completo
      */
@@ -361,7 +366,7 @@ class CalculadoraImportacionService
         ];
 
         foreach ($calculadora->proveedores as $proveedor) {
-            $totales['total_cbm'] += $proveedor->cbm;
+            $totales['total_cbm'] += round($proveedor->cbm, 2);
             $totales['total_peso'] += $proveedor->peso;
 
             foreach ($proveedor->productos as $producto) {
@@ -371,7 +376,8 @@ class CalculadoraImportacionService
                 $totales['total_ad_valorem'] += $producto->total_ad_valorem;
             }
         }
-
+        $totales['total_cbm'] = round($totales['total_cbm'], 2);
+        $totales['total_peso'] = round($totales['total_peso'], 2);
         return $totales;
     }
 
@@ -380,12 +386,43 @@ class CalculadoraImportacionService
      */
     public function eliminarCalculo(int $id): bool
     {
+        DB::beginTransaction(); 
         try {
             $calculadora = CalculadoraImportacion::findOrFail($id);
-            $calculadora->delete(); // Esto eliminará en cascada proveedores y productos
+            
+            // Si la calculadora tiene cotización, eliminar primero los registros relacionados
+            if ($calculadora->id_cotizacion) {
+                $cotizacionId = $calculadora->id_cotizacion;
+                
+                // Obtener los proveedores de la cotización
+                $proveedores = CotizacionProveedor::where('id_cotizacion', $cotizacionId)->get();
+                
+                // Eliminar items de proveedores primero
+                foreach ($proveedores as $proveedor) {
+                    CotizacionProveedorItem::where('id_proveedor', $proveedor->id)->delete();
+                }
+                
+                // Eliminar proveedores
+                CotizacionProveedor::where('id_cotizacion', $cotizacionId)->delete();
+                
+                // Eliminar facturas comerciales
+                FacturaComercial::where('quotation_id', $cotizacionId)->delete();
+                
+                // Eliminar la cotización
+                Cotizacion::where('id', $cotizacionId)->delete();
+            }
+            
+            // Eliminar la calculadora (esto eliminará en cascada proveedores y productos)
+            $calculadora->delete();
+            
+            DB::commit();
             return true;
         } catch (\Exception $e) {
-            Log::error('Error al eliminar cálculo de importación: ' . $e->getMessage());
+            DB::rollBack();
+            Log::error('Error al eliminar cálculo de importación: ' . $e->getMessage(), [
+                'calculadora_id' => $id,
+                'trace' => $e->getTraceAsString()
+            ]);
             return false;
         }
     }
@@ -497,6 +534,7 @@ class CalculadoraImportacionService
             $rowCostoUnitarioPEN = 54;
             $initialColumnIndex = 3;
             $totalColumnas = 0;
+            $formatoTexto = 'General';
             $sheetResumen = $objPHPExcel->getSheet(0);
             foreach ($data['proveedores'] as $proveedor) {
                 $totalColumnas += count($proveedor['productos']);
@@ -643,7 +681,9 @@ class CalculadoraImportacionService
                     $sheetResumen->setCellValue('O' . $currentRowProducto, "=F" . $currentRowProducto);
                     $sheetResumen->setCellValue('P' . $currentRowProducto, "=H" . $currentRowProducto);
                     $sheetResumen->setCellValue('Q' . $currentRowProducto, "=J" . $currentRowProducto);
-                    
+                    //m and n column not are currency format
+                    $sheetResumen->getStyle('M' . $currentRowProducto)->getNumberFormat()->setFormatCode($this->formatoTexto);
+                    $sheetResumen->getStyle('N' . $currentRowProducto)->getNumberFormat()->setFormatCode($this->formatoTexto);
                     // Aplicar formatos a la tabla M-Q
                     $sheetResumen->getStyle('O' . $currentRowProducto)->getNumberFormat()->setFormatCode($this->formatoDollar);
                     $sheetResumen->getStyle('P' . $currentRowProducto)->getNumberFormat()->setFormatCode($this->formatoDollar);
@@ -655,7 +695,12 @@ class CalculadoraImportacionService
                     $styleMQ->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
                     $styleMQ->getAlignment()->setVertical(\PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER);
                     $styleMQ->getBorders()->getAllBorders()->setBorderStyle(\PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN);
-                    
+                    //fonfo blanco 
+                    $styleMQ->getFill()->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID);
+                    $styleMQ->getFill()->getStartColor()->setARGB('FFFFFF');
+                    //set font color black
+                    $styleMQ->getFont()->getColor()->setARGB('000000');
+
                     $indexProducto++;
                     $currentRowProducto++;
                     $productColumnIndex++; // Incrementar el índice de columna para el siguiente producto
@@ -675,22 +720,8 @@ class CalculadoraImportacionService
             //format i to dollar
             $sheetResumen->getStyle('I' . $currentRowProducto)->getNumberFormat()->setFormatCode($this->formatoDollar);
             
-            // Crear TOTAL para la tabla M-Q (Resumen de Costos Unitarios) - solo uno al final
-            $sheetResumen->setCellValue('M' . $currentRowProducto, 'TOTAL');
-            $sheetResumen->setCellValue('O' . $currentRowProducto, '=SUM(O' . $startRowProducto . ':O' . ($currentRowProducto - 1) . ')');
-            $sheetResumen->setCellValue('P' . $currentRowProducto, '=SUM(P' . $startRowProducto . ':P' . ($currentRowProducto - 1) . ')');
-            $sheetResumen->setCellValue('Q' . $currentRowProducto, '=SUM(Q' . $startRowProducto . ':Q' . ($currentRowProducto - 1) . ')');
-            // Aplicar formatos a la tabla M-Q TOTAL
-            $sheetResumen->getStyle('O' . $currentRowProducto)->getNumberFormat()->setFormatCode($this->formatoDollar);
-            $sheetResumen->getStyle('P' . $currentRowProducto)->getNumberFormat()->setFormatCode($this->formatoDollar);
-            $sheetResumen->getStyle('Q' . $currentRowProducto)->getNumberFormat()->setFormatCode($this->formatoSoles);
-            // Aplicar estilo y bordes a la fila TOTAL de M-Q
-            $rangeMQTotal = 'M' . $currentRowProducto . ':Q' . $currentRowProducto;
-            $styleMQTotal = $sheetResumen->getStyle($rangeMQTotal);
-            $styleMQTotal->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
-            $styleMQTotal->getAlignment()->setVertical(\PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER);
-            $styleMQTotal->getBorders()->getAllBorders()->setBorderStyle(\PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN);
-            
+
+
             //copy style from row 36 to more rows
             
             // Agregar una fila en blanco después del TOTAL final (para separar del resumen de pagos)
@@ -868,6 +899,8 @@ class CalculadoraImportacionService
                 ];
             }
         } catch (\Exception $e) {
+            Log::error('Error al crear cotización inicial: ' . $e->getMessage());
+
             return [
                 'url' => null,
                 'totalfob' => null,
