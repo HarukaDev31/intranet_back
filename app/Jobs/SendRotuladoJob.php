@@ -1005,7 +1005,7 @@ Por lo tanto, dile a tu proveedor #{$supplierCode} que le ponga la etiqueta.
             }
 
             // Hacer más ancha la columna F (VIM number)
-            $worksheet->getColumnDimension('F')->setWidth(25);
+            $worksheet->getColumnDimension('F')->setWidth(30);
 
             // Mergear la columna B para todo el rango generado
             if (count($codes) > 1) {
