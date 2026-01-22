@@ -2772,6 +2772,7 @@ class CotizacionFinalController extends Controller
                             WHERE id_contenedor = ' . $idContenedor . '
                         )
                         AND estado_cotizador = "CONFIRMADO"
+                        AND (id_contenedor_pago IS NULL OR id_contenedor_pago = ' . $idContenedor . ')
                     ) as total_vendido_logistica_impuestos'),
                     
                     // Total pagado logistica
