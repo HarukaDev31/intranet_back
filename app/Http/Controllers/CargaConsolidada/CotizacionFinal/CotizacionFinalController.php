@@ -310,6 +310,7 @@ class CotizacionFinalController extends Controller
                 }, $pagos);
                 $subdata = [
                     'index' => $index,
+                    'id_contenedor_pago' => $row->id_contenedor_pago,
                     'id_contenedor' => $row->id_contenedor,
                     'nombre' => $this->cleanUtf8String($row->nombre),
                     'documento' => $this->cleanUtf8String($row->documento),
