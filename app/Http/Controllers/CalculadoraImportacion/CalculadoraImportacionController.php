@@ -370,7 +370,7 @@ class CalculadoraImportacionController extends Controller
                 'headers' => [
                     'total_clientes' => [
                         'value' => $calculos->total(),
-                        'label' => 'Total Cotizaciones Realizadas'
+                        'label' => 'Cotizaciones Realizadas'
                     ],
                     'cotizaciones_vendidas' => [
                         'value' => $cotizacionesVendidas,
