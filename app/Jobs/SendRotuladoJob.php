@@ -27,6 +27,7 @@ use Maatwebsite\Excel\Events\AfterSheet;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
+use PhpOffice\PhpSpreadsheet\Style\Font;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use Illuminate\Support\Facades\DB;
 use App\Models\CargaConsolidada\Contenedor;
@@ -1038,6 +1039,16 @@ Por lo tanto, dile a tu proveedor #{$supplierCode} que le ponga la etiqueta.
                 ]
             ];
             $worksheet->getStyle("B{$startRow}:G{$endRow}")->applyFromArray($borderStyle);
+
+            // Aplicar formato bold y tamaño 15 a las columnas C y F
+            $fontStyle = [
+                'font' => [
+                    'bold' => true,
+                    'size' => 15
+                ]
+            ];
+            $worksheet->getStyle("C{$startRow}:C{$endRow}")->applyFromArray($fontStyle);
+            $worksheet->getStyle("F{$startRow}:F{$endRow}")->applyFromArray($fontStyle);
 
             // Guardar el archivo modificado
             $writer = IOFactory::createWriter($spreadsheet, 'Xlsx');
