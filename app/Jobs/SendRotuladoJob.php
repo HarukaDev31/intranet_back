@@ -827,8 +827,8 @@ Por lo tanto, dile a tu proveedor #{$supplierCode} que le ponga la etiqueta.
     private function generateCorrelativeCodes($baseCode, $qtyBox, $lastCodeRow = null)
     {
         try {
-            // Extraer el número del código base (ej: L7NES211MSG083495 -> 083495)
-            if (!preg_match('/^L7NES(\d+)MSG(\d+)$/', $baseCode, $matches)) {
+            // Extraer el número del código base (ej: L7NES211MTG083495 -> 083495)
+            if (!preg_match('/^L7NES(\d+)MTG(\d+)$/', $baseCode, $matches)) {
                 throw new \Exception('Formato de código base inválido: ' . $baseCode);
             }
 
