@@ -353,8 +353,14 @@ class CalculadoraImportacionController extends Controller
             //get all estados calculadora label=estado value=estado
             $estadoCalculadora = CalculadoraImportacion::getEstadosDisponiblesFilter();
 
-            // Contar cotizaciones vendidas (estado COTIZADO)
-            $cotizacionesVendidas = CalculadoraImportacion::where('estado', 'COTIZADO')->count();
+            // Contar cotizaciones realizadas (estado COTIZADO)
+            $cotizacionesRealizadas = CalculadoraImportacion::where('estado', 'COTIZADO')->count();
+
+            //Contar cotizaciones pendientes (estado PENDIENTE)
+            $cotizacionesPendientes = CalculadoraImportacion::where('estado', 'PENDIENTE')->count();
+
+            //Contar cotizaciones vendidas (estado CONFIRMADO)
+            $cotizacionesVendidas = CalculadoraImportacion::where('estado', 'CONFIRMADO')->count();
 
             return response()->json([
                 'success' => true,
@@ -368,8 +374,12 @@ class CalculadoraImportacionController extends Controller
                     'to' => $calculos->lastItem()
                 ],
                 'headers' => [
-                    'total_clientes' => [
-                        'value' => $calculos->total(),
+                    'cotizaciones_pendientes' => [
+                        'value' => $cotizacionesPendientes,
+                        'label' => 'Cotizaciones Pendientes'
+                    ],
+                    'cotizaciones_realizadas' => [
+                        'value' => $cotizacionesRealizadas,
                         'label' => 'Cotizaciones Realizadas'
                     ],
                     'cotizaciones_vendidas' => [

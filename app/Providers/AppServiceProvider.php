@@ -3,6 +3,8 @@
 namespace App\Providers;
 
 use Illuminate\Support\ServiceProvider;
+use App\Models\CargaConsolidada\Cotizacion;
+use App\Observers\CargaConsolidada\CotizacionObserver;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -23,6 +25,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot()
     {
-        //
+        // Registrar observer para sincronizar estados entre Cotizacion y CalculadoraImportacion
+        Cotizacion::observe(CotizacionObserver::class);
     }
 }
