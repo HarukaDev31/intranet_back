@@ -80,7 +80,8 @@ class Cotizacion extends Model
         'cod_contract',
         'autosigned_contract_at',
         'cotizacion_contrato_autosigned_url',
-        'from_calculator'
+        'from_calculator',
+        'id_contenedor_destino'
     ];
 
     /**

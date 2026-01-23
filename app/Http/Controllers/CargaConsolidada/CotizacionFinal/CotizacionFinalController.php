@@ -312,6 +312,7 @@ class CotizacionFinalController extends Controller
                     'index' => $index,
                     'id_contenedor_pago' => $row->id_contenedor_pago,
                     'id_contenedor' => $row->id_contenedor,
+                    'id_contenedor_destino' => $row->id_contenedor_destino,
                     'nombre' => $this->cleanUtf8String($row->nombre),
                     'documento' => $this->cleanUtf8String($row->documento),
                     'telefono' => $this->cleanUtf8String($row->telefono),
