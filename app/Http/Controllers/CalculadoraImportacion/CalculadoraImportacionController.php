@@ -353,8 +353,8 @@ class CalculadoraImportacionController extends Controller
             //get all estados calculadora label=estado value=estado
             $estadoCalculadora = CalculadoraImportacion::getEstadosDisponiblesFilter();
 
-            // Contar cotizaciones realizadas (estado COTIZADO)
-            $cotizacionesRealizadas = CalculadoraImportacion::where('estado', 'COTIZADO')->count();
+            // Contar cotizaciones realizadas (estado COTIZADO y CONFIRMADO)
+            $cotizacionesRealizadas = CalculadoraImportacion::whereIn('estado', ['COTIZADO', 'CONFIRMADO'])->count();
 
             //Contar cotizaciones pendientes (estado PENDIENTE)
             $cotizacionesPendientes = CalculadoraImportacion::where('estado', 'PENDIENTE')->count();
