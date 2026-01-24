@@ -88,6 +88,9 @@ require __DIR__.'/modules/calendar.php';
 // Módulo de Noticias del Sistema
 require __DIR__.'/modules/news.php';
 
+// Módulo de Vi?ticos
+require __DIR__.'/modules/viaticos.php';
+
 //Clientes
 // Módulo de Delivery
 require __DIR__.'/modules/external/delivery.php';

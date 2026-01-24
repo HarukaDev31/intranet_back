@@ -1464,16 +1464,21 @@ class CotizacionController extends Controller
                 $monto = $sheet->getCell('J29')->getOldCalculatedValue();
                 $impuestos = $sheet->getCell('J32')->getOldCalculatedValue();
                 $extra = $sheet->getCell('J30')->getOldCalculatedValue() ?? 0;
+                $descuento = $sheet->getCell('J31')->getOldCalculatedValue() ?? 0;
             } else {
                 // Si NO hay ANTIDUMPING: monto de J30 (servicio + cargos - descuento + impuestos), impuestos de J33
                 $monto = $sheet->getCell('J30')->getOldCalculatedValue();
                 $impuestos = $sheet->getCell('J33')->getOldCalculatedValue();
                 $extra = $sheet->getCell('J31')->getOldCalculatedValue() ?? 0;
+                $descuento = $sheet->getCell('J32')->getOldCalculatedValue() ?? 0;
                 if ($extra == 0) {
                     $extra = $sheet->getCell('J31')->getCalculatedValue();
-                    Log::info('EXTRA: ' . $extra);
+                    
                 }
-                Log::info('EXTRA: ' . $extra);
+                if ($descuento == 0) {
+                    $descuento = $sheet->getCell('J32')->getCalculatedValue();
+                }
+               
             }
 
             $tarifa = $monto / (($volumen <= 0 ? 1 : $volumen) < 1.00 ? 1 : ($volumen <= 0 ? 1 : $volumen));
@@ -1481,7 +1486,7 @@ class CotizacionController extends Controller
             $highestRow = $sheet->getHighestRow();
             $qtyItem = 0;
             //
-            $monto = $monto + $extra;
+            $monto = $monto + $extra - $descuento;
             Log::info('MONTO: ' . $monto);
             for ($row = 36; $row <= $highestRow; $row++) {
                 $cellValue = $sheet->getCell('A' . $row)->getValue();
