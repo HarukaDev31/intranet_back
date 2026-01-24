@@ -12,10 +12,16 @@ class CotizacionObserver
      */
     public function updated(Cotizacion $cotizacion): void
     {
-        // Si el estado del cotizador cambió a CONFIRMADO, sincronizar la calculadora
-        if ($cotizacion->wasChanged('estado_cotizador') && $cotizacion->estado_cotizador === 'CONFIRMADO') {
-            CalculadoraImportacion::where('id_cotizacion', $cotizacion->id)
-                ->update(['estado' => CalculadoraImportacion::ESTADO_CONFIRMADO]);
+        // Si el estado del cotizador cambió, sincronizar la calculadora según el nuevo valor
+        if ($cotizacion->wasChanged('estado_cotizador')) {
+            if ($cotizacion->estado_cotizador === 'CONFIRMADO') {
+                CalculadoraImportacion::where('id_cotizacion', $cotizacion->id)
+                    ->update(['estado' => CalculadoraImportacion::ESTADO_CONFIRMADO]);
+            } elseif ($cotizacion->estado_cotizador === 'PENDIENTE') {
+                // Cuando la cotización vuelve a PENDIENTE, en la calculadora debe quedar como COTIZADO
+                CalculadoraImportacion::where('id_cotizacion', $cotizacion->id)
+                    ->update(['estado' => CalculadoraImportacion::ESTADO_COTIZADO]);
+            }
         }
     }
 }
