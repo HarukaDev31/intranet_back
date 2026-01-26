@@ -12,6 +12,7 @@ use App\Models\Notificacion;
 use Illuminate\Support\Facades\DB;
 use App\Traits\WhatsappTrait;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
@@ -75,6 +76,21 @@ class CotizacionFinalController extends Controller
     private $CONCEPT_PAGO_IMPUESTOS = 2;
     private $CONCEPT_PAGO_LOGISTICA = 1;
     /**
+     * @OA\Get(
+     *     path="/carga-consolidada/contenedores/{idContenedor}/cotizaciones-finales",
+     *     tags={"Cotización Final"},
+     *     summary="Obtener cotizaciones finales",
+     *     description="Obtiene las cotizaciones finales de un contenedor específico",
+     *     operationId="getContenedorCotizacionesFinales",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="idContenedor", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Parameter(name="search", in="query", @OA\Schema(type="string")),
+     *     @OA\Parameter(name="estado_cotizacion_final", in="query", @OA\Schema(type="string")),
+     *     @OA\Parameter(name="per_page", in="query", @OA\Schema(type="integer", default=10)),
+     *     @OA\Response(response=200, description="Cotizaciones finales obtenidas exitosamente"),
+     *     @OA\Response(response=401, description="No autenticado")
+     * )
+     *
      * Obtiene las cotizaciones finales de un contenedor específico
      */
     public function getContenedorCotizacionesFinales(Request $request, $idContenedor)
@@ -98,34 +114,69 @@ class CotizacionFinalController extends Controller
                 ->where('id_contenedor', $idContenedor)
                 ->whereNotNull('estado_cliente')
                 ->whereNull('id_cliente_importacion')
-
+                ->whereExists(function ($query) {
+                    $query->select(DB::raw(1))
+                        ->from('contenedor_consolidado_cotizacion_proveedores')
+                        ->whereColumn('contenedor_consolidado_cotizacion_proveedores.id_cotizacion', 'contenedor_consolidado_cotizacion.id');
+                })
                 ->where('estado_cotizador', 'CONFIRMADO');
 
             // Aplicar filtros adicionales si se proporcionan
             if ($request->has('search')) {
-                $search = $request->search;
-                $query->where(function ($q) use ($search) {
-                    $q->where('nombre', 'LIKE', "%{$search}%")
-                        ->orWhere('documento', 'LIKE', "%{$search}%")
-                        ->orWhere('correo', 'LIKE', "%{$search}%");
-                });
+                // Normalize and trim search input
+                $search = trim((string)$request->search);
+                if ($search !== '') {
+                    $query->where(function ($q) use ($search) {
+                        $q->where('contenedor_consolidado_cotizacion.nombre', 'LIKE', "%{$search}%")
+                          ->orWhere('contenedor_consolidado_cotizacion.documento', 'LIKE', "%{$search}%")
+                          ->orWhere('contenedor_consolidado_cotizacion.correo', 'LIKE', "%{$search}%")
+                          ->orWhere('contenedor_consolidado_cotizacion.telefono', 'LIKE', "%{$search}%");
+                    });
+                }
             }
 
-            // Filtrar por estado de cotización final si se proporciona
             if ($request->has('estado_cotizacion_final') && !empty($request->estado_cotizacion_final)) {
                 $query->where('estado_cotizacion_final', $request->estado_cotizacion_final);
             }
 
-
-            // Paginación
             $perPage = $request->input('per_page', 10);
             $data = $query->paginate($perPage);
 
-            // Transformar los datos para incluir las columnas específicas
             $transformedData = [];
             $index = 1;
 
             foreach ($data->items() as $row) {
+                $pagos = DB::table($this->table_contenedor_consolidado_cotizacion_coordinacion_pagos . ' as P')
+                    ->leftJoin($this->table_pagos_concept . ' as C', 'P.id_concept', '=', 'C.id')
+                    ->where('P.id_cotizacion', $row->id_cotizacion)
+                    ->select('P.id', 'P.monto', 'P.voucher_url', 'P.payment_date', 'P.banco', 'P.created_at', 'P.status', 'C.name as concept_name')
+                    ->orderBy('P.id', 'asc')
+                    ->get();
+
+                $pagos->transform(function ($p) {
+                    if (isset($p->voucher_url) && $p->voucher_url) {
+                        $p->voucher_url = $this->generateImageUrl($p->voucher_url);
+                    }
+                    return $p;
+                });
+
+                // Determinar si los pagos asociados están todos confirmados
+                $pagosNotConfirmed = $pagos->filter(function($p){
+                    $status = isset($p->status) ? strtoupper(trim($p->status)) : '';
+                    return $status !== 'CONFIRMADO';
+                })->count();
+
+                $pagado_verificado = false;
+                // Considerar pagado verificado solo cuando:
+                //  - el estado en BD sea exactamente 'PAGADO' (no 'SOBREPAGO'), y
+                //  - NO existen pagos sin confirmar para los conceptos LOGISTICA/IMPUESTOS
+                // Esto garantiza que un registro en 'SOBREPAGO' nunca aparezca como "verificado"
+                // hasta que el monto pagado se iguale al monto a pagar (es decir, pase a 'PAGADO').
+                $estadoFinal = isset($row->estado_cotizacion_final) ? strtoupper(trim($row->estado_cotizacion_final)) : '';
+                if ($estadoFinal === 'PAGADO' && $pagosNotConfirmed === 0) {
+                    $pagado_verificado = true;
+                }
+
                 $subdata = [
                     'index' => $index,
                     'nombre' => $this->cleanUtf8String($row->nombre_upper ?? $row->nombre),
@@ -139,8 +190,12 @@ class CotizacionFinalController extends Controller
                     'impuestos_final' => $row->impuestos_final_formateado ?? $row->impuestos_final,
                     'tarifa_final' => $row->tarifa_final_formateado ?? $row->tarifa_final,
                     'estado_cotizacion_final' => $this->cleanUtf8String($row->estado_cotizacion_final),
+                    'pagado_verificado' => $pagado_verificado,
                     'id_cotizacion' => $row->id_cotizacion,
-                    'cotizacion_final_url' =>$this->generateImageUrl($row->cotizacion_final_url)
+                    'cotizacion_final_url' =>$this->generateImageUrl($row->cotizacion_final_url),
+                    'pagos' => $pagos,
+                    'cotizacion_contrato_firmado_url' => $row->cotizacion_contrato_firmado_url ? $this->generateImageUrl($row->cotizacion_contrato_firmado_url) : null,
+                    'cod_contract' => $row->cod_contract,
                 ];
 
                 $transformedData[] = $subdata;
@@ -164,6 +219,7 @@ class CotizacionFinalController extends Controller
 
             ]);
         } catch (\Exception $e) {
+            Log::error('Error al obtener cotizaciones finales: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
                 'message' => 'Error al obtener cotizaciones finales: ' . $e->getMessage()
@@ -254,7 +310,9 @@ class CotizacionFinalController extends Controller
                 }, $pagos);
                 $subdata = [
                     'index' => $index,
+                    'id_contenedor_pago' => $row->id_contenedor_pago,
                     'id_contenedor' => $row->id_contenedor,
+                    'id_contenedor_destino' => $row->id_contenedor_destino,
                     'nombre' => $this->cleanUtf8String($row->nombre),
                     'documento' => $this->cleanUtf8String($row->documento),
                     'telefono' => $this->cleanUtf8String($row->telefono),
@@ -316,6 +374,12 @@ class CotizacionFinalController extends Controller
             // Nueva ubicación: storage/app/public/CargaConsolidada/cotizacionfinal/{idContenedor}
             $possiblePaths[] = storage_path('app/public/' . $originalUrl);
             
+            // Procesar ruta de la DB con generateImageUrl
+            $generatedUrl = $this->generateImageUrl($originalUrl);
+            if ($generatedUrl) {
+                $possiblePaths[] = $generatedUrl;
+            }
+            
             // Verificar si es una URL completa
             $isValidUrl = filter_var($originalUrl, FILTER_VALIDATE_URL) || preg_match('/^https?:\/\//', $originalUrl);
             
@@ -337,6 +401,8 @@ class CotizacionFinalController extends Controller
             foreach ($possiblePaths as $path) {
                 if (strpos($path, 'http') === 0) {
                     // Es una URL, usar downloadFileFromUrl
+                    //fix malformed url
+                    $path = str_replace(' ', '%20', $path);
                     $fileContent = $this->downloadFileFromUrl($path);
                 } else if (file_exists($path)) {
                     // Es un archivo local
@@ -349,6 +415,7 @@ class CotizacionFinalController extends Controller
                 }
             }
 
+            
             if ($fileContent === false) {
                 Log::error('No se pudo leer el archivo de cotización final');
                 throw new \Exception("No se pudo leer el archivo Excel desde ninguna ubicación.");
@@ -969,14 +1036,33 @@ class CotizacionFinalController extends Controller
 
         return strtr($string, $accents);
     }
+    /**
+     * @OA\Put(
+     *     path="/carga-consolidada/contenedor/cotizacion-final/general/update-estado",
+     *     tags={"Cotización Final"},
+     *     summary="Actualizar estado de cotización final",
+     *     description="Cambia el estado de una cotización final",
+     *     operationId="updateEstadoCotizacionFinal",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             required={"idCotizacion", "estado"},
+     *             @OA\Property(property="idCotizacion", type="integer"),
+     *             @OA\Property(property="estado", type="string", description="Nuevo estado")
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Estado actualizado exitosamente"),
+     *     @OA\Response(response=500, description="Error interno")
+     * )
+     */
     public function updateEstadoCotizacionFinal(Request $request)
     {
         try {
             $cotizacion = Cotizacion::find($request->idCotizacion);
             $cotizacion->estado_cotizacion_final = $request->estado;
             $cotizacion->save();
-            if ($request->estado == 'COTIZADO') {
-                //get phone from cotizacion table where id=idCotizacionFinal
+            if ($request->estado == 'COBRANDO') {
                 $cotizacion = DB::table($this->table_contenedor_cotizacion . ' as CC')
                     ->select([
                         'CC.telefono',
@@ -1001,11 +1087,9 @@ class CotizacionFinalController extends Controller
                 if (!$cotizacion) {
                     throw new \Exception('Cotización no encontrada');
                 }
-
                 $telefono = preg_replace('/\s+/', '', $cotizacion->telefono);
                 $phoneNumberId = $telefono ? $telefono . '@c.us' : '';
                 $totalPagos = $cotizacion->total_pagos;
-
                 $volumen = $cotizacion->volumen_final;
                 $nombre = $cotizacion->nombre;
                 $logisticaFinal = $cotizacion->logistica_final;
@@ -1021,12 +1105,10 @@ class CotizacionFinalController extends Controller
                 if (!$contenedor) {
                     throw new \Exception('Contenedor no encontrado');
                 }
-
                 $carga = $contenedor->carga;
                 $fechaArribo = $contenedor->fecha_arribo;
                 $telefono = preg_replace('/\s+/', '', $cotizacion->telefono);
                 $this->phoneNumberId = $telefono ? $telefono . '@c.us' : '';
-    
                 $message = "📦 *Consolidado #" . $carga . "*\n" .
                     "Hola " . $nombre . " 😁 un gusto saludarte! \n" .
                     "A continuación te envio la cotización final de tu importación📋📦.\n" .
@@ -1038,14 +1120,14 @@ class CotizacionFinalController extends Controller
                     "Último día de pago: " . date('d/m/Y', strtotime($fechaArribo)) . "\n";
                 $this->sendMessage($message);
                 $pathCotizacionFinalPDF = $this->getBoletaForSend($request->idCotizacion);
-                Log::info('Path cotización final: ' . $pathCotizacionFinalPDF);
+                Log::info('pathCotizacionFinalPDF: ' . $pathCotizacionFinalPDF);
                 $this->sendMedia($pathCotizacionFinalPDF, null, null, null, 3);
                 $message = "Resumen de Pago\n" .
                     "✅Cotización final: $" . number_format($total, 2) . "\n" .
                     "✅Adelanto: $" . number_format($totalPagos, 2) . "\n" .
-                    "✅ Pendiente de pago: $" . number_format($totalAPagar, 2) . "\n";
+                    "✅ *Pendiente de pago: $" . number_format($totalAPagar, 2) . "*\n";
                 $this->sendMessage($message, null, 5);
-                $pagosUrl = public_path('assets/images/pagos-full.jpg');
+                $pagosUrl = public_path('assets/images/pagos-full.jpg');    
                 $this->sendMedia($pagosUrl, 'image/jpg', null, null, 10);
             }
             return response()->json([
@@ -1059,6 +1141,101 @@ class CotizacionFinalController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Enviar recordatorio de pago por WhatsApp al cliente para una cotización final.
+     * Body (opcional): { "sleep": <segundos de espera entre llamadas> }
+     */
+    public function sendReminderPago(Request $request, $idCotizacion)
+    {
+        try {
+            // Recuperar datos principales de la cotización (incluye subconsulta para totales pagados)
+            $cotizacion = DB::table($this->table_contenedor_cotizacion . ' as CC')
+                ->select([
+                    'CC.telefono',
+                    'CC.id_contenedor',
+                    'CC.impuestos_final',
+                    'CC.volumen_final',
+                    'CC.monto_final',
+                    'CC.tarifa_final',
+                    'CC.nombre',
+                    'CC.logistica_final',
+                    DB::raw('(
+                        SELECT IFNULL(SUM(cccp.monto), 0)
+                        FROM contenedor_consolidado_cotizacion_coordinacion_pagos cccp
+                        JOIN cotizacion_coordinacion_pagos_concept ccp ON cccp.id_concept = ccp.id
+                        WHERE cccp.id_cotizacion = CC.id
+                        AND (ccp.name = "LOGISTICA" OR ccp.name = "IMPUESTOS")
+                    ) as total_pagos')
+                ])
+                ->where('CC.id', $idCotizacion)
+                ->first();
+
+            if (! $cotizacion) {
+                return response()->json(['message' => 'Cotización no encontrada', 'success' => false], 404);
+            }
+
+            // Obtener contenedor para número de consolidado y fecha de arribo
+            $contenedor = Contenedor::select('carga', 'fecha_arribo')->where('id', $cotizacion->id_contenedor)->first();
+            $carga = $contenedor ? $contenedor->carga : 'N/A';
+            $fechaArribo = $contenedor ? $contenedor->fecha_arribo : null;
+
+            // Calculos de montos
+            $logisticaFinal = $cotizacion->logistica_final ?? 0;
+            $impuestosFinal = $cotizacion->impuestos_final ?? 0;
+            $totalCotizacion = $logisticaFinal + $impuestosFinal;
+            $totalPagos = $cotizacion->total_pagos ?? 0;
+            $pendiente = $totalCotizacion - $totalPagos;
+
+            // Preparar mensaje según plantilla solicitada
+            $message = "🙋🏽‍♀ RECORDATORÍO DE PAGO\n\n" .
+                "📦 Consolidado #" . $carga . "\n" .
+                "Usted cuenta con un pago pendiente, es necesario realizar el pago para continuar con el proceso de nacionalización.\n\n" .
+                "Resumen de Pago\n" .
+                "✅ Cotización final: $" . number_format($totalCotizacion, 2, '.', '') . "\n" .
+                "✅ Adelanto: $" . number_format($totalPagos, 2, '.', '') . "\n" .
+                "✅ *Pendiente de pago: $" . number_format($pendiente, 2, '.', '') . "*\n" .
+                ($fechaArribo ? "Último día de pago: " . date('d/m/Y', strtotime($fechaArribo)) . "\n" : "") .
+                "\nPor favor debe enviar el comprobante de pago a la brevedad.";
+            // Preparar número y enviar (normalizar como en otros lugares del proyecto)
+            $rawTelefono = $cotizacion->telefono ?? '';
+            // Remover todo lo que no sea dígito
+            $telefonoDigits = preg_replace('/\D/', '', $rawTelefono);
+
+            // Si no tiene código de país, asumir Perú (+51) para números locales de 9 dígitos
+            if (strlen($telefonoDigits) === 9) {
+                $telefonoDigits = '51' . $telefonoDigits;
+            } elseif (strlen($telefonoDigits) === 10 && substr($telefonoDigits, 0, 1) === '0') {
+                $telefonoDigits = '51' . substr($telefonoDigits, 1);
+            }
+
+            if (empty($telefonoDigits)) {
+                Log::warning('sendReminderPago: teléfono inválido o vacío', ['cotizacion_id' => $idCotizacion, 'telefono_raw' => $rawTelefono]);
+                return response()->json(['message' => 'Teléfono del cliente inválido o vacío', 'success' => false], 400);
+            }
+
+            $this->phoneNumberId = $telefonoDigits . '@c.us';
+
+            // Log previo al envío para diagnóstico
+            Log::info('sendReminderPago enviando', [
+                'cotizacion_id' => $idCotizacion,
+                'telefono_raw' => $rawTelefono,
+                'telefono_normalized' => $telefonoDigits,
+                'phoneNumberId' => $this->phoneNumberId
+            ]);
+
+            $sleep = $request->input('sleep', 0);
+            $result = $this->sendMessage($message, $this->phoneNumberId, $sleep);
+
+            Log::info('sendReminderPago resultado', ['cotizacion_id' => $idCotizacion, 'result' => $result]);
+
+            return response()->json(['message' => 'Recordatorio enviado', 'success' => true, 'result' => $result]);
+        } catch (\Exception $e) {
+            Log::error('Error en sendReminderPago: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            return response()->json(['message' => 'Error al enviar recordatorio: ' . $e->getMessage(), 'success' => false], 500);
+        }
+    }
+
     /**
      * Obtiene la ruta local de un archivo, ya sea desde URL o ruta local
      * Si es una URL, descarga el archivo temporalmente
@@ -1116,6 +1293,32 @@ class CotizacionFinalController extends Controller
             throw $e;
         }
     }
+    /**
+     * @OA\Post(
+     *     path="/carga-consolidada/contenedor/cotizacion-final/pagos",
+     *     tags={"Cotización Final"},
+     *     summary="Registrar pago de cotización final",
+     *     description="Guarda un nuevo pago para una cotización final",
+     *     operationId="storeCotizacionFinalPago",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\MediaType(
+     *             mediaType="multipart/form-data",
+     *             @OA\Schema(
+     *                 @OA\Property(property="voucher", type="string", format="binary"),
+     *                 @OA\Property(property="idCotizacion", type="integer"),
+     *                 @OA\Property(property="idContenedor", type="integer"),
+     *                 @OA\Property(property="monto", type="number"),
+     *                 @OA\Property(property="fecha", type="string", format="date"),
+     *                 @OA\Property(property="banco", type="string")
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Pago registrado exitosamente"),
+     *     @OA\Response(response=422, description="Datos inválidos")
+     * )
+     */
     public function store(Request $request)
     {
         try {
@@ -1172,14 +1375,11 @@ class CotizacionFinalController extends Controller
             $inserted = DB::table($this->table_contenedor_consolidado_cotizacion_coordinacion_pagos)->insert($data);
 
             if ($inserted) {
-                // Obtener información del cliente y contenedor para la notificación
                 $cotizacionInfo = DB::table($this->table_contenedor_cotizacion . ' as CC')
                     ->join('carga_consolidada_contenedor as C', 'C.id', '=', 'CC.id_contenedor')
                     ->select('CC.nombre as cliente_nombre', 'CC.documento as cliente_documento', 'C.carga as contenedor_nombre')
                     ->where('CC.id', $request->idCotizacion)
                     ->first();
-
-                // Crear notificación para el perfil Administración
                 if ($cotizacionInfo) {
                     Notificacion::create([
                         'titulo' => 'Nuevo Pago de Impuestos Registrado',
@@ -1208,7 +1408,13 @@ class CotizacionFinalController extends Controller
                         ]
                     ]);
                 }
-
+                // Sincronizar estado de la cotización a partir de los pagos (LOGISTICA / IMPUESTOS)
+                try {
+                    app()->make(\App\Http\Controllers\CargaConsolidada\PagosController::class)
+                        ->syncEstadoCotizacionFromPayments($request->idCotizacion, false);
+                } catch (\Exception $e) {
+                    Log::error('Error sincronizando estado de cotizacion tras store pago: ' . $e->getMessage());
+                }
                 return response()->json([
                     'success' => true,
                     'message' => 'Pago guardado exitosamente',
@@ -1228,6 +1434,28 @@ class CotizacionFinalController extends Controller
             ], 500);
         }
     }
+    /**
+     * @OA\Post(
+     *     path="/carga-consolidada/contenedor/cotizacion-final/general/upload-factura-comercial",
+     *     tags={"Cotización Final"},
+     *     summary="Subir factura comercial",
+     *     description="Sube una factura comercial general para un contenedor",
+     *     operationId="uploadFacturaComercialCF",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\MediaType(
+     *             mediaType="multipart/form-data",
+     *             @OA\Schema(
+     *                 @OA\Property(property="idContenedor", type="integer"),
+     *                 @OA\Property(property="file", type="string", format="binary")
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Factura subida exitosamente"),
+     *     @OA\Response(response=500, description="Error interno")
+     * )
+     */
     public function uploadFacturaComercial(Request $request)
     {
         try {
@@ -1247,6 +1475,207 @@ class CotizacionFinalController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Error al actualizar factura general: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * @OA\Post(
+     *     path="/carga-consolidada/contenedor/cotizacion-final/general/upload-cotizacion-final/{idCotizacion}",
+     *     tags={"Cotización Final"},
+     *     summary="Subir cotización final",
+     *     description="Sube un archivo Excel de cotización final para una cotización específica",
+     *     operationId="uploadCotizacionFinalFile",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="idCotizacion", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\MediaType(
+     *             mediaType="multipart/form-data",
+     *             @OA\Schema(
+     *                 @OA\Property(property="file", type="string", format="binary")
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Archivo subido exitosamente"),
+     *     @OA\Response(response=404, description="Cotización no encontrada")
+     * )
+     *
+     * Subir una cotización final a partir de un archivo (Excel) para una cotización específica.
+     * Campos esperados: file (xlsx/xls), idCotizacion (int)
+     */
+    public function uploadCotizacionFinalFile(Request $request, $idCotizacion)
+    {
+        try {
+            // Requerir idCotizacion: el flujo debe ser por id para evitar ambigüedades
+            $request->validate([
+                'file' => 'required|file|mimes:xlsx,xls',
+                
+            ]);
+
+            $file = $request->file('file');
+            $fileExt = $file->getClientOriginalExtension();
+
+            // Buscar cotizacion por id (obligatorio)
+            $cotizacion = Cotizacion::find($idCotizacion);
+            if (! $cotizacion) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Cotización no encontrada'
+                ], 404);
+            }
+
+            $idContenedor = $cotizacion->id_contenedor ?? 'unknown';
+
+            // Guardar archivo en storage/public
+            $fileName = time() . '_cotizacion_final_' . $idCotizacion . '.' . $fileExt;
+            $relativeDirectory = 'cotizacion_final/' . $idContenedor;
+            $storedPath = $file->storeAs($relativeDirectory, $fileName, 'public');
+            $dbPath = $storedPath;
+
+            // Leer desde el archivo guardado
+            $fullStoredPath = storage_path('app/public/' . $storedPath);
+            Log::info('Intentando leer Excel desde: ' . $fullStoredPath);
+            $spreadsheet = IOFactory::load($fullStoredPath);
+
+            // --- Parsear valores finales desde el Excel
+            $sheet = $spreadsheet->getSheet(0);
+
+            // Helper inline para obtener y normalizar valores numéricos desde celdas
+            $getNumeric = function($cellAddress) use ($sheet) {
+                try {
+                    $raw = $sheet->getCell($cellAddress)->getCalculatedValue();
+                } catch (\Exception $e) {
+                    try { $raw = $sheet->getCell($cellAddress)->getValue(); } catch (\Exception $_) { $raw = null; }
+                }
+                if ($raw === null) return null;
+                $str = (string) $raw;
+                // Remover símbolos comunes de moneda y espacios
+                $clean = preg_replace('/[^0-9\.,\-]/', '', $str);
+                // Normalizar coma decimal -> punto si hay más comas que puntos
+                if (substr_count($clean, ',') > 0 && substr_count($clean, '.') === 0) {
+                    $clean = str_replace(',', '.', $clean);
+                } else {
+                    // eliminar comas de miles
+                    $clean = str_replace(',', '', $clean);
+                }
+                if ($clean === '' || $clean === null) return null;
+                return floatval($clean);
+            };
+
+            $hasAntidumping = strtoupper(trim((string) $sheet->getCell('B23')->getValue())) === 'ANTIDUMPING';
+
+            if ($hasAntidumping) {
+                $fob_final = $getNumeric('K30');
+                $logistica_sheet = $getNumeric('K31');
+                $impuestos_final = $getNumeric('K32');
+                $monto_final = $getNumeric('K31');
+            } else {
+                $fob_final = $getNumeric('K29');
+                $logistica_sheet = $getNumeric('K30');
+                $impuestos_final = $getNumeric('K31');
+                $monto_final = $getNumeric('K30');
+            }
+
+            $tarifa_final = $getNumeric('K27');
+            $volumen_final = $getNumeric('J11');
+
+            $pesoCellRaw = $sheet->getCell('J9')->getValue();
+            $peso_final = null;
+            if ($pesoCellRaw !== null) {
+                $pesoClean = preg_replace('/[^0-9\.,\-]/', '', (string) $pesoCellRaw);
+                if ($pesoClean !== '' && $pesoClean !== null) {
+                    if (substr_count($pesoClean, ',') > 0 && substr_count($pesoClean, '.') === 0) {
+                        $pesoClean = str_replace(',', '.', $pesoClean);
+                    } else {
+                        $pesoClean = str_replace(',', '', $pesoClean);
+                    }
+                    $peso_final = is_numeric($pesoClean) ? (float) $pesoClean : null;
+                    if ($peso_final !== null && stripos((string) $pesoCellRaw, 'tn') !== false) {
+                        $peso_final *= 1000;
+                    }
+                }
+            }
+
+            $logistica_final = $logistica_sheet;
+
+            if ($tarifa_final === null && $volumen_final !== null && $volumen_final > 0) {
+                $tarifa_final = $volumen_final < 1 ? $logistica_final : ($logistica_final / $volumen_final);
+            } elseif ($tarifa_final !== null && $volumen_final !== null && $volumen_final > 0) {
+                $logistica_final = $volumen_final < 1 ? $tarifa_final : $tarifa_final * $volumen_final;
+            }
+
+            // Validación estricta: monto, impuestos y logística deben extraerse correctamente
+            if ($monto_final === null || $impuestos_final === null || $logistica_final === null) {
+                // borrar archivo almacenado
+                try { Storage::disk('public')->delete($dbPath); } catch (\Exception $_) {}
+                Log::warning('Extraccion obligatoria falló (monto/impuestos/logistica) al subir cotizacion final. Archivo eliminado: ' . $dbPath);
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No se pudieron extraer los campos obligatorios (monto, impuestos, logística) del Excel. La cotización final no fue guardada.'
+                ], 422);
+            }
+
+            // Preparar datos para actualizar: SOLO campos derivados de la cotizacion final
+            $updateData = [
+                'cotizacion_final_url' => $dbPath,
+                'estado_cotizacion_final' => 'COTIZADO'
+            ];
+
+            $updateData['monto_final'] = $monto_final;
+            $updateData['impuestos_final'] = $impuestos_final;
+            $updateData['logistica_final'] = $logistica_final;
+
+            $updateData['fob_final'] = $fob_final ?? 0;
+            $updateData['peso_final'] = $peso_final ?? 0;
+            $updateData['tarifa_final'] = $tarifa_final ?? 0;
+            $updateData['volumen_final'] = $volumen_final ?? 0;
+
+            // Actualizar la cotizacion (por id obligatorio)
+            try {
+                DB::table($this->table_contenedor_cotizacion)
+                    ->where('id', $idCotizacion)
+                    ->update($updateData);
+                Log::info('Cotización final actualizada', ['id' => $idCotizacion, 'update' => $updateData]);
+            } catch (\Exception $dbError) {
+                Log::error('Error al actualizar cotizacion final: ' . $dbError->getMessage(), ['id' => $idCotizacion, 'update' => $updateData]);
+                if (strpos($dbError->getMessage(), 'Out of range value') !== false) {
+                    // aplicar límites y reintentar
+                    $limited = $updateData;
+                    if (isset($limited['monto_final'])) $limited['monto_final'] = min($limited['monto_final'], 999999.99);
+                    if (isset($limited['logistica_final'])) $limited['logistica_final'] = min($limited['logistica_final'], 999999.99);
+                    if (isset($limited['impuestos_final'])) $limited['impuestos_final'] = min($limited['impuestos_final'], 999999.99);
+                    try {
+                        DB::table($this->table_contenedor_cotizacion)
+                            ->where('id', $idCotizacion)
+                            ->update($limited);
+                        Log::info('Cotización final actualizada con valores limitados', ['id' => $idCotizacion]);
+                    } catch (\Exception $retryErr) {
+                        Log::error('Fallo persistente al actualizar cotizacion final: ' . $retryErr->getMessage(), ['id' => $idCotizacion]);
+                        return response()->json([
+                            'success' => false,
+                            'message' => 'Error al actualizar la cotización final en la base de datos.'
+                        ], 500);
+                    }
+                } else {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Error al actualizar la cotización final en la base de datos.'
+                    ], 500);
+                }
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Cotización final subida y registrada correctamente',
+                'data' => $updateData
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error en uploadCotizacionFinalFile: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al subir cotización final: ' . $e->getMessage()
             ], 500);
         }
     }
@@ -1290,6 +1719,14 @@ class CotizacionFinalController extends Controller
     }
 
     /**
+     * @OA\Options(
+     *     path="/carga-consolidada/contenedor/cotizacion-final/general/upload-plantilla-final",
+     *     tags={"Cotización Final"},
+     *     summary="Options CORS",
+     *     description="Maneja peticiones OPTIONS para CORS",
+     *     @OA\Response(response=200, description="OK")
+     * )
+     *
      * Maneja peticiones OPTIONS para CORS
      */
     public function handleOptions()
@@ -1301,6 +1738,27 @@ class CotizacionFinalController extends Controller
     }
 
     /**
+     * @OA\Post(
+     *     path="/carga-consolidada/contenedor/cotizacion-final/general/upload-plantilla-final",
+     *     tags={"Cotización Final"},
+     *     summary="Generar Excel masivo",
+     *     description="Genera Excel masivo de cotizaciones para múltiples clientes",
+     *     operationId="generateMassiveExcelPayrolls",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\MediaType(
+     *             mediaType="multipart/form-data",
+     *             @OA\Schema(
+     *                 @OA\Property(property="file", type="string", format="binary"),
+     *                 @OA\Property(property="idContenedor", type="integer")
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Excel generado exitosamente"),
+     *     @OA\Response(response=422, description="Datos inválidos")
+     * )
+     *
      * Genera Excel masivo de cotizaciones para múltiples clientes
      */
     public function generateMassiveExcelPayrolls(Request $request)
@@ -1312,12 +1770,10 @@ class CotizacionFinalController extends Controller
                 'idContenedor' => 'required|integer'
             ]);
 
-            // Aumentar límite de memoria
             $originalMemoryLimit = ini_get('memory_limit');
             ini_set('memory_limit', '2048M');
             $idContainer = $request->idContenedor;
             
-            // Obtener datos del Excel subido
             $data = $this->getMassiveExcelData($request->file('file'));
             
             Log::info('Datos procesados del Excel: ' . json_encode($data));
@@ -1341,6 +1797,11 @@ class CotizacionFinalController extends Controller
                 ->where('estado_cotizador', 'CONFIRMADO')
                 ->whereNotNull('estado_cliente')
                 ->whereNull('id_cliente_importacion')
+                ->whereExists(function ($query) {
+                    $query->select(DB::raw(1))
+                        ->from($this->table_contenedor_cotizacion_proveedores)
+                        ->whereRaw($this->table_contenedor_cotizacion_proveedores . '.id_cotizacion = cc.id');
+                })
                 ->get();
 
             Log::info('Datos de cotizaciones encontrados: ' . json_encode($result));
@@ -1418,10 +1879,7 @@ class CotizacionFinalController extends Controller
 
             // Crear nuevo archivo ZIP
             $zip = new ZipArchive();
-            Log::info('Intentando crear archivo ZIP en: ' . $zipFilePath);
-            Log::info('Directorio existe: ' . (file_exists(dirname($zipFilePath)) ? 'Sí' : 'No'));
-            Log::info('Directorio es escribible: ' . (is_writable(dirname($zipFilePath)) ? 'Sí' : 'No'));
-            
+       
             $zipResult = $zip->open($zipFilePath, ZipArchive::CREATE);
             if ($zipResult !== TRUE) {
                 $errorMessages = [
@@ -1485,7 +1943,6 @@ class CotizacionFinalController extends Controller
                 }
 
                 $processedCount++;
-                Log::info('Procesando cliente ' . $processedCount . ' de ' . count($data) . ': ' . $value['cliente']['nombre']);
 
                 try {
                     Log::info('Iniciando generación de Excel para: ' . $value['cliente']['nombre']);
@@ -1516,14 +1973,18 @@ class CotizacionFinalController extends Controller
                     if (file_exists($fullExcelPath)) {
                         $addResult = $zip->addFile($fullExcelPath, $excelFileName);
                         if ($addResult) {
-                            Log::info('Archivo agregado al ZIP exitosamente: ' . $excelFileName);
                         } else {
                             Log::error('Error al agregar archivo al ZIP: ' . $excelFileName);
                         }
                     } else {
                         Log::error('El archivo Excel no existe: ' . $fullExcelPath);
                     }
-
+                    $estadoCotizacionFinal = DB::table($this->table_contenedor_cotizacion)
+                        ->where('id', $result['id'])
+                        ->where('estado_cotizacion_final', '!=', 'PENDIENTE')
+                        ->where('estado_cotizacion_final', '!=', null)
+                        ->first();
+                    
                     // Validar valores antes de actualizar la base de datos
                     $updateData = [
                         'cotizacion_final_url' => $result['cotizacion_final_url'],
@@ -1533,22 +1994,18 @@ class CotizacionFinalController extends Controller
                         'impuestos_final' => $result['impuestos_final'],
                         'logistica_final' => $result['logistica_final'],
                         'fob_final' => $result['fob_final'],
-                        'estado_cotizacion_final' => 'PENDIENTE',
                         'peso_final' => $result['peso_final'],
                     ];
+                    if(!$estadoCotizacionFinal) {
+                        $updateData['estado_cotizacion_final'] = 'COTIZADO';
+                    }
                     
-                    Log::info('Actualizando cotización con datos:', [
-                        'id' => $result['id'],
-                        'cliente' => $value['cliente']['nombre'],
-                        'datos' => $updateData
-                    ]);
                     
                     // Actualizar tabla de cotizaciones con manejo de errores
                     try {
                         DB::table($this->table_contenedor_cotizacion)
                             ->where('id', $result['id'])
                             ->update($updateData);
-                        Log::info('Cotización actualizada exitosamente en BD');
                     } catch (\Exception $dbError) {
                         Log::error('Error al actualizar cotización en BD: ' . $dbError->getMessage(), [
                             'id' => $result['id'],
@@ -2106,7 +2563,7 @@ class CotizacionFinalController extends Controller
                     'logistica_final' => $result['logistica_final'],
                     'fob_final' => $result['fob_final'],
                     'peso_final' => $result['peso_final'],
-                    'estado_cotizacion_final' => 'PENDIENTE'
+                    'estado_cotizacion_final' => 'COTIZADO'
                 ]);
 
             return response()->json([
@@ -2151,6 +2608,17 @@ class CotizacionFinalController extends Controller
     }
 
     /**
+     * @OA\Get(
+     *     path="/carga-consolidada/contenedor/cotizacion-final/general/check-temp-directory",
+     *     tags={"Cotización Final"},
+     *     summary="Verificar directorio temporal",
+     *     description="Verifica el directorio temporal y permisos del sistema",
+     *     operationId="checkTempDirectory",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Response(response=200, description="Información del directorio"),
+     *     @OA\Response(response=500, description="Error interno")
+     * )
+     *
      * Verifica el directorio temporal y permisos
      */
     public function checkTempDirectory()
@@ -2222,6 +2690,18 @@ class CotizacionFinalController extends Controller
     }
 
     /**
+     * @OA\Get(
+     *     path="/carga-consolidada/contenedor/cotizacion-final/general/{idContenedor}/headers",
+     *     tags={"Cotización Final"},
+     *     summary="Obtener headers de cotización final",
+     *     description="Obtiene los totales y métricas de cotizaciones finales de un contenedor",
+     *     operationId="getCotizacionFinalHeaders",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="idContenedor", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Headers obtenidos exitosamente"),
+     *     @OA\Response(response=500, description="Error interno")
+     * )
+     *
      * Obtiene los headers de cotizaciones finales para un contenedor
      */
     public function getCotizacionFinalHeaders($idContenedor)
@@ -2294,6 +2774,7 @@ class CotizacionFinalController extends Controller
                             WHERE id_contenedor = ' . $idContenedor . '
                         )
                         AND estado_cotizador = "CONFIRMADO"
+                        AND (id_contenedor_pago IS NULL OR id_contenedor_pago = ' . $idContenedor . ')
                     ) as total_vendido_logistica_impuestos'),
                     
                     // Total pagado logistica
@@ -2330,27 +2811,27 @@ class CotizacionFinalController extends Controller
                 $dataHeaders = [
                     'cbm_total_peru' => [
                         "value" => $result->cbm_total_peru,
-                        "label" => "CBM Total Perú",
+                        "label" => "",
                         "icon" => "https://upload.wikimedia.org/wikipedia/commons/c/cf/Flag_of_Peru.svg"
                     ],
                     'total_logistica' => [
                         "value" => $result->total_logistica,
-                        "label" => "Total Logistica",
+                        "label" => "Logist.",
                         "icon" => "cryptocurrency-color:soc"
                     ],
                     'total_logistica_pagado' => [
                         "value" => $result->total_logistica_pagado,
-                        "label" => "Total Logistica Pagado",
+                        "label" => "Logist. Pagado",
                         "icon" => "cryptocurrency-color:soc"
                     ],
                     'total_impuestos' => [
                         "value" => $result->total_impuestos,
-                        "label" => "Total Impuestos",
+                        "label" => "Impuestos",
                         "icon" => "cryptocurrency-color:soc"
                     ],
                     'total_fob' => [
                         "value" => $result->total_fob,
-                        "label" => "Total FOB",
+                        "label" => "FOB",
                         "icon" => "cryptocurrency-color:soc"
                     ],
                 ];
@@ -2366,32 +2847,32 @@ class CotizacionFinalController extends Controller
                 $dataHeaders = [
                     'cbm_total' => [
                         "value" => $result->cbm_total_peru,
-                        "label" => "CBM Total Perú",
+                        "label" => "",
                         "icon" => "https://upload.wikimedia.org/wikipedia/commons/c/cf/Flag_of_Peru.svg"
                     ],
                     'total_logistica' => [
                         "value" => $result->total_logistica,
-                        "label" => "Total Logistica",
+                        "label" => "Logist.",
                         "icon" => "cryptocurrency-color:soc"
                     ],
                     'total_impuestos' => [
                         "value" => $result->total_impuestos,
-                        "label" => "Total Impuestos",
+                        "label" => "Impuestos",
                         "icon" => "cryptocurrency-color:soc"
                     ],
                     'total_fob' => [
                         "value" => $result->total_fob,
-                        "label" => "Total FOB",
+                        "label" => "FOB",
                         "icon" => "cryptocurrency-color:soc"
                     ],
                     'total_pagado' => [
                         "value" => $result->total_pagado,
-                        "label" => "Total Pagado",
+                        "label" => "Pagado",
                         "icon" => "cryptocurrency-color:soc"
                     ],
                     'total_vendido_logistica_impuestos' => [
                         "value" => $result->total_vendido_logistica_impuestos,
-                        "label" => "Total Vendido",
+                        "label" => "Vendido",
                         "icon" => "cryptocurrency-color:soc"
                     ],
                 ];
@@ -2407,10 +2888,10 @@ class CotizacionFinalController extends Controller
                     'data' => [
                         'cbm_total' => ["value" => 0, "label" => "CBM Pendiente", "icon" => "fas fa-cube"],
                         'cbm_embarcado' => ["value" => 0, "label" => "CBM Embarcado", "icon" => "fas fa-ship"],
-                        'total_logistica' => ["value" => 0, "label" => "Total Logistica", "icon" => "fas fa-dollar-sign"],
-                        'qty_items' => ["value" => 0, "label" => "Cantidad de Items", "icon" => "bi:boxes"],
+                        'total_logistica' => ["value" => 0, "label" => "Logistica", "icon" => "fas fa-dollar-sign"],
+                        'qty_items' => ["value" => 0, "label" => "Items", "icon" => "bi:boxes"],
                         'cbm_total_peru' => ["value" => 0, "label" => "CBM Total Perú", "icon" => "https://upload.wikimedia.org/wikipedia/commons/c/cf/Flag_of_Peru.svg"],
-                        'total_fob' => ["value" => 0, "label" => "Total FOB", "icon" => "fas fa-dollar-sign"]
+                        'total_fob' => ["value" => 0, "label" => "FOB", "icon" => "fas fa-dollar-sign"]
                     ],
                     'carga' => ''
                 ]);
@@ -2423,6 +2904,19 @@ class CotizacionFinalController extends Controller
             ], 500);
         }
     }
+    /**
+     * @OA\Delete(
+     *     path="/carga-consolidada/contenedor/cotizacion-final/general/delete-cotizacion-final-file/{idCotizacion}",
+     *     tags={"Cotización Final"},
+     *     summary="Eliminar archivo de cotización final",
+     *     description="Elimina el archivo de cotización final de una cotización",
+     *     operationId="deleteCotizacionFinalFile",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="idCotizacion", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Archivo eliminado exitosamente"),
+     *     @OA\Response(response=404, description="Cotización no encontrada")
+     * )
+     */
     public function deleteCotizacionFinalFile($idCotizacionFinal)
     {
         try {
@@ -2442,6 +2936,7 @@ class CotizacionFinalController extends Controller
 
             // Actualizar el campo a null en la base de datos
             $cotizacion->update(['cotizacion_final_url' => null]);
+            $cotizacion->update(['estado_cotizacion_final' => 'PENDIENTE']);
 
             return response()->json([
                 'success' => true,
@@ -2457,6 +2952,18 @@ class CotizacionFinalController extends Controller
     }
 
     /**
+     * @OA\Get(
+     *     path="/carga-consolidada/contenedor/cotizacion-final/general/download-cotizacion-excel/{idCotizacion}",
+     *     tags={"Cotización Final"},
+     *     summary="Descargar Excel de cotización final",
+     *     description="Descarga el archivo Excel de cotización final individual",
+     *     operationId="downloadCotizacionFinalExcel",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="idCotizacion", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Archivo Excel descargado"),
+     *     @OA\Response(response=404, description="Cotización o archivo no encontrado")
+     * )
+     *
      * Descarga el archivo Excel de cotización final individual
      */
     public function downloadCotizacionFinalExcel($idCotizacion)
@@ -3628,7 +4135,8 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
             
             $objPHPExcel->setActiveSheetIndex(2)->setCellValue($InitialColumn . '44', "=SUM(C44" . ":" . $InitialColumnLetter . "44)");
             $productsCount = count($data['cliente']['productos']);
-            $ColumndIndex = Coordinate::stringFromColumnIndex($productsCount + 1);
+            //C column + products count
+            $ColumndIndex = Coordinate::stringFromColumnIndex($productsCount + 2);
             
             $objPHPExcel->setActiveSheetIndex(0)->setCellValue('J20', "=MAX('3'!C27:" . $ColumndIndex . "27)");
             $objPHPExcel->setActiveSheetIndex(2)->setCellValue($InitialColumn . '43', "Total");
@@ -3907,7 +4415,9 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
             $objPHPExcel->getActiveSheet()->setTitle('2');
             
             $objWriter = IOFactory::createWriter($objPHPExcel, 'Xlsx');
-            $excelFileName = 'Cotizacion' . ($data['cliente']['nombre'] ?? 'Cliente') . '.xlsx';
+            // Agregar timestamp al nombre del archivo para evitar sobrescrituras
+            $timestamp = date('YmdHis');
+            $excelFileName = 'Cotizacion' . ($data['cliente']['nombre'] ?? 'Cliente') . '_' . $timestamp . '.xlsx';
             
             // Crear directorio si no existe
             $directory = public_path('storage/cotizacion_final/' . $idContenedor);

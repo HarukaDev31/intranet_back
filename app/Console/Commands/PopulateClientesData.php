@@ -127,7 +127,7 @@ class PopulateClientesData extends Command
         foreach ($cotizaciones as $cotizacion) {
             // Convertir el objeto stdClass a array para evitar problemas de acceso
             $clienteData = [
-                'fecha' => $cotizacion->fecha,
+                'fecha' => $cotizacion->fecha_confirmacion ?? $cotizacion->fecha,
                 'nombre' => $cotizacion->nombre,
                 'documento' => $cotizacion->documento,
                 'correo' => $cotizacion->correo,

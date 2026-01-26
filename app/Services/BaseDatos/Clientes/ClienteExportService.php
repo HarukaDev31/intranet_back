@@ -5,6 +5,7 @@ namespace App\Services\BaseDatos\Clientes;
 use App\Models\BaseDatos\Clientes\Cliente;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use Carbon\Carbon;
@@ -36,9 +37,6 @@ class ClienteExportService
             
             // Llenar datos y obtener información de dimensiones
             $infoDimensiones = $this->llenarDatosExcel($sheet, $datosExport);
-            
-            // Configurar encabezados de servicios dinámicamente
-            $this->configurarEncabezadosServicios($sheet, $infoDimensiones['maxServiceCount']);
             
             // Aplicar formato y estilos
             $this->aplicarFormatoExcel($sheet, $infoDimensiones);
@@ -139,8 +137,9 @@ class ClienteExportService
             'H3' => 'WHATSAPP',
             'I3' => 'FECHA REGISTRO',
             'J3' => 'SERVICIO',
-            'K3' => 'CATEGORIA',
-            'L2' => 'HISTORIAL DE COMPRA',
+            'K3' => 'MONTO',
+            'L3' => 'FECHA SERVICIO',
+            'M3' => 'CATEGORIA',
         ];
 
         foreach ($headers as $cell => $value) {
@@ -155,64 +154,83 @@ class ClienteExportService
     private function llenarDatosExcel($sheet, $datosExport)
     {
         $row = 4;
-        $maxServiceCount = 0;
+        $mergedRanges = []; // Almacenar rangos para mergear después
 
         foreach ($datosExport as $item) {
             $cliente = $item['cliente'];
             $servicios = $item['servicios'];
             $categoria = $item['categoria'];
-            $primerServicio = !empty($servicios) ? $servicios[0] : null;
-
-            // Llenar información principal del cliente
-            $sheet->setCellValue('B' . $row, $cliente->id);
-            $sheet->setCellValue('C' . $row, $cliente->nombre);
-            $sheet->setCellValue('D' . $row, $cliente->documento);
-            $sheet->setCellValue('E' . $row, $cliente->ruc);
-            $sheet->setCellValue('F' . $row, $cliente->empresa);
-            $sheet->setCellValue('G' . $row, $cliente->correo);
-            $sheet->setCellValue('H' . $row, $cliente->telefono);
-            $sheet->setCellValue('I' . $row, $cliente->fecha ? $cliente->fecha->format('d/m/Y') : '');
-            $sheet->setCellValue('J' . $row, $primerServicio ? $primerServicio['servicio'] : '');
-            $sheet->setCellValue('K' . $row, $categoria);
             
-            // Llenar servicios
-            $currentColumn = 'L';
-            if (count($servicios) > $maxServiceCount) {
-                $maxServiceCount = count($servicios);
+            // Si no hay servicios, crear una fila vacía
+            if (empty($servicios)) {
+                $startRow = $row;
+                
+                // Llenar información principal del cliente
+                $sheet->setCellValue('B' . $row, $cliente->id);
+                $sheet->setCellValue('C' . $row, $cliente->nombre);
+                $sheet->setCellValue('D' . $row, $cliente->documento);
+                $sheet->setCellValue('E' . $row, $cliente->ruc);
+                $sheet->setCellValue('F' . $row, $cliente->empresa);
+                $sheet->setCellValue('G' . $row, $cliente->correo);
+                $sheet->setCellValue('H' . $row, $cliente->telefono);
+                $sheet->setCellValue('I' . $row, $cliente->fecha ? $cliente->fecha->format('d/m/Y') : '');
+                $sheet->setCellValue('J' . $row, ''); // Sin servicio
+                $sheet->setCellValue('K' . $row, ''); // Sin monto
+                $sheet->setCellValue('L' . $row, ''); // Sin fecha servicio
+                $sheet->setCellValue('M' . $row, $categoria);
+                
+                $endRow = $row;
+                $mergedRanges[] = [
+                    'startRow' => $startRow,
+                    'endRow' => $endRow,
+                    'cliente' => $cliente,
+                    'categoria' => $categoria
+                ];
+                
+                $row++;
+            } else {
+                // Crear una fila por cada servicio
+                $startRow = $row;
+                
+                foreach ($servicios as $index => $servicio) {
+                    // Solo llenar información del cliente en la primera fila
+                    if ($index === 0) {
+                        $sheet->setCellValue('B' . $row, $cliente->id);
+                        $sheet->setCellValue('C' . $row, $cliente->nombre);
+                        $sheet->setCellValue('D' . $row, $cliente->documento);
+                        $sheet->setCellValue('E' . $row, $cliente->ruc);
+                        $sheet->setCellValue('F' . $row, $cliente->empresa);
+                        $sheet->setCellValue('G' . $row, $cliente->correo);
+                        $sheet->setCellValue('H' . $row, $cliente->telefono);
+                        $sheet->setCellValue('I' . $row, $cliente->fecha ? $cliente->fecha->format('d/m/Y') : '');
+                        $sheet->setCellValue('M' . $row, $categoria);
+                    }
+                    
+                    // Llenar información del servicio (siempre)
+                    $sheet->setCellValue('J' . $row, $servicio['servicio']);
+                    $sheet->setCellValue('K' . $row, $servicio['monto'] ?? '');
+                    $sheet->setCellValue('L' . $row, $servicio['fecha'] ? Carbon::parse($servicio['fecha'])->format('d/m/Y') : '');
+                    
+                    $row++;
+                }
+                
+                $endRow = $row - 1;
+                $mergedRanges[] = [
+                    'startRow' => $startRow,
+                    'endRow' => $endRow,
+                    'cliente' => $cliente,
+                    'categoria' => $categoria
+                ];
             }
-            
-            foreach ($servicios as $servicio) {
-                $sheet->setCellValue($currentColumn . $row, $servicio['servicio']);
-                $sheet->setCellValue($this->getColumnLetter($currentColumn, 1) . $row, $servicio['monto'] ?? 0);
-                $sheet->setCellValue($this->getColumnLetter($currentColumn, 2) . $row, $servicio['fecha']);
-                $currentColumn = $this->getColumnLetter($currentColumn, 3);
-            }
-
-            $row++;
         }
         
         return [
-            'maxServiceCount' => $maxServiceCount,
             'lastRow' => $row - 1,
-            'maxColumn' => $this->getColumnLetter('L', ($maxServiceCount * 3) - 1)
+            'maxColumn' => 'M',
+            'mergedRanges' => $mergedRanges
         ];
     }
 
-    /**
-     * Configura los encabezados de servicios dinámicamente
-     */
-    private function configurarEncabezadosServicios($sheet, $maxServiceCount)
-    {
-        $startColumn = 'L';
-        for ($i = 0; $i < $maxServiceCount; $i++) {
-            $sheet->setCellValue($startColumn . 3, 'SERVICIO ' . ($i + 1));
-            $startColumn = $this->getColumnLetter($startColumn, 1);
-            $sheet->setCellValue($startColumn . 3, 'MONTO ' . ($i + 1));
-            $startColumn = $this->getColumnLetter($startColumn, 1);
-            $sheet->setCellValue($startColumn . 3, 'FECHA ' . ($i + 1));
-            $startColumn = $this->getColumnLetter($startColumn, 1);
-        }
-    }
 
     /**
      * Aplica formato y estilos al Excel
@@ -221,10 +239,30 @@ class ClienteExportService
     {
         $maxColumn = $infoDimensiones['maxColumn'];
         $lastRow = $infoDimensiones['lastRow'];
+        $mergedRanges = $infoDimensiones['mergedRanges'];
         
         // Unir celdas de encabezados
-        $sheet->mergeCells('B2:K2');
-        $sheet->mergeCells('L2:' . $maxColumn . '2');
+        $sheet->mergeCells('B2:M2');
+        
+        // Mergear celdas de información del cliente que no dependen de servicios
+        // Columnas a mergear: B (N), C (NOMBRE), D (DNI), E (RUC), F (EMPRESA), G (CORREO), H (WHATSAPP), I (FECHA REGISTRO), M (CATEGORIA)
+        foreach ($mergedRanges as $range) {
+            $startRow = $range['startRow'];
+            $endRow = $range['endRow'];
+            
+            // Solo mergear si hay más de una fila
+            if ($endRow > $startRow) {
+                // Mergear columnas B-I y M (información del cliente)
+                $columnsToMerge = ['B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'M'];
+                foreach ($columnsToMerge as $col) {
+                    $sheet->mergeCells($col . $startRow . ':' . $col . $endRow);
+                    // Centrar verticalmente el contenido mergeado
+                    $sheet->getStyle($col . $startRow . ':' . $col . $endRow)
+                        ->getAlignment()
+                        ->setVertical(\PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER);
+                }
+            }
+        }
         
         // Configurar ancho de columnas específico para mejor legibilidad
         $columnWidths = [
@@ -236,33 +274,19 @@ class ClienteExportService
             'G' => 30,  // CORREO
             'H' => 20,  // WHATSAPP
             'I' => 15,  // FECHA REGISTRO
-            'J' => 15,  // SERVICIO
-            'K' => 15,  // CATEGORIA
+            'J' => 20,  // SERVICIO
+            'K' => 15,  // MONTO
+            'L' => 15,  // FECHA SERVICIO
+            'M' => 15,  // CATEGORIA
         ];
         
-        // Aplicar anchos específicos a las columnas principales
+        // Aplicar anchos específicos a las columnas
         foreach ($columnWidths as $column => $width) {
             $sheet->getColumnDimension($column)->setWidth($width);
         }
         
-        // Para las columnas de servicios, usar autoSize pero con un mínimo
-        $startServiceColumn = 'L';
-        for ($i = 0; $i < $infoDimensiones['maxServiceCount']; $i++) {
-            $serviceCol = $this->getColumnLetter($startServiceColumn, $i * 3);
-            $montoCol = $this->getColumnLetter($startServiceColumn, $i * 3 + 1);
-            $fechaCol = $this->getColumnLetter($startServiceColumn, $i * 3 + 2);
-            
-            $sheet->getColumnDimension($serviceCol)->setWidth(20);  // SERVICIO
-            $sheet->getColumnDimension($montoCol)->setWidth(15);    // MONTO
-            $sheet->getColumnDimension($fechaCol)->setWidth(15);    // FECHA
-        }
-        
         // Configurar formato de texto para la columna H (WhatsApp)
         $sheet->getStyle('H4:H' . $lastRow)->getNumberFormat()->setFormatCode(\PhpOffice\PhpSpreadsheet\Style\NumberFormat::FORMAT_TEXT);
-        
-        // Configurar formato de texto para columnas de servicios
-        $serviceRange = 'L4:' . $maxColumn . $lastRow;
-        $sheet->getStyle($serviceRange)->getNumberFormat()->setFormatCode(\PhpOffice\PhpSpreadsheet\Style\NumberFormat::FORMAT_TEXT);
         
         // Aplicar bordes a toda la tabla
         $range = 'B3:' . $maxColumn . $lastRow;
@@ -324,26 +348,26 @@ class ClienteExportService
         $serviciosPorCliente = [];
 
         // Obtener servicios de pedido_curso
-        $pedidosCurso = \DB::table('pedido_curso as pc')
+        $pedidosCurso = DB::table('pedido_curso as pc')
             ->join('entidad as e', 'pc.ID_Entidad', '=', 'e.ID_Entidad')
             ->where('pc.Nu_Estado', 2)
             ->whereIn('pc.id_cliente', $clienteIds)
             ->select(
                 'pc.id_cliente',
                 'e.Fe_Registro as fecha',
-                \DB::raw("'Curso' as servicio"),
-                \DB::raw('NULL as monto')
+                DB::raw("'Curso' as servicio"),
+                DB::raw('NULL as monto')
             )
             ->get();
 
         // Obtener servicios de contenedor_consolidado_cotizacion
-        $cotizaciones = \DB::table('contenedor_consolidado_cotizacion')
+        $cotizaciones = DB::table('contenedor_consolidado_cotizacion')
             ->where('estado_cotizador', 'CONFIRMADO')
             ->whereIn('id_cliente', $clienteIds)
             ->select(
                 'id_cliente',
                 'fecha',
-                \DB::raw("'Consolidado' as servicio"),
+                DB::raw("'Consolidado' as servicio"),
                 'monto'
             )
             ->get();

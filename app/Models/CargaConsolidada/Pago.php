@@ -23,7 +23,7 @@ class Pago extends Model
 
     protected $casts = [
         'monto' => 'decimal:4',
-        'payment_date' => 'date',
+        'payment_date' =>'string',
         'confirmation_date' => 'datetime',
         'is_confirmed' => 'boolean',
         'created_at' => 'datetime'

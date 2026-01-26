@@ -75,7 +75,13 @@ class Cotizacion extends Model
         'id_cliente_importacion',
         'delivery_form_registered_at',
         'total_pago_delivery',
-        'send_alert_difference_cbm_status'
+        'tipo_servicio',
+        'send_alert_difference_cbm_status',
+        'cod_contract',
+        'autosigned_contract_at',
+        'cotizacion_contrato_autosigned_url',
+        'from_calculator',
+        'id_contenedor_destino'
     ];
 
     /**
@@ -86,6 +92,7 @@ class Cotizacion extends Model
     protected $casts = [
         'fecha' => 'datetime',
         'fecha_confirmacion' => 'datetime',
+        'autosigned_contract_at' => 'datetime',
         'volumen' => 'decimal:2',
         'valor_doc' => 'decimal:2',
         'valor_cot' => 'decimal:2',
@@ -104,6 +111,7 @@ class Cotizacion extends Model
         'qty_item' => 'integer',
         'delivery_form_registered_at' => 'date',
         'total_pago_delivery' => 'decimal:2',
+        'from_calculator' => 'boolean',
     ];
 
     /**
@@ -164,8 +172,9 @@ class Cotizacion extends Model
         'C.FINAL' => 'C. Final',
         'AJUSTADO' => 'Ajustado',
         'COTIZADO' => 'Cotizado',
+        'COBRANDO' => 'Cobrando',
         'PAGADO' => 'Pagado',
-        'SOBREPAGO' => 'Sobrepago'
+        'SOBREPAGO' => 'Sobrepago',
     ];
 
     /**
@@ -219,6 +228,14 @@ class Cotizacion extends Model
     public function pagos()
     {
         return $this->hasMany(Pago::class, 'id_cotizacion');
+    }
+
+    /**
+     * Relación con Facturas Comerciales
+     */
+    public function facturasComerciales()
+        {
+            return $this->hasMany(FacturaComercial::class, 'quotation_id', 'id');
     }
 
     /**

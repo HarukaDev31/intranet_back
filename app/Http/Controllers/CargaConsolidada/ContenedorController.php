@@ -10,17 +10,21 @@ use App\Models\Usuario;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Tymon\JWTAuth\Facades\JWTAuth;
+use App\Jobs\ProcessPackingListUploadJob;
 use App\Models\CargaConsolidada\Cotizacion;
 use App\Models\CargaConsolidada\CotizacionProveedor;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use App\Models\CalculadoraImportacion;
 use App\Models\Notificacion;
+use App\Events\CotizacionChangeContainer;
 use App\Traits\WhatsappTrait;
+use App\Traits\GoogleSheetsHelper;
+use Carbon\Carbon;
 
 class ContenedorController extends Controller
 {
-    use WhatsappTrait;
+    use WhatsappTrait, GoogleSheetsHelper;
     private $defaultAgenteSteps = [];
 
     private $defautlAgenteChinaSteps = [];
@@ -30,48 +34,77 @@ class ContenedorController extends Controller
     private $defaultAdministracion = [];
     public function __construct()
     {
+        $host = rtrim(config('app.url') ?? env('APP_URL'), '/');
         $this->defaultAgenteSteps = array(
-            ["name" => "ORDEN DE COMPRA", "iconURL" => env('APP_URL') . "assets/icons/orden.png"],
-            ["name" => "PAGOS", "iconURL" => env('APP_URL') . "assets/icons/pagos.png"],
-            ["name" => "RECEPCION DE CARGA", "iconURL" => env('APP_URL') . "assets/icons/recepcion.png"],
-            ["name" => "BOOKING", "iconURL" => env('APP_URL') . "assets/icons/inspeccion.png"],
-            ["name" => "DOCUMENTACION", "iconURL" => env('APP_URL') . "assets/icons/documentacion.png"]
+            ["name" => "ORDEN DE COMPRA", "iconURL" => $host . '/assets/icons/orden.png'],
+            ["name" => "PAGOS", "iconURL" => $host . '/assets/icons/pagos.png'],
+            ["name" => "RECEPCION DE CARGA", "iconURL" => $host . '/assets/icons/recepcion.png'],
+            ["name" => "BOOKING", "iconURL" => $host . '/assets/icons/inspeccion.png'],
+            ["name" => "DOCUMENTACION", "iconURL" => $host . '/assets/icons/documentacion.png']
         );
         $this->defautlAgenteChinaSteps = array(
-            ["name" => "ORDEN DE COMPRA", "iconURL" => env('APP_URL') . "assets/icons/orden.png"],
-            ["name" => "PAGOS Y COORDINACION", "iconURL" => env('APP_URL') . "assets/icons/coordinacion.png"],
-            ["name" => "RECEPCION DE CARGA", "iconURL" => env('APP_URL') . "assets/icons/recepcion.png"],
-            ["name" => "BOOKING", "iconURL" => env('APP_URL') . "assets/icons/inspeccion.png"],
-            ["name" => "DOCUMENTACION", "iconURL" => env('APP_URL') . "assets/icons/documentacion.png"]
+            ["name" => "ORDEN DE COMPRA", "iconURL" => $host . '/assets/icons/orden.png'],
+            ["name" => "PAGOS Y COORDINACION", "iconURL" => $host . '/assets/icons/coordinacion.png'],
+            ["name" => "RECEPCION DE CARGA", "iconURL" => $host . '/assets/icons/recepcion.png'],
+            ["name" => "BOOKING", "iconURL" => $host . '/assets/icons/inspeccion.png'],
+            ["name" => "DOCUMENTACION", "iconURL" => $host . '/assets/icons/documentacion.png']
         );
         $this->defaultJefeChina = array(
-            ["name" => "ORDEN DE COMPRA", "iconURL" => env('APP_URL') . "assets/icons/orden.png"],
-            ["name" => "PAGOS Y COORDINACION", "iconURL" => env('APP_URL') . "assets/icons/coordinacion.png"],
-            ["name" => "RECEPCION E INSPECCION", "iconURL" => env('APP_URL') . "assets/icons/recepcion.png"],
-            ["name" => "BOOKING", "iconURL" => env('APP_URL') . "assets/icons/inspeccion.png"],
-            ["name" => "DOCUMENTACION", "iconURL" => env('APP_URL') . "assets/icons/documentacion.png"]
+            ["name" => "ORDEN DE COMPRA", "iconURL" => $host . '/assets/icons/orden.png'],
+            ["name" => "PAGOS Y COORDINACION", "iconURL" => $host . '/assets/icons/coordinacion.png'],
+            ["name" => "RECEPCION E INSPECCION", "iconURL" => $host . '/assets/icons/recepcion.png'],
+            ["name" => "BOOKING", "iconURL" => $host . '/assets/icons/inspeccion.png'],
+            ["name" => "DOCUMENTACION", "iconURL" => $host . '/assets/icons/documentacion.png']
         );
         $this->defaultCotizador = array(
-            ["name" => "COTIZACION", "iconURL" => env('APP_URL') . "assets/icons/cotizacion.png"],
-            ["name" => "CLIENTES", "iconURL" => env('APP_URL') . "assets/icons/clientes.png"],
-            ["name" => "DOCUMENTACION", "iconURL" => env('APP_URL') . "assets/icons/cdocumentacion.png"],
-            ["name" => "COTIZACION FINAL", "iconURL" => env('APP_URL') . "assets/icons/cotizacion_final.png"],
-            ["name" => "ENTREGA", "iconURL" => env('APP_URL') . "assets/icons/entrega.png"],
-            ["name" => "FACTURA Y GUIA", "iconURL" => env('APP_URL') . "assets/icons/factura.png"]
+            ["name" => "COTIZACION", "iconURL" => $host . '/assets/icons/cotizacion.png'],
+            ["name" => "CLIENTES", "iconURL" => $host . '/assets/icons/clientes.png'],
+            ["name" => "DOCUMENTACION", "iconURL" => $host . '/assets/icons/cdocumentacion.png'],
+            ["name" => "COTIZACION FINAL", "iconURL" => $host . '/assets/icons/cotizacion_final.png'],
+            ["name" => "ENTREGA", "iconURL" => $host . '/assets/icons/entrega.png'],
+            ["name" => "FACTURA Y GUIA", "iconURL" => $host . '/assets/icons/factura.png']
         );
         $this->defaultDocumentacion = array(
-            ["name" => "COTIZACION", "iconURL" => env('APP_URL') . "assets/icons/cotizacion.png"],
-            ["name" => "DOCUMENTACION", "iconURL" => env('APP_URL') . "assets/icons/cdocumentacion.png"],
-            ["name" => "ADUANA", "iconURL" => env('APP_URL') . "assets/icons/aduana.png"],
+            ["name" => "CLIENTES", "iconURL" => $host . '/assets/icons/clientes.png'],
+            ["name" => "DOCUMENTACION", "iconURL" => $host . '/assets/icons/cdocumentacion.png'],
+            ["name" => "ADUANA", "iconURL" => $host . '/assets/icons/aduana.png'],
         );
         $this->defaultAdministracion = array(
-            ["name" => "CLIENTES", "iconURL" => env('APP_URL') . "assets/icons/clientes.png"],
-            ["name" => "DOCUMENTACION", "iconURL" => env('APP_URL') . "assets/icons/cdocumentacion.png"],
-            ["name" => "COTIZACION FINAL", "iconURL" => env('APP_URL') . "assets/icons/cotizacion_final.png"],
-            ["name" => "ENTREGA", "iconURL" => env('APP_URL') . "assets/icons/entrega.png"],
-            ["name" => "FACTURA Y GUIA", "iconURL" => env('APP_URL') . "assets/icons/factura.png"]
+            ["name" => "CLIENTES", "iconURL" => $host . '/assets/icons/clientes.png'],
+            ["name" => "DOCUMENTACION", "iconURL" => $host . '/assets/icons/cdocumentacion.png'],
+            ["name" => "COTIZACION FINAL", "iconURL" => $host . '/assets/icons/cotizacion_final.png'],
+            ["name" => "ENTREGA", "iconURL" => $host . '/assets/icons/entrega.png'],
+            ["name" => "FACTURA Y GUIA", "iconURL" => $host . '/assets/icons/factura.png']
         );
     }
+
+    /**
+     * @OA\Get(
+     *     path="/carga-consolidada/contenedores",
+     *     tags={"Carga Consolidada"},
+     *     summary="Listar contenedores",
+     *     description="Obtiene la lista de contenedores de carga consolidada",
+     *     operationId="getContenedores",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(
+     *         name="completado",
+     *         in="query",
+     *         description="Filtrar contenedores completados",
+     *         required=false,
+     *         @OA\Schema(type="boolean", default=false)
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Lista de contenedores obtenida exitosamente",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=true),
+     *             @OA\Property(property="data", type="array", @OA\Items(type="object"))
+     *         )
+     *     ),
+     *     @OA\Response(response=401, description="No autenticado"),
+     *     @OA\Response(response=500, description="Error del servidor")
+     * )
+     */
     public function index(Request $request)
     {
         try {
@@ -105,8 +138,9 @@ class ContenedorController extends Controller
                 });
             }
 
-            //order by int(carga) desc
-            $query->orderBy(DB::raw('CAST(carga AS UNSIGNED)'), 'desc');
+            //order by int(carga) desc y en base al año y mes de f_inicio
+            $query->orderBy(DB::raw('YEAR(f_inicio)'), 'DESC');
+            $query->orderByRaw('CAST(carga AS UNSIGNED) DESC');
             $data = $query->paginate(100);
 
             // Optimización: obtener todos los ids de la página y hacer agregaciones en lote.
@@ -181,6 +215,7 @@ class ContenedorController extends Controller
                     'id' => $c->id,
                     'carga' => $c->carga,
                     'mes' => $c->mes,
+                    'anio' => date('Y', strtotime($c->f_inicio)),
                     'f_cierre' => $c->f_cierre,
                     'f_puerto' => $c->f_puerto,
                     'f_entrega' => $c->f_entrega,
@@ -227,18 +262,52 @@ class ContenedorController extends Controller
         }
     }
 
-
+    /**
+     * @OA\Post(
+     *     path="/carga-consolidada/contenedor",
+     *     tags={"Carga Consolidada"},
+     *     summary="Crear o actualizar contenedor",
+     *     description="Crea un nuevo contenedor o actualiza uno existente",
+     *     operationId="storeContenedor",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             @OA\Property(property="id", type="integer", nullable=true),
+     *             @OA\Property(property="carga", type="string"),
+     *             @OA\Property(property="mes", type="integer"),
+     *             @OA\Property(property="f_cierre", type="string", format="date"),
+     *             @OA\Property(property="ID_Pais", type="integer")
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Contenedor creado/actualizado exitosamente"),
+     *     @OA\Response(response=500, description="Error al crear contenedor")
+     * )
+     */
     public function store(Request $request)
 
     {
         try {
             $data = $request->all();
-            if ($data['id']) {
-                $contenedor = Contenedor::find($data['id']);
-                $contenedor->update($data);
-            } else {
-                $contenedor = Contenedor::create($data);
-                $this->generateSteps($contenedor->id);
+                if ($data['id']) {
+                    $contenedor = Contenedor::find($data['id']);
+                    $contenedor->update($data);
+                } else {
+                    // Calcular f_inicio usando mes (campo mes) y año de f_cierre
+                    if (!empty($data['f_cierre'])) {
+                        $year = date('Y', strtotime($data['f_cierre']));
+                        // Determinar mes: si es numérico válido usarlo, sino fallback al mes de f_cierre
+                        $month = null;
+                        if (isset($data['mes']) && is_numeric($data['mes']) && (int)$data['mes'] >= 1 && (int)$data['mes'] <= 12) {
+                            $month = (int)$data['mes'];
+                        } else {
+                            $month = (int)date('m', strtotime($data['f_cierre']));
+                        }
+                        $data['f_inicio'] = sprintf('%04d-%02d-01', $year, $month);
+                    }
+
+                    $contenedor = Contenedor::create($data);
+                    $this->generateSteps($contenedor->id);
             }
 
 
@@ -327,6 +396,19 @@ class ContenedorController extends Controller
             ], 500);
         }
     }
+    
+    /**
+     * @OA\Get(
+     *     path="/carga-consolidada/contenedor/{id}",
+     *     tags={"Carga Consolidada"},
+     *     summary="Obtener contenedor",
+     *     description="Obtiene los detalles de un contenedor específico",
+     *     operationId="showContenedor",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="id", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Contenedor obtenido exitosamente")
+     * )
+     */
     public function show($id)
     {
         // Implementación básica
@@ -342,6 +424,19 @@ class ContenedorController extends Controller
         return response()->json(['message' => 'Contenedor update']);
     }
 
+    /**
+     * @OA\Delete(
+     *     path="/carga-consolidada/contenedor/{id}",
+     *     tags={"Carga Consolidada"},
+     *     summary="Eliminar contenedor",
+     *     description="Elimina un contenedor y todos sus datos asociados",
+     *     operationId="destroyContenedor",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="id", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Contenedor eliminado exitosamente"),
+     *     @OA\Response(response=500, description="Error al eliminar")
+     * )
+     */
     public function destroy($id)
     {
         try {
@@ -362,11 +457,34 @@ class ContenedorController extends Controller
         }
     }
 
+    /**
+     * @OA\Get(
+     *     path="/carga-consolidada/contenedor/filter-options",
+     *     tags={"Contenedor"},
+     *     summary="Obtener opciones de filtro",
+     *     description="Obtiene las opciones de filtro disponibles para contenedores",
+     *     operationId="filterOptionsContenedor",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Response(response=200, description="Opciones obtenidas exitosamente")
+     * )
+     */
     public function filterOptions()
     {
         // Implementación básica
         return response()->json(['message' => 'Contenedor filter options']);
     }
+    /**
+     * @OA\Get(
+     *     path="/carga-consolidada/contenedor/{idContenedor}/pasos",
+     *     tags={"Contenedor"},
+     *     summary="Obtener pasos del contenedor",
+     *     description="Obtiene los pasos de proceso del contenedor según el rol del usuario",
+     *     operationId="getContenedorPasos",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="idContenedor", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Pasos obtenidos exitosamente")
+     * )
+     */
     public function getContenedorPasos($idContenedor)
     {
         try {
@@ -450,10 +568,10 @@ class ContenedorController extends Controller
         // Si después de limpiar no arranca con assets/, no forzamos nada: devolvemos base + original limpio
         $baseUrl = rtrim(config('app.url'), '/');
         if (!preg_match('#^(assets/|storage/)#', $ruta)) {
-            return $baseUrl . '/' . $ruta;
+            return $baseUrl . '/' . ltrim($ruta, '/');
         }
 
-        return $baseUrl . '/' . $ruta;
+        return $baseUrl . '/' . ltrim($ruta, '/');
     }
     public function getValidContainers()
     {
@@ -472,6 +590,17 @@ class ContenedorController extends Controller
 
         return response()->json(['data' => $data, 'success' => true]);
     }
+    /**
+     * @OA\Get(
+     *     path="/carga-consolidada/contenedor/cargas-disponibles",
+     *     tags={"Contenedor"},
+     *     summary="Obtener cargas disponibles",
+     *     description="Obtiene la lista de cargas disponibles",
+     *     operationId="getCargasDisponibles",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Response(response=200, description="Cargas obtenidas exitosamente")
+     * )
+     */
     public function getCargasDisponibles()
     {
         $hoy = date('Y-m-d');
@@ -479,6 +608,57 @@ class ContenedorController extends Controller
             ->orderByRaw('CAST(carga AS UNSIGNED) DESC');
         return $query->get();
     }
+    /**
+     * @OA\Get(
+     *     path="/carga-consolidada/contenedor/cargas-disponibles-dropdown",
+     *     tags={"Contenedor"},
+     *     summary="Obtener cargas disponibles dropdown",
+     *     @OA\Parameter(name="year", in="query", required=false, @OA\Schema(type="integer")),
+     *     description="Obtiene la lista de cargas disponibles para dropdown",
+     *     operationId="getCargasDisponiblesDropdown",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Response(response=200, description="Cargas obtenidas exitosamente")
+     * )
+     */
+    public function getCargasDisponiblesDropdown(Request $request){
+        $year = $request->year?$request->year:date('Y');
+        $cargas = Contenedor::where('empresa', '!=', 1)
+            ->whereYear('f_inicio', $year)
+            //get row with f_inicio null where year is 2025
+            ->where(function($query) use ($year){
+                $query->whereYear('f_inicio', $year)
+                    ->orWhereNull('f_inicio');
+            })
+            ->orderByRaw('CAST(carga AS UNSIGNED) DESC')
+            ->get();
+        //return value label 
+        return $cargas->map(function($carga){
+            return [
+                'value' => $carga->id,
+                'label' => 'Contenedor #'.$carga->carga.' - '.Carbon::parse($carga->f_inicio??'2025-01-01')->format('Y'),
+            ];
+        });
+        return response()->json(['data' => $cargas, 'success' => true]);
+    }
+    /**
+     * @OA\Post(
+     *     path="/carga-consolidada/cotizaciones/mover-consolidado",
+     *     tags={"Contenedor"},
+     *     summary="Mover cotización a consolidado",
+     *     description="Mueve una cotización de un contenedor a otro (consolidado)",
+     *     operationId="moveCotizacionToConsolidado",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             @OA\Property(property="idCotizacion", type="integer"),
+     *             @OA\Property(property="idContenedorDestino", type="integer")
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Cotización movida exitosamente"),
+     *     @OA\Response(response=404, description="Cotización no encontrada")
+     * )
+     */
     public function moveCotizacionToConsolidado(Request $request)
     {
         try {
@@ -489,11 +669,15 @@ class ContenedorController extends Controller
             if (!$cotizacion) {
                 return response()->json(['message' => 'Cotización no encontrada', 'success' => false], 404);
             }
+            $idContenedorOrigen=Cotizacion::find($idCotizacion)->id_contenedor;
+
             $cotizacion->id_contenedor = $idContenedorDestino;
             $cotizacion->estado_cotizador = 'CONFIRMADO';
             $cotizacion->updated_at = date('Y-m-d H:i:s');
             $cotizacion->save();
             $contenedorDestino=Contenedor::find($idContenedorDestino);
+            $contenedorOrigen=Contenedor::find($idContenedorOrigen);
+            $cargaOrigen=$contenedorOrigen->carga;
             // Actualiza los proveedores asociados
             $proveedores = CotizacionProveedor::where('id_cotizacion', $idCotizacion)->get();
             if (!$proveedores || $proveedores->isEmpty()) {
@@ -506,20 +690,47 @@ class ContenedorController extends Controller
             }
 
             // Crear notificaciones para Coordinación y Jefe de Ventas
-            $this->crearNotificacionesMovimientoConsolidado($cotizacion, $idContenedorDestino);
+            $this->crearNotificacionesMovimientoConsolidado($cotizacion, $idContenedorOrigen, $idContenedorDestino);
           
-            $message = "Hola @nombrecliente, segun lo conversado estamos pasando su carga para el consolidado @contenedorDestino.
+            $message = "Hola @nombrecliente, tu carga que estaba proyectado subir en el consolidado @cargaOrigen estamos pasándolo al @contenedorDestino,ya que al parecer tu pedido no llego a la fecha de cierre. 
 Le estaré informando cualquier avance 🫡.";
+/**if cargaDestino to int < carga origen use this message instead Hola (nombre), tu carga que estaba proyectado subir en el consolidado # , estará lista antes de lo previsto. Para agilizar tu importación, la hemos pasado al consolidado #
+Le estaré informando cualquier avance 🫡 */
+            if ($contenedorDestino->carga < $cargaOrigen) {
+                $message = "Hola @nombrecliente, tu carga que estaba proyectado subir en el consolidado @cargaOrigen estará lista antes de lo previsto. Para agilizar tu importación, la hemos pasado al consolidado @contenedorDestino
+Le estaré informando cualquier avance 🫡.";
+            }
             $message = str_replace('@nombrecliente', $cotizacion->nombre, $message);
             $message = str_replace('@contenedorDestino', '#'.$contenedorDestino->carga, $message);
+            $message = str_replace('@cargaOrigen', '#'.$cargaOrigen, $message);
             $telefono = preg_replace('/\s+/', '', $cotizacion->telefono);
             $telefono = $telefono ? $telefono . '@c.us' : '';
-            $this->sendMessage($message, $telefono, 3);
+            // TEMPORALMENTE DESHABILITADO: Número de ventas bloqueado
+            // $this->sendMessageVentas($message, $telefono, 3);
             return response()->json(['message' => 'Cotización movida a consolidado correctamente', 'success' => true]);
         } catch (\Exception $e) {
             return response()->json(['message' => 'Error al mover cotización a consolidado: ' . $e->getMessage(), 'success' => false], 500);
         }
     }
+    /**
+     * @OA\Post(
+     *     path="/carga-consolidada/cotizaciones/mover-calculadora",
+     *     tags={"Contenedor"},
+     *     summary="Mover cotización a calculadora",
+     *     description="Mueve una cotización a la calculadora de importación",
+     *     operationId="moveCotizacionToCalculadora",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             @OA\Property(property="idCotizacion", type="integer"),
+     *             @OA\Property(property="idContenedorDestino", type="integer")
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Cotización movida exitosamente"),
+     *     @OA\Response(response=404, description="Calculadora no encontrada")
+     * )
+     */
     public function moveCotizacionToCalculadora(Request $request)
     {
         try {
@@ -538,6 +749,92 @@ Le estaré informando cualquier avance 🫡.";
             return response()->json(['message' => 'Error al mover cotización a calculadora: ' . $e->getMessage(), 'success' => false], 500);
         }
     }
+    /**
+     * @OA\Get(
+     *     path="/carga-consolidada/contenedor/vendedores-dropdown",
+     *     tags={"Contenedor"},
+     *     @OA\Parameter(name="fecha_inicio", in="query", required=false, @OA\Schema(type="string", format="date")),
+     *     @OA\Parameter(name="fecha_fin", in="query", required=false, @OA\Schema(type="string", format="date")),
+     *     @OA\Parameter(name="id_contenedor", in="query", required=false, @OA\Schema(type="integer")),
+     *     summary="Obtener vendedores para dropdown",
+     *     description="Obtiene la lista de vendedores para usar como dropdown",
+     *     operationId="getVendedoresDropdown",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Response(response=200, description="Vendedores obtenidos exitosamente")
+     * )
+     */
+    public function getVendedoresDropdown(Request $request)
+    {
+        try {
+            $fechaInicio = $request->input('fecha_inicio');
+            $fechaFin = $request->input('fecha_fin');
+            $idContenedor = $request->input('id_contenedor');
+
+            $query = DB::table('usuario as u')
+                ->select([
+                    'u.ID_Usuario as id',
+                    'u.No_Nombres_Apellidos as nombre',
+                    DB::raw('COUNT(DISTINCT cc.id) as total_cotizaciones'),
+                    DB::raw('COALESCE(SUM(cccp.cbm_total), 0) as volumen_total')
+                ])
+                ->join('contenedor_consolidado_cotizacion as cc', 'u.ID_Usuario', '=', 'cc.id_usuario')
+                ->join('contenedor_consolidado_cotizacion_proveedores as cccp', 'cc.id', '=', 'cccp.id_cotizacion')
+                ->join('carga_consolidada_contenedor as cont', 'cc.id_contenedor', '=', 'cont.id')
+                ->groupBy('u.ID_Usuario', 'u.No_Nombres_Apellidos');
+
+            if ($fechaInicio && $fechaFin) {
+                $query->whereBetween('cont.fecha_zarpe', [$fechaInicio, $fechaFin]);
+            }
+
+            if ($idContenedor) {
+                $query->where('cc.id_contenedor', $idContenedor);
+            }
+            //not returns row with nombre  contains Danitza Leonardo y frank
+            $query->whereNotIn('u.No_Nombres_Apellidos', ['Danitza', 'Leonardo', 'Frank Oviedo']);
+           
+            $vendedores = $query->get()->map(function($item) {
+                return [
+                    'value' => $item->id,
+                    'label' => $item->nombre,
+                    'total_cotizaciones' => $item->total_cotizaciones,
+                    'volumen_total' => round($item->volumen_total, 2)
+                ];
+            });
+
+            return response()->json([
+                'success' => true,
+                'data' => $vendedores
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error en getVendedoresFiltro: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al obtener vendedores para filtro',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+/**
+    * @OA\Put(
+    *     path="/carga-consolidada/contenedor/estado-documentacion",
+    *     tags={"Contenedor"},
+    *     summary="Actualizar estado de documentación",
+    *     description="Actualiza el estado de documentación de un contenedor",
+    *     operationId="updateEstadoDocumentacion",
+    *     security={{"bearerAuth":{}}},
+    *     @OA\RequestBody(
+    *         required=true,
+    *         @OA\JsonContent(
+    *             @OA\Property(property="id", type="integer"),
+    *             @OA\Property(property="estado_documentacion", type="string")
+    *         )
+    *     ),
+    *     @OA\Response(response=200, description="Estado actualizado exitosamente"),
+    *     @OA\Response(response=404, description="Contenedor no encontrado")
+    * )
+    */
+    
     public function updateEstadoDocumentacion(Request $request)
     {
         try {
@@ -563,88 +860,149 @@ Le estaré informando cualquier avance 🫡.";
             ];
         }
     }
+    /**
+     * @OA\Put(
+     *     path="/carga-consolidada/contenedor/{idcontenedor}/fecha-documentacion-max",
+     *     tags={"Contenedor"},
+     *     summary="Actualizar fecha máxima de documentación",
+     *     description="Actualiza la fecha máxima de documentación de un contenedor",
+     *     operationId="updateFechaDocumentacionMax",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="idcontenedor", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             @OA\Property(property="fecha_documentacion_max", type="string", format="date")
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Fecha actualizada exitosamente"),
+     *     @OA\Response(response=404, description="Contenedor no encontrado"),
+     *     @OA\Response(response=422, description="Validación fallida")
+     * )
+     *
+     * Actualiza la columna fecha_documentacion_max de un contenedor.
+     * Espera un body { "fecha_documentacion_max": "YYYY-MM-DD" } y el id del contenedor en la ruta.
+     */
+    public function updateFechaDocumentacionMax(Request $request, $idcontenedor)
+    {
+        try {
+            $this->validate($request, [
+                'fecha_documentacion_max' => 'required|date_format:Y-m-d'
+            ]);
+
+            $contenedor = Contenedor::find($idcontenedor);
+            if (!$contenedor) {
+                return response()->json(['success' => false, 'message' => 'Contenedor no encontrado'], 404);
+            }
+
+            $contenedor->fecha_documentacion_max = $request->input('fecha_documentacion_max');
+            $contenedor->save();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Fecha de documentación máxima actualizada correctamente',
+                'data' => ['fecha_documentacion_max' => $contenedor->fecha_documentacion_max]
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $ve) {
+            return response()->json(['success' => false, 'message' => $ve->getMessage()], 422);
+        } catch (\Exception $e) {
+            Log::error('Error al actualizar fecha_documentacion_max: ' . $e->getMessage());
+            return response()->json(['success' => false, 'message' => 'Error al actualizar fecha_documentacion_max: ' . $e->getMessage()], 500);
+        }
+    }
+    /**
+     * @OA\Post(
+     *     path="/carga-consolidada/contenedor/packing-list",
+     *     tags={"Contenedor"},
+     *     summary="Subir packing list",
+     *     description="Sube un archivo de packing list para un contenedor",
+     *     operationId="uploadPackingListContenedor",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\MediaType(
+     *             mediaType="multipart/form-data",
+     *             @OA\Schema(
+     *                 @OA\Property(property="idContenedor", type="integer"),
+     *                 @OA\Property(property="file", type="string", format="binary")
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Archivo subido exitosamente"),
+     *     @OA\Response(response=400, description="Archivo no enviado o tipo no permitido")
+     * )
+     */
     public function uploadPackingList(Request $request)
     {
         try {
-            $idContenedor = $request->input('idContenedor');
+            $idContenedor = (int) $request->input('idContenedor');
 
-            // Validar que se haya enviado un archivo
             if (!$request->hasFile('file')) {
                 return response()->json([
                     'status' => 'error',
-                    'message' => 'No se ha enviado ningún archivo'
+                    'message' => 'No se ha enviado ningún archivo',
                 ], 400);
             }
 
             $file = $request->file('file');
 
-            // Validar tamaño del archivo 400 MB
-            $maxFileSize = 400 * 1024 * 1024; // 400 MB en bytes
-            if ($file->getSize() > $maxFileSize) {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => 'El archivo excede el tamaño máximo permitido (1MB)'
-                ], 400);
-            }
-
-            // Validar extensión del archivo
             $allowedExtensions = ['jpg', 'jpeg', 'png', 'gif', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'txt'];
             $fileExtension = strtolower($file->getClientOriginalExtension());
 
             if (!in_array($fileExtension, $allowedExtensions)) {
                 return response()->json([
                     'status' => 'error',
-                    'message' => 'Tipo de archivo no permitido'
+                    'message' => 'Tipo de archivo no permitido',
                 ], 400);
             }
 
-            // Generar nombre único para el archivo
             $filename = time() . '_' . uniqid() . '.' . $fileExtension;
-
-            // Ruta de almacenamiento
             $path = 'assets/images/agentecompra/';
-
-            // Guardar archivo usando Laravel Storage
             $fileUrl = $file->storeAs($path, $filename, 'public');
 
-            // Actualizar el contenedor usando Eloquent
-            $contenedor = Contenedor::find($idContenedor);
-            if (!$contenedor) {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => 'Contenedor no encontrado'
-                ], 404);
-            }
+            $user = auth()->user();
+            $userId = $user ? $user->ID_Usuario : null;
+            $userGroup = $user ? $user->No_Grupo : null;
 
-            $contenedor->update([
-                'lista_embarque_url' => $fileUrl,
-                'lista_embarque_uploaded_at' => date('Y-m-d H:i:s')
-            ]);
+            ProcessPackingListUploadJob::dispatch(
+                $idContenedor,
+                $fileUrl,
+                $file->getClientOriginalName(),
+                $file->getSize(),
+                $userId,
+                $userGroup
+            )->onQueue('importaciones');
 
-            // Verificar si el contenedor está completado
-            $this->verifyContainerIsCompleted($idContenedor);
-            
-            // Validar usuarios en cotizaciones con proveedores cargados
-            $this->validateUsersInCotizacionesWithLoadedProveedores($idContenedor);
-            
             return response()->json([
                 'success' => true,
-                'message' => 'Lista de embarque actualizada correctamente',
+                'message' => 'Lista de embarque recibida. Procesaremos la información en segundo plano.',
                 'data' => [
                     'file_url' => $fileUrl,
                     'file_name' => $file->getClientOriginalName(),
-                    'file_size' => $file->getSize()
-                ]
+                    'file_size' => $file->getSize(),
+                ],
             ]);
         } catch (\Exception $e) {
             Log::error('Error en uploadListaEmbarque: ' . $e->getMessage());
             return response()->json([
                 'status' => 'error',
-                'message' => 'Error al subir la lista de embarque: ' . $e->getMessage()
+                'message' => 'Error al subir la lista de embarque: ' . $e->getMessage(),
             ], 500);
         }
     }
 
+    /**
+     * @OA\Post(
+     *     path="/carga-consolidada/contenedor/{idcontenedor}/verify-completed",
+     *     tags={"Contenedor"},
+     *     summary="Verificar si contenedor está completado",
+     *     description="Verifica y actualiza el estado del contenedor según su lista de embarque",
+     *     operationId="verifyContainerIsCompleted",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="idcontenedor", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Verificación completada")
+     * )
+     */
     public function verifyContainerIsCompleted($idcontenedor)
     {
         try {
@@ -697,6 +1055,19 @@ Le estaré informando cualquier avance 🫡.";
             Log::error('Error en verifyContainerIsCompleted: ' . $e->getMessage());
         }
     }
+    /**
+     * @OA\Delete(
+     *     path="/carga-consolidada/contenedor/{idContenedor}/packing-list",
+     *     tags={"Contenedor"},
+     *     summary="Eliminar packing list",
+     *     description="Elimina el packing list de un contenedor",
+     *     operationId="deletePackingListContenedor",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="idContenedor", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Packing list eliminado exitosamente"),
+     *     @OA\Response(response=500, description="Error al eliminar")
+     * )
+     */
     public function deletePackingList($idContenedor)
     {
         try {
@@ -720,11 +1091,18 @@ Le estaré informando cualquier avance 🫡.";
     /**
      * Crea notificaciones para Coordinación y Jefe de Ventas cuando se mueve una cotización a consolidado
      */
-    private function crearNotificacionesMovimientoConsolidado($cotizacion, $idContenedorDestino)
+    private function crearNotificacionesMovimientoConsolidado($cotizacion, $idContenedorOrigen, $idContenedorDestino)
     {
         try {
-            // Obtener el contenedor destino
+            // Obtener los contenedores
+            $contenedorOrigen = Contenedor::find($idContenedorOrigen);
             $contenedorDestino = Contenedor::find($idContenedorDestino);
+            
+            if (!$contenedorOrigen) {
+                Log::warning('Contenedor origen no encontrado: ' . $idContenedorOrigen);
+                return;
+            }
+            
             if (!$contenedorDestino) {
                 Log::warning('Contenedor destino no encontrado: ' . $idContenedorDestino);
                 return;
@@ -735,6 +1113,14 @@ Le estaré informando cualquier avance 🫡.";
             if (!$usuarioActual) {
                 Log::warning('Usuario actual no encontrado al mover cotización a consolidado');
                 return;
+            }
+            
+            // Disparar evento de cambio de contenedor
+            try {
+                $message = "El usuario {$usuarioActual->No_Nombres_Apellidos} movió la cotización de {$cotizacion->nombre} del contenedor {$contenedorOrigen->carga} al contenedor {$contenedorDestino->carga}";
+                CotizacionChangeContainer::dispatch($cotizacion, $contenedorOrigen, $contenedorDestino, $usuarioActual, $message);
+            } catch (\Exception $e) {
+                Log::error('Error al disparar evento CotizacionChangeContainer: ' . $e->getMessage());
             }
 
             // Crear la notificación para Coordinación
@@ -795,17 +1181,37 @@ Le estaré informando cualquier avance 🫡.";
                     ]
                 ])
             ]);
-
-            Log::info('Notificaciones de movimiento a consolidado creadas para Coordinación y Jefe de Ventas:', [
-                'notificacion_coordinacion_id' => $notificacionCoordinacion->id,
-                'notificacion_jefe_ventas_id' => $notificacionJefeVentas->id,
-                'cotizacion_id' => $cotizacion->id,
-                'contenedor_destino_id' => $idContenedorDestino,
-                'contenedor_destino_carga' => $contenedorDestino->carga,
-                'usuario_actual' => $usuarioActual->No_Nombres_Apellidos
+            //creat tambien para un cotizador 
+            $notificacionCotizador = Notificacion::create([
+                'titulo' => 'Cotización Movida a Consolidado',
+                'mensaje' => "El usuario {$usuarioActual->No_Nombres_Apellidos} movió la cotización de {$cotizacion->nombre} al contenedor {$contenedorDestino->carga}",
+                'descripcion' => "Cotización #{$cotizacion->id} | Cliente: {$cotizacion->nombre} | Documento: {$cotizacion->documento} | Volumen: {$cotizacion->volumen} CBM | Contenedor destino: {$contenedorDestino->carga}",
+                'modulo' => Notificacion::MODULO_CARGA_CONSOLIDADA,
+                'rol_destinatario' => Usuario::ROL_COTIZADOR,
+                'navigate_to' => 'cargaconsolidada/abiertos/cotizaciones',
+                'navigate_params' => json_encode([
+                    'idContenedor' => $idContenedorDestino,
+                    'tab' => 'prospectos',
+                    'idCotizacion' => $cotizacion->id
+                ]),
+                'tipo' => Notificacion::TIPO_INFO,
+                'icono' => 'mdi:swap-horizontal',
+                'prioridad' => Notificacion::PRIORIDAD_MEDIA,
+                'referencia_tipo' => 'cotizacion',
+                'referencia_id' => $cotizacion->id,
+                'activa' => true,
+                'creado_por' => $usuarioActual->ID_Usuario,
+                'configuracion_roles' => json_encode([
+                    Usuario::ROL_COTIZADOR => [
+                        'titulo' => 'Cotización Movida - Supervisión',
+                        'mensaje' => "Cotización de {$cotizacion->nombre} movida al contenedor {$contenedorDestino->carga} por {$usuarioActual->No_Nombres_Apellidos}",
+                        'descripcion' => "Cotización #{$cotizacion->id} movida - Supervisión requerida"
+                    ]
+                ])
             ]);
+           
 
-            return [$notificacionCoordinacion, $notificacionJefeVentas];
+            return [$notificacionCoordinacion, $notificacionJefeVentas, $notificacionCotizador];
         } catch (\Exception $e) {
             Log::error('Error al crear notificaciones de movimiento a consolidado para Coordinación y Jefe de Ventas: ' . $e->getMessage());
             // No lanzar excepción para no afectar el flujo principal de movimiento
@@ -813,247 +1219,9 @@ Le estaré informando cualquier avance 🫡.";
         }
     }
 
-    /**
-     * Validar usuarios en cotizaciones con proveedores cargados
-     * Usa la misma validación del comando PopulateClientesData
-     */
-    private function validateUsersInCotizacionesWithLoadedProveedores($idContenedor)
-    {
-        try {
-            Log::info('🔍 Iniciando validación de usuarios en cotizaciones con proveedores cargados', [
-                'contenedor_id' => $idContenedor
-            ]);
+    
 
-            // Obtener cotizaciones del contenedor que tienen proveedores con estado_china = 'LOADED'
-            $cotizaciones = DB::table('contenedor_consolidado_cotizacion as ccc')
-                ->join('contenedor_consolidado_cotizacion_proveedores as cccp', 'ccc.id', '=', 'cccp.id_cotizacion')
-                ->where('ccc.id_contenedor', $idContenedor)
-                ->where('cccp.estados_proveedor', 'LOADED')
-                ->whereNotNull('ccc.nombre')
-                ->where('ccc.nombre', '!=', '')
-                ->whereRaw('LENGTH(TRIM(ccc.nombre)) >= 2')
-                ->where(function ($query) {
-                    $query->whereNotNull('ccc.telefono')
-                        ->where('ccc.telefono', '!=', '')
-                        ->whereRaw('LENGTH(TRIM(ccc.telefono)) >= 7')
-                        ->orWhereNotNull('ccc.documento')
-                        ->where('ccc.documento', '!=', '')
-                        ->whereRaw('LENGTH(TRIM(ccc.documento)) >= 5')
-                        ->orWhereNotNull('ccc.correo')
-                        ->where('ccc.correo', '!=', '')
-                        ->whereRaw('ccc.correo REGEXP "^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$"');
-                })
-                ->select('ccc.id', 'ccc.telefono', 'ccc.nombre', 'ccc.documento', 'ccc.correo')
-                ->distinct()
-                ->get();
+    
 
-            Log::info('Cotizaciones encontradas con proveedores cargados: ' . $cotizaciones->count());
 
-            $validados = 0;
-            $clientesCreados = 0;
-            $clientesEncontrados = 0;
-
-            foreach ($cotizaciones as $cotizacion) {
-                // Convertir a objeto para usar las mismas validaciones
-                $clienteData = [
-                    'nombre' => $cotizacion->nombre,
-                    'documento' => $cotizacion->documento,
-                    'correo' => $cotizacion->correo,
-                    'telefono' => $cotizacion->telefono
-                ];
-
-                $clienteObj = (object)$clienteData;
-
-                // Usar la misma validación del comando
-                if ($this->validateClienteDataFromCommand($clienteObj)) {
-                    $validados++;
-                    $clienteId = $this->insertOrGetClienteFromCommand($clienteObj, 'cotizacion_proveedor_loaded');
-                    
-                    if ($clienteId) {
-                        // Verificar si el cliente ya existía o fue creado
-                        $clienteExistia = DB::table('clientes')->where('id', $clienteId)->exists();
-                        
-                        if ($clienteExistia) {
-                            $clientesEncontrados++;
-                        } else {
-                            $clientesCreados++;
-                        }
-
-                        Log::info("✅ Cliente validado para cotización con proveedor cargado", [
-                            'cotizacion_id' => $cotizacion->id,
-                            'cliente_id' => $clienteId,
-                            'nombre' => $clienteObj->nombre,
-                            'fue_creado' => !$clienteExistia
-                        ]);
-                    }
-                } else {
-                    Log::warning("❌ Cliente no válido en cotización con proveedor cargado", [
-                        'cotizacion_id' => $cotizacion->id,
-                        'nombre' => $clienteObj->nombre,
-                        'telefono' => $clienteObj->telefono,
-                        'documento' => $clienteObj->documento,
-                        'correo' => $clienteObj->correo
-                    ]);
-                }
-            }
-
-            Log::info('🎉 Validación completada', [
-                'contenedor_id' => $idContenedor,
-                'total_procesados' => $cotizaciones->count(),
-                'validados' => $validados,
-                'clientes_encontrados' => $clientesEncontrados,
-                'clientes_creados' => $clientesCreados
-            ]);
-
-        } catch (\Exception $e) {
-            Log::error('Error en validación de usuarios con proveedores cargados: ' . $e->getMessage(), [
-                'contenedor_id' => $idContenedor,
-                'error' => $e->getMessage()
-            ]);
-        }
-    }
-
-    /**
-     * Validar que el cliente tenga al menos un campo de contacto válido
-     * (Copiado del comando PopulateClientesData)
-     */
-    private function validateClienteDataFromCommand($data)
-    {
-        $telefono = trim($data->telefono ?? '');
-        $documento = trim($data->documento ?? '');
-        $correo = trim($data->correo ?? '');
-        $nombre = trim($data->nombre ?? '');
-
-        // Validar que tenga nombre válido (no vacío y no solo espacios)
-        if (empty($nombre) || strlen($nombre) < 2) {
-            return false;
-        }
-
-        // Validar que tenga al menos uno de los tres campos de contacto válidos
-        $hasValidPhone = !empty($telefono) && strlen($telefono) >= 7;
-        $hasValidDocument = !empty($documento) && strlen($documento) >= 5;
-        $hasValidEmail = !empty($correo) && filter_var($correo, FILTER_VALIDATE_EMAIL);
-
-        if (!$hasValidPhone && !$hasValidDocument && !$hasValidEmail) {
-            return false;
-        }
-
-        return true;
-    }
-
-    /**
-     * Normalizar número de teléfono eliminando espacios, caracteres especiales y +
-     * (Copiado del comando PopulateClientesData)
-     */
-    private function normalizePhoneFromCommand($phone)
-    {
-        if (empty($phone)) {
-            return null;
-        }
-
-        // Eliminar espacios, guiones, paréntesis, puntos y símbolo +
-        $normalized = preg_replace('/[\s\-\(\)\.\+]/', '', $phone);
-
-        // Solo mantener números
-        $normalized = preg_replace('/[^0-9]/', '', $normalized);
-
-        return $normalized ?: null;
-    }
-
-    /**
-     * Insertar cliente si no existe, o retornar ID si ya existe
-     * (Copiado del comando PopulateClientesData)
-     */
-    private function insertOrGetClienteFromCommand($data, $fuente = 'desconocida')
-    {
-        // Normalizar teléfono
-        $telefonoNormalizado = $this->normalizePhoneFromCommand($data->telefono ?? null);
-
-        // Buscar por teléfono normalizado primero
-        $cliente = null;
-        
-        // Validar que el teléfono no sea nulo o vacío antes de procesar
-        if (!empty($telefonoNormalizado) && $telefonoNormalizado !== null) {
-            $cliente = DB::table('clientes')
-                ->where('telefono', 'like', $telefonoNormalizado)
-                ->first();
-            
-            if ($cliente) {
-                return $cliente->id;
-            }
-        }
-
-        // Si no se encuentra por teléfono, buscar por documento
-        // Validar que el documento no sea nulo o vacío antes de procesar
-        if (!$cliente && !empty(trim($data->documento ?? '')) && trim($data->documento ?? '') !== null) {
-            $cliente = DB::table('clientes')
-                ->where('documento', $data->documento)
-                ->first();
-                
-            if ($cliente) {
-                return $cliente->id;
-            }
-        }
-
-        // Si no se encuentra por documento, buscar por correo
-        // Validar que el correo no sea nulo o vacío antes de procesar
-        if (!$cliente && !empty(trim($data->correo ?? '')) && trim($data->correo ?? '') !== null) {
-            $cliente = DB::table('clientes')
-                ->where('correo', $data->correo)
-                ->first();
-                
-            if ($cliente) {
-                return $cliente->id;
-            }
-        }
-
-        // Validación final antes de insertar
-        $nombre = trim($data->nombre ?? '');
-        $documento = !empty($data->documento) ? trim($data->documento) : null;
-        $correo = !empty($data->correo) ? trim($data->correo) : null;
-
-        // Verificar que el nombre sea válido
-        if (empty($nombre) || strlen($nombre) < 2) {
-            return null;
-        }
-
-        // Verificar que tenga al menos un método de contacto válido
-        $hasValidContact = false;
-        if (!empty($telefonoNormalizado) && strlen($telefonoNormalizado) >= 7) {
-            $hasValidContact = true;
-        }
-        if (!$hasValidContact && !empty($documento) && strlen($documento) >= 5) {
-            $hasValidContact = true;
-        }
-        if (!$hasValidContact && !empty($correo) && filter_var($correo, FILTER_VALIDATE_EMAIL)) {
-            $hasValidContact = true;
-        }
-
-        if (!$hasValidContact) {
-            return null;
-        }
-
-        try {
-            // Insertar nuevo cliente
-            $clienteId = DB::table('clientes')->insertGetId([
-                'nombre' => $nombre,
-                'documento' => $documento,
-                'correo' => $correo,
-                'telefono' => $telefonoNormalizado,
-                'fecha' => now(),
-                'created_at' => now(),
-                'updated_at' => now()
-            ]);
-
-            return $clienteId;
-        } catch (\Exception $e) {
-            Log::error("Error al insertar cliente desde {$fuente}: " . $e->getMessage(), [
-                'nombre' => $nombre,
-                'telefono' => $telefonoNormalizado,
-                'documento' => $documento,
-                'correo' => $correo
-            ]);
-            return null;
-        }
-    }
 }

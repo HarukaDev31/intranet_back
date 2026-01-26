@@ -12,6 +12,96 @@ use Tymon\JWTAuth\Facades\JWTAuth;
 class UserBusinessController extends Controller
 {
     /**
+     * @OA\Get(
+     *     path="/auth/clientes/business",
+     *     tags={"Empresa Usuario"},
+     *     summary="Obtener datos de empresa del cliente",
+     *     description="Obtiene la información de la empresa asociada al cliente autenticado",
+     *     operationId="getClienteBusiness",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Response(
+     *         response=200,
+     *         description="Datos de empresa obtenidos exitosamente",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=true),
+     *             @OA\Property(property="business", type="object",
+     *                 @OA\Property(property="id", type="integer"),
+     *                 @OA\Property(property="name", type="string"),
+     *                 @OA\Property(property="ruc", type="string"),
+     *                 @OA\Property(property="comercialCapacity", type="string"),
+     *                 @OA\Property(property="rubric", type="string"),
+     *                 @OA\Property(property="socialAddress", type="string")
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(response=401, description="No autenticado")
+     * )
+     */
+    public function show()
+    {
+        try {
+            $user = JWTAuth::user();
+            
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Usuario no encontrado'
+                ], 401);
+            }
+
+            $userBusiness = UserBusiness::find($user->id_user_business);
+
+            return response()->json([
+                'success' => true,
+                'business' => $userBusiness ? [
+                    'id' => $userBusiness->id,
+                    'name' => $userBusiness->name,
+                    'ruc' => $userBusiness->ruc,
+                    'comercialCapacity' => $userBusiness->comercial_capacity,
+                    'rubric' => $userBusiness->rubric,
+                    'socialAddress' => $userBusiness->social_address,
+                ] : null
+            ], 200);
+
+        } catch (\Exception $e) {
+            Log::error('Error al obtener datos de empresa: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al obtener datos de empresa'
+            ], 500);
+        }
+    }
+
+    /**
+     * @OA\Post(
+     *     path="/auth/clientes/business",
+     *     tags={"Empresa Usuario"},
+     *     summary="Crear o actualizar empresa del cliente",
+     *     description="Crea o actualiza la información de la empresa del cliente autenticado",
+     *     operationId="storeOrUpdateClienteBusiness",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             @OA\Property(property="business_name", type="string", example="Mi Empresa S.A.C."),
+     *             @OA\Property(property="business_ruc", type="string", example="20123456789"),
+     *             @OA\Property(property="comercial_capacity", type="string", example="Gerente General"),
+     *             @OA\Property(property="rubric", type="string", example="Importaciones"),
+     *             @OA\Property(property="social_address", type="string", example="Av. Principal 123")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Empresa creada/actualizada exitosamente",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=true),
+     *             @OA\Property(property="message", type="string"),
+     *             @OA\Property(property="business", type="object")
+     *         )
+     *     ),
+     *     @OA\Response(response=401, description="No autenticado")
+     * )
+     *
      * Crear o actualizar empresa del usuario
      *
      * @param UserBusinessRequest $request
@@ -21,12 +111,7 @@ class UserBusinessController extends Controller
     {
         try {
             $user = JWTAuth::user();
-            Log::info('UserBusinessController - Usuario:', [
-                'user' => $user
-            ]);
-            Log::info('UserBusinessController - Datos recibidos:', [
-                'request' => $request->all()
-            ]);
+            
             if (!$user) {
                 return response()->json([
                     'success' => false,
@@ -180,55 +265,6 @@ class UserBusinessController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Error al procesar la empresa',
-                'error' => $e->getMessage()
-            ], 500);
-        }
-    }
-
-    /**
-     * Obtener empresa del usuario
-     *
-     * @return \Illuminate\Http\JsonResponse
-     */
-    public function show()
-    {
-        try {
-            $user = JWTAuth::user();
-            
-            if (!$user) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Usuario no encontrado'
-                ], 401);
-            }
-
-            $userBusiness = $user->userBusiness;
-
-            if (!$userBusiness) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'No se encontró empresa asociada'
-                ], 404);
-            }
-
-            return response()->json([
-                'success' => true,
-                'business' => [
-                    'id' => $userBusiness->id,
-                    'name' => $userBusiness->name,
-                    'ruc' => $userBusiness->ruc,
-                    'comercialCapacity' => $userBusiness->comercial_capacity,
-                    'rubric' => $userBusiness->rubric,
-                    'socialAddress' => $userBusiness->social_address,
-                ]
-            ], 200);
-
-        } catch (\Exception $e) {
-            Log::error('Error en show UserBusiness: ' . $e->getMessage());
-            
-            return response()->json([
-                'success' => false,
-                'message' => 'Error al obtener la empresa',
                 'error' => $e->getMessage()
             ], 500);
         }

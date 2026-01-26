@@ -67,6 +67,9 @@ require __DIR__.'/modules/cursos.php';
 // Módulo de Carga Consolidada
 require __DIR__.'/modules/carga-consolidada.php';
 
+// Módulo de Dashboard por Usuario
+require __DIR__.'/modules/dashboard-usuario.php';
+
 // Módulo de Calculadora de Importación
 require __DIR__.'/modules/calculadora-importacion.php';
 
@@ -78,6 +81,15 @@ require __DIR__.'/modules/notificaciones.php';
 
 // Módulo de Opciones Generales
 require __DIR__.'/modules/options.php';
+
+// Módulo de Calendario
+require __DIR__.'/modules/calendar.php';
+
+// Módulo de Noticias del Sistema
+require __DIR__.'/modules/news.php';
+
+// Módulo de Vi?ticos
+require __DIR__.'/modules/viaticos.php';
 
 //Clientes
 // Módulo de Delivery

@@ -15,8 +15,15 @@ class CalculadoraImportacion extends Model
 
     protected $fillable = [
         'id_cliente',
+        'id_usuario',
+        'created_by',
+        'cod_cotizacion',
+        'id_cotizacion',
         'nombre_cliente',
+        'tipo_documento',
         'dni_cliente',
+        'ruc_cliente',
+        'razon_social',
         'correo_cliente',
         'whatsapp_cliente',
         'tipo_cliente',
@@ -26,11 +33,13 @@ class CalculadoraImportacion extends Model
         'url_cotizacion',
         'url_cotizacion_pdf',
         'tarifa',
+        'tarifa_descuento',
+        'tc',
         'total_fob',
         'total_impuestos',
         'logistica',
         'estado',
-        'id_carga_consolidada_contenedor'
+        'id_carga_consolidada_contenedor',
     ];
 
     protected $casts = [
@@ -38,6 +47,8 @@ class CalculadoraImportacion extends Model
         'tarifa_total_extra_proveedor' => 'decimal:2',
         'tarifa_total_extra_item' => 'decimal:2',
         'tarifa' => 'decimal:2',
+        'tarifa_descuento' => 'decimal:2',
+        'tc' => 'decimal:4',
         'total_fob' => 'decimal:2',
         'total_impuestos' => 'decimal:2',
         'logistica' => 'decimal:2',
@@ -141,7 +152,19 @@ class CalculadoraImportacion extends Model
     {
         return $this->belongsTo(\App\Models\CargaConsolidada\Contenedor::class, 'id_carga_consolidada_contenedor');
     }
+
+    /**
+     * Relación con el usuario creador
+     */
+    public function creador(): BelongsTo
+    {
+        return $this->belongsTo(\App\Models\Usuario::class, 'created_by', 'ID_Usuario');
+    }
    
+    public function vendedor(): BelongsTo
+    {
+        return $this->belongsTo(\App\Models\Usuario::class, 'id_usuario', 'ID_Usuario');
+    }
     /**
      * Calcular total de CBM de todos los proveedores
      */
@@ -175,5 +198,13 @@ class CalculadoraImportacion extends Model
             ['value' => self::ESTADO_COTIZADO, 'label' => 'COTIZADO'],
             ['value' => self::ESTADO_CONFIRMADO, 'label' => 'CONFIRMADO']
         ];
+    }
+
+    /**
+     * Relación con la cotización de carga consolidada
+     */
+    public function cotizacion(): BelongsTo
+    {
+        return $this->belongsTo(\App\Models\CargaConsolidada\Cotizacion::class, 'id_cotizacion');
     }
 }

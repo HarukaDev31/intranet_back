@@ -8,6 +8,19 @@ use App\Models\BaseDatos\Regulaciones\ProductoRubro;
 use Illuminate\Support\Facades\Log;
 class ProductoRubroController extends Controller
 {
+    /**
+     * @OA\Get(
+     *     path="/regulaciones/rubros/dropdown",
+     *     tags={"Regulaciones"},
+     *     summary="Obtener rubros para dropdown",
+     *     description="Obtiene la lista de rubros de productos para usar en dropdowns",
+     *     operationId="getRubrosDropdown",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="search", in="query", @OA\Schema(type="string")),
+     *     @OA\Parameter(name="tipo", in="query", @OA\Schema(type="string")),
+     *     @OA\Response(response=200, description="Rubros obtenidos exitosamente")
+     * )
+     */
     public function getDropdown(Request $request)
     {
         try {

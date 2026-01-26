@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
 
 class Notificacion extends Model
@@ -229,12 +230,37 @@ class Notificacion extends Model
     {
         $query = static::activas()
             ->noExpiradas()
-            ->porUsuario($usuario->ID_Usuario);
-
-        // Filtrar por rol si el usuario tiene grupo
-        if ($usuario->grupo) {
-            $query->porRol($usuario->grupo->No_Grupo);
-        }
+            ->where(function ($q) use ($usuario) {
+                // La notificación debe cumplir:
+                // 1. (usuario_destinatario IS NULL OR usuario_destinatario = usuario_id)
+                // 2. Y (rol_destinatario IS NULL OR rol_destinatario = rol_usuario)
+                // Pero si tiene usuario_destinatario específico, esa notificación debe aparecer para ese usuario
+                // independientemente del rol
+                $q->where(function ($subQ) use ($usuario) {
+                    // Caso 1: Notificación dirigida específicamente a este usuario (por usuario_destinatario)
+                    $subQ->where('usuario_destinatario', $usuario->ID_Usuario);
+                    
+                    // Caso 2: Notificación sin usuario específico, pero con rol
+                    // Si el usuario tiene grupo, mostrar notificaciones con ese rol o sin rol
+                    if ($usuario->grupo) {
+                        $rolUsuario = $usuario->grupo->No_Grupo;
+                        
+                        $subQ->orWhere(function ($subQ2) use ($rolUsuario) {
+                            $subQ2->whereNull('usuario_destinatario')
+                                ->where(function ($subQ3) use ($rolUsuario) {
+                                    $subQ3->whereNull('rol_destinatario')
+                                        ->orWhere('rol_destinatario', $rolUsuario);
+                                });
+                        });
+                    } else {
+                        // Si no tiene grupo, solo mostrar notificaciones sin usuario ni rol específico
+                        $subQ->orWhere(function ($subQ2) {
+                            $subQ2->whereNull('usuario_destinatario')
+                                ->whereNull('rol_destinatario');
+                        });
+                    }
+                });
+            });
 
         // Aplicar filtros adicionales
         if (isset($filtros['modulo'])) {
@@ -249,14 +275,42 @@ class Notificacion extends Model
             $query->porPrioridad($filtros['prioridad_minima']);
         }
 
-        if (isset($filtros['no_leidas']) && $filtros['no_leidas']) {
-            $query->whereDoesntHave('usuarios', function ($q) use ($usuario) {
-                $q->where('usuario_id', $usuario->ID_Usuario)
-                  ->where('leida', true);
-            });
+        if (isset($filtros['no_leidas'])) {
+            if ($filtros['no_leidas']) {
+                // Filtrar solo notificaciones NO leídas
+                $query->whereDoesntHave('usuarios', function ($q) use ($usuario) {
+                    $q->where('usuario_id', $usuario->ID_Usuario)
+                      ->where('leida', true);
+                });
+            } else {
+                // Filtrar solo notificaciones SÍ leídas
+                $query->whereHas('usuarios', function ($q) use ($usuario) {
+                    $q->where('usuario_id', $usuario->ID_Usuario)
+                      ->where('leida', true);
+                });
+            }
         }
 
-        return $query->orderByDesc('prioridad')
-            ->orderByDesc('created_at');
+      
+        
+        // Clonar la query para debugging sin afectar la query principal
+        $queryDebug = clone $query;
+        $resultadosSinOrdenar = $queryDebug->get();
+        
+        // Aplicar ordenamiento y obtener resultados ordenados para debugging
+        $queryDebug2 = clone $query;
+        $queryDebug2->orderByRaw('CASE WHEN usuario_destinatario = ? THEN 0 ELSE 1 END', [$usuario->ID_Usuario])
+            ->orderByDesc('id');
+        $resultadosOrdenados = $queryDebug2->get();
+      
+        // Verificar la notificación 1897 específicamente
+        $notif1897 = $resultadosOrdenados->firstWhere('id', 1897);
+        
+        
+
+        // Ordenar de forma que las notificaciones dirigidas específicamente al usuario
+        // tengan prioridad, luego por ID (más recientes primero)
+        return $query->orderByRaw('CASE WHEN usuario_destinatario = ? THEN 0 ELSE 1 END', [$usuario->ID_Usuario])
+            ->orderByDesc('id');
     }
 }

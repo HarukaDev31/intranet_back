@@ -8,6 +8,17 @@ use App\Models\CargaConsolidada\TipoCliente;
 
 class TipoClienteController extends Controller
 {
+    /**
+     * @OA\Get(
+     *     path="/carga-consolidada/tipos-cliente",
+     *     tags={"Tipos de Cliente"},
+     *     summary="Listar tipos de cliente",
+     *     description="Obtiene la lista de tipos de cliente disponibles",
+     *     operationId="getTiposCliente",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Response(response=200, description="Tipos de cliente obtenidos exitosamente")
+     * )
+     */
     public function index(Request $request)
     {
         // Implementación básica

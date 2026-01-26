@@ -27,6 +27,28 @@ class CursoController extends Controller
 {
     use CodeIgniterEncryption, MoodleRestProTrait, FileTrait, WhatsappTrait;
     public $table_pedido_curso_pagos = 'pedido_curso_pagos';
+    
+    /**
+     * @OA\Get(
+     *     path="/cursos",
+     *     tags={"Cursos"},
+     *     summary="Listar cursos y pedidos",
+     *     description="Obtiene la lista de pedidos de cursos con filtros y paginación",
+     *     operationId="getCursos",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="limit", in="query", @OA\Schema(type="integer", default=10)),
+     *     @OA\Parameter(name="page", in="query", @OA\Schema(type="integer", default=1)),
+     *     @OA\Parameter(name="search", in="query", @OA\Schema(type="string")),
+     *     @OA\Parameter(name="campanas", in="query", @OA\Schema(type="string")),
+     *     @OA\Parameter(name="fechaInicio", in="query", @OA\Schema(type="string", format="date")),
+     *     @OA\Parameter(name="fechaFin", in="query", @OA\Schema(type="string", format="date")),
+     *     @OA\Parameter(name="estados_pago", in="query", @OA\Schema(type="string")),
+     *     @OA\Parameter(name="tipos_curso", in="query", @OA\Schema(type="string")),
+     *     @OA\Parameter(name="sobrepagado", in="query", @OA\Schema(type="string")),
+     *     @OA\Response(response=200, description="Cursos obtenidos exitosamente"),
+     *     @OA\Response(response=401, description="No autenticado")
+     * )
+     */
     public function index(Request $request)
     {
         try {
@@ -105,6 +127,7 @@ class CursoController extends Controller
                 $query->where(function ($q) use ($search) {
                     $q->where('CLI.No_Entidad', 'like', "%$search%")
                         ->orWhere('CLI.Nu_Documento_Identidad', 'like', "%$search%")
+                        ->orWhere('CLI.Nu_Celular_Entidad', 'like', "%$search%")
                         ->orWhere('PC.ID_Pedido_Curso', 'like', "%$search%")
                         // Agrega aquí más campos si quieres que el buscador sea más amplio
                     ;
@@ -280,6 +303,16 @@ class CursoController extends Controller
     }
 
     /**
+     * @OA\Get(
+     *     path="/cursos/filter-options",
+     *     tags={"Cursos"},
+     *     summary="Obtener opciones de filtro para cursos",
+     *     description="Obtiene las opciones disponibles para filtrar cursos (campañas, estados, tipos)",
+     *     operationId="filterOptions",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Response(response=200, description="Opciones obtenidas exitosamente")
+     * )
+     *
      * Obtener opciones de filtro para cursos
      */
     public function filterOptions()
@@ -320,6 +353,20 @@ class CursoController extends Controller
                 'success' => true,
                 'data' => [
                     [
+                        'key' => 'fechaInicio',
+                        'label' => 'Fecha inicio',
+                        'placeholder' => 'Desde',
+                        'type' => 'date',
+                        'options' => []
+                    ],
+                    [
+                        'key' => 'fechaFin',
+                        'label' => 'Fecha fin',
+                        'placeholder' => 'Hasta',
+                        'type' => 'date',
+                        'options' => []
+                    ],
+                    [
                         'key' => 'campanas',
                         'label' => 'Campañas',
                         'placeholder' => 'Selecciona una campaña',
@@ -349,6 +396,23 @@ class CursoController extends Controller
     }
 
     /**
+     * @OA\Delete(
+     *     path="/cursos/{idPedido}",
+     *     tags={"Cursos"},
+     *     summary="Eliminar pedido de curso",
+     *     description="Elimina un pedido de curso por su ID",
+     *     operationId="eliminarPedido",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(
+     *         name="idPedido",
+     *         in="path",
+     *         required=true,
+     *         @OA\Schema(type="integer")
+     *     ),
+     *     @OA\Response(response=200, description="Pedido eliminado exitosamente"),
+     *     @OA\Response(response=404, description="Pedido no encontrado")
+     * )
+     *
      * Eliminar pedido (migrado de CodeIgniter)
      */
     public function eliminarPedido($idPedido)
@@ -392,6 +456,23 @@ class CursoController extends Controller
      */
   
     /**
+     * @OA\Get(
+     *     path="/cursos/{idPedido}/cliente",
+     *     tags={"Cursos"},
+     *     summary="Obtener datos del cliente por pedido",
+     *     description="Obtiene los datos del cliente asociado a un pedido de curso",
+     *     operationId="getDatosClientePorPedido",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(
+     *         name="idPedido",
+     *         in="path",
+     *         required=true,
+     *         @OA\Schema(type="integer")
+     *     ),
+     *     @OA\Response(response=200, description="Datos del cliente obtenidos exitosamente"),
+     *     @OA\Response(response=404, description="Pedido no encontrado")
+     * )
+     *
      * Obtener datos del cliente por pedido
      */
     public function getDatosClientePorPedido($idPedido)
@@ -465,6 +546,23 @@ class CursoController extends Controller
 
 
     /**
+     * @OA\Put(
+     *     path="/cursos/usuario-moodle/{idUsuario}",
+     *     tags={"Cursos"},
+     *     summary="Actualizar usuario Moodle",
+     *     description="Actualiza los datos del usuario en Moodle",
+     *     operationId="setUsuarioMoodle",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="idUsuario", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\RequestBody(
+     *         @OA\JsonContent(
+     *             @OA\Property(property="usuario_moodle", type="string"),
+     *             @OA\Property(property="No_Password", type="string")
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Usuario actualizado exitosamente")
+     * )
+     *
      * Actualizar usuario Moodle
      */
     public function setUsuarioMoodle(Request $request, $idUsuario)
@@ -478,6 +576,18 @@ class CursoController extends Controller
     }
 
     /**
+     * @OA\Put(
+     *     path="/cursos/{idPedido}",
+     *     tags={"Cursos"},
+     *     summary="Actualizar pedido de curso",
+     *     description="Actualiza los datos de un pedido de curso",
+     *     operationId="actualizarPedidoPublic",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="idPedido", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\RequestBody(required=true, @OA\JsonContent(type="object")),
+     *     @OA\Response(response=200, description="Pedido actualizado exitosamente")
+     * )
+     *
      * Actualizar pedido
      */
     public function actualizarPedidoPublic(Request $request, $idPedido)
@@ -490,6 +600,23 @@ class CursoController extends Controller
         return response()->json(['status' => 'error', 'message' => 'Error al modificar']);
     }
 
+    /**
+     * @OA\Put(
+     *     path="/cursos/{idPedido}/importe",
+     *     tags={"Cursos"},
+     *     summary="Actualizar importe de pedido",
+     *     description="Actualiza el importe total de un pedido de curso",
+     *     operationId="actualizarImportePedido",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="idPedido", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\RequestBody(
+     *         @OA\JsonContent(
+     *             @OA\Property(property="Ss_Total", type="number")
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Importe actualizado exitosamente")
+     * )
+     */
     public function actualizarImportePedido(Request $request, $idPedido)
     {
         $importe = $request->input('importe');
@@ -502,6 +629,18 @@ class CursoController extends Controller
 
 
     /**
+     * @OA\Delete(
+     *     path="/cursos/pago/{idPagoCurso}",
+     *     tags={"Cursos"},
+     *     summary="Eliminar pago de curso",
+     *     description="Elimina un pago de curso y su voucher asociado",
+     *     operationId="borrarPagoCurso",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="idPagoCurso", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Pago eliminado exitosamente"),
+     *     @OA\Response(response=404, description="Pago no encontrado")
+     * )
+     *
      * Eliminar pago de curso y borrar voucher (migrado de CodeIgniter)
      */
     public function borrarPagoCurso($idPagoCurso)
@@ -554,6 +693,31 @@ class CursoController extends Controller
     }
 
     /**
+     * @OA\Post(
+     *     path="/cursos/pagos",
+     *     tags={"Cursos"},
+     *     summary="Guardar pago de cliente",
+     *     description="Guarda un pago de cliente con voucher adjunto",
+     *     operationId="saveClientePagosCurso",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\MediaType(
+     *             mediaType="multipart/form-data",
+     *             @OA\Schema(
+     *                 required={"voucher", "idPedido", "monto", "fecha", "banco"},
+     *                 @OA\Property(property="voucher", type="string", format="binary"),
+     *                 @OA\Property(property="idPedido", type="integer"),
+     *                 @OA\Property(property="monto", type="number"),
+     *                 @OA\Property(property="fecha", type="string", format="date"),
+     *                 @OA\Property(property="banco", type="string")
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Pago guardado exitosamente"),
+     *     @OA\Response(response=422, description="Validación fallida")
+     * )
+     *
      * Guardar pago de cliente (con voucher)
      */
     public function saveClientePagosCurso(Request $request)
@@ -632,6 +796,17 @@ class CursoController extends Controller
     }
 
     /**
+     * @OA\Get(
+     *     path="/cursos/{idPedidoCurso}/pagos",
+     *     tags={"Cursos"},
+     *     summary="Obtener pagos de un pedido de curso",
+     *     description="Obtiene todos los pagos detallados de un pedido de curso",
+     *     operationId="getPagosCursoPedido",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="idPedidoCurso", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Pagos obtenidos exitosamente")
+     * )
+     *
      * Obtener pagos detallados de un pedido
      */
     public function getPagosCursoPedido($idPedidoCurso)
@@ -651,6 +826,24 @@ class CursoController extends Controller
     }
 
     /**
+     * @OA\Post(
+     *     path="/cursos/campanas",
+     *     tags={"Cursos - Campañas"},
+     *     summary="Crear campaña de curso",
+     *     description="Crea una nueva campaña de curso con fechas y días",
+     *     operationId="crearCampana",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             @OA\Property(property="fe_inicio", type="string", format="date"),
+     *             @OA\Property(property="fe_fin", type="string", format="date"),
+     *             @OA\Property(property="dias", type="array", @OA\Items(type="string", format="date"))
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Campaña creada exitosamente")
+     * )
+     *
      * Métodos de campañas: crear, editar, borrar, obtener
      */
     public function crearCampana(Request $request)
@@ -670,6 +863,26 @@ class CursoController extends Controller
         return response()->json(['status' => 'success', 'message' => 'Campaña registrada correctamente', 'id' => $id]);
     }
 
+    /**
+     * @OA\Put(
+     *     path="/cursos/campanas/{id}",
+     *     tags={"Cursos - Campañas"},
+     *     summary="Editar campaña de curso",
+     *     description="Actualiza una campaña de curso existente",
+     *     operationId="editarCampana",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="id", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             @OA\Property(property="fe_inicio", type="string", format="date"),
+     *             @OA\Property(property="fe_fin", type="string", format="date"),
+     *             @OA\Property(property="dias", type="array", @OA\Items(type="string", format="date"))
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Campaña actualizada exitosamente")
+     * )
+     */
     public function editarCampana(Request $request, $id)
     {
         $data = [
@@ -684,12 +897,35 @@ class CursoController extends Controller
         return response()->json(['status' => 'success', 'message' => 'Campaña actualizada correctamente']);
     }
 
+    /**
+     * @OA\Delete(
+     *     path="/cursos/campanas/{id}",
+     *     tags={"Cursos - Campañas"},
+     *     summary="Eliminar campaña de curso",
+     *     description="Elimina (soft delete) una campaña de curso",
+     *     operationId="borrarCampana",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="id", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Campaña eliminada exitosamente")
+     * )
+     */
     public function borrarCampana($id)
     {
         DB::table('campana_curso')->where('ID_Campana', $id)->update(['Fe_Borrado' => now()]);
         return response()->json(['status' => 'success', 'message' => 'Campaña eliminada correctamente']);
     }
 
+    /**
+     * @OA\Get(
+     *     path="/cursos/campanas",
+     *     tags={"Cursos - Campañas"},
+     *     summary="Obtener campañas de cursos",
+     *     description="Lista todas las campañas de cursos activas",
+     *     operationId="getCampanas",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Response(response=200, description="Campañas obtenidas exitosamente")
+     * )
+     */
     public function getCampanas()
     {
         $campanas = DB::table('campana_curso')
@@ -716,6 +952,18 @@ class CursoController extends Controller
         return response()->json(['status' => 'success', 'data' => $campanas]);
     }
 
+    /**
+     * @OA\Get(
+     *     path="/cursos/campanas/{id}",
+     *     tags={"Cursos - Campañas"},
+     *     summary="Obtener campaña por ID",
+     *     description="Obtiene una campaña específica con sus días",
+     *     operationId="getCampanaById",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="id", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Campaña obtenida exitosamente")
+     * )
+     */
     public function getCampanaById($id)
     {
         $campana = DB::table('campana_curso as c')
@@ -728,6 +976,23 @@ class CursoController extends Controller
     }
 
     /**
+     * @OA\Post(
+     *     path="/cursos/tipo-curso",
+     *     tags={"Cursos"},
+     *     summary="Asignar tipo de curso",
+     *     description="Asigna un tipo de curso a un pedido",
+     *     operationId="asignarTipoCurso",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             @OA\Property(property="id_pedido", type="integer"),
+     *             @OA\Property(property="id_tipo_curso", type="integer")
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Tipo de curso asignado exitosamente")
+     * )
+     *
      * Asignar tipo de curso (migrado de CodeIgniter)
      */
     public function asignarTipoCurso(Request $request)
@@ -770,6 +1035,23 @@ class CursoController extends Controller
     }
 
     /**
+     * @OA\Post(
+     *     path="/cursos/asignar-campana",
+     *     tags={"Cursos"},
+     *     summary="Asignar campaña a pedido de curso",
+     *     description="Asigna una campaña a un pedido de curso",
+     *     operationId="asignarCampanaPedidoCurso",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             @OA\Property(property="id_pedido", type="integer"),
+     *             @OA\Property(property="estado_pedido", type="integer")
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Campaña asignada exitosamente")
+     * )
+     *
      * Asignar campaña a pedido (migrado de CodeIgniter)
      */
     public function asignarCampanaPedidoCurso(Request $request)
@@ -800,6 +1082,20 @@ class CursoController extends Controller
     }
 
     /**
+     * @OA\Get(
+     *     path="/cursos/pagos-general",
+     *     tags={"Cursos"},
+     *     summary="Obtener pagos de cursos general",
+     *     description="Obtiene la lista general de pagos de cursos con filtros",
+     *     operationId="getPagosCurso",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="limit", in="query", @OA\Schema(type="integer", default=10)),
+     *     @OA\Parameter(name="page", in="query", @OA\Schema(type="integer", default=1)),
+     *     @OA\Parameter(name="search", in="query", @OA\Schema(type="string")),
+     *     @OA\Response(response=200, description="Pagos obtenidos exitosamente"),
+     *     @OA\Response(response=401, description="No autenticado")
+     * )
+     *
      * Obtener pagos de cursos (migrado de CodeIgniter)
      */
     public function getPagosCurso(Request $request)
@@ -929,6 +1225,24 @@ class CursoController extends Controller
             ], 500);
         }
     }
+    /**
+     * @OA\Post(
+     *     path="/cursos/change-importe",
+     *     tags={"Cursos"},
+     *     summary="Cambiar importe de pedido",
+     *     description="Cambia el importe total de un pedido de curso",
+     *     operationId="changeImportePedido",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             @OA\Property(property="id_pedido", type="integer"),
+     *             @OA\Property(property="importe", type="number")
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Importe actualizado exitosamente")
+     * )
+     */
     public function changeImportePedido(Request $request)
     {
         try {
@@ -946,6 +1260,24 @@ class CursoController extends Controller
         }
     }
 
+    /**
+     * @OA\Post(
+     *     path="/cursos/crear-usuario-moodle",
+     *     tags={"Cursos"},
+     *     summary="Crear usuario en Moodle",
+     *     description="Crea un usuario en la plataforma Moodle para cursos",
+     *     operationId="crearUsuarioCursosMoodle",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             @OA\Property(property="id_usuario", type="integer"),
+     *             @OA\Property(property="id_pedido", type="integer")
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Usuario Moodle creado exitosamente")
+     * )
+     */
     public function crearUsuarioCursosMoodle(Request $request)
     {
         try {
@@ -1108,16 +1440,74 @@ class CursoController extends Controller
 
                 // Log de respuesta de Moodle
                 Log::error('Respuesta de Moodle: ' . json_encode($response_usuario_moodle));
+                Log::error('Respuesta de Moodle (var_dump): ' . print_r($response_usuario_moodle, true));
 
                 if ($response_usuario_moodle['status'] == 'success') {
-                    // Buscar el usuario creado usando el nuevo username
-                    $arrParams['criteria'][0]['key']   = 'username';
-                    $arrParams['criteria'][0]['value'] = $username;
+                    // ✅ Usar el username real de Moodle si el usuario ya existía, sino usar el generado
+                    $moodle_username = $response_usuario_moodle['username'] ?? $username;
                     
-                    // Set No_Usuario to $username
+                    // ✅ Usar la contraseña de la respuesta si está disponible (para usuarios existentes actualizados)
+                    // Si no, usar la contraseña original que se preparó
+                    $moodle_password = $response_usuario_moodle['password'] ?? $cleaned_password;
+                    
+                    // Log para debug - VERIFICAR VALORES
+                    Log::error("=== DEBUG: ASIGNACIÓN DE VARIABLES ===");
+                    Log::error("response_usuario_moodle completo: " . json_encode($response_usuario_moodle));
+                    Log::error("response_usuario_moodle['username']: " . ($response_usuario_moodle['username'] ?? 'NO DEFINIDO'));
+                    Log::error("username (generado): {$username}");
+                    Log::error("moodle_username (asignado): {$moodle_username}");
+                    Log::error("Password de respuesta: " . ($response_usuario_moodle['password'] ?? 'NO ENCONTRADO'));
+                    Log::error("cleaned_password: {$cleaned_password}");
+                    Log::error("moodle_password (asignado): {$moodle_password}");
+                    Log::error("¿Coinciden las contraseñas? " . ($moodle_password === $cleaned_password ? 'SÍ' : 'NO'));
+                    
+                    // Si el usuario ya existía, usar su username real; si es nuevo, usar el generado
+                    if (isset($response_usuario_moodle['user_exists']) && $response_usuario_moodle['user_exists']) {
+                        Log::info("Usuario existente en Moodle, usando username real: {$moodle_username}");
+                    } else {
+                        Log::info("Usuario nuevo en Moodle, usando username generado: {$moodle_username}");
+                    }
+                    
+                    // Buscar el usuario usando el username correcto (real o generado)
+                    // ✅ FORZAR el uso del username de la respuesta si el usuario existe
+                    if (isset($response_usuario_moodle['user_exists']) && $response_usuario_moodle['user_exists']) {
+                        // Si el usuario ya existía, SIEMPRE usar el username de la respuesta
+                        if (!empty($response_usuario_moodle['username'])) {
+                            $moodle_username = $response_usuario_moodle['username'];
+                            Log::error("✅ FORZADO: Usando username real de usuario existente: {$moodle_username}");
+                        } else {
+                            Log::error("⚠️ ERROR: Usuario existe pero no se encontró username en respuesta");
+                        }
+                    }
+                    
+                    // Verificación final
+                    if (empty($moodle_username)) {
+                        $moodle_username = $response_usuario_moodle['username'] ?? $username;
+                        Log::error("⚠️ ADVERTENCIA: moodle_username estaba vacío, se reasignó a: {$moodle_username}");
+                    }
+                    
+                    // ✅ Asegurar que $arrParams esté inicializado correctamente
+                    $arrParams = [
+                        'criteria' => [
+                            [
+                                'key' => 'username',
+                                'value' => $moodle_username
+                            ]
+                        ]
+                    ];
+                    
+                    // Log para verificar el valor que se va a usar
+                    Log::error("=== ANTES DE BUSCAR USUARIO EN MOODLE ===");
+                    Log::error("moodle_username FINAL a buscar: {$moodle_username}");
+                    Log::error("username generado (NO usar): {$username}");
+                    Log::error("arrParams completo: " . json_encode($arrParams));
+                    Log::error("Verificación: arrParams['criteria'][0]['value'] = " . $arrParams['criteria'][0]['value']);
+                    
+                    // Set No_Usuario to $moodle_username (username real de Moodle)
+                    // ✅ Usar la contraseña correcta (la de la respuesta si existe, sino la original)
                     $this->setUsuarioModdle(
-                        $username,
-                        $this->ciEncrypt($cleaned_password),
+                        $moodle_username,
+                        $this->ciEncrypt($moodle_password),
                         $id
                     );
                     
@@ -1143,10 +1533,45 @@ class CursoController extends Controller
                         } else {
                             $this->actualizarPedido(['ID_Pedido_Curso' => $id_pedido_curso], ['Nu_Estado_Usuario_Externo' => '2']);
 
-                            // Enviar credenciales por email y WhatsApp
+                            // Log para verificar credenciales antes de enviar
+                            Log::info('=== CREDENCIALES A ENVIAR ===');
+                            Log::info('Username Moodle: ' . $moodle_username);
+                            Log::info('Password a enviar (longitud): ' . strlen($moodle_password) . ' caracteres');
+                            Log::info('Password a enviar (valor completo): ' . $moodle_password);
+                            Log::info('Email: ' . $email);
+                            Log::info('Password usado en arrPost: ' . ($arrPost['password'] ?? 'NO DEFINIDO'));
+                            Log::info('¿Coinciden las contraseñas? ' . ($moodle_password === ($arrPost['password'] ?? '') ? 'SÍ' : 'NO'));
+                            
+                            // ✅ Verificar si la contraseña se actualizó correctamente
+                            $password_updated = $response_usuario_moodle['password_updated'] ?? true;
+                            
+                            // Si el usuario existía y la contraseña NO se actualizó, no enviar credenciales nuevas
+                            // porque la contraseña que tenemos no es la real del usuario
+                            if (isset($response_usuario_moodle['user_exists']) && 
+                                $response_usuario_moodle['user_exists'] && 
+                                !$password_updated) {
+                                
+                                Log::warning('⚠️ No se enviarán credenciales: Usuario existe pero contraseña no se pudo actualizar por permisos');
+                                
+                                return response()->json([
+                                    'success' => true,
+                                    'status' => 'warning',
+                                    'message' => 'Usuario ya existe en Moodle pero no se pudo actualizar la contraseña por falta de permisos. El usuario debe usar su contraseña actual o solicitar recuperación de contraseña.',
+                                    'data' => [
+                                        'original_username' => $original_username,
+                                        'moodle_username' => $moodle_username,
+                                        'moodle_id' => $id_usuario,
+                                        'user_existed' => true,
+                                        'password_updated' => false,
+                                        'warning' => 'Las credenciales no se enviaron porque la contraseña no se pudo actualizar. El usuario debe usar su contraseña actual en Moodle.'
+                                    ]
+                                ]);
+                            }
+                            
+                            // ✅ Enviar credenciales por email y WhatsApp usando el username y password correctos de Moodle
                             $this->enviarCredencialesMoodle(
-                                $username,
-                                $cleaned_password,
+                                $moodle_username,
+                                $moodle_password, // ✅ Usar la contraseña correcta
                                 $email,
                                 $nombres,
                                 $phoneNumber
@@ -1158,9 +1583,11 @@ class CursoController extends Controller
                                 'message' => 'Usuario y curso creados exitosamente. Credenciales enviadas por email y WhatsApp.',
                                 'data' => [
                                     'original_username' => $original_username,
-                                    'moodle_username' => $username,
+                                    'moodle_username' => $moodle_username, // ✅ Usar el username real de Moodle
                                     'moodle_id' => $id_usuario,
-                                    'moodle_password' => $cleaned_password, // Contraseña sin encriptar para el admin
+                                    'moodle_password' => $moodle_password, // ✅ Usar la contraseña correcta (no cleaned_password)
+                                    'user_existed' => $response_usuario_moodle['user_exists'] ?? false,
+                                    'password_updated' => $password_updated
                                 ]
                             ]);
                         }
@@ -1391,6 +1818,20 @@ class CursoController extends Controller
         return $results;
     }
 
+    /**
+     * @OA\Post(
+     *     path="/cursos/enviar-email-moodle/{id}/{ID_Pedido_Curso}",
+     *     tags={"Cursos"},
+     *     summary="Enviar email de usuario Moodle",
+     *     description="Envía las credenciales de Moodle al usuario por email y WhatsApp",
+     *     operationId="enviarEmailUsuarioMoodle",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="id", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Parameter(name="ID_Pedido_Curso", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Email enviado exitosamente"),
+     *     @OA\Response(response=404, description="Entidad no encontrada")
+     * )
+     */
     public function enviarEmailUsuarioMoodle($id, $ID_Pedido_Curso)
     {
         try {
@@ -1420,7 +1861,7 @@ class CursoController extends Controller
                     $message .= "Tu cuenta en ProBusiness ha sido creada exitosamente.\n\n";
                     $message .= "Usuario: " . (isset($result->usuario_moodle) && $result->usuario_moodle ? $result->usuario_moodle : $result->No_Usuario) . "\n";
                     $message .= "Contraseña: {$this->ciDecrypt($result->No_Password)}\n\n";
-                    $message .= "Puedes acceder a tu cuenta en el siguiente enlace: https://aulavirtualprobusiness.com/login/\n\n";
+                    $message .= "Puedes acceder a tu cuenta en el siguiente enlace: https://aulavirtual.probusiness.pe/login/\n\n";
                     $mensaje = "El día del inicio del curso, te agregaremos a un grupo de whatsapp por donde compartiremos los links de acceso al zoom, los materiales de trabajo y las grabaciones de las clases dictadas.\n\n";
                     $message .= "Saludos,\nEl equipo de ProBusiness";
                     
@@ -1470,6 +1911,34 @@ class CursoController extends Controller
         }
     }
 
+    /**
+     * @OA\Put(
+     *     path="/cursos/clientes/{id}",
+     *     tags={"Cursos"},
+     *     summary="Actualizar datos de cliente",
+     *     description="Actualiza los datos personales de un cliente de cursos",
+     *     operationId="actualizarDatosCliente",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="id", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             @OA\Property(property="nombres", type="string"),
+     *             @OA\Property(property="dni", type="string"),
+     *             @OA\Property(property="sexo", type="integer"),
+     *             @OA\Property(property="red_social", type="integer"),
+     *             @OA\Property(property="correo", type="string"),
+     *             @OA\Property(property="id_pais", type="integer"),
+     *             @OA\Property(property="whatsapp", type="string"),
+     *             @OA\Property(property="id_departamento", type="integer"),
+     *             @OA\Property(property="nacimiento", type="string", format="date"),
+     *             @OA\Property(property="id_provincia", type="integer"),
+     *             @OA\Property(property="id_distrito", type="integer")
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Cliente actualizado exitosamente")
+     * )
+     */
     public function actualizarDatosCliente(Request $request,$id)
     {
         try {
@@ -1590,6 +2059,19 @@ class CursoController extends Controller
     }
 
     /**
+     * @OA\Post(
+     *     path="/cursos/{idPedidoCurso}/constancia",
+     *     tags={"Cursos"},
+     *     summary="Generar constancia de pedido",
+     *     description="Genera y envía la constancia de un pedido de curso",
+     *     operationId="generarConstanciaPedido",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="idPedidoCurso", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Constancia generada exitosamente"),
+     *     @OA\Response(response=404, description="Pedido no encontrado"),
+     *     @OA\Response(response=400, description="Pedido no confirmado o sin teléfono")
+     * )
+     *
      * Genera y envía la constancia de un pedido de curso
      */
     public function generarConstanciaPedido($idPedidoCurso)
@@ -1672,12 +2154,19 @@ class CursoController extends Controller
     private function enviarCredencialesMoodle($username, $password, $email, $nombre, $phoneNumber = null)
     {
         try {
+            // Log para verificar credenciales recibidas
+            Log::info('=== ENVIAR CREDENCIALES MOODLE ===');
+            Log::info('Username recibido: ' . $username);
+            Log::info('Password recibido (longitud): ' . strlen($password) . ' caracteres');
+            Log::info('Password recibido (valor completo): ' . $password);
+            Log::info('Email: ' . $email);
+            
             // URL de Moodle desde configuración o variable de entorno
-            $moodleUrl = env('MOODLE_URL', 'https://aulavirtualprobusiness.com/login/index.php');
+            $moodleUrl = env('MOODLE_URL', 'https://aulavirtual.probusiness.pe/login/index.php');
             
             // Rutas de los logos
-            $logo_header = public_path('storage/logo_header.png');
-            $logo_footer = public_path('storage/logo_footer.png');
+            $logo_header = public_path('storage/logo_icons/logo_header.png');
+            $logo_footer = public_path('storage/logo_icons/logo_footer.png');
 
             // Enviar email con las credenciales
             try {
@@ -1730,6 +2219,22 @@ class CursoController extends Controller
         }
     }
     /**
+     * @OA\Get(
+     *     path="/cursos/exportar-excel",
+     *     tags={"Cursos"},
+     *     summary="Exportar cursos a Excel",
+     *     description="Exporta la lista de cursos a un archivo Excel con los mismos filtros que el listado",
+     *     operationId="exportarExcel",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="search", in="query", @OA\Schema(type="string")),
+     *     @OA\Parameter(name="campanas", in="query", @OA\Schema(type="string")),
+     *     @OA\Parameter(name="fechaInicio", in="query", @OA\Schema(type="string", format="date")),
+     *     @OA\Parameter(name="fechaFin", in="query", @OA\Schema(type="string", format="date")),
+     *     @OA\Parameter(name="estados_pago", in="query", @OA\Schema(type="string")),
+     *     @OA\Parameter(name="tipos_curso", in="query", @OA\Schema(type="string")),
+     *     @OA\Response(response=200, description="Archivo Excel generado exitosamente")
+     * )
+     *
      * Exportar cursos a Excel usando los mismos filtros que index
      */
     public function exportarExcel(Request $request)
@@ -1969,6 +2474,259 @@ class CursoController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Error al exportar Excel: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * @OA\Post(
+     *     path="/cursos/{idPedido}/recordatorio-pago",
+     *     tags={"Cursos"},
+     *     summary="Enviar recordatorio de pago",
+     *     description="Envía un recordatorio de pago por WhatsApp al cliente",
+     *     operationId="enviarRecordatorioPago",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="idPedido", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Recordatorio enviado exitosamente"),
+     *     @OA\Response(response=404, description="Pedido no encontrado"),
+     *     @OA\Response(response=400, description="Cliente sin teléfono registrado")
+     * )
+     *
+     * Enviar recordatorio de pago por WhatsApp
+     */
+    public function enviarRecordatorioPago($idPedido)
+    {
+        try {
+            // Obtener usuario autenticado
+            $user = JWTAuth::parseToken()->authenticate();
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Usuario no autenticado'
+                ], 401);
+            }
+
+            // Obtener datos del pedido con información del cliente y pagos
+            $pedido = DB::table('pedido_curso AS PC')
+                ->select([
+                    'PC.ID_Pedido_Curso',
+                    'PC.Ss_Total',
+                    'CLI.No_Entidad',
+                    'CLI.Nu_Celular_Entidad',
+                    DB::raw('(
+                        SELECT IFNULL(SUM(cccp.monto), 0)
+                        FROM pedido_curso_pagos AS cccp
+                        JOIN pedido_curso_pagos_concept ccp ON cccp.id_concept = ccp.id
+                        WHERE cccp.id_pedido_curso = PC.ID_Pedido_Curso
+                        AND ccp.name = "ADELANTO"
+                    ) AS total_pagos')
+                ])
+                ->leftJoin('entidad AS CLI', 'CLI.ID_Entidad', '=', 'PC.ID_Entidad')
+                ->where('PC.ID_Pedido_Curso', $idPedido)
+                ->first();
+
+            if (!$pedido) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Pedido no encontrado'
+                ], 404);
+            }
+
+            // Validar que tenga número de teléfono
+            if (empty($pedido->Nu_Celular_Entidad)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'El cliente no tiene número de teléfono registrado'
+                ], 400);
+            }
+
+            // Calcular valores
+            $importe = floatval($pedido->Ss_Total ?? 0);
+            $adelanto = floatval($pedido->total_pagos ?? 0);
+            $deuda = $importe - $adelanto;
+
+            // Formatear números con 2 decimales
+            $importeFormateado = number_format($importe, 2, '.', '');
+            $adelantoFormateado = number_format($adelanto, 2, '.', '');
+            $deudaFormateada = number_format($deuda, 2, '.', '');
+
+            // Construir mensaje
+            $nombreCliente = $pedido->No_Entidad ?? 'Cliente';
+            $mensaje = "Buen día {$nombreCliente} 👋\n\n";
+            $mensaje .= "Hoy estamos comenzando las clases 📚 recordarte que para poder gestionar las credenciales tienes que enviar la captura de la diferencia, quedo a la espera 🚢📦🌎✈️\n\n";
+            $mensaje .= "Importe: S/ {$importeFormateado}\n";
+            $mensaje .= "Adelanto: S/ {$adelantoFormateado}\n";
+            $mensaje .= "Deuda: S/ {$deudaFormateada}";
+
+            // Formatear número de teléfono
+            $phoneNumber = trim($pedido->Nu_Celular_Entidad);
+            // Remover caracteres no numéricos excepto el prefijo
+            $phoneNumber = preg_replace('/[^0-9]/', '', $phoneNumber);
+            
+            // Si tiene 9 dígitos, agregar prefijo 51
+            if (strlen($phoneNumber) == 9) {
+                $phoneNumber = '51' . $phoneNumber . '@c.us';
+            } else {
+                // Si ya tiene prefijo, solo agregar @c.us
+                $phoneNumber = $phoneNumber . '@c.us';
+            }
+
+            // Enviar mensaje por WhatsApp usando sendMessageCurso
+            $response = $this->sendMessageCurso($mensaje, $phoneNumber);
+
+            if ($response && isset($response['status']) && $response['status']) {
+                Log::info('Recordatorio de pago enviado exitosamente', [
+                    'id_pedido' => $idPedido,
+                    'cliente' => $nombreCliente,
+                    'telefono' => $phoneNumber
+                ]);
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Recordatorio de pago enviado correctamente'
+                ]);
+            } else {
+                $errorMessage = $response['response']['error'] ?? 'Error desconocido al enviar WhatsApp';
+                Log::error('Error al enviar recordatorio de pago', [
+                    'id_pedido' => $idPedido,
+                    'response' => $response
+                ]);
+
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Error al enviar el recordatorio',
+                    'error' => $errorMessage
+                ], 500);
+            }
+        } catch (\Exception $e) {
+            Log::error('Error en enviarRecordatorioPago: ' . $e->getMessage(), [
+                'id_pedido' => $idPedido,
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al enviar recordatorio de pago',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * @OA\Post(
+     *     path="/cursos/{idPedido}/instrucciones-password",
+     *     tags={"Cursos"},
+     *     summary="Enviar instrucciones de cambio de contraseña",
+     *     description="Envía instrucciones para cambiar la contraseña por WhatsApp",
+     *     operationId="enviarInstruccionesCambioPassword",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="idPedido", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Instrucciones enviadas exitosamente"),
+     *     @OA\Response(response=404, description="Pedido no encontrado"),
+     *     @OA\Response(response=400, description="Cliente sin teléfono registrado")
+     * )
+     *
+     * Enviar instrucciones para cambiar contraseña por WhatsApp
+     */
+    public function enviarInstruccionesCambioPassword($idPedido)
+    {
+        try {
+            // Obtener usuario autenticado
+            $user = JWTAuth::parseToken()->authenticate();
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Usuario no autenticado'
+                ], 401);
+            }
+
+            // Obtener datos del pedido con información del cliente
+            $pedido = DB::table('pedido_curso AS PC')
+                ->select([
+                    'PC.ID_Pedido_Curso',
+                    'CLI.No_Entidad',
+                    'CLI.Nu_Celular_Entidad'
+                ])
+                ->leftJoin('entidad AS CLI', 'CLI.ID_Entidad', '=', 'PC.ID_Entidad')
+                ->where('PC.ID_Pedido_Curso', $idPedido)
+                ->first();
+
+            if (!$pedido) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Pedido no encontrado'
+                ], 404);
+            }
+
+            // Validar que tenga número de teléfono
+            if (empty($pedido->Nu_Celular_Entidad)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'El cliente no tiene número de teléfono registrado'
+                ], 400);
+            }
+
+            // Construir mensaje
+            $nombreCliente = $pedido->No_Entidad ?? 'Cliente';
+            $mensaje = "Hola {$nombreCliente} 👋\n\n";
+            $mensaje .= "Para cambiar tu contraseña del aula virtual, sigue estos pasos:\n\n";
+            $mensaje .= "1. Ingresa a: https://aulavirtual.probusiness.pe/login/forgot_password.php\n";
+            $mensaje .= "2. Ingresa tu nombre de usuario o correo electrónico\n";
+            $mensaje .= "3. Revisa tu correo para recibir las instrucciones\n\n";
+            $mensaje .= "Si tienes alguna duda, no dudes en contactarnos.\n\n";
+            $mensaje .= "¡Saludos! 🚀\n";
+            $mensaje .= "_Equipo Probusiness_";
+
+            // Formatear número de teléfono
+            $phoneNumber = trim($pedido->Nu_Celular_Entidad);
+            // Remover caracteres no numéricos excepto el prefijo
+            $phoneNumber = preg_replace('/[^0-9]/', '', $phoneNumber);
+            
+            // Si tiene 9 dígitos, agregar prefijo 51
+            if (strlen($phoneNumber) == 9) {
+                $phoneNumber = '51' . $phoneNumber . '@c.us';
+            } else {
+                // Si ya tiene prefijo, solo agregar @c.us
+                $phoneNumber = $phoneNumber . '@c.us';
+            }
+
+            // Enviar mensaje por WhatsApp usando sendMessageCurso
+            $response = $this->sendMessageCurso($mensaje, $phoneNumber);
+
+            if ($response && isset($response['status']) && $response['status']) {
+                Log::info('Instrucciones de cambio de contraseña enviadas exitosamente', [
+                    'id_pedido' => $idPedido,
+                    'cliente' => $nombreCliente,
+                    'telefono' => $phoneNumber
+                ]);
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Instrucciones de cambio de contraseña enviadas correctamente'
+                ]);
+            } else {
+                $errorMessage = $response['response']['error'] ?? 'Error desconocido al enviar WhatsApp';
+                Log::error('Error al enviar instrucciones de cambio de contraseña', [
+                    'id_pedido' => $idPedido,
+                    'response' => $response
+                ]);
+
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Error al enviar las instrucciones',
+                    'error' => $errorMessage
+                ], 500);
+            }
+        } catch (\Exception $e) {
+            Log::error('Error en enviarInstruccionesCambioPassword: ' . $e->getMessage(), [
+                'id_pedido' => $idPedido,
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al enviar instrucciones de cambio de contraseña',
+                'error' => $e->getMessage()
             ], 500);
         }
     }

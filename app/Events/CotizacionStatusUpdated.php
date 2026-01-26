@@ -3,35 +3,40 @@
 namespace App\Events;
 
 use App\Models\CargaConsolidada\Cotizacion;
+use App\Models\Usuario;
 use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PresenceChannel;
 use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 
-class CotizacionStatusUpdated implements ShouldBroadcast
+class CotizacionStatusUpdated implements ShouldBroadcast, ShouldQueue
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
     public $cotizacion;
     public $status;
     public $message;
+    public $usuario;
+    public $queue = 'notificaciones';
 
     /**
      * Create a new event instance.
      *
      * @return void
      */
-    public function __construct(Cotizacion $cotizacion, string $status, string $message)
+    public function __construct(Cotizacion $cotizacion, string $status, string $message, Usuario $usuario)
     {
         Log::info('CotizacionStatusUpdated', ['cotizacion' => $cotizacion, 'status' => $status, 'message' => $message]);
 
         $this->cotizacion = $cotizacion;
         $this->status = $status;
         $this->message = $message;
+        $this->usuario = $usuario;
     }
 
     /**
@@ -42,7 +47,12 @@ class CotizacionStatusUpdated implements ShouldBroadcast
     public function broadcastOn()
     {
         // El prefijo 'private-' se agrega automáticamente por Laravel
-        return new PrivateChannel('Cotizador-notifications');
+        // Retornar un array de canales para enviar a múltiples canales
+        return [
+            new PrivateChannel('Cotizador-notifications'),
+            new PrivateChannel('Coordinacion-notifications'),
+            new PrivateChannel('Administracion-notifications'),
+        ];
     }
 
     /**
@@ -56,7 +66,18 @@ class CotizacionStatusUpdated implements ShouldBroadcast
             'id' => $this->cotizacion->id,
             'status' => $this->status,
             'message' => $this->message,
+            'usuario_id' => $this->usuario->ID_Usuario,
             'updated_at' => now()->toIso8601String(),
         ];
+    }
+
+    /**
+     * Get the broadcast event name.
+     *
+     * @return string
+     */
+    public function broadcastAs()
+    {
+        return 'CotizacionStatusUpdated';
     }
 }

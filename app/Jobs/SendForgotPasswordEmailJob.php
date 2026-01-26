@@ -42,8 +42,8 @@ class SendForgotPasswordEmailJob implements ShouldQueue
     public function handle()
     {
         try {
-            $logoHeader = public_path('storage/logo_header.png');
-            $logoFooter = public_path('storage/logo_footer.png');
+            $logoHeader = public_path('storage/logo_icons/logo_header.png');
+            $logoFooter = public_path('storage/logo_icons/logo_footer.png');
 
             Mail::to($this->email)->send(new ForgotPasswordMail(
                 $this->token,

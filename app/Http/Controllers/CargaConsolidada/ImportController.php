@@ -13,6 +13,16 @@ use Symfony\Component\Console\Output\BufferedOutput;
 class ImportController extends Controller
 {
     /**
+     * @OA\Get(
+     *     path="/carga-consolidada/import/form",
+     *     tags={"Importación"},
+     *     summary="Mostrar formulario de importación",
+     *     description="Muestra el formulario para importar archivos Excel",
+     *     operationId="showImportForm",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Response(response=200, description="Formulario mostrado")
+     * )
+     *
      * Mostrar formulario de importación
      */
     public function showImportForm()
@@ -21,6 +31,27 @@ class ImportController extends Controller
     }
 
     /**
+     * @OA\Post(
+     *     path="/carga-consolidada/import/excel",
+     *     tags={"Importación"},
+     *     summary="Importar archivo Excel",
+     *     description="Procesa y carga datos desde un archivo Excel",
+     *     operationId="importExcel",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\MediaType(
+     *             mediaType="multipart/form-data",
+     *             @OA\Schema(
+     *                 @OA\Property(property="excel_file", type="string", format="binary", description="Archivo Excel (.xlsx, .xls)")
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Importación exitosa"),
+     *     @OA\Response(response=422, description="Error de validación"),
+     *     @OA\Response(response=500, description="Error durante la importación")
+     * )
+     *
      * Procesar archivo Excel subido
      */
     public function importExcel(Request $request)

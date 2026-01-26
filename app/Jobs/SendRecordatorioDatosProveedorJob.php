@@ -10,15 +10,17 @@ use Illuminate\Queue\SerializesModels;
 use App\Models\CargaConsolidada\Cotizacion;
 use App\Models\CargaConsolidada\CotizacionProveedor;
 use App\Traits\WhatsappTrait;
+use App\Traits\DatabaseConnectionTrait;
 use Illuminate\Support\Facades\Log;
 
 class SendRecordatorioDatosProveedorJob implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, WhatsappTrait;
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, WhatsappTrait, DatabaseConnectionTrait;
 
     protected $idCotizacion;
     protected $idContainer;
     protected $proveedores;
+    protected $domain;
 
     /**
      * Create a new job instance.
@@ -26,12 +28,14 @@ class SendRecordatorioDatosProveedorJob implements ShouldQueue
      * @param int $idCotizacion
      * @param int $idContainer
      * @param array $proveedores
+     * @param string|null $domain
      */
-    public function __construct($idCotizacion, $idContainer, $proveedores)
+    public function __construct($idCotizacion, $idContainer, $proveedores, $domain = null)
     {
         $this->idCotizacion = $idCotizacion;
         $this->idContainer = $idContainer;
         $this->proveedores = $proveedores;
+        $this->domain = $domain;
         
         // ✅ Delay de 3 segundos para asegurar que los datos estén actualizados en BD
         $this->delay(now()->addSeconds(3));
@@ -45,6 +49,8 @@ class SendRecordatorioDatosProveedorJob implements ShouldQueue
     public function handle()
     {
         try {
+            // Establecer la conexión de BD basándose en el dominio
+            $this->setDatabaseConnection($this->domain);
             $cotizacion = Cotizacion::find($this->idCotizacion);
             $uuid=$cotizacion->uuid;
             if (!$cotizacion) {
@@ -63,9 +69,10 @@ class SendRecordatorioDatosProveedorJob implements ShouldQueue
                 $proveedor = CotizacionProveedor::find($proveedorId);
                 
                 if ($proveedor) {
-                    $message .= "Nombre del proveedor: " . $proveedor->supplier . "\n";
-                    $message .= "WeChat: " . $proveedor->supplier_phone . "\n";
+                    $message .= "Nombre del vendedor: " . $proveedor->supplier . "\n";
+                    $message .= "Número o WeChat: " . $proveedor->supplier_phone . "\n";
                     $message .= "Codigo proveedor: " . $proveedor->code_supplier . "\n";
+                    $message .= "----------------------------------------------------------\n";
                 }
             }
             

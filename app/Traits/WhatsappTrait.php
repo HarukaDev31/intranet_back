@@ -3,19 +3,167 @@
 namespace App\Traits;
 
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 trait WhatsappTrait
 {
     private $phoneNumberId = null;
 
+    /**
+     * Mapeo inverso de conexión de BD a dominio del frontend
+     * Múltiples dominios pueden usar la misma conexión (mysql)
+     */
+    private function getDomainFromDatabaseConnection($connection)
+    {
+        $connectionDomainMap = [
+            'mysql' => 'intranetv2.probusiness.pe', // Dominio principal para producción
+            'mysql_qa' => 'qaintranet.probusiness.pe',
+            'mysql_local' => 'localhost',
+        ];
+        
+        return $connectionDomainMap[$connection] ?? null;
+    }
+
+    /**
+     * Obtener el dominio del frontend desde donde se hace la petición
+     * Prioriza Origin/Referer, luego infiere desde la conexión de BD actual
+     */
+    private function getRequestDomain()
+    {
+        try {
+            // Primero intentar obtener desde headers HTTP (Origin/Referer)
+            $request = request();
+            if ($request) {
+                $origin = $request->headers->get('origin');
+                $referer = $request->headers->get('referer');
+
+                $sourceHost = null;
+                if ($origin) {
+                    $sourceHost = parse_url($origin, PHP_URL_HOST);
+                }
+                if (!$sourceHost && $referer) {
+                    $sourceHost = parse_url($referer, PHP_URL_HOST);
+                }
+
+                if ($sourceHost) {
+                    // Extraer solo el dominio (sin puerto o subdirectorios)
+                    return $this->extractDomain($sourceHost);
+                }
+            }
+
+            // Si no hay headers disponibles (ej: Jobs), inferir desde la conexión de BD actual
+            try {
+                $currentConnection = DB::getDefaultConnection();
+                $domain = $this->getDomainFromDatabaseConnection($currentConnection);
+                
+                if ($domain) {
+                    Log::info('Dominio inferido desde conexión de BD', [
+                        'connection' => $currentConnection,
+                        'domain' => $domain
+                    ]);
+                    return $domain;
+                }
+            } catch (\Exception $dbException) {
+                Log::debug('No se pudo obtener conexión de BD: ' . $dbException->getMessage());
+            }
+
+            // Si no se pudo obtener de ninguna forma
+            Log::warning('No se pudo obtener el dominio del frontend: Origin/Referer no disponibles y no se pudo inferir desde BD');
+            return null;
+        } catch (\Exception $e) {
+            Log::warning('Error al obtener dominio del frontend: ' . $e->getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Extraer el dominio del host
+     * Similar a DatabaseSelectionMiddleware
+     */
+    private function extractDomain($host)
+    {
+        // Remover el puerto si existe (ej: localhost:8000 -> localhost)
+        $domain = explode(':', $host)[0];
+        
+        // Si tiene www, removerlo
+        $domain = preg_replace('/^www\./', '', $domain);
+        
+        return $domain;
+    }
+
+    /**
+     * Obtener el dominio del frontend desde la request actual
+     * Método público para ser usado desde controladores al despachar Jobs
+     * 
+     * @return string|null
+     */
+    public static function getCurrentRequestDomain()
+    {
+        try {
+            $request = request();
+            if (!$request) {
+                return null;
+            }
+
+            // Priorizar el dominio proveniente de Origin/Referer
+            $origin = $request->headers->get('origin');
+            $referer = $request->headers->get('referer');
+
+            $sourceHost = null;
+            if ($origin) {
+                $sourceHost = parse_url($origin, PHP_URL_HOST);
+            }
+            if (!$sourceHost && $referer) {
+                $sourceHost = parse_url($referer, PHP_URL_HOST);
+            }
+
+            if ($sourceHost) {
+                // Remover el puerto si existe
+                $domain = explode(':', $sourceHost)[0];
+                // Si tiene www, removerlo
+                $domain = preg_replace('/^www\./', '', $domain);
+                return $domain;
+            }
+
+            return null;
+        } catch (\Exception $e) {
+            Log::warning('Error al obtener dominio desde request: ' . $e->getMessage());
+            return null;
+        }
+    }
+
     private function _callApi($endpoint, $data)
     {
         try {
             $url = 'https://redis.probusiness.pe/api/whatsapp' . $endpoint;
-            $envUrl = env('APP_URL');
-            $defaultWhatsapNumber=env('DEFAULT_WHATSAPP_NUMBER','912705923@c.us');
-            $data['phoneNumberId'] = $defaultWhatsapNumber;
-
+            
+            // Obtener dominio desde donde se hace la petición
+            $domain = $this->getRequestDomain();
+            $defaultWhatsapNumber = env('DEFAULT_WHATSAPP_NUMBER', '51912705923@c.us');
+            Log::info('Domain: ' . $domain);
+            // Validar dominio similar a DatabaseSelectionMiddleware
+            // Si es localhost, desarrollo o QA, usar número por defecto
+            $domainsForDefaultNumber = ['localhost', '127.0.0.1', 'qaintranet.probusiness.pe'];
+            $shouldUseDefaultNumber = false;
+            
+            if ($domain) {
+                foreach ($domainsForDefaultNumber as $allowedDomain) {
+                    if (strpos($domain, $allowedDomain) !== false || $domain === $allowedDomain) {
+                        $shouldUseDefaultNumber = true;
+                        break;
+                    }
+                }
+            }
+            
+            if ($shouldUseDefaultNumber) {
+                $data['phoneNumberId'] = $defaultWhatsapNumber;
+                Log::info('Dominio detectado para usar número por defecto', [
+                    'domain' => $domain,
+                    'phoneNumberId' => $defaultWhatsapNumber
+                ]);
+            }
+           
             $ch = curl_init();
             curl_setopt($ch, CURLOPT_URL, $url);
             curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
@@ -35,10 +183,7 @@ trait WhatsappTrait
             $error = curl_error($ch);
             curl_close($ch);
             if ($error) {
-                Log::error('Error de cURL en API de WhatsApp: ' . $error, [
-                    'endpoint' => $endpoint,
-                    'url' => $url
-                ]);
+             
                 return [
                     'status' => false,
                     'response' => ['error' => 'Error de conexión: ' . $error]
@@ -78,7 +223,7 @@ trait WhatsappTrait
     public function sendWelcome($carga, $phoneNumberId = null, $sleep = 0): array
     {
         $phoneNumberId = $phoneNumberId ? $phoneNumberId : $this->phoneNumberId;
-        return $this->_callApi('/welcome', [
+        return $this->_callApi('/welcomeV2', [
             'carga' => $carga,
             'phoneNumberId' => $phoneNumberId,
             'sleep' => $sleep
@@ -132,7 +277,7 @@ trait WhatsappTrait
     {
         $phoneNumberId = $phoneNumberId ? $phoneNumberId : $this->phoneNumberId;
 
-        return $this->_callApi('/message', [
+        return $this->_callApi('/messageV2', [
             'message' => $message,
             'phoneNumberId' => $phoneNumberId,
             'sleep' => $sleep
@@ -158,7 +303,7 @@ trait WhatsappTrait
             'sleep' => $sleep
         ]);
     }
-    public function sendMedia($filePath, $mimeType = null, $message = null, $phoneNumberId = null, $sleep = 0)
+    public function sendMedia($filePath, $mimeType = null, $message = null, $phoneNumberId = null, $sleep = 0,$fromNumber='consolidado',$fileName=null)
     {
         try {
             $phoneNumberId = $phoneNumberId ? $phoneNumberId : $this->phoneNumberId;
@@ -183,13 +328,14 @@ trait WhatsappTrait
             
             $fileContent = base64_encode($fileContent);
 
-            return $this->_callApi('/media', [
+            return $this->_callApi('/mediaV2', [
                 'fileContent' => $fileContent,
-                'fileName' => basename($filePath),
+                'fileName' => $fileName ?? basename($filePath),
                 'mimeType' => $mimeType,
                 'message' => $message,
                 'phoneNumberId' => $phoneNumberId,
-                'sleep' => $sleep
+                'sleep' => $sleep,
+                'fromNumber' => $fromNumber
             ]);
         } catch (\Exception $e) {
             Log::error('Error al enviar media: ' . $e->getMessage(), [
@@ -199,7 +345,7 @@ trait WhatsappTrait
             return false;
         }
     }
-    public function sendMediaInspection($filePath, $mimeType = null, $message = null, $phoneNumberId = null, $sleep = 0, $inspection_id = null)
+    public function sendMediaInspection($filePath, $mimeType = null, $message = null, $phoneNumberId = null, $sleep = 0, $inspection_id = null,$fileName=null)
     {
         try {
             $phoneNumberId = $phoneNumberId ? $phoneNumberId : $this->phoneNumberId;
@@ -236,9 +382,9 @@ trait WhatsappTrait
                 'inspectionId' => $inspection_id
             ]);
             
-            return $this->_callApi('/media-inspection', [
+            return $this->_callApi('/media-inspectionV2', [
                 'fileContent' => $fileContent,
-                'fileName' => basename($filePath),
+                'fileName' => $fileName ?? basename($filePath),
                 'mimeType' => $mimeType,
                 'message' => $message,
                 'phoneNumberId' => $phoneNumberId,
@@ -252,6 +398,141 @@ trait WhatsappTrait
                 'trace' => $e->getTraceAsString()
             ]);
             return false;
+        }
+    }
+
+    /**
+     * Envía datos de media de inspección directamente al controlador local
+     * El controlador procesará y encolará el job SendMediaInspectionMessageJobV2
+     * Envía solo la URL pública del archivo (no base64)
+     * 
+     * @param string $filePath Ruta del archivo a enviar
+     * @param string|null $mimeType Tipo MIME del archivo
+     * @param string|null $message Mensaje opcional
+     * @param string|null $phoneNumberId Número de teléfono
+     * @param int $sleep Tiempo de espera
+     * @param int|null $inspection_id ID de la inspección
+     * @param string|null $fileName Nombre del archivo
+     * @return array|false Respuesta del controlador o false en caso de error
+     */
+    public function sendMediaInspectionToController($filePath, $mimeType = null, $message = null, $phoneNumberId = null, $sleep = 0, $inspection_id = null, $fileName = null)
+    {
+        try {
+            $phoneNumberId = $phoneNumberId ? $phoneNumberId : $this->phoneNumberId;
+            
+            // Validar que inspection_id esté presente
+            if ($inspection_id === null) {
+                Log::error('Error al enviar media de inspección al controlador: inspection_id es requerido');
+                return false;
+            }
+
+            // Generar URL pública del archivo
+            $publicUrl = $this->generatePublicUrlFromPath($filePath);
+            
+            if (!$publicUrl) {
+                Log::error('Error al generar URL pública del archivo: ' . $filePath);
+                return false;
+            }
+
+            Log::info('Enviando media de inspección al controlador local (URL)', [
+                'filePath' => $filePath,
+                'publicUrl' => $publicUrl,
+                'fileName' => $fileName ?? basename($filePath),
+                'mimeType' => $mimeType,
+                'inspectionId' => $inspection_id
+            ]);
+
+            // Usar _callApi para enviar la URL al controlador
+            return $this->_callApi('/media-inspectionV2', [
+                'fileContent' => $publicUrl, // Enviar URL en lugar de base64
+                'fileName' => $fileName ?? basename($filePath),
+                'phoneNumberId' => $phoneNumberId,
+                'mimeType' => $mimeType,
+                'message' => $message,
+                'inspectionId' => $inspection_id
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Excepción al enviar media de inspección al controlador: ' . $e->getMessage(), [
+                'filePath' => $filePath,
+                'inspectionId' => $inspection_id,
+                'trace' => $e->getTraceAsString()
+            ]);
+            return false;
+        }
+    }
+
+    /**
+     * Genera una URL pública para un archivo desde su ruta
+     * 
+     * @param string $filePath Ruta del archivo (puede ser absoluta o relativa)
+     * @return string|null URL pública del archivo o null si falla
+     */
+    private function generatePublicUrlFromPath($filePath)
+    {
+        try {
+            // Si ya es una URL completa, devolverla tal como está
+            if (filter_var($filePath, FILTER_VALIDATE_URL)) {
+                return $filePath;
+            }
+
+            // Limpiar la ruta de barras iniciales para evitar doble slash
+            $ruta = ltrim($filePath, '/');
+
+            // Si es una ruta absoluta del sistema, convertirla a ruta relativa
+            if (strpos($filePath, storage_path('app/public')) === 0) {
+                // Es una ruta absoluta en storage/app/public
+                $ruta = str_replace(storage_path('app/public'), '', $filePath);
+                $ruta = ltrim($ruta, '/\\');
+            } elseif (strpos($filePath, public_path('storage')) === 0) {
+                // Es una ruta absoluta en public/storage
+                $ruta = str_replace(public_path('storage'), '', $filePath);
+                $ruta = ltrim($ruta, '/\\');
+            }
+
+            // Limpiar la ruta
+            $ruta = str_replace('\\', '/', $ruta);
+            $ruta = ltrim($ruta, '/');
+
+            // Corregir rutas con doble storage
+            if (strpos($ruta, 'storage//storage/') !== false) {
+                $ruta = str_replace('storage//storage/', 'storage/', $ruta);
+            }
+
+            // Si la ruta ya contiene 'storage/', no agregar otro 'storage/'
+            if (strpos($ruta, 'storage/') === 0) {
+                $baseUrl = config('app.url');
+                $publicUrl = rtrim($baseUrl, '/') . '/' . $ruta;
+            } elseif (strpos($ruta, 'public/') === 0) {
+                // Si la ruta empieza con 'public/', remover 'public/' y agregar 'storage/'
+                $ruta = substr($ruta, 7); // Remover 'public/'
+                $baseUrl = config('app.url');
+                $publicUrl = rtrim($baseUrl, '/') . '/storage/' . $ruta;
+            } else {
+                // Construir URL manualmente (igual que generateImageUrl en CotizacionProveedorController)
+                $baseUrl = config('app.url');
+                $storagePath = 'storage/';
+
+                // Asegurar que no haya doble slash
+                $baseUrl = rtrim($baseUrl, '/');
+                $storagePath = ltrim($storagePath, '/');
+                $ruta = ltrim($ruta, '/');
+
+                $publicUrl = $baseUrl . '/' . $storagePath . $ruta;
+            }
+
+            Log::info("URL pública generada desde ruta", [
+                'file_path' => $filePath,
+                'relative_path' => $ruta,
+                'public_url' => $publicUrl
+            ]);
+
+            return $publicUrl;
+        } catch (\Exception $e) {
+            Log::error("Error al generar URL pública desde ruta: " . $e->getMessage(), [
+                'file_path' => $filePath,
+                'trace' => $e->getTraceAsString()
+            ]);
+            return null;
         }
     }
 }

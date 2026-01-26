@@ -232,7 +232,7 @@ trait MoodleRestProTrait
 
     private function call_moodle($function_name, $params, $token)
     {
-        $domain = 'https://aulavirtualprobusiness.com';
+        $domain = 'https://aulavirtual.probusiness.pe';
 
         $serverurl = $domain . '/webservice/rest/server.php'. '?wstoken=' . $token . '&wsfunction='.$function_name;
 
@@ -240,16 +240,33 @@ trait MoodleRestProTrait
         // Enviar como form data (application/x-www-form-urlencoded) que es lo que espera Moodle REST
         try {
             Log::info("Llamando a Moodle: {$function_name}");
+            Log::info("Token usado: " . substr($token, 0, 8) . '...' . substr($token, -8)); // Mostrar solo parte del token por seguridad
+            Log::info("URL completa: {$serverurl}");
             Log::info("Parámetros enviados a Moodle: " . json_encode($params));
             
             $response = Http::timeout(30)
                 ->asForm()
                 ->post($serverurl, $params);
-                
-            Log::info("Respuesta de Moodle: " . $response->body());
+            
+            // Log detallado de la respuesta
+            Log::info("HTTP Code: " . $response->status());
+            Log::info("Respuesta de Moodle (cURL): " . $response->body());
+            
+            // Si hay un error de acceso, loggear más detalles
+            if (strpos($response->body(), 'accessexception') !== false || 
+                strpos($response->body(), 'Access to the function') !== false) {
+                Log::error("=== ERROR DE ACCESO EN MOODLE ===");
+                Log::error("Función: {$function_name}");
+                Log::error("Token: " . substr($token, 0, 8) . '...' . substr($token, -8));
+                Log::error("URL: {$serverurl}");
+                Log::error("Respuesta completa: " . $response->body());
+                Log::error("HTTP Status: " . $response->status());
+            }
+            
             return $response->body();
         } catch (\Exception $e) {
             Log::error('Error en call_moodle: ' . $e->getMessage());
+            Log::error('Stack trace: ' . $e->getTraceAsString());
             return '<EXCEPTION>' . $e->getMessage() . '</EXCEPTION>';
         }
     }
@@ -339,9 +356,18 @@ trait MoodleRestProTrait
                 $user = [];
                 foreach ($xml_tree->MULTIPLE->SINGLE->KEY as $key) {
                     $name = (string)$key['name'];
-                    $value = (string)$key->VALUE;
+                    // Manejar valores null explícitamente
+                    if (isset($key->VALUE['null']) && (string)$key->VALUE['null'] === 'null') {
+                        $value = null;
+                    } else {
+                        $value = (string)$key->VALUE;
+                    }
                     $user[$name] = $value;
                 }
+                
+                // Log para debug: verificar que el username se extrajo correctamente
+                Log::info('Usuario extraído de Moodle - username: ' . ($user['username'] ?? 'NO ENCONTRADO'));
+                Log::info('Usuario extraído completo: ' . json_encode($user));
                 
                 return [
                     'status' => 'success',
@@ -370,15 +396,56 @@ trait MoodleRestProTrait
         $users = [$user_data];
         $params = ['users' => $users];
         
+        // Log detallado antes de intentar actualizar
+        Log::info('=== INTENTANDO ACTUALIZAR USUARIO EN MOODLE ===');
+        Log::info('Token usado: ' . substr($token, 0, 8) . '...' . substr($token, -8));
+        Log::info('Datos del usuario a actualizar: ' . json_encode($user_data));
+        
         $response = $this->call_moodle('core_user_update_users', $params, $token);
 
         if ($this->xmlresponse_is_exception($response)) {
+            // Verificar si es un error de permisos (accessexception)
+            if (strpos($response, 'accessexception') !== false || 
+                strpos($response, 'Access to the function core_user_update_users() is not allowed') !== false) {
+                
+                // Log detallado del error de permisos
+                Log::error('=== ERROR DE PERMISOS EN MOODLE ===');
+                Log::error('Función: core_user_update_users');
+                Log::error('Token: ' . substr($token, 0, 8) . '...' . substr($token, -8));
+                Log::error('Respuesta completa: ' . $response);
+                
+                // Intentar extraer más información del error
+                try {
+                    $xml_tree = new \SimpleXMLElement($response);
+                    if (isset($xml_tree->MESSAGE)) {
+                        Log::error('Mensaje de error: ' . (string)$xml_tree->MESSAGE);
+                    }
+                    if (isset($xml_tree->DEBUGINFO)) {
+                        Log::error('Debug info: ' . (string)$xml_tree->DEBUGINFO);
+                    }
+                } catch (\Exception $e) {
+                    Log::error('No se pudo parsear el XML del error: ' . $e->getMessage());
+                }
+                
+                // Si es un error de permisos, retornar éxito con advertencia
+                // porque el usuario ya existe en Moodle (que es el objetivo principal)
+                Log::warning('No se pudo actualizar contraseña en Moodle por falta de permisos, pero el usuario ya existe: ' . json_encode($user_data));
+                return [
+                    'status' => 'success',
+                    'message' => "Usuario existe en Moodle (no se pudo actualizar contraseña por permisos)",
+                    'warning' => true
+                ];
+            }
+            
+            // Para otros errores, retornar error
+            Log::error('Error al actualizar usuario en Moodle (no es de permisos): ' . $response);
             return [
                 'status' => 'error',
                 'message' => "Error al actualizar: " . $response
             ];
         }
         
+        Log::info('Usuario actualizado exitosamente en Moodle');
         return [
             'status' => 'success',
             'message' => "Usuario actualizado exitosamente"
@@ -391,7 +458,7 @@ trait MoodleRestProTrait
     public function createUser($arrPost)
     {
         try {
-            $token = '2a41772b01afcf26da875fc1ab59bf45';
+            $token = 'b582ae9ecd4e4e47794f4c27a091d775';
             
             // Validar datos antes de crear usuario
             if (empty($arrPost['username']) || empty($arrPost['password']) || 
@@ -407,10 +474,20 @@ trait MoodleRestProTrait
             $existing_user = $this->get_user_by_field('email', $arrPost['email'], $token);
             
             if ($existing_user['status'] == 'success') {
-                // Usuario existe, actualizarlo con nueva contraseña
-                Log::info('Usuario ya existe en Moodle, actualizando contraseña: ' . $arrPost['email']);
+                // Usuario existe, intentar actualizarlo con nueva contraseña
+                Log::info('Usuario ya existe en Moodle, intentando actualizar contraseña: ' . $arrPost['email']);
                 
                 $user_id = $existing_user['response']['id'];
+                $existing_username = isset($existing_user['response']['username']) 
+                    ? (string)$existing_user['response']['username'] 
+                    : null;
+                
+                // Validar que tenemos el username
+                if (empty($existing_username)) {
+                    Log::error('ERROR: No se pudo extraer el username del usuario existente en Moodle');
+                    Log::error('Respuesta completa de get_user_by_field: ' . json_encode($existing_user));
+                }
+                
                 $update_data = [
                     'id' => (int)$user_id,
                     'password' => $arrPost['password']
@@ -419,13 +496,33 @@ trait MoodleRestProTrait
                 $update_result = $this->update_user($update_data, $token);
                 
                 if ($update_result['status'] == 'success') {
-                    return [
+                    // Si tiene warning, significa que no se pudo actualizar pero el usuario existe
+                    if (isset($update_result['warning']) && $update_result['warning']) {
+                        Log::warning('Usuario existe en Moodle pero no se pudo actualizar contraseña por permisos. Continuando...');
+                    }
+                    
+                    // Log para debug: verificar que tenemos el username
+                    Log::info('Username real de Moodle extraído: ' . ($existing_username ?? 'NO ENCONTRADO'));
+                    Log::info('Datos completos del usuario existente: ' . json_encode($existing_user['response']));
+                    
+                    $result = [
                         'status' => 'success',
-                        'message' => 'Usuario existente actualizado',
-                        'user_id' => $user_id
+                        'message' => isset($update_result['warning']) && $update_result['warning'] 
+                            ? 'Usuario existe en Moodle (contraseña no actualizada por permisos)' 
+                            : 'Usuario existente actualizado',
+                        'user_id' => $user_id,
+                        'username' => $existing_username, // ✅ Retornar el username real de Moodle
+                        'password' => $arrPost['password'], // ✅ Retornar la contraseña que se intentó actualizar
+                        'password_updated' => !(isset($update_result['warning']) && $update_result['warning']),
+                        'user_exists' => true // ✅ Indicar que el usuario ya existía
                     ];
+                    
+                    Log::info('Resultado que se retorna de createUser: ' . json_encode($result));
+                    
+                    return $result;
                 }
                 
+                // Si falla por otra razón que no sea permisos, retornar el error
                 return $update_result;
             }
             
@@ -436,6 +533,14 @@ trait MoodleRestProTrait
             Log::info('Creando nuevo usuario Moodle: ' . json_encode($user_data_1));
             
             $user_id_1 = $this->create_user($user_data_1, $token);
+            
+            // Si se creó exitosamente, agregar el username y password al resultado
+            if ($user_id_1['status'] == 'success') {
+                $user_id_1['username'] = $arrPost['username']; // Username que se usó para crear
+                $user_id_1['password'] = $arrPost['password']; // ✅ Retornar la contraseña que se usó para crear
+                $user_id_1['user_exists'] = false; // Indicar que es un usuario nuevo
+            }
+            
             return $user_id_1;
         } 
         catch (\Exception $e) {
@@ -451,7 +556,7 @@ trait MoodleRestProTrait
     public function getUser($arrParams)
     {
         try {
-            $token = '2a41772b01afcf26da875fc1ab59bf45';
+            $token = 'b582ae9ecd4e4e47794f4c27a091d775';
             $user_id_1 = $this->get_user_field($arrParams, $token);
             return $user_id_1;
         } 
@@ -469,7 +574,7 @@ trait MoodleRestProTrait
     public function crearCursoUsuario($arrParams)
     {
         try {
-            $token = '2a41772b01afcf26da875fc1ab59bf45';
+            $token = 'b582ae9ecd4e4e47794f4c27a091d775';
 
             $user_id_1 = $arrParams['id_usuario'];
             $role_id = 5;//usuario invitado

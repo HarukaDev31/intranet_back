@@ -10,6 +10,7 @@ Route::group(['prefix' => 'clientes/delivery', 'middleware' => 'jwt.external'], 
     Route::post('/provincia', [DeliveryController::class, 'storeProvinciaForm']);
     Route::post('/lima', [DeliveryController::class, 'storeLimaForm']);
     Route::get('/horarios-disponibles/{idConsolidado}', [EntregaController::class, 'getHorariosDisponiblesClientes']);
+    Route::get('/formulario-lima/{cotizacionUuid}', [DeliveryController::class, 'getFormularioLimaByCotizacion']);
     Route::get('/{idConsolidado}', [DeliveryController::class, 'getClientesConsolidado']);
    
 });

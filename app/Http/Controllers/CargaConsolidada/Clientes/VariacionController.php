@@ -8,6 +8,23 @@ use Illuminate\Support\Facades\DB;
 
 class VariacionController extends Controller
 {
+    /**
+     * @OA\Get(
+     *     path="/carga-consolidada/contenedores/{idContenedor}/clientes/variacion",
+     *     tags={"Clientes Carga Consolidada"},
+     *     summary="Listar variaciones de clientes",
+     *     description="Obtiene la lista de clientes con sus variaciones de volumen para un contenedor",
+     *     operationId="getClientesVariacion",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="idContenedor", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Parameter(name="search", in="query", @OA\Schema(type="string")),
+     *     @OA\Parameter(name="estado", in="query", @OA\Schema(type="string")),
+     *     @OA\Parameter(name="per_page", in="query", @OA\Schema(type="integer", default=100)),
+     *     @OA\Parameter(name="sort_by", in="query", @OA\Schema(type="string", default="CC.fecha")),
+     *     @OA\Parameter(name="sort_order", in="query", @OA\Schema(type="string", default="asc")),
+     *     @OA\Response(response=200, description="Variaciones obtenidas exitosamente")
+     * )
+     */
     public function index(Request $request, $idContenedor)
     {
         $query = DB::table('contenedor_consolidado_cotizacion as CC')

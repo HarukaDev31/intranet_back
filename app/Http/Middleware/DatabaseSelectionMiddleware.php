@@ -20,20 +20,37 @@ class DatabaseSelectionMiddleware
      * Mapeo de dominios a nombres de conexiones de base de datos
      */
     private $domainDatabaseMap = [
-        'intranetv2.probusiness.pe' => 'mysql', // Base de datos principal (PROD)
-        'probusiness-intranet.com' => 'mysql_qa', // Base de datos de QA
-        'localhost' => 'mysql_local', // Para desarrollo
-        // Agrega más dominios según necesites
+        'intranetv2.probusiness.pe' => 'mysql', 
+        'clientes.probusiness.pe' => 'mysql', 
+        'datosprovedor.probusiness.pe' => 'mysql', 
+        'tienda.probusiness.pe' => 'mysql', 
+        'agentecompras.probusiness.pe' => 'mysql',
+        'cargaconsolidada.probusiness.pe' => 'mysql', 
+        'qaintranet.probusiness.pe' => 'mysql_qa', 
+        'localhost' => 'mysql_local', 
+
     ];
 
     public function handle(Request $request, Closure $next)
     {
-        // Obtener el host del request
-        $host = $request->getHost();
-        
+        // Priorizar el dominio proveniente de Origin/Referer (cuando hay frontend en otro dominio)
+        $origin = $request->headers->get('origin');
+        $referer = $request->headers->get('referer');
+
+        $sourceHost = null;
+        if ($origin) {
+            $sourceHost = parse_url($origin, PHP_URL_HOST);
+        }
+        if (!$sourceHost && $referer) {
+            $sourceHost = parse_url($referer, PHP_URL_HOST);
+        }
+
+        // Si no hay Origin/Referer válidos, usar el host de la request
+        $host = $sourceHost ?: $request->getHost();
+
         // Extraer solo el dominio (sin puerto o subdirectorios)
         $domain = $this->extractDomain($host);
-        
+
         // Obtener la conexión de base de datos según el dominio
         $databaseConnection = $this->getDatabaseConnection($domain);
         
@@ -43,12 +60,6 @@ class DatabaseSelectionMiddleware
         // También puedes establecerlo en DB facade
         DB::setDefaultConnection($databaseConnection);
         
-        // Log para debugging
-        Log::info('Database connection selected', [
-            'domain' => $domain,
-            'host' => $host,
-            'connection' => $databaseConnection
-        ]);
         
         return $next($request);
     }

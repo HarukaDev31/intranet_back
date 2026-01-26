@@ -16,6 +16,19 @@ class SheetController extends Controller
     {
         //
     }
+    
+    /**
+     * @OA\Get(
+     *     path="/google/sheets/values",
+     *     tags={"Google Sheets"},
+     *     summary="Obtener valores de Google Sheet",
+     *     description="Recupera los datos de un Google Sheet configurado",
+     *     operationId="getGoogleSheetValues",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Response(response=200, description="Valores obtenidos exitosamente"),
+     *     @OA\Response(response=500, description="Error al conectar con Google Sheets")
+     * )
+     */
     // retrieve the data from google sheet
     public function getGoogleSheetValues()
     {

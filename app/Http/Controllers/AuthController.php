@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Tymon\JWTAuth\Facades\JWTAuth;
 use Tymon\JWTAuth\Exceptions\JWTException;
@@ -24,6 +25,7 @@ use App\Http\Requests\RegisterRequest;
 use App\Models\User;
 use App\Models\CargaConsolidada\Cotizacion;
 use App\Traits\FileTrait;
+
 class AuthController extends Controller
 {
     use FileTrait;
@@ -38,6 +40,59 @@ class AuthController extends Controller
     }
 
     /**
+     * @OA\Post(
+     *     path="/auth/login",
+     *     tags={"Autenticación"},
+     *     summary="Iniciar sesión de usuario interno",
+     *     description="Autentica un usuario interno del sistema y retorna un token JWT",
+     *     operationId="login",
+     *     @OA\RequestBody(
+     *         required=true,
+     *         description="Credenciales de acceso",
+     *         @OA\JsonContent(
+     *             required={"No_Usuario", "password"},
+     *             @OA\Property(property="No_Usuario", type="string", example="admin", description="Nombre de usuario"),
+     *             @OA\Property(property="password", type="string", format="password", example="123456", description="Contraseña del usuario")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Login exitoso",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=true),
+     *             @OA\Property(property="message", type="string", example="Acceso correcto"),
+     *             @OA\Property(property="token", type="string", example="eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..."),
+     *             @OA\Property(property="token_type", type="string", example="bearer"),
+     *             @OA\Property(property="expires_in", type="integer", example=86400),
+     *             @OA\Property(property="user", type="object",
+     *                 @OA\Property(property="id", type="integer", example=1),
+     *                 @OA\Property(property="nombre", type="string", example="admin"),
+     *                 @OA\Property(property="nombres_apellidos", type="string", example="Administrador Sistema"),
+     *                 @OA\Property(property="email", type="string", example="admin@probusiness.com.pe"),
+     *                 @OA\Property(property="soldCBM", type="number", format="float", example=150.5),
+     *                 @OA\Property(property="embarquedCBM", type="number", format="float", example=120.3)
+     *             ),
+     *             @OA\Property(property="menus", type="array", @OA\Items(type="object"))
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=401,
+     *         description="Credenciales inválidas",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="status", type="string", example="error"),
+     *             @OA\Property(property="message", type="string", example="Usuario o contraseña incorrectos")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=500,
+     *         description="Error del servidor",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="status", type="string", example="error"),
+     *             @OA\Property(property="message", type="string", example="Error al iniciar sesión")
+     *         )
+     *     )
+     * )
+     *
      * Get a JWT via given credentials.
      *
      * @return \Illuminate\Http\JsonResponse
@@ -49,7 +104,6 @@ class AuthController extends Controller
 
             $data = $request->all();
             $result = $this->verificarAccesoLogin($data);
-
             if ($result['sStatus'] === 'success') {
                 // Buscar el usuario para generar el token
                 $usuario = Usuario::where('No_Usuario', $data['No_Usuario'])
@@ -59,13 +113,11 @@ class AuthController extends Controller
                 if ($usuario) {
                     try {
                         $token = JWTAuth::fromUser($usuario);
-
-                        // Cargar relaciones del usuario
+                        // Cargar relaciones del usuario    
                         $usuario->load(['grupo', 'empresa', 'organizacion']);
 
                         // Obtener menús del usuario
                         $menus = $this->obtenerMenusUsuario($usuario);
-
                         // Preparar información del grupo
                         $grupoInfo = null;
                         if ($usuario->grupo) {
@@ -79,7 +131,49 @@ class AuthController extends Controller
                             ];
                         }
 
-                        return response()->json([
+                        // Calcular CBM vendidos y embarcados (sin filtros de fecha en el login)
+                        $idUsuario = $usuario->ID_Usuario;
+
+                        // Calcular CBM vendidos en Perú (total de volumen confirmado por usuario)
+                        $soldCBM = DB::table('contenedor_consolidado_cotizacion as cc')
+                            ->leftJoin('contenedor_consolidado_cotizacion_proveedores as cccp', 'cc.id', '=', 'cccp.id_cotizacion')
+                            ->leftJoin('carga_consolidada_contenedor as cont', 'cc.id_contenedor', '=', 'cont.id')
+                            ->where('cc.estado_cotizador', 'CONFIRMADO')
+                            ->where('cc.id_usuario', $idUsuario)
+                            ->where('cont.empresa', '!=', '1')
+                            ->whereNotNull('cc.fecha_confirmacion')
+                            ->sum('cccp.cbm_total') ?? 0;
+
+                        // Calcular CBM embarcados (total de cbm_total_china recibidos en china y embarcados)
+                        $embarquedCBM = DB::table('contenedor_consolidado_cotizacion_proveedores as cccp')
+                            ->join('contenedor_consolidado_cotizacion as cc', 'cccp.id_cotizacion', '=', 'cc.id')
+                            ->join('carga_consolidada_contenedor as cont', 'cc.id_contenedor', '=', 'cont.id')
+                            ->where('cccp.estados_proveedor', 'LOADED')
+                            ->where('cc.id_usuario', $idUsuario)
+                            ->where('cont.empresa', '!=', '1')
+                            ->whereNull('cc.id_cliente_importacion')
+                            ->where('cc.estado_cotizador', 'CONFIRMADO')
+                            ->sum('cccp.cbm_total_china') ?? 0;
+
+                        // Obtener datos del perfil (mismo formato que me())
+                        $nombreCompleto = $usuario->No_Nombres_Apellidos ?? $usuario->No_Usuario ?? '';
+                        $email = $usuario->Txt_Email ?? '';
+                        
+                        // Obtener fecha de nacimiento
+                        $fechaNacimiento = '';
+                        if ($usuario->Fe_Nacimiento) {
+                            $fechaNacimiento = is_string($usuario->Fe_Nacimiento) 
+                                ? $usuario->Fe_Nacimiento 
+                                : (new \DateTime($usuario->Fe_Nacimiento))->format('Y-m-d');
+                        }
+
+                        // Obtener foto URL
+                        $photoUrl = '';
+                        if ($usuario->Txt_Foto) {
+                            $photoUrl = $this->generateImageUrl($usuario->Txt_Foto);
+                        }
+
+                        $payload = [
                             'success' => true,
                             'message' => $result['sMessage'],
                             'token' => $token,
@@ -89,7 +183,19 @@ class AuthController extends Controller
                                 'id' => $usuario->ID_Usuario,
                                 'nombre' => $usuario->No_Usuario,
                                 'nombres_apellidos' => $usuario->No_Nombres_Apellidos,
-                                'email' => $usuario->Txt_Email,
+                                'fullName' => !empty($nombreCompleto) ? $nombreCompleto : null,
+                                'photoUrl' => $photoUrl,
+                                'email' => $email,
+                                'dni' => $usuario->Nu_Documento ?? '',
+                                'fechaNacimiento' => $fechaNacimiento,
+                                'idCountry' => $usuario->ID_Pais ? (int)$usuario->ID_Pais : 0,
+                                'idDepartment' => $usuario->ID_Departamento ? (int)$usuario->ID_Departamento : 0,
+                                'idProvince' => $usuario->ID_Provincia ? (int)$usuario->ID_Provincia : 0,
+                                'idDistrict' => $usuario->ID_Distrito ? (int)$usuario->ID_Distrito : 0,
+                                'phone' => $usuario->Nu_Celular ?? null,
+                                'soldCBM' => (float) $soldCBM,
+                                'embarquedCBM' => (float) $embarquedCBM,
+                                'goals' => $usuario->Txt_Objetivos ?? null,
                                 'estado' => $usuario->Nu_Estado,
                                 'empresa' => $usuario->empresa ? [
                                     'id' => $usuario->empresa->ID_Empresa,
@@ -104,7 +210,12 @@ class AuthController extends Controller
                             'iCantidadAcessoUsuario' => $result['iCantidadAcessoUsuario'] ?? null,
                             'iIdEmpresa' => $result['iIdEmpresa'] ?? null,
                             'menus' => $menus
-                        ]);
+                        ];
+
+                        // Sanitize payload to avoid malformed UTF-8 characters during json_encode
+                        $payload = $this->sanitizeForJson($payload);
+
+                        return response()->json($payload);
                     } catch (JWTException $e) {
                         return response()->json([
                             'status' => 'error',
@@ -121,22 +232,440 @@ class AuthController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'status' => 'error',
-                'message' => 'Error al iniciar sesión'
+                'message' => 'Error al iniciar sesión: ' . $e->getMessage()
             ], 500);
         }
     }
 
     /**
+     * @OA\Get(
+     *     path="/auth/me",
+     *     tags={"Autenticación"},
+     *     summary="Obtener usuario autenticado",
+     *     description="Retorna la información del usuario actualmente autenticado",
+     *     operationId="me",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(
+     *         name="fecha_inicio",
+     *         in="query",
+     *         description="Fecha de inicio para filtrar CBM (formato: Y-m-d)",
+     *         required=false,
+     *         @OA\Schema(type="string", format="date", example="2025-01-01")
+     *     ),
+     *     @OA\Parameter(
+     *         name="fecha_fin",
+     *         in="query",
+     *         description="Fecha fin para filtrar CBM (formato: Y-m-d)",
+     *         required=false,
+     *         @OA\Schema(type="string", format="date", example="2025-12-31")
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Información del usuario",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=true),
+     *             @OA\Property(property="user", type="object",
+     *                 @OA\Property(property="id", type="integer", example=1),
+     *                 @OA\Property(property="fullName", type="string", example="Juan Pérez"),
+     *                 @OA\Property(property="photoUrl", type="string", example="https://..."),
+     *                 @OA\Property(property="email", type="string", example="juan@email.com"),
+     *                 @OA\Property(property="dni", type="string", example="12345678"),
+     *                 @OA\Property(property="fechaNacimiento", type="string", format="date"),
+     *                 @OA\Property(property="phone", type="string", example="999888777"),
+     *                 @OA\Property(property="soldCBM", type="number", format="float"),
+     *                 @OA\Property(property="embarquedCBM", type="number", format="float")
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(response=401, description="No autenticado")
+     * )
+     *
      * Get the authenticated User.
      *
      * @return \Illuminate\Http\JsonResponse
      */
-    public function me()
+    public function me(Request $request)
     {
-        return response()->json(auth()->user());
+        try {
+            $usuario = auth()->user();
+
+            if (!$usuario) {
+                return response()->json(['error' => 'Usuario no autenticado'], 401);
+            }
+
+            // El usuario autenticado es un Usuario (modelo Usuario), no User
+            // Usamos ID_Usuario para los cálculos de CBM
+            $idUsuario = $usuario->ID_Usuario;
+
+            // Obtener fechas de filtro si vienen como query parameters
+            $fechaInicio = $request->query('fecha_inicio');
+            $fechaFin = $request->query('fecha_fin');
+
+            // Calcular CBM vendidos en Perú (total de volumen confirmado por usuario)
+            // Los CBM vendidos: son el total de todos los cbm vendidos en Peru
+            // Usa la misma lógica que DashboardVentasController: suma cbm_total de cotizaciones confirmadas
+            $soldCBMQuery = DB::table('contenedor_consolidado_cotizacion as cc')
+                ->leftJoin('contenedor_consolidado_cotizacion_proveedores as cccp', 'cc.id', '=', 'cccp.id_cotizacion')
+                ->leftJoin('carga_consolidada_contenedor as cont', 'cc.id_contenedor', '=', 'cont.id')
+                ->where('cc.estado_cotizador', 'CONFIRMADO')
+                ->where('cc.id_usuario', $idUsuario)
+                ->where('cont.empresa', '!=', '1')
+                ->whereNotNull('cc.fecha_confirmacion');
+
+            // Aplicar filtro de fechas si vienen (usando fecha_confirmacion como en DashboardVentasController)
+            if ($fechaInicio && $fechaFin) {
+                $soldCBMQuery->whereBetween(DB::raw('DATE(cc.fecha_confirmacion)'), [$fechaInicio, $fechaFin]);
+            }
+
+            $soldCBM = $soldCBMQuery->sum('cccp.cbm_total') ?? 0;
+
+            // Calcular CBM embarcados (total de cbm_total_china recibidos en china y embarcados)
+            // Los cbm embarcados son el total de todos los cbm recibidos en china y embarcados
+            // Usa fecha_zarpe del contenedor para filtrar cuando están embarcados
+            $embarquedCBMQuery = DB::table('contenedor_consolidado_cotizacion_proveedores as cccp')
+                ->join('contenedor_consolidado_cotizacion as cc', 'cccp.id_cotizacion', '=', 'cc.id')
+                ->join('carga_consolidada_contenedor as cont', 'cc.id_contenedor', '=', 'cont.id')
+                ->where('cccp.estados_proveedor', 'LOADED')
+                ->where('cc.id_usuario', $idUsuario)
+                ->where('cont.empresa', '!=', '1')
+                ->whereNull('cc.id_cliente_importacion')
+                ->where('cc.estado_cotizador', 'CONFIRMADO');
+
+            // Aplicar filtro de fechas si vienen (usando fecha_zarpe para embarcados)
+            if ($fechaInicio && $fechaFin) {
+                $embarquedCBMQuery->whereBetween(DB::raw('DATE(cc.fecha_confirmacion)'), [$fechaInicio, $fechaFin]);
+            }
+
+            $embarquedCBM = $embarquedCBMQuery->sum('cccp.cbm_total_china') ?? 0;
+
+            // Obtener datos directamente del modelo Usuario
+            $nombreCompleto = $usuario->No_Nombres_Apellidos ?? $usuario->No_Usuario ?? '';
+            $email = $usuario->Txt_Email ?? '';
+            
+            // Obtener fecha de nacimiento
+            $fechaNacimiento = '';
+            if ($usuario->Fe_Nacimiento) {
+                $fechaNacimiento = is_string($usuario->Fe_Nacimiento) 
+                    ? $usuario->Fe_Nacimiento 
+                    : (new \DateTime($usuario->Fe_Nacimiento))->format('Y-m-d');
+            }
+
+            // Obtener foto URL
+            $photoUrl = '';
+            if ($usuario->Txt_Foto) {
+                $photoUrl = $this->generateImageUrl($usuario->Txt_Foto);
+            }
+
+            // Construir respuesta según el formato UserProfile usando directamente el modelo Usuario
+            $userProfile = [
+                'id' => $usuario->ID_Usuario,
+                'fullName' => !empty($nombreCompleto) ? $nombreCompleto : null,
+                'photoUrl' => $photoUrl,
+                'email' => $email,
+                'dni' => $usuario->Nu_Documento ?? '',
+                'fechaNacimiento' => $fechaNacimiento,
+                'idCountry' => $usuario->ID_Pais ? (int)$usuario->ID_Pais : 0,
+                'idDepartment' => $usuario->ID_Departamento ? (int)$usuario->ID_Departamento : 0,
+                'idProvince' => $usuario->ID_Provincia ? (int)$usuario->ID_Provincia : 0,
+                'idDistrict' => $usuario->ID_Distrito ? (int)$usuario->ID_Distrito : 0,
+                'phone' => $usuario->Nu_Celular ?? null,
+                'soldCBM' => (float) $soldCBM,
+                'embarquedCBM' => (float) $embarquedCBM,
+                'goals' => $usuario->Txt_Objetivos ?? null,
+            ];
+
+            return response()->json([
+                'success' => true,
+                'user' => $userProfile
+            ], 200);
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Error al obtener el usuario: ' . $e->getMessage()
+            ], 500);
+        }
     }
 
     /**
+     * @OA\Post(
+     *     path="/auth/profile",
+     *     tags={"Autenticación"},
+     *     summary="Actualizar perfil del usuario",
+     *     description="Actualiza la información del perfil del usuario autenticado",
+     *     operationId="updateProfile",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             @OA\Property(property="fullName", type="string", example="Juan Pérez"),
+     *             @OA\Property(property="email", type="string", example="juan@email.com"),
+     *             @OA\Property(property="phone", type="string", example="999888777"),
+     *             @OA\Property(property="dni", type="string", example="12345678"),
+     *             @OA\Property(property="fechaNacimiento", type="string", format="date"),
+     *             @OA\Property(property="idCountry", type="integer", example=1),
+     *             @OA\Property(property="idDepartment", type="integer", example=1),
+     *             @OA\Property(property="idProvince", type="integer", example=1),
+     *             @OA\Property(property="idDistrict", type="integer", example=1),
+     *             @OA\Property(property="goals", type="string", example="Mi objetivo"),
+     *             @OA\Property(property="photo", type="string", format="binary", description="Imagen de perfil")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Perfil actualizado exitosamente",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=true),
+     *             @OA\Property(property="message", type="string", example="Perfil actualizado correctamente")
+     *         )
+     *     ),
+     *     @OA\Response(response=401, description="No autenticado"),
+     *     @OA\Response(response=500, description="Error del servidor")
+     * )
+     *
+     * Actualizar perfil del usuario
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function profile(Request $request)
+    {
+        try {
+            $usuario = auth()->user();
+
+            if (!$usuario) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Usuario no autenticado'
+                ], 401);
+            }
+
+            // Validar unicidad de email, dni y phone (excepto el usuario actual)
+            $idUsuario = $usuario->ID_Usuario;
+            
+            if ($request->has('email')) {
+                $email = $request->input('email');
+                $emailExists = DB::table('usuario')
+                    ->where('Txt_Email', $email)
+                    ->where('ID_Usuario', '!=', $idUsuario)
+                    ->exists();
+                if ($emailExists) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'El correo electrónico ya está en uso'
+                    ], 422);
+                }
+            }
+
+            if ($request->has('dni')) {
+                $dni = $request->input('dni');
+                if ($dni) {
+                    $dniExists = DB::table('usuario')
+                        ->where('Nu_Documento', $dni)
+                        ->where('ID_Usuario', '!=', $idUsuario)
+                        ->exists();
+                    if ($dniExists) {
+                        return response()->json([
+                            'success' => false,
+                            'message' => 'El DNI ya está en uso'
+                        ], 422);
+                    }
+                }
+            }
+
+            if ($request->has('phone')) {
+                $phone = $request->input('phone');
+                if ($phone) {
+                    $phoneExists = DB::table('usuario')
+                        ->where('Nu_Celular', $phone)
+                        ->where('ID_Usuario', '!=', $idUsuario)
+                        ->exists();
+                    if ($phoneExists) {
+                        return response()->json([
+                            'success' => false,
+                            'message' => 'El teléfono ya está en uso'
+                        ], 422);
+                    }
+                }
+            }
+
+            DB::beginTransaction();
+
+            // Preparar datos para actualizar (solo los que vienen en el request)
+            $updateData = [];
+
+            // Email
+            if ($request->has('email')) {
+                $updateData['Txt_Email'] = $request->input('email');
+            }
+
+            // Phone
+            if ($request->has('phone')) {
+                $updateData['Nu_Celular'] = $request->input('phone');
+            }
+
+            // DNI
+            if ($request->has('dni')) {
+                $updateData['Nu_Documento'] = $request->input('dni');
+            }
+
+            // Fecha de nacimiento
+            if ($request->has('fecha_nacimiento')) {
+                $updateData['Fe_Nacimiento'] = $request->input('fecha_nacimiento');
+            }
+
+            // Country
+            if ($request->has('country')) {
+                $updateData['ID_Pais'] = $request->input('country');
+            }
+
+            // Departamento
+            if ($request->has('departamento')) {
+                $updateData['ID_Departamento'] = $request->input('departamento');
+            }
+
+            // Provincia (puede venir como 'city' o 'province')
+            if ($request->has('city')) {
+                $updateData['ID_Provincia'] = $request->input('city');
+            } elseif ($request->has('province')) {
+                $updateData['ID_Provincia'] = $request->input('province');
+            }
+
+            // Distrito
+            if ($request->has('distrito')) {
+                $updateData['ID_Distrito'] = $request->input('distrito');
+            }
+
+            // Goals
+            if ($request->has('goals')) {
+                $updateData['Txt_Objetivos'] = $request->input('goals');
+            }
+
+            // Manejar foto si viene
+            $photoPath = null;
+            
+            if ($request->hasFile('photo')) {
+                // Eliminar foto anterior si existe
+                $fotoAnterior = $usuario->Txt_Foto ?? null;
+                if ($fotoAnterior && Storage::disk('public')->exists($fotoAnterior)) {
+                    Storage::disk('public')->delete($fotoAnterior);
+                }
+                
+                // Guardar nueva foto
+                $photo = $request->file('photo');
+                $photoName = 'profile_' . $idUsuario . '_' . time() . '.' . $photo->getClientOriginalExtension();
+                $photoPath = $photo->storeAs('profiles', $photoName, 'public');
+                $updateData['Txt_Foto'] = $photoPath;
+            } elseif ($request->has('photo')) {
+                // Manejar foto como base64/binary
+                $photoData = $request->input('photo');
+                
+                if ($photoData && !empty($photoData)) {
+                    // Eliminar foto anterior si existe
+                    $fotoAnterior = $usuario->Txt_Foto ?? null;
+                    if ($fotoAnterior && Storage::disk('public')->exists($fotoAnterior)) {
+                        Storage::disk('public')->delete($fotoAnterior);
+                    }
+                    
+                    // Decodificar base64 si es necesario
+                    if (preg_match('/^data:image\/(\w+);base64,/', $photoData, $type)) {
+                        $photoData = substr($photoData, strpos($photoData, ',') + 1);
+                        $type = strtolower($type[1]);
+                    } else {
+                        $type = 'jpg'; // Default
+                    }
+                    
+                    $photoDecoded = base64_decode($photoData);
+                    if ($photoDecoded !== false) {
+                        $photoName = 'profile_' . $idUsuario . '_' . time() . '.' . $type;
+                        $photoPath = 'profiles/' . $photoName;
+                        Storage::disk('public')->put($photoPath, $photoDecoded);
+                        $updateData['Txt_Foto'] = $photoPath;
+                    }
+                }
+            }
+
+            // Actualizar directamente en la tabla usuario
+            if (!empty($updateData)) {
+                DB::table('usuario')
+                    ->where('ID_Usuario', $idUsuario)
+                    ->update($updateData);
+                
+                // Refrescar el modelo
+                $usuario = Usuario::find($idUsuario);
+            }
+
+            DB::commit();
+
+            // Obtener fecha de nacimiento formateada
+            $fechaNacimiento = '';
+            if ($usuario->Fe_Nacimiento) {
+                $fechaNacimiento = is_string($usuario->Fe_Nacimiento) 
+                    ? $usuario->Fe_Nacimiento 
+                    : (new \DateTime($usuario->Fe_Nacimiento))->format('Y-m-d');
+            }
+
+            // Obtener foto URL
+            $photoUrl = '';
+            if ($usuario->Txt_Foto) {
+                $photoUrl = $this->generateImageUrl($usuario->Txt_Foto);
+            } elseif ($photoPath) {
+                $photoUrl = $this->generateImageUrl($photoPath);
+            }
+
+            // Construir respuesta según el formato UserProfile
+            $response = [
+                'success' => true,
+                'message' => 'Perfil actualizado exitosamente',
+                'user' => [
+                    'id' => $usuario->ID_Usuario,
+                    'fullName' => !empty($usuario->No_Nombres_Apellidos) ? $usuario->No_Nombres_Apellidos : ($usuario->No_Usuario ?? null),
+                    'photoUrl' => $photoUrl,
+                    'email' => $usuario->Txt_Email ?? '',
+                    'dni' => $usuario->Nu_Documento ?? '',
+                    'fechaNacimiento' => $fechaNacimiento,
+                    'idCountry' => $usuario->ID_Pais ? (int)$usuario->ID_Pais : 0,
+                    'idDepartment' => $usuario->ID_Departamento ? (int)$usuario->ID_Departamento : 0,
+                    'idProvince' => $usuario->ID_Provincia ? (int)$usuario->ID_Provincia : 0,
+                    'idDistrict' => $usuario->ID_Distrito ? (int)$usuario->ID_Distrito : 0,
+                    'phone' => $usuario->Nu_Celular ?? null,
+                    'soldCBM' => 0, // Se calcula en me(), no en profile
+                    'embarquedCBM' => 0, // Se calcula en me(), no en profile
+                    'goals' => $usuario->Txt_Objetivos ?? null,
+                ]
+            ];
+
+            return response()->json($response, 200);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Error en profile AuthController: ' . $e->getMessage());
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al actualizar el perfil: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * @OA\Post(
+     *     path="/auth/logout",
+     *     tags={"Autenticación"},
+     *     summary="Cerrar sesión",
+     *     description="Invalida el token JWT del usuario",
+     *     operationId="logout",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Response(
+     *         response=200,
+     *         description="Sesión cerrada exitosamente",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=true),
+     *             @OA\Property(property="message", type="string", example="Sesión cerrada exitosamente")
+     *         )
+     *     ),
+     *     @OA\Response(response=401, description="No autenticado")
+     * )
+     *
      * Log the user out (Invalidate the token).
      *
      * @return \Illuminate\Http\JsonResponse
@@ -152,6 +681,25 @@ class AuthController extends Controller
     }
 
     /**
+     * @OA\Post(
+     *     path="/auth/refresh",
+     *     tags={"Autenticación"},
+     *     summary="Refrescar token JWT",
+     *     description="Genera un nuevo token JWT a partir del token actual",
+     *     operationId="refresh",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Response(
+     *         response=200,
+     *         description="Token refrescado exitosamente",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="access_token", type="string", example="eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..."),
+     *             @OA\Property(property="token_type", type="string", example="bearer"),
+     *             @OA\Property(property="expires_in", type="integer", example=86400)
+     *         )
+     *     ),
+     *     @OA\Response(response=500, description="Error al refrescar token")
+     * )
+     *
      * Refresh a token.
      *
      * @return \Illuminate\Http\JsonResponse
@@ -183,6 +731,70 @@ class AuthController extends Controller
             'token_type' => 'bearer',
             'expires_in' => config('jwt.ttl') * 60
         ]);
+    }
+
+    /**
+     * Recursively sanitize data to ensure strings are valid UTF-8 before json_encode.
+     * Attempts several common conversions and falls back to removing invalid bytes.
+     *
+     * @param mixed $data
+     * @return mixed
+     */
+    private function sanitizeForJson($data)
+    {
+        if (is_array($data)) {
+            $out = [];
+            foreach ($data as $k => $v) {
+                $out[$k] = $this->sanitizeForJson($v);
+            }
+            return $out;
+        }
+
+        if (is_object($data)) {
+            foreach ($data as $k => $v) {
+                $data->$k = $this->sanitizeForJson($v);
+            }
+            return $data;
+        }
+
+        if (is_string($data)) {
+            // If already valid UTF-8, return as-is
+            if (function_exists('mb_check_encoding')) {
+                if (mb_check_encoding($data, 'UTF-8')) return $data;
+            } else {
+                // try a quick iconv check
+                $try = @iconv('UTF-8', 'UTF-8//IGNORE', $data);
+                if ($try !== false && $try === $data) return $data;
+            }
+
+            // Try common conversions
+            $conversions = [
+                ['from' => 'ISO-8859-1', 'to' => 'UTF-8//TRANSLIT'],
+                ['from' => 'CP1252', 'to' => 'UTF-8//TRANSLIT'],
+                ['from' => 'UTF-8', 'to' => 'UTF-8//IGNORE'],
+            ];
+
+            foreach ($conversions as $c) {
+                $converted = @iconv($c['from'], $c['to'], $data);
+                if ($converted !== false) {
+                    if (!function_exists('mb_check_encoding') || mb_check_encoding($converted, 'UTF-8')) {
+                        return $converted;
+                    }
+                }
+            }
+
+            // Last resorts
+            $converted = @utf8_encode($data);
+            if ($converted !== false) return $converted;
+
+            // Remove bytes that are not valid UTF-8 as final fallback
+            $clean = @iconv('UTF-8', 'UTF-8//IGNORE', $data);
+            if ($clean !== false) return $clean;
+
+            return $data;
+        }
+
+        return $data;
     }
 
     /**
@@ -357,14 +969,26 @@ class AuthController extends Controller
         try {
             $idGrupo = $usuario->ID_Grupo;
             $noUsuario = $usuario->No_Usuario;
+            $idUsuario = $usuario->ID_Usuario;
+
+            // Obtener ID_Grupo_Usuario del usuario (si existe)
+            $grupoUsuarioRow = DB::table('grupo_usuario')->where('ID_Usuario', $idUsuario)->first();
+            $idGrupoUsuario = $grupoUsuarioRow ? $grupoUsuarioRow->ID_Grupo_Usuario : null;
 
             // Configurar condiciones según el usuario
-            $selectDistinct = "";
-            $whereIdGrupo = "AND GRPUSR.ID_Grupo = " . $idGrupo;
+            $selectDistinct = "DISTINCT";
             $orderByNuAgregar = "";
 
+            // Por defecto filtramos por el `ID_Grupo` (todos los usuarios del grupo)
+            if (!empty($idGrupo)) {
+                $whereIdGrupo = "AND GRPUSR.ID_Grupo = " . (int)$idGrupo;
+            } else {
+                // Si no hay grupo definido, no aplicamos filtro por grupo
+                $whereIdGrupo = "";
+            }
+
             if ($noUsuario == 'root') {
-                $selectDistinct = "DISTINCT";
+                $selectDistinct = "DISTINCT";   
                 $whereIdGrupo = "";
                 $orderByNuAgregar = "ORDER BY Nu_Agregar DESC";
             }
@@ -380,10 +1004,49 @@ class AuthController extends Controller
                         AND MNU.Nu_Activo = 0
                         {$whereIdGrupo}
                         ORDER BY MNU.ID_Padre ASC, MNU.Nu_Orden, MNU.ID_MENU ASC";
-
             $arrMenuPadre = DB::select($sqlPadre);
             //orde by Nu_Orden
             $arrMenuPadre = collect($arrMenuPadre)->sortBy('Nu_Orden')->toArray();
+
+            // Si hay menús asignados específicamente al usuario 28911 (vía su registro en `grupo_usuario`),
+            // esos menús deben ocultarse a todos los demás usuarios del mismo grupo.
+            // Los menús marcados específicamente para uno o varios usuarios (ej. 28911, 28791)
+            // deben permanecer exclusivos y ocultos para el resto de usuarios del mismo grupo.
+            $exclusiveUserIds = [28911, 28791];
+
+            if (!in_array($idUsuario, $exclusiveUserIds, true)) {
+                $exclusiveMenuIds = DB::table('menu_acceso')
+                    ->join('grupo_usuario', 'menu_acceso.ID_Grupo_Usuario', '=', 'grupo_usuario.ID_Grupo_Usuario')
+                    ->whereIn('grupo_usuario.ID_Usuario', $exclusiveUserIds)
+                    ->distinct()
+                    ->pluck('menu_acceso.ID_Menu')
+                    ->toArray();
+
+                if (!empty($exclusiveMenuIds)) {
+                    // Filtrar padres
+                    $arrMenuPadre = array_values(array_filter($arrMenuPadre, function ($m) use ($exclusiveMenuIds) {
+                        return isset($m->ID_Menu) && !in_array((int)$m->ID_Menu, $exclusiveMenuIds, true);
+                    }));
+
+                    // También filtrar hijos y sub-hijos si existen
+                    foreach ($arrMenuPadre as $idx => $rowPadre) {
+                        if (!empty($rowPadre->Hijos)) {
+                            $rowPadre->Hijos = array_values(array_filter($rowPadre->Hijos, function ($h) use ($exclusiveMenuIds) {
+                                return isset($h->ID_Menu) && !in_array((int)$h->ID_Menu, $exclusiveMenuIds, true);
+                            }));
+
+                            foreach ($rowPadre->Hijos as $hIdx => $h) {
+                                if (!empty($h->SubHijos)) {
+                                    $h->SubHijos = array_values(array_filter($h->SubHijos, function ($sh) use ($exclusiveMenuIds) {
+                                        return isset($sh->ID_Menu) && !in_array((int)$sh->ID_Menu, $exclusiveMenuIds, true);
+                                    }));
+                                }
+                            }
+                        }
+                        $arrMenuPadre[$idx] = $rowPadre;
+                    }
+                }
+            }
             // Obtener hijos para cada menú padre
             foreach ($arrMenuPadre as $rowPadre) {
                 $sqlHijos = "SELECT {$selectDistinct}
@@ -530,6 +1193,46 @@ class AuthController extends Controller
         }
     }
 
+    /**
+     * @OA\Post(
+     *     path="/auth/clientes/register",
+     *     tags={"Autenticación Clientes"},
+     *     summary="Registrar nuevo cliente",
+     *     description="Registra un nuevo usuario cliente externo en el sistema",
+     *     operationId="registerCliente",
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             required={"nombre", "email", "password"},
+     *             @OA\Property(property="nombre", type="string", example="Juan", description="Nombre del cliente"),
+     *             @OA\Property(property="lastname", type="string", example="Pérez", description="Apellidos del cliente"),
+     *             @OA\Property(property="email", type="string", format="email", example="juan@email.com"),
+     *             @OA\Property(property="password", type="string", format="password", example="123456"),
+     *             @OA\Property(property="whatsapp", type="string", example="999888777"),
+     *             @OA\Property(property="goals", type="string", example="Importar productos de China"),
+     *             @OA\Property(property="dni", type="string", example="12345678"),
+     *             @OA\Property(property="fechaNacimiento", type="string", format="date", example="1990-01-15"),
+     *             @OA\Property(property="provincia_id", type="integer", example=1),
+     *             @OA\Property(property="departamento_id", type="integer", example=1),
+     *             @OA\Property(property="distrito_id", type="integer", example=1),
+     *             @OA\Property(property="no_como_entero", type="string", example="Redes sociales"),
+     *             @OA\Property(property="no_otros_como_entero_empresa", type="string", example="Google")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=201,
+     *         description="Usuario registrado exitosamente",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=true),
+     *             @OA\Property(property="message", type="string", example="Usuario registrado correctamente"),
+     *             @OA\Property(property="token", type="string"),
+     *             @OA\Property(property="user", type="object")
+     *         )
+     *     ),
+     *     @OA\Response(response=422, description="Error de validación"),
+     *     @OA\Response(response=500, description="Error del servidor")
+     * )
+     */
     public function register(RegisterRequest $request)
     {
         DB::beginTransaction();
@@ -546,12 +1249,14 @@ class AuthController extends Controller
                 'goals' => $validatedData['goals'] ?? null,
                 'password' => Hash::make($validatedData['password']),
                 'dni' => $validatedData['dni'] ?? null,
-                'birth_date' => $validatedData['fechaNacimiento'] ?? null,
+                'birth_date' => $validatedData['fechaNacimiento'] ?? null,  
                 'provincia_id' => $validatedData['provincia_id'] ?? null,
                 'departamento_id' => $validatedData['departamento_id'] ?? null,
                 'distrito_id' => $validatedData['distrito_id'] ?? null,
+                'no_como_entero' => $validatedData['no_como_entero'] ?? null,
+                'no_otros_como_entero_empresa' => $validatedData['no_otros_como_entero_empresa'] ?? null,
             ]);
-            
+
             Log::info('user created', $user->toArray());
 
             $token = JWTAuth::fromUser($user);
@@ -607,6 +1312,8 @@ class AuthController extends Controller
                     'district' => $user->distrito ? $user->distrito->No_Distrito : null,
                     'phone' => $user->whatsapp,
                     'empresa' => $user->userBusiness, // No hay negocio asociado al registrarse
+                    'no_como_entero' => $user->no_como_entero,
+                    'no_otros_como_entero_empresa' => $user->no_otros_como_entero_empresa,
                     'importedAmount' => 0, // Campo no disponible en la estructura actual
                     'importedContainers' => 0, // Campo no disponible en la estructura actual
                     'goals' => $user->goals,
@@ -622,7 +1329,7 @@ class AuthController extends Controller
                     ],
                 ],
                 'iCantidadAcessoUsuario' => 1,
-                
+
                 'iIdEmpresa' => null,
                 'menus' => $menus,
                 'success' => true
@@ -632,6 +1339,39 @@ class AuthController extends Controller
             return response()->json(['error' => $e->getMessage(), 'success' => false], 500);
         }
     }
+
+    /**
+     * @OA\Post(
+     *     path="/auth/clientes/login",
+     *     tags={"Autenticación Clientes"},
+     *     summary="Iniciar sesión de cliente",
+     *     description="Autentica un cliente externo y retorna un token JWT",
+     *     operationId="loginCliente",
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             required={"No_Usuario", "No_Password"},
+     *             @OA\Property(property="No_Usuario", type="string", format="email", example="cliente@email.com", description="Email del cliente"),
+     *             @OA\Property(property="No_Password", type="string", format="password", example="123456", description="Contraseña")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Login exitoso",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=true),
+     *             @OA\Property(property="message", type="string", example="Iniciando sesión"),
+     *             @OA\Property(property="token", type="string"),
+     *             @OA\Property(property="token_type", type="string", example="bearer"),
+     *             @OA\Property(property="expires_in", type="integer", example=86400),
+     *             @OA\Property(property="user", type="object"),
+     *             @OA\Property(property="menus", type="array", @OA\Items(type="object"))
+     *         )
+     *     ),
+     *     @OA\Response(response=400, description="Campos requeridos faltantes"),
+     *     @OA\Response(response=401, description="Credenciales inválidas")
+     * )
+     */
     public function loginCliente(Request $request)
     {
         try {
@@ -737,7 +1477,7 @@ class AuthController extends Controller
             Log::error('Error en loginCliente: ' . $e->getMessage());
             return response()->json([
                 'status' => 'error',
-                'message' => 'Error al iniciar sesión'
+                'message' => 'Error al iniciar sesión: ' . $e->getMessage()
             ], 500);
         }
     }
@@ -751,29 +1491,6 @@ class AuthController extends Controller
     {
         try {
             $user = JWTAuth::user();
-            /* return this format export interface UserProfile{
-    id:number,
-    fullName:string,
-    photoUrl:string,
-    email:string,
-    documentNumber:string,
-    age:number,
-    country:string,
-    city?:string,
-    phone?:string,
-    business?:UserBusiness,   
-    importedAmount:number,
-    importedContainers:number,
-    goals?:string, 
-}
-export interface UserBusiness{
-    id:number,
-    name:string,
-    ruc:string,
-    comercialCapacity:string,
-    rubric:string,
-    socialAddress?:string,
-}*/
 
             if (!$user) {
                 return response()->json([
@@ -800,7 +1517,7 @@ export interface UserBusiness{
                     'socialAddress' => $user->userBusiness->social_address,
                 ];
             }
-            $importedAmount = $this->getUserCotizacionesByWhatsapp($user->whatsapp,$user->dni);
+            $importedAmount = $this->getUserCotizacionesByWhatsapp($user->whatsapp, $user->dni);
 
             return response()->json([
                 'success' => true,
@@ -912,7 +1629,7 @@ export interface UserBusiness{
                 $user = User::where('dni', $dni)->first();
                 $correo = $user ? $user->email : null;
             }
-      
+
             $trayectos = Cotizacion::where('estado_cotizador', 'CONFIRMADO')
                 ->whereNull('id_cliente_importacion')
                 ->whereNotNull('estado_cliente')
@@ -945,27 +1662,27 @@ export interface UserBusiness{
 
                 ->select('id', 'fob_final', 'volumen', 'fob', 'monto', 'id_contenedor', 'impuestos_final', 'impuestos', 'logistica_final', 'volumen_doc', 'volumen_final')
                 ->get();
-                
+
             Log::info('Trayectos encontrados: ' . $trayectos->count());
-            
+
             // Calcular la suma de FOB
-            $sumFob = $trayectos->sum(function($cotizacion) {
-                return (float)(($cotizacion->fob_final==0 || $cotizacion->fob_final==null) ? $cotizacion->fob : $cotizacion->fob_final);
+            $sumFob = $trayectos->sum(function ($cotizacion) {
+                return (float)(($cotizacion->fob_final == 0 || $cotizacion->fob_final == null) ? $cotizacion->fob : $cotizacion->fob_final);
             });
-            
-            $sumImpuestos = $trayectos->sum(function($cotizacion) {
-                return (float)(($cotizacion->impuestos_final==0 || $cotizacion->impuestos_final==null) ? $cotizacion->impuestos : $cotizacion->impuestos_final);
+
+            $sumImpuestos = $trayectos->sum(function ($cotizacion) {
+                return (float)(($cotizacion->impuestos_final == 0 || $cotizacion->impuestos_final == null) ? $cotizacion->impuestos : $cotizacion->impuestos_final);
             });
-            
-            $sumLogistica = $trayectos->sum(function($cotizacion) {
-                return (float)(($cotizacion->logistica_final==0 || $cotizacion->logistica_final==null) ? $cotizacion->monto : $cotizacion->logistica_final);
+
+            $sumLogistica = $trayectos->sum(function ($cotizacion) {
+                return (float)(($cotizacion->logistica_final == 0 || $cotizacion->logistica_final == null) ? $cotizacion->monto : $cotizacion->logistica_final);
             });
 
             //Calcular la suma cbm
-            $volumen_final = $trayectos->sum(function($cotizacion) {
-                return (float)(($cotizacion->volumen_final==0 || $cotizacion->volumen_final==null) ? $cotizacion->volumen : $cotizacion->volumen_final);
+            $volumen_final = $trayectos->sum(function ($cotizacion) {
+                return (float)(($cotizacion->volumen_final == 0 || $cotizacion->volumen_final == null) ? $cotizacion->volumen : $cotizacion->volumen_final);
             });
-            
+
             // Contar contenedores totales aun no sean unicos
             $containerCount = $trayectos->count();
             return [
@@ -991,6 +1708,31 @@ export interface UserBusiness{
     }
 
     /**
+     * @OA\Post(
+     *     path="/auth/clientes/forgot-password",
+     *     tags={"Autenticación Clientes"},
+     *     summary="Solicitar recuperación de contraseña",
+     *     description="Genera un token de recuperación y envía un correo electrónico al cliente",
+     *     operationId="forgotPassword",
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             required={"email"},
+     *             @OA\Property(property="email", type="string", format="email", example="cliente@email.com")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Email de recuperación enviado",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=true),
+     *             @OA\Property(property="message", type="string", example="Se ha enviado un correo con las instrucciones")
+     *         )
+     *     ),
+     *     @OA\Response(response=404, description="Usuario no encontrado"),
+     *     @OA\Response(response=422, description="Email inválido")
+     * )
+     *
      * Generar token de recuperación de contraseña y enviar correo
      *
      * @param Request $request
@@ -1037,7 +1779,7 @@ export interface UserBusiness{
             );
 
             // Construir URL de reset (viene del frontend)
-            $frontendUrl = env('APP_URL_CLIENTES','http://localhost:3001');
+            $frontendUrl = env('APP_URL_CLIENTES', 'http://localhost:3001');
             $resetUrl = $frontendUrl . '/reset-password?token=' . $token;
 
             // Despachar job para enviar email
@@ -1052,7 +1794,6 @@ export interface UserBusiness{
                 'success' => true,
                 'message' => 'Se ha enviado un correo con las instrucciones para recuperar tu contraseña'
             ], 200);
-
         } catch (\Exception $e) {
             Log::error('Error en forgotPassword: ' . $e->getMessage(), [
                 'trace' => $e->getTraceAsString()
@@ -1066,6 +1807,33 @@ export interface UserBusiness{
     }
 
     /**
+     * @OA\Post(
+     *     path="/auth/clientes/reset-password",
+     *     tags={"Autenticación Clientes"},
+     *     summary="Restablecer contraseña",
+     *     description="Restablece la contraseña del cliente usando el token de recuperación",
+     *     operationId="resetPassword",
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             required={"token", "password", "password_confirmation"},
+     *             @OA\Property(property="token", type="string", example="abc123...", description="Token de recuperación"),
+     *             @OA\Property(property="password", type="string", format="password", example="nuevaPassword123", description="Nueva contraseña (min 8 caracteres)"),
+     *             @OA\Property(property="password_confirmation", type="string", format="password", example="nuevaPassword123", description="Confirmación de contraseña")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Contraseña actualizada exitosamente",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=true),
+     *             @OA\Property(property="message", type="string", example="Contraseña actualizada correctamente")
+     *         )
+     *     ),
+     *     @OA\Response(response=400, description="Token inválido o expirado"),
+     *     @OA\Response(response=422, description="Error de validación")
+     * )
+     *
      * Restablecer contraseña con token
      *
      * @param Request $request
@@ -1099,7 +1867,7 @@ export interface UserBusiness{
 
             // Obtener todos los registros de password_resets
             $passwordResets = DB::table('password_resets')->get();
-                
+
             // Buscar el registro correcto comparando el token hasheado
             $resetRecord = null;
             foreach ($passwordResets as $record) {
@@ -1158,7 +1926,6 @@ export interface UserBusiness{
                 'success' => true,
                 'message' => '¡Contraseña restablecida exitosamente! Ahora puedes iniciar sesión con tu nueva contraseña.'
             ], 200);
-
         } catch (\Exception $e) {
             Log::error('Error en resetPassword: ' . $e->getMessage(), [
                 'trace' => $e->getTraceAsString()

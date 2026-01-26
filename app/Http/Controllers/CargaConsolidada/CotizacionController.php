@@ -65,12 +65,62 @@ class CotizacionController extends Controller
         }
         return $headers;
     }
+
+    /**
+     * @OA\Get(
+     *     path="/carga-consolidada/contenedores/{idContenedor}/cotizaciones",
+     *     tags={"Carga Consolidada"},
+     *     summary="Listar cotizaciones de un contenedor",
+     *     description="Obtiene las cotizaciones asociadas a un contenedor específico",
+     *     operationId="getCotizacionesByContenedor",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(
+     *         name="idContenedor",
+     *         in="path",
+     *         description="ID del contenedor",
+     *         required=true,
+     *         @OA\Schema(type="integer")
+     *     ),
+     *     @OA\Parameter(
+     *         name="search",
+     *         in="query",
+     *         description="Buscar por nombre, documento o teléfono",
+     *         required=false,
+     *         @OA\Schema(type="string")
+     *     ),
+     *     @OA\Parameter(
+     *         name="idCotizacion",
+     *         in="query",
+     *         description="Filtrar por ID de cotización específica",
+     *         required=false,
+     *         @OA\Schema(type="integer")
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Cotizaciones obtenidas exitosamente",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=true),
+     *             @OA\Property(property="data", type="array", @OA\Items(type="object")),
+     *             @OA\Property(property="pagination", type="object"),
+     *             @OA\Property(property="headers", type="object")
+     *         )
+     *     ),
+     *     @OA\Response(response=401, description="No autenticado"),
+     *     @OA\Response(response=404, description="Contenedor no encontrado")
+     * )
+     */
     public function index(Request $request, $idContenedor)
     {
         try {
             $user = JWTAuth::parseToken()->authenticate();
             $query = Cotizacion::where('id_contenedor', $idContenedor)->whereNull('id_cliente_importacion');
             $rol = $user->getNombreGrupo();
+            
+            // Filtrar por ID de cotización si se proporciona
+            if ($request->has('idCotizacion') && !empty($request->idCotizacion)) {
+                $query->where('id', $request->idCotizacion);
+            }
+            
             // Aplicar filtros básicos
             if ($request->has('search')) {
                 $search = $request->search;
@@ -114,12 +164,16 @@ class CotizacionController extends Controller
             // Siempre filtrar cotizaciones que tengan al menos un proveedor
             $query->whereHas('proveedores');
 
-            //if request has estado_coordinacion or estado_china  then query with  proveedores  and just get cotizaciones with at least one proveedor with the state
+            //if request has estado_coordinacion or estado_china or estado_cotizador  then query with  proveedores  and just get cotizaciones with at least one proveedor with the state
             if ($request->has('estado_coordinacion') || $request->has('estado_china')) {
                 $query->whereHas('proveedores', function ($query) use ($request) {
                     $query->where('estados', $request->estado_coordinacion)
                         ->orWhere('estados_proveedor', $request->estado_china);
                 });
+            }
+            // filtrar por estado_cotizador
+            if ($request->has('estado_cotizador') && !empty($request->estado_cotizador)) {
+                $query->where('estado_cotizador', $request->estado_cotizador);
             }
             // Aplicar filtros según el rol del usuario
             switch ($rol) {
@@ -168,6 +222,7 @@ class CotizacionController extends Controller
             $data = $results->map(function ($cotizacion) use ($files) {
                 return [
                     'id' => $cotizacion->id,
+                    'uuid' => $cotizacion->uuid,
                     'nombre' => $cotizacion->nombre,
                     'documento' => $cotizacion->documento,
                     'telefono' => $cotizacion->telefono,
@@ -176,6 +231,10 @@ class CotizacionController extends Controller
                     'estado' => $cotizacion->estado,
                     'estado_cliente' => $cotizacion->name,
                     'estado_cotizador' => $cotizacion->estado_cotizador,
+                    'cotizacion_contrato_autosigned_url' => $cotizacion->cotizacion_contrato_autosigned_url ? $this->generateImageUrl($cotizacion->cotizacion_contrato_autosigned_url) : null,
+                    'cotizacion_contrato_firmado_url' => $cotizacion->cotizacion_contrato_firmado_url ? $this->generateImageUrl($cotizacion->cotizacion_contrato_firmado_url) : null,
+                    'cotizacion_contrato_url' => $cotizacion->cotizacion_contrato_url ? $this->generateImageUrl($cotizacion->cotizacion_contrato_url) : null,
+                    'cod_contract' => $cotizacion->cod_contract,
                     'monto' => $cotizacion->monto,
                     'monto_final' => $cotizacion->monto_final,
                     'volumen' => $cotizacion->volumen,
@@ -212,12 +271,16 @@ class CotizacionController extends Controller
             ], 500);
         }
     }
-    private function generateImageUrl($ruta)
+    public function generateImageUrl($ruta)
     {
         if (empty($ruta)) {
             return null;
         }
+        Log::info($ruta);
+        if(strpos($ruta,'files//')!==false){
+            $ruta = str_replace('files//', '', $ruta);
 
+        }
         // Si ya es una URL completa, verificar si tiene doble storage y corregirlo
         if (filter_var($ruta, FILTER_VALIDATE_URL)) {
             // Corregir URLs con doble storage
@@ -229,6 +292,7 @@ class CotizacionController extends Controller
 
         // Limpiar la ruta de barras iniciales para evitar doble slash
         $ruta = ltrim($ruta, '/');
+        //if ruta contains files/ remove it 
 
         // Corregir rutas con doble storage
         if (strpos($ruta, 'storage//storage/') !== false) {
@@ -258,7 +322,9 @@ class CotizacionController extends Controller
             $baseUrl = config('app.url');
             return rtrim($baseUrl, '/') . '/storage/' . $ruta;
         }
-
+        // Si la ruta contiene 'file/', removerlo
+    
+        
         // Construir URL manualmente para evitar problemas con Storage::url()
         $baseUrl = config('app.url');
         $storagePath = 'storage/';
@@ -349,12 +415,12 @@ class CotizacionController extends Controller
         $headersData = [
             'cbm_total_china' => [
                 'value' => $headers ? $headers->cbm_total_china : 0,
-                'label' => 'CBM Total ',
+                'label' => '',
                 'icon' => 'https://upload.wikimedia.org/wikipedia/commons/f/fa/Flag_of_the_People%27s_Republic_of_China.svg'
             ],
             'cbm_total_peru' => [
                 'value' => $headers ? $headers->cbm_total_peru : 0,
-                'label' => 'CBM Total ',
+                'label' => '',
                 'icon' => 'https://upload.wikimedia.org/wikipedia/commons/c/cf/Flag_of_Peru.svg'
             ],
             'cbm_vendido' => [
@@ -372,20 +438,20 @@ class CotizacionController extends Controller
                 'label' => 'CBM Embarcado',
                 'icon' => 'mage:box-3d'
             ],
+            'qty_items' => [
+                'value' => $headers ? $headers->total_qty_items : 0,
+                'label' => 'Items',
+                'icon' => 'bi:boxes'
+            ],
             'total_logistica_pagado' => [
                 'value' => $headers ? $headers->total_logistica_pagado : 0,
-                'label' => 'Total Logistica Pagado',
+                'label' => 'Logist. Pagado',
                 'icon' => 'cryptocurrency-color:soc'
             ],
             'total_logistica' => [
                 'value' => $headers ? $headers->total_logistica : 0,
-                'label' => 'Total Logistica',
+                'label' => 'Logist.',
                 'icon' => 'cryptocurrency-color:soc'
-            ],
-            'qty_items' => [
-                'value' => $headers ? $headers->total_qty_items : 0,
-                'label' => 'Cantidad de Items',
-                'icon' => 'bi:boxes'
             ],
 
 
@@ -547,6 +613,30 @@ class CotizacionController extends Controller
             'lista_embarque_url' => $this->generateImageUrl($contenedor->lista_embarque_url) ? $this->generateImageUrl($contenedor->lista_embarque_url) : null
         ]);
     }
+    
+    /**
+     * @OA\Post(
+     *     path="/carga-consolidada/contenedor/cotizaciones",
+     *     tags={"Cotizaciones"},
+     *     summary="Crear cotización",
+     *     description="Crea una nueva cotización para un contenedor subiendo un archivo Excel",
+     *     operationId="storeCotizacion",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\MediaType(
+     *             mediaType="multipart/form-data",
+     *             @OA\Schema(
+     *                 @OA\Property(property="id_contenedor", type="integer"),
+     *                 @OA\Property(property="cotizacion", type="string", format="binary")
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Cotización creada exitosamente"),
+     *     @OA\Response(response=400, description="Datos inválidos"),
+     *     @OA\Response(response=404, description="Contenedor no encontrado")
+     * )
+     */
     public function store(Request $request)
     {
         try {
@@ -660,11 +750,35 @@ class CotizacionController extends Controller
                 // Obtener datos de proveedores
                 $dataEmbarque = $this->getEmbarqueData($cotizacion, $dataToInsert);
 
-                // Insertar proveedores en lote si existen
+                // Insertar proveedores (uno por uno) y sus items si existen
                 if (!empty($dataEmbarque)) {
                     try {
-                        CotizacionProveedor::insert($dataEmbarque);
-                        Log::info('Proveedores insertados correctamente: ' . count($dataEmbarque));
+                        $insertedCount = 0;
+                        foreach ($dataEmbarque as $prov) {
+                            $items = isset($prov['items']) ? $prov['items'] : [];
+                            if (isset($prov['items'])) {
+                                unset($prov['items']);
+                            }
+                            $provModel = CotizacionProveedor::create($prov);
+                            $insertedCount++;
+                            if ($provModel && !empty($items)) {
+                                foreach ($items as $item) {
+                                    \App\Models\CargaConsolidada\CotizacionProveedorItem::create([
+                                        'id_contenedor' => $provModel->id_contenedor,
+                                        'id_cotizacion' => $provModel->id_cotizacion,
+                                        'id_proveedor' => $provModel->id,
+                                        'initial_price' => $item['initial_price'] ?? null,
+                                        'initial_qty' => $item['initial_qty'] ?? null,
+                                        'initial_name' => $item['initial_name'] ?? null,
+                                        'final_price' => $item['final_price'] ?? null,
+                                        'final_qty' => $item['final_qty'] ?? null,
+                                        'final_name' => $item['final_name'] ?? null,
+                                        'tipo_producto' => $item['tipo_producto'] ?? 'GENERAL',
+                                    ]);
+                                }
+                            }
+                        }
+                        Log::info('Proveedores insertados correctamente: ' . $insertedCount);
                     } catch (\Exception $e) {
                         Log::error('Error al insertar proveedores: ' . $e->getMessage());
                         DB::rollBack();
@@ -741,20 +855,261 @@ class CotizacionController extends Controller
             ], 500);
         }
     }
-
-
-    public function show($id)
+    /**
+     * @OA\Post(
+     *     path="/carga-consolidada/contenedor/cotizaciones/from-calculadora",
+     *     tags={"Cotizaciones"},
+     *     summary="Crear cotización desde calculadora",
+     *     description="Crea una nueva cotización desde calculadora subiendo un archivo Excel",
+     *     operationId="storeFromCalculadora",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\MediaType(
+     *             mediaType="multipart/form-data",
+     *             @OA\Schema(
+     *                 @OA\Property(property="id_contenedor", type="integer"),
+     *                 @OA\Property(property="cotizacion", type="string", format="binary")
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Cotización creada exitosamente"),
+     *     @OA\Response(response=400, description="Datos inválidos"),
+     *     @OA\Response(response=404, description="Contenedor no encontrado")
+     * )
+     */
+    public function storeFromCalculadora(Request $request)
     {
-        // Implementación básica
-        return response()->json(['message' => 'Cotizacion show']);
-    }
+        try {
+            // Validar los datos requeridos
+            if (!$request->has('id_contenedor')) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'El ID del contenedor es requerido'
+                ], 400);
+            }
 
-    public function update(Request $request, $id)
-    {
-        // Implementación básica
-        return response()->json(['message' => 'Cotizacion update']);
-    }
+            // Validar que el contenedor existe
+            $contenedor = Contenedor::find($request->id_contenedor);
+            if (!$contenedor) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'El contenedor especificado no existe'
+                ], 404);
+            }
 
+            // Validar el archivo subido
+            if (!$request->hasFile('cotizacion')) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'No se ha proporcionado ningún archivo'
+                ], 400);
+            }
+
+            $file = $request->file('cotizacion');
+
+            // Crear un directorio temporal si no existe
+            $tempPath = storage_path('app/temp');
+            if (!file_exists($tempPath)) {
+                mkdir($tempPath, 0755, true);
+            }
+
+            // Mover el archivo a nuestro directorio temporal
+            $tempFileName = uniqid('cotizacion_') . '.' . $file->getClientOriginalExtension();
+            $tempFilePath = $tempPath . '/' . $tempFileName;
+
+            // Copiar el archivo al directorio temporal
+            copy($file->getRealPath(), $tempFilePath);
+
+
+            $cotizacion = [
+                'name' => $file->getClientOriginalName(),
+                'type' => $file->getMimeType(),
+                'tmp_name' => $tempFilePath,
+                'error' => 0,
+                'size' => $file->getSize()
+            ];
+
+            // Iniciar transacción de base de datos para todo el flujo
+            DB::beginTransaction();
+
+            try {
+                // Subir archivo usando el sistema de almacenamiento de Laravel
+                $fileName = time() . '_' . $file->getClientOriginalName();
+                $fileUrl = $file->storeAs('public/agentecompra', $fileName);
+
+                if (!$fileUrl) {
+                    Log::error('Error al subir archivo usando Laravel Storage');
+                    DB::rollBack();
+                    return response()->json([
+                        'status' => 'error',
+                        'success' => false,
+                        'message' => 'Error al subir el archivo'
+                    ], 500);
+                }
+
+                // Convertir la ruta de storage a URL pública
+                $fileUrl = Storage::url($fileUrl);
+                // Convertir a ruta con CORS habilitado
+                $fileUrl = route('storage.file', ['path' => str_replace('public/', '', $fileUrl)]);
+                Log::info('Cotizacion desde calculadora: ' . json_encode($cotizacion));
+                Log::info('Data: ' . $fileUrl);
+
+                $dataToInsert = $this->getCotizacionDataFromCalculadora($cotizacion);
+
+                // Verificar si getCotizacionDataFromCalculadora devolvió un error
+                if (!is_array($dataToInsert)) {
+                    DB::rollBack();
+                    Storage::delete($fileUrl); // Limpiar el archivo si hay error
+                    return response()->json([
+                        'status' => 'error',
+                        'success' => false,
+                        'message' => 'Error al procesar el archivo: ' . $dataToInsert
+                    ], 500);
+                }
+
+                $dataToInsert['cotizacion_file_url'] = $fileUrl;
+                $dataToInsert['id_contenedor'] = $request->id_contenedor;
+                $dataToInsert['id_usuario'] = Auth::id();
+                $dataToInsert['uuid'] = Str::uuid();
+                // Crear la cotización
+                $cotizacionModel = Cotizacion::create($dataToInsert);
+
+                if (!$cotizacionModel) {
+                    DB::rollBack();
+                    Storage::delete($fileUrl);
+                    return response()->json([
+                        'status' => 'error',
+                        'success' => false,
+                        'message' => 'No se pudo crear la cotización'
+                    ], 500);
+                }
+
+                $idCotizacion = $cotizacionModel->id;
+                $dataToInsert['id_cotizacion'] = $idCotizacion;
+
+                // Obtener datos de proveedores
+                $dataEmbarque = $this->getEmbarqueData($cotizacion, $dataToInsert);
+
+                // Insertar proveedores (uno por uno) y sus items si existen
+                if (!empty($dataEmbarque)) {
+                    try {
+                        $insertedCount = 0;
+                        foreach ($dataEmbarque as $prov) {
+                            $items = isset($prov['items']) ? $prov['items'] : [];
+                            if (isset($prov['items'])) {
+                                unset($prov['items']);
+                            }
+                            $provModel = CotizacionProveedor::create($prov);
+                            $insertedCount++;
+                            if ($provModel && !empty($items)) {
+                                foreach ($items as $item) {
+                                    \App\Models\CargaConsolidada\CotizacionProveedorItem::create([
+                                        'id_contenedor' => $provModel->id_contenedor,
+                                        'id_cotizacion' => $provModel->id_cotizacion,
+                                        'id_proveedor' => $provModel->id,
+                                        'initial_price' => $item['initial_price'] ?? null,
+                                        'initial_qty' => $item['initial_qty'] ?? null,
+                                        'initial_name' => $item['initial_name'] ?? null,
+                                        'final_price' => $item['final_price'] ?? null,
+                                        'final_qty' => $item['final_qty'] ?? null,
+                                        'final_name' => $item['final_name'] ?? null,
+                                        'tipo_producto' => $item['tipo_producto'] ?? 'GENERAL',
+                                    ]);
+                                }
+                            }
+                        }
+                        Log::info('Proveedores insertados correctamente: ' . $insertedCount);
+                    } catch (\Exception $e) {
+                        Log::error('Error al insertar proveedores: ' . $e->getMessage());
+                        DB::rollBack();
+                        Storage::delete($fileUrl);
+                        return response()->json([
+                            'status' => 'error',
+                            'success' => false,
+                            'message' => 'Error al insertar proveedores: ' . $e->getMessage()
+                        ], 500);
+                    }
+                }
+
+                $nombre = $dataToInsert['nombre'];
+
+                // Ya tenemos el contenedor validado desde el inicio
+                $f_cierre = $contenedor->f_cierre;
+
+                $message = 'Hola ' . $nombre . ' pudiste revisar la cotización enviada? 
+                Te comento que cerramos nuestro consolidado este ' . $f_cierre . ' Por favor si cuentas con alguna duda me avisas y puedo llamarte para aclarar tus dudas.';
+
+                $telefono = preg_replace('/\s+/', '', $dataToInsert['telefono']);
+                $telefono = $telefono ? $telefono . '@c.us' : '';
+
+                $data_json = [
+                    'message' => $message,
+                    'phoneNumberId' => $telefono,
+                ];
+
+                // Aquí podrías agregar la lógica para guardar en la tabla de crons si es necesario
+
+                // Si todo salió bien, confirmar la transacción
+                DB::commit();
+
+                // Crear notificación para Coordinación
+                $this->crearNotificacionCoordinacion($cotizacionModel, $contenedor);
+
+                // Limpiar el archivo temporal
+                if (file_exists($cotizacion['tmp_name'])) {
+                    unlink($cotizacion['tmp_name']);
+                }
+
+                return response()->json([
+                    'id' => $idCotizacion,
+                    'status' => 'success',
+                    'success' => true,
+                    'message' => 'Cotización creada exitosamente'
+                ]);
+            } catch (\Exception $e) {
+                // En caso de cualquier error, hacer rollback y limpiar archivos
+                DB::rollBack();
+
+                if (isset($fileUrl)) {
+                    Storage::delete($fileUrl);
+                }
+
+                // Limpiar archivo temporal
+                if (file_exists($cotizacion['tmp_name'])) {
+                    unlink($cotizacion['tmp_name']);
+                }
+
+                Log::error('Error en store de cotizaciones: ' . $e->getMessage());
+                return response()->json([
+                    'status' => 'error',
+                    'success' => false,
+                    'message' => 'Error al procesar la cotización: ' . $e->getMessage()
+                ], 500);
+            }
+        } catch (\Exception $e) {
+            Log::error('Error en store de cotizaciones: ' . $e->getMessage());
+            return response()->json([
+                'status' => 'error',
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 500);
+        }
+    }
+  
+    /**
+     * @OA\Delete(
+     *     path="/carga-consolidada/contenedor/cotizaciones/{id}",
+     *     tags={"Cotizaciones"},
+     *     summary="Eliminar cotización",
+     *     description="Elimina una cotización y sus proveedores asociados",
+     *     operationId="destroyCotizacion",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="id", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Cotización eliminada exitosamente"),
+     *     @OA\Response(response=500, description="Error al eliminar")
+     * )
+     */
     public function destroy($id)
     {
         try {
@@ -771,6 +1126,17 @@ class CotizacionController extends Controller
         }
     }
 
+    /**
+     * @OA\Get(
+     *     path="/carga-consolidada/cotizaciones/filter-options",
+     *     tags={"Cotización"},
+     *     summary="Obtener opciones de filtro",
+     *     description="Obtiene las opciones de filtro disponibles para cotizaciones",
+     *     operationId="filterOptionsCotizacion",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Response(response=200, description="Opciones obtenidas exitosamente")
+     * )
+     */
     public function filterOptions()
     {
         // Implementación básica
@@ -778,6 +1144,18 @@ class CotizacionController extends Controller
     }
 
     /**
+     * @OA\Get(
+     *     path="/carga-consolidada/cotizaciones/{id}/documentacion",
+     *     tags={"Cotización"},
+     *     summary="Obtener documentación de cliente",
+     *     description="Obtiene la documentación completa de una cotización para el cliente",
+     *     operationId="showClientesDocumentacion",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="id", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Documentación obtenida exitosamente"),
+     *     @OA\Response(response=404, description="Cotización no encontrada")
+     * )
+     *
      * Obtener documentación de clientes para una cotización específica
      * Replica la funcionalidad del método showClientesDocumentacion de CodeIgniter
      */
@@ -931,6 +1309,11 @@ class CotizacionController extends Controller
     }
 
     /**
+     * Extrae datos de una cotización desde un archivo Excel para calculadora
+     * @param array $cotizacion Array con información del archivo subido
+     * @return array|string Datos extraídos o mensaje de error
+     */
+    /**
      * Extrae datos de una cotización desde un archivo Excel
      * @param array $cotizacion Array con información del archivo subido
      * @return array|string Datos extraídos o mensaje de error
@@ -982,14 +1365,6 @@ class CotizacionController extends Controller
                 $fob = $sheet->getCell('J30')->getOldCalculatedValue();
                 $impuestos = $sheet->getCell('J32')->getOldCalculatedValue();
 
-                //get j24 and j26
-                Log::error('20: ' . $sheet->getCell('J20')->getOldCalculatedValue());
-                Log::error('21: ' . $sheet->getCell('J21')->getOldCalculatedValue());
-                Log::error('22: ' . $sheet->getCell('J22')->getOldCalculatedValue());
-                Log::error('23: ' . $sheet->getCell('J23')->getOldCalculatedValue());
-                Log::error('24: ' . $sheet->getCell('J24')->getOldCalculatedValue());
-                Log::error('26: ' . $sheet->getCell('J26')->getOldCalculatedValue());
-                Log::error('impuestos: ' . $impuestos);
             } else {
                 $monto = $sheet->getCell('J30')->getOldCalculatedValue();
                 $fob = $sheet->getCell('J29')->getOldCalculatedValue();
@@ -1025,6 +1400,118 @@ class CotizacionController extends Controller
                 'qty_item' => $qtyItem
             ];
             Log::error('Data: ' . json_encode($data));
+            return $data;
+        } catch (Exception $e) {
+            return $e->getMessage();
+        }
+    }
+
+    /**
+     * Extrae datos de una cotización desde un archivo Excel para calculadora
+     * @param array $cotizacion Array con información del archivo subido
+     * @return array|string Datos extraídos o mensaje de error
+     */
+    public function getCotizacionDataFromCalculadora($cotizacion)
+    {
+        try {
+            if (!file_exists($cotizacion['tmp_name'])) {
+                Log::error('Archivo no encontrado en: ' . $cotizacion['tmp_name']);
+                return 'Archivo no encontrado: ' . $cotizacion['tmp_name'];
+            }
+
+            Log::info('Intentando cargar archivo desde calculadora: ' . $cotizacion['tmp_name']);
+
+            try {
+                $objPHPExcel = IOFactory::load($cotizacion['tmp_name']);
+            } catch (\Exception $e) {
+                Log::error('Error al cargar archivo Excel: ' . $e->getMessage());
+                return 'Error al cargar archivo Excel: ' . $e->getMessage();
+            }
+
+            $sheet = $objPHPExcel->getSheet(0);
+            $nombre = $sheet->getCell('B8')->getValue();
+            $documento = $sheet->getCell('B9')->getValue();
+            $correo = $sheet->getCell('B10')->getValue();
+            $telefono = $sheet->getCell('B11')->getValue();
+            $volumen = $sheet->getCell('I11')->getCalculatedValue();
+            $valorCot = $sheet->getCell('J14')->getCalculatedValue();
+
+            //get calculated value from cell e9
+            $fecha = $sheet->getCell('E9')->getValue();
+            if ($fecha == "=+TODAY()") {
+                $fecha = date("Y-m-d");
+            } else {
+                $fecha = $this->convertDateFormat($fecha);
+            }
+
+            $tipoCliente = $sheet->getCell('E11')->getValue();
+
+            //find if exists in table contenedor_consolidado_tipo_cliente with name = $tipoCliente else create new and get id
+            $tipoClienteModel = TipoCliente::where('name', $tipoCliente)->first();
+            if (!$tipoClienteModel) {
+                $tipoClienteModel = TipoCliente::create(['name' => $tipoCliente]);
+            }
+            $idTipoCliente = $tipoClienteModel->id;
+
+            // Para calculadora: FOB siempre es de J14
+            $fob = $sheet->getCell('J14')->getOldCalculatedValue();
+            
+            // Lógica diferente para calculadora según ANTIDUMPING
+            $antidumping = trim($sheet->getCell('A23')->getValue()) == "ANTIDUMPING";
+            Log::info('ANTIDUMPING: ' . $antidumping);
+            if (!$antidumping) {
+                // Si hay ANTIDUMPING: monto de J30, impuestos de J32
+                $monto = $sheet->getCell('J29')->getOldCalculatedValue();
+                $impuestos = $sheet->getCell('J32')->getOldCalculatedValue();
+                $extra = $sheet->getCell('J30')->getOldCalculatedValue() ?? 0;
+                $descuento = $sheet->getCell('J31')->getOldCalculatedValue() ?? 0;
+            } else {
+                // Si NO hay ANTIDUMPING: monto de J30 (servicio + cargos - descuento + impuestos), impuestos de J33
+                $monto = $sheet->getCell('J30')->getOldCalculatedValue();
+                $impuestos = $sheet->getCell('J33')->getOldCalculatedValue();
+                $extra = $sheet->getCell('J31')->getOldCalculatedValue() ?? 0;
+                $descuento = $sheet->getCell('J32')->getOldCalculatedValue() ?? 0;
+                if ($extra == 0) {
+                    $extra = $sheet->getCell('J31')->getCalculatedValue();
+                    
+                }
+                if ($descuento == 0) {
+                    $descuento = $sheet->getCell('J32')->getCalculatedValue();
+                }
+               
+            }
+
+            $tarifa = $monto / (($volumen <= 0 ? 1 : $volumen) < 1.00 ? 1 : ($volumen <= 0 ? 1 : $volumen));
+            $peso = $sheet->getCell('I9')->getOldCalculatedValue();
+            $highestRow = $sheet->getHighestRow();
+            $qtyItem = 0;
+            //
+            $monto = $monto + $extra - $descuento;
+            Log::info('MONTO: ' . $monto);
+            for ($row = 36; $row <= $highestRow; $row++) {
+                $cellValue = $sheet->getCell('A' . $row)->getValue();
+                if (is_numeric($cellValue) && $cellValue > 0) {
+                    $qtyItem++;
+                }
+            }
+
+            $data = [
+                'nombre' => $nombre,
+                'documento' => $documento,
+                'correo' => $correo,
+                'telefono' => $telefono,
+                'volumen' => $volumen,
+                'id_tipo_cliente' => $idTipoCliente,
+                'fecha' => $fecha,
+                'valor_cot' => $valorCot,
+                'monto' => $monto,
+                'tarifa' => $tarifa,
+                'peso' => $peso,
+                'fob' => $fob,
+                'impuestos' => $impuestos,
+                'qty_item' => $qtyItem
+            ];
+            Log::info('Data desde calculadora: ' . json_encode($data));
             return $data;
         } catch (Exception $e) {
             return $e->getMessage();
@@ -1178,9 +1665,29 @@ class CotizacionController extends Controller
                 $dataEmbarque = $this->getEmbarqueData($cotizacion, $dataToInsert);
                 Log::error('Data embarque: ' . json_encode($dataEmbarque));
 
-                // Insertar proveedores
+                // Insertar proveedores y sus items
                 foreach ($dataEmbarque as $proveedor) {
-                    CotizacionProveedor::create($proveedor);
+                    $items = isset($proveedor['items']) ? $proveedor['items'] : [];
+                    if (isset($proveedor['items'])) {
+                        unset($proveedor['items']);
+                    }
+                    $proveedorModel = CotizacionProveedor::create($proveedor);
+                    if ($proveedorModel && !empty($items)) {
+                        foreach ($items as $item) {
+                            \App\Models\CargaConsolidada\CotizacionProveedorItem::create([
+                                'id_contenedor' => $proveedorModel->id_contenedor,
+                                'id_cotizacion' => $proveedorModel->id_cotizacion,
+                                'id_proveedor' => $proveedorModel->id,
+                                'initial_price' => $item['initial_price'] ?? null,
+                                'initial_qty' => $item['initial_qty'] ?? null,
+                                'initial_name' => $item['initial_name'] ?? null,
+                                'final_price' => $item['final_price'] ?? null,
+                                'final_qty' => $item['final_qty'] ?? null,
+                                'final_name' => $item['final_name'] ?? null,
+                                'tipo_producto' => $item['tipo_producto'] ?? 'GENERAL',
+                            ]);
+                        }
+                    }
                 }
 
                 $nombre = $dataToInsert['nombre'];
@@ -1200,8 +1707,6 @@ class CotizacionController extends Controller
                     'phoneNumberId' => $telefono,
                 ];
 
-                // Aquí podrías insertar en la tabla de crons si existe
-                // Por ahora solo retornamos éxito
 
                 return [
                     'id' => $idCotizacion,
@@ -1220,6 +1725,16 @@ class CotizacionController extends Controller
     }
 
     /**
+     * @OA\Get(
+     *     path="/carga-consolidada/cotizaciones/tipos-cliente",
+     *     tags={"Cotización"},
+     *     summary="Obtener tipos de cliente",
+     *     description="Obtiene todos los tipos de cliente disponibles para cotizaciones",
+     *     operationId="getTipoClienteCotizacion",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Response(response=200, description="Tipos de cliente obtenidos exitosamente")
+     * )
+     *
      * Obtiene todos los tipos de cliente
      */
     public function getTipoCliente()
@@ -1228,11 +1743,19 @@ class CotizacionController extends Controller
     }
 
     /**
-     * Elimina el archivo de cotización
-     */
-
-
-    /**
+     * @OA\Delete(
+     *     path="/carga-consolidada/cotizaciones/{id}",
+     *     tags={"Cotización"},
+     *     summary="Eliminar cotización",
+     *     description="Elimina una cotización completa y sus archivos asociados",
+     *     operationId="deleteCotizacion",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="id", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Cotización eliminada exitosamente"),
+     *     @OA\Response(response=404, description="Cotización no encontrada"),
+     *     @OA\Response(response=500, description="Error al eliminar cotización")
+     * )
+     *
      * Elimina una cotización completa
      */
     public function deleteCotizacion($id)
@@ -1266,11 +1789,19 @@ class CotizacionController extends Controller
     }
 
     /**
-     * Actualiza el estado del cliente
-     */
-
-
-    /**
+     * @OA\Post(
+     *     path="/carga-consolidada/cotizaciones/{id}/refresh-file",
+     *     tags={"Cotización"},
+     *     summary="Refrescar archivo de cotización",
+     *     description="Refresca y reprocesa el archivo de cotización desde el archivo Excel existente",
+     *     operationId="refreshCotizacionFile",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="id", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Cotización refrescada exitosamente"),
+     *     @OA\Response(response=404, description="Cotización no encontrada"),
+     *     @OA\Response(response=500, description="Error al refrescar cotización")
+     * )
+     *
      * Refresca el archivo de cotización
      */
     public function refreshCotizacionFile($id)
@@ -1609,21 +2140,85 @@ class CotizacionController extends Controller
                     if (in_array($code, $newProviders)) {
                         $key = array_search($code, $newProviders);
                         $dataToUpdate = $dataEmbarque[$key];
+                        $items = isset($dataToUpdate['items']) ? $dataToUpdate['items'] : [];
+                        if (isset($dataToUpdate['items'])) {
+                            unset($dataToUpdate['items']);
+                        }
+                        
+                        // Actualizar proveedor (mantener lógica original)
                         CotizacionProveedor::where('code_supplier', $code)
                             ->where('id_cotizacion', $id)
                             ->update($dataToUpdate);
-                    } else {
-                        CotizacionProveedor::where('code_supplier', $code)
+                        
+                        // Obtener el proveedor actualizado para manejar items
+                        $proveedor = CotizacionProveedor::where('code_supplier', $code)
                             ->where('id_cotizacion', $id)
-                            ->delete();
+                            ->first();
+                        
+                        // Manejar items del proveedor actualizado
+                        if ($proveedor) {
+                            // Eliminar items antiguos del proveedor
+                            \App\Models\CargaConsolidada\CotizacionProveedorItem::where('id_proveedor', $proveedor->id)->delete();
+                            
+                            // Insertar nuevos items
+                            if (!empty($items)) {
+                                foreach ($items as $item) {
+                                    \App\Models\CargaConsolidada\CotizacionProveedorItem::create([
+                                        'id_contenedor' => $proveedor->id_contenedor,
+                                        'id_cotizacion' => $proveedor->id_cotizacion,
+                                        'id_proveedor' => $proveedor->id,
+                                        'initial_price' => $item['initial_price'] ?? null,
+                                        'initial_qty' => $item['initial_qty'] ?? null,
+                                        'initial_name' => $item['initial_name'] ?? null,
+                                        'final_price' => $item['final_price'] ?? null,
+                                        'final_qty' => $item['final_qty'] ?? null,
+                                        'final_name' => $item['final_name'] ?? null,
+                                        'tipo_producto' => $item['tipo_producto'] ?? 'GENERAL',
+                                    ]);
+                                }
+                            }
+                        }
+                    } else {
+                        // Eliminar proveedor y sus items
+                        $proveedorToDelete = CotizacionProveedor::where('code_supplier', $code)
+                            ->where('id_cotizacion', $id)
+                            ->first();
+                        
+                        if ($proveedorToDelete) {
+                            \App\Models\CargaConsolidada\CotizacionProveedorItem::where('id_proveedor', $proveedorToDelete->id)->delete();
+                            $proveedorToDelete->delete();
+                        }
                     }
                 }
 
                 // Insertar nuevos proveedores
                 foreach ($dataEmbarque as $data) {
                     if (!in_array($data['code_supplier'], $existingProviders)) {
-                        Log::info('Insertando nuevo prove edor: ' . json_encode($data));
-                        CotizacionProveedor::create($data);
+                        $items = isset($data['items']) ? $data['items'] : [];
+                        if (isset($data['items'])) {
+                            unset($data['items']);
+                        }
+                        
+                        Log::info('Insertando nuevo proveedor: ' . json_encode($data));
+                        $provModel = CotizacionProveedor::create($data);
+                        
+                        // Insertar items del nuevo proveedor
+                        if ($provModel && !empty($items)) {
+                            foreach ($items as $item) {
+                                \App\Models\CargaConsolidada\CotizacionProveedorItem::create([
+                                    'id_contenedor' => $provModel->id_contenedor,
+                                    'id_cotizacion' => $provModel->id_cotizacion,
+                                    'id_proveedor' => $provModel->id,
+                                    'initial_price' => $item['initial_price'] ?? null,
+                                    'initial_qty' => $item['initial_qty'] ?? null,
+                                    'initial_name' => $item['initial_name'] ?? null,
+                                    'final_price' => $item['final_price'] ?? null,
+                                    'final_qty' => $item['final_qty'] ?? null,
+                                    'final_name' => $item['final_name'] ?? null,
+                                    'tipo_producto' => $item['tipo_producto'] ?? 'GENERAL',
+                                ]);
+                            }
+                        }
                     }
                 }
 
@@ -1640,17 +2235,29 @@ class CotizacionController extends Controller
     }
 
     /**
-     * Muestra una cotización específica
-     */
-    public function showCotizacion($id)
-    {
-        return Cotizacion::find($id);
-    }
-
-    /**
-     * Actualiza una cotización
-     */
-    /**
+     * @OA\Post(
+     *     path="/carga-consolidada/cotizaciones/{id}/update-file",
+     *     tags={"Cotización"},
+     *     summary="Actualizar archivo de cotización",
+     *     description="Sube y actualiza el archivo Excel de una cotización existente",
+     *     operationId="updateCotizacionFile",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="id", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\MediaType(
+     *             mediaType="multipart/form-data",
+     *             @OA\Schema(
+     *                 @OA\Property(property="cotizacion", type="string", format="binary", description="Archivo Excel de cotización")
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Archivo actualizado exitosamente"),
+     *     @OA\Response(response=400, description="Archivo no proporcionado"),
+     *     @OA\Response(response=404, description="Cotización no encontrada"),
+     *     @OA\Response(response=500, description="Error al actualizar archivo")
+     * )
+     *
      * Actualiza el archivo de una cotización existente
      * @param Request $request
      * @param int $id ID de la cotización
@@ -1747,6 +2354,26 @@ class CotizacionController extends Controller
     }
 
     /**
+     * @OA\Put(
+     *     path="/carga-consolidada/cotizaciones/{id}/estado",
+     *     tags={"Cotización"},
+     *     summary="Actualizar estado de cotización",
+     *     description="Actualiza el estado de una cotización (CONTACTADO, INTERESADO, CONFIRMADO, etc.)",
+     *     operationId="updateEstadoCotizacion",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="id", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             required={"estado"},
+     *             @OA\Property(property="estado", type="string", example="CONFIRMADO", description="Estado de la cotización")
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Estado actualizado exitosamente"),
+     *     @OA\Response(response=400, description="No se puede cambiar estado - proveedores sin productos"),
+     *     @OA\Response(response=500, description="Error al actualizar estado")
+     * )
+     *
      * Actualiza el estado de una cotización
      */
     public function updateEstadoCotizacion($id, Request $request)
@@ -1810,23 +2437,43 @@ class CotizacionController extends Controller
             }
 
             if (
-                $estado == 'CONFIRMADO'  &&
-                (str_contains($cotizacion->telefono, '931629529') ||
-                    str_contains($cotizacion->telefono, '912705923')
-                    || str_contains($cotizacion->telefono, '934958839')
-                )
+                $estado == 'CONFIRMADO'  
+                
             ) {
 
 
                 $message = "El cliente {$cotizacion->nombre} ha pasado a confirmado, por favor contactar.";
                 try {
-                    event(new \App\Events\CotizacionStatusUpdated($cotizacion, $estado, $message));
+                    $usuarioActual = Auth::user();
+                    \App\Events\CotizacionStatusUpdated::dispatch($cotizacion, $estado, $message, $usuarioActual);
                 } catch (\Exception $e) {
                     Log::error('Error en updateEstadoCotizacion: Pusher error: ' . $e->getMessage());
                 }
 
                 $this->crearNotificacionCotizacionConfirmada($cotizacion);
+
+                // Generar código de contrato automáticamente
+                try {
+                    $lastCotizacion = Cotizacion::where('cod_contract', 'like', 'PRO%')
+                        ->where('uuid', '!=', $cotizacion->uuid)
+                        ->orderBy('id', 'desc')
+                        ->first();
+                    
+                    $lastSequentialNumber = 0;
+                    if ($lastCotizacion && preg_match('/(\d{4})$/', $lastCotizacion->cod_contract, $matches)) {
+                        $lastSequentialNumber = intval($matches[1]);
+                    }
+                    
+                    $newSequentialNumber = $lastSequentialNumber + 1;
+                    $newCotizacionCode = 'PRO' . date('m') . date('y') . str_pad($newSequentialNumber, 4, '0', STR_PAD_LEFT);
+                    $cotizacion->update(['cod_contract' => $newCotizacionCode]);
+                    Log::info('Código de contrato generado: ' . $newCotizacionCode . ' para cotización ' . $cotizacion->id);
+                } catch (\Exception $ex) {
+                    Log::warning('Error generando código de contrato para cotización ' . $cotizacion->id . ': ' . $ex->getMessage());
+                }
+
                 //if current env not is production, send message to whatsapp
+                /*
                 $wspMessage = "Hola {$cotizacion->nombre} gracias por formar parte de nuestra comunidad de importadores; antes de derivarte con el equipo de Coordinaciones por favor recuerda lo siguiente:\n\n" .
                     "1. Envío el contrato para formalizar el servicio de importación. Tiene dos (2) días hábiles para enviar observaciones. De no recibirlas, daremos el contrato por aceptado.\n" .
                     "2. Si el producto tiene marca, logo y/o contiene una imagen de una marca o personaje conocido o patentado en INDECOPI no se podrá transportar.\n" .
@@ -1834,21 +2481,7 @@ class CotizacionController extends Controller
                     "4. Recuerda que las tarifas que te brindé son válidas solo para esta importación.\n" .
                     "5. Te recuerdo que en el escenario en el que llegue menor y/o mayor carga a lo cotizado, existirá un ajuste en el precio final.\n" .
                     "6. Al mismo tiempo si deseas una nueva importación, no dudes en comunicarte conmigo.";
-
-                $telefonoCliente = preg_replace('/\s+/', '', $cotizacion->telefono);
-                $telefonoCliente = $telefonoCliente ? $telefonoCliente . '@c.us' : '';
-                try {
-
-                    $signUrl = rtrim(env('APP_URL_CLIENTES', 'http://localhost:3001'), '/') . '/firma-acuerdo-servicio/' . ($cotizacion->uuid ?? '');
-                    $wspMessage .= "\n\nPara firmar el acuerdo ve a este enlace: \n" . $signUrl;
-
-                    $wspMessageData = $this->sendMessage($wspMessage, $telefonoCliente);
-                    if (!(is_array($wspMessageData) && isset($wspMessageData['status']) && $wspMessageData['status'] === true)) {
-                        Log::warning('Respuesta inesperada al enviar texto por WhatsApp al cliente confirmado: ' . json_encode($wspMessageData));
-                    }
-                } catch (\Throwable $ex) {
-                    Log::warning('Error enviando texto WhatsApp al cliente confirmado: ' . $ex->getMessage());
-                }
+                */
 
                 try {
                     $contenedor = isset($cotizacion->contenedor) ? $cotizacion->contenedor : Contenedor::find($cotizacion->id_contenedor);
@@ -1861,6 +2494,7 @@ class CotizacionController extends Controller
                         'cliente_domicilio' => $cotizacion->direccion ?? null,
                         'carga' => $carga,
                         'logo_contrato_url' => public_path('storage/logo_icons/logo_contrato.png'),
+                        'cod_contract' => $cotizacion->cod_contract,
                     ];
 
                     $contractHtml = view('contracts.contrato', $viewData)->render();
@@ -2074,9 +2708,56 @@ class CotizacionController extends Controller
                     $peso = $sheet2->getCell($columnStart . $rowPesoProveedor)->getValue();
                     $cbmTotal = $sheet2->getCell($columnStart . $rowVolProveedor)->getValue();
 
+                    // Extraer items dentro del rango del proveedor (filas fijas 11,15,17)
+                    $items = [];
+                    $rowName = 11; // nombre
+                    $rowPrice = 15; // initial_price
+                    $rowQty = 17; // initial_qty
+
+                    // Determinar columnas del rango (ej: "C4:F4" => C..F)
+                    $startCol = $columnStart;
+                    $endCol = $columnStart;
+                    if ($currentRange) {
+                        $parts = explode(':', $currentRange);
+                        if (count($parts) === 2) {
+                            // Extraer letras de columna ignorando números de fila
+                            $startCol = preg_replace('/\d+/', '', $parts[0]);
+                            $endCol = preg_replace('/\d+/', '', $parts[1]);
+                        }
+                    }
+
+                    // Iterar columnas del rango del proveedor
+                    $col = $startCol;
+                    while (true) {
+                        $nameVal = $this->getDataCell($sheet2, $col . $rowName);
+                        $priceVal = $this->getDataCell($sheet2, $col . $rowPrice);
+                        $qtyVal = $this->getDataCell($sheet2, $col . $rowQty);
+
+                        $nameVal = is_null($nameVal) ? '' : trim((string) $nameVal);
+                        $priceNum = is_numeric($priceVal) ? (float)$priceVal : 0;
+                        $qtyNum = is_numeric($qtyVal) ? (int)$qtyVal : 0;
+
+                        if ($nameVal !== '' || $priceNum > 0 || $qtyNum > 0) {
+                            $items[] = [
+                                'initial_name' => $nameVal,
+                                'initial_price' => $priceNum,
+                                'initial_qty' => $qtyNum,
+                                'final_name' => null,
+                                'final_price' => null,
+                                'final_qty' => null,
+                                'tipo_producto' => 'GENERAL',
+                            ];
+                        }
+
+                        if ($col === $endCol) {
+                            break;
+                        }
+                        $col = $this->incrementColumn($col);
+                    }
+
                     // Solo agregar proveedor si tiene datos válidos
                     if ($qtyBox > 0 || $peso > 0 || $cbmTotal > 0) {
-                        // Agrega los datos del proveedor
+                        // Agrega los datos del proveedor con items
                         $proveedores[] = [
                             'qty_box' => $qtyBox ?? 0,
                             'peso' => $peso ?? 0,
@@ -2098,6 +2779,7 @@ class CotizacionController extends Controller
                             'cbm_total_china' => 0,
                             'arrive_date_china' => null,
                             'send_rotulado_status' => 'PENDING',
+                            'items' => $items,
                             'created_at' => now(),
                             'updated_at' => now()
                         ];
@@ -2210,6 +2892,54 @@ class CotizacionController extends Controller
                     if ($codeSupplier == null) {
                         $codeSupplier = $this->generateCodeSupplier($nameCliente, $carga, $count, $provider);
                     }
+
+                    // Extraer items dentro del rango del proveedor (filas fijas 11,15,17)
+                    $items = [];
+                    $rowName = 11; // nombre
+                    $rowPrice = 15; // initial_price
+                    $rowQty = 17; // initial_qty
+
+                    // Determinar columnas del rango (ej: "C4:F4" => C..F)
+                    $startCol = $columnStart;
+                    $endCol = $columnStart;
+                    if ($currentRange) {
+                        $parts = explode(':', $currentRange);
+                        if (count($parts) === 2) {
+                            // Extraer letras de columna ignorando números de fila
+                            $startCol = preg_replace('/\d+/', '', $parts[0]);
+                            $endCol = preg_replace('/\d+/', '', $parts[1]);
+                        }
+                    }
+
+                    // Iterar columnas del rango del proveedor
+                    $col = $startCol;
+                    while (true) {
+                        $nameVal = $this->getDataCell($sheet2, $col . $rowName);
+                        $priceVal = $this->getDataCell($sheet2, $col . $rowPrice);
+                        $qtyVal = $this->getDataCell($sheet2, $col . $rowQty);
+
+                        $nameVal = is_null($nameVal) ? '' : trim((string) $nameVal);
+                        $priceNum = is_numeric($priceVal) ? (float)$priceVal : 0;
+                        $qtyNum = is_numeric($qtyVal) ? (int)$qtyVal : 0;
+
+                        if ($nameVal !== '' || $priceNum > 0 || $qtyNum > 0) {
+                            $items[] = [
+                                'initial_name' => $nameVal,
+                                'initial_price' => $priceNum,
+                                'initial_qty' => $qtyNum,
+                                'final_name' => null,
+                                'final_price' => null,
+                                'final_qty' => null,
+                                'tipo_producto' => 'GENERAL',
+                            ];
+                        }
+
+                        if ($col === $endCol) {
+                            break;
+                        }
+                        $col = $this->incrementColumn($col);
+                    }
+
                     // Solo agregar proveedor si tiene datos válidos
                     if ($qtyBox > 0 || $peso > 0 || $cbmTotal > 0) {
                         $proveedores[] = [
@@ -2221,6 +2951,7 @@ class CotizacionController extends Controller
                             'code_supplier' => $codeSupplier,
                             'volumen_doc' => 0,
                             'send_rotulado_status' => 'PENDING',
+                            'items' => $items,
                             'created_at' => now(),
                             'updated_at' => now()
                         ];
@@ -2272,6 +3003,20 @@ class CotizacionController extends Controller
         return $value;
     }
 
+    /**
+     * @OA\Delete(
+     *     path="/carga-consolidada/cotizaciones/{id}/file",
+     *     tags={"Cotización"},
+     *     summary="Eliminar archivo de cotización",
+     *     description="Elimina el archivo Excel asociado a una cotización",
+     *     operationId="deleteCotizacionFile",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="id", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Archivo eliminado exitosamente"),
+     *     @OA\Response(response=404, description="Cotización no encontrada"),
+     *     @OA\Response(response=500, description="Error al eliminar archivo")
+     * )
+     */
     public function deleteCotizacionFile($id)
     {
         try {
@@ -2295,6 +3040,19 @@ class CotizacionController extends Controller
         }
     }
 
+    /**
+     * @OA\Get(
+     *     path="/carga-consolidada/cotizaciones/{idContenedor}/exportar",
+     *     tags={"Cotización"},
+     *     summary="Exportar cotizaciones a Excel",
+     *     description="Exporta las cotizaciones de un contenedor a archivo Excel",
+     *     operationId="exportarCotizacion",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="idContenedor", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Archivo Excel generado exitosamente"),
+     *     @OA\Response(response=500, description="Error al exportar cotizaciones")
+     * )
+     */
     public function exportarCotizacion(Request $request, $idContenedor)
     {
         try {
@@ -2319,28 +3077,6 @@ class CotizacionController extends Controller
                 return;
             }
 
-            // Crear la notificación para Coordinación
-            $notificacion = Notificacion::create([
-                'titulo' => 'Nueva Cotización Creada',
-                'mensaje' => "El usuario {$usuarioCreador->No_Nombres_Apellidos} ha creado una nueva cotización para {$cotizacion->nombre}",
-                'descripcion' => "Cliente: {$cotizacion->nombre} | Documento: {$cotizacion->documento} | Volumen: {$cotizacion->volumen} CBM | Contenedor: {$contenedor->carga}",
-                'modulo' => Notificacion::MODULO_CARGA_CONSOLIDADA,
-                'rol_destinatario' => Usuario::ROL_COORDINACION,
-                'tipo' => Notificacion::TIPO_INFO,
-                'icono' => 'mdi:file-document-plus',
-                'prioridad' => Notificacion::PRIORIDAD_MEDIA,
-                'referencia_tipo' => 'cotizacion',
-                'referencia_id' => $cotizacion->id,
-                'activa' => true,
-                'creado_por' => $usuarioCreador->ID_Usuario,
-                'configuracion_roles' => json_encode([
-                    Usuario::ROL_COORDINACION => [
-                        'titulo' => 'Nueva Cotización - Revisar',
-                        'mensaje' => "Nueva cotización de {$cotizacion->nombre} requiere revisión",
-                        'descripcion' => "Cotización #{$cotizacion->id} para contenedor {$contenedor->carga}"
-                    ]
-                ])
-            ]);
 
             // Crear la notificación para Jefe de Ventas
             $notificacionJefeVentas = Notificacion::create([
@@ -2365,15 +3101,9 @@ class CotizacionController extends Controller
                 ])
             ]);
 
-            Log::info('Notificaciones creadas para Coordinación y Jefe de Ventas:', [
-                'notificacion_coordinacion_id' => $notificacion->id,
-                'notificacion_jefe_ventas_id' => $notificacionJefeVentas->id,
-                'cotizacion_id' => $cotizacion->id,
-                'contenedor_id' => $contenedor->id,
-                'usuario_creador' => $usuarioCreador->No_Nombres_Apellidos
-            ]);
+           
 
-            return [$notificacion, $notificacionJefeVentas];
+            return [ $notificacionJefeVentas];
         } catch (\Exception $e) {
             Log::error('Error al crear notificaciones para Coordinación y Jefe de Ventas: ' . $e->getMessage());
             // No lanzar excepción para no afectar el flujo principal de creación de cotización
@@ -2473,6 +3203,89 @@ class CotizacionController extends Controller
             Log::error('Error al crear notificaciones de cotización confirmada para Coordinación y Jefe de Ventas: ' . $e->getMessage());
             // No lanzar excepción para no afectar el flujo principal de actualización de estado
             return null;
+        }
+    }
+
+    /**
+     * @OA\Post(
+     *     path="/carga-consolidada/cotizaciones/{id}/recordatorio-firma",
+     *     tags={"Cotización"},
+     *     summary="Enviar recordatorio de firma de contrato",
+     *     description="Envía un recordatorio de firma de contrato al cliente por WhatsApp",
+     *     operationId="sendRecordatorioFirmaContrato",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="id", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Recordatorio enviado exitosamente"),
+     *     @OA\Response(response=404, description="Cotización o contenedor no encontrado"),
+     *     @OA\Response(response=500, description="Error al enviar recordatorio")
+     * )
+     *
+     * Envía un recordatorio de firma de contrato por WhatsApp
+     * @param int $id ID de la cotización
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function sendRecordatorioFirmaContrato($id)
+    {
+        try {
+            $cotizacion = Cotizacion::find($id);
+            
+            if (!$cotizacion) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Cotización no encontrada'
+                ], 404);
+            }
+
+            // Obtener el contenedor
+            $contenedor = $cotizacion->contenedor;
+            if (!$contenedor) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Contenedor no encontrado'
+                ], 404);
+            }
+
+            // Construir el mensaje
+            $nombreCliente = $cotizacion->nombre;
+            $carga = $contenedor->carga;
+            $signUrl = rtrim(env('APP_URL_CLIENTES', 'http://localhost:3001'), '/') . '/firma-acuerdo-servicio/' . ($cotizacion->uuid ?? '');
+            
+            $message = "Hola {$nombreCliente} porfavor firmar su contrato del consolidado #{$carga} {$signUrl}";
+
+            // Preparar el teléfono del cliente
+            $telefono = preg_replace('/\s+/', '', $cotizacion->telefono);
+            $telefono = $telefono ? $telefono . '@c.us' : '';
+
+            // TEMPORALMENTE DESHABILITADO: Número de ventas bloqueado
+            // Enviar mensaje usando sendMessageVentas (desde el número de ventas)
+            // $wspMessageData = $this->sendMessageVentas($message, $telefono);
+            
+            if (!(is_array($wspMessageData) && isset($wspMessageData['status']) && $wspMessageData['status'] === true)) {
+                Log::warning('Respuesta inesperada al enviar recordatorio de firma por WhatsApp: ' . json_encode($wspMessageData));
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Error al enviar el mensaje de WhatsApp'
+                ], 500);
+            }
+
+            Log::info('Recordatorio de firma enviado exitosamente:', [
+                'cotizacion_id' => $cotizacion->id,
+                'cliente' => $nombreCliente,
+                'telefono' => $telefono,
+                'carga' => $carga
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Recordatorio de firma enviado correctamente'
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error al enviar recordatorio de firma: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al enviar el recordatorio: ' . $e->getMessage()
+            ], 500);
         }
     }
 }

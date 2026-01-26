@@ -4,6 +4,7 @@ namespace App\Models\CargaConsolidada;
 
 use Illuminate\Database\Eloquent\Model;
 use App\Models\CargaConsolidada\Contenedor;
+use App\Models\CargaConsolidada\CotizacionProveedorItems;
 
 class CotizacionProveedor extends Model
 {
@@ -35,7 +36,19 @@ class CotizacionProveedor extends Model
         'id_contenedor_pago',
         'estado_china',
         'send_rotulado_status',
-        'tipo_rotulado'
+        'tipo_rotulado',
+        'invoice_status',
+        'packing_status',
+        'excel_conf_status'
+    ];
+
+    // Permitir asignación masiva de los nuevos estados de documentos (casts definidos abajo)
+
+    // Agregar nuevos campos de estado de documentos
+    protected $casts = [
+        'invoice_status' => 'string',
+        'packing_status' => 'string',
+        'excel_conf_status' => 'string'
     ];
 
     /**
@@ -60,5 +73,10 @@ class CotizacionProveedor extends Model
     public function inspectionAlmacen()
     {
         return $this->hasMany(AlmacenInspection::class, 'id_proveedor');
+    }
+    //relation items with contenedor_consolidado_cotizacion_proveedores_items
+    public function items()
+    {
+        return $this->hasMany(CotizacionProveedorItems::class, 'id_proveedor');
     }
 }

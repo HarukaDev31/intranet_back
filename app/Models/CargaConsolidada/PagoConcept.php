@@ -12,6 +12,9 @@ class PagoConcept extends Model
         'name',
         'description'
     ];
+    protected $casts = [
+        'payment_date' => 'date',
+    ];
 
     /**
      * Relación con pagos

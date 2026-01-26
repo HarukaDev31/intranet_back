@@ -144,6 +144,29 @@ class ImportProductosExcelJob implements ShouldQueue
                 ]);
             }
 
+            // Determinar el id del contenedor asociado a esta importación.
+            // El campo 'id_contenedor_consolidado_documentacion_files' puede contener
+            // - el id del DocumentacionFile (en cuyo caso debemos obtener su id_contenedor)
+            // - o directamente el id del contenedor. Hacemos ambas comprobaciones.
+            $contenedorId = null;
+            try {
+                if ($importProducto && $importProducto->id_contenedor_consolidado_documentacion_files) {
+                    $linked = $importProducto->id_contenedor_consolidado_documentacion_files;
+                    // Intentar obtener DocumentacionFile
+                    $docFile = \App\Models\CargaConsolidada\DocumentacionFile::find($linked);
+                    if ($docFile && $docFile->id_contenedor) {
+                        $contenedorId = (int) $docFile->id_contenedor;
+                        Log::info('ImportProductosExcelJob: contenedorId obtenido desde DocumentacionFile: ' . $contenedorId);
+                    } else {
+                        // Si no existe DocumentacionFile con ese id, interpretamos el valor como id_contenedor
+                        $contenedorId = (int) $linked;
+                        Log::info('ImportProductosExcelJob: contenedorId tomado directamente del campo linked: ' . $contenedorId);
+                    }
+                }
+            } catch (\Exception $e) {
+                Log::warning('No se pudo determinar idContenedor desde ImportProducto: ' . $e->getMessage());
+            }
+
             $importedCount = 0;
             $errors = [];
 
@@ -191,6 +214,7 @@ class ImportProductosExcelJob implements ShouldQueue
                 // Guardar en la base de datos usando el modelo
                 $productoData = [
                     'id_import_producto' => $this->idImportProducto,
+                    'idContenedor' => $contenedorId,
                     'item' => $item,
                     'nombre_comercial' => $nombre_comercial,
                     'foto' => $foto,

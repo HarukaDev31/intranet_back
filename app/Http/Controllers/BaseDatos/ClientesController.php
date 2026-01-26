@@ -22,9 +22,14 @@ use App\Http\Controllers\Controller;
 use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
 use Tymon\JWTAuth\Facades\JWTAuth;
+use App\Traits\WhatsappTrait;
+use Illuminate\Support\Facades\Mail;
+use App\Mail\RecuperarContrasenaMail;
 
 class ClientesController extends Controller
 {
+    use WhatsappTrait;
+    
     protected $clienteService;
     protected $clienteExportService;
     protected $clienteImportService;
@@ -46,7 +51,54 @@ class ClientesController extends Controller
     /**
      * Ruta física para archivos Excel importados (sistema de archivos)
      */
+
     /**
+     * @OA\Get(
+     *     path="/clientes",
+     *     tags={"Clientes"},
+     *     summary="Listar clientes",
+     *     description="Obtiene una lista paginada de clientes con búsqueda opcional",
+     *     operationId="getClientes",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(
+     *         name="search",
+     *         in="query",
+     *         description="Término de búsqueda",
+     *         required=false,
+     *         @OA\Schema(type="string")
+     *     ),
+     *     @OA\Parameter(
+     *         name="itemsPerPage",
+     *         in="query",
+     *         description="Cantidad de items por página",
+     *         required=false,
+     *         @OA\Schema(type="integer", default=100)
+     *     ),
+     *     @OA\Parameter(
+     *         name="currentPage",
+     *         in="query",
+     *         description="Página actual",
+     *         required=false,
+     *         @OA\Schema(type="integer", default=1)
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Lista de clientes obtenida exitosamente",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=true),
+     *             @OA\Property(property="data", type="array", @OA\Items(type="object")),
+     *             @OA\Property(property="pagination", type="object",
+     *                 @OA\Property(property="current_page", type="integer"),
+     *                 @OA\Property(property="last_page", type="integer"),
+     *                 @OA\Property(property="per_page", type="integer"),
+     *                 @OA\Property(property="total", type="integer")
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(response=401, description="No autenticado"),
+     *     @OA\Response(response=500, description="Error del servidor")
+     * )
+     *
      * Obtener lista de clientes con paginación
      */
     public function index(Request $request): JsonResponse
@@ -58,7 +110,7 @@ class ClientesController extends Controller
             $page = $request->get('currentPage', 1);
 
             // Usar el servicio para obtener datos
-            $result = $this->clienteService->obtenerClientes($request, $page, $perPage);
+            $result = $this->clienteService->obtenerClientes($request, $page, $perPage, $search);
 
             return response()->json([
                 'success' => true,
@@ -76,6 +128,33 @@ class ClientesController extends Controller
     }
 
     /**
+     * @OA\Get(
+     *     path="/clientes/{id}",
+     *     tags={"Clientes"},
+     *     summary="Obtener cliente por ID",
+     *     description="Obtiene la información detallada de un cliente específico con todos sus servicios",
+     *     operationId="getClienteById",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(
+     *         name="id",
+     *         in="path",
+     *         description="ID del cliente",
+     *         required=true,
+     *         @OA\Schema(type="integer")
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Cliente obtenido exitosamente",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=true),
+     *             @OA\Property(property="data", type="object"),
+     *             @OA\Property(property="message", type="string")
+     *         )
+     *     ),
+     *     @OA\Response(response=404, description="Cliente no encontrado"),
+     *     @OA\Response(response=500, description="Error del servidor")
+     * )
+     *
      * Obtener un cliente específico con todos sus servicios
      */
     public function show($id): JsonResponse
@@ -99,6 +178,90 @@ class ClientesController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Error al obtener cliente: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Enviar instrucciones de recuperación de contraseña
+     */
+    public function enviarInstruccionesRecuperacionContrasena($id): JsonResponse
+    {
+        try {
+            $cliente = Cliente::find($id);
+            
+            if (!$cliente) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Cliente no encontrado'
+                ], 404);
+            }
+
+            // Obtener URL base de clientes desde .env
+            $baseUrl = env('APP_URL_CLIENTES', 'https://clientes.probusiness.pe');
+            $recuperarContrasenaUrl = rtrim($baseUrl, '/') . '/recuperar-contrasena';
+
+            // Enviar mensaje por WhatsApp
+            if (!empty($cliente->telefono)) {
+                $telefono = trim($cliente->telefono);
+                $telefono = preg_replace('/[^0-9]/', '', $telefono);
+                
+                if (strlen($telefono) == 9) {
+                    $telefono = '51' . $telefono . '@c.us';
+                } else {
+                    $telefono = $telefono . '@c.us';
+                }
+
+                $whatsappMessage = "¡Hola {$cliente->nombre}! 👋\n\n";
+                $whatsappMessage .= "Para recuperar tu contraseña, puedes hacerlo a través del siguiente enlace:\n";
+                $whatsappMessage .= "{$recuperarContrasenaUrl}\n\n";
+                $whatsappMessage .= "Si tienes algún problema, no dudes en contactarnos.\n\n";
+                $whatsappMessage .= "¡Saludos!\nEquipo Probusiness";
+
+                $response = $this->sendMessageCurso($whatsappMessage, $telefono);
+
+                if (!$response['status']) {
+                    Log::error('Error al enviar WhatsApp de recuperación de contraseña', [
+                        'cliente_id' => $id,
+                        'response' => $response
+                    ]);
+                }
+            }
+
+            // Enviar correo electrónico
+            if (!empty($cliente->correo)) {
+                try {
+                    $logo_header = public_path('storage/logo_icons/logo_header.png');
+                    $logo_footer = public_path('storage/logo_icons/logo_footer.png');
+
+                    Mail::to($cliente->correo)->send(
+                        new RecuperarContrasenaMail(
+                            $cliente->nombre,
+                            $recuperarContrasenaUrl,
+                            $logo_header,
+                            $logo_footer
+                        )
+                    );
+                } catch (\Exception $e) {
+                    Log::error('Error al enviar correo de recuperación de contraseña', [
+                        'cliente_id' => $id,
+                        'error' => $e->getMessage()
+                    ]);
+                }
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Instrucciones de recuperación de contraseña enviadas exitosamente'
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error en enviarInstruccionesRecuperacionContrasena: ' . $e->getMessage(), [
+                'cliente_id' => $id,
+                'trace' => $e->getTraceAsString()
+            ]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al enviar instrucciones de recuperación de contraseña: ' . $e->getMessage()
             ], 500);
         }
     }
@@ -1365,15 +1528,15 @@ class ClientesController extends Controller
             return [
                 'total_clientes' => [
                     'value' => 0,
-                    'label' => 'Total Clientes'
+                    'label' => 'Clientes'
                 ],
                 'total_clientes_curso' => [
                     'value' => 0,
-                    'label' => 'Total Clientes Curso'
+                    'label' => 'Curso'
                 ],
                 'total_clientes_consolidado' => [
                     'value' => 0,
-                    'label' => 'Total Clientes Consolidado'
+                    'label' => 'Consolidado'
                 ]
             ];
         }
@@ -1402,15 +1565,15 @@ class ClientesController extends Controller
         return [
             'total_clientes' => [
                 'value' => $totalClientes,
-                'label' => 'Total Clientes'
+                'label' => 'Clientes'
             ],
             'total_clientes_curso' => [
                 'value' => $clientesCurso,
-                'label' => 'Total Clientes Curso'
+                'label' => 'Curso'
             ],
             'total_clientes_consolidado' => [
                 'value' => $clientesConsolidado,
-                'label' => 'Total Clientes Consolidado'
+                'label' => 'Consolidado'
             ]
         ];
     }

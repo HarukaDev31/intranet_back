@@ -10,20 +10,23 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use App\Models\CargaConsolidada\CotizacionProveedor;
 use App\Models\CargaConsolidada\Cotizacion;
 use App\Models\CargaConsolidada\AlmacenInspection;
 use App\Traits\WhatsappTrait;
+use App\Traits\DatabaseConnectionTrait;
 use Carbon\Carbon;
 
 class SendInspectionMediaJob implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, WhatsappTrait;
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, WhatsappTrait, DatabaseConnectionTrait;
 
     protected $idProveedor;
     protected $idCotizacion;
     protected $idsProveedores;
     protected $userId;
+    protected $domain;
 
     /**
      * Número de intentos antes de fallar
@@ -44,12 +47,13 @@ class SendInspectionMediaJob implements ShouldQueue
      *
      * @return void
      */
-    public function __construct($idProveedor, $idCotizacion, $idsProveedores, $userId = null)
+    public function __construct($idProveedor, $idCotizacion, $idsProveedores, $userId = null, $domain = null)
     {
         $this->idProveedor = $idProveedor;
         $this->idCotizacion = $idCotizacion;
         $this->idsProveedores = $idsProveedores;
         $this->userId = $userId;
+        $this->domain = $domain;
     }
 
     /**
@@ -60,10 +64,14 @@ class SendInspectionMediaJob implements ShouldQueue
     public function handle()
     {
         try {
+            // Establecer la conexión de BD basándose en el dominio
+            $this->setDatabaseConnection($this->domain);
+
             Log::info("Iniciando job de envío de inspección", [
                 'id_proveedor' => $this->idProveedor,
                 'id_cotizacion' => $this->idCotizacion,
-                'user_id' => $this->userId
+                'user_id' => $this->userId,
+                'domain' => $this->domain
             ]);
 
             // Obtener imágenes del proveedor
@@ -126,6 +134,34 @@ class SendInspectionMediaJob implements ShouldQueue
             $proveedorUpdate->estados = 'INSPECCIONADO';
             $proveedorUpdate->save();
 
+            // Actualizar tracking siguiendo el patrón correcto
+            $ahora = now();
+            
+            // Obtener el registro más reciente del tracking
+            $trackingActual = DB::table('contenedor_proveedor_estados_tracking')
+                ->where('id_proveedor', $this->idProveedor)
+                ->where('id_cotizacion', $this->idCotizacion)
+                ->orderBy('created_at', 'desc')
+                ->orderBy('id', 'desc')
+                ->first();
+
+            if ($trackingActual) {
+                // Actualizar el registro existente con updated_at
+                DB::table('contenedor_proveedor_estados_tracking')
+                    ->where('id', $trackingActual->id)
+                    ->update(['updated_at' => $ahora]);
+            }
+
+            // Insertar nuevo registro con el estado INSPECCIONADO
+            DB::table('contenedor_proveedor_estados_tracking')
+                ->insert([
+                    'id_proveedor' => $this->idProveedor,
+                    'id_cotizacion' => $this->idCotizacion,
+                    'estado' => 'INSPECCIONADO',
+                    'created_at' => $ahora,
+                    'updated_at' => $ahora
+                ]);
+
             Log::info("Estado del proveedor actualizado", [
                 'id_proveedor' => $this->idProveedor,
                 'nuevo_estado' => 'INSPECCIONADO'
@@ -154,39 +190,48 @@ class SendInspectionMediaJob implements ShouldQueue
             Log::info("Mensaje principal enviado", ['telefono' => $telefono]);
 
 
+            // Obtener código del proveedor para el mensaje
+            $codeSupplier = $proveedor->code_supplier;
+
             // Procesar y enviar imágenes
             $imagenesEnviadas = 0;
             foreach ($imagesUrls as $image) {
-                $filePath = $this->resolveMediaPath($image->file_path);
-
-                if ($filePath) {
-                    $this->sendMediaInspection($filePath, $image->file_type, '', $telefono, 0, $image->id);
+                // Generar URL pública del archivo
+                $publicUrl = $this->generatePublicUrl($image->file_path);
+                
+                if ($publicUrl) {
+                    // Mensaje con código del proveedor
+                    $message = $codeSupplier;
+                    $this->sendMediaInspectionToController($image->file_path, $image->file_type, $message, $telefono, 0, $image->id);
                     $imagenesEnviadas++;
-
-                    // Si es archivo temporal, eliminarlo después del envío
-                    if (strpos($filePath, sys_get_temp_dir()) !== false) {
-                        unlink($filePath);
-                    }
+                    Log::info('Imagen enviada con URL', [
+                        'file_path' => $image->file_path,
+                        'url' => $publicUrl,
+                        'code_supplier' => $codeSupplier
+                    ]);
                 } else {
-                    Log::error('No se pudo resolver la ruta del archivo imagen: ' . $image->file_path);
+                    Log::error('No se pudo generar URL pública para imagen: ' . $image->file_path);
                 }
             }
 
             // Procesar y enviar videos
             $videosEnviados = 0;
             foreach ($videosUrls as $video) {
-                $filePath = $this->resolveMediaPath($video->file_path);
-
-                if ($filePath) {
-                    $this->sendMediaInspection($filePath, $video->file_type, '', $telefono, 0, $video->id);
+                // Generar URL pública del archivo
+                $publicUrl = $this->generatePublicUrl($video->file_path);
+                
+                if ($publicUrl) {
+                    // Mensaje con código del proveedor
+                    $message = $codeSupplier;
+                    $this->sendMediaInspectionToController($video->file_path, $video->file_type, $message, $telefono, 0, $video->id);
                     $videosEnviados++;
-
-                    // Si es archivo temporal, eliminarlo después del envío
-                    if (strpos($filePath, sys_get_temp_dir()) !== false) {
-                        unlink($filePath);
-                    }
+                    Log::info('Video enviado con URL', [
+                        'file_path' => $video->file_path,
+                        'url' => $publicUrl,
+                        'code_supplier' => $codeSupplier
+                    ]);
                 } else {
-                    Log::error('No se pudo resolver la ruta del archivo video: ' . $video->file_path);
+                    Log::error('No se pudo generar URL pública para video: ' . $video->file_path);
                 }
             }
 
@@ -228,192 +273,47 @@ class SendInspectionMediaJob implements ShouldQueue
     }
 
     /**
-     * Resuelve la ruta de un archivo, manejando tanto rutas locales como URLs externas
+     * Genera una URL pública para un archivo almacenado
      * 
-     * @param string $filePath Ruta del archivo (puede ser local o URL)
-     * @return string|false Ruta del archivo accesible o false si falla
+     * @param string $filePath Ruta del archivo (puede ser relativa o absoluta)
+     * @return string|null URL pública del archivo o null si falla
      */
-    private function resolveMediaPath($filePath)
+    private function generatePublicUrl($filePath)
     {
         try {
-            Log::info("Resolviendo ruta de archivo: " . $filePath);
-
-            // Verificar si es una URL externa
+            // Si ya es una URL completa, devolverla tal como está
             if (filter_var($filePath, FILTER_VALIDATE_URL)) {
-                Log::info("URL externa detectada, descargando: " . $filePath);
-                return $this->downloadExternalMedia($filePath);
+                return $filePath;
             }
 
-            // Si no es URL, intentar como ruta local
-            $possiblePaths = [
-                // Ruta directa si ya es absoluta
-                $filePath,
-                // Ruta en storage/app/public
-                storage_path('app/public/' . $filePath),
-                // Ruta en public
-                public_path($filePath),
-                // Ruta relativa desde storage
-                storage_path($filePath),
-                // Limpiar posibles barras dobles y probar
-                storage_path('app/public/' . ltrim($filePath, '/')),
-                public_path(ltrim($filePath, '/'))
-            ];
+            // Limpiar la ruta
+            $ruta = ltrim($filePath, '/');
 
-            foreach ($possiblePaths as $path) {
-                if (file_exists($path)) {
-                    Log::info("Archivo encontrado en: " . $path);
-                    return $path;
-                }
+            // Si la ruta empieza con 'public/', removerlo
+            if (strpos($ruta, 'public/') === 0) {
+                $ruta = substr($ruta, 7);
             }
 
-            Log::error("Archivo no encontrado en ninguna ruta", [
+            // Construir URL manualmente
+            $baseUrl = config('app.url');
+            $baseUrl = rtrim($baseUrl, '/');
+            $ruta = ltrim($ruta, '/');
+
+            // Generar URL completa
+            $publicUrl = $baseUrl . '/storage/' . $ruta;
+
+            Log::info("URL pública generada", [
                 'file_path' => $filePath,
-                'attempted_paths' => $possiblePaths
+                'public_url' => $publicUrl
             ]);
 
-            return false;
+            return $publicUrl;
         } catch (\Exception $e) {
-            Log::error("Error al resolver ruta de archivo: " . $e->getMessage(), [
+            Log::error("Error al generar URL pública: " . $e->getMessage(), [
                 'file_path' => $filePath,
                 'trace' => $e->getTraceAsString()
             ]);
-            return false;
+            return null;
         }
-    }
-
-    /**
-     * Descarga un archivo desde una URL externa y lo guarda temporalmente
-     * 
-     * @param string $url URL del archivo a descargar
-     * @return string|false Ruta del archivo temporal o false si falla
-     */
-    private function downloadExternalMedia($url)
-    {
-        try {
-            Log::info("Descargando archivo externo: " . $url);
-
-            // Verificar si cURL está disponible
-            if (!function_exists('curl_init')) {
-                Log::error("cURL no está disponible en el servidor");
-                return false;
-            }
-
-            // Inicializar cURL
-            $ch = curl_init();
-
-            if (!$ch) {
-                Log::error("No se pudo inicializar cURL");
-                return false;
-            }
-
-            // Configurar opciones de cURL
-            curl_setopt_array($ch, [
-                CURLOPT_URL => $url,
-                CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_FOLLOWLOCATION => true,
-                CURLOPT_MAXREDIRS => 5,
-                CURLOPT_TIMEOUT => 60,
-                CURLOPT_CONNECTTIMEOUT => 30,
-                CURLOPT_SSL_VERIFYPEER => false,
-                CURLOPT_SSL_VERIFYHOST => false,
-                CURLOPT_USERAGENT => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-                CURLOPT_HTTPHEADER => [
-                    'Accept: image/*,video/*,*/*',
-                    'Accept-Language: es-ES,es;q=0.9,en;q=0.8',
-                ],
-            ]);
-
-            // Ejecutar la petición
-            $fileContent = curl_exec($ch);
-            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            $error = curl_error($ch);
-            $contentType = curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
-
-            curl_close($ch);
-
-            // Verificar errores
-            if ($fileContent === false || !empty($error)) {
-                Log::error("Error cURL al descargar archivo: " . $error, ['url' => $url]);
-                return false;
-            }
-
-            if ($httpCode !== 200) {
-                Log::error("Error HTTP al descargar archivo. Código: " . $httpCode, [
-                    'url' => $url,
-                    'content_type' => $contentType
-                ]);
-                return false;
-            }
-
-            if (empty($fileContent)) {
-                Log::error("Archivo descargado está vacío", ['url' => $url]);
-                return false;
-            }
-
-            // Determinar extensión del archivo
-            $extension = $this->getFileExtensionFromUrl($url, $contentType);
-
-            // Crear archivo temporal
-            $tempFile = tempnam(sys_get_temp_dir(), 'media_') . '.' . $extension;
-
-            if (file_put_contents($tempFile, $fileContent) === false) {
-                Log::error("No se pudo crear el archivo temporal");
-                return false;
-            }
-
-            Log::info("Archivo descargado exitosamente", [
-                'url' => $url,
-                'temp_file' => $tempFile,
-                'size' => strlen($fileContent),
-                'content_type' => $contentType
-            ]);
-
-            return $tempFile;
-        } catch (\Exception $e) {
-            Log::error("Excepción al descargar archivo externo: " . $e->getMessage(), [
-                'url' => $url,
-                'trace' => $e->getTraceAsString()
-            ]);
-            return false;
-        }
-    }
-
-    /**
-     * Obtiene la extensión de archivo basada en la URL y content-type
-     * 
-     * @param string $url URL del archivo
-     * @param string $contentType Content-Type del archivo
-     * @return string Extensión del archivo
-     */
-    private function getFileExtensionFromUrl($url, $contentType = null)
-    {
-        // Intentar obtener extensión de la URL
-        $pathInfo = pathinfo(parse_url($url, PHP_URL_PATH));
-        if (!empty($pathInfo['extension'])) {
-            return strtolower($pathInfo['extension']);
-        }
-
-        // Si no hay extensión en la URL, usar content-type
-        if ($contentType) {
-            $mimeToExtension = [
-                'image/jpeg' => 'jpg',
-                'image/png' => 'png',
-                'image/gif' => 'gif',
-                'image/webp' => 'webp',
-                'video/mp4' => 'mp4',
-                'video/avi' => 'avi',
-                'video/mov' => 'mov',
-                'video/wmv' => 'wmv',
-                'application/pdf' => 'pdf'
-            ];
-
-            $mainType = strtok($contentType, ';'); // Remover parámetros como charset
-            if (isset($mimeToExtension[$mainType])) {
-                return $mimeToExtension[$mainType];
-            }
-        }
-
-        // Por defecto, usar extensión genérica
-        return 'tmp';
     }
 }

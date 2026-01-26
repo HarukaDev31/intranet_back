@@ -55,6 +55,8 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
         Route::post('packing-list', [ContenedorController::class, 'uploadPackingList']);
         Route::get('valid-containers', [ContenedorController::class, 'getValidContainers']);
         Route::get('cargas-disponibles', [ContenedorController::class, 'getCargasDisponibles']);
+        Route::get('cargas-disponibles-dropdown', [ContenedorController::class, 'getCargasDisponiblesDropdown']);
+        Route::get('vendedores-dropdown', [ContenedorController::class, 'getVendedoresDropdown']);
         Route::post('move-cotizacion', [ContenedorController::class, 'moveCotizacionToConsolidado']);
         Route::post('move-cotizacion-calculadora', [ContenedorController::class, 'moveCotizacionToCalculadora']);
         Route::get('/', [ContenedorController::class, 'index']);
@@ -62,6 +64,7 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
         Route::post('/', [ContenedorController::class, 'store']);
         Route::post('/estado-documentacion', [ContenedorController::class, 'updateEstadoDocumentacion']);
         Route::delete('packing-list/{idContenedor}', [ContenedorController::class, 'deletePackingList']);
+        Route::post('update-fecha-documentacion/{idContenedor}', [ContenedorController::class, 'updateFechaDocumentacionMax']);
 
         // Cotizaciones
         Route::group(['prefix' => 'cotizaciones'], function () {
@@ -73,6 +76,7 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
             Route::post('{id}/estado-cotizador', [CotizacionController::class, 'updateEstadoCotizacion']);
             Route::post('{id}/file', [CotizacionController::class, 'updateCotizacionFile']);
             Route::delete('{id}/file', [CotizacionController::class, 'deleteCotizacionFile']);
+            Route::post('{id}/send-recordatorio-firma', [CotizacionController::class, 'sendRecordatorioFirmaContrato']);
             Route::delete('{id}', [CotizacionController::class, 'destroy']);
             Route::post('/', [CotizacionController::class, 'store']);
             Route::get('filters/options', [CotizacionController::class, 'filterOptions']);
@@ -80,12 +84,22 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
         
         // Clientes
         Route::group(['prefix' => 'clientes'], function () {
+            Route::post('/general/recordatorios-documentos', [GeneralController::class, 'recordatoriosDocumentos']);
+            Route::post('/general/solicitar-documentos', [GeneralController::class, 'solicitarDocumentos']);
+            Route::get('/general/{idCotizacion}/proveedores-items', [GeneralController::class, 'getProveedoresItemsCotizacion']);
+            Route::get('/general/{idCotizacion}/proveedores-pending-documents', [GeneralController::class, 'getProveedorPendingDocuments']);
             Route::get('/general/{idContenedor}/export', [GeneralController::class, 'exportarClientes']);
             Route::get('/general/{idContenedor}/headers', [GeneralController::class, 'getClientesHeader']);
             Route::get('/general/{idContenedor}', [GeneralController::class, 'index']);
             Route::post('/general/estado-cliente', [GeneralController::class, 'updateEstadoCliente']);
             Route::post('/general/status-cliente-doc', [GeneralController::class, 'updateStatusCliente']);
             Route::get('/embarcados/{idContenedor}', [EmbarcadosController::class, 'getEmbarcados']);
+            Route::post('embarcados/{idProveedor}/factura-comercial', [EmbarcadosController::class, 'uploadFacturaComercial']);
+            Route::post('embarcados/{idProveedor}/packing-list', [EmbarcadosController::class, 'uploadPackingList']);
+            Route::post('embarcados/{idProveedor}/excel-confirmacion', [EmbarcadosController::class, 'uploadExcelConfirmacion']);
+            Route::delete('embarcados/{idProveedor}/factura-comercial', [EmbarcadosController::class, 'deleteFacturaComercial']);
+            Route::delete('embarcados/{idProveedor}/packing-list', [EmbarcadosController::class, 'deletePackingList']);
+            Route::delete('embarcados/{idProveedor}/excel-confirmacion', [EmbarcadosController::class, 'deleteExcelConfirmacion']);
             Route::get('/variacion/{idContenedor}', [VariacionController::class, 'index']);
             Route::post('/variacion/vol-selected', [VariacionController::class, 'updateVolSelected']);
             Route::post('/variacion/documentacion/proveedor/{idProveedor}/create', [DocumentacionController::class, 'createProveedorDocumentacionFolder']);
@@ -93,6 +107,7 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
             Route::delete('/variacion/documentacion/proveedor/{idProveedor}/factura-comercial', [DocumentacionController::class, 'deleteProveedorFacturaComercial']);
             Route::delete('/variacion/documentacion/proveedor/{idProveedor}/excel-confirmacion', [DocumentacionController::class, 'deleteProveedorExcelConfirmacion']);
             Route::delete('/variacion/documentacion/proveedor/{idProveedor}/packing-list', [DocumentacionController::class, 'deleteProveedorPackingList']);
+            Route::delete('/variacion/documentacion/archivo/{idFile}', [CotizacionProveedorController::class, 'deleteFileDocumentationPeru']);
             Route::get('/variacion/documentacion/{idCotizacion}', [VariacionController::class, 'showClientesDocumentacion']);
             Route::get('/pagos/{idContenedor}', [ClientesPagosController::class, 'index']);
             Route::post('/pagos', [ClientesPagosController::class, 'store']);
@@ -120,6 +135,7 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
             Route::delete('/general/delete-cotizacion-final-file/{idCotizacion}', [CotizacionFinalController::class, 'deleteCotizacionFinalFile']);
             Route::put('/general/update-estado', [CotizacionFinalController::class, 'updateEstadoCotizacionFinal']);
             Route::post('/general/upload-factura-comercial', [CotizacionFinalController::class, 'uploadFacturaComercial']);
+            Route::post('/general/upload-cotizacion-final/{idCotizacion}', [CotizacionFinalController::class, 'uploadCotizacionFinalFile']);
             Route::post('/general/generate-individual/{idContenedor}', [CotizacionFinalController::class, 'generateIndividualCotizacion']);
             Route::post('/general/process-excel-data', [CotizacionFinalController::class, 'processExcelData']);
             Route::get('/general/download-plantilla-general/{idContenedor}', [CotizacionFinalController::class, 'downloadPlantillaGeneral']);
@@ -127,16 +143,21 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
             Route::get('/pagos/{idCotizacion}', [CotizacionFinalController::class, 'getCotizacionFinalDocumentacionPagos']);
             Route::get('/general/{idContenedor}', [CotizacionFinalController::class, 'getContenedorCotizacionesFinales']);
             Route::get('/general/{idContenedor}/headers', [CotizacionFinalController::class, 'getCotizacionFinalHeaders']);
+            Route::post('/general/{idContenedor}/send-reminder-pago', [CotizacionFinalController::class, 'sendReminderPago']);
         });
         
         // Factura y guía
         Route::group(['prefix' => 'factura-guia'], function () {
+            Route::get('/general/get-facturas-comerciales/{idCotizacion}', [FacturaGuiaController::class, 'getFacturasComerciales']);
+
             Route::get('/general/{idContenedor}/headers', [FacturaGuiaController::class, 'getHeadersData']);
             Route::post('/general/upload-guia-remision', [FacturaGuiaController::class, 'uploadGuiaRemision']);
             Route::post('/general/upload-factura-comercial', [FacturaGuiaController::class, 'uploadFacturaComercial']);
             Route::get('/general/{idContenedor}', [FacturaGuiaController::class, 'getContenedorFacturaGuia']);
             Route::delete('/general/delete-factura-comercial/{idContenedor}', [FacturaGuiaController::class, 'deleteFacturaComercial']);
             Route::delete('/general/delete-guia-remision/{idContenedor}', [FacturaGuiaController::class, 'deleteGuiaRemision']);
+            Route::post('/send-factura/{idCotizacion}', [FacturaGuiaController::class, 'sendFactura']);
+            Route::post('/send-guia/{idCotizacion}', [FacturaGuiaController::class, 'sendGuia']);
         });
         
         // Aduana
@@ -155,6 +176,7 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
         Route::group(['prefix' => 'entrega'], function () {
             Route::post('/horarios', [EntregaController::class, 'storeHorarios']);
             Route::post('/horarios/edit', [EntregaController::class, 'editHorarios']);
+            Route::post('/horarios/seleccion', [EntregaController::class, 'seleccionHorarios']);
             Route::delete('/horarios/delete', [EntregaController::class, 'deleteHorarios']);
             Route::get('/agencias', [EntregaController::class, 'getAgencias']);
             Route::post('/entregas/conformidad', [EntregaController::class, 'uploadConformidad']);
@@ -170,6 +192,8 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
             Route::delete('/{idContenedor}/fechas/{idFecha}/rangos/{idRango}', [EntregaController::class, 'deleteRango']);
             Route::get('/{idContenedor}/headers', [EntregaController::class, 'getHeaders']);
             Route::get('/clientes/{idContenedor}', [EntregaController::class, 'getClientesEntrega']);
+            // Export ROTULADO PARED
+            Route::get('/{idContenedor}/rotulado-pared', [EntregaController::class, 'downloadPlantillas']);
             Route::post('/clientes/{idContenedor}/sendForm', [EntregaController::class, 'sendForm']);
             Route::get('/entregas/{idContenedor}', [EntregaController::class, 'getEntregas']);
             Route::get('/entregas/detalle/{idCotizacion}', [EntregaController::class, 'getEntregasDetalle']);
@@ -186,8 +210,12 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
             //delivery pagos /id
             Route::delete('/delivery/pagos/{idCotizacion}',  [ClientesPagosController::class, 'delete']);
             Route::post('/delivery/importe', [EntregaController::class, 'saveImporteDelivery']);
+            Route::post('/delivery/servicio', [EntregaController::class, 'saveServicioDelivery']);
             Route::post('/delivery/pagos', [EntregaController::class, 'savePagosDelivery']);
             Route::post('/delivery/send-message/{idCotizacion}', [EntregaController::class, 'sendMessageDelivery']);
+            Route::post('/delivery/recordatorio-formulario/{idCotizacion}', [EntregaController::class, 'sendRecordatorioFormularioDelivery']);
+            Route::post('/delivery/cobro-cotizacion-final/{idCotizacion}', [EntregaController::class, 'sendCobroCotizacionFinalDelivery']);
+            Route::post('/delivery/cobro-delivery/{idCotizacion}', [EntregaController::class, 'sendCobroDeliveryDelivery']);
             Route::get('/delivery/all', [EntregaController::class, 'getAllDelivery']);
 
             Route::get('/delivery/{idContenedor}', [EntregaController::class, 'getDelivery']);

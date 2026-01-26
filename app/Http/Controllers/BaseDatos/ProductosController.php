@@ -19,6 +19,68 @@ use App\Jobs\ImportProductosExcelJob;
 class ProductosController extends Controller
 {
     /**
+     * @OA\Get(
+     *     path="/productos",
+     *     tags={"Productos"},
+     *     summary="Listar productos",
+     *     description="Obtiene una lista paginada de productos importados con filtros opcionales",
+     *     operationId="getProductos",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(
+     *         name="limit",
+     *         in="query",
+     *         description="Cantidad de items por página",
+     *         required=false,
+     *         @OA\Schema(type="integer", default=10)
+     *     ),
+     *     @OA\Parameter(
+     *         name="page",
+     *         in="query",
+     *         description="Número de página",
+     *         required=false,
+     *         @OA\Schema(type="integer", default=1)
+     *     ),
+     *     @OA\Parameter(
+     *         name="search",
+     *         in="query",
+     *         description="Búsqueda por nombre comercial o subpartida",
+     *         required=false,
+     *         @OA\Schema(type="string")
+     *     ),
+     *     @OA\Parameter(
+     *         name="rubro",
+     *         in="query",
+     *         description="Filtrar por rubro",
+     *         required=false,
+     *         @OA\Schema(type="string")
+     *     ),
+     *     @OA\Parameter(
+     *         name="tipoProducto",
+     *         in="query",
+     *         description="Filtrar por tipo de producto",
+     *         required=false,
+     *         @OA\Schema(type="string")
+     *     ),
+     *     @OA\Parameter(
+     *         name="campana",
+     *         in="query",
+     *         description="Filtrar por campaña/carga",
+     *         required=false,
+     *         @OA\Schema(type="string")
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Lista de productos obtenida exitosamente",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=true),
+     *             @OA\Property(property="data", type="array", @OA\Items(type="object")),
+     *             @OA\Property(property="pagination", type="object"),
+     *             @OA\Property(property="headers", type="object")
+     *         )
+     *     ),
+     *     @OA\Response(response=500, description="Error del servidor")
+     * )
+     *
      * Obtener lista de productos
      */
     public function index(Request $request)
@@ -29,7 +91,16 @@ class ProductosController extends Controller
 
             // Usar query builder con join explícito a contenedor según idContenedor
             $query = ProductoImportadoExcel::leftJoin('carga_consolidada_contenedor', 'productos_importados_excel.idContenedor', '=', 'carga_consolidada_contenedor.id')
-                ->select('productos_importados_excel.*', 'carga_consolidada_contenedor.carga as carga_contenedor');
+                ->select('productos_importados_excel.id',
+                    'productos_importados_excel.nombre_comercial',
+                    'productos_importados_excel.subpartida',
+                    'productos_importados_excel.rubro',
+                    'productos_importados_excel.tipo_producto',
+                    'productos_importados_excel.foto',
+                    'productos_importados_excel.unidad_comercial',
+                    'carga_consolidada_contenedor.carga as carga_contenedor',
+                    DB::raw('YEAR(carga_consolidada_contenedor.f_cierre) as anio')
+                );
 
             // Aplicar filtros si están presentes (reemplaza el bloque actual)
             if ($request->has('search') && $request->search) {
@@ -53,6 +124,10 @@ class ProductosController extends Controller
             if ($request->has('campana') && $request->campana && $request->campana !== 'todos') {
                 $query->where('carga_consolidada_contenedor.carga', $request->campana);
             }
+
+            // Ordenar por carga consolidada más reciente y por año de cierre (descendente)
+            $query->orderByRaw('CAST(carga_consolidada_contenedor.carga AS UNSIGNED) DESC')
+                ->orderByRaw('YEAR(carga_consolidada_contenedor.f_cierre) DESC');
 
             $data = $query->paginate($perPage, ['*'], 'page', $page);
             //for each foto add the url if url cannot contains http or https    
@@ -90,6 +165,26 @@ class ProductosController extends Controller
     }
 
     /**
+     * @OA\Get(
+     *     path="/productos/filter-options",
+     *     tags={"Productos"},
+     *     summary="Obtener opciones de filtro",
+     *     description="Obtiene las opciones disponibles para filtrar productos (rubros, tipos, campañas)",
+     *     operationId="getProductosFilterOptions",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Response(
+     *         response=200,
+     *         description="Opciones de filtro obtenidas exitosamente",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=true),
+     *             @OA\Property(property="rubros", type="array", @OA\Items(type="string")),
+     *             @OA\Property(property="tiposProducto", type="array", @OA\Items(type="string")),
+     *             @OA\Property(property="campanas", type="array", @OA\Items(type="string"))
+     *         )
+     *     ),
+     *     @OA\Response(response=500, description="Error del servidor")
+     * )
+     *
      * Obtener opciones de filtro para productos
      */
     public function filterOptions()
@@ -160,6 +255,13 @@ class ProductosController extends Controller
 
             $file = $request->file('excel_file');
             $idContenedor = $request->idContenedor;
+            Log::info('prepared Request idContenedor: ' . $idContenedor);
+            try {
+                Log::info('Request dump (keys): ' . json_encode(array_keys($request->all())));
+                Log::info('Request files keys: ' . json_encode(array_keys($request->files->all())));
+            } catch (\Exception $e) {
+                Log::warning('No se pudo volcar request para debug: ' . $e->getMessage());
+            }
             if (!$file) {
                 Log::error('No se proporcionó archivo');
                 return response()->json([
@@ -172,6 +274,7 @@ class ProductosController extends Controller
             $request->validate([
                 'excel_file' => 'required|file|mimes:xlsx,xls,xlsm'
             ]);
+            Log::info('Validation passed for excel_file: ' . $file->getClientOriginalName());
 
             // Validar tipo de archivo
             $extension = strtolower($file->getClientOriginalExtension());
@@ -202,6 +305,12 @@ class ProductosController extends Controller
                 'id_contenedor_consolidado_documentacion_files' => $idContenedor
             ]);
 
+            // Log para verificar qué se guardó exactamente en el registro de importación
+            try {
+                Log::info('ImportProducto creado - id: ' . $importProducto->id . ', id_contenedor_consolidado_documentacion_files: ' . ($importProducto->id_contenedor_consolidado_documentacion_files ?? 'NULL') . ', id_contenedor (fallback): ' . ($importProducto->id_contenedor ?? 'NULL'));
+            } catch (\Exception $e) {
+                Log::warning('No se pudo loguear ImportProducto creado: ' . $e->getMessage());
+            }
             DB::commit();
 
             ImportProductosExcelJob::dispatch($fullTempPath, $importProducto->id)->onQueue('importaciones');
@@ -434,26 +543,47 @@ class ProductosController extends Controller
     public function deleteExcel($id)
     {
         try {
+            Log::info('ProductosController::deleteExcel called with id=' . $id);
             $importProducto = ImportProducto::find($id);
 
             if (!$importProducto) {
+                Log::warning('ProductosController::deleteExcel - import not found id=' . $id);
                 return response()->json([
                     'success' => false,
                     'message' => 'Importación no encontrada'
                 ], 404);
             }
 
-            // Eliminar el archivo de la base de datos
-            $importProducto->delete();
+            Log::info('ProductosController::deleteExcel - import found id=' . $importProducto->id . ', id_contenedor_consolidado_documentacion_files=' . ($importProducto->id_contenedor_consolidado_documentacion_files ?? 'NULL') . ', ruta_archivo=' . ($importProducto->ruta_archivo ?? 'NULL'));
 
+            // Eliminar productos importados asociados a esta importación (si los hay)
+            try {
+                $deletedCount = ProductoImportadoExcel::where('id_import_producto', $importProducto->id)->delete();
+                Log::info('Productos importados eliminados para import_id=' . $importProducto->id . ': ' . $deletedCount);
+            } catch (\Exception $e) {
+                Log::warning('No se pudieron eliminar productos importados para import_id=' . $importProducto->id . ': ' . $e->getMessage());
+            }
+
+            // Eliminar el registro de importación
+            try {
+                $importProducto->delete();
+            } catch (\Exception $e) {
+                Log::warning('No se pudo eliminar ImportProducto id=' . $importProducto->id . ': ' . $e->getMessage());
+            }
+
+            // Eliminar archivo físico asociado a la importación
             $filePath = storage_path('app/' . $importProducto->ruta_archivo);
-            if (file_exists($filePath)) {
-                unlink($filePath);
+            if (!empty($importProducto->ruta_archivo) && file_exists($filePath)) {
+                try {
+                    unlink($filePath);
+                } catch (\Exception $e) {
+                    Log::warning('No se pudo eliminar el archivo físico de la importación: ' . $e->getMessage());
+                }
             }
 
             return response()->json([
                 'success' => true,
-                'message' => 'Importación eliminada correctamente'
+                'message' => 'Importación y productos asociados eliminados correctamente'
             ]);
         } catch (\Exception $e) {
             Log::error('Error al eliminar importación: ' . $e->getMessage());

@@ -25,6 +25,32 @@ class BroadcastController extends Controller
         'private-CatalogoChina-notifications' => 'CatalogoChina',
         'private-Administracion-notifications' => 'Administración',
     ];
+    
+    /**
+     * @OA\Post(
+     *     path="/broadcasting/auth",
+     *     tags={"Broadcasting"},
+     *     summary="Autenticar canal de broadcasting",
+     *     description="Autentica al usuario para acceder a canales privados de WebSocket",
+     *     operationId="broadcastAuth",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             @OA\Property(property="channel_name", type="string"),
+     *             @OA\Property(property="socket_id", type="string")
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Autenticación exitosa"),
+     *     @OA\Response(response=401, description="No autorizado"),
+     *     @OA\Response(response=403, description="Acceso denegado al canal")
+     * )
+     *
+     * Authenticate the request for channel access.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Illuminate\Http\Response
+     */
     public function authenticate(Request $request)
     {
         Log::info('Authenticate request', [

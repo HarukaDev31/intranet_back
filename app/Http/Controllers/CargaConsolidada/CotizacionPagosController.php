@@ -16,6 +16,20 @@ class CotizacionPagosController extends Controller
     private $table_contenedor_consolidado_cotizacion_coordinacion_pagos = "contenedor_consolidado_cotizacion_coordinacion_pagos";
     private $table_pagos_concept = "contenedor_consolidado_pagos_concept";
 
+    /**
+     * @OA\Get(
+     *     path="/carga-consolidada/contenedores/{idContenedor}/clientes-pagos",
+     *     tags={"Pagos"},
+     *     summary="Obtener clientes con información de pagos",
+     *     description="Obtiene la lista de clientes de un contenedor con su información de pagos de documentación",
+     *     operationId="getClientesDocumentacionPagos",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="idContenedor", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Parameter(name="search", in="query", description="Búsqueda por nombre, documento o teléfono", @OA\Schema(type="string")),
+     *     @OA\Response(response=200, description="Clientes obtenidos exitosamente"),
+     *     @OA\Response(response=401, description="No autenticado")
+     * )
+     */
     public function getClientesDocumentacionPagos(Request $request, $idContenedor)
     {
         try {
@@ -67,6 +81,37 @@ class CotizacionPagosController extends Controller
             $filteredResults = collect($results)->filter(function ($item) {
                 return is_null($item->id_cliente_importacion ?? null);
             });
+
+            // Aplicar búsqueda simple si viene el parámetro 'search'
+            // Solo buscar por nombre, documento (DNI) o número (teléfono)
+            $search = $request->get('search', '');
+            if (!empty($search)) {
+                $s = mb_strtolower(trim((string)$search));
+                $s_digits = preg_replace('/\D+/', '', $s);
+
+                $filteredResults = $filteredResults->filter(function ($row) use ($s, $s_digits) {
+                    $nombre = mb_strtolower($this->cleanText($row->nombre ?? ''));
+                    $documento = mb_strtolower((string)($row->documento ?? ''));
+                    $telefono = preg_replace('/\D+/', '', (string)($row->telefono ?? ''));
+
+                    // Coincidir por nombre (contains)
+                    if ($s !== '' && strpos($nombre, $s) !== false) {
+                        return true;
+                    }
+
+                    // Coincidir por documento (contains) - DNI o parte del mismo
+                    if ($s !== '' && strpos($documento, $s) !== false) {
+                        return true;
+                    }
+
+                    // Coincidir por teléfono (buscar por dígitos)
+                    if ($s_digits !== '' && strpos($telefono, $s_digits) !== false) {
+                        return true;
+                    }
+
+                    return false;
+                })->values();
+            }
             
             if ($user->No_Grupo == Usuario::ROL_COTIZADOR && $user->ID_Usuario != 28791) {
                 $filteredResults = $filteredResults->where('id_usuario', $user->ID_Usuario);

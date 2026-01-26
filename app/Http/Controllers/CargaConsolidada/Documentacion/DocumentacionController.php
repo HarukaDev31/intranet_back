@@ -15,12 +15,17 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
+use App\Models\BaseDatos\ProductoImportadoExcel;
+use App\Models\Distrito;
+use Carbon\Carbon;
 use Tymon\JWTAuth\Facades\JWTAuth;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Http\Controllers\BaseDatos\ProductosController;
+use App\Models\ImportProducto;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Cell\DataType;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
@@ -67,6 +72,19 @@ class DocumentacionController extends Controller
     private $cambioEstadoProveedor = "cambio-estado-proveedor";
     private $table_contenedor_cotizacion_final = "contenedor_consolidado_cotizacion_final";
     /**
+     * @OA\Get(
+     *     path="/carga-consolidada/contenedores/{id}/documentacion/folders",
+     *     tags={"Documentación"},
+     *     summary="Obtener carpetas de documentación",
+     *     description="Obtiene las carpetas de documentación y sus archivos para un contenedor específico",
+     *     operationId="getDocumentationFolderFiles",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="id", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Carpetas obtenidas exitosamente"),
+     *     @OA\Response(response=401, description="No autenticado"),
+     *     @OA\Response(response=500, description="Error al obtener carpetas")
+     * )
+     *
      * Obtiene las carpetas de documentación y sus archivos para un contenedor específico
      */
     public function getDocumentationFolderFiles($id)
@@ -337,6 +355,28 @@ class DocumentacionController extends Controller
     }
 
     /**
+     * @OA\Post(
+     *     path="/carga-consolidada/contenedor/documentacion/upload-file-documentation",
+     *     tags={"Documentación"},
+     *     summary="Subir archivo de documentación",
+     *     description="Sube un archivo a una carpeta de documentación existente",
+     *     operationId="uploadFileDocumentation",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\MediaType(
+     *             mediaType="multipart/form-data",
+     *             @OA\Schema(
+     *                 @OA\Property(property="idFolder", type="integer"),
+     *                 @OA\Property(property="idContenedor", type="integer"),
+     *                 @OA\Property(property="file", type="string", format="binary")
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Archivo subido exitosamente"),
+     *     @OA\Response(response=400, description="Archivo no enviado o muy grande")
+     * )
+     *
      * Sube un archivo de documentación
      */
     public function uploadFileDocumentation(Request $request)
@@ -440,16 +480,29 @@ class DocumentacionController extends Controller
                 ]);
             }
 
-            // Si es el folder 9 (productos), procesar Excel
-            if ($idFolder == 9 && $fileExtension == 'xlsx') {
+            // Si es el folder 9 (productos), procesar Excel xlsx o xlsm
+            if ($idFolder == 9 && ($fileExtension == 'xlsx' || $fileExtension == 'xlsm')) {
                 //instance  ProductosController and call importExcel
+                Log::info('Iniciando importación de productos desde Excel para contenedor: ' . $idContenedor);
                 $productosController = new ProductosController();
                 // Corregido: crear un nuevo Request correctamente y pasar los datos necesarios
-                $newRequest = new Request([
-                    'excel_file' => $file,
-                    'idContenedor' => $idContenedor
-                ]);
+                Log::info('Preparando Request para importExcel con archivo: ' . $file->getClientOriginalName());
+                // Construir Request correctamente: poner idContenedor en el body (request)
+                // y el UploadedFile en la bag de files. Algunos controladores esperan el archivo
+                // en $request->files, no en $request->all().
+                // Pasar el id del registro DocumentacionFile para que el import quede vinculado
+                // y sea posible borrar luego por ese id. Antes se pasaba el id del contenedor,
+                // lo que llevaba a inconsistencias si el request entrante no lo incluía.
+                $newRequest = new Request([], ['idContenedor' => $documentacionFile->id], [], [], ['excel_file' => $file, 'file' => $file]);
+                // Asegurar también explícitamente que los archivos estén en la colección files
+                $newRequest->files->set('excel_file', $file);
+                $newRequest->files->set('file', $file);
+                // Forzar en ambos lugares (request bag y merged data) por si acaso
+                $newRequest->request->set('idContenedor', $documentacionFile->id);
+                $newRequest->merge(['idContenedor' => $documentacionFile->id]);
+                Log::info('Llamando a importExcel con Request: idContenedor(DocumentacionFile id)=' . $newRequest->request->get('idContenedor') . ', original_idContenedor=' . $idContenedor . ', hasFile(excel_file)=' . ($newRequest->files->has('excel_file') ? 'yes' : 'no'));
                 $productosController->importExcel($newRequest);
+                Log::info('Importación de productos desde Excel completada para contenedor: ' . $idContenedor);
             }
 
             return response()->json([
@@ -890,12 +943,13 @@ class DocumentacionController extends Controller
             }
         }
 
-        // Aplicar merges pendientes
-        $this->applyPendingMerges($sheet, $pendingMerge, $currentClient, $clientStartRow, $clientEndRow);
+        // Aplicar merges pendientes (primera hoja, no es adicional)
+        $this->applyPendingMerges($sheet, $pendingMerge, $currentClient, $clientStartRow, $clientEndRow, false);
 
         // Retornar información del último cliente para continuidad entre hojas
         return [
             'lastClient' => $currentClient,
+            'lastClientStartRow' => $clientStartRow,
             'lastClientEndRow' => $clientEndRow,
             'lastProcessedRow' => $row - 1 // La última fila procesada antes del TOTAL
         ];
@@ -955,9 +1009,9 @@ class DocumentacionController extends Controller
                     $endRow = (int)$endMatches[0];
 
                     for ($r = $startRow; $r <= $endRow; $r++) {
-                        $adValorem = $sheetListaPartidas->getCell('G' . $r)->getValue();
+                        $adValorem = $sheetListaPartidas->getCell('G' . $r)->getCalculatedValue();
                         if (trim($adValorem) == "FTA") {
-                            $adValorem = $sheetListaPartidas->getCell('H' . $r)->getValue();
+                            $adValorem = $sheetListaPartidas->getCell('H' . $r)->getCalculatedValue();
                         }
 
                         $antiDumping = $sheetListaPartidas->getCell('I' . $r)->getValue();
@@ -1086,7 +1140,7 @@ class DocumentacionController extends Controller
     /**
      * Aplica merges pendientes
      */
-    private function applyPendingMerges($sheet, $pendingMerge, $currentClient, $clientStartRow, $clientEndRow)
+    private function applyPendingMerges($sheet, $pendingMerge, $currentClient, $clientStartRow, $clientEndRow, $isAdditionalSheet = false)
     {
         if ($currentClient !== "" && $currentClient !== null && $clientStartRow > 0) {
             $pendingMerge[] = [
@@ -1113,7 +1167,28 @@ class DocumentacionController extends Controller
                     $sheet->mergeCells('D' . $merge['start'] . ':D' . $merge['end']);
                     $sheet->mergeCells('T' . $merge['start'] . ':T' . $merge['end']);
 
-                    Log::info('✅ Merge aplicado exitosamente para cliente: ' . $merge['client']);
+                    // Re-aplicar formatos numéricos al rango extendido COMPLETO
+                    // IMPORTANTE: Para columnas mergeadas (T), aplicar formato solo a la primera celda
+                    // Para columnas NO mergeadas (R, O, Q), aplicar formato a todas las filas
+                    
+                    // Aplicar formatos a TODAS las filas para columnas no mergeadas
+                    for ($row = $merge['start']; $row <= $merge['end']; $row++) {
+                        // Para hojas adicionales, SIEMPRE aplicar formatos a columnas O y Q (no mergeadas)
+                        // Usar formato de contabilidad con 2 decimales (igual que la primera hoja)
+                        // Esto asegura que todas las filas del rango extendido tengan el formato correcto
+                        if ($isAdditionalSheet) {
+                            // Formato de contabilidad USD con 2 decimales
+                            $sheet->getStyle('O' . $row)->getNumberFormat()->setFormatCode('_("$"* #,##0.00_);_("$"* (#,##0.00);_("$"* "-"??_);_(@_)');
+                            $sheet->getStyle('Q' . $row)->getNumberFormat()->setFormatCode('_("$"* #,##0.00_);_("$"* (#,##0.00);_("$"* "-"??_);_(@_)');
+                        }
+                        // Aplicar formato a columna R (no mergeada) en todas las filas
+                        $sheet->getStyle('R' . $row)->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_PERCENTAGE_00);
+                    }
+                    
+                    // Aplicar formato a columna T (mergeada) solo a la primera celda del merge (la visible)
+                    $sheet->getStyle('T' . $merge['start'])->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_NUMBER_00);
+
+                    Log::info('✅ Merge aplicado exitosamente para cliente: ' . $merge['client'] . ' con formatos reaplicados');
                 } catch (\Exception $e) {
                     Log::error('❌ Error merging cells for client ' . $merge['client'] . ': ' . $e->getMessage());
                 }
@@ -1126,7 +1201,12 @@ class DocumentacionController extends Controller
      */
     private function processAdditionalClientMerge($sheet, $row, $client, &$currentClient, &$clientStartRow, &$clientEndRow, &$pendingMerge)
     {
-        if ($client !== $currentClient) {
+        // Usar isNameMatch para comparar clientes, no comparación estricta
+        // Esto permite detectar el mismo cliente incluso si hay diferencias menores (espacios, acentos, etc.)
+        $isSameClient = !empty($currentClient) && $this->isNameMatch($client, $currentClient);
+        
+        if (!$isSameClient) {
+            // Si hay un cliente anterior válido, guardarlo para merge
             if ($currentClient !== "" && $currentClient !== null && $clientStartRow > 0) {
                 $pendingMerge[] = [
                     'client' => $currentClient,
@@ -1135,8 +1215,35 @@ class DocumentacionController extends Controller
                 ];
             }
 
+            // Iniciar nuevo cliente
             $currentClient = $client;
             $clientStartRow = $row;
+        } else {
+            // Si es el mismo cliente que el último de la hoja anterior, extender el merge
+            // El merge del último cliente ya fue aplicado al final de la hoja anterior,
+            // así que necesitamos desmergearlo y volver a aplicarlo con el rango extendido
+            if ($clientStartRow > 0 && $clientEndRow > 0 && $clientEndRow >= $clientStartRow) {
+                try {
+                    Log::info('🔄 Cliente continuo detectado: ' . $currentClient . ' - Extendiendo merge desde fila ' . $clientStartRow . ' hasta ' . $row);
+                    
+                    for ($r = $clientStartRow; $r <= $clientEndRow; $r++) {
+                        $this->safeUnmergeCells($sheet, 'C' . $r);
+                        $this->safeUnmergeCells($sheet, 'D' . $r);
+                        $this->safeUnmergeCells($sheet, 'T' . $r);
+                        
+                        // Formato de contabilidad USD con 2 decimales (igual que la primera hoja)
+                        $sheet->getStyle('O' . $r)->getNumberFormat()->setFormatCode('_("$"* #,##0.00_);_("$"* (#,##0.00);_("$"* "-"??_);_(@_)');
+                        $sheet->getStyle('Q' . $r)->getNumberFormat()->setFormatCode('_("$"* #,##0.00_);_("$"* (#,##0.00);_("$"* "-"??_);_(@_)');
+                    }
+                    
+                    Log::info('✅ Celdas desmergeadas y formatos O/Q reaplicados para extender merge del cliente continuo');
+                } catch (\Exception $e) {
+                    Log::warning('⚠️ Error al desmergear cliente continuo (continuando de todas formas): ' . $e->getMessage());
+                }
+            }
+            // Mantener clientStartRow desde donde empezó en la hoja anterior
+            // No cambiar currentClient ni clientStartRow
+            // El merge se aplicará al final con el rango extendido (clientStartRow hasta la nueva clientEndRow)
         }
 
         $clientEndRow = $row;
@@ -1201,7 +1308,8 @@ class DocumentacionController extends Controller
 
         // Variables para manejar merge de clientes - inicializar con info de hoja anterior
         $currentClient = $lastClientInfo['lastClient'] ?? "";
-        $clientStartRow = $lastClientInfo['lastClientEndRow'] ?? 0;
+        // Si hay un último cliente, usar su startRow para continuar el merge si es el mismo cliente
+        $clientStartRow = $lastClientInfo['lastClientStartRow'] ?? 0;
         $clientEndRow = $lastClientInfo['lastClientEndRow'] ?? 0;
         $pendingMerge = [];
 
@@ -1264,12 +1372,13 @@ class DocumentacionController extends Controller
             }
         }
 
-        // Aplicar merges pendientes al final
-        $this->applyPendingMerges($sheet0, $pendingMerge, $currentClient, $clientStartRow, $clientEndRow);
+        // Aplicar merges pendientes al final (hoja adicional, pasar true)
+        $this->applyPendingMerges($sheet0, $pendingMerge, $currentClient, $clientStartRow, $clientEndRow, true);
 
         // Retornar información del último cliente para la siguiente hoja
         return [
             'lastClient' => $currentClient,
+            'lastClientStartRow' => $clientStartRow,
             'lastClientEndRow' => $clientEndRow,
             'lastProcessedRow' => $highestFirstSheetRow - 1
         ];
@@ -1308,9 +1417,12 @@ class DocumentacionController extends Controller
         $sheet->getStyle('R' . $row . ':T' . $row)->applyFromArray($styleArray);
         $sheet->getStyle('R' . $row . ':T' . $row)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
         $sheet->getStyle('R' . $row . ':T' . $row)->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
-        $sheet->getStyle('O' . $row)->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_CURRENCY_USD_SIMPLE);
-        $sheet->getStyle('Q' . $row)->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_CURRENCY_USD_SIMPLE);
+        // Formato de contabilidad USD con 2 decimales (igual que la primera hoja)
+        $sheet->getStyle('O' . $row)->getNumberFormat()->setFormatCode('_("$"* #,##0.00_);_("$"* (#,##0.00);_("$"* "-"??_);_(@_)');
+        $sheet->getStyle('Q' . $row)->getNumberFormat()->setFormatCode('_("$"* #,##0.00_);_("$"* (#,##0.00);_("$"* "-"??_);_(@_)');
         $sheet->getStyle('R' . $row)->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_PERCENTAGE_00);
+        // Aplicar formato numérico con 2 decimales para columna T (volumen)
+        $sheet->getStyle('T' . $row)->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_NUMBER_00);
     }
 
     /**
@@ -1475,10 +1587,107 @@ class DocumentacionController extends Controller
 
         return strtr($text, $accents);
     }
+    /**
+     * @OA\Delete(
+     *     path="/carga-consolidada/contenedor/documentacion/delete/{idFile}",
+     *     tags={"Documentación"},
+     *     summary="Eliminar archivo de documentación",
+     *     description="Elimina un archivo de documentación específico",
+     *     operationId="deleteFileDocumentation",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="idFile", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Archivo eliminado exitosamente"),
+     *     @OA\Response(response=404, description="Archivo no encontrado")
+     * )
+     */
     public function deleteFileDocumentation(Request $request, $idFile)
     {
         $file = DocumentacionFile::find($idFile);
-        $file->delete();
+        if (!$file) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Archivo no encontrado'
+            ], 404);
+        }
+
+        Log::info('deleteFileDocumentation invoked for idFile=' . $idFile . ', id_folder=' . ($file->id_folder ?? 'NULL') . ', id_contenedor=' . ($file->id_contenedor ?? 'NULL') . ', file_url=' . ($file->file_url ?? 'NULL'));
+
+        // Intentar eliminar imports vinculados a este archivo (aplica a folder 9 y también a otros folders)
+        try {
+            $productosController = new ProductosController();
+
+            // Intentar localizar imports por varios criterios para ser robustos
+            $filename = basename($file->file_url);
+
+            $imports = ImportProducto::where(function ($q) use ($file, $filename) {
+                $q->where('id_contenedor_consolidado_documentacion_files', $file->id)
+                  ->orWhere('id_contenedor_consolidado_documentacion_files', $file->id_contenedor)
+                  ->orWhere('ruta_archivo', 'like', '%' . $filename . '%');
+            })->get();
+
+            Log::info('deleteFileDocumentation: imports query completed, found count=' . ($imports ? $imports->count() : 0));
+            foreach ($imports as $impLog) {
+                Log::info('deleteFileDocumentation: matched import id=' . $impLog->id . ', id_contenedor_consolidado_documentacion_files=' . ($impLog->id_contenedor_consolidado_documentacion_files ?? 'NULL') . ', ruta_archivo=' . ($impLog->ruta_archivo ?? 'NULL'));
+            }
+
+            foreach ($imports as $import) {
+                try {
+                    // Llamar al método existente en ProductosController que elimina la importación por id
+                    Log::info('deleteFileDocumentation: calling ProductosController::deleteExcel for import id=' . $import->id);
+                    $res = $productosController->deleteExcel($import->id);
+                    try {
+                        // Intentar loguear el contenido de la respuesta si existe
+                        if (is_object($res) && method_exists($res, 'getContent')) {
+                            Log::info('deleteFileDocumentation: deleteExcel response: ' . $res->getContent());
+                        }
+                    } catch (\Exception $e) {
+                        Log::warning('deleteFileDocumentation: could not log deleteExcel response: ' . $e->getMessage());
+                    }
+                } catch (\Exception $e) {
+                    Log::error('Error calling deleteExcel for import id=' . $import->id . ': ' . $e->getMessage());
+                }
+            }
+
+            // Si no se encontró ningún import vinculado, aplicar borrados alternativos
+            if (count($imports) === 0) {
+                Log::info('deleteFileDocumentation: no imports matched - applying fallback deletion');
+                // Fallback 1: eliminar por idContenedor (si los productos fueron importados con idContenedor)
+                try {
+                    $deletedByCont = ProductoImportadoExcel::where('idContenedor', $file->id_contenedor)->delete();
+                    Log::info('deleteFileDocumentation: fallback deleted productos by idContenedor=' . $file->id_contenedor . ' count=' . $deletedByCont);
+                } catch (\Exception $e) {
+                    Log::warning('deleteFileDocumentation: error deleting productos by idContenedor: ' . $e->getMessage());
+                }
+
+                // Fallback 2: eliminar por ventana temporal alrededor de la fecha de creación del archivo
+                if ($file->created_at) {
+                    try {
+                        $start = Carbon::parse($file->created_at)->subMinutes(5)->toDateTimeString();
+                        $end = Carbon::parse($file->created_at)->addMinutes(60)->toDateTimeString();
+                        $deletedByTime = ProductoImportadoExcel::whereNull('idContenedor')
+                            ->whereBetween('created_at', [$start, $end])
+                            ->delete();
+                        Log::info('deleteFileDocumentation: fallback deleted productos by time window (' . $start . ' - ' . $end . ') count=' . $deletedByTime);
+                    } catch (\Exception $e) {
+                        Log::warning('deleteFileDocumentation: error deleting productos by time window: ' . $e->getMessage());
+                    }
+                }
+            }
+        } catch (\Exception $e) {
+            Log::error('Error al buscar/eliminar imports asociados al DocumentacionFile id=' . $file->id . ': ' . $e->getMessage());
+        }
+
+        // Eliminar el registro del archivo de documentación
+        try {
+            $file->delete();
+        } catch (\Exception $e) {
+            Log::error('Error al eliminar DocumentacionFile id=' . $idFile . ': ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al eliminar archivo: ' . $e->getMessage()
+            ], 500);
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'Archivo eliminado correctamente'
@@ -1486,6 +1695,18 @@ class DocumentacionController extends Controller
     }
 
     /**
+     * @OA\Get(
+     *     path="/carga-consolidada/contenedor/documentacion/download-zip/{idContenedor}",
+     *     tags={"Documentación"},
+     *     summary="Descargar documentación en ZIP",
+     *     description="Descarga toda la documentación de un contenedor en formato ZIP",
+     *     operationId="downloadDocumentacionZip",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="idContenedor", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Archivo ZIP descargado"),
+     *     @OA\Response(response=404, description="No se encontraron archivos")
+     * )
+     *
      * Descarga la documentación completa en formato ZIP
      */
     public function downloadDocumentacionZip($id)
@@ -1767,6 +1988,30 @@ class DocumentacionController extends Controller
     }
 
     /**
+     * @OA\Post(
+     *     path="/carga-consolidada/contenedor/documentacion/create-folder",
+     *     tags={"Documentación"},
+     *     summary="Crear carpeta de documentación",
+     *     description="Crea una nueva carpeta de documentación con su archivo asociado",
+     *     operationId="createDocumentacionFolder",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\MediaType(
+     *             mediaType="multipart/form-data",
+     *             @OA\Schema(
+     *                 @OA\Property(property="folder_name", type="string"),
+     *                 @OA\Property(property="idContenedor", type="integer"),
+     *                 @OA\Property(property="file", type="string", format="binary"),
+     *                 @OA\Property(property="categoria", type="string"),
+     *                 @OA\Property(property="icon", type="string")
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Carpeta creada exitosamente"),
+     *     @OA\Response(response=400, description="Tipo de archivo no permitido")
+     * )
+     *
      * Crea una nueva carpeta de documentación con su archivo asociado
      */
     public function createDocumentacionFolder(Request $request)
@@ -1893,6 +2138,7 @@ class DocumentacionController extends Controller
                 'plantilla_productos.xlsx', 
                 'plantilla_stock.xlsx',
                 'plantilla_precios.xlsx',
+                'plantilla_clientes.xlsx'
             ];
             
             $templatePath = public_path('assets/templates/');
@@ -1930,8 +2176,11 @@ class DocumentacionController extends Controller
                 throw new \Exception("No se pudo crear el archivo ZIP. Código de error: {$result}");
             }
             
-            // Generar plantillas pobladas
-            $poblatedFiles = $this->generatePoblatedTemplates($productosData, $contenedor->carga);
+            // Obtener datos de entregas (clientes) desde EntregaController
+            $clientesEntregaData = $this->getEntregasData($idContenedor);
+
+            // Generar plantillas pobladas (ahora también reciben datos de clientes/entregas)
+            $poblatedFiles = $this->generatePoblatedTemplates($productosData, $contenedor->carga, $clientesEntregaData);
             
             // Agregar solo plantillas pobladas al ZIP
             foreach ($poblatedFiles as $filePath) {
@@ -2259,9 +2508,135 @@ class DocumentacionController extends Controller
     }
 
     /**
+     * Obtiene los datos de entregas (clientes) reutilizando la lógica de EntregaController::getEntregas
+     */
+    private function getEntregasData($idContenedor, $queryParams = [])
+    {
+        try {
+            // Crear una Request con parámetros de consulta si se proporcionan
+            $req = \Illuminate\Http\Request::create('/', 'GET', $queryParams);
+
+            // Instanciar el controller de Entrega y llamar al método
+            $entregaController = new \App\Http\Controllers\CargaConsolidada\EntregaController();
+            $resp = $entregaController->getEntregasDocumentacion($req, $idContenedor);
+
+            // Extraer datos del JsonResponse
+            if ($resp instanceof \Illuminate\Http\JsonResponse) {
+                $arr = $resp->getData(true);
+            } else {
+                $arr = json_decode($resp->getContent(), true);
+            }
+
+            $baseItems = isset($arr['data']) && is_array($arr['data']) ? $arr['data'] : [];
+
+            // Enriquecer cada fila con datos adicionales de getEntregasDetalle
+            $enriched = [];
+            foreach ($baseItems as $row) {
+                $cotizacionId = $row['id'] ?? null; // en getEntregas la cotización está en CC.id -> id
+                $detalle = null;
+                if ($cotizacionId) {
+                    try {
+                        $detalleResp = $entregaController->getEntregasDetalle($cotizacionId);
+                        if ($detalleResp instanceof \Illuminate\Http\JsonResponse) {
+                            $detalleArr = $detalleResp->getData(true);
+                        } else {
+                            $detalleArr = json_decode($detalleResp->getContent(), true);
+                        }
+                        $detalle = $detalleArr['data'] ?? null;
+                    } catch (\Exception $e) {
+                        Log::warning('No se pudo obtener detalle para cotizacion ' . $cotizacionId . ': ' . $e->getMessage());
+                    }
+                }
+
+                // Preparar campos adicionales seguros
+                $direccion = '';
+                $provinciaName = '';
+                $distritoName = '';
+                $departamentoName = $row['department_name'] ?? '';
+                $deliveryDateStruct = null;
+                $formUserStruct = null;
+
+                if (is_array($detalle)) {
+                    // delivery struct
+                    if (isset($detalle['delivery']) && is_array($detalle['delivery'])) {
+                        $deliveryDateStruct = $detalle['delivery'];
+                    }
+                    if (isset($detalle['form_user']) && is_array($detalle['form_user'])) {
+                        $formUserStruct = $detalle['form_user'];
+                    }
+                    // Province form
+                    if (isset($detalle['province']) && is_array($detalle['province'])) {
+                        $prov = $detalle['province'];
+                        $direccion = $prov['agency_address_final_delivery'] ?? $prov['importer_address'] ?? ($prov['r_address'] ?? $direccion);
+                        $provinciaName = $prov['province_name'] ?? '';
+                        $distritoName = $prov['district_name'] ?? '';
+                        $departamentoName = $prov['department_name'] ?? $departamentoName;
+                    }
+                    // Lima form
+                    if (empty($direccion) && isset($detalle['lima']) && is_array($detalle['lima'])) {
+                        $lima = $detalle['lima'];
+                        $direccion = $lima['final_destination_place'] ?? $lima['conductor_address'] ?? $direccion;
+                        // Lima usa departamento/provincia/distrito LIMA por defecto
+                        if (!empty($direccion)) {
+                            $departamentoName = 'LIMA';
+                            $provinciaName = 'LIMA';
+                            if (isset($lima['final_destination_district'])) {
+                                $distritoKey = $lima['final_destination_district'];
+                                $distrito = null;
+                                // Si viene como ID numérico, buscar por PK
+                                if (is_numeric($distritoKey)) {
+                                    $distrito = Distrito::find($distritoKey);
+                                }
+                                // Si viene como texto, intentar coincidencia exacta por nombre
+                                if (!$distrito && is_string($distritoKey) && $distritoKey !== '') {
+                                    $distrito = Distrito::where('No_Distrito', trim($distritoKey))->first();
+                                }
+                                if ($distrito) {
+                                    $distritoName = $distrito->No_Distrito;
+                                }
+                            }
+                        }
+                    }
+                }
+                    
+                
+
+                // Añadir campos normalizados para la plantilla
+                $row['direccion'] = $direccion;
+                $row['departamento_name'] = $departamentoName; // mantener campo original y actualizado
+                $row['provincia_name'] = $provinciaName;
+                $row['distrito_name'] = $distritoName;
+                if ($formUserStruct) {
+                    $row['form_user_name'] = $formUserStruct['name'] ?? ($row['form_user_name'] ?? null);
+                    $row['form_user_email'] = $formUserStruct['email'] ?? ($row['form_user_email'] ?? null);
+                }
+                if ($deliveryDateStruct) {
+                    // Prefiera delivery_date ya existente; si falta usar struct
+                    if (empty($row['delivery_date'])) {
+                        $row['delivery_date'] = $deliveryDateStruct['date'] ?? null;
+                    }
+                    if (empty($row['delivery_start_time'])) {
+                        $row['delivery_start_time'] = $deliveryDateStruct['start_time'] ?? null;
+                    }
+                    if (empty($row['delivery_end_time'])) {
+                        $row['delivery_end_time'] = $deliveryDateStruct['end_time'] ?? null;
+                    }
+                }
+
+                $enriched[] = $row;
+            }
+
+            return $enriched;
+        } catch (\Exception $e) {
+            Log::error('Error obteniendo entregas: ' . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
      * Genera las plantillas pobladas
      */
-    private function generatePoblatedTemplates($productosData, $carga)
+    private function generatePoblatedTemplates($productosData, $carga, $clientesData = [])
     {
         $templatePath = public_path('assets/templates/');
         $tempPath = storage_path('app/temp/');
@@ -2296,6 +2671,16 @@ class DocumentacionController extends Controller
                 $writer = new Xlsx($preciosPoblado);
                 $writer->save($preciosPath);
                 $poblatedFiles[] = $preciosPath;
+            }
+
+            // Plantilla de formularios (puede recibir datos de clientes/entregas)
+            $formsTemplate = $templatePath . 'plantilla_clientes.xlsx';
+            if (file_exists($formsTemplate)) {
+                $formsPoblado = $this->populateFormulariosTemplate($formsTemplate, $clientesData);
+                $formsPath = $tempPath . '1_Laesystems_Plantilla_Clientes.xlsx';
+                $writer = new Xlsx($formsPoblado);
+                $writer->save($formsPath);
+                $poblatedFiles[] = $formsPath;
             }
             
         } catch (\Exception $e) {
@@ -2380,5 +2765,101 @@ class DocumentacionController extends Controller
         }
         
         return $excel;
+    }
+
+    /**
+     * Pobla la plantilla de formularios
+     */
+    private function populateFormulariosTemplate($templatePath, $formularioData)
+    {
+        $excel = IOFactory::load($templatePath);
+        $sheet = $excel->getActiveSheet();
+        
+        $row = 2; // Empezar en la fila 2
+        foreach ($formularioData as $item) {
+            // - clientes/entregas (campos de cliente y contacto)
+            if (is_array($item)) {
+                // Cliente/Entrega: columnas A..P según la plantilla de tus capturas
+                $docNumber = $item['documento'] ?? ($item['r_doc'] ?? ($item['voucher_doc'] ?? ($item['pick_doc'] ?? '')));
+                $docDigits = preg_replace('/\D+/', '', (string)$docNumber);
+                $docType = $this->inferDocumentTypeCode($docNumber);
+                $name = $item['nombre'] ?? ($item['cliente'] ?? ($item['r_name'] ?? ''));
+                $phone = $this->normalizePhoneDigits($item['telefono'] ?? '');
+                $cell = $phone; // Si no hay celular separado, usamos el mismo
+                $email = $item['correo'] ?? '';
+                $contactName = $item['form_user_name'] ?? '';
+                $contactPhone = $this->normalizePhoneDigits($item['telefono'] ?? ''); // sin campo específico, reusar
+                $contactEmail = $item['form_user_email'] ?? '';
+                $pais = 'PERU';
+                $isLima = isset($item['type_form']) && ((int)$item['type_form'] === 1);
+                $departamento = $isLima ? 'LIMA' : ($item['departamento_name'] ?? ($item['department_name'] ?? ''));
+                $provincia = $isLima ? 'LIMA' : ($item['provincia_name'] ?? '');
+                $distrito = $item['distrito_name'] ?? '';
+                $nota = $item['nota'] ?? '';
+                $diasCredito = '';
+
+                $sheet->setCellValue('A' . $row, $docType);
+                // Documento: solo dígitos y como texto; si queda vacío, dejar celda en blanco
+                if ($docDigits === '') {
+                    $sheet->setCellValue('B' . $row, null);
+                } else {
+                    $sheet->setCellValueExplicit('B' . $row, $docDigits, DataType::TYPE_STRING);
+                    $sheet->getStyle('B' . $row)->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_TEXT);
+                }
+                $sheet->setCellValue('C' . $row, $name);
+                $direccionLima = $item['final_destination_place'] ?? ($item['home_adress_delivery'] ?? ($item['direccion'] ?? ''));
+                $direccionProvincia = $item['home_adress_delivery'] ?? ($item['final_destination_place'] ?? ($item['direccion'] ?? ''));
+                $sheet->setCellValue('D' . $row, $isLima ? $direccionLima : $direccionProvincia);
+                $sheet->setCellValue('E' . $row, '');
+                $sheet->setCellValue('F' . $row, $cell);
+                $sheet->setCellValue('G' . $row, $email);
+                $sheet->setCellValue('H' . $row, '');
+                $sheet->setCellValue('I' . $row, '');
+                $sheet->setCellValue('J' . $row, '');
+                $sheet->setCellValue('K' . $row, '');
+                $sheet->setCellValue('L' . $row, '');
+                $sheet->setCellValue('M' . $row, '');
+                $sheet->setCellValue('N' . $row, '');
+                $sheet->setCellValue('O' . $row, '');
+                $sheet->setCellValue('P' . $row, '');
+            }
+
+            $row++;
+        }
+        
+        return $excel;
+    }
+
+    /**
+     * Inferir tipo de documento de identidad para la plantilla (1..6)
+     * 1=OTROS, 2=DNI, 3=CARNET EXTRANJERIA, 4=RUC, 5=PASAPORTE, 6=CÉDULA DIPLOMÁTICA
+     */
+    private function inferDocumentTypeCode($doc)
+    {
+        if (empty($doc)) return 1; // OTROS
+        $digits = preg_replace('/\D+/', '', (string)$doc);
+        if (strlen($digits) === 11) return 4; // RUC
+        if (strlen($digits) === 8) return 2;  // DNI
+        if (strlen($digits) === 9) return 5;  // PASAPORTE
+        if (strlen($digits) === 12) return 3; // CARNET EXTRANJERIA
+        // sin mejor señal, OTROS
+        return 1;
+    }
+
+    /**
+     * Normaliza teléfono a solo dígitos (sin prefijos internacionales)
+     */
+    private function normalizePhoneDigits($raw)
+    {
+        if (is_null($raw)) return '';
+        $digits = preg_replace('/\D+/', '', (string)$raw);
+        if ($digits === null) return '';
+        // Quitar prefijo 0051 o 51 si existe
+        if (strpos($digits, '0051') === 0) {
+            $digits = substr($digits, 4);
+        } elseif (strpos($digits, '51') === 0) {
+            $digits = substr($digits, 2);
+        }
+        return $digits;
     }
 }

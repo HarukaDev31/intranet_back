@@ -3,6 +3,8 @@
 namespace App\Services\BaseDatos\Clientes;
 
 use App\Models\BaseDatos\Clientes\Cliente;
+use App\Models\Usuario;
+use App\Models\Provincia;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
@@ -123,15 +125,307 @@ class ClienteService
             $primerServicio = $cliente->primer_servicio;
             $servicios = $cliente->servicios;
 
+            // Resolver entidad/provincia/comocomo_entero_empresa asociada (si existe)
+            $provinciaName = null;
+            $provinciaId = null;
+            $nuComoEnteroEmpresa = null;
+            $nuOtrosComoEnteroEmpresa = null;
+            $userRecord = null;
+            try {
+                $servicioNombre = $primerServicio['servicio'] ?? null;
+
+                // Si es Curso: preferir entidad, luego pedido_curso
+                if ($servicioNombre && strtolower($servicioNombre) === 'curso') {
+                    // 1) entidad heurística
+                    if (method_exists($cliente, 'resolveEntidad')) {
+                        $ent = $cliente->resolveEntidad();
+                        if ($ent) {
+                            $provinciaId = $ent->ID_Provincia ?? null;
+                            if ($provinciaId && isset($ent->provincia) && isset($ent->provincia->No_Provincia)) {
+                                $provinciaName = $ent->provincia->No_Provincia;
+                            }
+                            if (isset($ent->Nu_Como_Entero_Empresa)) {
+                                $nuComoEnteroEmpresa = $ent->Nu_Como_Entero_Empresa;
+                            }
+                        }
+                    }
+
+                    // 2) fallback: buscar en pedido_curso -> entidad
+                    if (!$provinciaName) {
+                        try {
+                            $pedido = DB::table('pedido_curso as pc')
+                                ->join('entidad as e', 'pc.ID_Entidad', '=', 'e.ID_Entidad')
+                                ->where('pc.Nu_Estado', 2)
+                                ->where('pc.id_cliente', $cliente->id)
+                                ->select('e.ID_Provincia', 'e.Nu_Como_Entero_Empresa')
+                                ->orderBy('e.Fe_Registro', 'asc')
+                                ->first();
+
+                            if ($pedido) {
+                                $provinciaId = $pedido->ID_Provincia ?? $provinciaId;
+                                if ($provinciaId) {
+                                    $prov = Provincia::find($provinciaId);
+                                    $provinciaName = $prov ? $prov->No_Provincia : null;
+                                }
+                                if (isset($pedido->Nu_Como_Entero_Empresa) && !$nuComoEnteroEmpresa) {
+                                    $nuComoEnteroEmpresa = $pedido->Nu_Como_Entero_Empresa;
+                                }
+                            }
+                        } catch (\Exception $e) {
+                            Log::warning('obtenerClientePorId: error consultando pedido_curso - ' . $e->getMessage());
+                        }
+                    }
+
+                } elseif ($servicioNombre && strtolower($servicioNombre) === 'consolidado') {
+                    // Consolidado: prioridad entidad -> cotizaciones -> usuario
+                    // 1) entidad heurística
+                    if (method_exists($cliente, 'resolveEntidad')) {
+                        $ent = $cliente->resolveEntidad();
+                        if ($ent) {
+                            $provinciaId = $ent->ID_Provincia ?? null;
+                            if ($provinciaId && isset($ent->provincia) && isset($ent->provincia->No_Provincia)) {
+                                $provinciaName = $ent->provincia->No_Provincia;
+                            }
+                            if (isset($ent->Nu_Como_Entero_Empresa)) {
+                                $nuComoEnteroEmpresa = $ent->Nu_Como_Entero_Empresa;
+                            }
+                        }
+                    }
+
+                    // 2) cotizaciones -> usuario (si no hay provincia todavía)
+                    if (!$provinciaName) {
+                        try {
+                            $cotizacionQuery = DB::table('contenedor_consolidado_cotizacion as CC')
+                                ->join('carga_consolidada_contenedor as C', 'C.id', '=', 'CC.id_contenedor')
+                                ->where('CC.estado_cotizador', 'CONFIRMADO')
+                                ->whereNotNull('CC.estado_cliente');
+
+                            if (!empty($cliente->telefono)) {
+                                $telefonoLimpio = preg_replace('/[^0-9]/', '', $cliente->telefono);
+                                $cotizacionQuery->where(function($q) use ($telefonoLimpio) {
+                                    $q->where(DB::raw('REPLACE(REPLACE(CC.telefono, " ", ""), "-", "")'), 'LIKE', "%{$telefonoLimpio}%")
+                                      ->orWhere(DB::raw('REPLACE(REPLACE(CC.telefono, " ", ""), "-", "")'), 'LIKE', "%" . preg_replace('/^51/', '', $telefonoLimpio) . "%");
+                                });
+                            }
+
+                            if (!empty($cliente->documento)) {
+                                $cotizacionQuery->orWhere('CC.documento', $cliente->documento);
+                            }
+
+                            if (!empty($cliente->correo)) {
+                                $cotizacionQuery->orWhere(function($q2) use ($cliente) {
+                                    $q2->whereNotNull('CC.correo')
+                                       ->where('CC.correo', '!=', '')
+                                       ->where('CC.correo', $cliente->correo);
+                                });
+                            }
+
+                            $cotizacion = $cotizacionQuery->select('CC.*')
+                                ->orderBy('CC.fecha', 'asc')
+                                ->orderByRaw('CAST(C.carga AS UNSIGNED)')
+                                ->first();
+
+                            if ($cotizacion && isset($cotizacion->id_usuario)) {
+                                $usuario = Usuario::find($cotizacion->id_usuario);
+                                if ($usuario) {
+                                    // Usuario puede tener ID_Provincia o provincia relation
+                                    $usuarioProvinciaId = $usuario->ID_Provincia ?? ($usuario->provincia_id ?? null);
+                                    if ($usuarioProvinciaId) {
+                                        $provinciaId = $usuarioProvinciaId;
+                                        $prov = Provincia::find($provinciaId);
+                                        $provinciaName = $prov ? $prov->No_Provincia : null;
+                                    }
+                                }
+                            }
+                        } catch (\Exception $e) {
+                            Log::warning('obtenerClientePorId: error resolviendo provincia desde cotizacion/usuario - ' . $e->getMessage());
+                        }
+                    }
+
+                    // 3) users table (último fallback para consolidado si aún no hay provincia o campos empresa)
+                    if (!$provinciaName || empty($nuComoEnteroEmpresa)) {
+                        try {
+                            $userQuery = DB::table('users');
+
+                            if (!empty($cliente->correo)) {
+                                $userQuery->where('email', $cliente->correo);
+                            } elseif (!empty($cliente->telefono)) {
+                                $telefonoLimpio = preg_replace('/[^0-9]/', '', $cliente->telefono);
+                                $userQuery->where(function($q) use ($telefonoLimpio) {
+                                    $q->where(DB::raw('REPLACE(REPLACE(whatsapp, " ", ""), "-", "")'), 'LIKE', "%{$telefonoLimpio}%")
+                                      ->orWhere(DB::raw('REPLACE(REPLACE(phone, " ", ""), "-", "")'), 'LIKE', "%{$telefonoLimpio}%");
+                                });
+                            } elseif (!empty($cliente->documento)) {
+                                $userQuery->where('dni', $cliente->documento);
+                            }
+
+                            $user = $userQuery->first();
+
+                            if ($user) {
+                                $userRecord = $user;
+                                // User puede tener provincia_id o idcity
+                                if (!$provinciaName) {
+                                    $userProvinciaId = $user->provincia_id ?? ($user->idcity ?? null);
+                                    if ($userProvinciaId) {
+                                        $provinciaId = $userProvinciaId;
+                                        $prov = Provincia::find($provinciaId);
+                                        $provinciaName = $prov ? $prov->No_Provincia : null;
+                                    }
+                                }
+                                // Obtener campos de empresa desde users
+                                if (empty($nuComoEnteroEmpresa) && isset($user->no_como_entero)) {
+                                    $nuComoEnteroEmpresa = $user->no_como_entero;
+                                }
+                                if (empty($nuOtrosComoEnteroEmpresa) && isset($user->no_otros_como_entero_empresa)) {
+                                    $nuOtrosComoEnteroEmpresa = $user->no_otros_como_entero_empresa;
+                                }
+                                Log::info('obtenerClientePorId: nuComoEnteroEmpresa: ' . $nuComoEnteroEmpresa);
+                                Log::info('obtenerClientePorId: nuOtrosComoEnteroEmpresa: ' . $nuOtrosComoEnteroEmpresa);
+                            }
+                        } catch (\Exception $e) {
+                            Log::warning('obtenerClientePorId: error resolviendo provincia/campos empresa desde users - ' . $e->getMessage());
+                        }
+                    }
+                } else {
+                    // Sin primer servicio definido: intentar entidad como fallback
+                    if (method_exists($cliente, 'resolveEntidad')) {
+                        $ent = $cliente->resolveEntidad();
+                        if ($ent) {
+                            $provinciaId = $ent->ID_Provincia ?? null;
+                            if ($provinciaId && isset($ent->provincia) && isset($ent->provincia->No_Provincia)) {
+                                $provinciaName = $ent->provincia->No_Provincia;
+                            }
+                            if (isset($ent->Nu_Como_Entero_Empresa)) {
+                                $nuComoEnteroEmpresa = $ent->Nu_Como_Entero_Empresa;
+                            }
+                        }
+                    }
+                }
+            } catch (\Exception $e) {
+                Log::warning('obtenerClientePorId: error resolviendo entidad/provincia - ' . $e->getMessage());
+            }
+
+            // preparar campos de empresa según prioridad
+            $primaryCode = $cliente->No_Como_Entero_Empresa ?? ($nuComoEnteroEmpresa ?? null);
+            $no_otros_como_entero = $cliente->No_Otros_Como_Entero_Empresa ?? null;
+            // intentar tomar desde entidad si aún no está definido
+            try {
+                if (empty($primaryCode) && isset($ent) && isset($ent->Nu_Como_Entero_Empresa)) {
+                    $primaryCode = $ent->Nu_Como_Entero_Empresa;
+                }
+                if (empty($no_otros_como_entero) && isset($ent) && isset($ent->No_Otros_Como_Entero_Empresa)) {
+                    $no_otros_como_entero = $ent->No_Otros_Como_Entero_Empresa;
+                }
+                // fallback a users para consolidado si aún no hay valores
+                if (empty($no_otros_como_entero) && !empty($nuOtrosComoEnteroEmpresa)) {
+                    $no_otros_como_entero = $nuOtrosComoEnteroEmpresa;
+                }
+            } catch (\Exception $e) {
+                // ignore
+            }
+
+            // Map numeric codes to labels. If code is 6 or 8, prefer the 'otros' free-text field.
+            $sourceMap = [
+                0 => 'No especificado',
+                1 => 'TikTok',
+                2 => 'Facebook',
+                3 => 'Instagram',
+                4 => 'YouTube',
+                5 => 'Familiares/Amigos',
+                6 => 'Otros'
+            ];
+
+            $no_como_entero_final = null;
+            if (!is_null($primaryCode) && $primaryCode !== '') {
+                $codeInt = (int) $primaryCode;
+                // If code indicates 'Otros' (6 or 8) and we don't yet have the free-text, try to resolve entidad now
+                if (($codeInt === 6 || $codeInt === 8) && empty($no_otros_como_entero)) {
+                    try {
+                        if (!isset($ent) && method_exists($cliente, 'resolveEntidad')) {
+                            $ent = $cliente->resolveEntidad();
+                        }
+                        if (isset($ent) && !empty($ent->No_Otros_Como_Entero_Empresa)) {
+                            $no_otros_como_entero = $ent->No_Otros_Como_Entero_Empresa;
+                        }
+                    } catch (\Exception $e) {
+                        // ignore
+                    }
+                }
+
+                if (($codeInt === 6 || $codeInt === 8) && !empty($no_otros_como_entero)) {
+                    $no_como_entero_final = $no_otros_como_entero;
+                } elseif (isset($sourceMap[$codeInt])) {
+                    $no_como_entero_final = $sourceMap[$codeInt];
+                } else {
+                    $no_como_entero_final = $primaryCode;
+                }
+            }
+
+            // Buscar usuario en tabla users por whatsapp, email o dni
+            $idUser = null;
+            try {
+                $userQuery = DB::table('users');
+                
+                $telefonoLimpio = null;
+                $telefonoVariantes = [];
+                
+                if (!empty($cliente->telefono)) {
+                    $telefonoLimpio = preg_replace('/[^0-9]/', '', $cliente->telefono);
+                    $telefonoVariantes[] = $telefonoLimpio;
+                    
+                    // Si tiene prefijo 51, también buscar sin prefijo
+                    if (strlen($telefonoLimpio) >= 11 && substr($telefonoLimpio, 0, 2) === '51') {
+                        $telefonoSinPrefijo = substr($telefonoLimpio, 2);
+                        $telefonoVariantes[] = $telefonoSinPrefijo;
+                    } else {
+                        // Si no tiene prefijo, también buscar con prefijo
+                        $telefonoConPrefijo = '51' . $telefonoLimpio;
+                        $telefonoVariantes[] = $telefonoConPrefijo;
+                    }
+                }
+                
+                if (!empty($cliente->correo) || !empty($telefonoLimpio) || !empty($cliente->documento)) {
+                    $userQuery->where(function($q) use ($cliente, $telefonoVariantes) {
+                        if (!empty($cliente->correo)) {
+                            $q->where('email', $cliente->correo);
+                        }
+                        if (!empty($telefonoVariantes)) {
+                            $q->orWhere(function($q2) use ($telefonoVariantes) {
+                                foreach ($telefonoVariantes as $telefono) {
+                                    $q2->orWhere(function($q3) use ($telefono) {
+                                        $q3->where(DB::raw('REPLACE(REPLACE(REPLACE(whatsapp, " ", ""), "-", ""), "+", "")'), 'LIKE', "%{$telefono}%")
+                                           ->orWhere(DB::raw('REPLACE(REPLACE(REPLACE(phone, " ", ""), "-", ""), "+", "")'), 'LIKE', "%{$telefono}%");
+                                    });
+                                }
+                            });
+                        }
+                        if (!empty($cliente->documento)) {
+                            $q->orWhere('dni', $cliente->documento);
+                        }
+                    });
+                    
+                    $user = $userQuery->first();
+                    if ($user) {
+                        $idUser = $user->id;
+                    }
+                }
+            } catch (\Exception $e) {
+                Log::warning('obtenerClientePorId: error buscando usuario en tabla users - ' . $e->getMessage());
+            }
+
             $data = [
                 'id' => $cliente->id,
                 'nombre' => $cliente->nombre,
                 'documento' => $cliente->documento,
                 'correo' => $cliente->correo,
                 'telefono' => $cliente->telefono,
+                'provincia' => $provinciaName ?? ($cliente->provincia ?? null),
+                'id_provincia' => $provinciaId,
+                'origen' => $no_como_entero_final,
                 'ruc' => $cliente->ruc,
                 'empresa' => $cliente->empresa,
                 'fecha' => $cliente->fecha ? $cliente->fecha->format('d/m/Y') : null,
+                'id_user' => $idUser,
                 'primer_servicio' => $primerServicio ? [
                     'servicio' => $primerServicio['servicio'],
                     'fecha' => Carbon::parse($primerServicio['fecha'])->format('d/m/Y'),
@@ -503,13 +797,231 @@ class ClienteService
             if ($primerServicio === null) {
                 continue;
             }
+            // intentar resolver provincia por entidad para cada cliente (si aplica)
+            $provinciaName = null;
+            try {
+                $provinciaName = null;
+                $nuComoEnteroEmpresa = null;
+                $nuOtrosComoEnteroEmpresa = null;
+                $userRecord = null;
+                $primer = $cliente->primer_servicio;
+                $servicioNombre = $primer['servicio'] ?? null;
+
+                if ($servicioNombre && strtolower($servicioNombre) === 'curso') {
+                    // Curso: entidad -> pedido_curso
+                    if (method_exists($cliente, 'resolveEntidad')) {
+                        $ent = $cliente->resolveEntidad();
+                        if ($ent) {
+                            $provinciaName = $ent->provincia->No_Provincia ?? null;
+                            if (isset($ent->Nu_Como_Entero_Empresa)) {
+                                $nuComoEnteroEmpresa = $ent->Nu_Como_Entero_Empresa;
+                            }
+                        }
+                    }
+
+                    if (!$provinciaName) {
+                        try {
+                            $pedido = DB::table('pedido_curso as pc')
+                                ->join('entidad as e', 'pc.ID_Entidad', '=', 'e.ID_Entidad')
+                                ->where('pc.Nu_Estado', 2)
+                                ->where('pc.id_cliente', $cliente->id)
+                                ->select('e.ID_Provincia', 'e.Nu_Como_Entero_Empresa')
+                                ->orderBy('e.Fe_Registro', 'asc')
+                                ->first();
+
+                            if ($pedido) {
+                                if (isset($pedido->ID_Provincia)) {
+                                    $prov = Provincia::find($pedido->ID_Provincia);
+                                    $provinciaName = $prov ? $prov->No_Provincia : null;
+                                }
+                                if (isset($pedido->Nu_Como_Entero_Empresa)) {
+                                    $nuComoEnteroEmpresa = $pedido->Nu_Como_Entero_Empresa;
+                                }
+                            }
+                        } catch (\Exception $e) {
+                            Log::warning('transformarDatosClientes: error consultando pedido_curso para cliente ' . $cliente->id . ' - ' . $e->getMessage());
+                        }
+                    }
+
+                } elseif ($servicioNombre && strtolower($servicioNombre) === 'consolidado') {
+                    // Consolidado: entidad -> cotizacion->usuario
+                    if (method_exists($cliente, 'resolveEntidad')) {
+                        $ent = $cliente->resolveEntidad();
+                        if ($ent) {
+                            $provinciaName = $ent->provincia->No_Provincia ?? null;
+                            if (isset($ent->Nu_Como_Entero_Empresa)) {
+                                $nuComoEnteroEmpresa = $ent->Nu_Como_Entero_Empresa;
+                            }
+                        }
+                    }
+
+                    if (!$provinciaName) {
+                        try {
+                            $cotizacionQuery = DB::table('contenedor_consolidado_cotizacion as CC')
+                                ->join('carga_consolidada_contenedor as C', 'C.id', '=', 'CC.id_contenedor')
+                                ->where('CC.estado_cotizador', 'CONFIRMADO')
+                                ->whereNotNull('CC.estado_cliente');
+
+                            if (!empty($cliente->telefono)) {
+                                $telefonoLimpio = preg_replace('/[^0-9]/', '', $cliente->telefono);
+                                $cotizacionQuery->where(function($q) use ($telefonoLimpio) {
+                                    $q->where(DB::raw('REPLACE(REPLACE(CC.telefono, " ", ""), "-", "")'), 'LIKE', "%{$telefonoLimpio}%")
+                                      ->orWhere(DB::raw('REPLACE(REPLACE(CC.telefono, " ", ""), "-", "")'), 'LIKE', "%" . preg_replace('/^51/', '', $telefonoLimpio) . "%");
+                                });
+                            }
+
+                            if (!empty($cliente->documento)) {
+                                $cotizacionQuery->orWhere('CC.documento', $cliente->documento);
+                            }
+
+                            if (!empty($cliente->correo)) {
+                                $cotizacionQuery->orWhere(function($q2) use ($cliente) {
+                                    $q2->whereNotNull('CC.correo')
+                                       ->where('CC.correo', '!=', '')
+                                       ->where('CC.correo', $cliente->correo);
+                                });
+                            }
+
+                            $cotizacion = $cotizacionQuery->select('CC.*')
+                                ->orderBy('CC.fecha', 'asc')
+                                ->orderByRaw('CAST(C.carga AS UNSIGNED)')
+                                ->first();
+
+                            if ($cotizacion && isset($cotizacion->id_usuario)) {
+                                $usuario = Usuario::find($cotizacion->id_usuario);
+                                if ($usuario) {
+                                    $usuarioProvinciaId = $usuario->ID_Provincia ?? ($usuario->provincia_id ?? null);
+                                    if ($usuarioProvinciaId) {
+                                        $prov = Provincia::find($usuarioProvinciaId);
+                                        $provinciaName = $prov ? $prov->No_Provincia : null;
+                                    }
+                                }
+                            }
+                        } catch (\Exception $e) {
+                            Log::warning('transformarDatosClientes: error resolviendo provincia desde cotizacion/usuario para cliente ' . $cliente->id . ' - ' . $e->getMessage());
+                        }
+                    }
+
+                    // 3) users table (último fallback para consolidado si aún no hay provincia o campos empresa)
+                    if (!$provinciaName || empty($nuComoEnteroEmpresa)) {
+                        try {
+                            $userQuery = DB::table('users');
+
+                            if (!empty($cliente->correo)) {
+                                $userQuery->where('email', $cliente->correo);
+                            } elseif (!empty($cliente->telefono)) {
+                                $telefonoLimpio = preg_replace('/[^0-9]/', '', $cliente->telefono);
+                                $userQuery->where(function($q) use ($telefonoLimpio) {
+                                    $q->where(DB::raw('REPLACE(REPLACE(whatsapp, " ", ""), "-", "")'), 'LIKE', "%{$telefonoLimpio}%")
+                                      ->orWhere(DB::raw('REPLACE(REPLACE(phone, " ", ""), "-", "")'), 'LIKE', "%{$telefonoLimpio}%");
+                                });
+                            } elseif (!empty($cliente->documento)) {
+                                $userQuery->where('dni', $cliente->documento);
+                            }
+
+                            $user = $userQuery->first();
+
+                            if ($user) {
+                                $userRecord = $user;
+                                // User puede tener provincia_id o idcity
+                                if (!$provinciaName) {
+                                    $userProvinciaId = $user->provincia_id ?? ($user->idcity ?? null);
+                                    if ($userProvinciaId) {
+                                        $prov = Provincia::find($userProvinciaId);
+                                        $provinciaName = $prov ? $prov->No_Provincia : null;
+                                    }
+                                }
+                                // Obtener campos de empresa desde users
+                                if (empty($nuComoEnteroEmpresa) && isset($user->no_como_entero)) {
+                                    $nuComoEnteroEmpresa = $user->no_como_entero;
+                                }
+                                if (empty($nuOtrosComoEnteroEmpresa) && isset($user->no_otros_como_entero_empresa)) {
+                                    $nuOtrosComoEnteroEmpresa = $user->no_otros_como_entero_empresa;
+                                }
+                                Log::info('transformarDatosClientes: nuComoEnteroEmpresa: ' . $nuComoEnteroEmpresa);
+                                Log::info('transformarDatosClientes: nuOtrosComoEnteroEmpresa: ' . $nuOtrosComoEnteroEmpresa);
+                            }
+                        } catch (\Exception $e) {
+                            Log::warning('transformarDatosClientes: error resolviendo provincia/campos empresa desde users para cliente ' . $cliente->id . ' - ' . $e->getMessage());
+                        }
+                    }
+                } else {
+                    // fallback general: entidad
+                    if (method_exists($cliente, 'resolveEntidad')) {
+                        $ent = $cliente->resolveEntidad();
+                        if ($ent) {
+                            $provinciaName = $ent->provincia->No_Provincia ?? null;
+                            if (isset($ent->Nu_Como_Entero_Empresa)) {
+                                $nuComoEnteroEmpresa = $ent->Nu_Como_Entero_Empresa;
+                            }
+                        }
+                    }
+                }
+            } catch (\Exception $e) {
+                Log::warning('transformarDatosClientes: error resolviendo entidad para cliente ' . $cliente->id . ' - ' . $e->getMessage());
+            }
+
+            // preparar y mapear campos de empresa para el listado
+            $primaryCode = $cliente->No_Como_Entero_Empresa ?? ($nuComoEnteroEmpresa ?? null);
+            $no_otros_val = $cliente->No_Otros_Como_Entero_Empresa ?? null;
+            try {
+                if (empty($no_otros_val) && isset($ent) && isset($ent->No_Otros_Como_Entero_Empresa)) {
+                    $no_otros_val = $ent->No_Otros_Como_Entero_Empresa;
+                }
+                // fallback a users para consolidado si aún no hay valores
+                if (empty($no_otros_val) && !empty($nuOtrosComoEnteroEmpresa)) {
+                    $no_otros_val = $nuOtrosComoEnteroEmpresa;
+                }
+            } catch (\Exception $e) {
+                // ignore
+            }
+
+            $sourceMap = [
+                0 => 'No especificado',
+                1 => 'TikTok',
+                2 => 'Facebook',
+                3 => 'Instagram',
+                4 => 'YouTube',
+                5 => 'Familiares/Amigos',
+                6 => 'Otros',
+                8 => 'Otros'
+            ];
+
+            $no_como_entero_final = null;
+            if (!is_null($primaryCode) && $primaryCode !== '') {
+                $codeInt = (int) $primaryCode;
+                // If code indicates 'Otros' (6 or 8) and we don't yet have the free-text, try to resolve entidad now
+                if (($codeInt === 6 || $codeInt === 8) && empty($no_otros_val)) {
+                    try {
+                        if (!isset($ent) && method_exists($cliente, 'resolveEntidad')) {
+                            $ent = $cliente->resolveEntidad();
+                        }
+                        if (isset($ent) && !empty($ent->No_Otros_Como_Entero_Empresa)) {
+                            $no_otros_val = $ent->No_Otros_Como_Entero_Empresa;
+                        }
+                    } catch (\Exception $e) {
+                        // ignore
+                    }
+                }
+
+                if (($codeInt === 6 || $codeInt === 8) && !empty($no_otros_val)) {
+                    $no_como_entero_final = $no_otros_val;
+                } elseif (isset($sourceMap[$codeInt])) {
+                    $no_como_entero_final = $sourceMap[$codeInt];
+                } else {
+                    $no_como_entero_final = $primaryCode;
+                }
+            }
+
             $datosTransformados[] = [
-                'id' => $cliente->id,
-                'nombre' => $cliente->nombre,
-                'documento' => $cliente->documento,
-                'correo' => $cliente->correo,
-                'telefono' => $cliente->telefono,
-                'fecha' => $cliente->fecha ? $cliente->fecha->format('d/m/Y') : null,
+                    'id' => $cliente->id,
+                    'nombre' => $cliente->nombre,
+                    'documento' => $cliente->documento,
+                    'correo' => $cliente->correo,
+                    'telefono' => $cliente->telefono,
+                    'provincia' => $provinciaName ?? ($cliente->provincia ?? null),
+                    'origen' => $no_como_entero_final,
+                    'fecha' => $cliente->fecha ? $cliente->fecha->format('d/m/Y') : null,
                 'categoria' => $categoria,
                 'primer_servicio' => $primerServicio ? [
                     'servicio' => $primerServicio['servicio'],
@@ -575,15 +1087,15 @@ class ClienteService
             return [
                 'total_clientes' => [
                     'value' => 0,
-                    'label' => 'Total Clientes'
+                    'label' => 'Clientes'
                 ],
                 'total_clientes_curso' => [
                     'value' => 0,
-                    'label' => 'Total Clientes Curso'
+                    'label' => 'Curso'
                 ],
                 'total_clientes_consolidado' => [
                     'value' => 0,
-                    'label' => 'Total Clientes Consolidado'
+                    'label' => 'Consolidado'
                 ]
             ];
         }
@@ -623,15 +1135,15 @@ class ClienteService
         return [
             'total_clientes' => [
                 'value' => $index,
-                'label' => 'Total Clientes'
+                'label' => 'Clientes'
             ],
             'total_clientes_curso' => [
                 'value' => $clientesCurso,
-                'label' => 'Total Clientes Curso'
+                'label' => 'Curso'
             ],
             'total_clientes_consolidado' => [
                 'value' => $clientesConsolidado,
-                'label' => 'Total Clientes Consolidado'
+                'label' => 'Consolidado'
             ]
         ];
     }
