@@ -1131,7 +1131,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
      * @param int $idCotizacion
      * @param string $carga
      * @return string
-     * @throws Exception
+     * @throws ExceptionASJKASASJKAS
      */
     protected function procesarEstadoCobrando($idProveedor, $idCotizacion, $carga)
     {
@@ -1177,12 +1177,37 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
             $phoneNumberId = $telefono ? $telefono . '@c.us' : '';
 
             // Construir y enviar mensaje
+            // Calcular suma y conteo de pagos del concepto LOGISTICA para esta cotización
+            try {
+                $queryPagos = DB::table('contenedor_consolidado_cotizacion_coordinacion_pagos as P')
+                    ->join('cotizacion_coordinacion_pagos_concept as C', 'P.id_concept', '=', 'C.id')
+                    ->where('P.id_cotizacion', $idCotizacion)
+                    ->where('C.name', 'LOGISTICA');
+
+                $totalPagosLogistica = $queryPagos->sum('P.monto');
+                $countPagosLogistica = $queryPagos->count();
+            } catch (\Exception $e) {
+                Log::warning('Error calculando pagos LOGISTICA (procesarEstadoCobrando): ' . $e->getMessage(), ['id_cotizacion' => $idCotizacion]);
+                $totalPagosLogistica = 0;
+                $countPagosLogistica = 0;
+            }
+
+            $pendiente = (float)($valorCot ?? 0) - (float)$totalPagosLogistica;
+            if ($pendiente < 0) {
+                $pendiente = 0;
+            }
+
             $message = "Reserva de espacio:\n" .
                 "*Consolidado #" . $carga . "-2025*\n\n" .
                 "Ahora tienes que hacer el pago del CBM preliminar para poder subir su carga en nuestro contenedor.\n\n" .
                 "☑ CBM Preliminar: " . $volumen . " cbm\n" .
-                "☑ Costo CBM: $" . $valorCot . "\n" .
-                "☑ Fecha Limite de pago: " . $fCierre . "\n\n" .
+                "☑ Costo CBM: $" . $valorCot . "\n";
+
+            if (!empty($countPagosLogistica) && $countPagosLogistica > 0) {
+                $message .= "☑ Pendiente de pago CBM: $" . number_format($pendiente, 2) . "\n";
+            }
+
+            $message .= "☑ Fecha Limite de pago: " . $fCierre . "\n\n" .
                 "⚠ Nota: Realizar el pago antes del llenado del contenedor.\n\n" .
                 "📦 En caso hubiera variaciones en el cubicaje se cobrará la diferencia en la cotización final.\n\n" .
                 "Apenas haga el pago, envíe por este medio para hacer la reserva.";
@@ -2204,12 +2229,39 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
 
         $fechaCierre = $this->formatFechaCierre($contenedor->f_cierre);
 
+        // Calcular suma de pagos del concepto LOGISTICA para esta cotización
+        try {
+            $queryPagos = DB::table('contenedor_consolidado_cotizacion_coordinacion_pagos as P')
+                ->join('cotizacion_coordinacion_pagos_concept as C', 'P.id_concept', '=', 'C.id')
+                ->where('P.id_cotizacion', $cotizacion->id)
+                ->where('C.name', 'LOGISTICA');
+
+            $totalPagosLogistica = $queryPagos->sum('P.monto');
+            $countPagosLogistica = $queryPagos->count();
+        } catch (\Exception $e) {
+            Log::warning('Error calculando pagos LOGISTICA: ' . $e->getMessage(), ['id_cotizacion' => $cotizacion->id]);
+            $totalPagosLogistica = 0;
+            $countPagosLogistica = 0;
+        }
+
+        $pendiente = (float)($cotizacion->monto ?? 0) - (float)$totalPagosLogistica;
+        if ($pendiente < 0) {
+            $pendiente = 0;
+        }
+
         $message = "Reserva de espacio:\n" .
             "*Consolidado #{$contenedor->carga}-2025*\n\n" .
             "Ahora tienes que hacer el pago del CBM preliminar para poder subir su carga en nuestro contenedor.\n\n" .
             "☑ CBM Preliminar: {$cotizacion->volumen} cbm\n" .
-            "☑ Costo CBM: \${$cotizacion->monto}\n" .
-            "☑ Fecha Limite de pago: {$fechaCierre}\n\n" .
+            "☑ Costo CBM: \${$cotizacion->monto}\n";
+
+        // Mostrar pendiente justo debajo de Costo CBM si existe al menos un pago LOGISTICA
+        if (!empty($countPagosLogistica) && $countPagosLogistica > 0) {
+            $message .= "☑ Pendiente de pago CBM: $" . number_format($pendiente, 2) . "\n";
+        }
+
+        // Luego mostrar fecha límite y notas
+        $message .= "📅 Fecha Limite de pago: {$fechaCierre}\n\n" .
             "⚠ Nota: Realizar el pago antes del llenado del contenedor.\n\n" .
             "📦 En caso hubiera variaciones en el cubicaje se cobrará la diferencia en la cotización final.\n\n" .
             "Apenas haga el pago, envíe por este medio para hacer la reserva.";
