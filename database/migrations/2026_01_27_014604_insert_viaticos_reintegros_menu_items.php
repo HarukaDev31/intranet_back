@@ -29,7 +29,7 @@ class InsertViaticosReintegrosMenuItems extends Migration
             'Txt_Url_Video' => NULL,
             'No_Menu_China' => 'Travel Expenses',
             'show_father' => 0,
-            'url_intranet_v2' => NULL,
+            'url_intranet_v2' => '#',
         ]);
 
         // Insertar "Mis Reintegros" como hijo directo del menú principal
