@@ -6,6 +6,10 @@ use App\Http\Requests\StoreViaticoRequest;
 use App\Http\Requests\UpdateViaticoRequest;
 use App\Services\ViaticoService;
 use App\Models\Viatico;
+use App\Models\Notificacion;
+use App\Models\Usuario;
+use App\Events\ViaticoCreado;
+use App\Events\ViaticoActualizado;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
@@ -231,8 +235,8 @@ class ViaticoController extends Controller
             }
 
             $data = $request->validated();
-            $archivo = $request->hasFile('receipt_file') 
-                ? $request->file('receipt_file') 
+            $archivo = $request->hasFile('payment_receipt_file') 
+                ? $request->file('payment_receipt_file') 
                 : null;
 
             // Si se envía delete_file, eliminar el archivo
@@ -240,15 +244,60 @@ class ViaticoController extends Controller
                 $data['delete_file'] = true;
             }
 
+            $viaticoAnterior = clone $viatico;
             $viatico = $this->viaticoService->actualizarViatico($viatico, $data, $archivo);
+            
+            // Recargar el modelo para obtener datos actualizados
+            $viatico->refresh();
+            $viatico->load('usuario');
 
             $viatico->url_comprobante = $viatico->receipt_file 
                 ? asset('storage/' . $viatico->receipt_file)
                 : null;
-            $viatico->url_payment_receipt = $viatico->payment_receipt_file 
+            $viatico->payment_receipt_file = $viatico->payment_receipt_file 
                 ? asset('storage/' . $viatico->payment_receipt_file)
                 : null;
             $viatico->nombre_usuario = optional($viatico->usuario)->No_Nombres_Apellidos ?? 'N/A';
+
+            // Obtener usuario actual (Administración) y usuario creador
+            $usuarioAdministracion = auth()->user();
+            $usuarioCreador = $viatico->usuario;
+
+            // Crear notificación para el usuario creador
+            if ($usuarioCreador && $usuarioCreador->ID_Usuario !== $usuarioAdministracion->ID_Usuario) {
+                $estadoTexto = $viatico->status === Viatico::STATUS_CONFIRMED ? 'confirmado' : 
+                              ($viatico->status === Viatico::STATUS_REJECTED ? 'rechazado' : 'actualizado');
+                
+                $message = "Administración ha {$estadoTexto} tu viático: {$viatico->subject}";
+                
+                try {
+                    $notificacionUsuario = Notificacion::create([
+                        'titulo' => "Viático {$estadoTexto}",
+                        'mensaje' => $message,
+                        'descripcion' => "Viático #{$viatico->id} | Asunto: {$viatico->subject} | Monto: S/ {$viatico->total_amount} | Estado: {$estadoTexto} | Actualizado por: {$usuarioAdministracion->No_Nombres_Apellidos}",
+                        'modulo' => Notificacion::MODULO_ADMINISTRACION,
+                        'usuario_destinatario' => $usuarioCreador->ID_Usuario,
+                        'navigate_to' => 'viaticos',
+                        'navigate_params' => json_encode([
+                            'id' => $viatico->id
+                        ]),
+                        'tipo' => $viatico->status === Viatico::STATUS_CONFIRMED ? Notificacion::TIPO_SUCCESS : 
+                                 ($viatico->status === Viatico::STATUS_REJECTED ? Notificacion::TIPO_ERROR : Notificacion::TIPO_INFO),
+                        'icono' => $viatico->status === Viatico::STATUS_CONFIRMED ? 'mdi:check-circle' : 
+                                  ($viatico->status === Viatico::STATUS_REJECTED ? 'mdi:close-circle' : 'mdi:information'),
+                        'prioridad' => Notificacion::PRIORIDAD_MEDIA,
+                        'referencia_tipo' => 'viatico',
+                        'referencia_id' => $viatico->id,
+                        'activa' => true,
+                        'creado_por' => $usuarioAdministracion->ID_Usuario,
+                    ]);
+
+                    // Disparar evento de socket para el usuario creador
+                    ViaticoActualizado::dispatch($viatico, $usuarioAdministracion, $usuarioCreador, $message);
+                } catch (\Exception $e) {
+                    Log::error('Error al crear notificación o disparar evento ViaticoActualizado: ' . $e->getMessage());
+                }
+            }
 
             return response()->json([
                 'success' => true,

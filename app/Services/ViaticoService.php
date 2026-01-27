@@ -24,7 +24,6 @@ class ViaticoService
             // Si se sube un archivo, guardarlo y cambiar estado a CONFIRMED
             if ($archivo) {
                 $data['receipt_file'] = $this->guardarArchivo($archivo);
-                $data['status'] = Viatico::STATUS_CONFIRMED;
             }
 
             $viatico = Viatico::create($data);
@@ -46,14 +45,16 @@ class ViaticoService
     {
         try {
             DB::beginTransaction();
-
+            Log::info('data: ' . json_encode($data));
+            Log::info('archivo: ' . json_encode($archivo));
+            Log::info('viatico: ' . json_encode($viatico));
             // Si se sube un archivo nuevo
             if ($archivo) {
                 // Eliminar archivo anterior si existe
-                if ($viatico->receipt_file) {
-                    $this->eliminarArchivo($viatico->receipt_file);
+                if ($viatico->payment_receipt_file) {
+                    $this->eliminarArchivo($viatico->payment_receipt_file);
                 }
-                $data['receipt_file'] = $this->guardarArchivo($archivo);
+                $data['payment_receipt_file'] = $this->guardarArchivo($archivo);
                 $data['status'] = Viatico::STATUS_CONFIRMED;
             }
 
@@ -62,13 +63,13 @@ class ViaticoService
                 if ($viatico->receipt_file) {
                     $this->eliminarArchivo($viatico->receipt_file);
                 }
-                $data['receipt_file'] = null;
+                $data['payment_receipt_file'] = null;
                 $data['status'] = Viatico::STATUS_PENDING;
                 unset($data['delete_file']);
             }
 
             // Si solo se cambia el estado manualmente
-            if (isset($data['status']) && !isset($data['receipt_file'])) {
+            if (isset($data['status']) && !isset($data['payment_receipt_file'])) {
                 // El estado se mantiene como viene en $data
             }
 

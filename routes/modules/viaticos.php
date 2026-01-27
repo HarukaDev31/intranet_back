@@ -17,7 +17,7 @@ Route::group(['prefix' => 'viaticos', 'middleware' => 'jwt.auth'], function () {
     Route::get('/', [ViaticoController::class, 'index']);
     Route::post('/', [ViaticoController::class, 'store']);
     Route::get('/{id}', [ViaticoController::class, 'show']);
-    Route::put('/{id}', [ViaticoController::class, 'update']);
+    Route::post('update/{id}', [ViaticoController::class, 'update']);
     Route::delete('/{id}', [ViaticoController::class, 'destroy']);
     
     // Rutas específicas para administración
