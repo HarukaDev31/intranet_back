@@ -29,7 +29,7 @@ class InsertViaticosReintegrosMenuItems extends Migration
             'Txt_Url_Video' => NULL,
             'No_Menu_China' => 'Travel Expenses',
             'show_father' => 0,
-            'url_intranet_v2' => 'viaticos'
+            'url_intranet_v2' => NULL,
         ]);
 
         // Insertar "Mis Reintegros" como hijo directo del menú principal
@@ -51,26 +51,11 @@ class InsertViaticosReintegrosMenuItems extends Migration
         ]);
 
         // Insertar "Viáticos y Reintegros" como hijo del menú principal (será padre de Pendientes y Completados)
-        $menuViaticosId = DB::table('menu')->insertGetId([
-            'ID_Padre' => $menuPrincipalId,
-            'Nu_Orden' => 2,
-            'No_Menu' => 'Viáticos y Reintegros',
-            'No_Menu_Url' => 'viaticos',
-            'No_Class_Controller' => 'ViaticoController',
-            'Txt_Css_Icons' => 'fa fa-list',
-            'Nu_Separador' => 0,
-            'Nu_Seguridad' => 0,
-            'Nu_Activo' => 0,
-            'Nu_Tipo_Sistema' => 0,
-            'Txt_Url_Video' => NULL,
-            'No_Menu_China' => 'Travel Expenses',
-            'show_father' => 1, // Mostrar como padre para que muestre submenús
-            'url_intranet_v2' => 'viaticos'
-        ]);
+        
 
         // Insertar "Pendientes" como hijo de "Viáticos y Reintegros"
         DB::table('menu')->insert([
-            'ID_Padre' => $menuViaticosId,
+            'ID_Padre' => $menuPrincipalId,
             'Nu_Orden' => 1,
             'No_Menu' => 'Pendientes',
             'No_Menu_Url' => 'viaticos/pendientes',
@@ -88,7 +73,7 @@ class InsertViaticosReintegrosMenuItems extends Migration
 
         // Insertar "Completados" como hijo de "Viáticos y Reintegros"
         DB::table('menu')->insert([
-            'ID_Padre' => $menuViaticosId,
+            'ID_Padre' => $menuPrincipalId,
             'Nu_Orden' => 2,
             'No_Menu' => 'Completados',
             'No_Menu_Url' => 'viaticos/completados',
