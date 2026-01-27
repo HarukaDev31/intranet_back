@@ -34,10 +34,10 @@ class CalculadoraImportacionService
 
             // Determinar campos según tipo de documento
             $tipoDocumento = $data['clienteInfo']['tipoDocumento'] ?? 'DNI';
-            
+
             // Obtener tipo_cambio del request, si es null o 0 usar 3.75 por defecto
             $tipoCambio = (!empty($data['tipo_cambio']) && $data['tipo_cambio'] > 0) ? $data['tipo_cambio'] : 3.75;
-            
+
             // Crear registro principal
             $calculadora = CalculadoraImportacion::create([
                 'id_cliente' => $cliente ? $cliente->id : null,
@@ -59,15 +59,16 @@ class CalculadoraImportacionService
                 'tarifa_descuento' => $data['tarifaDescuento'] ?? 0,
                 'tc' => $tipoCambio,
                 'estado' => CalculadoraImportacion::ESTADO_PENDIENTE,
-                
+
             ]);
             $totalProductos = 0;
-            // Crear proveedores
-            foreach ($data['proveedores'] as $proveedorData) {
+            // Crear proveedores (sin códigos, se generarán solo al pasar a COTIZADO)
+            foreach ($data['proveedores'] as $index => $proveedorData) {
                 $proveedor = $calculadora->proveedores()->create([
                     'cbm' => $proveedorData['cbm'],
                     'peso' => $proveedorData['peso'],
-                    'qty_caja' => $proveedorData['qtyCaja']
+                    'qty_caja' => $proveedorData['qtyCaja'],
+                    'code_supplier' => null // Los códigos se generan solo al pasar a COTIZADO
                 ]);
 
                 // Crear productos del proveedor
@@ -87,7 +88,7 @@ class CalculadoraImportacionService
             $data['totalExtraProveedor'] = $data['tarifaTotalExtraProveedor'];
             $data['totalExtraItem'] = $data['tarifaTotalExtraItem'];
             $data['totalDescuento'] = $data['tarifaDescuento'];
-            
+
             Log::info('[CREAR COTIZACIÓN] Iniciando creación de Excel para calculadora ID: ' . $calculadora->id);
             Log::info('[CREAR COTIZACIÓN] Total productos: ' . $totalProductos);
             Log::info('[CREAR COTIZACIÓN] Datos preparados: ' . json_encode([
@@ -96,55 +97,55 @@ class CalculadoraImportacionService
                 'totalExtraItem' => $data['totalExtraItem'],
                 'totalDescuento' => $data['totalDescuento']
             ]));
-            
+
             $result = $this->crearCotizacionInicial($data);
-            
+
             Log::info('[CREAR COTIZACIÓN] Resultado de crearCotizacionInicial: ' . json_encode($result));
-            
+
             if (!$result || !isset($result['url'])) {
                 Log::error('[CREAR COTIZACIÓN] Error: No se generó URL del Excel. Result: ' . json_encode($result));
                 throw new \Exception('No se pudo generar el archivo Excel de la cotización');
             }
-            
+
             $url = $result['url'];
             $totalFob = $result['totalfob'];
             $totalImpuestos = $result['totalimpuestos'];
             $logistica = $result['logistica'];
             $boletaInfo = $result['boleta'];
-            
+
             Log::info('[CREAR COTIZACIÓN] Excel generado exitosamente');
             Log::info('[CREAR COTIZACIÓN] URL Excel: ' . $url);
             Log::info('[CREAR COTIZACIÓN] Total FOB: ' . $totalFob);
             Log::info('[CREAR COTIZACIÓN] Total Impuestos: ' . $totalImpuestos);
             Log::info('[CREAR COTIZACIÓN] Logística: ' . $logistica);
-            
+
             if ($boletaInfo) {
                 Log::info('[CREAR COTIZACIÓN] Boleta generada: ' . $boletaInfo['filename']);
             }
-            
+
             $calculadora->url_cotizacion = $url;
             $calculadora->total_fob = $totalFob;
             $calculadora->total_impuestos = $totalImpuestos;
             $calculadora->logistica = $logistica;
-            
+
             // Guardar URL del PDF si se generó la boleta
             if ($boletaInfo) {
                 $calculadora->url_cotizacion_pdf = $boletaInfo['url'];
                 Log::info('[CREAR COTIZACIÓN] Boleta PDF guardada en: ' . $boletaInfo['path']);
                 Log::info('[CREAR COTIZACIÓN] URL pública del PDF: ' . $boletaInfo['url']);
             }
-            
+
             Log::info('[CREAR COTIZACIÓN] Guardando calculadora con URL: ' . $url);
             $calculadora->save();
             Log::info('[CREAR COTIZACIÓN] Calculadora guardada exitosamente. ID: ' . $calculadora->id . ', URL: ' . $calculadora->url_cotizacion);
-            
+
             // Guardar información de la boleta si se generó
             if ($boletaInfo) {
                 // Aquí podrías guardar la información de la boleta en la base de datos
                 // Por ejemplo, crear un registro en una tabla de boletas
                 Log::info('Boleta PDF guardada en: ' . $boletaInfo['path']);
             }
-            
+
             DB::commit();
             return $calculadora->load(['proveedores.productos']);
         } catch (\Exception $e) {
@@ -161,6 +162,11 @@ class CalculadoraImportacionService
     {
         try {
             DB::beginTransaction();
+
+            // Cargar relación de contenedor si existe
+            if ($calculadora->id_carga_consolidada_contenedor) {
+                $calculadora->load('contenedor');
+            }
 
             // Actualizar cliente si existe
             $cliente = $this->buscarOcrearCliente($data['clienteInfo']);
@@ -191,19 +197,88 @@ class CalculadoraImportacionService
                 'tc' => $tipoCambio,
             ]);
 
-            // Eliminar proveedores y productos existentes
+            // Obtener proveedores existentes con sus códigos antes de eliminarlos
+            // Mapear por código para preservarlos correctamente
+            $proveedoresExistentes = $calculadora->proveedores()->with('productos')->orderBy('id')->get();
+            $mapaCodigosPorProveedor = [];
+            $codigosPorIndice = []; // Mapear códigos por índice de orden
+            foreach ($proveedoresExistentes as $index => $prov) {
+                if ($prov->code_supplier) {
+                    // Usar el código como clave para mapear
+                    $mapaCodigosPorProveedor[$prov->code_supplier] = $prov;
+                    // También mapear por índice para preservar orden
+                    $codigosPorIndice[$index] = $prov->code_supplier;
+                }
+            }
+
+            // Obtener códigos de proveedores que se van a mantener (si vienen en los datos)
+            // Si no vienen en los datos, usar los códigos existentes por orden
+            $codigosAMantener = [];
+            foreach ($data['proveedores'] as $index => $proveedorData) {
+                if (isset($proveedorData['code_supplier']) && !empty($proveedorData['code_supplier'])) {
+                    // Si viene en los datos, usarlo
+                    $codigosAMantener[] = $proveedorData['code_supplier'];
+                } elseif (isset($codigosPorIndice[$index])) {
+                    // Si no viene pero existe un código en esa posición, preservarlo
+                    $codigosAMantener[] = $codigosPorIndice[$index];
+                    // Agregar al array de datos para que se use
+                    $data['proveedores'][$index]['code_supplier'] = $codigosPorIndice[$index];
+                }
+            }
+
+            // Si hay cotización relacionada, eliminar proveedores de cotización que ya no existen
+            if ($calculadora->id_cotizacion && !empty($mapaCodigosPorProveedor)) {
+                $codigosExistentes = array_keys($mapaCodigosPorProveedor);
+                $codigosAEliminar = array_diff($codigosExistentes, $codigosAMantener);
+
+                if (!empty($codigosAEliminar)) {
+                    // Eliminar proveedores de cotización que ya no están en la calculadora
+                    $proveedoresCotizacion = \App\Models\CargaConsolidada\CotizacionProveedor::where('id_cotizacion', $calculadora->id_cotizacion)
+                        ->whereIn('code_supplier', $codigosAEliminar)
+                        ->get();
+
+                    foreach ($proveedoresCotizacion as $provCotizacion) {
+                        // Eliminar items primero
+                        \App\Models\CargaConsolidada\CotizacionProveedorItem::where('id_proveedor', $provCotizacion->id)->delete();
+                        // Eliminar proveedor
+                        $provCotizacion->delete();
+                    }
+
+                    Log::info('Proveedores eliminados de cotización', [
+                        'calculadora_id' => $calculadora->id,
+                        'cotizacion_id' => $calculadora->id_cotizacion,
+                        'codigos_eliminados' => $codigosAEliminar
+                    ]);
+                }
+            }
+
+            // Eliminar proveedores y productos existentes de la calculadora
             foreach ($calculadora->proveedores as $proveedor) {
                 $proveedor->productos()->delete();
             }
             $calculadora->proveedores()->delete();
 
-            // Crear nuevos proveedores y productos
+            // Crear nuevos proveedores y productos (preservar códigos existentes si vienen en los datos)
             foreach ($data['proveedores'] as $index => $proveedorData) {
+                // Preservar código existente si viene en los datos (no regenerar)
+                $codeSupplier = null;
+                if (isset($proveedorData['code_supplier']) && !empty($proveedorData['code_supplier'])) {
+                    // Si viene en los datos, preservarlo (ya fue generado al pasar a COTIZADO)
+                    $codeSupplier = $proveedorData['code_supplier'];
+                }
+                // Si no viene código, dejarlo null (solo se genera al pasar a COTIZADO)
+
                 $proveedor = $calculadora->proveedores()->create([
                     'cbm' => $proveedorData['cbm'] ?? 0,
                     'peso' => $proveedorData['peso'] ?? 0,
                     'qty_caja' => $proveedorData['qtyCaja'] ?? 0,
+                    'code_supplier' => $codeSupplier
                 ]);
+
+                // Agregar código al array de datos para usar en Excel (si existe)
+                if ($codeSupplier) {
+                    $data['proveedores'][$index]['code_supplier'] = $codeSupplier;
+                }
 
                 foreach ($proveedorData['productos'] as $productoData) {
                     $proveedor->productos()->create([
@@ -240,7 +315,7 @@ class CalculadoraImportacionService
             $data['totalDescuento'] = $calculadora->tarifa_descuento;
             $data['id_usuario'] = $calculadora->id_usuario;
             $data['id_carga_consolidada_contenedor'] = $calculadora->id_carga_consolidada_contenedor;
-            
+
             Log::info('[EDITAR COTIZACIÓN] Iniciando edición de Excel para calculadora ID: ' . $calculadora->id);
             Log::info('[EDITAR COTIZACIÓN] URL Excel anterior: ' . $calculadora->url_cotizacion);
             Log::info('[EDITAR COTIZACIÓN] Total productos: ' . $data['totalProductos']);
@@ -252,12 +327,12 @@ class CalculadoraImportacionService
                 'id_usuario' => $data['id_usuario'],
                 'id_carga_consolidada_contenedor' => $data['id_carga_consolidada_contenedor']
             ]));
-            
+
             // Regenerar Excel completo con las nuevas filas del resumen
             $result = $this->crearCotizacionInicial($data);
-            
+
             Log::info('[EDITAR COTIZACIÓN] Resultado de crearCotizacionInicial: ' . json_encode($result));
-            
+
             if (!$result || !isset($result['url'])) {
                 Log::error('[EDITAR COTIZACIÓN] ERROR: No se generó URL del Excel. Result: ' . json_encode($result));
                 Log::error('[EDITAR COTIZACIÓN] La calculadora mantendrá la URL anterior: ' . $calculadora->url_cotizacion);
@@ -268,14 +343,14 @@ class CalculadoraImportacionService
                 $calculadora->total_fob = $result['totalfob'] ?? $calculadora->total_fob;
                 $calculadora->total_impuestos = $result['totalimpuestos'] ?? $calculadora->total_impuestos;
                 $calculadora->logistica = $result['logistica'] ?? $calculadora->logistica;
-                
+
                 Log::info('[EDITAR COTIZACIÓN] Excel regenerado exitosamente');
                 Log::info('[EDITAR COTIZACIÓN] URL Excel anterior: ' . $urlAnterior);
                 Log::info('[EDITAR COTIZACIÓN] URL Excel nueva: ' . $result['url']);
                 Log::info('[EDITAR COTIZACIÓN] Total FOB: ' . ($result['totalfob'] ?? 'N/A'));
                 Log::info('[EDITAR COTIZACIÓN] Total Impuestos: ' . ($result['totalimpuestos'] ?? 'N/A'));
                 Log::info('[EDITAR COTIZACIÓN] Logística: ' . ($result['logistica'] ?? 'N/A'));
-                
+
                 // Regenerar PDF con el Excel actualizado
                 if (isset($result['boleta'])) {
                     $boletaInfo = $result['boleta'];
@@ -285,12 +360,12 @@ class CalculadoraImportacionService
                     $boletaInfo = $this->generateBoleta($calculadora->url_cotizacion, $data['clienteInfo']);
                     Log::info('[EDITAR COTIZACIÓN] Resultado de generateBoleta: ' . json_encode($boletaInfo));
                 }
-                
+
                 if ($boletaInfo && isset($boletaInfo['path'])) {
                     $calculadora->url_cotizacion_pdf = $boletaInfo['url'];
                     Log::info('[EDITAR COTIZACIÓN] Boleta PDF actualizada: ' . $boletaInfo['url']);
                 }
-                
+
                 Log::info('[EDITAR COTIZACIÓN] Guardando calculadora con nueva URL: ' . $calculadora->url_cotizacion);
                 $calculadora->save();
                 Log::info('[EDITAR COTIZACIÓN] Calculadora guardada exitosamente. ID: ' . $calculadora->id . ', URL: ' . $calculadora->url_cotizacion);
@@ -386,35 +461,35 @@ class CalculadoraImportacionService
      */
     public function eliminarCalculo(int $id): bool
     {
-        DB::beginTransaction(); 
+        DB::beginTransaction();
         try {
             $calculadora = CalculadoraImportacion::findOrFail($id);
-            
+
             // Si la calculadora tiene cotización, eliminar primero los registros relacionados
             if ($calculadora->id_cotizacion) {
                 $cotizacionId = $calculadora->id_cotizacion;
-                
+
                 // Obtener los proveedores de la cotización
                 $proveedores = CotizacionProveedor::where('id_cotizacion', $cotizacionId)->get();
-                
+
                 // Eliminar items de proveedores primero
                 foreach ($proveedores as $proveedor) {
                     CotizacionProveedorItem::where('id_proveedor', $proveedor->id)->delete();
                 }
-                
+
                 // Eliminar proveedores
                 CotizacionProveedor::where('id_cotizacion', $cotizacionId)->delete();
-                
+
                 // Eliminar facturas comerciales
                 FacturaComercial::where('quotation_id', $cotizacionId)->delete();
-                
+
                 // Eliminar la cotización
                 Cotizacion::where('id', $cotizacionId)->delete();
             }
-            
+
             // Eliminar la calculadora (esto eliminará en cascada proveedores y productos)
             $calculadora->delete();
-            
+
             DB::commit();
             return true;
         } catch (\Exception $e) {
@@ -457,35 +532,35 @@ class CalculadoraImportacionService
             // Obtener tipo_cambio del request, si es null o 0 usar 3.75 por defecto
             $tipoCambio = (!empty($data['tipo_cambio']) && $data['tipo_cambio'] > 0) ? $data['tipo_cambio'] : 3.75;
             $plantillaPath = public_path('assets/templates/PLANTILLA_COTIZACION_INICIAL_CALCULADORA.xlsx');
-
+    
             if (!file_exists($plantillaPath)) {
                 return 'Plantilla de cotización inicial no encontrada: ' . $plantillaPath;
             }
-
+    
             try {
                 $objPHPExcel = \PhpOffice\PhpSpreadsheet\IOFactory::load($plantillaPath);
-
+    
                 if (!$objPHPExcel) {
                     return 'Error: La plantilla Excel no se cargó correctamente';
                 }
-
+    
                 if ($objPHPExcel->getSheetCount() === 0) {
                     return 'Error: La plantilla Excel no tiene hojas';
                 }
             } catch (\Exception $e) {
                 return 'Error al cargar plantilla Excel: ' . $e->getMessage();
             }
-
+    
             if ($objPHPExcel->getSheetCount() < 2) {
                 return 'Error: La plantilla no tiene suficientes hojas';
             }
-
+    
             $sheetCalculos = $objPHPExcel->getSheet(1);
-
+    
             if (!$sheetCalculos) {
                 return 'Error: No se pudo obtener la hoja de cálculos';
             }
-
+    
             $totalProductos = $data['totalProductos'];
             
             if ($totalProductos <= 0) {
@@ -498,6 +573,7 @@ class CalculadoraImportacionService
                 ];
             }
             
+            $rowCodeSupplier = 3;
             $rowNProveedor = 4;
             $rowNCaja = 5;
             $rowPeso = 6;
@@ -536,20 +612,19 @@ class CalculadoraImportacionService
             $totalColumnas = 0;
             $formatoTexto = 'General';
             $sheetResumen = $objPHPExcel->getSheet(0);
+            
             foreach ($data['proveedores'] as $proveedor) {
                 $totalColumnas += count($proveedor['productos']);
             }
-
-            // Solo insertar columnas si necesitamos más de 1 (ya que C está disponible)
+    
             if ($totalColumnas > 1) {
-                $columnasAInsertar = $totalColumnas - 1; // Restamos 1 porque ya tenemos la columna C
+                $columnasAInsertar = $totalColumnas - 1;
                 $sheetCalculos->insertNewColumnBefore('D', $columnasAInsertar);
             }
-
-            // Ahora empezar desde columna C (índice 3)
-            $columnIndex = 3; // C = 3
+    
+            $columnIndex = 3;
             $indexProveedor = 1;
-
+    
             $getColumnLetter = function ($columnNumber) {
                 $letter = '';
                 while ($columnNumber > 0) {
@@ -561,59 +636,102 @@ class CalculadoraImportacionService
             };
             $initialColumn = $getColumnLetter($initialColumnIndex);
             
-            // Calcular totalColumn y sumColumn una sola vez antes del bucle
             $totalColumn = $getColumnLetter($initialColumnIndex + $totalProductos);
             $sumColumn = $getColumnLetter($initialColumnIndex + $totalProductos - 1);
-
+    
             $indexProducto = 1;
-            $startRowProducto = 38; // Fila de inicio de productos en la hoja de resumen
+            $startRowProducto = 38;
             $currentRowProducto = $startRowProducto;
-            foreach ($data['proveedores'] as $proveedor) {
-                $numProductos = count($proveedor['productos']);
-
-                // Obtener columna inicial y final para el merge
-                $startColumn = $getColumnLetter($columnIndex);
-                $endColumn = $getColumnLetter($columnIndex + $numProductos - 1);
-
-                // Si el proveedor tiene más de 1 producto, hacer merge de las celdas del proveedor
-                if ($numProductos > 1) {
-                    // Merge para las filas del proveedor
-                    $sheetCalculos->mergeCells($startColumn . $rowNProveedor . ':' . $endColumn . $rowNProveedor);
-                    $sheetCalculos->mergeCells($startColumn . $rowNCaja . ':' . $endColumn . $rowNCaja);
-                    $sheetCalculos->mergeCells($startColumn . $rowPeso . ':' . $endColumn . $rowPeso);
-                    $sheetCalculos->mergeCells($startColumn . $rowVolProveedor . ':' . $endColumn . $rowVolProveedor);
-                    $sheetCalculos->mergeCells($startColumn . $rowHeaderNProveedor . ':' . $endColumn . $rowHeaderNProveedor);
-
-                    // Si hay medidas, también hacer merge
-                    if (isset($proveedor['medidas'])) {
-                        $sheetCalculos->mergeCells($startColumn . $rowMedida . ':' . $endColumn . $rowMedida);
+            
+            // ✅ SOLUCIÓN CRÍTICA: Eliminar TODOS los comentarios de AMBAS hojas
+            foreach ([$sheetResumen, $sheetCalculos] as $sheet) {
+                $comments = $sheet->getComments();
+                foreach ($comments as $coordinate => $comment) {
+                    try {
+                        $sheet->getComment($coordinate)->getText()->createText('');
+                        unset($sheet->getComments()[$coordinate]);
+                    } catch (\Exception $e) {
+                        // Ignorar
                     }
                 }
-
-                // Establecer valores del proveedor (solo en la primera columna del merge)
+            }
+            
+            // ✅ Función helper para merge seguro
+            $safeMergeCells = function($sheet, $range) {
+                try {
+                    $sheet->unmergeCells($range);
+                } catch (\Exception $e) {
+                    // No importa
+                }
+                
+                try {
+                    $sheet->mergeCells($range);
+                } catch (\Exception $e) {
+                    // Ignorar
+                }
+            };
+            
+            foreach ($data['proveedores'] as $proveedor) {
+                $numProductos = count($proveedor['productos']);
+    
+                $startColumn = $getColumnLetter($columnIndex);
+                $endColumn = $getColumnLetter($columnIndex + $numProductos - 1);
+    
+                if ($numProductos > 1) {
+                    $safeMergeCells($sheetCalculos, $startColumn . $rowCodeSupplier . ':' . $endColumn . $rowCodeSupplier);
+                    $safeMergeCells($sheetCalculos, $startColumn . $rowNProveedor . ':' . $endColumn . $rowNProveedor);
+                    $safeMergeCells($sheetCalculos, $startColumn . $rowNCaja . ':' . $endColumn . $rowNCaja);
+                    $safeMergeCells($sheetCalculos, $startColumn . $rowPeso . ':' . $endColumn . $rowPeso);
+                    $safeMergeCells($sheetCalculos, $startColumn . $rowVolProveedor . ':' . $endColumn . $rowVolProveedor);
+                    $safeMergeCells($sheetCalculos, $startColumn . $rowHeaderNProveedor . ':' . $endColumn . $rowHeaderNProveedor);
+    
+                    if (isset($proveedor['medidas'])) {
+                        $safeMergeCells($sheetCalculos, $startColumn . $rowMedida . ':' . $endColumn . $rowMedida);
+                    }
+                }
+    
+                $codeSupplier = $proveedor['code_supplier'] ?? null;
+                if ($codeSupplier) {
+                    $sheetCalculos->setCellValue($startColumn . $rowCodeSupplier, $codeSupplier);
+                }
+    
                 $sheetCalculos->setCellValue($startColumn . $rowNProveedor, $indexProveedor);
                 $sheetCalculos->setCellValue($startColumn . $rowNCaja, $proveedor['qtyCaja']);
                 $sheetCalculos->setCellValue($startColumn . $rowPeso, $proveedor['peso']);
                 $sheetCalculos->setCellValue($startColumn . $rowVolProveedor, $proveedor['cbm']);
                 $sheetCalculos->setCellValue($startColumn . $rowHeaderNProveedor, $indexProveedor);
-
+    
                 if (isset($proveedor['medidas'])) {
                     $sheetCalculos->setCellValue($startColumn . $rowMedida, $proveedor['medidas']);
                 }
-
-                // Ahora procesar cada producto en su propia columna
+    
                 $productColumnIndex = $columnIndex;
                 $indexP=0;
-                //insert count total productos rows before current row
+                
                 $sheetResumen->insertNewRowBefore($currentRowProducto, count($proveedor['productos']));
+                
                 foreach ($proveedor['productos'] as $productoIndex => $producto) {
                     $productColumn = $getColumnLetter($productColumnIndex);
-
+    
+                    // ✅ Limpiar merges heredados de la fila
+                    $allMergedCells = $sheetResumen->getMergeCells();
+                    foreach ($allMergedCells as $mergedRange) {
+                        if (preg_match('/:([A-Z]+)(\d+)$/', $mergedRange, $matches)) {
+                            $rangeRow = (int)$matches[2];
+                            if ($rangeRow == $currentRowProducto) {
+                                try {
+                                    $sheetResumen->unmergeCells($mergedRange);
+                                } catch (\Exception $e) {
+                                    // Ignorar
+                                }
+                            }
+                        }
+                    }
+    
                     $sheetCalculos->setCellValue($productColumn . $rowProducto, $producto['nombre']);
                     $sheetCalculos->setCellValue($productColumn . $rowValorUnitario, $producto['precio']);
                     $sheetCalculos->setCellValue($productColumn . $rowValoracion, $producto['valoracion']);
                     $sheetCalculos->setCellValue($productColumn . $rowCantidad, $producto['cantidad']);
-                    // Calcular valores
                     $sheetCalculos->setCellValue($productColumn . $rowValorFob, '=' . $productColumn . $rowValorUnitario . '*' . $productColumn . $rowCantidad);
                     $sheetCalculos->setCellValue($productColumn . $rowValorAjustado, '=' . ($productColumn . $rowValoracion) . '*' . ($productColumn . $rowCantidad));
                     $sheetCalculos->setCellValue($productColumn . $rowDistribucion, '=ROUND(' . ($productColumn . $rowValorFob) . '/' . ($totalColumn . $rowValorFob) . ',10)');
@@ -623,7 +741,6 @@ class CalculadoraImportacionService
                     $sheetCalculos->setCellValue($productColumn . $rowSeguro, '=ROUND(' . ($totalColumn . $rowSeguro) . '*' . ($productColumn . $rowDistribucion) . ',10)');
                     $sheetCalculos->setCellValue($productColumn . $rowValorCIF, '=ROUND(' . ($productColumn . $rowValorCFR) . '+' . ($productColumn . $rowSeguro) . ',10)');
                     $sheetCalculos->setCellValue($productColumn . $rowValorCIFAdjustado, '=ROUND(' . ($productColumn . $rowValorCFRAjustado) . '+' . ($productColumn . $rowSeguro) . ',10)');
-                    //tributos
                     $sheetCalculos->setCellValue($productColumn . $rowAntidumpingCU, $producto['antidumpingCU'] ?? 0);
                     $sheetCalculos->setCellValue($productColumn . $rowAntidumpingValor, '=ROUND(' . $productColumn . $rowCantidad . '*' . $productColumn . $rowAntidumpingCU . ',10)');
                     $sheetCalculos->setCellValue($productColumn . $rowAdValoremP, round(($producto['adValoremP'] ?? 0) / 100, 4));
@@ -633,100 +750,93 @@ class CalculadoraImportacionService
                     $sheetCalculos->setCellValue($productColumn . $rowIGV, $formIGV);
                     $formIPM = "=ROUND((MAX(" . $productColumn . $rowValorCIF . ":" . $productColumn . $rowValorCIFAdjustado . ")+" . $productColumn . $rowAdValoremP . "+" . $productColumn . $rowAdValoremValor . ")*0.02,10)";
                     $sheetCalculos->setCellValue($productColumn . $rowIPM, $formIPM);
-                    //form percepcion (max + advalorem + igv+ ipm)*0.035
                     $formPercepcion = "=ROUND((MAX(" . $productColumn . $rowValorCIF . ":" . $productColumn . $rowValorCIFAdjustado . ")+" . $productColumn . $rowAdValoremP . "+" . $productColumn . $rowAdValoremValor . "+" . $productColumn . $rowIGV . "+" . $productColumn . $rowIPM . ")*0.035,10)";
                     $sheetCalculos->setCellValue($productColumn . $rowPercepcion, $formPercepcion);
-
+    
                     $formTotalTributos = "=ROUND(" . $productColumn . $rowAdValoremValor . "+" . $productColumn . $rowIGV . "+" . $productColumn . $rowIPM . "+" . $productColumn . $rowPercepcion . ",10)";
                     $sheetCalculos->setCellValue($productColumn . $rowTotalTributos, $formTotalTributos);
-                    //Costos Destino
                     $sheetCalculos->setCellValue($productColumn . $rowDistribucionItemDestino, '=ROUND(' . $productColumn . $rowDistribucion . ',10)');
                     $sheetCalculos->setCellValue($productColumn . $rowItemDestino, '=ROUND(' . $totalColumn . $rowItemDestino . '*(' . $productColumn . $rowDistribucionItemDestino . '),10)');
                     $sheetCalculos->setCellValue($productColumn . $rowItemCostos, '=(' . $productColumn . $rowProducto . ')');
-                    //Totales - Costo Total = MAX(CIF, CIF Ajustado) + Antidumping + Total Tributos + Item Destino
                     $sheetCalculos->setCellValue($productColumn . $rowCostoTotal, '=ROUND(MAX(' . $productColumn . $rowValorCFR . ',' . $productColumn . $rowValorCFRAjustado . ')+' . $productColumn . $rowAntidumpingValor . '+' . $productColumn . $rowTotalTributos . '+' . $productColumn . $rowItemDestino . ',10)');
                     $sheetCalculos->setCellValue($productColumn . $rowCostoCantidad, '=(' . $productColumn . $rowCantidad . ')');
                     $sheetCalculos->setCellValue($productColumn . $rowCostoUnitarioUSD, '=ROUND((' . $productColumn . $rowCostoTotal . ')/(' . $productColumn . $rowCostoCantidad . '),10)');
                     $sheetCalculos->setCellValue($productColumn . $rowCostoUnitarioPEN, '=ROUND((' . $productColumn . $rowCostoUnitarioUSD . ')*' . $tipoCambio . ',10)');
-                    //IF PRODUCTINDEX >1 THEN INSERT ROW before NEXT ROW (to duplicate current row structure)
                     
                     $sheetResumen->setCellValue('A' . $currentRowProducto, $indexProducto);
-
                     $sheetResumen->setCellValue('B' . $currentRowProducto, "='2'!" . $productColumn . $rowProducto);
-                    //merge b to c
-                    $sheetResumen->mergeCells('B' . $currentRowProducto . ':D' . $currentRowProducto);
+                    
+                    $safeMergeCells($sheetResumen, 'B' . $currentRowProducto . ':D' . $currentRowProducto);
+                    
                     $sheetResumen->setCellValue('E' . $currentRowProducto, "='2'!" . $productColumn . $rowCantidad);
                     $sheetResumen->setCellValue('F' . $currentRowProducto, "='2'!" . $productColumn . $rowValorUnitario);
-                    //merge f to g
-                    $sheetResumen->mergeCells('F' . $currentRowProducto . ':G' . $currentRowProducto);
+                    
+                    $safeMergeCells($sheetResumen, 'F' . $currentRowProducto . ':G' . $currentRowProducto);
+                    
                     $sheetResumen->setCellValue('H' . $currentRowProducto, "='2'!" . $productColumn . $rowCostoUnitarioUSD);
                     $sheetResumen->setCellValue('I' . $currentRowProducto, "=E" . $currentRowProducto . "*H" . $currentRowProducto);
                     $sheetResumen->setCellValue('J' . $currentRowProducto, '=H' . $currentRowProducto . '*' . $tipoCambio);
-
-                    //MERGE J TO K
-                    $sheetResumen->mergeCells('J' . $currentRowProducto . ':K' . $currentRowProducto);
-                    $sheetResumen->duplicateStyle($sheetResumen->getStyle('A'.$startRowProducto), 'A' . $currentRowProducto . ':K' . $currentRowProducto);
-                    //APPLY F H I CONTAINS DOLLAR FORMAT
+    
+                    $safeMergeCells($sheetResumen, 'J' . $currentRowProducto . ':K' . $currentRowProducto);
+                    
+                    // ✅ CAMBIO CRÍTICO: Copiar estilos celda por celda en lugar de duplicateStyle
+                    $templateRow = $startRowProducto;
+                    $styleArray = [
+                        'font' => $sheetResumen->getStyle('A' . $templateRow)->getFont()->exportArray(),
+                        'borders' => $sheetResumen->getStyle('A' . $templateRow)->getBorders()->exportArray(),
+                        'alignment' => $sheetResumen->getStyle('A' . $templateRow)->getAlignment()->exportArray(),
+                        'fill' => $sheetResumen->getStyle('A' . $templateRow)->getFill()->exportArray(),
+                    ];
+                    
+                    // Aplicar estilos individualmente a cada celda del rango
+                    foreach (range('A', 'K') as $col) {
+                        $cellCoord = $col . $currentRowProducto;
+                        $sheetResumen->getStyle($cellCoord)->applyFromArray($styleArray);
+                    }
+                    
                     $sheetResumen->getStyle('F' . $currentRowProducto)->getNumberFormat()->setFormatCode($this->formatoDollar);
                     $sheetResumen->getStyle('H' . $currentRowProducto)->getNumberFormat()->setFormatCode($this->formatoDollar);
                     $sheetResumen->getStyle('I' . $currentRowProducto)->getNumberFormat()->setFormatCode($this->formatoDollar);
-                    //APPLY J S/. format
                     $sheetResumen->getStyle('J' . $currentRowProducto)->getNumberFormat()->setFormatCode($this->formatoSoles);
                     
-                    // Tabla paralela en columnas M-Q con fórmulas de cada celda por producto
-                    // Los datos se toman de la hoja 1 (resumen) sección de productos que empieza en A28
-                    // $currentRowProducto es la fila actual donde se está escribiendo el producto en la hoja de resumen
                     $sheetResumen->setCellValue('M' . $currentRowProducto, "=A" . $currentRowProducto);
                     $sheetResumen->setCellValue('N' . $currentRowProducto, "=B" . $currentRowProducto);
                     $sheetResumen->setCellValue('O' . $currentRowProducto, "=F" . $currentRowProducto);
                     $sheetResumen->setCellValue('P' . $currentRowProducto, "=H" . $currentRowProducto);
                     $sheetResumen->setCellValue('Q' . $currentRowProducto, "=J" . $currentRowProducto);
-                    //m and n column not are currency format
+                    
                     $sheetResumen->getStyle('M' . $currentRowProducto)->getNumberFormat()->setFormatCode($this->formatoTexto);
                     $sheetResumen->getStyle('N' . $currentRowProducto)->getNumberFormat()->setFormatCode($this->formatoTexto);
-                    // Aplicar formatos a la tabla M-Q
                     $sheetResumen->getStyle('O' . $currentRowProducto)->getNumberFormat()->setFormatCode($this->formatoDollar);
                     $sheetResumen->getStyle('P' . $currentRowProducto)->getNumberFormat()->setFormatCode($this->formatoDollar);
                     $sheetResumen->getStyle('Q' . $currentRowProducto)->getNumberFormat()->setFormatCode($this->formatoSoles);
                     
-                    // Aplicar centrado y bordes a la tabla M-Q
                     $rangeMQ = 'M' . $currentRowProducto . ':Q' . $currentRowProducto;
                     $styleMQ = $sheetResumen->getStyle($rangeMQ);
                     $styleMQ->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
                     $styleMQ->getAlignment()->setVertical(\PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER);
                     $styleMQ->getBorders()->getAllBorders()->setBorderStyle(\PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN);
-                    //fonfo blanco 
                     $styleMQ->getFill()->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID);
                     $styleMQ->getFill()->getStartColor()->setARGB('FFFFFF');
-                    //set font color black
                     $styleMQ->getFont()->getColor()->setARGB('000000');
-
+    
                     $indexProducto++;
                     $currentRowProducto++;
-                    $productColumnIndex++; // Incrementar el índice de columna para el siguiente producto
+                    $productColumnIndex++;
                     $indexP++;
                 }
-
-                // Actualizar el índice de columna para el siguiente proveedor
+    
                 $columnIndex += $numProductos;
                 $indexProveedor++;
             }
             
-            // Crear UN SOLO TOTAL al final de todos los productos (fuera del bucle de proveedores)
-            //totales acurrentrow =TOTAL , E= SUM(e.$startRowProducto:e.$currentRowProducto-1),i= SUM(i.$startRowProducto:i.$currentRowProducto-1),j= SUM(j.$startRowProducto:j.$currentRowProducto-1)
             $sheetResumen->setCellValue('A' . $currentRowProducto, 'TOTAL');
             $sheetResumen->setCellValue('E' . $currentRowProducto, '=SUM(E' . $startRowProducto . ':E' . ($currentRowProducto - 1) . ')');
             $sheetResumen->setCellValue('I' . $currentRowProducto, '=SUM(I' . $startRowProducto . ':I' . ($currentRowProducto - 1) . ')');
-            //format i to dollar
             $sheetResumen->getStyle('I' . $currentRowProducto)->getNumberFormat()->setFormatCode($this->formatoDollar);
-            
-
-
-            //copy style from row 36 to more rows
-            
-            // Agregar una fila en blanco después del TOTAL final (para separar del resumen de pagos)
+    
             $currentRowProducto++;
-            //set row indexProducto
+            
             $sheetCalculos->setCellValue($totalColumn . $rowNProveedor, '=SUM(' . ($initialColumn . $rowNProveedor) . ':' . ($sumColumn . $rowNProveedor) . ')');
             $sheetCalculos->setCellValue($totalColumn . $rowNCaja, '=SUM(' . ($initialColumn . $rowNCaja) . ':' . ($sumColumn . $rowNCaja) . ')');
             $sheetCalculos->setCellValue($totalColumn . $rowPeso, '=SUM(' . ($initialColumn . $rowPeso) . ':' . ($sumColumn . $rowPeso) . ')');
@@ -735,19 +845,18 @@ class CalculadoraImportacionService
             $sheetCalculos->setCellValue($totalColumn . $rowValorFob, '=SUM(' . ($initialColumn . $rowValorFob) . ':' . ($sumColumn . $rowValorFob) . ')');
             $sheetCalculos->setCellValue($totalColumn . $rowValorAjustado, '=SUM(' . ($initialColumn . $rowValorAjustado) . ':' . ($sumColumn . $rowValorAjustado) . ')');
             $sheetCalculos->setCellValue($totalColumn . $rowDistribucion, '=SUM(' . ($initialColumn . $rowDistribucion) . ':' . ($sumColumn . $rowDistribucion) . ')');
-            // Calcular la suma de extras
+            
             $totalExtras = ($data['totalExtraProveedor'] ?? 0) + ($data['totalExtraItem'] ?? 0);
-            // Sumar extras a la tarifa antes de multiplicar
-            $tarifaConExtras = $data['tarifa']['tarifa'] + $totalExtras;
+            $tarifaConExtras = $data['tarifa']['tarifa'];
+            
             if ($data['tarifa']['type'] == 'PLAIN') {
-                $sheetCalculos->setCellValue($totalColumn . $rowFlete, '=' . ($tarifaConExtras) . '*0.6');
-                //tarifa_descuento
-                $sheetCalculos->setCellValue($totalColumn . $rowItemDestino, '=(' . ($tarifaConExtras) . '*0.4)-(' . ($data['totalDescuento']??00) . ')');
+                $sheetCalculos->setCellValue($totalColumn . $rowFlete, '=' . ($data['tarifa']['tarifa']) . '*0.6');
+                $sheetCalculos->setCellValue($totalColumn . $rowItemDestino, '=(' . ($data['tarifa']['tarifa']) . '*0.4)-(' . ($data['totalDescuento']??00) . ')+(' . ($totalExtras??00) . ')');
             } else {
-                $sheetCalculos->setCellValue($totalColumn . $rowFlete, '=' . ($tarifaConExtras) . '*0.6*(' . ($totalColumn . $rowVolProveedor) . ')');
-                $sheetCalculos->setCellValue($totalColumn . $rowItemDestino, '=' . ($tarifaConExtras) . '*0.4*(' . ($totalColumn . $rowVolProveedor) . ')-(' . ($data['totalDescuento']??00) . ')');
+                $sheetCalculos->setCellValue($totalColumn . $rowFlete, '=' . ($data['tarifa']['tarifa']) . '*0.6*(' . ($totalColumn . $rowVolProveedor) . ')');
+                $sheetCalculos->setCellValue($totalColumn . $rowItemDestino, '=' . ($tarifaConExtras) . '*0.4*(' . ($totalColumn . $rowVolProveedor) . ')-(' . ($data['totalDescuento']??00) . ')+(' . ($totalExtras??00) . ')');
             }
-
+    
             $sheetCalculos->setCellValue($totalColumn . $rowValorCFR, '=ROUND(SUM(' . $initialColumn . $rowValorCFR . ':' . $sumColumn . $rowValorCFR . '),10)');
             $sheetCalculos->setCellValue($totalColumn . $rowValorCFRAjustado, '=ROUND(SUM(' . $initialColumn . $rowValorCFRAjustado . ':' . $sumColumn . $rowValorCFRAjustado . '),2)');
             $sheetCalculos->setCellValue($totalColumn . $rowSeguro, '=IF(' . $totalColumn . $rowValorFob . '>=5000,100,50)');
@@ -759,19 +868,14 @@ class CalculadoraImportacionService
             $sheetCalculos->setCellValue($totalColumn . $rowIPM, '=ROUND(SUM(' . $initialColumn . $rowIPM . ':' . $sumColumn . $rowIPM . '),10)');
             $sheetCalculos->setCellValue($totalColumn . $rowPercepcion, '=ROUND(SUM(' . $initialColumn . $rowPercepcion . ':' . $sumColumn . $rowPercepcion . '),10)');
             $sheetCalculos->setCellValue($totalColumn . $rowTotalTributos, '=ROUND(SUM(' . $initialColumn . $rowTotalTributos . ':' . $sumColumn . $rowTotalTributos . '),10)');
-            // El costo total es: MAX(ValorCIF, ValorCIF Ajustado) + Antidumping + Total Tributos + Costos Destino
             $sheetCalculos->setCellValue($totalColumn . $rowCostoTotal, '=ROUND(MAX(' . $totalColumn . $rowValorCFR . ',' . $totalColumn . $rowValorCFRAjustado . ')+' . $totalColumn . $rowAntidumpingValor . '+' . $totalColumn . $rowTotalTributos . '+' . $totalColumn . $rowItemDestino . ',10)');
             $sheetCalculos->setCellValue($totalColumn . $rowCostoCantidad, '=(' . $totalColumn . $rowCantidad . ')');
-            // Sumar los costos unitarios USD de todos los items individuales
             $sheetCalculos->setCellValue($totalColumn . $rowCostoUnitarioUSD, '=ROUND(SUM(' . $initialColumn . $rowCostoUnitarioUSD . ':' . $sumColumn . $rowCostoUnitarioUSD . '),10)');
-            // Sumar los costos unitarios PEN de todos los items individuales
             $sheetCalculos->setCellValue($totalColumn . $rowCostoUnitarioPEN, '=ROUND(SUM(' . $initialColumn . $rowCostoUnitarioPEN . ':' . $sumColumn . $rowCostoUnitarioPEN . '),10)');
             
-            // Limpiar celdas vacías en la hoja 2 después de la última columna de productos
             $sumColumnIndex = $initialColumnIndex + $totalProductos - 1;
             $totalColumnIndex = $initialColumnIndex + $totalProductos;
             
-            // Limpiar celdas vacías en columnas después de la última columna de productos
             for ($colIdx = $sumColumnIndex + 1; $colIdx < $totalColumnIndex + 3; $colIdx++) {
                 $colLetter = $getColumnLetter($colIdx);
                 if ($colIdx == $totalColumnIndex) {
@@ -787,17 +891,15 @@ class CalculadoraImportacionService
                                 $sheetCalculos->setCellValue($cell, '');
                             }
                         } catch (\Exception $e) {
-                            // Ignorar errores
+                            // Ignorar
                         }
                     }
                 } catch (\Exception $e) {
-                    // Ignorar errores
+                    // Ignorar
                 }
             }
             
-            //Resumen
             $sheetResumen->setCellValue('E11', $data['tarifa']['value']);
-            // Determinar qué datos mostrar según tipo de documento
             $tipoDocumento = $data['clienteInfo']['tipoDocumento'] ?? 'DNI';
             $nombreMostrar = $tipoDocumento === 'RUC' ? ($data['clienteInfo']['empresa'] ?? $data['clienteInfo']['razonSocial'] ?? '') : $data['clienteInfo']['nombre'];
             $documentoMostrar = $tipoDocumento === 'RUC' ? ($data['clienteInfo']['ruc'] ?? '') : $data['clienteInfo']['dni'];
@@ -807,49 +909,41 @@ class CalculadoraImportacionService
             $sheetResumen->setCellValue('B9', $documentoMostrar);
             $sheetResumen->setCellValue('B10', $data['clienteInfo']['correo']);
             $sheetResumen->setCellValue('B11', $whatsappValue);
-            // Agregar número de cajas, peso y volumen en la hoja de resumen
-            $sheetResumen->setCellValue('I9', "='2'!" . ($totalColumn . $rowPeso)); // Peso total
-            $sheetResumen->setCellValue('I10', "='2'!" . ($totalColumn . $rowNCaja)); // Número de cajas total
-            $sheetResumen->setCellValue('I11', "='2'!" . ($totalColumn . $rowVolProveedor)); // Volumen total
+            $sheetResumen->setCellValue('I9', "='2'!" . ($totalColumn . $rowPeso));
+            $sheetResumen->setCellValue('I10', "='2'!" . ($totalColumn . $rowNCaja));
+            $sheetResumen->setCellValue('I11', "='2'!" . ($totalColumn . $rowVolProveedor));
             $sheetResumen->setCellValue('J11', "='2'!" . ($totalColumn . $rowVolProveedor));
             $sheetResumen->setCellValue('J14', "='2'!" . ($totalColumn . $rowValorFob));
             $sheetResumen->setCellValue('J15', "='2'!" . ($totalColumn . $rowFlete . "+('2'!" . $totalColumn . $rowSeguro . ")"));
-            //i20 is percentage of highter percentage of advalorem between all products on page 2 ROW 33 COLUNM START FROM C COLUMN
+            
             $finalColumnAdValorem = $getColumnLetter($initialColumnIndex + $totalColumnas - 1);
             $sheetResumen->setCellValue('I20', "=MAX('2'!C" . $rowAdValoremP . ":" . $finalColumnAdValorem . $rowAdValoremP . ")");
-            //set i20 total advalorem
             $sheetResumen->setCellValue('J20', "='2'!" . ($totalColumn . $rowAdValoremValor));
-            //set i21 total igv
             $sheetResumen->setCellValue('J21', "='2'!" . ($totalColumn . $rowIGV));
-            //set i22 total ipm
             $sheetResumen->setCellValue('J22', "='2'!" . ($totalColumn . $rowIPM));
             $sheetResumen->setCellValue('I23', "=MAX('2'!C" . $rowAntidumpingCU . ":" . $finalColumnAdValorem . $rowAntidumpingCU . ")");
-
-            //set i23 total antidumping
             $sheetResumen->setCellValue('J23', "='2'!" . ($totalColumn . $rowAntidumpingValor));
-            //set i26 total percepcion
             $sheetResumen->setCellValue('J26', "='2'!" . ($totalColumn . $rowPercepcion));
-            //set i30 i11
+            
             if ($data['tarifa']['type'] == 'PLAIN') {
                 $sheetResumen->setCellValue('J30', '=' . $data['tarifa']['tarifa']);
             } else {
                 $sheetResumen->setCellValue('J30', '=I11*(' . $data['tarifa']['tarifa'] . ')');
             }
-
+    
             $sheetResumen->setCellValue('J31', $data['totalExtraProveedor']+$data['totalExtraItem']);
             $sheetResumen->setCellValue('J32', $data['totalDescuento']);
-            $sheetResumen->setCellValue('J33', '=J27'); // IMPUESTOS
-            // Fila 34: MONTO TOTAL = SERVICIO + CARGOS EXTRAS - DESCUENTO + IMPUESTOS
+            $sheetResumen->setCellValue('J33', '=J27');
             $sheetResumen->setCellValue('J34', '=J30+J31-J32+J33');
+            
             $timestamp = now()->format('Y_m_d_H_i_s');
             $fileName = "COTIZACION_INICIAL_{$data['clienteInfo']['nombre']}_{$timestamp}.xlsx";
             $filePath = storage_path('app/public/templates/' . $fileName);
-
+    
             try {
                 $writer = \PhpOffice\PhpSpreadsheet\IOFactory::createWriter($objPHPExcel, 'Xlsx');
                 $writer->save($filePath);
-
-                // Verificar que el archivo se creó correctamente
+    
                 if (!file_exists($filePath)) {
                     return [
                         'url' => null,
@@ -859,8 +953,7 @@ class CalculadoraImportacionService
                         'boleta' => null
                     ];
                 }
-
-                // Verificar que el archivo no esté vacío
+    
                 $fileSize = filesize($filePath);
                 if ($fileSize === 0) {
                     return [
@@ -871,20 +964,18 @@ class CalculadoraImportacionService
                         'boleta' => null
                     ];
                 }
-
-                // Generar boleta PDF
+    
                 $boletaInfo = null;
                 try {
                     $boletaInfo = $this->generateBoleta($objPHPExcel, $data['clienteInfo']);
                 } catch (\Exception $e) {
                     // Continuar sin la boleta
                 }
-
+    
                 $publicUrl = Storage::url('templates/' . $fileName);
                 
                 $totalFob = $sheetCalculos->getCell($totalColumn . $rowValorFob)->getCalculatedValue();
                 $totalImpuestos = $sheetCalculos->getCell($totalColumn . $rowTotalTributos)->getCalculatedValue();
-                //j30 + j31 if is number else 0 -j32
                 $j30 = $sheetResumen->getCell('J30')->getCalculatedValue();
                 $j31 = $sheetResumen->getCell('J31')->getCalculatedValue();
                 $j32 = $sheetResumen->getCell('J32')->getCalculatedValue();
@@ -898,6 +989,7 @@ class CalculadoraImportacionService
                     'boleta' => $boletaInfo
                 ];
             } catch (\Exception $e) {
+                \Log::error('Error al guardar Excel: ' . $e->getMessage());
                 return [
                     'url' => null,
                     'totalfob' => null,
@@ -907,8 +999,8 @@ class CalculadoraImportacionService
                 ];
             }
         } catch (\Exception $e) {
-            Log::error('Error al crear cotización inicial: ' . $e->getMessage());
-
+            \Log::error('Error al crear cotización inicial: ' . $e->getMessage());
+    
             return [
                 'url' => null,
                 'totalfob' => null,
@@ -1000,7 +1092,7 @@ class CalculadoraImportacionService
             // Aumentar memoria para procesar archivos Excel grandes
             ini_set('memory_limit', '2G');
             ini_set('max_execution_time', 300);
-            
+
             // Si recibe una URL, cargar el archivo Excel
             if (is_string($objPHPExcelOrUrl)) {
                 $fileUrl = $objPHPExcelOrUrl;
@@ -1015,21 +1107,21 @@ class CalculadoraImportacionService
                 } else {
                     $filePath = public_path($fileUrl);
                 }
-                
+
                 if (!file_exists($filePath)) {
                     throw new \Exception('Archivo Excel no encontrado: ' . $filePath);
                 }
-                
+
                 $objPHPExcel = \PhpOffice\PhpSpreadsheet\IOFactory::load($filePath);
             } else {
                 $objPHPExcel = $objPHPExcelOrUrl;
             }
-            
+
             $objPHPExcel->setActiveSheetIndex(0);
             $sheet = $objPHPExcel->getActiveSheet();
-            
+
             $antidumping = $sheet->getCell('A23')->getValue(); // B23 -> A23
-            
+
             $data = [
                 "name" => $clienteInfo['nombre'] ?? $sheet->getCell('B8')->getValue(), // C8 -> B8
                 "lastname" => "", // No hay apellido separado en el nuevo formato
@@ -1067,8 +1159,8 @@ class CalculadoraImportacionService
             Log::info(json_encode($data));
             $i = $antidumping == "ANTIDUMPING" ? 38 : 37;
             $items = [];
-            
-            while ($sheet->getCell('A' . $i)->getValue() != 'TOTAL') { 
+
+            while ($sheet->getCell('A' . $i)->getValue() != 'TOTAL') {
                 //remove format to string
                 $item = [
                     "index" => $sheet->getCell('A' . $i)->getCalculatedValue(), // B -> A
@@ -1165,7 +1257,7 @@ class CalculadoraImportacionService
             $options = new \Dompdf\Options();
             $options->set('isHtml5ParserEnabled', true);
             $options->set('isRemoteEnabled', true);
-            
+
             $dompdf = new \Dompdf\Dompdf($options);
             $dompdf->loadHtml($htmlContent);
             $dompdf->setPaper('A4', 'portrait');
@@ -1175,7 +1267,7 @@ class CalculadoraImportacionService
             $timestamp = now()->format('Y_m_d_H_i_s');
             $pdfFileName = "BOLETA_{$clienteInfo['nombre']}_{$timestamp}.pdf";
             $pdfPath = storage_path('app/public/boletas/' . $pdfFileName);
-            
+
             // Crear directorio si no existe
             if (!is_dir(dirname($pdfPath))) {
                 mkdir(dirname($pdfPath), 0755, true);
@@ -1189,11 +1281,31 @@ class CalculadoraImportacionService
                 'filename' => $pdfFileName,
                 'url' => Storage::url('boletas/' . $pdfFileName)
             ];
-
         } catch (\Exception $e) {
             Log::error('Error al generar boleta: ' . $e->getMessage());
             throw new \Exception('Error al generar boleta: ' . $e->getMessage());
         }
+    }
+
+    /**
+     * Genera código de proveedor basado en nombre del cliente y índice
+     * Misma estructura que CotizacionController.generateCodeSupplier
+     */
+    private function generateCodeSupplier($string, $carga, $rowCount, $index)
+    {
+        $words = explode(" ", trim($string));
+        $code = "";
+
+        // Primeras 2 letras de las primeras 2 palabras (protegido)
+        foreach ($words as $word) {
+            if (strlen($code) >= 4) break; // Ya tenemos 4 caracteres (2 palabras)
+            if (strlen($word) >= 2) { // Solo si la palabra tiene 2+ caracteres
+                $code .= strtoupper(substr($word, 0, 2));
+            }
+        }
+
+        // Completar con ceros y retornar
+        return $code . $carga . "-" . $index;
     }
 
     /**
@@ -1205,12 +1317,12 @@ class CalculadoraImportacionService
             $cell = $sheet->getCell($cellReference);
             $value = $cell->getCalculatedValue();
             Log::info("valor de la celda: " . $value);
-            
+
             // Si la celda está vacía o es null
             if ($value === null || $value === '') {
                 return 0.0;
             }
-            
+
             // Si es un string, intentar convertirlo a float
             if (is_string($value)) {
                 // Remover caracteres no numéricos excepto punto y coma
@@ -1220,15 +1332,14 @@ class CalculadoraImportacionService
                 }
                 return floatval($cleanValue);
             }
-            
+
             // Si ya es un número, convertirlo a float
             if (is_numeric($value)) {
                 return floatval($value);
             }
-            
+
             // Si no se puede convertir, retornar 0
             return 0.0;
-            
         } catch (\Exception $e) {
             Log::warning("Error al obtener valor de celda {$cellReference}: " . $e->getMessage());
             return 0.0;

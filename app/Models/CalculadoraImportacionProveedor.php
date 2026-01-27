@@ -17,7 +17,8 @@ class CalculadoraImportacionProveedor extends Model
         'id_calculadora_importacion',
         'cbm',
         'peso',
-        'qty_caja'
+        'qty_caja',
+        'code_supplier'
     ];
 
     protected $casts = [

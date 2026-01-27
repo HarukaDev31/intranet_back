@@ -220,6 +220,18 @@ class CotizacionController extends Controller
 
             // Transformar los datos para la respuesta
             $data = $results->map(function ($cotizacion) use ($files) {
+                // Obtener url_cotizacion_pdf de calculadora_importacion si existe
+                $urlCotizacionPdf = null;
+                if ($cotizacion->id) {
+                    $calculadora = DB::table('calculadora_importacion')
+                        ->where('id_cotizacion', $cotizacion->id)
+                        ->select('url_cotizacion_pdf')
+                        ->first();
+                    if ($calculadora && $calculadora->url_cotizacion_pdf) {
+                        $urlCotizacionPdf = $this->generateImageUrl($calculadora->url_cotizacion_pdf);
+                    }
+                }
+                
                 return [
                     'id' => $cotizacion->id,
                     'uuid' => $cotizacion->uuid,
@@ -247,6 +259,7 @@ class CotizacionController extends Controller
                     'tipo_cliente' => $cotizacion->tipoCliente->name,
                     'bl_file_url' => $files->bl_file_url ? $files->bl_file_url : null,
                     'lista_embarque_url' => $this->generateImageUrl($files->lista_embarque_url) ? $this->generateImageUrl($files->lista_embarque_url) : null,
+                    'url_cotizacion_pdf' => $urlCotizacionPdf,
                 ];
             });
 
@@ -1481,13 +1494,12 @@ class CotizacionController extends Controller
                
             }
 
+            
             $tarifa = $monto / (($volumen <= 0 ? 1 : $volumen) < 1.00 ? 1 : ($volumen <= 0 ? 1 : $volumen));
+            $monto = $monto + $extra - $descuento;
             $peso = $sheet->getCell('I9')->getOldCalculatedValue();
             $highestRow = $sheet->getHighestRow();
             $qtyItem = 0;
-            //
-            $monto = $monto + $extra - $descuento;
-            Log::info('MONTO: ' . $monto);
             for ($row = 36; $row <= $highestRow; $row++) {
                 $cellValue = $sheet->getCell('A' . $row)->getValue();
                 if (is_numeric($cellValue) && $cellValue > 0) {
@@ -1515,6 +1527,214 @@ class CotizacionController extends Controller
             return $data;
         } catch (Exception $e) {
             return $e->getMessage();
+        }
+    }
+
+    /**
+     * Actualizar cotización desde calculadora (similar a storeFromCalculadora pero para actualización)
+     * Lee el Excel, actualiza monto, tarifa, impuestos, logística y proveedores usando códigos
+     */
+    public function updateFromCalculadora($id, $file)
+    {
+        try {
+            $cotizacion = Cotizacion::find($id);
+            if (!$cotizacion) {
+                Log::error('Cotización no encontrada para actualizar desde calculadora', ['cotizacion_id' => $id]);
+                return false;
+            }
+
+            // Extraer datos del Excel usando getCotizacionDataFromCalculadora
+            $dataToInsert = $this->getCotizacionDataFromCalculadora($file);
+            
+            // Verificar si getCotizacionDataFromCalculadora devolvió un error
+            if (!is_array($dataToInsert)) {
+                Log::error('Error al extraer datos del Excel desde calculadora: ' . $dataToInsert);
+                return false;
+            }
+
+            // Calcular logística desde el Excel (J30 + J31 - J32)
+            try {
+                $objPHPExcel = IOFactory::load($file['tmp_name']);
+                $sheet = $objPHPExcel->getSheet(0);
+                $servicio = $sheet->getCell('J30')->getOldCalculatedValue() ?? 0;
+                $cargosExtras = $sheet->getCell('J31')->getOldCalculatedValue() ?? 0;
+                $descuento = $sheet->getCell('J32')->getOldCalculatedValue() ?? 0;
+                $logistica = (is_numeric($servicio) ? $servicio : 0) + 
+                            (is_numeric($cargosExtras) ? $cargosExtras : 0) - 
+                            (is_numeric($descuento) ? $descuento : 0);
+                $dataToInsert['logistica_final'] = $logistica;
+            } catch (\Exception $e) {
+                Log::warning('Error al calcular logística desde Excel: ' . $e->getMessage());
+                // Si no se puede calcular, usar monto - impuestos como fallback
+                $dataToInsert['logistica_final'] = ($dataToInsert['monto'] ?? 0) - ($dataToInsert['impuestos'] ?? 0);
+            }
+
+            // Actualizar archivo si se proporcionó uno nuevo
+            if (isset($file['tmp_name']) && file_exists($file['tmp_name'])) {
+                try {
+                    // Eliminar archivo antiguo si existe
+                    $oldFileUrl = $cotizacion->cotizacion_file_url;
+                    if ($oldFileUrl) {
+                        $oldStoragePath = str_replace('/storage/', 'public/', parse_url($oldFileUrl, PHP_URL_PATH));
+                        Storage::delete($oldStoragePath);
+                    }
+
+                    // Subir nuevo archivo
+                    $fileName = time() . '_' . $file['name'];
+                    $fileUrl = Storage::putFileAs('public/agentecompra', $file['tmp_name'], $fileName);
+
+                    if ($fileUrl) {
+                        $fileUrl = Storage::url($fileUrl);
+                        $fileUrl = route('storage.file', ['path' => str_replace('public/', '', $fileUrl)]);
+                        $dataToInsert['cotizacion_file_url'] = $fileUrl;
+                    }
+                } catch (\Exception $e) {
+                    Log::warning('Error al actualizar archivo, continuando con datos del Excel: ' . $e->getMessage());
+                }
+            }
+
+            $dataToInsert['updated_at'] = now();
+
+            // Verificar si existe fecha en la BD
+            if ($cotizacion->fecha) {
+                unset($dataToInsert['fecha']);
+            }
+
+            DB::statement('SET FOREIGN_KEY_CHECKS = 0');
+
+            // Actualizar datos de la cotización (monto, tarifa, impuestos, logística)
+            $cotizacion->update($dataToInsert);
+
+            Log::info('Cotización actualizada desde calculadora', [
+                'cotizacion_id' => $id,
+                'monto' => $dataToInsert['monto'] ?? null,
+                'impuestos' => $dataToInsert['impuestos'] ?? null,
+                'tarifa' => $dataToInsert['tarifa'] ?? null,
+                'logistica_final' => $dataToInsert['logistica_final'] ?? null
+            ]);
+
+            // Actualizar proveedores usando códigos
+            $dataToInsert['id_cotizacion'] = $id;
+            $dataToInsert['id_contenedor'] = $cotizacion->id_contenedor;
+
+            // Obtener proveedores existentes con códigos
+            $existingProviders = CotizacionProveedor::where('id_cotizacion', $id)
+                ->whereNotNull('code_supplier')
+                ->pluck('code_supplier')
+                ->toArray();
+            
+            // Eliminar proveedores sin código
+            CotizacionProveedor::where('id_cotizacion', $id)->whereNull('code_supplier')->delete();
+            
+            // Obtener datos de proveedores del Excel
+            $dataEmbarque = $this->getEmbarqueDataModified($file, $dataToInsert);
+            $newProviders = array_column($dataEmbarque, 'code_supplier');
+
+            // Actualizar proveedores existentes
+            foreach ($existingProviders as $code) {
+                if (in_array($code, $newProviders)) {
+                    $key = array_search($code, $newProviders);
+                    $dataToUpdate = $dataEmbarque[$key];
+                    $items = isset($dataToUpdate['items']) ? $dataToUpdate['items'] : [];
+                    if (isset($dataToUpdate['items'])) {
+                        unset($dataToUpdate['items']);
+                    }
+                    
+                    // Actualizar proveedor
+                    CotizacionProveedor::where('code_supplier', $code)
+                        ->where('id_cotizacion', $id)
+                        ->update($dataToUpdate);
+                    
+                    // Obtener el proveedor actualizado para manejar items
+                    $proveedor = CotizacionProveedor::where('code_supplier', $code)
+                        ->where('id_cotizacion', $id)
+                        ->first();
+                    
+                    // Manejar items del proveedor actualizado
+                    if ($proveedor) {
+                        // Eliminar items antiguos del proveedor
+                        \App\Models\CargaConsolidada\CotizacionProveedorItem::where('id_proveedor', $proveedor->id)->delete();
+                        
+                        // Insertar nuevos items
+                        if (!empty($items)) {
+                            foreach ($items as $item) {
+                                \App\Models\CargaConsolidada\CotizacionProveedorItem::create([
+                                    'id_contenedor' => $proveedor->id_contenedor,
+                                    'id_cotizacion' => $proveedor->id_cotizacion,
+                                    'id_proveedor' => $proveedor->id,
+                                    'initial_price' => $item['initial_price'] ?? null,
+                                    'initial_qty' => $item['initial_qty'] ?? null,
+                                    'initial_name' => $item['initial_name'] ?? null,
+                                    'final_price' => $item['final_price'] ?? null,
+                                    'final_qty' => $item['final_qty'] ?? null,
+                                    'final_name' => $item['final_name'] ?? null,
+                                    'tipo_producto' => $item['tipo_producto'] ?? 'GENERAL',
+                                ]);
+                            }
+                        }
+                    }
+                } else {
+                    // Eliminar proveedor y sus items (ya no está en el Excel)
+                    $proveedorToDelete = CotizacionProveedor::where('code_supplier', $code)
+                        ->where('id_cotizacion', $id)
+                        ->first();
+                    
+                    if ($proveedorToDelete) {
+                        \App\Models\CargaConsolidada\CotizacionProveedorItem::where('id_proveedor', $proveedorToDelete->id)->delete();
+                        $proveedorToDelete->delete();
+                    }
+                }
+            }
+
+            // Insertar nuevos proveedores (los que tienen códigos que no existían antes)
+            foreach ($dataEmbarque as $data) {
+                if (!in_array($data['code_supplier'], $existingProviders)) {
+                    $items = isset($data['items']) ? $data['items'] : [];
+                    if (isset($data['items'])) {
+                        unset($data['items']);
+                    }
+                    
+                    Log::info('Insertando nuevo proveedor desde calculadora: ' . json_encode($data));
+                    $provModel = CotizacionProveedor::create($data);
+                    
+                    // Insertar items del nuevo proveedor
+                    if ($provModel && !empty($items)) {
+                        foreach ($items as $item) {
+                            \App\Models\CargaConsolidada\CotizacionProveedorItem::create([
+                                'id_contenedor' => $provModel->id_contenedor,
+                                'id_cotizacion' => $provModel->id_cotizacion,
+                                'id_proveedor' => $provModel->id,
+                                'initial_price' => $item['initial_price'] ?? null,
+                                'initial_qty' => $item['initial_qty'] ?? null,
+                                'initial_name' => $item['initial_name'] ?? null,
+                                'final_price' => $item['final_price'] ?? null,
+                                'final_qty' => $item['final_qty'] ?? null,
+                                'final_name' => $item['final_name'] ?? null,
+                                'tipo_producto' => $item['tipo_producto'] ?? 'GENERAL',
+                            ]);
+                        }
+                    }
+                }
+            }
+
+            DB::statement('SET FOREIGN_KEY_CHECKS = 1');
+            
+            Log::info('Cotización actualizada desde calculadora exitosamente', [
+                'cotizacion_id' => $id,
+                'monto' => $dataToInsert['monto'] ?? null,
+                'impuestos' => $dataToInsert['impuestos'] ?? null,
+                'tarifa' => $dataToInsert['tarifa'] ?? null,
+                'logistica_final' => $dataToInsert['logistica_final'] ?? null
+            ]);
+            
+            return "success";
+        } catch (\Exception $e) {
+            Log::error('Error en updateFromCalculadora: ' . $e->getMessage(), [
+                'cotizacion_id' => $id,
+                'trace' => $e->getTraceAsString()
+            ]);
+            DB::statement('SET FOREIGN_KEY_CHECKS = 1');
+            return false;
         }
     }
 

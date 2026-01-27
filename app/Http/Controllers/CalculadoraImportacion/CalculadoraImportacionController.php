@@ -468,16 +468,28 @@ class CalculadoraImportacionController extends Controller
                     ], 404);
                 }
 
-                // Validar que no tenga cotización asignada
-                if ($calculadora->id_cotizacion) {
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'No se puede modificar una calculadora que ya tiene una cotización asignada'
-                    ], 400);
-                }
-
                 // Actualizar usando el servicio
                 $calculadora = $this->calculadoraImportacionService->actualizarCalculo($calculadora, $data);
+
+                // Si tiene cotización asignada, actualizar también la cotización usando los códigos
+                if ($calculadora->id_cotizacion && $calculadora->url_cotizacion) {
+                    // Recargar proveedores para obtener códigos actualizados
+                    $calculadora->load(['proveedores', 'contenedor']);
+                    
+                    // NO regenerar códigos - solo asegurar que estén escritos en el Excel si ya existen
+                    // Los códigos solo se generan al pasar a COTIZADO, no al actualizar
+                    if ($calculadora->id_carga_consolidada_contenedor) {
+                        // Verificar si los proveedores tienen códigos
+                        $proveedoresConCodigo = $calculadora->proveedores()->whereNotNull('code_supplier')->count();
+                        if ($proveedoresConCodigo > 0) {
+                            // Solo escribir códigos existentes en el Excel (no generar nuevos)
+                            $this->escribirCodigosExistentesEnExcel($calculadora);
+                        }
+                    }
+                    
+                    // Actualizar la cotización relacionada
+                    $this->actualizarCotizacionDesdeCalculadora($calculadora);
+                }
 
                 $totales = $this->calculadoraImportacionService->calcularTotales($calculadora);
 
@@ -548,9 +560,9 @@ class CalculadoraImportacionController extends Controller
                 'size' => filesize($tempFilePath)
             ];
 
-            // Llamar a uploadCotizacionFile del CotizacionController
+            // Llamar a updateFromCalculadora del CotizacionController (método específico para calculadora)
             $cotizacionController = app(CotizacionController::class);
-            $result = $cotizacionController->uploadCotizacionFile($calculadora->id_cotizacion, $fileData);
+            $result = $cotizacionController->updateFromCalculadora($calculadora->id_cotizacion, $fileData);
 
             // Limpiar archivo temporal
             if (file_exists($tempFilePath)) {
@@ -1105,6 +1117,422 @@ class CalculadoraImportacionController extends Controller
             Log::error('Error al descargar archivo: ' . $e->getMessage(), ['url' => $fileUrl]);
             return null;
         }
+    }
+
+    /**
+     * Generar códigos de proveedor y escribirlos en el Excel (fila 3)
+     * Usa la misma estructura que CotizacionController
+     */
+    private function generarCodigosProveedorEnExcel($calculadora)
+    {
+        try {
+            // Cargar relaciones necesarias - ordenar proveedores por ID para mantener orden
+            $calculadora->load(['contenedor']);
+            $proveedores = $calculadora->proveedores()->orderBy('id')->get();
+            
+            if ($proveedores->isEmpty()) {
+                Log::warning('No hay proveedores para generar códigos', ['calculadora_id' => $calculadora->id]);
+                return;
+            }
+
+            // Obtener el contenedor
+            $contenedor = $calculadora->contenedor;
+            if (!$contenedor) {
+                Log::warning('No se encontró contenedor para generar códigos', ['calculadora_id' => $calculadora->id]);
+                return;
+            }
+
+            $carga = $contenedor->carga;
+            // Completar a 2 dígitos si se puede convertir a número, sino usar últimos 2 caracteres
+            $count = is_numeric($carga) ? str_pad($carga, 2, "0", STR_PAD_LEFT) : substr($carga, -2);
+            
+            $nameCliente = $calculadora->nombre_cliente;
+
+            // Obtener el archivo Excel
+            $fileUrl = $calculadora->url_cotizacion;
+            $fileContents = $this->downloadFileFromUrl($fileUrl);
+
+            if (!$fileContents) {
+                Log::error('No se pudo descargar el archivo Excel para generar códigos', [
+                    'calculadora_id' => $calculadora->id,
+                    'url' => $fileUrl
+                ]);
+                return;
+            }
+
+            // Crear archivo temporal
+            $tempPath = storage_path('app/temp');
+            if (!file_exists($tempPath)) {
+                mkdir($tempPath, 0755, true);
+            }
+
+            $extension = pathinfo($fileUrl, PATHINFO_EXTENSION) ?: 'xlsx';
+            $tempFileName = uniqid('excel_codes_') . '.' . $extension;
+            $tempFilePath = $tempPath . '/' . $tempFileName;
+            file_put_contents($tempFilePath, $fileContents);
+
+            // Abrir el archivo Excel con PhpSpreadsheet
+            $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($tempFilePath);
+            $sheet2 = $spreadsheet->getSheet(1); // Hoja de cálculos (índice 1)
+
+            // Buscar la columna "TOTALES"
+            $columnStart = "C";
+            $columnTotales = "";
+            $stop = false;
+            while (!$stop) {
+                $cell = $sheet2->getCell($columnStart . "3")->getValue();
+                if (strtoupper(trim($cell)) == "TOTALES") {
+                    $columnTotales = $columnStart;
+                    $stop = true;
+                } else {
+                    $columnStart = $this->incrementColumn($columnStart);
+                }
+            }
+
+            $rowCodeSupplier = 3;
+            $rowProveedores = 4;
+            $columnStart = "C";
+            $provider = 1;
+            $currentRange = null;
+            $processedRanges = [];
+
+            // Iterar por cada proveedor de la calculadora
+            $proveedorIndex = 0;
+            $columnStart = "C";
+            $stop = false;
+
+            while (!$stop && $proveedorIndex < $proveedores->count()) {
+                // Verifica si la columna actual es la última
+                if ($columnStart == $columnTotales) {
+                    $stop = true;
+                    break;
+                }
+
+                // Obtiene el rango combinado de la celda actual
+                $cell = $sheet2->getCell($columnStart . $rowProveedores);
+                $currentRange = $cell->getMergeRange();
+
+                // Si el rango ya fue procesado, pasa a la siguiente columna
+                if ($currentRange && in_array($currentRange, $processedRanges)) {
+                    $columnStart = $this->incrementColumn($columnStart);
+                    continue;
+                }
+
+                // Agrega el rango actual a los rangos procesados
+                if ($currentRange) {
+                    $processedRanges[] = $currentRange;
+                }
+
+                // Obtener el proveedor de la calculadora (usar la colección ordenada)
+                $proveedorCalculadora = $proveedores[$proveedorIndex];
+                
+                // Generar código usando la misma función que CotizacionController
+                $codeSupplier = $this->generateCodeSupplier($nameCliente, $carga, $count, $provider);
+
+                // Determinar columnas del rango (ej: "C4:F4" => C..F)
+                $startCol = $columnStart;
+                $endCol = $columnStart;
+                if ($currentRange) {
+                    $parts = explode(':', $currentRange);
+                    if (count($parts) === 2) {
+                        $startCol = preg_replace('/\d+/', '', $parts[0]);
+                        $endCol = preg_replace('/\d+/', '', $parts[1]);
+                    }
+                }
+
+                // Escribir código en la fila 3, en la primera columna del rango
+                $sheet2->setCellValue($startCol . $rowCodeSupplier, $codeSupplier);
+
+                // Si el proveedor tiene múltiples columnas (múltiples productos), hacer merge
+                if ($startCol != $endCol) {
+                    $sheet2->mergeCells($startCol . $rowCodeSupplier . ':' . $endCol . $rowCodeSupplier);
+                }
+
+                // Guardar código en la base de datos - usar update directo para asegurar que se guarde
+                $proveedorId = $proveedorCalculadora->id;
+                $updated = \App\Models\CalculadoraImportacionProveedor::where('id', $proveedorId)
+                    ->update(['code_supplier' => $codeSupplier]);
+                
+                if ($updated) {
+                    Log::info('Código de proveedor guardado en BD', [
+                        'calculadora_id' => $calculadora->id,
+                        'proveedor_id' => $proveedorId,
+                        'code_supplier' => $codeSupplier,
+                        'columna' => $startCol,
+                        'updated_rows' => $updated
+                    ]);
+                } else {
+                    Log::error('Error al guardar código de proveedor en BD', [
+                        'calculadora_id' => $calculadora->id,
+                        'proveedor_id' => $proveedorId,
+                        'code_supplier' => $codeSupplier
+                    ]);
+                }
+
+                // Avanzar a la siguiente columna (después del rango del proveedor)
+                $columnStart = $this->incrementColumn($endCol);
+                $provider++;
+                $proveedorIndex++;
+            }
+
+            // Guardar el archivo modificado
+            $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
+            $writer->save($tempFilePath);
+
+            // Obtener la ruta de destino del archivo original
+            $destinoPath = $this->getFilePathFromUrl($fileUrl);
+            if ($destinoPath && file_exists(dirname($destinoPath))) {
+                // Copiar el archivo modificado a la ubicación original
+                copy($tempFilePath, $destinoPath);
+                Log::info('Códigos de proveedor escritos en Excel exitosamente', [
+                    'calculadora_id' => $calculadora->id,
+                    'total_proveedores' => $proveedorIndex,
+                    'proveedores_procesados' => $proveedorIndex
+                ]);
+                
+                // Verificar que los códigos se guardaron correctamente en la BD
+                $proveedoresConCodigo = \App\Models\CalculadoraImportacionProveedor::where('id_calculadora_importacion', $calculadora->id)
+                    ->whereNotNull('code_supplier')
+                    ->count();
+                Log::info('Verificación: Proveedores con código en BD', [
+                    'calculadora_id' => $calculadora->id,
+                    'total_con_codigo' => $proveedoresConCodigo,
+                    'total_proveedores' => $proveedores->count()
+                ]);
+                
+                // Verificar que los códigos se guardaron correctamente
+                $proveedoresConCodigo = \App\Models\CalculadoraImportacionProveedor::where('id_calculadora_importacion', $calculadora->id)
+                    ->whereNotNull('code_supplier')
+                    ->count();
+                Log::info('Verificación: Proveedores con código en BD', [
+                    'calculadora_id' => $calculadora->id,
+                    'total_con_codigo' => $proveedoresConCodigo,
+                    'total_proveedores' => $proveedores->count()
+                ]);
+            } else {
+                Log::warning('No se pudo determinar la ruta de destino del archivo', [
+                    'calculadora_id' => $calculadora->id,
+                    'url' => $fileUrl
+                ]);
+            }
+
+            // Limpiar archivo temporal
+            if (file_exists($tempFilePath)) {
+                unlink($tempFilePath);
+            }
+        } catch (\Exception $e) {
+            Log::error('Error al generar códigos de proveedor en Excel: ' . $e->getMessage(), [
+                'calculadora_id' => $calculadora->id,
+                'trace' => $e->getTraceAsString()
+            ]);
+        }
+    }
+
+    /**
+     * Escribir códigos existentes en el Excel (sin generar nuevos)
+     * Solo se usa cuando se actualiza una calculadora que ya tiene códigos
+     */
+    private function escribirCodigosExistentesEnExcel($calculadora)
+    {
+        try {
+            // Cargar relaciones necesarias
+            $calculadora->load(['contenedor', 'proveedores.productos']);
+
+            // Verificar que tenga proveedores con códigos
+            $proveedoresConCodigo = $calculadora->proveedores()->whereNotNull('code_supplier')->get();
+            if ($proveedoresConCodigo->isEmpty()) {
+                Log::info('No hay proveedores con códigos para escribir en Excel', ['calculadora_id' => $calculadora->id]);
+                return;
+            }
+
+            // Obtener el archivo Excel
+            $fileUrl = $calculadora->url_cotizacion;
+            $fileContents = $this->downloadFileFromUrl($fileUrl);
+
+            if (!$fileContents) {
+                Log::error('No se pudo descargar el archivo Excel para escribir códigos', [
+                    'calculadora_id' => $calculadora->id,
+                    'url' => $fileUrl
+                ]);
+                return;
+            }
+
+            // Crear archivo temporal
+            $tempPath = storage_path('app/temp');
+            if (!file_exists($tempPath)) {
+                mkdir($tempPath, 0755, true);
+            }
+
+            $extension = pathinfo($fileUrl, PATHINFO_EXTENSION) ?: 'xlsx';
+            $tempFileName = uniqid('excel_write_codes_') . '.' . $extension;
+            $tempFilePath = $tempPath . '/' . $tempFileName;
+            file_put_contents($tempFilePath, $fileContents);
+
+            // Abrir el archivo Excel con PhpSpreadsheet
+            $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($tempFilePath);
+            $sheet2 = $spreadsheet->getSheet(1); // Hoja de cálculos (índice 1)
+
+            // Buscar la columna "TOTALES"
+            $columnStart = "C";
+            $columnTotales = "";
+            $stop = false;
+            while (!$stop) {
+                $cell = $sheet2->getCell($columnStart . "3")->getValue();
+                if (strtoupper(trim($cell)) == "TOTALES") {
+                    $columnTotales = $columnStart;
+                    $stop = true;
+                } else {
+                    $columnStart = $this->incrementColumn($columnStart);
+                }
+            }
+
+            $rowCodeSupplier = 3;
+            $rowProveedores = 4;
+            $columnStart = "C";
+            $currentRange = null;
+            $processedRanges = [];
+
+            // Mapear códigos de proveedores por orden
+            $codigosPorOrden = $proveedoresConCodigo->pluck('code_supplier')->toArray();
+
+            // Iterar por cada proveedor de la calculadora que tenga código
+            $proveedorIndex = 0;
+            $columnStart = "C";
+            $stop = false;
+
+            while (!$stop && $proveedorIndex < count($codigosPorOrden)) {
+                // Verifica si la columna actual es la última
+                if ($columnStart == $columnTotales) {
+                    $stop = true;
+                    break;
+                }
+
+                // Obtiene el rango combinado de la celda actual
+                $cell = $sheet2->getCell($columnStart . $rowProveedores);
+                $currentRange = $cell->getMergeRange();
+
+                // Si el rango ya fue procesado, pasa a la siguiente columna
+                if ($currentRange && in_array($currentRange, $processedRanges)) {
+                    $columnStart = $this->incrementColumn($columnStart);
+                    continue;
+                }
+
+                // Agrega el rango actual a los rangos procesados
+                if ($currentRange) {
+                    $processedRanges[] = $currentRange;
+                }
+
+                // Obtener el código del proveedor
+                $codeSupplier = $codigosPorOrden[$proveedorIndex];
+
+                // Determinar columnas del rango (ej: "C4:F4" => C..F)
+                $startCol = $columnStart;
+                $endCol = $columnStart;
+                if ($currentRange) {
+                    $parts = explode(':', $currentRange);
+                    if (count($parts) === 2) {
+                        $startCol = preg_replace('/\d+/', '', $parts[0]);
+                        $endCol = preg_replace('/\d+/', '', $parts[1]);
+                    }
+                }
+
+                // Escribir código en la fila 3, en la primera columna del rango
+                $sheet2->setCellValue($startCol . $rowCodeSupplier, $codeSupplier);
+
+                // Si el proveedor tiene múltiples columnas (múltiples productos), hacer merge
+                if ($startCol != $endCol) {
+                    $sheet2->mergeCells($startCol . $rowCodeSupplier . ':' . $endCol . $rowCodeSupplier);
+                }
+
+                Log::info('Código existente escrito en Excel', [
+                    'calculadora_id' => $calculadora->id,
+                    'code_supplier' => $codeSupplier,
+                    'columna' => $startCol
+                ]);
+
+                // Avanzar a la siguiente columna (después del rango del proveedor)
+                $columnStart = $this->incrementColumn($endCol);
+                $proveedorIndex++;
+            }
+
+            // Guardar el archivo modificado
+            $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
+            $writer->save($tempFilePath);
+
+            // Obtener la ruta de destino del archivo original
+            $destinoPath = $this->getFilePathFromUrl($fileUrl);
+            if ($destinoPath && file_exists(dirname($destinoPath))) {
+                // Copiar el archivo modificado a la ubicación original
+                copy($tempFilePath, $destinoPath);
+                Log::info('Códigos existentes escritos en Excel exitosamente', [
+                    'calculadora_id' => $calculadora->id,
+                    'total_proveedores' => $proveedorIndex
+                ]);
+            } else {
+                Log::warning('No se pudo determinar la ruta de destino del archivo', [
+                    'calculadora_id' => $calculadora->id,
+                    'url' => $fileUrl
+                ]);
+            }
+
+            // Limpiar archivo temporal
+            if (file_exists($tempFilePath)) {
+                unlink($tempFilePath);
+            }
+        } catch (\Exception $e) {
+            Log::error('Error al escribir códigos existentes en Excel: ' . $e->getMessage(), [
+                'calculadora_id' => $calculadora->id,
+                'trace' => $e->getTraceAsString()
+            ]);
+        }
+    }
+
+    /**
+     * Generar código de proveedor usando la misma estructura que CotizacionController
+     */
+    private function generateCodeSupplier($string, $carga, $rowCount, $index)
+    {
+        $words = explode(" ", trim($string));
+        $code = "";
+
+        // Primeras 2 letras de las primeras 2 palabras (protegido)
+        foreach ($words as $word) {
+            if (strlen($code) >= 4) break; // Ya tenemos 4 caracteres (2 palabras)
+            if (strlen($word) >= 2) { // Solo si la palabra tiene 2+ caracteres
+                $code .= strtoupper(substr($word, 0, 2));
+            }
+        }
+
+        // Completar con ceros y retornar
+        return $code . $carga . "-" . $index;
+    }
+
+    /**
+     * Incrementar columna (helper) - misma implementación que CotizacionController
+     */
+    private function incrementColumn($column, $increment = 1)
+    {
+        $column = strtoupper($column); // Asegurarse de que todas las letras sean mayúsculas
+        $length = strlen($column);
+        $number = 0;
+
+        // Convertir la columna a un número
+        for ($i = 0; $i < $length; $i++) {
+            $number = $number * 26 + (ord($column[$i]) - ord('A') + 1);
+        }
+
+        // Incrementar el número
+        $number += $increment;
+
+        // Convertir el número de vuelta a columna
+        $result = '';
+        while ($number > 0) {
+            $number--;
+            $result = chr(65 + ($number % 26)) . $result;
+            $number = intval($number / 26);
+        }
+
+        return $result;
     }
 
     /**
