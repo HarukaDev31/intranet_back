@@ -28,7 +28,7 @@ class InsertViaticosReintegrosMenuItems extends Migration
             'Nu_Tipo_Sistema' => 0,
             'Txt_Url_Video' => NULL,
             'No_Menu_China' => 'Travel Expenses',
-            'show_father' => 0,
+            'show_father' => 1,
             'url_intranet_v2' => '#',
         ]);
 
@@ -67,7 +67,7 @@ class InsertViaticosReintegrosMenuItems extends Migration
             'Nu_Tipo_Sistema' => 0,
             'Txt_Url_Video' => NULL,
             'No_Menu_China' => 'Pending',
-            'show_father' => 0,
+            'show_father' => 1,
             'url_intranet_v2' => 'viaticos/pendientes'
         ]);
 
@@ -85,7 +85,7 @@ class InsertViaticosReintegrosMenuItems extends Migration
             'Nu_Tipo_Sistema' => 0,
             'Txt_Url_Video' => NULL,
             'No_Menu_China' => 'Completed',
-            'show_father' => 0,
+            'show_father' => 1,
             'url_intranet_v2' => 'viaticos/completados'
         ]);
     }
