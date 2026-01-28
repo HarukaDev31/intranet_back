@@ -415,6 +415,12 @@ class CotizacionController extends Controller
                     FROM contenedor_consolidado_cotizacion_coordinacion_pagos cccp
                     JOIN cotizacion_coordinacion_pagos_concept pc ON cccp.id_concept = pc.id
                     WHERE cccp.id_contenedor = ' . $idContenedor . '
+                    AND cccp.id_cotizacion IN (
+                        SELECT id
+                        FROM contenedor_consolidado_cotizacion
+                        WHERE id_contenedor = ' . $idContenedor . '
+                        AND estado_cotizador = "CONFIRMADO"
+                    )
                     AND pc.name = "LOGISTICA"
                 ) as total_logistica_pagado'),
                 DB::raw('(
