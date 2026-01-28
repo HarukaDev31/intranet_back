@@ -21,6 +21,7 @@ use App\Events\CotizacionChangeContainer;
 use App\Traits\WhatsappTrait;
 use App\Traits\GoogleSheetsHelper;
 use Carbon\Carbon;
+use App\Models\CargaConsolidada\Pago;
 
 class ContenedorController extends Controller
 {
@@ -679,6 +680,12 @@ class ContenedorController extends Controller
             $contenedorOrigen=Contenedor::find($idContenedorOrigen);
             $cargaOrigen=$contenedorOrigen->carga;
             // Actualiza los proveedores asociados
+            //find all pagos with this idCotizacion and update id_contenedor to idContenedorDestino
+            $pagos = Pago::where('id_cotizacion', $idCotizacion)->get();
+            foreach ($pagos as $pago) {
+                $pago->id_contenedor = $idContenedorDestino;
+                $pago->save();
+            }
             $proveedores = CotizacionProveedor::where('id_cotizacion', $idCotizacion)->get();
             if (!$proveedores || $proveedores->isEmpty()) {
                 return response()->json(['message' => 'Proveedores no encontrados', 'success' => false], 404);
