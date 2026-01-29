@@ -55,7 +55,7 @@ class SendViaticoWhatsappNotificationJob implements ShouldQueue
                 }
                 if (file_exists($fullPath) && is_readable($fullPath)) {
                     $mime = mime_content_type($fullPath) ?: 'application/octet-stream';
-                    $this->sendMedia($fullPath, $mime, $this->message, $this->userId, 0, 'administracion');
+                    $this->sendMedia($fullPath, $mime, null, $this->userId, 0, 'administracion');
                 } else {
                     Log::warning('SendViaticoWhatsappNotificationJob: archivo no encontrado o no legible', [
                         'path' => $this->paymentReceiptPath,
