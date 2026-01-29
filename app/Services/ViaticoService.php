@@ -46,40 +46,50 @@ class ViaticoService
      */
     public function actualizarViatico(Viatico $viatico, array $data, ?UploadedFile $archivo = null): Viatico
     {
+        $rutaNuevaGuardada = null;
+
         try {
-            DB::beginTransaction();
-            // Si se sube un archivo nuevo
+            // Guardar rutas de archivos a eliminar para hacerlo DESPUÉS del commit
+            // (operaciones de disco lentas no deben mantener la transacción abierta)
+            $archivosAEliminar = [];
+
+            // Si se sube un archivo nuevo: guardar FUERA de la transacción (es la parte más lenta)
             if ($archivo) {
-                // Eliminar archivo anterior si existe
                 if ($viatico->payment_receipt_file) {
-                    $this->eliminarArchivo($viatico->payment_receipt_file);
+                    $archivosAEliminar[] = $viatico->payment_receipt_file;
                 }
-                $data['payment_receipt_file'] = $this->guardarArchivo($archivo);
+                $rutaNuevaGuardada = $this->guardarArchivo($archivo);
+                $data['payment_receipt_file'] = $rutaNuevaGuardada;
                 $data['status'] = Viatico::STATUS_CONFIRMED;
             }
 
             // Si se elimina el archivo (se envía delete_file como true)
             if (isset($data['delete_file']) && $data['delete_file'] === true) {
                 if ($viatico->receipt_file) {
-                    $this->eliminarArchivo($viatico->receipt_file);
+                    $archivosAEliminar[] = $viatico->receipt_file;
                 }
                 $data['payment_receipt_file'] = null;
                 $data['status'] = Viatico::STATUS_PENDING;
                 unset($data['delete_file']);
             }
 
-            // Si solo se cambia el estado manualmente
-            if (isset($data['status']) && !isset($data['payment_receipt_file'])) {
-                // El estado se mantiene como viene en $data
-            }
-
+            DB::beginTransaction();
             $viatico->update($data);
-
             DB::commit();
 
-            return $viatico->fresh()->load('usuario');
+            // Eliminar archivos antiguos después del commit para no bloquear la transacción
+            foreach ($archivosAEliminar as $ruta) {
+                $this->eliminarArchivo($ruta);
+            }
+
+            // Evitar fresh() (query extra): el modelo ya está actualizado; solo recargar relación si hace falta
+            return $viatico->load('usuario');
         } catch (\Exception $e) {
             DB::rollBack();
+            // Si se había guardado un archivo nuevo y falló el update, eliminar el archivo huérfano
+            if ($rutaNuevaGuardada) {
+                $this->eliminarArchivo($rutaNuevaGuardada);
+            }
             Log::error('Error al actualizar viático: ' . $e->getMessage());
             throw $e;
         }
