@@ -355,7 +355,7 @@ class ViaticoController extends Controller
                     ]);
 
                     // WhatsApp en segundo plano: pasar ruta relativa (viaticos/xxx.jpg), no la URL
-                    $messageWhatsapp = "Administración ha aprobado tu reintegro de  S/.{$viatico->total_amount} ";
+                    $messageWhatsapp = "Administración ha efectuado el depósito de tu reintegro de viáticos por el monto de S/.{$viatico->total_amount} ";
                     SendViaticoWhatsappNotificationJob::dispatch(
                         $messageWhatsapp,
                         $usuarioCreador->ID_Usuario,
