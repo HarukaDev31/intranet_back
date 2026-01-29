@@ -42,7 +42,7 @@ class SendViaticoWhatsappNotificationJob implements ShouldQueue
             if (strlen($this->userPhone) === 9) {
                 $this->phoneNumberId = '51' . $this->userPhone . '@c.us';
             }
-            $this->sendMessage($this->message, $this->userId, 0, 'administracion');
+            $this->sendMessage($this->message, $this->phoneNumberId, 0, 'administracion');
 
             if ($this->paymentReceiptPath) {
                 // Si viene URL (ej. http://localhost:8000/storage/viaticos/xxx.jpg), extraer path relativo "viaticos/xxx.jpg"
