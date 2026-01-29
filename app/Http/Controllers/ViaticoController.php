@@ -55,10 +55,10 @@ class ViaticoController extends Controller
             // Transformar datos
             $data = $viaticos->items();
             foreach ($data as $viatico) {
-                $viatico->url_comprobante = $viatico->receipt_file 
+                $viatico->url_comprobante = $viatico->receipt_file
                     ? asset('storage/' . $viatico->receipt_file)
                     : null;
-                $viatico->url_payment_receipt = $viatico->payment_receipt_file 
+                $viatico->url_payment_receipt = $viatico->payment_receipt_file
                     ? asset('storage/' . $viatico->payment_receipt_file)
                     : null;
                 $viatico->nombre_usuario = optional($viatico->usuario)->No_Nombres_Apellidos ?? 'N/A';
@@ -126,25 +126,34 @@ class ViaticoController extends Controller
     {
         try {
             $data = $request->validated();
-            $archivo = $request->hasFile('receipt_file') 
-                ? $request->file('receipt_file') 
+            $archivo = $request->hasFile('receipt_file')
+                ? $request->file('receipt_file')
                 : null;
+            $idViatico = $request->id;
+            if ($idViatico) {
+                $viatico = $this->viaticoService->usuarioActualizarViatico($idViatico, $data, $archivo);
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Viático actualizado exitosamente',
+                    'data' => $viatico
+                ]);
+            } else {
+                $viatico = $this->viaticoService->crearViatico($data, $archivo);
 
-            $viatico = $this->viaticoService->crearViatico($data, $archivo);
+                $viatico->url_comprobante = $viatico->receipt_file
+                    ? asset('storage/' . $viatico->receipt_file)
+                    : null;
+                $viatico->url_payment_receipt = $viatico->payment_receipt_file
+                    ? asset('storage/' . $viatico->payment_receipt_file)
+                    : null;
+                $viatico->nombre_usuario = optional($viatico->usuario)->No_Nombres_Apellidos ?? 'N/A';
 
-            $viatico->url_comprobante = $viatico->receipt_file 
-                ? asset('storage/' . $viatico->receipt_file)
-                : null;
-            $viatico->url_payment_receipt = $viatico->payment_receipt_file 
-                ? asset('storage/' . $viatico->payment_receipt_file)
-                : null;
-            $viatico->nombre_usuario = optional($viatico->usuario)->No_Nombres_Apellidos ?? 'N/A';
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Viático creado exitosamente',
-                'data' => $viatico
-            ], 201);
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Viático creado exitosamente',
+                    'data' => $viatico
+                ], 201);
+            }
         } catch (\Exception $e) {
             Log::error('Error al crear viático: ' . $e->getMessage());
             return response()->json([
@@ -181,10 +190,10 @@ class ViaticoController extends Controller
                 ], 403);
             }
 
-            $viatico->url_comprobante = $viatico->receipt_file 
+            $viatico->url_comprobante = $viatico->receipt_file
                 ? asset('storage/' . $viatico->receipt_file)
                 : null;
-            $viatico->url_payment_receipt = $viatico->payment_receipt_file 
+            $viatico->url_payment_receipt = $viatico->payment_receipt_file
                 ? asset('storage/' . $viatico->payment_receipt_file)
                 : null;
             $viatico->nombre_usuario = optional($viatico->usuario)->No_Nombres_Apellidos ?? 'N/A';
@@ -235,8 +244,8 @@ class ViaticoController extends Controller
             }
 
             $data = $request->validated();
-            $archivo = $request->hasFile('payment_receipt_file') 
-                ? $request->file('payment_receipt_file') 
+            $archivo = $request->hasFile('payment_receipt_file')
+                ? $request->file('payment_receipt_file')
                 : null;
 
             // Si se envía delete_file, eliminar el archivo
@@ -246,15 +255,15 @@ class ViaticoController extends Controller
 
             $viaticoAnterior = clone $viatico;
             $viatico = $this->viaticoService->actualizarViatico($viatico, $data, $archivo);
-            
+
             // Recargar el modelo para obtener datos actualizados
             $viatico->refresh();
             $viatico->load('usuario');
 
-            $viatico->url_comprobante = $viatico->receipt_file 
+            $viatico->url_comprobante = $viatico->receipt_file
                 ? asset('storage/' . $viatico->receipt_file)
                 : null;
-            $viatico->payment_receipt_file = $viatico->payment_receipt_file 
+            $viatico->payment_receipt_file = $viatico->payment_receipt_file
                 ? asset('storage/' . $viatico->payment_receipt_file)
                 : null;
             $viatico->nombre_usuario = optional($viatico->usuario)->No_Nombres_Apellidos ?? 'N/A';
@@ -265,11 +274,10 @@ class ViaticoController extends Controller
 
             // Crear notificación para el usuario creador
             if ($usuarioCreador && $usuarioCreador->ID_Usuario !== $usuarioAdministracion->ID_Usuario) {
-                $estadoTexto = $viatico->status === Viatico::STATUS_CONFIRMED ? 'confirmado' : 
-                              ($viatico->status === Viatico::STATUS_REJECTED ? 'rechazado' : 'actualizado');
-                
+                $estadoTexto = $viatico->status === Viatico::STATUS_CONFIRMED ? 'confirmado' : ($viatico->status === Viatico::STATUS_REJECTED ? 'rechazado' : 'actualizado');
+
                 $message = "Administración ha {$estadoTexto} tu viático: {$viatico->subject}";
-                
+
                 try {
                     $notificacionUsuario = Notificacion::create([
                         'titulo' => "Viático {$estadoTexto}",
@@ -281,10 +289,8 @@ class ViaticoController extends Controller
                         'navigate_params' => json_encode([
                             'id' => $viatico->id
                         ]),
-                        'tipo' => $viatico->status === Viatico::STATUS_CONFIRMED ? Notificacion::TIPO_SUCCESS : 
-                                 ($viatico->status === Viatico::STATUS_REJECTED ? Notificacion::TIPO_ERROR : Notificacion::TIPO_INFO),
-                        'icono' => $viatico->status === Viatico::STATUS_CONFIRMED ? 'mdi:check-circle' : 
-                                  ($viatico->status === Viatico::STATUS_REJECTED ? 'mdi:close-circle' : 'mdi:information'),
+                        'tipo' => $viatico->status === Viatico::STATUS_CONFIRMED ? Notificacion::TIPO_SUCCESS : ($viatico->status === Viatico::STATUS_REJECTED ? Notificacion::TIPO_ERROR : Notificacion::TIPO_INFO),
+                        'icono' => $viatico->status === Viatico::STATUS_CONFIRMED ? 'mdi:check-circle' : ($viatico->status === Viatico::STATUS_REJECTED ? 'mdi:close-circle' : 'mdi:information'),
                         'prioridad' => Notificacion::PRIORIDAD_MEDIA,
                         'referencia_tipo' => 'viatico',
                         'referencia_id' => $viatico->id,

@@ -31,7 +31,7 @@ class StoreViaticoRequest extends FormRequest
             'requesting_area' => 'required|string|max:255',
             'expense_description' => 'required|string',
             'total_amount' => 'required|numeric|min:0',
-            'receipt_file' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:10240'
+            'receipt_file' => 'nullable|mimes:jpeg,png,jpg,gif,pdf,doc,docx,xls|max:10240'
         ];
     }
 

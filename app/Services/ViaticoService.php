@@ -87,6 +87,20 @@ class ViaticoService
             throw $e;
         }
     }
+    //usuario actualiza viatico
+    public function usuarioActualizarViatico(Viatico $viatico, array $data, ?UploadedFile $archivo = null): Viatico
+    {
+        try {
+            DB::beginTransaction();
+            $viatico->update($data);
+            DB::commit();
+            return $viatico->fresh()->load('usuario');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Error al actualizar viático: ' . $e->getMessage());
+            throw $e;
+        }
+    }
 
     /**
      * Obtener viáticos con filtros
