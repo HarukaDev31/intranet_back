@@ -274,6 +274,9 @@ class ViaticoController extends Controller
             
             $viatico = $this->viaticoService->actualizarViatico($viatico, $data, $archivo);
 
+            // Ruta relativa para el job (antes de sobrescribir con URL para la respuesta)
+            $paymentReceiptPathForJob = $viatico->payment_receipt_file;
+
             // El servicio ya devuelve el viático con usuario cargado; no hacer refresh() ni load() de nuevo
             $viatico->url_comprobante = $viatico->receipt_file
                 ? asset('storage/' . $viatico->receipt_file)
@@ -308,12 +311,12 @@ class ViaticoController extends Controller
                         'creado_por' => $usuarioAdministracion->ID_Usuario,
                     ]);
 
-                    // WhatsApp en segundo plano (no bloquea la respuesta)
+                    // WhatsApp en segundo plano: pasar ruta relativa (viaticos/xxx.jpg), no la URL
                     $messageWhatsapp = "Administración ha {$estadoTexto} tu viático: {$viatico->subject}     de  S/.{$viatico->total_amount} ";
                     SendViaticoWhatsappNotificationJob::dispatch(
                         $messageWhatsapp,
                         $usuarioCreador->ID_Usuario,
-                        $viatico->payment_receipt_file
+                        $paymentReceiptPathForJob
                     )->afterResponse();
 
                     ViaticoActualizado::dispatch($viatico, $usuarioAdministracion, $usuarioCreador, $message);
