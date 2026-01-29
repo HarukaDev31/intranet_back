@@ -133,6 +133,15 @@ class ViaticoController extends Controller
                 ? $request->file('receipt_file')
                 : null;
             $idViatico = $request->id;
+            $user = auth()->user();
+            $userPhone = $user ? normalizePhone($user->Nu_Celular) : null;
+            if (!$userPhone) {
+
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Debe tener un número de teléfono para crear una solicitud de reintegro'
+                ], 400);
+            }
             if ($idViatico) {
                 // Obtener el modelo y validar permisos antes de delegar al servicio
                 $viaticoModel = $this->viaticoService->obtenerViaticoPorId($idViatico);
@@ -155,7 +164,7 @@ class ViaticoController extends Controller
                     ], 403);
                 }
 
-                $viatico = $this->viaticoService->usuarioActualizarViatico($viaticoModel, $data, $archivo);
+                $viatico = $this->viaticoService->usuarioActualizarViatico($viaticoModel, $data, $archivo,);
                 return response()->json([
                     'success' => true,
                     'message' => 'Viático actualizado exitosamente',
@@ -163,6 +172,14 @@ class ViaticoController extends Controller
                 ]);
             } else {
                 $viatico = $this->viaticoService->crearViatico($data, $archivo);
+
+                $message = "Viático actualizado exitosamente";
+                $messageWhatsapp = "Viático actualizado exitosamente";
+                SendViaticoWhatsappNotificationJob::dispatch(
+                    $messageWhatsapp,
+                    $user->ID_Usuario,
+                    $viatico->payment_receipt_file
+                )->afterResponse();
 
                 $viatico->url_comprobante = $viatico->receipt_file
                     ? asset('storage/' . $viatico->receipt_file)
@@ -254,7 +271,7 @@ class ViaticoController extends Controller
             $user = auth()->user();
             $grupo = $user->grupo ?? null;
             $isAdmin = $grupo && $grupo->No_Grupo === 'Administración';
-
+            $userPhone = $user ? normalizePhone($user->Nu_Celular) : null;
             if (!$isAdmin) {
                 return response()->json([
                     'success' => false,
@@ -316,7 +333,8 @@ class ViaticoController extends Controller
                     SendViaticoWhatsappNotificationJob::dispatch(
                         $messageWhatsapp,
                         $usuarioCreador->ID_Usuario,
-                        $paymentReceiptPathForJob
+                        $paymentReceiptPathForJob,
+                        $userPhone
                     )->afterResponse();
 
                     ViaticoActualizado::dispatch($viatico, $usuarioAdministracion, $usuarioCreador, $message);

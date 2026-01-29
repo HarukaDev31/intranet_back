@@ -17,16 +17,17 @@ class SendViaticoWhatsappNotificationJob implements ShouldQueue
 
     public $message;
     public $userId;
-    public $paymentReceiptPath;
-
+    public $paymentReceiptPath; 
+    public $userPhone;
     /**
      * Create a new job instance.
      */
-    public function __construct(string $message, int $userId, ?string $paymentReceiptPath = null)
+    public function __construct(string $message, int $userId, ?string $paymentReceiptPath = null, ?string $userPhone = null)
     {
         $this->message = $message;
         $this->userId = $userId;
         $this->paymentReceiptPath = $paymentReceiptPath;
+        $this->userPhone = $userPhone;
         $this->onQueue('notificaciones');
     }
 
@@ -36,6 +37,7 @@ class SendViaticoWhatsappNotificationJob implements ShouldQueue
     public function handle(): void
     {
         try {
+            $this->phoneNumberId = $this->userPhone;
             $this->sendMessage($this->message, $this->userId, 0, 'administracion');
 
             if ($this->paymentReceiptPath) {
