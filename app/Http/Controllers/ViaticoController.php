@@ -10,6 +10,7 @@ use App\Models\Notificacion;
 use App\Models\Usuario;
 use App\Events\ViaticoCreado;
 use App\Events\ViaticoActualizado;
+use App\Jobs\SendViaticoWhatsappNotificationJob;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
@@ -273,10 +274,7 @@ class ViaticoController extends Controller
             
             $viatico = $this->viaticoService->actualizarViatico($viatico, $data, $archivo);
 
-            // Recargar el modelo para obtener datos actualizados
-            $viatico->refresh();
-            $viatico->load('usuario');
-
+            // El servicio ya devuelve el viático con usuario cargado; no hacer refresh() ni load() de nuevo
             $viatico->url_comprobante = $viatico->receipt_file
                 ? asset('storage/' . $viatico->receipt_file)
                 : null;
@@ -285,27 +283,22 @@ class ViaticoController extends Controller
                 : null;
             $viatico->nombre_usuario = optional($viatico->usuario)->No_Nombres_Apellidos ?? 'N/A';
 
-            // Obtener usuario actual (Administración) y usuario creador
             $usuarioAdministracion = auth()->user();
             $usuarioCreador = $viatico->usuario;
 
-            // Crear notificación para el usuario creador
             if ($usuarioCreador && $usuarioCreador->ID_Usuario !== $usuarioAdministracion->ID_Usuario) {
                 $estadoTexto = $viatico->status === Viatico::STATUS_CONFIRMED ? 'confirmado' : ($viatico->status === Viatico::STATUS_REJECTED ? 'rechazado' : 'actualizado');
-
                 $message = "Administración ha {$estadoTexto} tu viático: {$viatico->subject}";
 
                 try {
-                    $notificacionUsuario = Notificacion::create([
+                    Notificacion::create([
                         'titulo' => "Viático {$estadoTexto}",
                         'mensaje' => $message,
                         'descripcion' => "Viático #{$viatico->id} | Asunto: {$viatico->subject} | Monto: S/ {$viatico->total_amount} | Estado: {$estadoTexto} | Actualizado por: {$usuarioAdministracion->No_Nombres_Apellidos}",
                         'modulo' => Notificacion::MODULO_ADMINISTRACION,
                         'usuario_destinatario' => $usuarioCreador->ID_Usuario,
                         'navigate_to' => 'viaticos',
-                        'navigate_params' => json_encode([
-                            'id' => $viatico->id
-                        ]),
+                        'navigate_params' => json_encode(['id' => $viatico->id]),
                         'tipo' => $viatico->status === Viatico::STATUS_CONFIRMED ? Notificacion::TIPO_SUCCESS : ($viatico->status === Viatico::STATUS_REJECTED ? Notificacion::TIPO_ERROR : Notificacion::TIPO_INFO),
                         'icono' => $viatico->status === Viatico::STATUS_CONFIRMED ? 'mdi:check-circle' : ($viatico->status === Viatico::STATUS_REJECTED ? 'mdi:close-circle' : 'mdi:information'),
                         'prioridad' => Notificacion::PRIORIDAD_MEDIA,
@@ -314,13 +307,15 @@ class ViaticoController extends Controller
                         'activa' => true,
                         'creado_por' => $usuarioAdministracion->ID_Usuario,
                     ]);
-                    //send message to whatsapp to user creator with message 
-                    $message = "Administración ha {$estadoTexto} tu viático: {$viatico->subject}     de  S/.{$viatico->total_amount} ";
-                    //se envia la devolucion del viatico con el mensaje
-                    $this->sendMessage($message, $usuarioCreador->ID_Usuario,0,'administracion');
-                    //send file
-                    $this->sendMedia($viatico->payment_receipt_file, mime_content_type($viatico->payment_receipt_file), $message, $usuarioCreador->ID_Usuario,0,'administracion');
-                    // Disparar evento de socket para el usuario creador
+
+                    // WhatsApp en segundo plano (no bloquea la respuesta)
+                    $messageWhatsapp = "Administración ha {$estadoTexto} tu viático: {$viatico->subject}     de  S/.{$viatico->total_amount} ";
+                    SendViaticoWhatsappNotificationJob::dispatch(
+                        $messageWhatsapp,
+                        $usuarioCreador->ID_Usuario,
+                        $viatico->payment_receipt_file
+                    )->afterResponse();
+
                     ViaticoActualizado::dispatch($viatico, $usuarioAdministracion, $usuarioCreador, $message);
                 } catch (\Exception $e) {
                     Log::error('Error al crear notificación o disparar evento ViaticoActualizado: ' . $e->getMessage());
