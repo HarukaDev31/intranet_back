@@ -273,14 +273,15 @@ trait WhatsappTrait
         }
     }
 
-    public function sendMessage($message, $phoneNumberId = null, $sleep = 0): array
+    public function sendMessage($message, $phoneNumberId = null, $sleep = 0,$fromNumber='consolidado'): array
     {
         $phoneNumberId = $phoneNumberId ? $phoneNumberId : $this->phoneNumberId;
 
         return $this->_callApi('/messageV2', [
             'message' => $message,
             'phoneNumberId' => $phoneNumberId,
-            'sleep' => $sleep
+            'sleep' => $sleep,
+            'fromNumber' => $fromNumber
         ]);
     }
     public function sendMessageVentas($message, $phoneNumberId = null, $sleep = 0): array

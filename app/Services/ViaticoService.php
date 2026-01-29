@@ -48,9 +48,6 @@ class ViaticoService
     {
         try {
             DB::beginTransaction();
-            Log::info('data: ' . json_encode($data));
-            Log::info('archivo: ' . json_encode($archivo));
-            Log::info('viatico: ' . json_encode($viatico));
             // Si se sube un archivo nuevo
             if ($archivo) {
                 // Eliminar archivo anterior si existe
@@ -92,6 +89,9 @@ class ViaticoService
     {
         try {
             DB::beginTransaction();
+            if ($archivo) {
+                $data['payment_receipt_file'] = $this->guardarArchivo($archivo);
+            }
             $viatico->update($data);
             DB::commit();
             return $viatico->fresh()->load('usuario');

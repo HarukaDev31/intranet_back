@@ -14,6 +14,7 @@ class Viatico extends Model
     protected $fillable = [
         'subject',
         'reimbursement_date',
+        'return_date',
         'requesting_area',
         'expense_description',
         'total_amount',
@@ -25,6 +26,7 @@ class Viatico extends Model
 
     protected $casts = [
         'reimbursement_date' => 'date',
+        'return_date' => 'date',
         'total_amount' => 'decimal:2',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',

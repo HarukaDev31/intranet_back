@@ -13,9 +13,11 @@ use App\Events\ViaticoActualizado;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
+use App\Traits\WhatsappTrait;
 
 class ViaticoController extends Controller
 {
+    use WhatsappTrait;
     protected $viaticoService;
 
     public function __construct(ViaticoService $viaticoService)
@@ -237,13 +239,8 @@ class ViaticoController extends Controller
                     'message' => 'No tienes permiso para editar este viático'
                 ], 403);
             }
-
-            // Si el estado es CONFIRMED, solo se puede subir/eliminar archivo o cambiar estado
-            if ($viatico->status === Viatico::STATUS_CONFIRMED && !$request->hasFile('receipt_file') && !$request->has('delete_file')) {
-                // Permitir cambiar estado incluso si está confirmado
-            }
-
             $data = $request->validated();
+            $data['return_date'] = Carbon::now();
             $archivo = $request->hasFile('payment_receipt_file')
                 ? $request->file('payment_receipt_file')
                 : null;
@@ -252,8 +249,7 @@ class ViaticoController extends Controller
             if ($request->has('delete_file') && $request->delete_file == true) {
                 $data['delete_file'] = true;
             }
-
-            $viaticoAnterior = clone $viatico;
+            
             $viatico = $this->viaticoService->actualizarViatico($viatico, $data, $archivo);
 
             // Recargar el modelo para obtener datos actualizados
@@ -297,7 +293,12 @@ class ViaticoController extends Controller
                         'activa' => true,
                         'creado_por' => $usuarioAdministracion->ID_Usuario,
                     ]);
-
+                    //send message to whatsapp to user creator with message 
+                    $message = "Administración ha {$estadoTexto} tu viático: {$viatico->subject}     de  S/.{$viatico->total_amount} ";
+                    //se envia la devolucion del viatico con el mensaje
+                    $this->sendMessage($message, $usuarioCreador->ID_Usuario,0,'administracion');
+                    //send file
+                    $this->sendMedia($viatico->payment_receipt_file, mime_content_type($viatico->payment_receipt_file), $message, $usuarioCreador->ID_Usuario,0,'administracion');
                     // Disparar evento de socket para el usuario creador
                     ViaticoActualizado::dispatch($viatico, $usuarioAdministracion, $usuarioCreador, $message);
                 } catch (\Exception $e) {
