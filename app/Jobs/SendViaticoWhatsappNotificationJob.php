@@ -18,7 +18,6 @@ class SendViaticoWhatsappNotificationJob implements ShouldQueue
     public $message;
     public $userId;
     public $paymentReceiptPath;
-    public $queue = 'notificaciones';
 
     /**
      * Create a new job instance.
@@ -28,6 +27,7 @@ class SendViaticoWhatsappNotificationJob implements ShouldQueue
         $this->message = $message;
         $this->userId = $userId;
         $this->paymentReceiptPath = $paymentReceiptPath;
+        $this->onQueue('notificaciones');
     }
 
     /**
@@ -39,14 +39,25 @@ class SendViaticoWhatsappNotificationJob implements ShouldQueue
             $this->sendMessage($this->message, $this->userId, 0, 'administracion');
 
             if ($this->paymentReceiptPath) {
-                $fullPath = Storage::disk('public')->path($this->paymentReceiptPath);
+                // Ruta en BD: "viaticos/xxx.pdf" (relativa al disco public = storage/app/public)
+                $pathNormalized = str_replace('\\', '/', trim($this->paymentReceiptPath));
+                $fullPath = storage_path('app/public/' . $pathNormalized);
+
+                if (!file_exists($fullPath)) {
+                    $fullPath = public_path('storage/' . $pathNormalized);
+                }
+                if (!file_exists($fullPath) && method_exists(Storage::disk('public'), 'path')) {
+                    $fullPath = Storage::disk('public')->path($this->paymentReceiptPath);
+                }
                 if (file_exists($fullPath) && is_readable($fullPath)) {
                     $mime = mime_content_type($fullPath) ?: 'application/octet-stream';
                     $this->sendMedia($fullPath, $mime, $this->message, $this->userId, 0, 'administracion');
                 } else {
                     Log::warning('SendViaticoWhatsappNotificationJob: archivo no encontrado o no legible', [
                         'path' => $this->paymentReceiptPath,
-                        'fullPath' => $fullPath
+                        'fullPath' => $fullPath,
+                        'storage_app_public' => storage_path('app/public'),
+                        'public_storage' => public_path('storage')
                     ]);
                 }
             }
