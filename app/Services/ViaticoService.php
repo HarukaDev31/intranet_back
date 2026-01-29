@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Http\UploadedFile;
+USE App\Events\ViaticoCreado;
 
 class ViaticoService
 {
@@ -27,7 +28,9 @@ class ViaticoService
             }
 
             $viatico = Viatico::create($data);
-
+            //send viatico created notification to user
+            $user = $viatico->usuario;
+            ViaticoCreado::dispatch($viatico, $user, 'Viático creado exitosamente');
             DB::commit();
 
             return $viatico->load('usuario');
