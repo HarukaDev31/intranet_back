@@ -31,7 +31,12 @@ class StoreViaticoRequest extends FormRequest
             'requesting_area' => 'required|string|max:255',
             'expense_description' => 'required|string',
             'total_amount' => 'required|numeric|min:0',
-            'receipt_file' => 'nullable|mimes:jpeg,png,jpg,gif,pdf,doc,docx,xls|max:100240'
+            'receipt_file' => 'nullable|file|mimes:jpeg,png,jpg,gif,pdf,doc,docx,xls|max:102400',
+            'items' => 'required|array|min:1',
+            'items.*.concepto' => 'required|string|max:255',
+            'items.*.monto' => 'required|numeric|min:0',
+            'items.*.receipt_file' => 'nullable|file|mimes:jpeg,png,jpg,gif,pdf,doc,docx,xls|max:102400',
+            'items.*.existing_file_url' => 'nullable|string|max:500',
         ];
     }
 

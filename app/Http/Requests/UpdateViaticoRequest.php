@@ -26,9 +26,19 @@ class UpdateViaticoRequest extends FormRequest
     public function rules()
     {
         return [
+            'subject' => 'sometimes|string|max:255',
+            'reimbursement_date' => 'sometimes|date',
+            'requesting_area' => 'sometimes|string|max:255',
+            'expense_description' => 'sometimes|string',
+            'total_amount' => 'sometimes|numeric|min:0',
             'status' => 'sometimes|in:PENDING,CONFIRMED,REJECTED',
-            'receipt_file' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:10240',
-            'delete_file' => 'sometimes|boolean'
+            'receipt_file' => 'nullable|file|mimes:jpeg,png,jpg,gif,pdf,doc,docx,xls|max:102400',
+            'delete_file' => 'sometimes|boolean',
+            'items' => 'sometimes|array|min:0',
+            'items.*.id' => 'nullable|integer|exists:viaticos_pagos,id',
+            'items.*.concepto' => 'required|string|max:255',
+            'items.*.monto' => 'required|numeric|min:0',
+            'items.*.receipt_file' => 'nullable|file|mimes:jpeg,png,jpg,gif,pdf,doc,docx,xls|max:102400',
         ];
     }
 

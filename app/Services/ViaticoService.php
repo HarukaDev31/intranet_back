@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Viatico;
+use App\Models\ViaticoPago;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
@@ -12,28 +13,48 @@ USE App\Events\ViaticoCreado;
 class ViaticoService
 {
     /**
-     * Crear un nuevo viático
+     * Crear un nuevo viático (con items: concepto, monto, receipt_file por item)
      */
-    public function crearViatico(array $data, ?UploadedFile $archivo = null): Viatico
+    public function crearViatico(array $data, ?UploadedFile $archivo = null, array $itemFiles = []): Viatico
     {
         try {
             DB::beginTransaction();
 
             $data['user_id'] = auth()->id();
             $data['status'] = Viatico::STATUS_PENDING;
+            $items = $data['items'] ?? [];
+            unset($data['items']);
 
-            // Si se sube un archivo, guardarlo y cambiar estado a CONFIRMED
             if ($archivo) {
                 $data['receipt_file'] = $this->guardarArchivo($archivo);
             }
 
             $viatico = Viatico::create($data);
-            //send viatico created notification to user
+
+            foreach ($items as $index => $item) {
+                $pagoData = [
+                    'viatico_id' => $viatico->id,
+                    'concepto' => $item['concepto'],
+                    'monto' => $item['monto'],
+                ];
+                if (!empty($item['pago_url'])) {
+                    // Ya viene con URL, no subir imagen; guardar solo la ruta
+                    $pagoData['existing_file_url'] = $this->normalizarRutaPagoDesdeUrl($item['existing_file_url']);
+                } else {
+                    $file = $itemFiles[$index] ?? null;
+                    if ($file instanceof UploadedFile) {
+                        $fileInfo = $this->guardarArchivoPagoItem($file);
+                        $pagoData = array_merge($pagoData, $fileInfo);
+                    }
+                }
+                ViaticoPago::create($pagoData);
+            }
+
             $user = $viatico->usuario;
             ViaticoCreado::dispatch($viatico, $user, 'Viático creado exitosamente');
             DB::commit();
 
-            return $viatico->load('usuario');
+            return $viatico->load(['usuario', 'pagos']);
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('Error al crear viático: ' . $e->getMessage());
@@ -42,18 +63,15 @@ class ViaticoService
     }
 
     /**
-     * Actualizar un viático
+     * Actualizar un viático (items con id = actualizar, sin id = crear; no enviados = eliminar)
      */
-    public function actualizarViatico(Viatico $viatico, array $data, ?UploadedFile $archivo = null): Viatico
+    public function actualizarViatico(Viatico $viatico, array $data, ?UploadedFile $archivo = null, array $itemFiles = []): Viatico
     {
         $rutaNuevaGuardada = null;
 
         try {
-            // Guardar rutas de archivos a eliminar para hacerlo DESPUÉS del commit
-            // (operaciones de disco lentas no deben mantener la transacción abierta)
             $archivosAEliminar = [];
 
-            // Si se sube un archivo nuevo: guardar FUERA de la transacción (es la parte más lenta)
             if ($archivo) {
                 if ($viatico->payment_receipt_file) {
                     $archivosAEliminar[] = $viatico->payment_receipt_file;
@@ -63,7 +81,6 @@ class ViaticoService
                 $data['status'] = Viatico::STATUS_CONFIRMED;
             }
 
-            // Si se elimina el archivo (se envía delete_file como true)
             if (isset($data['delete_file']) && $data['delete_file'] === true) {
                 if ($viatico->receipt_file) {
                     $archivosAEliminar[] = $viatico->receipt_file;
@@ -73,20 +90,64 @@ class ViaticoService
                 unset($data['delete_file']);
             }
 
+            $items = $data['items'] ?? null;
+            unset($data['items']);
+
             DB::beginTransaction();
             $viatico->update($data);
+
+            if ($items !== null) {
+                $idsPresentes = [];
+                foreach ($items as $index => $item) {
+                    $file = $itemFiles[$index] ?? null;
+                    if (!empty($item['id'])) {
+                        $pago = ViaticoPago::where('viatico_id', $viatico->id)->find($item['id']);
+                        if ($pago) {
+                            $idsPresentes[] = $pago->id;
+                            $updateData = [
+                                'concepto' => $item['concepto'],
+                                'monto' => $item['monto'],
+                            ];
+                            if ($file instanceof UploadedFile) {
+                                if ($pago->file_path) {
+                                    $archivosAEliminar[] = $pago->file_path;
+                                }
+                                $updateData = array_merge($updateData, $this->guardarArchivoPagoItem($file));
+                            }
+                            $pago->update($updateData);
+                        }
+                    } else {
+                        $pagoData = [
+                            'viatico_id' => $viatico->id,
+                            'concepto' => $item['concepto'],
+                            'monto' => $item['monto'],
+                        ];
+                        if ($file instanceof UploadedFile) {
+                            $pagoData = array_merge($pagoData, $this->guardarArchivoPagoItem($file));
+                        }
+                        $nuevo = ViaticoPago::create($pagoData);
+                        $idsPresentes[] = $nuevo->id;
+                    }
+                }
+                // Eliminar items que ya no vienen en el request
+                $eliminados = ViaticoPago::where('viatico_id', $viatico->id)->whereNotIn('id', $idsPresentes)->get();
+                foreach ($eliminados as $p) {
+                    if ($p->file_path) {
+                        $archivosAEliminar[] = $p->file_path;
+                    }
+                    $p->delete();
+                }
+            }
+
             DB::commit();
 
-            // Eliminar archivos antiguos después del commit para no bloquear la transacción
             foreach ($archivosAEliminar as $ruta) {
                 $this->eliminarArchivo($ruta);
             }
 
-            // Evitar fresh() (query extra): el modelo ya está actualizado; solo recargar relación si hace falta
-            return $viatico->load('usuario');
+            return $viatico->load(['usuario', 'pagos']);
         } catch (\Exception $e) {
             DB::rollBack();
-            // Si se había guardado un archivo nuevo y falló el update, eliminar el archivo huérfano
             if ($rutaNuevaGuardada) {
                 $this->eliminarArchivo($rutaNuevaGuardada);
             }
@@ -94,17 +155,60 @@ class ViaticoService
             throw $e;
         }
     }
-    //usuario actualiza viatico
-    public function usuarioActualizarViatico(Viatico $viatico, array $data, ?UploadedFile $archivo = null): Viatico
+    /**
+     * Usuario actualiza su viático (con items: id para actualizar, sin id para crear)
+     */
+    public function usuarioActualizarViatico(Viatico $viatico, array $data, ?UploadedFile $archivo = null, array $itemFiles = []): Viatico
     {
         try {
             DB::beginTransaction();
             if ($archivo) {
                 $data['receipt_file'] = $this->guardarArchivo($archivo);
             }
+            $items = $data['items'] ?? null;
+            unset($data['items']);
             $viatico->update($data);
+
+            if ($items !== null) {
+                $idsPresentes = [];
+                foreach ($items as $index => $item) {
+                    $file = $itemFiles[$index] ?? null;
+                    if (!empty($item['id'])) {
+                        $pago = ViaticoPago::where('viatico_id', $viatico->id)->find($item['id']);
+                        if ($pago) {
+                            $idsPresentes[] = $pago->id;
+                            $updateData = ['concepto' => $item['concepto'], 'monto' => $item['monto']];
+                            if ($file instanceof UploadedFile) {
+                                if ($pago->file_path) {
+                                    $this->eliminarArchivo($pago->file_path);
+                                }
+                                $updateData = array_merge($updateData, $this->guardarArchivoPagoItem($file));
+                            }
+                            $pago->update($updateData);
+                        }
+                    } else {
+                        $pagoData = [
+                            'viatico_id' => $viatico->id,
+                            'concepto' => $item['concepto'],
+                            'monto' => $item['monto'],
+                        ];
+                        if ($file instanceof UploadedFile) {
+                            $pagoData = array_merge($pagoData, $this->guardarArchivoPagoItem($file));
+                        }
+                        $nuevo = ViaticoPago::create($pagoData);
+                        $idsPresentes[] = $nuevo->id;
+                    }
+                }
+                $eliminados = ViaticoPago::where('viatico_id', $viatico->id)->whereNotIn('id', $idsPresentes)->get();
+                foreach ($eliminados as $p) {
+                    if ($p->file_path) {
+                        $this->eliminarArchivo($p->file_path);
+                    }
+                    $p->delete();
+                }
+            }
             DB::commit();
-            return $viatico->fresh()->load('usuario');
+            return $viatico->load(['usuario', 'pagos']);
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('Error al actualizar viático: ' . $e->getMessage());
@@ -117,7 +221,7 @@ class ViaticoService
      */
     public function obtenerViaticos(array $filtros = [])
     {
-        $query = Viatico::with('usuario');
+        $query = Viatico::with(['usuario', 'pagos']);
 
         // Filtrar por usuario si no es administración
         if (isset($filtros['user_id'])) {
@@ -160,7 +264,7 @@ class ViaticoService
      */
     public function obtenerViaticoPorId(int $id): ?Viatico
     {
-        return Viatico::with('usuario')->find($id);
+        return Viatico::with(['usuario', 'pagos'])->find($id);
     }
 
     /**
@@ -169,16 +273,36 @@ class ViaticoService
     public function eliminarViatico(Viatico $viatico): bool
     {
         try {
-            // Eliminar archivo si existe
             if ($viatico->receipt_file) {
                 $this->eliminarArchivo($viatico->receipt_file);
             }
-
+            foreach ($viatico->pagos as $pago) {
+                if ($pago->file_path) {
+                    $this->eliminarArchivo($pago->file_path);
+                }
+            }
             return $viatico->delete();
         } catch (\Exception $e) {
             Log::error('Error al eliminar viático: ' . $e->getMessage());
             throw $e;
         }
+    }
+
+    /**
+     * Normalizar pago_url (URL completa o ruta) a ruta relativa para file_path
+     */
+    private function normalizarRutaPagoDesdeUrl(string $pagoUrl): string
+    {
+        $path = $pagoUrl;
+        if (preg_match('#^https?://#', $pagoUrl)) {
+            $parsed = parse_url($pagoUrl);
+            $path = isset($parsed['path']) ? ltrim($parsed['path'], '/') : $pagoUrl;
+        }
+        // Quitar prefijo "storage/" si viene en la ruta
+        if (strpos($path, 'storage/') === 0) {
+            $path = substr($path, 8);
+        }
+        return $path;
     }
 
     /**
@@ -188,8 +312,24 @@ class ViaticoService
     {
         $nombreArchivo = time() . '_' . uniqid() . '.' . $archivo->getClientOriginalExtension();
         $ruta = $archivo->storeAs('viaticos', $nombreArchivo, 'public');
-        
         return $ruta;
+    }
+
+    /**
+     * Guardar archivo de item en viaticos_pagos y devolver datos para la tabla
+     */
+    private function guardarArchivoPagoItem(UploadedFile $archivo): array
+    {
+        $nombreArchivo = time() . '_' . uniqid() . '.' . $archivo->getClientOriginalExtension();
+        $ruta = $archivo->storeAs('viaticos_pagos', $nombreArchivo, 'public');
+        return [
+            'file_path' => $ruta,
+            'file_url' => null,
+            'file_size' => $archivo->getSize(),
+            'file_original_name' => $archivo->getClientOriginalName(),
+            'file_mime_type' => $archivo->getMimeType(),
+            'file_extension' => $archivo->getClientOriginalExtension(),
+        ];
     }
 
     /**

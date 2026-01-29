@@ -47,6 +47,14 @@ class Viatico extends Model
     }
 
     /**
+     * Relación con items de pago (viaticos_pagos)
+     */
+    public function pagos()
+    {
+        return $this->hasMany(ViaticoPago::class);
+    }
+
+    /**
      * Obtener estados disponibles
      */
     public static function getEstadosDisponibles()

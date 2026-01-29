@@ -54,7 +54,12 @@ class ViaticoController extends Controller
             $perPage = $request->get('per_page', 10);
             $page = (int) $request->get('page', 1);
             $viaticos = $query->paginate($perPage, ['*'], 'page', $page);
-
+            //foreach viatico complete pago.file_path
+            foreach ($viaticos as $viatico) {
+                foreach ($viatico->pagos as $pago) {
+                    $pago->file_path = asset('storage/' . $pago->file_path);
+                }
+            }
             // Transformar datos
             $data = $viaticos->items();
             foreach ($data as $viatico) {
@@ -123,12 +128,30 @@ class ViaticoController extends Controller
     }
 
     /**
+     * Extrae archivos de items del request y normaliza data.items (concepto, monto, id).
+     */
+    private function extraerItemFilesYNormalizarItems(Request $request, array &$data): array
+    {
+        $items = $data['items'] ?? [];
+        $itemFiles = [];
+        foreach ($items as $index => $item) {
+            $itemFiles[$index] = isset($item['receipt_file']) && $item['receipt_file'] instanceof \Illuminate\Http\UploadedFile
+                ? $item['receipt_file']
+                : $request->file("items.{$index}.receipt_file");
+            unset($data['items'][$index]['receipt_file']);
+        }
+        $data['items'] = array_values($items);
+        return $itemFiles;
+    }
+
+    /**
      * Crear un nuevo viático
      */
     public function store(StoreViaticoRequest $request)
     {
         try {
             $data = $request->validated();
+            $itemFiles = $this->extraerItemFilesYNormalizarItems($request, $data);
             $archivo = $request->hasFile('receipt_file')
                 ? $request->file('receipt_file')
                 : null;
@@ -164,14 +187,14 @@ class ViaticoController extends Controller
                     ], 403);
                 }
 
-                $viatico = $this->viaticoService->usuarioActualizarViatico($viaticoModel, $data, $archivo,);
+                $viatico = $this->viaticoService->usuarioActualizarViatico($viaticoModel, $data, $archivo, $itemFiles);
                 return response()->json([
                     'success' => true,
                     'message' => 'Viático actualizado exitosamente',
                     'data' => $viatico
                 ]);
             } else {
-                $viatico = $this->viaticoService->crearViatico($data, $archivo);
+                $viatico = $this->viaticoService->crearViatico($data, $archivo, $itemFiles);
 
                
                 $viatico->url_comprobante = $viatico->receipt_file
@@ -231,7 +254,9 @@ class ViaticoController extends Controller
                 ? asset('storage/' . $viatico->payment_receipt_file)
                 : null;
             $viatico->nombre_usuario = optional($viatico->usuario)->No_Nombres_Apellidos ?? 'N/A';
-
+            foreach ($viatico->pagos as $pago) {
+                $pago->file_path = asset('storage/' . $pago->file_path);
+            }
             return response()->json([
                 'success' => true,
                 'data' => $viatico
@@ -280,12 +305,17 @@ class ViaticoController extends Controller
                 ? $request->file('payment_receipt_file')
                 : null;
 
+            $itemFiles = [];
+            if (!empty($data['items'])) {
+                $itemFiles = $this->extraerItemFilesYNormalizarItems($request, $data);
+            }
+
             // Si se envía delete_file, eliminar el archivo
             if ($request->has('delete_file') && $request->delete_file == true) {
                 $data['delete_file'] = true;
             }
-            
-            $viatico = $this->viaticoService->actualizarViatico($viatico, $data, $archivo);
+
+            $viatico = $this->viaticoService->actualizarViatico($viatico, $data, $archivo, $itemFiles);
 
             // Ruta relativa para el job (antes de sobrescribir con URL para la respuesta)
             $paymentReceiptPathForJob = $viatico->payment_receipt_file;
