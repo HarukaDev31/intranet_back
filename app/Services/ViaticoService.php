@@ -242,6 +242,10 @@ class ViaticoService
             $query->where('reimbursement_date', '<=', $filtros['fecha_fin']);
         }
 
+        if (isset($filtros['requesting_area'])) {
+            $query->where('requesting_area', $filtros['requesting_area']);
+        }
+
         // Búsqueda por asunto o descripción
         if (isset($filtros['search'])) {
             $search = $filtros['search'];

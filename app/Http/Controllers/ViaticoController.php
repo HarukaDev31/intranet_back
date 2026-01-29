@@ -38,7 +38,8 @@ class ViaticoController extends Controller
                 'fecha_fin' => $request->get('fecha_fin'),
                 'search' => $request->get('search'),
                 'sort_by' => $request->get('sort_by', 'created_at'),
-                'sort_order' => $request->get('sort_order', 'desc')
+                'sort_order' => $request->get('sort_order', 'desc'),
+                'requesting_area' => $request->get('requesting_area'),
             ];
 
             // Si no es administración, filtrar por usuario actual
