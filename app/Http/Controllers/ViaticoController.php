@@ -173,14 +173,7 @@ class ViaticoController extends Controller
             } else {
                 $viatico = $this->viaticoService->crearViatico($data, $archivo);
 
-                $message = "Viático actualizado exitosamente";
-                $messageWhatsapp = "Viático actualizado exitosamente";
-                SendViaticoWhatsappNotificationJob::dispatch(
-                    $messageWhatsapp,
-                    $user->ID_Usuario,
-                    $viatico->payment_receipt_file
-                )->afterResponse();
-
+               
                 $viatico->url_comprobante = $viatico->receipt_file
                     ? asset('storage/' . $viatico->receipt_file)
                     : null;

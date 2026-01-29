@@ -38,6 +38,10 @@ class SendViaticoWhatsappNotificationJob implements ShouldQueue
     {
         try {
             $this->phoneNumberId = $this->userPhone;
+            //if numbers have 9 digts add 51 and add @c.us
+            if (strlen($this->userPhone) === 9) {
+                $this->phoneNumberId = '51' . $this->userPhone . '@c.us';
+            }
             $this->sendMessage($this->message, $this->userId, 0, 'administracion');
 
             if ($this->paymentReceiptPath) {
