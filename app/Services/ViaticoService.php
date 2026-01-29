@@ -90,7 +90,7 @@ class ViaticoService
         try {
             DB::beginTransaction();
             if ($archivo) {
-                $data['payment_receipt_file'] = $this->guardarArchivo($archivo);
+                $data['receipt_file'] = $this->guardarArchivo($archivo);
             }
             $viatico->update($data);
             DB::commit();
