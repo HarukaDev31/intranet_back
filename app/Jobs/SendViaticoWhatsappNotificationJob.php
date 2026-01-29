@@ -38,7 +38,7 @@ class SendViaticoWhatsappNotificationJob implements ShouldQueue
     {
         try {
             $this->phoneNumberId = $this->userPhone;
-            $this->sendMessage($this->message, $this->userId, 0, 'administracion');
+            $this->sendMessage($this->message, $this->phoneNumberId, 0, 'administracion');
 
             if ($this->paymentReceiptPath) {
                 // Si viene URL (ej. http://localhost:8000/storage/viaticos/xxx.jpg), extraer path relativo "viaticos/xxx.jpg"
@@ -57,7 +57,7 @@ class SendViaticoWhatsappNotificationJob implements ShouldQueue
                 }
                 if (file_exists($fullPath) && is_readable($fullPath)) {
                     $mime = mime_content_type($fullPath) ?: 'application/octet-stream';
-                    $this->sendMedia($fullPath, $mime, null, $this->userId, 0, 'administracion');
+                    $this->sendMedia($fullPath, $mime, null, $this->phoneNumberId, 0, 'administracion');
                 } else {
                     Log::warning('SendViaticoWhatsappNotificationJob: archivo no encontrado o no legible', [
                         'path' => $this->paymentReceiptPath,

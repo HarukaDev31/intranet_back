@@ -271,7 +271,10 @@ class ViaticoController extends Controller
             $user = auth()->user();
             $grupo = $user->grupo ?? null;
             $isAdmin = $grupo && $grupo->No_Grupo === 'Administración';
-            $userPhone = $user ? normalizePhone($user->Nu_Celular) : null;
+            $idUsuario = $viatico->user_id;
+            $usuarioCreador = Usuario::find($idUsuario);
+            $userPhone = $usuarioCreador ? normalizePhone($usuarioCreador->Nu_Celular) : null;
+            Log::info('Número de teléfono del usuario creador: ' . $userPhone);
             if (!$isAdmin) {
                 return response()->json([
                     'success' => false,
