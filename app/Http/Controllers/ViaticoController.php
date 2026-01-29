@@ -131,7 +131,28 @@ class ViaticoController extends Controller
                 : null;
             $idViatico = $request->id;
             if ($idViatico) {
-                $viatico = $this->viaticoService->usuarioActualizarViatico($idViatico, $data, $archivo);
+                // Obtener el modelo y validar permisos antes de delegar al servicio
+                $viaticoModel = $this->viaticoService->obtenerViaticoPorId($idViatico);
+
+                if (!$viaticoModel) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Viático no encontrado'
+                    ], 404);
+                }
+
+                $user = auth()->user();
+                $grupo = $user->grupo ?? null;
+                $isAdmin = $grupo && $grupo->No_Grupo === 'Administración';
+
+                if (!$isAdmin && $viaticoModel->user_id !== $user->ID_Usuario) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'No tienes permiso para editar este viático'
+                    ], 403);
+                }
+
+                $viatico = $this->viaticoService->usuarioActualizarViatico($viaticoModel, $data, $archivo);
                 return response()->json([
                     'success' => true,
                     'message' => 'Viático actualizado exitosamente',
@@ -334,12 +355,12 @@ class ViaticoController extends Controller
                 ], 404);
             }
 
-            // Verificar permisos: solo administración puede eliminar
+            // Verificar permisos: administración o el usuario creador puede eliminar
             $user = auth()->user();
             $grupo = $user->grupo ?? null;
             $isAdmin = $grupo && $grupo->No_Grupo === 'Administración';
 
-            if (!$isAdmin) {
+            if (!$isAdmin && $viatico->user_id !== $user->ID_Usuario) {
                 return response()->json([
                     'success' => false,
                     'message' => 'No tienes permiso para eliminar este viático'
