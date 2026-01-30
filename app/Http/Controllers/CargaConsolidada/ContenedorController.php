@@ -577,7 +577,10 @@ class ContenedorController extends Controller
     public function getValidContainers()
     {
         // Obtener los contenedores existentes
-        $existingContainers = Contenedor::where('empresa', '!=', '1')->pluck('carga')->toArray();
+        $existingContainers = Contenedor::where('empresa', '!=', '1')->
+        //where year f_inicio is current year
+        whereYear('f_inicio', date('Y'))->
+        pluck('carga')->toArray();
         Log::info('existingContainers', $existingContainers);
         // Crear array con todos los contenedores (1-50) indicando cuáles están deshabilitados
         $data = [];
