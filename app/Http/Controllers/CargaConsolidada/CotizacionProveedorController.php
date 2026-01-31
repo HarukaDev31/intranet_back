@@ -156,9 +156,11 @@ class CotizacionProveedorController extends Controller
                     'main.*',
                     'U.No_Nombres_Apellidos'
                 ])
+
                 ->leftJoin('contenedor_consolidado_tipo_cliente AS TC', 'TC.id', '=', 'main.id_tipo_cliente')
                 ->leftJoin('usuario AS U', 'U.ID_Usuario', '=', 'main.id_usuario')
-                ->where('main.id_contenedor', $idContenedor);
+                ->where('main.id_contenedor', $idContenedor)
+                ->whereRaw('NOT EXISTS (SELECT 1 FROM calculadora_importacion ci WHERE ci.id_cotizacion = main.id AND ci.estado = ?)', ['PENDIENTE']);
 
             if (!empty($search)) {
                 Log::info('search: ' . $search);
@@ -3633,6 +3635,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                     'logo_contrato_url' => public_path('storage/logo_contrato.png'),
                     'signature_base64' => $signatureBase64,
                     'cod_contract' => $cotizacion->cod_contract,
+                    'cod_contract_calculator' => optional($cotizacion->calculadoraImportacion)->cod_cotizacion,
                 ];
 
                 // Renderizar vista del contrato con firma

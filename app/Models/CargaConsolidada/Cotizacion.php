@@ -5,6 +5,7 @@ namespace App\Models\CargaConsolidada;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use App\Models\Usuario;
+use App\Models\CalculadoraImportacion;
 
 class Cotizacion extends Model
 {
@@ -229,7 +230,13 @@ class Cotizacion extends Model
     {
         return $this->hasMany(Pago::class, 'id_cotizacion');
     }
-
+    /**
+     * Relación con CalculadoraImportacion (la calculadora tiene id_cotizacion -> esta cotización)
+     */
+    public function calculadoraImportacion()
+    {
+        return $this->hasOne(CalculadoraImportacion::class, 'id_cotizacion');
+    }
     /**
      * Relación con Facturas Comerciales
      */

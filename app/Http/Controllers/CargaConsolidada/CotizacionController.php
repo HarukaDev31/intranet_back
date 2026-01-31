@@ -113,7 +113,15 @@ class CotizacionController extends Controller
     {
         try {
             $user = JWTAuth::parseToken()->authenticate();
-            $query = Cotizacion::where('id_contenedor', $idContenedor)->whereNull('id_cliente_importacion');
+            $query = Cotizacion::with('calculadoraImportacion')
+                ->where('id_contenedor', $idContenedor)
+                ->whereNull('id_cliente_importacion')
+                ->where(function ($q) {
+                    $q->whereDoesntHave('calculadoraImportacion')
+                        ->orWhereHas('calculadoraImportacion', function ($q) {
+                            $q->where('estado', '!=', 'PENDIENTE');
+                        });
+                });
             $rol = $user->getNombreGrupo();
             
             // Filtrar por ID de cotización si se proporciona
@@ -260,6 +268,9 @@ class CotizacionController extends Controller
                     'bl_file_url' => $files->bl_file_url ? $files->bl_file_url : null,
                     'lista_embarque_url' => $this->generateImageUrl($files->lista_embarque_url) ? $this->generateImageUrl($files->lista_embarque_url) : null,
                     'url_cotizacion_pdf' => $urlCotizacionPdf,
+                    'from_calculator' => $cotizacion->from_calculator,
+                    'cod_contract_calculator' => optional($cotizacion->calculadoraImportacion)->cod_cotizacion,
+                    'tarifa_descuento' => optional($cotizacion->calculadoraImportacion)->tarifa_descuento,
                 ];
             });
 
@@ -2721,6 +2732,7 @@ class CotizacionController extends Controller
                         'carga' => $carga,
                         'logo_contrato_url' => public_path('storage/logo_icons/logo_contrato.png'),
                         'cod_contract' => $cotizacion->cod_contract,
+                        'cod_contract_calculator' => optional($cotizacion->calculadoraImportacion)->cod_cotizacion,
                     ];
 
                     $contractHtml = view('contracts.contrato', $viewData)->render();

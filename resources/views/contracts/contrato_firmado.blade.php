@@ -122,7 +122,7 @@
         <table class="meta-table small">
             <tr>
                 <td><strong>FECHA:</strong> {{ $fecha ?? date('d-m-Y') }}</td>
-                <td><strong>CONTRATO:</strong> {{ $cod_contract ?? '' }}</td>
+                <td style="white-space: nowrap;"><strong>CONTRATO:</strong> {{ $cod_contract ?? '' }}{!! !empty($cod_contract_calculator) ? ' &nbsp;|&nbsp; <strong>Cotización:</strong> ' . e($cod_contract_calculator) : '' !!}</td>
             </tr>
         </table>
         <div class="section small">

@@ -612,7 +612,7 @@ class CalculadoraImportacionService
             $totalColumnas = 0;
             $formatoTexto = 'General';
             $sheetResumen = $objPHPExcel->getSheet(0);
-            
+            Log::info('data: ' . json_encode($data));
             foreach ($data['proveedores'] as $proveedor) {
                 $totalColumnas += count($proveedor['productos']);
             }
@@ -707,12 +707,12 @@ class CalculadoraImportacionService
     
                 $productColumnIndex = $columnIndex;
                 $indexP=0;
-                
+                Log::info('currentRowProducto: ' . $currentRowProducto);
                 $sheetResumen->insertNewRowBefore($currentRowProducto, count($proveedor['productos']));
                 
                 foreach ($proveedor['productos'] as $productoIndex => $producto) {
                     $productColumn = $getColumnLetter($productColumnIndex);
-    
+                    Log::info('productColumn: ' . $productColumn);
                     // ✅ Limpiar merges heredados de la fila
                     $allMergedCells = $sheetResumen->getMergeCells();
                     foreach ($allMergedCells as $mergedRange) {

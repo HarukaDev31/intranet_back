@@ -633,6 +633,7 @@ class ContenedorController extends Controller
                 $query->whereYear('f_inicio', $year)
                     ->orWhereNull('f_inicio');
             })
+            ->where('estado_china', '!=', Contenedor::CONTEDOR_CERRADO)
             ->orderByRaw('CAST(carga AS UNSIGNED) DESC')
             ->get();
         //return value label 

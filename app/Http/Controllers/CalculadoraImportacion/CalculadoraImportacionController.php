@@ -307,7 +307,7 @@ class CalculadoraImportacionController extends Controller
     public function index(Request $request)
     {
         try {
-            $query = CalculadoraImportacion::with(['proveedores.productos', 'cliente', 'contenedor', 'creador', 'vendedor']);
+            $query = CalculadoraImportacion::with(['proveedores.productos', 'cliente', 'contenedor', 'creador', 'vendedor', 'cotizacion']);
 
             //filter optional campania=54&estado_calculadora=PENDIENTE
             if ($request->has('campania') && $request->campania) {
@@ -338,6 +338,8 @@ class CalculadoraImportacionController extends Controller
                 //vendedor id_usuario
                 $calculadora->nombre_vendedor = optional($calculadora->vendedor)->No_Nombres_Apellidos;
                 $calculadora->carga_contenedor = '  #' . optional($calculadora->contenedor)->carga . '-' . ($calculadora->contenedor ? Carbon::parse($calculadora->contenedor->f_inicio)->format('Y') : '2025');
+                $calculadora->estado_cotizador=optional($calculadora->cotizacion)->estado_cotizador;
+                $calculadora->cod_contract=optional($calculadora->cotizacion)->cod_contract;
             }
             //get filters estado calculadora, all contenedores carga id,
             //get all containers label=carga value=id (solo del año actual)
@@ -491,6 +493,11 @@ class CalculadoraImportacionController extends Controller
                     $this->actualizarCotizacionDesdeCalculadora($calculadora);
                 }
 
+                // Modificar el Excel para agregar fechas de pago (también al actualizar)
+                if ($calculadora->url_cotizacion && $calculadora->id_carga_consolidada_contenedor) {
+                    $this->modificarExcelConFechas($calculadora);
+                }
+
                 $totales = $this->calculadoraImportacionService->calcularTotales($calculadora);
 
                 return response()->json([
@@ -505,6 +512,12 @@ class CalculadoraImportacionController extends Controller
 
             // Si no viene ID, es una creación
             $calculadora = $this->calculadoraImportacionService->guardarCalculo($data);
+
+            // Modificar el Excel para agregar fechas de pago si ya tiene URL y contenedor
+            if ($calculadora->url_cotizacion && $calculadora->id_carga_consolidada_contenedor) {
+                $this->modificarExcelConFechas($calculadora);
+            }
+
             $totales = $this->calculadoraImportacionService->calcularTotales($calculadora);
 
             return response()->json([
@@ -1596,6 +1609,12 @@ class CalculadoraImportacionController extends Controller
             // Abrir el archivo Excel con PhpSpreadsheet
             $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($tempFilePath);
             $sheet = $spreadsheet->getActiveSheet();
+
+            // Escribir en D7: COTIZACION N° cod_cotizacion cuando existe
+            if (!empty($calculadora->cod_cotizacion)) {
+                $sheet->setCellValue('D7', 'COTIZACION N° ' . $calculadora->cod_cotizacion);
+            }
+
             // Calcular las filas
             $filaServicioConsolidado = 37 + $totalItems + 4;
             $filaPagoImpuestos = 37 + $totalItems + 5;
