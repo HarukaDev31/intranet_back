@@ -839,10 +839,20 @@ class CalculadoraImportacionController extends Controller
                     $calculadora->save();
                 }
 
-                // Modificar el Excel para agregar fechas de pago
+                // Modificar el Excel para agregar fechas de pago y código de cotización (D7)
                 if ($calculadora->url_cotizacion && $calculadora->id_carga_consolidada_contenedor) {
                     $this->modificarExcelConFechas($calculadora);
                 }
+
+                // Regenerar boleta PDF con el código de cotización actualizado en el Excel (PLANTILLA_COTIZACION_INICIAL_CALCULADORA.html)
+                if ($calculadora->url_cotizacion) {
+                    $boletaInfo = $this->calculadoraImportacionService->regenerarBoletaPdf($calculadora);
+                    if ($boletaInfo && !empty($boletaInfo['url'])) {
+                        $calculadora->url_cotizacion_pdf = $boletaInfo['url'];
+                        Log::info('Boleta PDF regenerada al pasar a COTIZADO', ['calculadora_id' => $calculadora->id]);
+                    }
+                }
+
                 if (!$calculadora->id_cotizacion && $calculadora->id_carga_consolidada_contenedor && $calculadora->url_cotizacion) {
                     // Descargar el archivo Excel desde la URL
                     $fileUrl = $calculadora->url_cotizacion;

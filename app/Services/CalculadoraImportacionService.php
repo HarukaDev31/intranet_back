@@ -989,7 +989,7 @@ class CalculadoraImportacionService
                     'boleta' => $boletaInfo
                 ];
             } catch (\Exception $e) {
-                \Log::error('Error al guardar Excel: ' . $e->getMessage());
+                Log::error('Error al guardar Excel: ' . $e->getMessage());
                 return [
                     'url' => null,
                     'totalfob' => null,
@@ -999,7 +999,7 @@ class CalculadoraImportacionService
                 ];
             }
         } catch (\Exception $e) {
-            \Log::error('Error al crear cotización inicial: ' . $e->getMessage());
+            Log::error('Error al crear cotización inicial: ' . $e->getMessage());
     
             return [
                 'url' => null,
@@ -1084,6 +1084,42 @@ class CalculadoraImportacionService
     }
 
     /**
+     * Regenerar boleta PDF a partir del Excel actual (ej. cuando se actualiza con cod_cotizacion).
+     * Usado cuando la cotización pasa a COTIZADO y el Excel ya tiene el código en D7.
+     *
+     * @return array|null ['path' => ..., 'filename' => ..., 'url' => ...] o null si falla
+     */
+    public function regenerarBoletaPdf(CalculadoraImportacion $calculadora): ?array
+    {
+        if (!$calculadora->url_cotizacion) {
+            Log::warning('[REGENERAR BOLETA] Calculadora sin url_cotizacion', ['id' => $calculadora->id]);
+            return null;
+        }
+
+        $clienteInfo = [
+            'nombre' => $calculadora->nombre_cliente,
+            'dni' => $calculadora->dni_cliente ?? $calculadora->ruc_cliente,
+            'ruc' => $calculadora->ruc_cliente,
+            'correo' => $calculadora->correo_cliente ?? '',
+            'whatsapp' => is_array($calculadora->whatsapp_cliente ?? null)
+                ? $calculadora->whatsapp_cliente
+                : ['value' => $calculadora->whatsapp_cliente ?? ''],
+            'tipoCliente' => $calculadora->tipo_cliente ?? 'NUEVO',
+            'qtyProveedores' => $calculadora->qty_proveedores ?? 1,
+        ];
+
+        try {
+            return $this->generateBoleta($calculadora->url_cotizacion, $clienteInfo);
+        } catch (\Exception $e) {
+            Log::error('[REGENERAR BOLETA] Error al regenerar boleta: ' . $e->getMessage(), [
+                'calculadora_id' => $calculadora->id,
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return null;
+        }
+    }
+
+    /**
      * Generar boleta PDF a partir del Excel
      */
     private function generateBoleta($objPHPExcelOrUrl, $clienteInfo)
@@ -1122,7 +1158,19 @@ class CalculadoraImportacionService
 
             $antidumping = $sheet->getCell('A23')->getValue(); // B23 -> A23
 
+            // Código de cotización (D7: "COTIZACION N° CO02260001") para la boleta PDF
+            $codigoCotizacion = '';
+            try {
+                $d7 = $sheet->getCell('D7')->getValue();
+                if (is_string($d7) && preg_match('/COTIZACION\s+N[°º]?\s*(.+)/u', trim($d7), $m)) {
+                    $codigoCotizacion = trim($m[1]);
+                }
+            } catch (\Throwable $e) {
+                // Ignorar
+            }
+
             $data = [
+                "cod_contract" => $codigoCotizacion,
                 "name" => $clienteInfo['nombre'] ?? $sheet->getCell('B8')->getValue(), // C8 -> B8
                 "lastname" => "", // No hay apellido separado en el nuevo formato
                 "ID" => $clienteInfo['dni'] ?? $sheet->getCell('B10')->getValue(), // C10 -> B10

@@ -160,23 +160,21 @@
   <body>
     <img class="water-mark" src="{{logo}}" />
 
-    <table class="table-header">
+    <table class="client-table">
+      <!-- Fila de encabezado: misma estructura de columnas que las filas de datos para alinear logo y empresa+cotización -->
       <tr>
-        <td  class="no-border"></td>
-        <td  class="no-border">
+        <td colspan="2" class="no-border" style="text-align: center; vertical-align: middle; padding: 8px 0;">
           <img src="{{logo}}" style="height: 100px;width: 100px;"/>
         </td>
-        <td class="no-border " style="padding: 0 50px;">
-          <h1  style="font-size:28px;margin:0;padding: 0;">PRO MUNDO COMEX S.A.C.</h1>
-          <h2   style="color:#e67e22;font-size: 25px;text-align: center;margin:0;padding: 0;"> RUC: 206124524321</h2>
+        <td class="no-border"></td>
+        <td colspan="2" class="no-border" style="text-align: center; vertical-align: middle; padding: 8px 0;">
+          <h1 style="font-size:20px;margin:0;padding: 0;">PRO MUNDO COMEX S.A.C.</h1>
+          <h2 style="color:#e67e22;font-size: 20px;text-align: center;margin:0;padding: 0;"> RUC: 206124524321</h2>
+          <h3 style="font-size:15px;padding: 0; text-align: center;">COTIZACION N° {{cod_contract}}</h3>
         </td>
         <td class="no-border"></td>
-        <td class="no-border"></td>
+        <td colspan="2" class="no-border"></td>
       </tr>
-    </table>
-        
-    </table>
-    <table class="client-table">
       <tr>
         <td class="no-border">NOMBRE:</td>
         <td class="highlight no-border">{{name}}</td>
