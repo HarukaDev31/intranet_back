@@ -900,10 +900,11 @@ class CalculadoraImportacionController extends Controller
                         if (isset($responseData['id']) && $responseData['status'] === 'success') {
                             $cotizacionId = $responseData['id'];
 
-                            // Actualizar la cotización con el id_usuario de la calculadora y marcar from_calculator
+                            // Actualizar la cotización: id_usuario, from_calculator y Excel (cotizacion_file_url)
                             Cotizacion::where('id', $cotizacionId)->update([
                                 'id_usuario' => $calculadora->id_usuario ?? $currentUserId,
-                                'from_calculator' => true
+                                'from_calculator' => true,
+                                'cotizacion_file_url' => $calculadora->url_cotizacion,
                             ]);
 
                             $calculadora->id_cotizacion = $cotizacionId;
@@ -926,6 +927,14 @@ class CalculadoraImportacionController extends Controller
                             'url' => $fileUrl
                         ]);
                     }
+                }
+
+                // Sincronizar Excel en contenedor_consolidado_cotizacion (ya existía id_cotizacion o recién creada)
+                if ($calculadora->id_cotizacion && $calculadora->url_cotizacion) {
+                    Cotizacion::where('id', $calculadora->id_cotizacion)->update([
+                        'cotizacion_file_url' => $calculadora->url_cotizacion,
+                    ]);
+                    Log::info('cotizacion_file_url actualizado al pasar a COTIZADO', ['cotizacion_id' => $calculadora->id_cotizacion]);
                 }
             }
             $calculadora->save();

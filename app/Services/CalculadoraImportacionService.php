@@ -368,6 +368,15 @@ class CalculadoraImportacionService
 
                 Log::info('[EDITAR COTIZACIÓN] Guardando calculadora con nueva URL: ' . $calculadora->url_cotizacion);
                 $calculadora->save();
+
+                // Sincronizar Excel en contenedor_consolidado_cotizacion
+                if ($calculadora->id_cotizacion && $calculadora->url_cotizacion) {
+                    Cotizacion::where('id', $calculadora->id_cotizacion)->update([
+                        'cotizacion_file_url' => $calculadora->url_cotizacion,
+                    ]);
+                    Log::info('[EDITAR COTIZACIÓN] cotizacion_file_url actualizado en cotización ID: ' . $calculadora->id_cotizacion);
+                }
+
                 Log::info('[EDITAR COTIZACIÓN] Calculadora guardada exitosamente. ID: ' . $calculadora->id . ', URL: ' . $calculadora->url_cotizacion);
             }
 
