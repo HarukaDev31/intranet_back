@@ -3102,6 +3102,29 @@ class CotizacionController extends Controller
             $currentRange = null;
             $processedRanges = []; // Almacena los rangos procesados
             $proveedores = []; // Lista de proveedores
+            $existingCodeIndices = []; // Almacena los índices de códigos existentes
+
+            // Primera pasada: recolectar todos los índices de códigos existentes
+            $tempColumnStart = "C";
+            $tempProcessedRanges = [];
+            while ($tempColumnStart != $columnTotales) {
+                $tempCell = $sheet2->getCell($tempColumnStart . $rowProveedores);
+                $tempRange = $tempCell->getMergeRange();
+                if ($tempRange && in_array($tempRange, $tempProcessedRanges)) {
+                    $tempColumnStart = $this->incrementColumn($tempColumnStart);
+                    continue;
+                }
+                if ($tempRange) {
+                    $tempProcessedRanges[] = $tempRange;
+                }
+                $tempCode = $this->getDataCell($sheet2, $tempColumnStart . $rowCodeSupplier);
+                if ($tempCode && preg_match('/-(\d+)$/', $tempCode, $matches)) {
+                    $existingCodeIndices[] = (int)$matches[1];
+                }
+                $tempColumnStart = $this->incrementColumn($tempColumnStart);
+            }
+            // Siguiente índice disponible para nuevos códigos
+            $nextAvailableIndex = empty($existingCodeIndices) ? 1 : max($existingCodeIndices) + 1;
 
             while (!$stop) {
                 // Verifica si la columna actual es la última
@@ -3127,8 +3150,10 @@ class CotizacionController extends Controller
                     $qtyBox = $this->getDataCell($sheet2, $columnStart . $rowCajasProveedor);
                     $peso = $this->getDataCell($sheet2, $columnStart . $rowPesoProveedor);
                     $cbmTotal = $this->getDataCell($sheet2, $columnStart . $rowVolProveedor);
-                    if ($codeSupplier == null) {
-                        $codeSupplier = $this->generateCodeSupplier($nameCliente, $carga, $count, $provider);
+                    if ($codeSupplier == null || trim($codeSupplier) === '') {
+                        // Usar el siguiente índice disponible en lugar del índice del bucle
+                        $codeSupplier = $this->generateCodeSupplier($nameCliente, $carga, $count, $nextAvailableIndex);
+                        $nextAvailableIndex++;
                     }
 
                     // Extraer items dentro del rango del proveedor (filas fijas 11,15,17)
