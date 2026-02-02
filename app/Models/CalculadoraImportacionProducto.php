@@ -23,11 +23,11 @@ class CalculadoraImportacionProducto extends Model
     ];
 
     protected $casts = [
-        'precio' => 'decimal:2',
+        'precio' => 'decimal:10',
         'valoracion' => 'integer',
         'cantidad' => 'integer',
-        'antidumping_cu' => 'decimal:2',
-        'ad_valorem_p' => 'decimal:2'
+        'antidumping_cu' => 'decimal:10',
+        'ad_valorem_p' => 'decimal:10'
     ];
 
     /**

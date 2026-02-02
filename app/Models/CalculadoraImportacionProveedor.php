@@ -22,8 +22,8 @@ class CalculadoraImportacionProveedor extends Model
     ];
 
     protected $casts = [
-        'cbm' => 'decimal:2',
-        'peso' => 'decimal:2',
+        'cbm' => 'decimal:10',
+        'peso' => 'decimal:10',
         'qty_caja' => 'integer'
     ];
 

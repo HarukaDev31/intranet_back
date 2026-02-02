@@ -44,14 +44,14 @@ class CalculadoraImportacion extends Model
 
     protected $casts = [
         'qty_proveedores' => 'integer',
-        'tarifa_total_extra_proveedor' => 'decimal:2',
-        'tarifa_total_extra_item' => 'decimal:2',
-        'tarifa' => 'decimal:2',
-        'tarifa_descuento' => 'decimal:2',
-        'tc' => 'decimal:4',
-        'total_fob' => 'decimal:2',
-        'total_impuestos' => 'decimal:2',
-        'logistica' => 'decimal:2',
+        'tarifa_total_extra_proveedor' => 'decimal:10',
+        'tarifa_total_extra_item' => 'decimal:10',
+        'tarifa' => 'decimal:10',
+        'tarifa_descuento' => 'decimal:10',
+        'tc' => 'decimal:10',
+        'total_fob' => 'decimal:10',
+        'total_impuestos' => 'decimal:10',
+        'logistica' => 'decimal:10',
         'estado' => 'string',
         'id_carga_consolidada_contenedor' => 'integer'
     ];
