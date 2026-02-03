@@ -1141,13 +1141,20 @@ class CalculadoraImportacionService
         $totalProductos = collect($proveedores)->sum(fn ($p) => count($p['productos']));
         $tarifaVal = (float) ($calculadora->tarifa ?? 0);
 
+        $totalExtraProveedor = (float) ($calculadora->tarifa_total_extra_proveedor ?? 0);
+        $totalExtraItem = (float) ($calculadora->tarifa_total_extra_item ?? 0);
+        $totalDescuento = (float) ($calculadora->tarifa_descuento ?? 0);
+
         $data = [
             'clienteInfo' => $clienteInfo,
             'proveedores' => $proveedores,
             'totalProductos' => $totalProductos,
-            'tarifaTotalExtraProveedor' => (float) ($calculadora->tarifa_total_extra_proveedor ?? 0),
-            'tarifaTotalExtraItem' => (float) ($calculadora->tarifa_total_extra_item ?? 0),
-            'tarifaDescuento' => (float) ($calculadora->tarifa_descuento ?? 0),
+            'tarifaTotalExtraProveedor' => $totalExtraProveedor,
+            'tarifaTotalExtraItem' => $totalExtraItem,
+            'tarifaDescuento' => $totalDescuento,
+            'totalExtraProveedor' => $totalExtraProveedor,
+            'totalExtraItem' => $totalExtraItem,
+            'totalDescuento' => $totalDescuento,
             'tarifa' => [
                 'tarifa' => $tarifaVal,
                 'type' => 'CBM',
