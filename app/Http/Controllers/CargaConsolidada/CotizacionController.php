@@ -1589,11 +1589,14 @@ class CotizacionController extends Controller
             // Actualizar archivo si se proporcionó uno nuevo
             if (isset($file['tmp_name']) && file_exists($file['tmp_name'])) {
                 try {
-                    // Eliminar archivo antiguo si existe
+                  
                     $oldFileUrl = $cotizacion->cotizacion_file_url;
                     if ($oldFileUrl) {
-                        $oldStoragePath = str_replace('/storage/', 'public/', parse_url($oldFileUrl, PHP_URL_PATH));
-                        Storage::delete($oldStoragePath);
+                        $path = parse_url($oldFileUrl, PHP_URL_PATH) ?: $oldFileUrl;
+                        if (strpos($path, 'templates/') === false && strpos($path, 'agentecompra') !== false) {
+                            $oldStoragePath = str_replace('/storage/', 'public/', $path);
+                            Storage::delete($oldStoragePath);
+                        }
                     }
 
                     // Subir nuevo archivo
