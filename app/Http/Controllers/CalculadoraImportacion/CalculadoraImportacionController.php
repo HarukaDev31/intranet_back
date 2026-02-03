@@ -599,11 +599,15 @@ class CalculadoraImportacionController extends Controller
             }
 
             if ($result === "success") {
-                // Actualizar from_calculator y id_usuario
-                Cotizacion::where('id', $calculadora->id_cotizacion)->update([
+                // Actualizar from_calculator, id_usuario y cotizacion_file_url (Excel)
+                $updateData = [
                     'id_usuario' => $calculadora->id_usuario,
                     'from_calculator' => true
-                ]);
+                ];
+                if ($calculadora->url_cotizacion) {
+                    $updateData['cotizacion_file_url'] = $calculadora->url_cotizacion;
+                }
+                Cotizacion::where('id', $calculadora->id_cotizacion)->update($updateData);
 
                 Log::info('Cotización actualizada desde calculadora', [
                     'calculadora_id' => $calculadora->id,
