@@ -546,11 +546,27 @@ class CalculadoraImportacionController extends Controller
             $fileContents = $this->downloadFileFromUrl($fileUrl);
 
             if (!$fileContents) {
-                Log::error('No se pudo descargar archivo para actualizar cotización', [
+                Log::warning('Archivo Excel no encontrado, recreando desde calculadora', [
                     'calculadora_id' => $calculadora->id,
                     'url' => $fileUrl
                 ]);
-                return false;
+                $result = $this->calculadoraImportacionService->regenerarExcelDesdeCalculadora($calculadora);
+                if (!$result) {
+                    Log::error('No se pudo recrear el archivo Excel para actualizar cotización', [
+                        'calculadora_id' => $calculadora->id
+                    ]);
+                    return false;
+                }
+                $calculadora->refresh();
+                $fileUrl = $calculadora->url_cotizacion;
+                $fileContents = $this->downloadFileFromUrl($fileUrl);
+                if (!$fileContents) {
+                    Log::error('No se pudo descargar archivo tras recrearlo para actualizar cotización', [
+                        'calculadora_id' => $calculadora->id,
+                        'url' => $fileUrl
+                    ]);
+                    return false;
+                }
             }
 
             // Crear archivo temporal
@@ -1185,11 +1201,27 @@ class CalculadoraImportacionController extends Controller
             $fileContents = $this->downloadFileFromUrl($fileUrl);
 
             if (!$fileContents) {
-                Log::error('No se pudo descargar el archivo Excel para generar códigos', [
+                Log::warning('Archivo Excel no encontrado para códigos, recreando', [
                     'calculadora_id' => $calculadora->id,
                     'url' => $fileUrl
                 ]);
-                return;
+                $result = $this->calculadoraImportacionService->regenerarExcelDesdeCalculadora($calculadora);
+                if (!$result) {
+                    Log::error('No se pudo recrear el archivo Excel para generar códigos', [
+                        'calculadora_id' => $calculadora->id
+                    ]);
+                    return;
+                }
+                $calculadora->refresh();
+                $fileUrl = $calculadora->url_cotizacion;
+                $fileContents = $this->downloadFileFromUrl($fileUrl);
+                if (!$fileContents) {
+                    Log::error('No se pudo descargar el archivo Excel tras recrearlo para generar códigos', [
+                        'calculadora_id' => $calculadora->id,
+                        'url' => $fileUrl
+                    ]);
+                    return;
+                }
             }
 
             // Crear archivo temporal
@@ -1607,11 +1639,25 @@ class CalculadoraImportacionController extends Controller
             $fileContents = $this->downloadFileFromUrl($fileUrl);
 
             if (!$fileContents) {
-                Log::error('No se pudo descargar el archivo Excel para modificar', [
+                Log::warning('Archivo Excel no encontrado, recreando desde calculadora', [
                     'calculadora_id' => $calculadora->id,
                     'url' => $fileUrl
                 ]);
-                return;
+                $result = $this->calculadoraImportacionService->regenerarExcelDesdeCalculadora($calculadora);
+                if (!$result) {
+                    Log::error('No se pudo recrear el archivo Excel', ['calculadora_id' => $calculadora->id]);
+                    return;
+                }
+                $calculadora->refresh();
+                $fileUrl = $calculadora->url_cotizacion;
+                $fileContents = $this->downloadFileFromUrl($fileUrl);
+                if (!$fileContents) {
+                    Log::error('No se pudo descargar el archivo Excel tras recrearlo', [
+                        'calculadora_id' => $calculadora->id,
+                        'url' => $fileUrl
+                    ]);
+                    return;
+                }
             }
 
             // Crear archivo temporal

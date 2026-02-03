@@ -369,7 +369,6 @@ class CalculadoraImportacionService
                 Log::info('[EDITAR COTIZACIÓN] Guardando calculadora con nueva URL: ' . $calculadora->url_cotizacion);
                 $calculadora->save();
 
-                // Sincronizar Excel en contenedor_consolidado_cotizacion
                 if ($calculadora->id_cotizacion && $calculadora->url_cotizacion) {
                     Cotizacion::where('id', $calculadora->id_cotizacion)->update([
                         'cotizacion_file_url' => $calculadora->url_cotizacion,
@@ -1090,6 +1089,91 @@ class CalculadoraImportacionService
         }
 
         return $calculadora->update(['id_carga_consolidada_contenedor' => null]);
+    }
+
+    /**
+     * Regenerar Excel desde la calculadora cuando el archivo no existe.
+     * Usado en modificarExcelConFechas y actualizarCotizacionDesdeCalculadora.
+     *
+     * @return array|null ['url' => ..., 'totalfob' => ..., etc] o null si falla
+     */
+    public function regenerarExcelDesdeCalculadora(CalculadoraImportacion $calculadora): ?array
+    {
+        $calculadora->load(['proveedores.productos', 'contenedor']);
+
+        $clienteInfo = [
+            'nombre' => $calculadora->nombre_cliente,
+            'dni' => $calculadora->dni_cliente ?? '',
+            'ruc' => $calculadora->ruc_cliente ?? '',
+            'empresa' => $calculadora->razon_social ?? '',
+            'razonSocial' => $calculadora->razon_social ?? '',
+            'correo' => $calculadora->correo_cliente ?? '',
+            'whatsapp' => is_array($calculadora->whatsapp_cliente ?? null)
+                ? $calculadora->whatsapp_cliente
+                : ['value' => $calculadora->whatsapp_cliente ?? ''],
+            'tipoCliente' => $calculadora->tipo_cliente ?? 'NUEVO',
+            'qtyProveedores' => $calculadora->qty_proveedores ?? 1,
+            'tipoDocumento' => $calculadora->tipo_documento ?? 'DNI',
+        ];
+
+        $proveedores = [];
+        foreach ($calculadora->proveedores as $prov) {
+            $productos = [];
+            foreach ($prov->productos as $p) {
+                $productos[] = [
+                    'nombre' => $p->nombre,
+                    'precio' => (float) $p->precio,
+                    'valoracion' => (float) ($p->valoracion ?? 0),
+                    'cantidad' => (int) $p->cantidad,
+                    'antidumpingCU' => (float) ($p->antidumping_cu ?? 0),
+                    'adValoremP' => (float) ($p->ad_valorem_p ?? 0),
+                ];
+            }
+            $proveedores[] = [
+                'cbm' => (float) $prov->cbm,
+                'peso' => (float) $prov->peso,
+                'qtyCaja' => (int) $prov->qty_caja,
+                'code_supplier' => $prov->code_supplier,
+                'productos' => $productos,
+            ];
+        }
+
+        $totalProductos = collect($proveedores)->sum(fn ($p) => count($p['productos']));
+        $tarifaVal = (float) ($calculadora->tarifa ?? 0);
+
+        $data = [
+            'clienteInfo' => $clienteInfo,
+            'proveedores' => $proveedores,
+            'totalProductos' => $totalProductos,
+            'tarifaTotalExtraProveedor' => (float) ($calculadora->tarifa_total_extra_proveedor ?? 0),
+            'tarifaTotalExtraItem' => (float) ($calculadora->tarifa_total_extra_item ?? 0),
+            'tarifaDescuento' => (float) ($calculadora->tarifa_descuento ?? 0),
+            'tarifa' => [
+                'tarifa' => $tarifaVal,
+                'type' => 'CBM',
+                'value' => $tarifaVal,
+            ],
+            'tipo_cambio' => (float) ($calculadora->tc ?? 3.75),
+            'id_carga_consolidada_contenedor' => $calculadora->id_carga_consolidada_contenedor,
+        ];
+
+        $result = $this->crearCotizacionInicial($data);
+        if (!$result || !is_array($result) || empty($result['url'])) {
+            Log::error('[REGENERAR EXCEL] No se pudo crear el Excel', ['calculadora_id' => $calculadora->id]);
+            return null;
+        }
+
+        $calculadora->url_cotizacion = $result['url'];
+        $calculadora->total_fob = $result['totalfob'] ?? $calculadora->total_fob;
+        $calculadora->total_impuestos = $result['totalimpuestos'] ?? $calculadora->total_impuestos;
+        $calculadora->logistica = $result['logistica'] ?? $calculadora->logistica;
+        if (!empty($result['boleta']['url'])) {
+            $calculadora->url_cotizacion_pdf = $result['boleta']['url'];
+        }
+        $calculadora->save();
+
+        Log::info('[REGENERAR EXCEL] Excel recreado exitosamente', ['calculadora_id' => $calculadora->id, 'url' => $result['url']]);
+        return $result;
     }
 
     /**
