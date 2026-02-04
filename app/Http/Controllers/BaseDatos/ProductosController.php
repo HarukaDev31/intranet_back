@@ -15,10 +15,9 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use App\Jobs\ImportProductosExcelJob;
-use App\Traits\FileTrait;
+
 class ProductosController extends Controller
 {
-    use FileTrait;
     /**
      * @OA\Get(
      *     path="/productos",
@@ -572,8 +571,8 @@ class ProductosController extends Controller
                 Log::warning('No se pudo eliminar ImportProducto id=' . $importProducto->id . ': ' . $e->getMessage());
             }
 
-            // Eliminar archivo físico asociado a la importación
-            $filePath = storage_path('app/' . $importProducto->ruta_archivo);
+            // Eliminar archivo físico asociado a la importación (guardado en disco public: storage/app/public/)
+            $filePath = storage_path('app/public/' . $importProducto->ruta_archivo);
             if (!empty($importProducto->ruta_archivo) && file_exists($filePath)) {
                 try {
                     unlink($filePath);
@@ -641,5 +640,28 @@ class ProductosController extends Controller
             ], 500);
         }
     }
-    
+    private function generateImageUrl($ruta)
+    {
+        if (empty($ruta)) {
+            return null;
+        }
+
+        // Si ya es una URL completa, devolverla tal como está
+        if (filter_var($ruta, FILTER_VALIDATE_URL)) {
+            return $ruta;
+        }
+
+        // Limpiar la ruta de barras iniciales para evitar doble slash
+        $ruta = ltrim($ruta, '/');
+
+        // Construir URL manualmente para evitar problemas con Storage::url()
+        $baseUrl = config('app.url');
+        $storagePath = '/storage/';
+
+        // Asegurar que no haya doble slash
+        $baseUrl = rtrim($baseUrl, '/');
+        $storagePath = ltrim($storagePath, '/');
+        $ruta = ltrim($ruta, '/');
+        return $baseUrl . '/' . $storagePath . '/' . $ruta;
+    }
 }
