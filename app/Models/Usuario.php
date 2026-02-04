@@ -16,6 +16,7 @@ class Usuario extends Authenticatable implements JWTSubject
     const ROL_ADMINISTRACION = 'Administración';
     const ROL_DOCUMENTACION = 'Documentacion';
     const ROL_CATALOGO_CHINA = 'CatalogoChina';
+    const ROL_JEFE_IMPORTACION = 'Jefe Importacion';
     protected $fillable = [
         'No_Usuario',
         'No_Password',
