@@ -498,6 +498,15 @@ class CalculadoraImportacionController extends Controller
                     $this->modificarExcelConFechas($calculadora);
                 }
 
+                // Regenerar PDF de la cotización para que refleje el Excel actual (con cod, fechas, etc.)
+                if ($calculadora->url_cotizacion) {
+                    $boletaInfo = $this->calculadoraImportacionService->regenerarBoletaPdf($calculadora);
+                    if ($boletaInfo && !empty($boletaInfo['url'])) {
+                        $calculadora->url_cotizacion_pdf = $boletaInfo['url'];
+                        $calculadora->save();
+                    }
+                }
+
                 $totales = $this->calculadoraImportacionService->calcularTotales($calculadora);
 
                 return response()->json([
