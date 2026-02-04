@@ -291,7 +291,9 @@ class ProductosController extends Controller
             //s
             $tempPath = $file->store('temp');
             $fullTempPath = storage_path('app/' . $tempPath);
-            $filePath = $file->storeAs('imports/productos', time() . '_' . uniqid() . '_' . $file->getClientOriginalName(), 'public');
+            // Sanitizar nombre: reemplazar # y otros caracteres que rompen URLs
+            $safeFilename = preg_replace('/[#?&=]/', '_', $file->getClientOriginalName());
+            $filePath = $file->storeAs('imports/productos', time() . '_' . uniqid() . '_' . $safeFilename, 'public');
 
             // Crear registro de importación
             $importProducto = ImportProducto::create([
@@ -652,16 +654,11 @@ class ProductosController extends Controller
         }
 
         // Limpiar la ruta de barras iniciales para evitar doble slash
-        $ruta = ltrim($ruta, '/');
+        $ruta = trim($ruta, '/');
 
-        // Construir URL manualmente para evitar problemas con Storage::url()
-        $baseUrl = config('app.url');
-        $storagePath = '/storage/';
-
-        // Asegurar que no haya doble slash
-        $baseUrl = rtrim($baseUrl, '/');
-        $storagePath = ltrim($storagePath, '/');
-        $ruta = ltrim($ruta, '/');
-        return $baseUrl . '/' . $storagePath . '/' . $ruta;
+        // Usar ruta /files/ con path codificado: evita que # y otros caracteres rompan la URL
+        // El FileController decodifica el path antes de buscar el archivo
+        $baseUrl = rtrim(config('app.url'), '/');
+        return $baseUrl . '/files/' . rawurlencode($ruta);
     }
 }

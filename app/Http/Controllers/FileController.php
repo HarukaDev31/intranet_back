@@ -24,6 +24,11 @@ class FileController extends Controller
     public function serveFile($path)
     {
         try {
+            // Decodificar path (viene codificado para soportar #, espacios, etc.)
+            $path = rawurldecode($path);
+            // Normalizar dobles barras y barras iniciales
+            $path = preg_replace('#/+#', '/', trim($path, '/'));
+
             $possiblePaths = [
                 storage_path('app/public/' . $path),
                 public_path('storage/' . $path),
