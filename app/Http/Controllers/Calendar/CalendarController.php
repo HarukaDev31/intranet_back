@@ -25,7 +25,7 @@ class CalendarController extends Controller
 
     /**
      * GET /api/calendar/events
-     * Query: start_date, end_date, responsable_id, contenedor_id, status, priority.
+     * Query: start_date, end_date, responsable_id, contenedor_id (uno) o contenedor_ids[] (varios), status, priority.
      */
     public function getEvents(Request $request): JsonResponse
     {
@@ -34,12 +34,28 @@ class CalendarController extends Controller
             $userId = $user->getIdUsuario();
             $onlyMyCharges = !$this->permissionService->isJefeImportaciones($user);
 
+            $contenedorIds = $request->input('contenedor_ids');
+            if (is_array($contenedorIds)) {
+                $contenedorIds = array_filter(array_map('intval', $contenedorIds));
+            } elseif (is_string($contenedorIds) && $contenedorIds !== '') {
+                $contenedorIds = array_filter(array_map('intval', explode(',', $contenedorIds)));
+            } elseif (is_numeric($contenedorIds) || (is_string($contenedorIds) && is_numeric(trim($contenedorIds)))) {
+                $contenedorIds = [(int) $contenedorIds];
+            } elseif ($request->has('contenedor_id') && $request->input('contenedor_id') !== null && $request->input('contenedor_id') !== '') {
+                $contenedorIds = [(int) $request->input('contenedor_id')];
+            } else {
+                $contenedorIds = null;
+            }
+            if ($contenedorIds !== null && empty($contenedorIds)) {
+                $contenedorIds = null;
+            }
+
             $events = $this->eventService->getEventsForUser(
                 $userId,
                 $request->input('start_date'),
                 $request->input('end_date'),
                 $request->input('responsable_id') ? (int) $request->input('responsable_id') : null,
-                $request->input('contenedor_id') ? (int) $request->input('contenedor_id') : null,
+                $contenedorIds,
                 $request->input('status'),
                 $request->input('priority') !== null ? (int) $request->input('priority') : null,
                 $onlyMyCharges

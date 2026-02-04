@@ -24,6 +24,7 @@ class BroadcastController extends Controller
         'private-ContenedorAlmacen-notifications' => 'ContenedorAlmacen',
         'private-CatalogoChina-notifications' => 'CatalogoChina',
         'private-Administracion-notifications' => 'Administración',
+        'private-JefeImportacion-notifications' => 'Jefe Importacion',
     ];
     
     /**

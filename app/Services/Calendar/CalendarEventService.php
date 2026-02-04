@@ -23,7 +23,7 @@ class CalendarEventService
         ?string $startDate = null,
         ?string $endDate = null,
         ?int $responsableId = null,
-        ?int $contenedorId = null,
+        ?array $contenedorIds = null,
         ?string $status = null,
         ?int $priority = null,
         bool $onlyMyCharges = false
@@ -41,8 +41,8 @@ class CalendarEventService
         if ($responsableId !== null) {
             $query->whereHas('charges', fn ($q) => $q->where('user_id', $responsableId));
         }
-        if ($contenedorId !== null) {
-            $query->where('contenedor_id', $contenedorId);
+        if ($contenedorIds !== null && count($contenedorIds) > 0) {
+            $query->whereIn('contenedor_id', $contenedorIds);
         }
         if ($status !== null) {
             $query->whereHas('charges', fn ($q) => $q->where('status', $status));
@@ -146,7 +146,7 @@ class CalendarEventService
      * Crear evento desde el formulario "Nueva actividad":
      * - activity_id (o name si se crea nueva),
      * - start_date, end_date,
-     * - responsible_user_ids (array, máx. 2),
+     * - responsible_user_ids (array, N responsables),
      * - contenedor_id (opcional)
      */
     public function createActivityEvent(int $calendarId, array $data): CalendarEvent
@@ -157,11 +157,9 @@ class CalendarEventService
             $startDate = $data['start_date'];
             $endDate = $data['end_date'];
             $responsibleIds = $data['responsible_user_ids'] ?? $data['responsable_ids'] ?? [];
+            $responsibleIds = array_values(array_unique(array_filter(array_map('intval', (array) $responsibleIds))));
             $contenedorId = $data['contenedor_id'] ?? null;
             $notes = $data['notes'] ?? null;
-
-            // Limitar a 2 responsables
-            $responsibleIds = array_slice(array_values($responsibleIds), 0, 2);
 
             $event = CalendarEvent::create([
                 'calendar_id'   => $calendar->id,
@@ -238,18 +236,30 @@ class CalendarEventService
                 }
             }
 
+            // Sincronizar responsables: conservar progreso (status, notes) de los existentes; solo añadir/eliminar.
             if (array_key_exists('responsible_user_ids', $data) || array_key_exists('responsable_ids', $data)) {
-                CalendarEventCharge::where('calendar_event_id', $event->id)->delete();
-                $ids = array_slice(array_values($data['responsible_user_ids'] ?? $data['responsable_ids'] ?? []), 0, 2);
-                foreach ($ids as $uid) {
-                    CalendarEventCharge::create([
-                        'calendar_id' => $event->calendar_id,
-                        'user_id' => $uid,
-                        'calendar_event_id' => $event->id,
-                        'assigned_at' => now(),
-                        'status' => CalendarEventCharge::STATUS_PENDIENTE,
-                    ]);
+                $requestedIds = array_values(array_unique(array_filter(
+                    $data['responsible_user_ids'] ?? $data['responsable_ids'] ?? []
+                )));
+                $existingCharges = CalendarEventCharge::where('calendar_event_id', $event->id)->get();
+                $existingByUser = $existingCharges->keyBy('user_id');
+
+                foreach ($requestedIds as $uid) {
+                    $uid = (int) $uid;
+                    if (!$existingByUser->has($uid)) {
+                        CalendarEventCharge::create([
+                            'calendar_id' => $event->calendar_id,
+                            'user_id' => $uid,
+                            'calendar_event_id' => $event->id,
+                            'assigned_at' => now(),
+                            'status' => CalendarEventCharge::STATUS_PENDIENTE,
+                        ]);
+                    }
                 }
+                $keepUserIds = array_map('intval', $requestedIds);
+                CalendarEventCharge::where('calendar_event_id', $event->id)
+                    ->whereNotIn('user_id', $keepUserIds)
+                    ->delete();
             }
 
             $event->load(['activity', 'eventDays', 'charges.user', 'contenedor']);
@@ -332,10 +342,6 @@ class CalendarEventService
         $calendarIds = Calendar::pluck('id');
         $event = CalendarEvent::whereIn('calendar_id', $calendarIds)->find($eventId);
         if (!$event) {
-            return null;
-        }
-        $count = CalendarEventCharge::where('calendar_event_id', $eventId)->count();
-        if ($count >= 2) {
             return null;
         }
         $exists = CalendarEventCharge::where('calendar_event_id', $eventId)->where('user_id', $userIdToAssign)->exists();
