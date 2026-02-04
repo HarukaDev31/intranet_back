@@ -1232,6 +1232,7 @@ class CalculadoraImportacionService
             // Si recibe una URL, cargar el archivo Excel
             if (is_string($objPHPExcelOrUrl)) {
                 $fileUrl = $objPHPExcelOrUrl;
+                $filePath = null;
                 // Convertir URL a ruta de archivo
                 if (strpos($fileUrl, 'http') === 0) {
                     $parsedUrl = parse_url($fileUrl);
@@ -1239,13 +1240,21 @@ class CalculadoraImportacionService
                     if (strpos($path, '/storage/') === 0) {
                         $path = substr($path, 9); // Remover '/storage/'
                     }
+                    $path = ltrim($path, '/');
                     $filePath = storage_path('app/public/' . $path);
                 } else {
-                    $filePath = public_path($fileUrl);
+                    // url_cotizacion puede ser "storage/templates/..." o "/storage/templates/..."
+                    $pathRel = preg_replace('#^/?(storage/)?#', '', $fileUrl);
+                    $pathStorage = storage_path('app/public/' . $pathRel);
+                    if (file_exists($pathStorage)) {
+                        $filePath = $pathStorage;
+                    } else {
+                        $filePath = public_path($fileUrl);
+                    }
                 }
 
-                if (!file_exists($filePath)) {
-                    throw new \Exception('Archivo Excel no encontrado: ' . $filePath);
+                if (!$filePath || !file_exists($filePath)) {
+                    throw new \Exception('Archivo Excel no encontrado: ' . ($filePath ?? $fileUrl));
                 }
 
                 $objPHPExcel = \PhpOffice\PhpSpreadsheet\IOFactory::load($filePath);
