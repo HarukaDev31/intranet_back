@@ -15,17 +15,30 @@ class CalendarActivityUpdated implements ShouldBroadcast, ShouldQueue
 
     public $queue = 'notificaciones';
 
+    /** @var int */
+    public $calendarEventId;
+    /** @var int|null */
+    public $calendarId;
+    /** @var int|null */
+    public $contenedorId;
+    /** @var array<int> */
+    public $userIdsToNotify;
+
     /**
      * Create a new event instance.
      *
      * @param  array<int>  $userIdsToNotify  Jefe (solo si hay responsables) + responsables asignados.
      */
     public function __construct(
-        public int $calendarEventId,
-        public ?int $calendarId = null,
-        public ?int $contenedorId = null,
-        public array $userIdsToNotify = []
+        int $calendarEventId,
+        ?int $calendarId = null,
+        ?int $contenedorId = null,
+        array $userIdsToNotify = []
     ) {
+        $this->calendarEventId = $calendarEventId;
+        $this->calendarId = $calendarId;
+        $this->contenedorId = $contenedorId;
+        $this->userIdsToNotify = $userIdsToNotify;
     }
 
     /**
