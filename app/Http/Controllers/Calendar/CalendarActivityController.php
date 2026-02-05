@@ -527,9 +527,7 @@ class CalendarActivityController extends Controller
         try {
             $year = request()->input('year', date('Y'));
             $contenedores = Contenedor::where('empresa', '!=', 1)
-                ->where(function ($q) use ($year) {
-                    $q->whereYear('f_inicio', $year)->orWhereNull('f_inicio');
-                })
+               
                 ->where('estado_documentacion', '!=', Contenedor::CONTEDOR_CERRADO)
                 ->orderByRaw('CAST(carga AS UNSIGNED) DESC')
                 ->get(['id', 'carga', 'f_inicio']);
