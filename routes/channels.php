@@ -14,8 +14,13 @@ use App\Models\Usuario;
 |
 */
 
-// Canal privado para usuarios
+// Canal privado para usuarios (nombre genérico Laravel)
 Broadcast::channel('App.Models.User.{id}', function ($user, $id) {
+    return (int) $user->ID_Usuario === (int) $id;
+});
+
+// Canal privado por usuario (modelo Usuario, ID_Usuario) - usado por calendario
+Broadcast::channel('App.Models.Usuario.{id}', function ($user, $id) {
     return (int) $user->ID_Usuario === (int) $id;
 });
 

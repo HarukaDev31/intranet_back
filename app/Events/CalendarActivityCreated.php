@@ -51,7 +51,7 @@ class CalendarActivityCreated implements ShouldBroadcast, ShouldQueue
     {
         $channels = [];
         foreach (array_unique(array_filter($this->userIdsToNotify)) as $userId) {
-            $channels[] = new PrivateChannel('App.Models.User.' . $userId);
+            $channels[] = new PrivateChannel('App.Models.Usuario.' . $userId);
         }
         return $channels;
     }
