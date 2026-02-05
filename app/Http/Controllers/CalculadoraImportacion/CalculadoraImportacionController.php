@@ -17,6 +17,7 @@ use Illuminate\Support\Facades\Storage;
 use App\Traits\WhatsappTrait;
 use App\Models\CargaConsolidada\Contenedor;
 use App\Models\CargaConsolidada\Cotizacion;
+use App\Models\UserCotizacionExport;
 use App\Http\Controllers\CargaConsolidada\CotizacionController;
 use Illuminate\Support\Str;
 
@@ -541,6 +542,119 @@ class CalculadoraImportacionController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Error al guardar el cálculo: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Exportar cotización sin guardar en calculadora: genera Excel + PDF y guarda registro en user_cotizacion_exports.
+     * Para flujo n8n/WhatsApp: acordar datos por WhatsApp y luego llamar a esta ruta para obtener el PDF.
+     * Tarifa principal, extra por proveedores y extra por ítems se calculan en backend si no se envían:
+     * - Tipo de cliente: por whatsapp (busca en BD de clientes y servicios → NUEVO, RECURRENTE, etc.); si no hay cliente, NUEVO.
+     * - Tarifa: por tipo de cliente + CBM total (calculadora_tarifas_consolidado).
+     * - Extra proveedor: (proveedores - 3) × 50 USD.
+     * - Extra ítem: por CBM total y cantidad de ítems (tabla TARIFAS_EXTRA_ITEM_PER_CBM).
+     */
+    public function exportCotizacion(Request $request)
+    {
+        try {
+            $data = $request->all();
+            if (isset($data['proveedores']) && is_array($data['proveedores'])) {
+                foreach ($data['proveedores'] as $i => $proveedor) {
+                    if (isset($proveedor['productos']) && is_array($proveedor['productos'])) {
+                        foreach ($proveedor['productos'] as $j => $producto) {
+                            if (isset($producto['antidumpingCU']) && $producto['antidumpingCU'] === '') {
+                                $data['proveedores'][$i]['productos'][$j]['antidumpingCU'] = null;
+                            }
+                            if (isset($producto['adValoremP']) && $producto['adValoremP'] === '') {
+                                $data['proveedores'][$i]['productos'][$j]['adValoremP'] = null;
+                            }
+                        }
+                    }
+                }
+            }
+            if (empty($data['clienteInfo']['tipoDocumento'])) {
+                $data['clienteInfo']['tipoDocumento'] = 'DNI';
+            }
+            if (!isset($data['clienteInfo']['qtyProveedores']) && !empty($data['proveedores'])) {
+                $data['clienteInfo']['qtyProveedores'] = count($data['proveedores']);
+            }
+            $request->merge($data);
+
+            $request->validate([
+                'clienteInfo.nombre' => 'required|string',
+                'clienteInfo.tipoDocumento' => 'nullable|string|in:DNI,RUC',
+                'clienteInfo.dni' => 'nullable|string',
+                'clienteInfo.ruc' => 'nullable|string',
+                'clienteInfo.empresa' => 'nullable|string',
+                'clienteInfo.whatsapp' => 'required|string', // Para resolver tipo de cliente en backend
+                'clienteInfo.correo' => 'nullable|string',
+                'clienteInfo.tipoCliente' => 'nullable|string', // Opcional; si no se envía se calcula por whatsapp
+                'clienteInfo.qtyProveedores' => 'nullable|integer|min:1',
+                'proveedores' => 'required|array|min:1',
+                'proveedores.*.cbm' => 'required|numeric|min:0',
+                'proveedores.*.peso' => 'required|numeric|min:0',
+                'proveedores.*.productos' => 'required|array|min:1',
+                'proveedores.*.productos.*.nombre' => 'required|string',
+                'proveedores.*.productos.*.precio' => 'required|numeric|min:0',
+                'proveedores.*.productos.*.cantidad' => 'required|integer|min:1',
+                'proveedores.*.productos.*.antidumpingCU' => 'nullable|numeric|min:0',
+                'proveedores.*.productos.*.adValoremP' => 'nullable|numeric|min:0',
+                'tarifa' => 'nullable', // Opcional; si no se envía se calcula por tipo cliente + CBM
+                'tarifaTotalExtraProveedor' => 'nullable|numeric|min:0',
+                'tarifaTotalExtraItem' => 'nullable|numeric|min:0',
+                'tarifaDescuento' => 'nullable|numeric|min:0',
+                'tipo_cambio' => 'nullable|numeric|min:0'
+            ]);
+
+            $data = $request->all();
+            $result = $this->calculadoraImportacionService->generarCotizacionParaExport($data);
+
+            if (!$result || empty($result['url']) || empty($result['boleta'])) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No se pudo generar la cotización (Excel/PDF)'
+                ], 500);
+            }
+
+            $boleta = $result['boleta'];
+            $excelUrl = $result['url'];
+            $pdfUrl = isset($boleta['url']) ? $boleta['url'] : null;
+            $pdfPathRel = isset($boleta['filename']) ? 'boletas/' . $boleta['filename'] : null;
+            $excelPathRel = preg_replace('#^/?(storage/)?#', '', $excelUrl);
+            if (strpos($excelPathRel, 'templates/') !== 0) {
+                $excelPathRel = 'templates/' . basename($excelUrl);
+            }
+
+            $export = UserCotizacionExport::create([
+                'user_id' => auth()->id(),
+                'ip' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+                'file_path' => $pdfPathRel,
+                'file_url' => $pdfUrl ? (strpos($pdfUrl, 'http') === 0 ? $pdfUrl : url($pdfUrl)) : null,
+                'excel_path' => $excelPathRel,
+                'excel_url' => strpos($excelUrl, 'http') === 0 ? $excelUrl : url($excelUrl),
+                'cliente_nombre' => $data['clienteInfo']['nombre'] ?? null,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Cotización exportada',
+                'data' => [
+                    'export_id' => $export->id,
+                    'pdf_url' => $export->file_url,
+                    'excel_url' => $export->excel_url,
+                    'totalfob' => $result['totalfob'] ?? null,
+                    'totalimpuestos' => $result['totalimpuestos'] ?? null,
+                ]
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            throw $e;
+        } catch (\Exception $e) {
+            Log::error('Error en exportCotizacion: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al exportar cotización: ' . $e->getMessage()
             ], 500);
         }
     }

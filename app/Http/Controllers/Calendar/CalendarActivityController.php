@@ -413,7 +413,7 @@ class CalendarActivityController extends Controller
                 ? CalendarUserColorConfig::where('calendar_id', $calendarId)->get()->keyBy('user_id')
                 : collect();
 
-            $users = Usuario::whereHas('grupo', fn ($q) => $q->whereIn('No_Grupo', [Usuario::ROL_COORDINACION, Usuario::ROL_DOCUMENTACION]))
+            $users = Usuario::whereHas('grupo', fn ($q) => $q->whereIn('No_Grupo', [Usuario::ROL_COORDINACION, Usuario::ROL_DOCUMENTACION,Usuario::ROL_JEFE_IMPORTACION]))
                 ->where('Nu_Estado', 1)
                 ->orderBy('No_Nombres_Apellidos')
                 ->get(['ID_Usuario', 'No_Usuario', 'No_Nombres_Apellidos', 'Txt_Email', 'Txt_Foto']);
@@ -530,11 +530,11 @@ class CalendarActivityController extends Controller
                 ->where(function ($q) use ($year) {
                     $q->whereYear('f_inicio', $year)->orWhereNull('f_inicio');
                 })
-                ->where('estado_china', '!=', Contenedor::CONTEDOR_CERRADO)
+                ->where('estado_documentacion', '!=', Contenedor::CONTEDOR_CERRADO)
                 ->orderByRaw('CAST(carga AS UNSIGNED) DESC')
                 ->get(['id', 'carga', 'f_inicio']);
             $data = $contenedores->map(function ($c) {
-                $nombre = 'Consolidado #' . $c->carga;
+                $nombre = '#' . $c->carga;
                 $codigo = 'CONT-' . ($c->f_inicio ? $c->f_inicio->format('Y') : date('Y')) . '-' . str_pad((string) $c->id, 3, '0', STR_PAD_LEFT);
                 return ['id' => $c->id, 'nombre' => $nombre, 'codigo' => $codigo];
             });

@@ -14,10 +14,30 @@ use App\Models\CargaConsolidada\Cotizacion;
 use App\Models\CargaConsolidada\CotizacionProveedor;
 use App\Models\CargaConsolidada\CotizacionProveedorItem;
 use App\Models\CargaConsolidada\FacturaComercial;
+use App\Models\CalculadoraTipoCliente;
+use App\Models\CalculadoraTarifasConsolidado;
+use Carbon\Carbon;
 
 class CalculadoraImportacionService
 {
     public $TCAMBIO = 3.75;
+
+    /** Número de proveedores incluidos sin cargo extra */
+    const MAX_PROVEEDORES = 3;
+    /** USD por cada proveedor que exceda MAX_PROVEEDORES */
+    const TARIFA_EXTRA_PROVEEDOR = 50;
+
+    /** Tarifas extra por ítem según rango de CBM (reglas de negocio calculadora) */
+    const TARIFAS_EXTRA_ITEM_PER_CBM = [
+        ['limit_inf' => 0.1,   'limit_sup' => 1.0,   'item_base' => 6,  'item_extra' => 4,  'tarifa' => 20],
+        ['limit_inf' => 1.01,  'limit_sup' => 2.0,   'item_base' => 8,  'item_extra' => 7,  'tarifa' => 10],
+        ['limit_inf' => 2.1,   'limit_sup' => 3.0,   'item_base' => 10, 'item_extra' => 5,  'tarifa' => 10],
+        ['limit_inf' => 3.1,   'limit_sup' => 6.0,   'item_base' => 13, 'item_extra' => 7,  'tarifa' => 10],
+        ['limit_inf' => 6.1,   'limit_sup' => 9.0,   'item_base' => 15, 'item_extra' => 5,  'tarifa' => 10],
+        ['limit_inf' => 9.1,   'limit_sup' => 12.0,  'item_base' => 17, 'item_extra' => 8,  'tarifa' => 10],
+        ['limit_inf' => 12.1,  'limit_sup' => 15.0,  'item_base' => 19, 'item_extra' => 6,  'tarifa' => 10],
+        ['limit_inf' => 15.1,  'limit_sup' => 9999,  'item_base' => 20, 'item_extra' => 10, 'tarifa' => 10],
+    ];
     public $formatoDollar = '"$"#,##0.00_-';
     public $formatoSoles = '"S/." #,##0.00_-';
     public $formatoTexto = 'General';
@@ -527,6 +547,200 @@ class CalculadoraImportacionService
 
         // Convertir de vuelta a letra de columna
         return \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($newColumnIndex);
+    }
+
+    /**
+     * Resolver tipo de cliente por WhatsApp: busca en BD de clientes y determina categoría por servicios.
+     * Si no encuentra cliente o no hay servicios, devuelve NUEVO.
+     */
+    public function getTipoClientePorWhatsapp(string $whatsapp): string
+    {
+        $telefonoNormalizado = preg_replace('/[\s\-\(\)\.\+]/', '', $whatsapp);
+        if (preg_match('/^51(\d{9})$/', $telefonoNormalizado, $m)) {
+            $telefonoNormalizado = $m[1];
+        }
+        $clientes = Cliente::where('telefono', '!=', null)
+            ->where('telefono', '!=', '')
+            ->where(function ($q) use ($whatsapp, $telefonoNormalizado) {
+                $q->where('telefono', 'like', '%' . $whatsapp . '%');
+                if (!empty($telefonoNormalizado)) {
+                    $q->orWhereRaw('REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(telefono, " ", ""), "-", ""), "(", ""), ")", ""), "+", "") LIKE ?', ["%{$telefonoNormalizado}%"]);
+                }
+            })
+            ->limit(5)
+            ->get();
+        if ($clientes->isEmpty()) {
+            return 'NUEVO';
+        }
+        $clienteIds = $clientes->pluck('id')->toArray();
+        $serviciosPorCliente = $this->obtenerServiciosEnLoteParaExport($clienteIds);
+        foreach ($clienteIds as $cid) {
+            $servicios = $serviciosPorCliente[$cid] ?? [];
+            $categoria = $this->determinarCategoriaClienteExport($servicios);
+            if ($categoria !== 'NUEVO' || count($servicios) > 0) {
+                return $categoria;
+            }
+        }
+        return 'NUEVO';
+    }
+
+    private function obtenerServiciosEnLoteParaExport(array $clienteIds): array
+    {
+        if (empty($clienteIds)) {
+            return [];
+        }
+        $serviciosPorCliente = [];
+        $pedidosCurso = DB::table('pedido_curso as pc')
+            ->join('entidad as e', 'pc.ID_Entidad', '=', 'e.ID_Entidad')
+            ->where('pc.Nu_Estado', 2)
+            ->whereIn('pc.id_cliente', $clienteIds)
+            ->select('pc.id_cliente', 'e.Fe_Registro as fecha', DB::raw("'Curso' as servicio"), DB::raw('NULL as monto'))
+            ->get();
+        $cotizaciones = DB::table('contenedor_consolidado_cotizacion')
+            ->where('estado_cotizador', 'CONFIRMADO')
+            ->whereIn('id_cliente', $clienteIds)
+            ->select('id_cliente', 'fecha', DB::raw("'Consolidado' as servicio"), 'monto')
+            ->get();
+        foreach ($pedidosCurso as $p) {
+            $serviciosPorCliente[$p->id_cliente][] = ['servicio' => $p->servicio, 'fecha' => $p->fecha, 'monto' => $p->monto];
+        }
+        foreach ($cotizaciones as $c) {
+            $serviciosPorCliente[$c->id_cliente][] = ['servicio' => $c->servicio, 'fecha' => $c->fecha, 'monto' => $c->monto];
+        }
+        foreach ($serviciosPorCliente as &$s) {
+            usort($s, function ($a, $b) { return strtotime($a['fecha']) - strtotime($b['fecha']); });
+        }
+        return $serviciosPorCliente;
+    }
+
+    private function determinarCategoriaClienteExport(array $servicios): string
+    {
+        $n = count($servicios);
+        if ($n === 0) {
+            return 'NUEVO';
+        }
+        if ($n === 1) {
+            return 'RECURRENTE';
+        }
+        $ultimo = end($servicios);
+        $fechaUltimo = Carbon::parse($ultimo['fecha']);
+        $meses = $fechaUltimo->diffInMonths(Carbon::now());
+        if ($meses > 6) {
+            return 'INACTIVO';
+        }
+        if ($n >= 2) {
+            $primero = $servicios[0];
+            $frecuencia = Carbon::parse($primero['fecha'])->diffInMonths($fechaUltimo) / ($n - 1);
+            if ($frecuencia <= 2 && $meses <= 2) {
+                return 'PREMIUM';
+            }
+            if ($meses <= 6) {
+                return 'RECURRENTE';
+            }
+        }
+        return 'INACTIVO';
+    }
+
+    /**
+     * Tarifa principal por tipo de cliente y CBM total (desde calculadora_tarifas_consolidado).
+     */
+    public function getTarifaPrincipalPorTipoYCbm(string $tipoCliente, float $cbmTotal): float
+    {
+        $tipo = CalculadoraTipoCliente::where('nombre', $tipoCliente)->first();
+        if (!$tipo) {
+            $tipo = CalculadoraTipoCliente::where('nombre', 'NUEVO')->first();
+        }
+        if (!$tipo) {
+            return 375.0;
+        }
+        $tarifa = CalculadoraTarifasConsolidado::where('calculadora_tipo_cliente_id', $tipo->id)
+            ->where('limit_inf', '<=', $cbmTotal)
+            ->where('limit_sup', '>=', $cbmTotal)
+            ->first();
+        if ($tarifa) {
+            return (float) $tarifa->value;
+        }
+        $tarifa = CalculadoraTarifasConsolidado::where('calculadora_tipo_cliente_id', $tipo->id)
+            ->orderBy('limit_sup', 'desc')
+            ->first();
+        return $tarifa ? (float) $tarifa->value : 375.0;
+    }
+
+    /** Extra USD por proveedores que excedan MAX_PROVEEDORES (50 USD c/u). */
+    public function getExtraProveedor(int $cantidadProveedores): float
+    {
+        $extra = max(0, $cantidadProveedores - self::MAX_PROVEEDORES);
+        return $extra * self::TARIFA_EXTRA_PROVEEDOR;
+    }
+
+    /** Extra USD por ítems según CBM total y tabla TARIFAS_EXTRA_ITEM_PER_CBM. */
+    public function getExtraItemPorCbm(float $cbmTotal, int $totalItems): float
+    {
+        foreach (self::TARIFAS_EXTRA_ITEM_PER_CBM as $row) {
+            if ($cbmTotal >= $row['limit_inf'] && $cbmTotal <= $row['limit_sup']) {
+                $itemsExtraCobrar = min(max(0, $totalItems - $row['item_base']), $row['item_extra']);
+                return $itemsExtraCobrar * $row['tarifa'];
+            }
+        }
+        return 0;
+    }
+
+    /**
+     * Generar solo Excel + PDF de cotización sin guardar en calculadora_importacion.
+     * Para exportación vía n8n/WhatsApp (user_cotizacion_exports).
+     * Si el payload no trae tarifa/tarifaTotalExtraProveedor/tarifaTotalExtraItem, se calculan en backend
+     * por tipo de cliente (resuelto por whatsapp), CBM total e ítems.
+     *
+     * @param array $data clienteInfo (whatsapp obligatorio para resolver tipo), proveedores; opcional tarifa, tarifaTotalExtraProveedor, tarifaTotalExtraItem
+     * @return array|null ['url' => ..., 'boleta' => ..., 'totalfob' => ..., ...] o null si falla
+     */
+    public function generarCotizacionParaExport(array $data)
+    {
+        $totalProductos = 0;
+        $totalCbm = 0;
+        foreach ($data['proveedores'] as $proveedor) {
+            $totalProductos += isset($proveedor['productos']) ? count($proveedor['productos']) : 0;
+            $totalCbm += (float) ($proveedor['cbm'] ?? 0);
+        }
+        $data['totalProductos'] = $totalProductos;
+
+        $calcularEnBackend = !isset($data['tarifa']) || empty($data['tarifa']) || !isset($data['tarifaTotalExtraProveedor']) || !isset($data['tarifaTotalExtraItem']);
+        if ($calcularEnBackend) {
+            $whatsapp = is_array($data['clienteInfo']['whatsapp'] ?? null)
+                ? ($data['clienteInfo']['whatsapp']['value'] ?? '')
+                : ($data['clienteInfo']['whatsapp'] ?? '');
+            $tipoCliente = !empty($whatsapp) ? $this->getTipoClientePorWhatsapp($whatsapp) : ($data['clienteInfo']['tipoCliente'] ?? 'NUEVO');
+            $data['clienteInfo']['tipoCliente'] = $tipoCliente;
+            $tarifaVal = $this->getTarifaPrincipalPorTipoYCbm($tipoCliente, $totalCbm);
+            $data['tarifa'] = ['tarifa' => $tarifaVal, 'type' => 'CBM', 'value' => $tarifaVal];
+            $data['tarifaTotalExtraProveedor'] = $this->getExtraProveedor(count($data['proveedores']));
+            $data['tarifaTotalExtraItem'] = $this->getExtraItemPorCbm($totalCbm, $totalProductos);
+            $data['tarifaDescuento'] = 0;
+        }
+
+        $data['totalExtraProveedor'] = $data['tarifaTotalExtraProveedor'] ?? 0;
+        $data['totalExtraItem'] = $data['tarifaTotalExtraItem'] ?? 0;
+        $data['totalDescuento'] = $data['tarifaDescuento'] ?? 0;
+        if (empty($data['tarifa']) || !is_array($data['tarifa'])) {
+            $tarifaVal = is_array($data['tarifa']) ? (float) ($data['tarifa']['tarifa'] ?? 0) : (float) ($data['tarifa'] ?? 0);
+            $data['tarifa'] = ['tarifa' => $tarifaVal, 'type' => 'CBM', 'value' => $tarifaVal];
+        }
+        if (empty($data['tipo_cambio']) || $data['tipo_cambio'] <= 0) {
+            $data['tipo_cambio'] = 3.75;
+        }
+        foreach ($data['proveedores'] as $i => $proveedor) {
+            if (!isset($data['proveedores'][$i]['code_supplier'])) {
+                $data['proveedores'][$i]['code_supplier'] = null;
+            }
+        }
+        if (empty($data['clienteInfo']['qtyProveedores'])) {
+            $data['clienteInfo']['qtyProveedores'] = count($data['proveedores']);
+        }
+        $result = $this->crearCotizacionInicial($data);
+        if (!is_array($result) || empty($result['url'])) {
+            return null;
+        }
+        return $result;
     }
 
     /**
