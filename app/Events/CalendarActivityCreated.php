@@ -8,6 +8,7 @@ use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Log;
 
 class CalendarActivityCreated implements ShouldBroadcast, ShouldQueue
 {
@@ -53,6 +54,13 @@ class CalendarActivityCreated implements ShouldBroadcast, ShouldQueue
         foreach (array_unique(array_filter($this->userIdsToNotify)) as $userId) {
             $channels[] = new PrivateChannel('App.Models.Usuario.' . $userId);
         }
+        $channelNames = array_map(fn ($userId) => 'private-App.Models.Usuario.' . $userId, array_unique(array_filter($this->userIdsToNotify)));
+        Log::info('CalendarActivityCreated broadcast', [
+            'channels' => $channelNames,
+            'event_id' => $this->calendarEventId,
+            'broadcast_driver' => config('broadcasting.default'),
+            'pusher_host' => config('broadcasting.connections.pusher.options.host'),
+        ]);
         return $channels;
     }
 
