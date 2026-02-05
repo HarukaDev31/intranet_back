@@ -3,9 +3,8 @@
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
-use Illuminate\Support\Facades\DB;
 
-class InsertMenuItemsWithParent extends Migration
+class InsertMenuProgreso extends Migration
 {
     /**
      * Run the migrations.
@@ -14,8 +13,7 @@ class InsertMenuItemsWithParent extends Migration
      */
     public function up()
     {
-
-     
+        
         // Insertar el primer registro (padre) y obtener su ID_Menu autogenerado
         $padreId = DB::table('menu')->insertGetId([
             'ID_Padre' => 0,
@@ -52,6 +50,7 @@ class InsertMenuItemsWithParent extends Migration
             'show_father' => 0
         ]);
     }
+    }
 
     /**
      * Reverse the migrations.
@@ -60,8 +59,6 @@ class InsertMenuItemsWithParent extends Migration
      */
     public function down()
     {
-        // Eliminar los registros insertados (primero los hijos, luego los padres)
-        DB::table('menu')->where('No_Menu', 'Menú Hijo')->delete();
-        DB::table('menu')->where('No_Menu', 'Menú Padre')->delete();
+        //
     }
 }
