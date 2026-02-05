@@ -9,7 +9,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
-class CalendarActivityCreated implements ShouldBroadcast, ShouldQueue
+class CalendarActivityUpdated implements ShouldBroadcast, ShouldQueue
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
@@ -54,7 +54,7 @@ class CalendarActivityCreated implements ShouldBroadcast, ShouldQueue
             'calendar_event_id' => $this->calendarEventId,
             'calendar_id' => $this->calendarId,
             'contenedor_id' => $this->contenedorId,
-            'message' => 'Nueva actividad de calendario creada',
+            'message' => 'Actividad de calendario actualizada',
         ];
     }
 
@@ -63,6 +63,6 @@ class CalendarActivityCreated implements ShouldBroadcast, ShouldQueue
      */
     public function broadcastAs(): string
     {
-        return 'CalendarActivityCreated';
+        return 'CalendarActivityUpdated';
     }
 }

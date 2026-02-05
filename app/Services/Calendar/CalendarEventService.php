@@ -9,6 +9,9 @@ use App\Models\Calendar\CalendarEventChargeTracking;
 use App\Models\Calendar\CalendarEventDay;
 use App\Models\Calendar\CalendarActivity;
 use App\Models\Calendar\CalendarUserColorConfig;
+use App\Events\CalendarActivityCreated;
+use App\Events\CalendarActivityUpdated;
+use App\Events\CalendarActivityDeleted;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Collection;
 use App\Traits\FileTrait;
@@ -151,7 +154,7 @@ class CalendarEventService
      */
     public function createActivityEvent(int $calendarId, array $data): CalendarEvent
     {
-        return DB::transaction(function () use ($calendarId, $data) {
+        $event = DB::transaction(function () use ($calendarId, $data) {
             $calendar = Calendar::findOrFail($calendarId);
             $name = $this->resolveEventName($data);
             $startDate = $data['start_date'];
@@ -198,6 +201,9 @@ class CalendarEventService
             $event->load(['activity', 'eventDays', 'charges.user', 'contenedor']);
             return $event;
         });
+        $userIdsToNotify = $this->getCalendarNotificationUserIds($event);
+        CalendarActivityCreated::dispatch($event->id, $event->calendar_id, $event->contenedor_id, $userIdsToNotify);
+        return $event;
     }
 
     /**
@@ -212,7 +218,7 @@ class CalendarEventService
             return null;
         }
 
-        return DB::transaction(function () use ($event, $data) {
+        $event = DB::transaction(function () use ($event, $data) {
             $event->update(array_filter([
                 'name' => $data['name'] ?? $data['title'] ?? null,
                 'notes' => $data['notes'] ?? null,
@@ -265,6 +271,11 @@ class CalendarEventService
             $event->load(['activity', 'eventDays', 'charges.user', 'contenedor']);
             return $event;
         });
+        if ($event) {
+            $userIdsToNotify = $this->getCalendarNotificationUserIds($event);
+            CalendarActivityUpdated::dispatch($event->id, $event->calendar_id, $event->contenedor_id, $userIdsToNotify);
+        }
+        return $event;
     }
 
     /**
@@ -273,11 +284,18 @@ class CalendarEventService
     public function deleteEvent(int $eventId, int $userId, bool $canManageAll = false): bool
     {
         $calendarIds = $canManageAll ? Calendar::pluck('id') : Calendar::where('user_id', $userId)->pluck('id');
-        $event = CalendarEvent::whereIn('calendar_id', $calendarIds)->find($eventId);
+        $event = CalendarEvent::with(['calendar', 'charges'])->whereIn('calendar_id', $calendarIds)->find($eventId);
         if (!$event) {
             return false;
         }
-        return (bool) $event->delete();
+        $userIdsToNotify = $this->getCalendarNotificationUserIds($event);
+        $calendarId = $event->calendar_id;
+        $contenedorId = $event->contenedor_id;
+        $deleted = (bool) $event->delete();
+        if ($deleted) {
+            CalendarActivityDeleted::dispatch($eventId, $calendarId, $contenedorId, $userIdsToNotify);
+        }
+        return $deleted;
     }
 
     public function updateChargeStatus(int $chargeId, int $userId, string $newStatus, ?int $changedBy = null): ?CalendarEventCharge
@@ -544,6 +562,32 @@ class CalendarEventService
             ->orderBy('changed_at')
             ->get();
         return $rows->map(fn ($row) => $this->formatTrackingRow($row))->values()->all();
+    }
+
+    /**
+     * Usuarios a notificar por WebSocket: jefe (dueño del calendario) solo si la actividad
+     * tiene responsables; responsables (asignados a la actividad) siempre.
+     * Canal: private-App.Models.User.{userId}
+     *
+     * @return array<int>
+     */
+    private function getCalendarNotificationUserIds(CalendarEvent $event): array
+    {
+        $event->loadMissing(['calendar', 'charges']);
+        $calendar = $event->calendar;
+        if (!$calendar) {
+            return [];
+        }
+        $jefeId = (int) $calendar->user_id;
+        $responsableIds = $event->charges->pluck('user_id')->map(fn ($id) => (int) $id)->unique()->values()->all();
+        $userIds = [];
+        if (!empty($responsableIds)) {
+            $userIds[] = $jefeId;
+        }
+        foreach ($responsableIds as $uid) {
+            $userIds[] = $uid;
+        }
+        return array_values(array_unique($userIds));
     }
 
     private function resolveEventName(array $data): string
