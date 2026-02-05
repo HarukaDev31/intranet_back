@@ -527,13 +527,13 @@ class CalendarActivityController extends Controller
         try {
             $year = request()->input('year', date('Y'));
             $contenedores = Contenedor::where('empresa', '!=', 1)
-               
                 ->where('estado_documentacion', '!=', Contenedor::CONTEDOR_CERRADO)
-                ->orderByRaw('CAST(carga AS UNSIGNED) DESC')
+                ->orderByRaw('COALESCE(YEAR(f_inicio), 2025) ASC, CAST(carga AS UNSIGNED) ASC')
                 ->get(['id', 'carga', 'f_inicio']);
             $data = $contenedores->map(function ($c) {
-                $nombre = '#' . $c->carga;
-                $codigo = 'CONT-' . ($c->f_inicio ? $c->f_inicio->format('Y') : date('Y')) . '-' . str_pad((string) $c->id, 3, '0', STR_PAD_LEFT);
+                $anio = $c->f_inicio ? $c->f_inicio->format('Y') : '2025';
+                $nombre = '#' . $c->carga . ' - ' . $anio;
+                $codigo = 'CONT-' . $anio . '-' . str_pad((string) $c->id, 3, '0', STR_PAD_LEFT);
                 return ['id' => $c->id, 'nombre' => $nombre, 'codigo' => $codigo];
             });
             return response()->json(['success' => true, 'data' => $data, 'message' => 'Contenedores obtenidos correctamente']);
