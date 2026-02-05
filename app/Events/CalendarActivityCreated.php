@@ -24,22 +24,27 @@ class CalendarActivityCreated implements ShouldBroadcast, ShouldQueue
     public $contenedorId;
     /** @var array<int> */
     public $userIdsToNotify;
+    /** @var int|null Usuario que realizó la acción (crear); el frontend no muestra popup a este usuario. */
+    public $triggeredByUserId;
 
     /**
      * Create a new event instance.
      *
      * @param  array<int>  $userIdsToNotify  Jefe (solo si hay responsables) + responsables asignados.
+     * @param  int|null  $triggeredByUserId  Usuario que creó la actividad (no verá el modal de recargar).
      */
     public function __construct(
         int $calendarEventId,
         ?int $calendarId = null,
         ?int $contenedorId = null,
-        array $userIdsToNotify = []
+        array $userIdsToNotify = [],
+        ?int $triggeredByUserId = null
     ) {
         $this->calendarEventId = $calendarEventId;
         $this->calendarId = $calendarId;
         $this->contenedorId = $contenedorId;
         $this->userIdsToNotify = $userIdsToNotify;
+        $this->triggeredByUserId = $triggeredByUserId;
     }
 
     /**
@@ -76,6 +81,7 @@ class CalendarActivityCreated implements ShouldBroadcast, ShouldQueue
             'calendar_id' => $this->calendarId,
             'contenedor_id' => $this->contenedorId,
             'message' => 'Nueva actividad de calendario creada',
+            'triggered_by_user_id' => $this->triggeredByUserId,
         ];
     }
 

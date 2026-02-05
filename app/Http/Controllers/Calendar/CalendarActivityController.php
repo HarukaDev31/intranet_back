@@ -220,12 +220,14 @@ class CalendarActivityController extends Controller
             'notes'                 => 'nullable|string',
         ]);
         try {
+            $user = JWTAuth::parseToken()->authenticate();
             $event = $this->eventService->createActivityEvent(
                 (int) $request->calendar_id,
                 $request->only([
                     'activity_id', 'name', 'start_date', 'end_date',
                     'responsible_user_ids', 'contenedor_id', 'notes',
-                ])
+                ]),
+                $user ? $user->getIdUsuario() : null
             );
             return response()->json(['success' => true, 'data' => $event], 201);
         } catch (\Exception $e) {
@@ -284,7 +286,7 @@ class CalendarActivityController extends Controller
             );
             $data = $request->only(['name', 'priority', 'contenedor_id', 'notes', 'start_date', 'end_date']);
             $data['responsable_ids'] = $request->input('responsable_ids', []);
-            $event = $this->eventService->createActivityEvent($calendar->id, $data);
+            $event = $this->eventService->createActivityEvent($calendar->id, $data, $user->getIdUsuario());
             $formatted = $this->eventService->formatEventForResponse($event);
             return response()->json([
                 'success' => true,

@@ -139,7 +139,7 @@ class CalendarController extends Controller
                 'activity_id', 'name', 'title', 'start_date', 'end_date',
                 'responsible_user_ids', 'responsable_ids', 'contenedor_id', 'notes',
             ]);
-            $event = $this->eventService->createActivityEvent((int) $calendarId, $data);
+            $event = $this->eventService->createActivityEvent((int) $calendarId, $data, $userId);
             $formatted = $this->eventService->formatEventForResponse($event);
             return response()->json(['success' => true, 'data' => $formatted, 'message' => 'Actividad creada correctamente'], 201);
         } catch (\Exception $e) {

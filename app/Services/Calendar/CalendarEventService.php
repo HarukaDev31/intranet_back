@@ -12,7 +12,10 @@ use App\Models\Calendar\CalendarUserColorConfig;
 use App\Events\CalendarActivityCreated;
 use App\Events\CalendarActivityUpdated;
 use App\Events\CalendarActivityDeleted;
+use App\Models\Notificacion;
+use App\Models\Usuario;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Collection;
 use App\Traits\FileTrait;
 class CalendarEventService
@@ -151,8 +154,10 @@ class CalendarEventService
      * - start_date, end_date,
      * - responsible_user_ids (array, N responsables),
      * - contenedor_id (opcional)
+     *
+     * @param  int|null  $triggeredByUserId  Usuario que crea (recibirá el evento pero el front no le muestra popup).
      */
-    public function createActivityEvent(int $calendarId, array $data): CalendarEvent
+    public function createActivityEvent(int $calendarId, array $data, ?int $triggeredByUserId = null): CalendarEvent
     {
         $event = DB::transaction(function () use ($calendarId, $data) {
             $calendar = Calendar::findOrFail($calendarId);
@@ -202,7 +207,16 @@ class CalendarEventService
             return $event;
         });
         $userIdsToNotify = $this->getCalendarNotificationUserIds($event);
-        CalendarActivityCreated::dispatch($event->id, $event->calendar_id, $event->contenedor_id, $userIdsToNotify);
+        CalendarActivityCreated::dispatch($event->id, $event->calendar_id, $event->contenedor_id, $userIdsToNotify, $triggeredByUserId);
+
+        $this->crearNotificacionCalendario(
+            'creada',
+            $event->id,
+            $event->name ?? 'Sin nombre',
+            $event->contenedor_id,
+            $triggeredByUserId
+        );
+
         return $event;
     }
 
@@ -273,7 +287,15 @@ class CalendarEventService
         });
         if ($event) {
             $userIdsToNotify = $this->getCalendarNotificationUserIds($event);
-            CalendarActivityUpdated::dispatch($event->id, $event->calendar_id, $event->contenedor_id, $userIdsToNotify);
+            CalendarActivityUpdated::dispatch($event->id, $event->calendar_id, $event->contenedor_id, $userIdsToNotify, $userId);
+
+            $this->crearNotificacionCalendario(
+                'actualizada',
+                $event->id,
+                $event->name ?? 'Sin nombre',
+                $event->contenedor_id,
+                $userId
+            );
         }
         return $event;
     }
@@ -291,11 +313,87 @@ class CalendarEventService
         $userIdsToNotify = $this->getCalendarNotificationUserIds($event);
         $calendarId = $event->calendar_id;
         $contenedorId = $event->contenedor_id;
+        $eventName = $event->name ?? 'Sin nombre';
         $deleted = (bool) $event->delete();
         if ($deleted) {
-            CalendarActivityDeleted::dispatch($eventId, $calendarId, $contenedorId, $userIdsToNotify);
+            CalendarActivityDeleted::dispatch($eventId, $calendarId, $contenedorId, $userIdsToNotify, $userId);
+
+            $this->crearNotificacionCalendario(
+                'eliminada',
+                $eventId,
+                $eventName,
+                $contenedorId,
+                $userId
+            );
         }
         return $deleted;
+    }
+
+    /**
+     * Crea un registro en notificaciones para auditar acciones del calendario.
+     *
+     * @param  string  $accion  'creada' | 'actualizada' | 'eliminada'
+     * @param  int  $eventId  ID del evento de calendario
+     * @param  string  $eventName  Nombre de la actividad
+     * @param  int|null  $contenedorId  ID del contenedor (opcional)
+     * @param  int|null  $creadoPor  ID del usuario que realizó la acción
+     */
+    private function crearNotificacionCalendario(
+        string $accion,
+        int $eventId,
+        string $eventName,
+        ?int $contenedorId,
+        ?int $creadoPor
+    ): void {
+        $contenedorTexto = $contenedorId ? " | Contenedor ID: {$contenedorId}" : '';
+        $titulos = [
+            'creada' => 'Actividad de calendario creada',
+            'actualizada' => 'Actividad de calendario actualizada',
+            'eliminada' => 'Actividad de calendario eliminada',
+        ];
+        $referenciaTipos = [
+            'creada' => 'calendar_activity_created',
+            'actualizada' => 'calendar_activity_updated',
+            'eliminada' => 'calendar_activity_deleted',
+        ];
+
+        try {
+            Notificacion::create([
+            'titulo' => $titulos[$accion] ?? 'Calendario',
+            'mensaje' => "Actividad \"{$eventName}\" {$accion} en el calendario.",
+            'descripcion' => "Evento ID: {$eventId} | Actividad: {$eventName}{$contenedorTexto}",
+            'modulo' => Notificacion::MODULO_CALENDARIO,
+            'rol_destinatario' => Usuario::ROL_COORDINACION,
+            'navigate_to' => 'calendar',
+            'navigate_params' => [
+                'eventId' => $eventId,
+            ],
+            'tipo' => $accion === 'eliminada' ? Notificacion::TIPO_WARNING : Notificacion::TIPO_SUCCESS,
+            'icono' => $accion === 'eliminada' ? 'mdi:calendar-remove' : ($accion === 'creada' ? 'mdi:calendar-plus' : 'mdi:calendar-edit'),
+            'prioridad' => Notificacion::PRIORIDAD_MEDIA,
+            'referencia_tipo' => $referenciaTipos[$accion] ?? 'calendar_activity',
+            'referencia_id' => $eventId,
+            'activa' => true,
+            'creado_por' => $creadoPor,
+            'configuracion_roles' => [
+                Usuario::ROL_COORDINACION => [
+                    'titulo' => "Calendario - Actividad {$accion}",
+                    'mensaje' => "Actividad \"{$eventName}\" {$accion}",
+                    'descripcion' => "Evento ID: {$eventId}{$contenedorTexto}",
+                ],
+                Usuario::ROL_JEFE_IMPORTACION => [
+                    'titulo' => "Calendario - Actividad {$accion}",
+                    'mensaje' => "Actividad \"{$eventName}\" {$accion}",
+                    'descripcion' => "Evento ID: {$eventId}{$contenedorTexto}",
+                ],
+            ],
+        ]);
+        } catch (\Throwable $e) {
+            Log::warning('No se pudo crear notificación de auditoría de calendario: ' . $e->getMessage(), [
+                'accion' => $accion,
+                'event_id' => $eventId,
+            ]);
+        }
     }
 
     public function updateChargeStatus(int $chargeId, int $userId, string $newStatus, ?int $changedBy = null): ?CalendarEventCharge
