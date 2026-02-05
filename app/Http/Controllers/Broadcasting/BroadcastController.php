@@ -76,8 +76,30 @@ class BroadcastController extends Controller
 
             // Verificar manualmente el acceso al canal
             $channelName = $request->channel_name;
-            
-            // Verificar si el canal está en nuestra lista de canales configurados
+
+            // Canal privado por usuario (calendario): private-App.Models.Usuario.{id}
+            $userChannelPrefix = 'private-App.Models.Usuario.';
+            if (strpos($channelName, $userChannelPrefix) === 0) {
+                $channelUserId = (int) substr($channelName, strlen($userChannelPrefix));
+                if ((int) $user->ID_Usuario === $channelUserId) {
+                    $signature = hash_hmac(
+                        'sha256',
+                        $request->socket_id . ':' . $channelName,
+                        config('broadcasting.connections.pusher.secret')
+                    );
+                    return response()->json([
+                        'auth' => config('broadcasting.connections.pusher.key') . ':' . $signature
+                    ]);
+                }
+                Log::error('User not authorized for user channel', [
+                    'user_id' => $user->ID_Usuario,
+                    'channel' => $channelName,
+                    'channel_user_id' => $channelUserId
+                ]);
+                return response()->json(['message' => 'No autorizado para este canal'], 403);
+            }
+
+            // Verificar si el canal está en nuestra lista de canales configurados (por rol)
             if (isset($this->CHANNELS[$channelName])) {
                 $requiredRole = $this->CHANNELS[$channelName];
                 
@@ -105,11 +127,16 @@ class BroadcastController extends Controller
 
             // Para otros canales, usar el método estándar de Laravel
             $response = Broadcast::auth($request);
-            
+
+            // $response puede no ser objeto (ej. null) o no tener ->original; no asumir tipo
+            if (!is_object($response) || !property_exists($response, 'original')) {
+                Log::error('Broadcasting auth: respuesta inválida', ['channel' => $channelName]);
+                return response()->json(['message' => 'Error de autenticación del canal'], 403);
+            }
+
             Log::info('Broadcasting auth success', [
                 'user_id' => $user->ID_Usuario,
-                'channel' => $channelName,
-                'response' => $response->original
+                'channel' => $channelName
             ]);
 
             return response()->json($response->original);
