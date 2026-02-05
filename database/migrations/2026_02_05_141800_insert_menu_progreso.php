@@ -49,7 +49,7 @@ class InsertMenuProgreso extends Migration
             'url_intranet_v2' => null,
             'show_father' => 0
         ]);
-    }
+    
     }
 
     /**
