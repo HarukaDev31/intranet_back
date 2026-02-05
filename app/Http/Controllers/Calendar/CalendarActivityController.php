@@ -323,6 +323,10 @@ class CalendarActivityController extends Controller
     /**
      * DELETE /api/calendar/activities/{id} - Eliminar actividad (soft). Solo Jefe.
      */
+    /**
+     * DELETE /api/calendar/activities/{id}
+     * Elimina una actividad (solo soft delete: se marca deleted_at, no se borra de la BD).
+     */
     public function destroyActivity(int $id): JsonResponse
     {
         if (!$this->permissionService->canManageActivities(JWTAuth::parseToken()->authenticate())) {

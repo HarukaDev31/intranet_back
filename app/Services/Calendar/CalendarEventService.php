@@ -301,7 +301,8 @@ class CalendarEventService
     }
 
     /**
-     * Eliminar evento (soft delete). Si canManageAll=true (Jefe), puede eliminar cualquier evento.
+     * Eliminar evento (solo soft delete: marca deleted_at; no se elimina el registro de la BD).
+     * Si canManageAll=true (Jefe), puede eliminar cualquier evento.
      */
     public function deleteEvent(int $eventId, int $userId, bool $canManageAll = false): bool
     {
@@ -314,6 +315,7 @@ class CalendarEventService
         $calendarId = $event->calendar_id;
         $contenedorId = $event->contenedor_id;
         $eventName = $event->name ?? 'Sin nombre';
+        // Soft delete: CalendarEvent usa SoftDeletes, así que delete() solo setea deleted_at
         $deleted = (bool) $event->delete();
         if ($deleted) {
             CalendarActivityDeleted::dispatch($eventId, $calendarId, $contenedorId, $userIdsToNotify, $userId);
