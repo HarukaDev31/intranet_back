@@ -212,6 +212,10 @@ class CalendarEventService
             return $event;
         });
         $userIdsToNotify = $this->getCalendarNotificationUserIds($event);
+        // Excluir al usuario actual (quien crea la actividad) de la lista de notificados
+        if ($triggeredByUserId !== null) {
+            $userIdsToNotify = array_values(array_filter($userIdsToNotify, fn ($id) => (int) $id !== $triggeredByUserId));
+        }
         CalendarActivityCreated::dispatch($event->id, $event->calendar_id, $event->contenedor_id, $userIdsToNotify, $triggeredByUserId);
 
         $this->crearNotificacionCalendario(
@@ -292,6 +296,8 @@ class CalendarEventService
         });
         if ($event) {
             $userIdsToNotify = $this->getCalendarNotificationUserIds($event);
+            // Excluir al usuario actual (quien actualiza) de la lista de notificados
+            $userIdsToNotify = array_values(array_filter($userIdsToNotify, fn ($id) => (int) $id !== $userId));
             CalendarActivityUpdated::dispatch($event->id, $event->calendar_id, $event->contenedor_id, $userIdsToNotify, $userId);
 
             $this->crearNotificacionCalendario(
@@ -317,6 +323,8 @@ class CalendarEventService
             return false;
         }
         $userIdsToNotify = $this->getCalendarNotificationUserIds($event);
+        // Excluir al usuario actual (quien elimina) de la lista de notificados
+        $userIdsToNotify = array_values(array_filter($userIdsToNotify, fn ($id) => (int) $id !== $userId));
         $calendarId = $event->calendar_id;
         $contenedorId = $event->contenedor_id;
         $eventName = $event->name ?? 'Sin nombre';
