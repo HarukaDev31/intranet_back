@@ -50,11 +50,22 @@ class CalendarController extends Controller
                 $contenedorIds = null;
             }
 
+            // "Todos" = no enviar responsable_id; solo filtrar por responsable cuando viene el parámetro
+            $responsableId = null;
+            $rawResponsable = $request->input('responsable_id');
+            if ($rawResponsable !== null && $rawResponsable !== '' && is_numeric($rawResponsable)) {
+                $responsableId = (int) $rawResponsable;
+                // Quien no es jefe solo puede filtrar por sí mismo; ignorar cualquier otro responsable_id
+                if ($onlyMyCharges && $responsableId !== $userId) {
+                    $responsableId = null;
+                }
+            }
+
             $events = $this->eventService->getEventsForUser(
                 $userId,
                 $request->input('start_date'),
                 $request->input('end_date'),
-                $request->input('responsable_id') ? (int) $request->input('responsable_id') : null,
+                $responsableId,
                 $contenedorIds,
                 $request->input('status'),
                 $request->input('priority') !== null ? (int) $request->input('priority') : null,
