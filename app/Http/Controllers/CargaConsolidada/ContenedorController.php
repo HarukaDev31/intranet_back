@@ -609,7 +609,10 @@ class ContenedorController extends Controller
     {
         $hoy = date('Y-m-d');
         $query = Contenedor::where('empresa', '!=', 1)
+        //where estado_documentacion is not COMPLETED
+            ->where('estado_documentacion', '!=', Contenedor::ESTADOS_DOCUMENTACION['COMPLETADO'])
             ->orderByRaw('CAST(carga AS UNSIGNED) DESC');
+
         return $query->get();
     }
     /**
