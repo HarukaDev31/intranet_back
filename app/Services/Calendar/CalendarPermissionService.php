@@ -14,7 +14,7 @@ class CalendarPermissionService
     public function isCoordinacionOrDocumentacion(Usuario $user): bool
     {
         $rol = $user->getNombreGrupo();
-        return $rol === Usuario::ROL_COORDINACION || $rol === Usuario::ROL_DOCUMENTACION;
+        return $rol === Usuario::ROL_COORDINACION || $rol === Usuario::ROL_DOCUMENTACION || $rol === Usuario::ROL_JEFE_IMPORTACION;
     }
 
     public function canChangeAnyChargeStatus(Usuario $user): bool

@@ -178,7 +178,7 @@ class GeneralController extends Controller
         // Obtener proveedores relacionados en una sola consulta y agrupar por id_cotizacion
         // Nota: sólo cargar proveedores si el usuario es del rol Documentacion
         $proveedores = collect();
-        if (!empty($ids) && $user && $user->getNombreGrupo() == Usuario::ROL_DOCUMENTACION) {
+        if (!empty($ids) && $user && $user->getNombreGrupo() == Usuario::ROL_DOCUMENTACION|| $user->getNombreGrupo() == Usuario::ROL_JEFE_IMPORTACION) {
             $proveedores = DB::table('contenedor_consolidado_cotizacion_proveedores')
                 ->whereIn('id_cotizacion', $ids)
                 ->where('id_contenedor', $idContenedor)

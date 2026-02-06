@@ -113,7 +113,7 @@ class ContenedorController extends Controller
             $query = Contenedor::with('pais');
             $user = JWTAuth::parseToken()->authenticate();
             $completado = $request->completado ?? false;
-            if ($user->getNombreGrupo() == Usuario::ROL_DOCUMENTACION) {
+            if ($user->getNombreGrupo() == Usuario::ROL_DOCUMENTACION || $user->getNombreGrupo() == Usuario::ROL_JEFE_IMPORTACION) {
                 if ($completado) {
                     $query->where('estado_documentacion', '=', Contenedor::CONTEDOR_CERRADO);
                 } else {
