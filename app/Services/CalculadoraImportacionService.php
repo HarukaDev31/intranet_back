@@ -330,10 +330,10 @@ class CalculadoraImportacionService
                 $totalProductos += count($proveedorData['productos'] ?? []);
             }
             $data['totalProductos'] = $totalProductos;
-            $data['totalExtraProveedor'] = $calculadora->tarifa_total_extra_proveedor;
-            $data['totalExtraItem'] = $calculadora->tarifa_total_extra_item;
-            $data['totalDescuento'] = $calculadora->tarifa_descuento;
-            $data['id_usuario'] = $calculadora->id_usuario;
+            $data['totalExtraProveedor'] = $data['tarifaTotalExtraProveedor'];
+            $data['totalExtraItem'] = $data['tarifaTotalExtraItem'];
+            $data['totalDescuento'] = $data['tarifaDescuento'];
+            $data['id_usuario'] = $data['id_usuario'];
             $data['id_carga_consolidada_contenedor'] = $calculadora->id_carga_consolidada_contenedor;
 
             Log::info('[EDITAR COTIZACIÓN] Iniciando edición de Excel para calculadora ID: ' . $calculadora->id);
