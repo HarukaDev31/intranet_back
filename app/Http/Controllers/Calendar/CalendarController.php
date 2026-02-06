@@ -50,14 +50,29 @@ class CalendarController extends Controller
                 $contenedorIds = null;
             }
 
-            // "Todos" = no enviar responsable_id; solo filtrar por responsable cuando viene el parámetro
-            $responsableId = null;
-            $rawResponsable = $request->input('responsable_id');
-            if ($rawResponsable !== null && $rawResponsable !== '' && is_numeric($rawResponsable)) {
-                $responsableId = (int) $rawResponsable;
-                // Quien no es jefe solo puede filtrar por sí mismo; ignorar cualquier otro responsable_id
-                if ($onlyMyCharges && $responsableId !== $userId) {
-                    $responsableId = null;
+            // Responsable(s): aceptar responsable_ids[] (varios) o responsable_id (uno). "Todos" = no enviar.
+            $responsableIds = null;
+            $rawResponsableIds = $request->input('responsable_ids');
+            if (is_array($rawResponsableIds)) {
+                $responsableIds = array_filter(array_map('intval', $rawResponsableIds));
+            } elseif (is_string($rawResponsableIds) && $rawResponsableIds !== '') {
+                $responsableIds = array_filter(array_map('intval', explode(',', $rawResponsableIds)));
+            }
+            if ($responsableIds !== null && empty($responsableIds)) {
+                $responsableIds = null;
+            }
+            if ($responsableIds === null) {
+                $rawOne = $request->input('responsable_id');
+                if ($rawOne !== null && $rawOne !== '' && is_numeric($rawOne)) {
+                    $oneId = (int) $rawOne;
+                    if (!$onlyMyCharges || $oneId === $userId) {
+                        $responsableIds = [$oneId];
+                    }
+                }
+            } elseif ($onlyMyCharges) {
+                $responsableIds = array_intersect($responsableIds, [$userId]);
+                if (empty($responsableIds)) {
+                    $responsableIds = null;
                 }
             }
 
@@ -65,7 +80,7 @@ class CalendarController extends Controller
                 $userId,
                 $request->input('start_date'),
                 $request->input('end_date'),
-                $responsableId,
+                $responsableIds,
                 $contenedorIds,
                 $request->input('status'),
                 $request->input('priority') !== null ? (int) $request->input('priority') : null,
@@ -249,5 +264,36 @@ class CalendarController extends Controller
             return response()->json(['success' => false, 'errors' => $validator->errors()], 422);
         }
         return $this->updateEvent($request, $id);
+    }
+
+    /**
+     * PUT /api/calendar/events/{id}/status
+     * Estado por actividad: cualquier participante puede cambiarlo; se aplica a todos los responsables.
+     */
+    public function updateEventStatus(Request $request, int $id): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'status' => 'required|string|in:PENDIENTE,PROGRESO,COMPLETADO',
+        ]);
+        if ($validator->fails()) {
+            return response()->json(['success' => false, 'errors' => $validator->errors()], 422);
+        }
+        try {
+            $user = JWTAuth::parseToken()->authenticate();
+            $userId = $user->getIdUsuario();
+            $event = $this->eventService->updateEventStatus($id, $userId, $request->input('status'));
+            if (!$event) {
+                return response()->json(['success' => false, 'message' => 'Actividad no encontrada o no eres participante'], 404);
+            }
+            $formatted = $this->eventService->formatEventForResponse($event);
+            return response()->json(['success' => true, 'data' => $formatted, 'message' => 'Estado actualizado correctamente']);
+        } catch (\Exception $e) {
+            Log::error('CalendarController@updateEventStatus: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al actualizar estado',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
     }
 }

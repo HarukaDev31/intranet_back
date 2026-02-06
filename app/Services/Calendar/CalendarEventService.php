@@ -28,7 +28,7 @@ class CalendarEventService
         int $userId,
         ?string $startDate = null,
         ?string $endDate = null,
-        ?int $responsableId = null,
+        ?array $responsableIds = null,
         ?array $contenedorIds = null,
         ?string $status = null,
         ?int $priority = null,
@@ -44,8 +44,8 @@ class CalendarEventService
         if ($startDate && $endDate) {
             $query->whereHas('eventDays', fn ($q) => $q->whereBetween('date', [$startDate, $endDate]));
         }
-        if ($responsableId !== null) {
-            $query->whereHas('charges', fn ($q) => $q->where('user_id', $responsableId));
+        if ($responsableIds !== null && count($responsableIds) > 0) {
+            $query->whereHas('charges', fn ($q) => $q->whereIn('user_id', $responsableIds));
         }
         if ($contenedorIds !== null && count($contenedorIds) > 0) {
             $query->whereIn('contenedor_id', $contenedorIds);
@@ -57,7 +57,12 @@ class CalendarEventService
             $query->where('priority', $priority);
         }
 
-        $events = $query->orderBy('created_at', 'desc')->get();
+        // Ordenar por fecha de inicio (mínima fecha en event_days) ascendente: las que empiezan antes primero
+        $events = $query->orderByRaw('(
+            SELECT MIN(ced.date)
+            FROM calendar_event_days ced
+            WHERE ced.calendar_event_id = calendar_events.id
+        ) ASC')->get();
         return $events->map(fn ($event) => $this->formatEventForResponse($event));
     }
 
@@ -419,6 +424,38 @@ class CalendarEventService
         ]);
         $charge->load('user');
         return $charge;
+    }
+
+    /**
+     * Actualizar estado de la actividad (evento): aplica el mismo estado a todos los charges.
+     * Cualquier participante puede cambiar el estado; todos ven el mismo.
+     */
+    public function updateEventStatus(int $eventId, int $userId, string $newStatus): ?CalendarEvent
+    {
+        $event = CalendarEvent::with('charges')->find($eventId);
+        if (!$event) {
+            return null;
+        }
+        $isParticipant = $event->charges->contains('user_id', $userId);
+        if (!$isParticipant) {
+            return null;
+        }
+        $charges = CalendarEventCharge::where('calendar_event_id', $eventId)->get();
+        foreach ($charges as $charge) {
+            $fromStatus = $charge->status;
+            if ($fromStatus !== $newStatus) {
+                $charge->update(['status' => $newStatus]);
+                CalendarEventChargeTracking::create([
+                    'calendar_event_charge_id' => $charge->id,
+                    'from_status' => $fromStatus,
+                    'to_status' => $newStatus,
+                    'changed_at' => now(),
+                    'changed_by' => $userId,
+                ]);
+            }
+        }
+        $event->load(['activity', 'eventDays', 'charges.user', 'contenedor']);
+        return $event;
     }
 
     public function updateChargeNotes(int $chargeId, int $userId, string $notes): ?CalendarEventCharge

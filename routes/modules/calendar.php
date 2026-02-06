@@ -16,6 +16,7 @@ Route::group(['prefix' => 'calendar', 'middleware' => 'jwt.auth'], function () {
     Route::get('/events/{id}', [CalendarController::class, 'getEvent']);
     Route::post('/events', [CalendarController::class, 'createEvent']);
     Route::put('/events/{id}', [CalendarController::class, 'updateEvent']);
+    Route::put('/events/{id}/status', [CalendarController::class, 'updateEventStatus']);
     Route::delete('/events/{id}', [CalendarController::class, 'deleteEvent']);
     Route::put('/events/{id}/move', [CalendarController::class, 'moveEvent']);
 
