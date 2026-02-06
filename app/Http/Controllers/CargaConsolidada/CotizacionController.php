@@ -191,7 +191,7 @@ class CotizacionController extends Controller
                     }
                     break;
 
-                case Usuario::ROL_DOCUMENTACION:
+                case Usuario::ROL_DOCUMENTACION || Usuario::ROL_JEFE_IMPORTACION:
                     $query->where('estado_cotizador', 'CONFIRMADO');
                     break;
 

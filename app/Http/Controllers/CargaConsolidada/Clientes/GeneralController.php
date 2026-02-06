@@ -219,7 +219,7 @@ class GeneralController extends Controller
             $itemArr['proveedores'] = [];
 
             // Si el usuario es Documentacion, incluir proveedores completos (id, code_supplier, archivos y estados)
-            if ($user && $user->getNombreGrupo() == Usuario::ROL_DOCUMENTACION && $proveedores) {
+            if ($user && ($user->getNombreGrupo() == Usuario::ROL_DOCUMENTACION || $user->getNombreGrupo() == Usuario::ROL_JEFE_IMPORTACION) && $proveedores) {
                 // clave usada en groupBy es id_cotizacion
                 $cotKey = $cot->id_cotizacion ?? $cot->id ?? null;
                 if ($cotKey !== null && (is_array($proveedores) ? isset($proveedores[$cotKey]) : $proveedores->has($cotKey))) {
@@ -541,6 +541,7 @@ class GeneralController extends Controller
                     Usuario::ROL_ADMINISTRACION => ['cbm_total_china', 'cbm_total', 'total_logistica', 'total_logistica_pagado', 'qty_items', 'total_fob', 'total_impuestos'],
                     Usuario::ROL_COORDINACION => ['cbm_total_china', 'cbm_total', 'total_logistica', 'total_logistica_pagado', 'qty_items', 'total_fob', 'total_impuestos'],
                     Usuario::ROL_DOCUMENTACION => [null],
+                    Usuario::ROL_JEFE_IMPORTACION => [null],
                 ];
                 $userIdCheck = $user->getNombreGrupo();
                 $headersData = [

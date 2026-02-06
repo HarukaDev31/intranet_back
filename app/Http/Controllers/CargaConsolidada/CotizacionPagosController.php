@@ -126,6 +126,7 @@ class CotizacionPagosController extends Controller
                         Usuario::ROL_ALMACEN_CHINA => 'estado_china',
                         Usuario::ROL_CATALOGO_CHINA => 'estado_china',
                         Usuario::ROL_DOCUMENTACION => 'estado',
+                        Usuario::ROL_JEFE_IMPORTACION => 'estado',
                     ];
                     
                     if (isset($fieldToFilter[$user->No_Grupo])) {
