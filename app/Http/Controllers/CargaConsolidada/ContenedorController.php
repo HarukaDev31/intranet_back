@@ -677,7 +677,6 @@ class ContenedorController extends Controller
             $idContenedorOrigen=Cotizacion::find($idCotizacion)->id_contenedor;
 
             $cotizacion->id_contenedor = $idContenedorDestino;
-            $cotizacion->estado_cotizador = 'CONFIRMADO';
             $cotizacion->updated_at = date('Y-m-d H:i:s');
             $cotizacion->save();
             $contenedorDestino=Contenedor::find($idContenedorDestino);
@@ -720,6 +719,7 @@ Le estaré informando cualquier avance 🫡.";
             // $this->sendMessageVentas($message, $telefono, 3);
             return response()->json(['message' => 'Cotización movida a consolidado correctamente', 'success' => true]);
         } catch (\Exception $e) {
+            Log::error('Error al mover cotización a consolidado: ' . $e->getMessage());
             return response()->json(['message' => 'Error al mover cotización a consolidado: ' . $e->getMessage(), 'success' => false], 500);
         }
     }
