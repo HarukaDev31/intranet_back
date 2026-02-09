@@ -363,13 +363,15 @@ class CalculadoraImportacionService
                 $calculadora->total_fob = $result['totalfob'] ?? $calculadora->total_fob;
                 $calculadora->total_impuestos = $result['totalimpuestos'] ?? $calculadora->total_impuestos;
                 $calculadora->logistica = $result['logistica'] ?? $calculadora->logistica;
-
+                $calculadora->url_cotizacion_pdf = $result['boleta']['url'] ?? null;
+                $calculadora->id_usuario = $data['id_usuario'];
                 Log::info('[EDITAR COTIZACIÓN] Excel regenerado exitosamente');
                 Log::info('[EDITAR COTIZACIÓN] URL Excel anterior: ' . $urlAnterior);
                 Log::info('[EDITAR COTIZACIÓN] URL Excel nueva: ' . $result['url']);
                 Log::info('[EDITAR COTIZACIÓN] Total FOB: ' . ($result['totalfob'] ?? 'N/A'));
                 Log::info('[EDITAR COTIZACIÓN] Total Impuestos: ' . ($result['totalimpuestos'] ?? 'N/A'));
                 Log::info('[EDITAR COTIZACIÓN] Logística: ' . ($result['logistica'] ?? 'N/A'));
+                Log::info('[EDITAR COTIZACIÓN] ID Usuario: ' . ($data['id_usuario'] ?? 'N/A'));
 
                 // Regenerar PDF con el Excel actualizado
                 if (isset($result['boleta'])) {
