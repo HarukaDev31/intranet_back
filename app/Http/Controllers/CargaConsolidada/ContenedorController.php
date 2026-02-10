@@ -214,7 +214,7 @@ class ContenedorController extends Controller
                 }
                 return [
                     'id' => $c->id,
-                    'carga' => $c->carga,
+                    'carga' => $c->carga.' - '.date('Y', strtotime($c->f_inicio)),
                     'mes' => $c->mes,
                     'anio' => date('Y', strtotime($c->f_inicio)),
                     'f_cierre' => $c->f_cierre,
