@@ -18,7 +18,7 @@ class InsertViaticosReintegrosMenuItems extends Migration
         $menuPrincipalId = DB::table('menu')->insertGetId([
             'ID_Padre' => 0,
             'Nu_Orden' => 10, // Ajusta según dónde quieras que aparezca
-            'No_Menu' => 'Viáticos y Reintegros',
+            'No_Menu' => 'Mis Reintegros',
             'No_Menu_Url' => 'viaticos',
             'No_Class_Controller' => 'ViaticoController',
             'Txt_Css_Icons' => 'fa fa-money',
@@ -54,41 +54,7 @@ class InsertViaticosReintegrosMenuItems extends Migration
         // Insertar "Viáticos y Reintegros" como hijo del menú principal (será padre de Pendientes y Completados)
         
 
-        // Insertar "Pendientes" como hijo de "Viáticos y Reintegros"
-        DB::table('menu')->insert([
-            'ID_Padre' => $menuPrincipalId,
-            'Nu_Orden' => 1,
-            'No_Menu' => 'Pendientes',
-            'No_Menu_Url' => 'viaticos/pendientes',
-            'No_Class_Controller' => 'ViaticoController',
-            'Txt_Css_Icons' => 'fa fa-clock-o',
-            'Nu_Separador' => 0,
-            'Nu_Seguridad' => 0,
-            'Nu_Activo' => 0,
-            'Nu_Tipo_Sistema' => 0,
-            'Txt_Url_Video' => NULL,
-            'No_Menu_China' => 'Pending',
-            'show_father' => 1,
-            'url_intranet_v2' => 'viaticos/pendientes'
-        ]);
-
-        // Insertar "Completados" como hijo de "Viáticos y Reintegros"
-        DB::table('menu')->insert([
-            'ID_Padre' => $menuPrincipalId,
-            'Nu_Orden' => 2,
-            'No_Menu' => 'Completados',
-            'No_Menu_Url' => 'viaticos/completados',
-            'No_Class_Controller' => 'ViaticoController',
-            'Txt_Css_Icons' => 'fa fa-check',
-            'Nu_Separador' => 0,
-            'Nu_Seguridad' => 0,
-            'Nu_Activo' => 0,
-            'Nu_Tipo_Sistema' => 0,
-            'Txt_Url_Video' => NULL,
-            'No_Menu_China' => 'Completed',
-            'show_father' => 1,
-            'url_intranet_v2' => 'viaticos/completados'
-        ]);
+        
     }
 
     /**
