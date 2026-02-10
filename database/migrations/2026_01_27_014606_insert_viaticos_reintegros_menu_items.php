@@ -28,8 +28,8 @@ class InsertViaticosReintegrosMenuItems extends Migration
             'Nu_Tipo_Sistema' => 0,
             'Txt_Url_Video' => NULL,
             'No_Menu_China' => 'Travel Expenses',
-            'show_father' => 1,
-            'url_intranet_v2' => '#',
+            'show_father' => 0,
+            'url_intranet_v2' => 'viaticos',
         ]);
 
         // Insertar "Mis Reintegros" como hijo directo del menú principal
@@ -47,7 +47,8 @@ class InsertViaticosReintegrosMenuItems extends Migration
             'Txt_Url_Video' => NULL,
             'No_Menu_China' => 'My Reimbursements',
             'show_father' => 0,
-            'url_intranet_v2' => 'viaticos'
+            'url_intranet_v2' => null,
+        
         ]);
 
         // Insertar "Viáticos y Reintegros" como hijo del menú principal (será padre de Pendientes y Completados)
