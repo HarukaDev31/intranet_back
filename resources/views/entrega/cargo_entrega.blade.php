@@ -47,7 +47,7 @@
             <div class="title">CARGO DE ENTREGA DE MERCANCÍA</div>
 
             <div class="section">
-                <p>Yo, ,___________________________________ identificado(a) con DNI N.º _____________________, en representación de <strong>{{ $cliente ?? '' }}</strong>, declaro haber recibido de PRO BUSINESS la siguiente mercancía:</p>
+                <p>Yo, ,{{ $nombre ?? '_______________' }} identificado(a) con DNI N.º {{ $dni ?? '_______________' }}, en representación de <strong>{{ $cliente ?? '' }}</strong>, declaro haber recibido de PRO BUSINESS la siguiente mercancía:</p>
 
                 <ul>
                     <li>Número de consolidado: <strong>#{{ $carga ?? $cotizacion_id ?? '' }}</strong></li>
@@ -59,8 +59,13 @@
     </div>
 
     <div class="section">
-        <p>Fecha: _________________</p><br/>
-        <p>Firma del receptor: _________________________</p>
+        <p>Fecha: {{ $fecha ?? '________________' }}</p><br/>
+        <p>Firma del receptor:</p>
+        @if(!empty($signature_base64))
+            <img src="{{ $signature_base64 }}" alt="Firma" style="max-height: 50mm; max-width: 80mm; display: block;" />
+        @else
+            <span>{{ $firma ?? '________________________' }}</span>
+        @endif
     </div>
 
 </body>

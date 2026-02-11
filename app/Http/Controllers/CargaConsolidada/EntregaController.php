@@ -1780,6 +1780,19 @@ class EntregaController extends Controller
                         $output = $dompdf->output();
                         file_put_contents($pdfPath, $output);
                         $pdfFiles[] = $pdfPath;
+
+                        // Guardar PDF en public/entregas/cargo_entrega/ (accesible sin CORS)
+                        $publicDir = public_path('entregas/cargo_entrega/' . $idContenedor);
+                        if (!is_dir($publicDir)) {
+                            mkdir($publicDir, 0755, true);
+                        }
+                        $publicPath = $publicDir . DIRECTORY_SEPARATOR . $pdfName;
+                        if (file_put_contents($publicPath, $output) !== false) {
+                            $relativePath = 'entregas/cargo_entrega/' . $idContenedor . '/' . $pdfName;
+                            DB::table('contenedor_consolidado_cotizacion')
+                                ->where('id', $r->id_cotizacion)
+                                ->update(['cargo_entrega_pdf_url' => $relativePath]);
+                        }
                     } catch (\Exception $e) {
                         Log::error('Error generating PDF for cotizacion ' . $r->id_cotizacion . ': ' . $e->getMessage());
                         // continue generating others
@@ -3696,6 +3709,226 @@ Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, 
             return response()->json(['message' => 'Horarios seleccionados correctamente', 'success' => true], 200);
         } catch (\Exception $e) {
             return response()->json(['message' => 'Error al seleccionar horarios: ' . $e->getMessage(), 'success' => false], 500);
+        }
+    }
+
+    /**
+     * Obtiene la URL del PDF de cargo de entrega para visualización.
+     * Los PDFs se guardan en public/entregas/cargo_entrega/ para acceso directo.
+     */
+    public function getCargoEntregaPdf($idContenedor, $idCotizacion)
+    {
+        $row = DB::table('contenedor_consolidado_cotizacion as CC')
+            ->join('carga_consolidada_contenedor as C', 'C.id', '=', 'CC.id_contenedor')
+            ->where('CC.id', $idCotizacion)
+            ->where('CC.id_contenedor', $idContenedor)
+            ->select([
+                'CC.id',
+                'CC.id_contenedor',
+                'CC.cargo_entrega_pdf_url',
+                'CC.cargo_entrega_pdf_firmado_url',
+                'CC.nombre',
+                'CC.telefono'
+            ])
+            ->first();
+
+        if (!$row) {
+            return response()->json(['success' => false, 'message' => 'No se encontró el registro'], 404);
+        }
+
+        $pdfUrl = $row->cargo_entrega_pdf_firmado_url ?? $row->cargo_entrega_pdf_url;
+
+        if (!$pdfUrl) {
+            $generated = $this->generateCargoEntregaPdfPreview($idContenedor, $idCotizacion);
+            if (!$generated) {
+                return response()->json(['success' => false, 'message' => 'No se pudo generar el PDF'], 500);
+            }
+            $row = (object) array_merge((array) $row, ['cargo_entrega_pdf_url' => $generated, 'cargo_entrega_pdf_firmado_url' => null]);
+            $pdfUrl = $generated;
+        }
+
+        $baseUrl = rtrim(config('app.url'), '/');
+        $pdfUrlForApi = $row->cargo_entrega_pdf_firmado_url ?? $row->cargo_entrega_pdf_url;
+        // Usar /files/ para que pase por FileController con CORS (igual que otros archivos)
+        $fullUrl = $baseUrl . '/files/' . ltrim($pdfUrlForApi, '/');
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'cargo_entrega_pdf_url' => $fullUrl,
+                'cargo_entrega_pdf_firmado_url' => $row->cargo_entrega_pdf_firmado_url ? $fullUrl : null,
+                'pdf_url' => $fullUrl,
+                'nombre' => $row->nombre,
+                'telefono' => $row->telefono
+            ]
+        ]);
+    }
+
+    /**
+     * Genera PDF de vista previa del cargo de entrega (sin firma) y guarda en cargo_entrega_pdf_url.
+     * @return string|null Ruta relativa guardada o null si falla
+     */
+    private function generateCargoEntregaPdfPreview(int $idContenedor, int $idCotizacion)
+    {
+        $row = DB::table('contenedor_consolidado_cotizacion as CC')
+            ->join('carga_consolidada_contenedor as C', 'C.id', '=', 'CC.id_contenedor')
+            ->where('CC.id', $idCotizacion)
+            ->where('CC.id_contenedor', $idContenedor)
+            ->select(['CC.nombre as cliente', 'C.carga'])
+            ->first();
+        if (!$row) return null;
+
+        $qty = (int) DB::table('contenedor_consolidado_cotizacion_proveedores')
+            ->where('id_cotizacion', $idCotizacion)
+            ->sum(DB::raw('COALESCE(qty_box_china, qty_box, 0)'));
+
+        $viewData = [
+            'nombre' => null,
+            'dni' => null,
+            'cliente' => $row->cliente,
+            'carga' => $row->carga ?? '',
+            'cotizacion_id' => $idCotizacion,
+            'qty' => $qty,
+            'fecha' => now()->format('d-m-Y'),
+            'signature_base64' => null,
+        ];
+
+        try {
+            $html = view('entrega.cargo_entrega', $viewData)->render();
+            $options = new \Dompdf\Options();
+            $options->set('isHtml5ParserEnabled', true);
+            $options->set('defaultFont', 'DejaVu Sans');
+            $dompdf = new Dompdf($options);
+            $dompdf->loadHtml($html);
+            $dompdf->setPaper('A4', 'portrait');
+            $dompdf->render();
+            $publicDir = public_path('entregas/cargo_entrega/' . $idCotizacion);
+            if (!is_dir($publicDir)) {
+                mkdir($publicDir, 0755, true);
+            }
+            $filename = 'cargo_entrega_' . time() . '.pdf';
+            $relativePath = 'entregas/cargo_entrega/' . $idCotizacion . '/' . $filename;
+            file_put_contents($publicDir . DIRECTORY_SEPARATOR . $filename, $dompdf->output());
+            DB::table('contenedor_consolidado_cotizacion')
+                ->where('id', $idCotizacion)
+                ->where('id_contenedor', $idContenedor)
+                ->update(['cargo_entrega_pdf_url' => $relativePath]);
+            return $relativePath;
+        } catch (\Throwable $e) {
+            Log::error('Error generando preview cargo entrega: ' . $e->getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Firma el cargo de entrega: recibe nombre, dni y firma (base64).
+     * Genera el PDF con el blade cargo_entrega, lo guarda y envía WhatsApp.
+     */
+    public function signCargoEntrega(Request $request)
+    {
+        $request->validate([
+            'id_contenedor' => 'required|integer',
+            'id_cotizacion' => 'required|integer',
+            'nombre' => 'required|string|max:255',
+            'dni' => 'required|string|max:20',
+            'signature' => 'required|string',
+        ]);
+
+        $idContenedor = (int) $request->input('id_contenedor');
+        $idCotizacion = (int) $request->input('id_cotizacion');
+        $nombre = trim($request->input('nombre'));
+        $dni = trim($request->input('dni'));
+        $signature = $request->input('signature');
+
+        $row = DB::table('contenedor_consolidado_cotizacion as CC')
+            ->join('carga_consolidada_contenedor as C', 'C.id', '=', 'CC.id_contenedor')
+            ->where('CC.id', $idCotizacion)
+            ->where('CC.id_contenedor', $idContenedor)
+            ->select([
+                'CC.id',
+                'CC.nombre as cliente',
+                'CC.telefono',
+                'C.carga'
+            ])
+            ->first();
+
+        if (!$row) {
+            return response()->json(['success' => false, 'message' => 'No se encontró el registro'], 404);
+        }
+
+        $qty = (int) DB::table('contenedor_consolidado_cotizacion_proveedores')
+            ->where('id_cotizacion', $idCotizacion)
+            ->sum(DB::raw('COALESCE(qty_box_china, qty_box, 0)'));
+
+        $signatureBase64 = (strpos($signature, 'data:') === 0) ? $signature : ('data:image/png;base64,' . $signature);
+
+        $viewData = [
+            'nombre' => $nombre,
+            'dni' => $dni,
+            'cliente' => $row->cliente,
+            'carga' => $row->carga ?? '',
+            'cotizacion_id' => $idCotizacion,
+            'qty' => $qty,
+            'fecha' => now()->format('d-m-Y'),
+            'signature_base64' => $signatureBase64,
+        ];
+
+        try {
+            $html = view('entrega.cargo_entrega', $viewData)->render();
+
+            if (function_exists('set_time_limit')) {
+                @set_time_limit(120);
+            }
+            ini_set('memory_limit', '512M');
+
+            $options = new \Dompdf\Options();
+            $options->set('isHtml5ParserEnabled', true);
+            $options->set('defaultFont', 'DejaVu Sans');
+            $dompdf = new Dompdf($options);
+            $dompdf->loadHtml($html);
+            $dompdf->setPaper('A4', 'portrait');
+            $dompdf->render();
+            $pdfContent = $dompdf->output();
+
+            $publicDir = public_path('entregas/cargo_entrega/' . $idCotizacion);
+            if (!is_dir($publicDir)) {
+                mkdir($publicDir, 0755, true);
+            }
+            $filename = 'cargo_entrega_firmado_' . time() . '.pdf';
+            $relativePath = 'entregas/cargo_entrega/' . $idCotizacion . '/' . $filename;
+            file_put_contents($publicDir . DIRECTORY_SEPARATOR . $filename, $pdfContent);
+
+            DB::table('contenedor_consolidado_cotizacion')
+                ->where('id', $idCotizacion)
+                ->where('id_contenedor', $idContenedor)
+                ->update(['cargo_entrega_pdf_firmado_url' => $relativePath]);
+
+            $numeroWhatsapp = preg_replace('/[^0-9]/', '', $row->telefono ?? '');
+            if (strlen($numeroWhatsapp) < 9) {
+                $numeroWhatsapp = '51' . $numeroWhatsapp;
+            }
+            $numeroWhatsapp = $numeroWhatsapp . '@c.us';
+
+            $message = "Hola {$row->cliente} 👋\nAdjunto el documento de cargo de entrega firmado correspondiente a su importación del consolidado #{$row->carga}.\n\nMuchas gracias por confiar en Pro Business. ✈️📦";
+
+            $fullPath = public_path($relativePath);
+            $this->sendMessage($message, $numeroWhatsapp);
+            $this->sendMedia($fullPath, 'application/pdf', null, $numeroWhatsapp, 0, 'consolidado', 'cargo_entrega_firmado.pdf');
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Firma guardada correctamente',
+                'data' => ['cargo_entrega_pdf_firmado_url' => $this->generateImageUrl($relativePath)]
+            ], 201);
+        } catch (\Exception $e) {
+            Log::error('Error al firmar cargo de entrega: ' . $e->getMessage(), [
+                'id_cotizacion' => $idCotizacion,
+                'trace' => $e->getTraceAsString()
+            ]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al guardar la firma: ' . $e->getMessage()
+            ], 500);
         }
     }
 }

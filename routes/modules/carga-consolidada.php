@@ -181,6 +181,8 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
             Route::get('/agencias', [EntregaController::class, 'getAgencias']);
             Route::post('/entregas/conformidad', [EntregaController::class, 'uploadConformidad']);
             Route::delete('/entregas/conformidad/{id}', [EntregaController::class, 'deleteConformidad']);
+            Route::get('/cargo-entrega-pdf/{idContenedor}/{idCotizacion}', [EntregaController::class, 'getCargoEntregaPdf']);
+            Route::post('/cargo-entrega-firmar', [EntregaController::class, 'signCargoEntrega']);
 
             Route::get('/{idContenedor}/horarios-disponibles', [EntregaController::class, 'getHorariosDisponibles']);
             // CRUD fechas
