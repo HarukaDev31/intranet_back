@@ -16,6 +16,7 @@ use App\Models\CargaConsolidada\Contenedor;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Exports\RotuladoParedExport;
 use App\Exports\FormatoResumenExport;
+use App\Exports\ClientesEntregaExport;
 use Dompdf\Dompdf;
 use Dompdf\Options;
 use ZipArchive;
@@ -602,6 +603,7 @@ class EntregaController extends Controller
     public function getClientesEntrega(Request $request, $idContenedor)
     {
         // Lo obtiene de la tabla de clientes asociados al contenedor
+        //left join users as U where U.id = CC.id_usuario and get 
         $query = DB::table('contenedor_consolidado_cotizacion as CC')
             ->join('contenedor_consolidado_tipo_cliente as TC', 'TC.id', '=', 'CC.id_tipo_cliente')
             // Formularios (Lima y Provincia) asociados por id_cotizacion y mismo contenedor
@@ -613,7 +615,6 @@ class EntregaController extends Controller
                 $join->on('P.id_cotizacion', '=', 'CC.id')
                     ->where('P.id_contenedor', '=', $idContenedor);
             })
-
             ->where('CC.id_contenedor', $idContenedor)
             ->whereNotNull('CC.estado_cliente')
             ->whereNull('CC.id_cliente_importacion')
@@ -626,6 +627,7 @@ class EntregaController extends Controller
             ->select([
                 'CC.*',
                 'TC.name as name',
+                
                 // Tipo de formulario: 0 = Provincia, 1 = Lima (prioriza Provincia si existen ambos)
                 DB::raw('CASE WHEN P.id IS NOT NULL THEN 0 WHEN L.id IS NOT NULL THEN 1 ELSE NULL END as type_form'),
                 // voucher_doc normalizado según type_form (0 Provincia, 1 Lima)
@@ -704,12 +706,59 @@ class EntregaController extends Controller
         $perPage = (int) $request->input('itemsPerPage', 100);
         $data = $query->orderBy('CC.id', 'asc')->paginate($perPage, ['*'], 'page', $page);
 
+        // Mapa de códigos de origen (misma lógica que ClienteService::transformarDatosClientes)
+        $sourceMap = [
+            0 => 'No especificado',
+            1 => 'TikTok',
+            2 => 'Facebook',
+            3 => 'Instagram',
+            4 => 'YouTube',
+            5 => 'Familiares/Amigos',
+            6 => 'Otros',
+            8 => 'Otros'
+        ];
 
-        // Agregar fotos de conformidad (hasta 2) y el total por cada fila
+        // Agregar fotos de conformidad, total por fila y origen (no_como_entero / no_otros_como_entero_empresa desde users por documento/correo/telefono)
         $items = $data->items();
         foreach ($items as $row) {
             $row->conformidad = [];
             $row->conformidad_count = 0;
+
+            // Vincular con users por documento, correo o teléfono (igual que ClienteService)
+            $noComoEntero = null;
+            $noOtrosComoEnteroEmpresa = null;
+            try {
+                $user = \App\Helpers\UserLookupHelper::findUserByContact(
+                    $row->correo ?? null,
+                    $row->telefono ?? null,
+                    $row->documento ?? null
+                );
+                if ($user) {
+                    $noComoEntero = $user->no_como_entero ?? null;
+                    $noOtrosComoEnteroEmpresa = $user->no_otros_como_entero_empresa ?? null;
+                }
+            } catch (\Exception $e) {
+                Log::warning('getClientesEntrega: error vinculando user por documento/correo/telefono para cotización ' . $row->id . ' - ' . $e->getMessage());
+            }
+
+            // Calcular origen según lógica de ClienteService
+            $primaryCode = $noComoEntero ?? null;
+            $noOtrosVal = $noOtrosComoEnteroEmpresa ?? null;
+            $origen = null;
+            if (!is_null($primaryCode) && $primaryCode !== '') {
+                $codeInt = (int) $primaryCode;
+                if (($codeInt === 6 || $codeInt === 8) && !empty($noOtrosVal)) {
+                    $origen = $noOtrosVal;
+                } elseif (isset($sourceMap[$codeInt])) {
+                    $origen = $sourceMap[$codeInt];
+                } else {
+                    $origen = $primaryCode;
+                }
+            }
+            $row->origen = $origen;
+            $row->no_como_entero = $noComoEntero;
+            $row->no_otros_como_entero_empresa = $noOtrosComoEnteroEmpresa;
+
             $typeForm = isset($row->type_form) ? (int)$row->type_form : null;
             if ($typeForm !== null) {
                 // type_form: 0 = Provincia, 1 = Lima
@@ -758,6 +807,108 @@ class EntregaController extends Controller
             ]
         ]);
     }
+
+    /**
+     * Exportar clientes de entrega a Excel (Nombre de cliente, Dni, WhatsApp, T. cliente, T. entrega, Nombre de la provincia, Origen).
+     */
+    public function exportClientesEntregaExcel(Request $request, $idContenedor)
+    {
+        $query = DB::table('contenedor_consolidado_cotizacion as CC')
+            ->join('contenedor_consolidado_tipo_cliente as TC', 'TC.id', '=', 'CC.id_tipo_cliente')
+            ->leftJoin('consolidado_delivery_form_lima as L', function ($join) use ($idContenedor) {
+                $join->on('L.id_cotizacion', '=', 'CC.id')
+                    ->where('L.id_contenedor', '=', $idContenedor);
+            })
+            ->leftJoin('consolidado_delivery_form_province as P', function ($join) use ($idContenedor) {
+                $join->on('P.id_cotizacion', '=', 'CC.id')
+                    ->where('P.id_contenedor', '=', $idContenedor);
+            })
+            ->leftJoin('departamento as DPT', 'DPT.ID_Departamento', '=', 'P.id_department')
+            ->where('CC.id_contenedor', $idContenedor)
+            ->whereNotNull('CC.estado_cliente')
+            ->whereNull('CC.id_cliente_importacion')
+            ->where('CC.estado_cotizador', 'CONFIRMADO')
+            ->whereExists(function ($q) {
+                $q->select(DB::raw(1))
+                    ->from('contenedor_consolidado_cotizacion_proveedores')
+                    ->whereColumn('contenedor_consolidado_cotizacion_proveedores.id_cotizacion', 'CC.id');
+            })
+            ->select([
+                'CC.id',
+                'CC.nombre',
+                'CC.documento',
+                'CC.telefono',
+                'CC.correo',
+                'CC.id_contenedor',
+                'TC.name as name',
+                DB::raw('CASE WHEN P.id IS NOT NULL THEN 0 WHEN L.id IS NOT NULL THEN 1 ELSE NULL END as type_form'),
+                DB::raw('CASE WHEN P.id IS NOT NULL THEN DPT.No_Departamento ELSE NULL END as nombre_provincia'),
+            ]);
+
+        if ($request->filled('search')) {
+            $search = trim((string) $request->input('search'));
+            $searchDigits = preg_replace('/\D+/', '', $search);
+            $query->where(function ($q) use ($search, $searchDigits) {
+                $q->where('CC.nombre', 'LIKE', "%{$search}%")
+                    ->orWhere('CC.documento', 'LIKE', "%{$search}%")
+                    ->orWhere('CC.correo', 'LIKE', "%{$search}%");
+                if ($searchDigits !== '') {
+                    $normalized = 'REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(CC.telefono, " ", ""), "-", ""), "(", ""), ")", ""), "+", "")';
+                    $q->orWhereRaw("{$normalized} LIKE ?", ["%{$searchDigits}%"]);
+                    $q->orWhereRaw("{$normalized} LIKE ?", ["%51{$searchDigits}%"]);
+                }
+            });
+        }
+
+        $items = $query->orderBy('CC.id', 'asc')->get();
+
+        $sourceMap = [
+            0 => 'No especificado',
+            1 => 'TikTok',
+            2 => 'Facebook',
+            3 => 'Instagram',
+            4 => 'YouTube',
+            5 => 'Familiares/Amigos',
+            6 => 'Otros',
+            8 => 'Otros',
+        ];
+
+        foreach ($items as $row) {
+            $noComoEntero = null;
+            $noOtrosComoEnteroEmpresa = null;
+            try {
+                $user = \App\Helpers\UserLookupHelper::findUserByContact(
+                    $row->correo ?? null,
+                    $row->telefono ?? null,
+                    $row->documento ?? null
+                );
+                if ($user) {
+                    $noComoEntero = $user->no_como_entero ?? null;
+                    $noOtrosComoEnteroEmpresa = $user->no_otros_como_entero_empresa ?? null;
+                }
+            } catch (\Exception $e) {
+                Log::warning('exportClientesEntregaExcel: error vinculando user para cotización ' . $row->id . ' - ' . $e->getMessage());
+            }
+            $primaryCode = $noComoEntero ?? null;
+            $noOtrosVal = $noOtrosComoEnteroEmpresa ?? null;
+            $origen = null;
+            if ($primaryCode !== null && $primaryCode !== '') {
+                $codeInt = (int) $primaryCode;
+                if (($codeInt === 6 || $codeInt === 8) && !empty($noOtrosVal)) {
+                    $origen = $noOtrosVal;
+                } elseif (isset($sourceMap[$codeInt])) {
+                    $origen = $sourceMap[$codeInt];
+                } else {
+                    $origen = $primaryCode;
+                }
+            }
+            $row->origen = $origen;
+        }
+
+        $filename = 'clientes-entrega-' . $idContenedor . '-' . date('Y-m-d-His') . '.xlsx';
+        return Excel::download(new ClientesEntregaExport($items), $filename, \Maatwebsite\Excel\Excel::XLSX);
+    }
+
     public function sendForm($idContenedor)
     {
         // Lógica para manejar el envío del formulario de entrega

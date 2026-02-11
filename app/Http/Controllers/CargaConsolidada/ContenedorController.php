@@ -32,6 +32,7 @@ class ContenedorController extends Controller
     private $defaultJefeChina = [];
     private $defaultCotizador = [];
     private $defaultDocumentacion = [];
+    private $defaultJefeImportacion = [];
     private $defaultAdministracion = [];
     public function __construct()
     {
@@ -66,6 +67,11 @@ class ContenedorController extends Controller
             ["name" => "FACTURA Y GUIA", "iconURL" => $host . '/assets/icons/factura.png']
         );
         $this->defaultDocumentacion = array(
+            ["name" => "CLIENTES", "iconURL" => $host . '/assets/icons/clientes.png'],
+            ["name" => "DOCUMENTACION", "iconURL" => $host . '/assets/icons/cdocumentacion.png'],
+            ["name" => "ADUANA", "iconURL" => $host . '/assets/icons/aduana.png'],
+        );
+        $this->defaultJefeImportacion = array(
             ["name" => "CLIENTES", "iconURL" => $host . '/assets/icons/clientes.png'],
             ["name" => "DOCUMENTACION", "iconURL" => $host . '/assets/icons/cdocumentacion.png'],
             ["name" => "ADUANA", "iconURL" => $host . '/assets/icons/aduana.png'],
@@ -329,7 +335,8 @@ class ContenedorController extends Controller
         $cotizadorSteps = $this->getCotizacionSteps($idContenedor);
         $documentacionSteps = $this->getDocumentacionSteps($idContenedor);
         $administracionSteps = $this->getAdministracionSteps($idContenedor);
-        $this->insertSteps($cotizadorSteps, $documentacionSteps, $administracionSteps);
+        $jefeImportacionSteps = $this->getJefeImportacionSteps($idContenedor);
+        $this->insertSteps($cotizadorSteps, $documentacionSteps, $administracionSteps, $jefeImportacionSteps);
     }
     public function getCotizacionSteps($idContenedor)
     {
@@ -385,11 +392,31 @@ class ContenedorController extends Controller
         }
         return $stepsAdministracion;
     }
-    public function insertSteps($steps, $stepsDocumentacion)
+    public function getJefeImportacionSteps($idContenedor)
+    {
+        $stepsJefeImportacion = [];
+        $idContenedor = intval($idContenedor);
+        $index = 1;
+        foreach ($this->defaultJefeImportacion as $step) {
+            $stepsJefeImportacion[] = [
+                "id_pedido" => $idContenedor,
+                'id_order' => $index,
+                'tipo' => 'JEFE IMPORTACION',
+                'name' => $step['name'],
+                'iconURL' => $step['iconURL'],
+                'status' => 'PENDING'
+            ];
+            $index++;
+        }
+        return $stepsJefeImportacion;
+    }
+    public function insertSteps($steps, $stepsDocumentacion, $stepsAdministracion, $stepsJefeImportacion)
     {
         try {
             ContenedorPasos::insert($steps);
             ContenedorPasos::insert($stepsDocumentacion);
+            ContenedorPasos::insert($stepsAdministracion);
+            ContenedorPasos::insert($stepsJefeImportacion);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -508,6 +535,11 @@ class ContenedorController extends Controller
                     break;
                 case Usuario::ROL_DOCUMENTACION:
                     $query->where('tipo', 'DOCUMENTACION');
+                    break;
+                case Usuario::ROL_JEFE_IMPORTACION:
+                    //if not exists tipe Jefe Importacion, get documentacion steps
+                        $query->where('tipo', 'DOCUMENTACION');
+                    
                     break;
                 default:
                     $query->where('tipo', 'COTIZADOR');

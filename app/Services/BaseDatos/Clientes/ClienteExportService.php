@@ -140,6 +140,8 @@ class ClienteExportService
             'K3' => 'MONTO',
             'L3' => 'FECHA SERVICIO',
             'M3' => 'CATEGORIA',
+            'N3' => 'PROVINCIA',
+            'O3' => 'ORIGEN',
         ];
 
         foreach ($headers as $cell => $value) {
@@ -160,11 +162,14 @@ class ClienteExportService
             $cliente = $item['cliente'];
             $servicios = $item['servicios'];
             $categoria = $item['categoria'];
-            
+            $provinciaOrigen = $this->clienteService->getProvinciaYOrigenParaCliente($cliente, $servicios);
+            $provincia = $provinciaOrigen['provincia'] ?? '';
+            $origen = $provinciaOrigen['origen'] ?? '';
+
             // Si no hay servicios, crear una fila vacía
             if (empty($servicios)) {
                 $startRow = $row;
-                
+
                 // Llenar información principal del cliente
                 $sheet->setCellValue('B' . $row, $cliente->id);
                 $sheet->setCellValue('C' . $row, $cliente->nombre);
@@ -178,7 +183,9 @@ class ClienteExportService
                 $sheet->setCellValue('K' . $row, ''); // Sin monto
                 $sheet->setCellValue('L' . $row, ''); // Sin fecha servicio
                 $sheet->setCellValue('M' . $row, $categoria);
-                
+                $sheet->setCellValue('N' . $row, $provincia);
+                $sheet->setCellValue('O' . $row, $origen);
+
                 $endRow = $row;
                 $mergedRanges[] = [
                     'startRow' => $startRow,
@@ -186,12 +193,12 @@ class ClienteExportService
                     'cliente' => $cliente,
                     'categoria' => $categoria
                 ];
-                
+
                 $row++;
             } else {
                 // Crear una fila por cada servicio
                 $startRow = $row;
-                
+
                 foreach ($servicios as $index => $servicio) {
                     // Solo llenar información del cliente en la primera fila
                     if ($index === 0) {
@@ -204,16 +211,18 @@ class ClienteExportService
                         $sheet->setCellValue('H' . $row, $cliente->telefono);
                         $sheet->setCellValue('I' . $row, $cliente->fecha ? $cliente->fecha->format('d/m/Y') : '');
                         $sheet->setCellValue('M' . $row, $categoria);
+                        $sheet->setCellValue('N' . $row, $provincia);
+                        $sheet->setCellValue('O' . $row, $origen);
                     }
-                    
+
                     // Llenar información del servicio (siempre)
                     $sheet->setCellValue('J' . $row, $servicio['servicio']);
                     $sheet->setCellValue('K' . $row, $servicio['monto'] ?? '');
                     $sheet->setCellValue('L' . $row, $servicio['fecha'] ? Carbon::parse($servicio['fecha'])->format('d/m/Y') : '');
-                    
+
                     $row++;
                 }
-                
+
                 $endRow = $row - 1;
                 $mergedRanges[] = [
                     'startRow' => $startRow,
@@ -223,10 +232,10 @@ class ClienteExportService
                 ];
             }
         }
-        
+
         return [
             'lastRow' => $row - 1,
-            'maxColumn' => 'M',
+            'maxColumn' => 'O',
             'mergedRanges' => $mergedRanges
         ];
     }
@@ -242,18 +251,18 @@ class ClienteExportService
         $mergedRanges = $infoDimensiones['mergedRanges'];
         
         // Unir celdas de encabezados
-        $sheet->mergeCells('B2:M2');
+        $sheet->mergeCells('B2:O2');
         
         // Mergear celdas de información del cliente que no dependen de servicios
-        // Columnas a mergear: B (N), C (NOMBRE), D (DNI), E (RUC), F (EMPRESA), G (CORREO), H (WHATSAPP), I (FECHA REGISTRO), M (CATEGORIA)
+        // Columnas a mergear: B (N), C (NOMBRE), D (DNI), E (RUC), F (EMPRESA), G (CORREO), H (WHATSAPP), I (FECHA REGISTRO), M (CATEGORIA), N (PROVINCIA), O (ORIGEN)
         foreach ($mergedRanges as $range) {
             $startRow = $range['startRow'];
             $endRow = $range['endRow'];
             
             // Solo mergear si hay más de una fila
             if ($endRow > $startRow) {
-                // Mergear columnas B-I y M (información del cliente)
-                $columnsToMerge = ['B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'M'];
+                // Mergear columnas B-I, M, N, O (información del cliente)
+                $columnsToMerge = ['B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'M', 'N', 'O'];
                 foreach ($columnsToMerge as $col) {
                     $sheet->mergeCells($col . $startRow . ':' . $col . $endRow);
                     // Centrar verticalmente el contenido mergeado
@@ -278,6 +287,8 @@ class ClienteExportService
             'K' => 15,  // MONTO
             'L' => 15,  // FECHA SERVICIO
             'M' => 15,  // CATEGORIA
+            'N' => 20,  // PROVINCIA
+            'O' => 20,  // ORIGEN
         ];
         
         // Aplicar anchos específicos a las columnas

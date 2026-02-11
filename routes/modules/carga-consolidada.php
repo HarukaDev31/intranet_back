@@ -191,6 +191,7 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
             Route::put('/{idContenedor}/fechas/{idFecha}/rangos/{idRango}', [EntregaController::class, 'updateRango']);
             Route::delete('/{idContenedor}/fechas/{idFecha}/rangos/{idRango}', [EntregaController::class, 'deleteRango']);
             Route::get('/{idContenedor}/headers', [EntregaController::class, 'getHeaders']);
+            Route::get('/clientes/{idContenedor}/export-excel', [EntregaController::class, 'exportClientesEntregaExcel']);
             Route::get('/clientes/{idContenedor}', [EntregaController::class, 'getClientesEntrega']);
             // Export ROTULADO PARED
             Route::get('/{idContenedor}/rotulado-pared', [EntregaController::class, 'downloadPlantillas']);
