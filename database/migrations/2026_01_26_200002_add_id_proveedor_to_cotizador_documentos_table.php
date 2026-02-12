@@ -11,10 +11,12 @@ return new class extends Migration
      */
     public function up(): void
     {
-        //drop column id_proveedor if exists
-        Schema::table('contenedor_consolidado_cotizacion_cotizador_documentos', function (Blueprint $table) {
-            $table->dropColumn('id_proveedor');
-        });
+        
+        if (Schema::hasColumn('contenedor_consolidado_cotizacion_cotizador_documentos', 'id_proveedor')) {
+            Schema::table('contenedor_consolidado_cotizacion_cotizador_documentos', function (Blueprint $table) {
+                $table->dropColumn('id_proveedor');
+            });
+        }
         Schema::table('contenedor_consolidado_cotizacion_cotizador_documentos', function (Blueprint $table) {
             $table->unsignedInteger('id_proveedor')->nullable()->after('id_cotizacion');
             $table->foreign('id_proveedor', 'cc_cotizador_docs_id_proveedor_fk')
