@@ -444,6 +444,22 @@ class Cotizacion extends Model
     {
         return $this->hasMany(AlmacenInspection::class, 'id_cotizacion');
     }
+
+    /**
+     * Documentación del perfil cotizador (documentos generales).
+     */
+    public function documentacionCotizador()
+    {
+        return $this->hasMany(CotizacionCotizadorDocumento::class, 'id_cotizacion');
+    }
+
+    /**
+     * Documentos por proveedor del perfil cotizador (hasta 4 por proveedor).
+     */
+    public function proveedorDocumentosCotizador()
+    {
+        return $this->hasMany(CotizacionCotizadorProveedorDocumento::class, 'id_cotizacion');
+    }
     //function get sum of cbm_total of proveedores whwere estados_proveedor is 'LOADED' and estado_cotizador is 'CONFIRMADO'
     public function getSumCbmTotalChinaAttribute()
     {

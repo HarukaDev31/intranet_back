@@ -350,6 +350,10 @@ class ClienteService
 
             // Buscar usuario en tabla users por whatsapp, email o dni
             $idUser = null;
+            $businessRuc = null;
+            $businessEmpresa = null;
+            $businessRubro = null;
+            $businessRedSocial = null;
             try {
                 $user = \App\Helpers\UserLookupHelper::findUserByContact(
                     $cliente->correo ?? null,
@@ -358,6 +362,15 @@ class ClienteService
                 );
                 if ($user) {
                     $idUser = $user->id;
+                    // Obtener datos de user_business por user_id, fallback a legacy id_user_business
+                    $userBusiness = \App\Models\UserBusiness::where('user_id', $user->id)->first()
+                        ?? ($user->id_user_business ? \App\Models\UserBusiness::find($user->id_user_business) : null);
+                    if ($userBusiness) {
+                        $businessRuc = $userBusiness->ruc;
+                        $businessEmpresa = $userBusiness->name;
+                        $businessRubro = $userBusiness->rubric;
+                        $businessRedSocial = $userBusiness->social_address;
+                    }
                 }
             } catch (\Exception $e) {
                 Log::warning('obtenerClientePorId: error buscando usuario en tabla users - ' . $e->getMessage());
@@ -372,8 +385,10 @@ class ClienteService
                 'provincia' => $provinciaName ?? ($cliente->provincia ?? null),
                 'id_provincia' => $provinciaId,
                 'origen' => $no_como_entero_final,
-                'ruc' => $cliente->ruc,
-                'empresa' => $cliente->empresa,
+                'ruc' => $businessRuc ?? $cliente->ruc,
+                'empresa' => $businessEmpresa ?? $cliente->empresa,
+                'rubro' => $businessRubro,
+                'red_social' => $businessRedSocial,
                 'fecha' => $cliente->fecha ? $cliente->fecha->format('d/m/Y') : null,
                 'id_user' => $idUser,
                 'primer_servicio' => $primerServicio ? [

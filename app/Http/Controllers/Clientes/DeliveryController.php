@@ -14,6 +14,7 @@ use App\Jobs\SendDeliveryConfirmationWhatsAppLimaJob;
 use App\Jobs\SendDeliveryConfirmationWhatsAppProvinceJob;
 use Tymon\JWTAuth\Facades\JWTAuth;
 use App\Models\User;
+use App\Models\UserBusiness;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -428,6 +429,37 @@ class DeliveryController extends Controller
                 }
             }
             $idUser = JWTAuth::user()->id;
+
+            // Si tipoComprobante es factura, validar/crear/actualizar user_business
+            if (strtolower($request->tipoComprobante) === 'factura') {
+                $user = User::find($idUser);
+                if ($user) {
+                    // Buscar empresa por user_id primero, luego por legacy id_user_business
+                    $userBusiness = UserBusiness::where('user_id', $user->id)->first()
+                        ?? ($user->id_user_business ? UserBusiness::find($user->id_user_business) : null);
+
+                    if ($userBusiness) {
+                        // Ya tiene empresa → actualizar con los datos enviados
+                        $updateData = [
+                            'name' => $request->clienteRazonSocial ?? $userBusiness->name,
+                            'ruc' => $request->clienteRuc ?? $userBusiness->ruc,
+                        ];
+                        if (empty($userBusiness->user_id)) {
+                            $updateData['user_id'] = $user->id;
+                        }
+                        $userBusiness->update($updateData);
+                    } else {
+                        // No tiene empresa → crear y asociar
+                        $userBusiness = UserBusiness::create([
+                            'user_id' => $user->id,
+                            'name' => $request->clienteRazonSocial,
+                            'ruc' => $request->clienteRuc,
+                        ]);
+                        $user->update(['id_user_business' => $userBusiness->id]);
+                    }
+                }
+            }
+
             $formData = [
                 'id_contenedor' => $cotizacion->id_contenedor,
                 'id_user' => $idUser,

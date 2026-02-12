@@ -49,7 +49,8 @@ class UserBusinessController extends Controller
                 ], 401);
             }
 
-            $userBusiness = UserBusiness::find($user->id_user_business);
+            $userBusiness = UserBusiness::where('user_id', $user->id)->first()
+                ?? UserBusiness::find($user->id_user_business);
 
             return response()->json([
                 'success' => true,
@@ -184,10 +185,15 @@ class UserBusinessController extends Controller
 
             DB::beginTransaction();
 
-            // Buscar si el usuario ya tiene una empresa asociada
-            $userBusiness = UserBusiness::find($user->id_user_business);
+            // Buscar si el usuario ya tiene una empresa asociada (por user_id o legacy id_user_business)
+            $userBusiness = UserBusiness::where('user_id', $user->id)->first()
+                ?? UserBusiness::find($user->id_user_business);
 
             if ($userBusiness) {
+                // Asegurar que user_id esté asignado (migrar registros legacy)
+                if (empty($userBusiness->user_id)) {
+                    $userBusiness->update(['user_id' => $user->id]);
+                }
                 // Actualizar empresa existente - solo actualizar campos proporcionados
                 $updateData = [];
                 if (isset($validatedData['business_name'])) {
@@ -236,9 +242,10 @@ class UserBusinessController extends Controller
                     ], 400);
                 }
 
+                $createData['user_id'] = $user->id;
                 $userBusiness = UserBusiness::create($createData);
 
-                // Asociar la empresa al usuario
+                // Asociar la empresa al usuario (legacy)
                 $user->update(['id_user_business' => $userBusiness->id]);
                 $message = 'Empresa creada exitosamente';
             }

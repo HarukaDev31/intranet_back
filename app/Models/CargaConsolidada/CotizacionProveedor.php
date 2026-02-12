@@ -79,4 +79,12 @@ class CotizacionProveedor extends Model
     {
         return $this->hasMany(CotizacionProveedorItems::class, 'id_proveedor');
     }
+
+    /**
+     * Documentos del perfil cotizador para este proveedor (hasta 4).
+     */
+    public function documentosCotizador()
+    {
+        return $this->hasMany(CotizacionCotizadorProveedorDocumento::class, 'id_proveedor');
+    }
 }

@@ -11,6 +11,7 @@ use App\Http\Controllers\CargaConsolidada\Clientes\GeneralController;
 use App\Http\Controllers\CargaConsolidada\Clientes\EmbarcadosController;
 use App\Http\Controllers\CargaConsolidada\Clientes\VariacionController;
 use App\Http\Controllers\CargaConsolidada\Documentacion\DocumentacionController;
+use App\Http\Controllers\CargaConsolidada\CotizacionCotizadorDocumentacionController;
 use App\Http\Controllers\CargaConsolidada\CotizacionFinal\CotizacionFinalController;
 use App\Http\Controllers\CargaConsolidada\FacturaGuiaController;
 use App\Http\Controllers\CargaConsolidada\CotizacionPagosController;
@@ -80,7 +81,18 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
             Route::delete('{id}', [CotizacionController::class, 'destroy']);
             Route::post('/', [CotizacionController::class, 'store']);
             Route::get('filters/options', [CotizacionController::class, 'filterOptions']);
-        }); 
+        });
+
+        // Documentación cotizador (cotizaciones prospectos)
+        Route::prefix('cotizador-documentacion')->group(function () {
+            Route::get('{idCotizacion}', [CotizacionCotizadorDocumentacionController::class, 'show']);
+            Route::post('sync', [CotizacionCotizadorDocumentacionController::class, 'sync']);
+            Route::post('batch-delete', [CotizacionCotizadorDocumentacionController::class, 'batchDelete']);
+            Route::post('upload', [CotizacionCotizadorDocumentacionController::class, 'uploadDocumento']);
+            Route::delete('documento/{id}', [CotizacionCotizadorDocumentacionController::class, 'deleteDocumento']);
+            Route::post('proveedor/upload', [CotizacionCotizadorDocumentacionController::class, 'uploadProveedorDocumento']);
+            Route::delete('proveedor-documento/{id}', [CotizacionCotizadorDocumentacionController::class, 'deleteProveedorDocumento']);
+        });
         
         // Clientes
         Route::group(['prefix' => 'clientes'], function () {
