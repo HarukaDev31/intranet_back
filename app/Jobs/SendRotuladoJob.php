@@ -760,7 +760,7 @@ Por lo tanto, dile a tu proveedor #{$supplierCode} que le ponga la etiqueta.
                 Log::error('No se pudo crear el archivo VIM: ' . $excelPath);
             }
             if (file_exists($excelPath)) {
-                $message = "👆🏼Te adjunto la plantilla de la placa para que tu proveedor la pueda editar según los datos de tu producto.";
+                $message = "👆🏼Le adjuntamos la lista de códigos vins que deben ir grabados en los vehículos de movilidad personal.";
                 $this->sendMedia($excelPath, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', $message, null, $sleepSendMedia, 'consolidado', 'vin_movilidad.xlsx');
                 Log::info('Archivo VIM enviado por WhatsApp exitosamente');
             } else {
