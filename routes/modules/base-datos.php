@@ -9,6 +9,9 @@ use App\Http\Controllers\BaseDatos\Regulaciones\PermisoController;
 use App\Http\Controllers\BaseDatos\Regulaciones\EtiquetadoController;
 use App\Http\Controllers\BaseDatos\Regulaciones\DocumentosEspecialesController;
 use App\Http\Controllers\BaseDatos\ClientesController;
+use App\Http\Controllers\BaseDatos\ConsolidadoCotizacionAduanaTramitesController;
+use App\Http\Controllers\BaseDatos\TramiteAduanaDocumentosController;
+use App\Http\Controllers\BaseDatos\TramiteAduanaCatalogosController;
 use App\Http\Controllers\UsuarioGrupoController;
 
 /*
@@ -91,6 +94,32 @@ Route::group(['prefix' => 'base-datos', 'middleware' => 'jwt.auth'], function ()
         Route::post('verificar-pertenencia', [UsuarioGrupoController::class, 'verificarPertenencia']);
         Route::get('grupos-disponibles/{usuarioId}', [UsuarioGrupoController::class, 'getGruposDisponibles']);
         Route::get('estadisticas', [UsuarioGrupoController::class, 'getEstadisticas']);
+    });
+
+    // Catálogos trámite aduana (nuevas tablas tramite_aduana_entidades y tramite_aduana_tipos_permiso)
+    Route::group(['prefix' => 'tramite-aduana-catalogos'], function () {
+        Route::get('entidades', [TramiteAduanaCatalogosController::class, 'getEntidades']);
+        Route::post('entidades', [TramiteAduanaCatalogosController::class, 'storeEntidad']);
+        Route::get('tipos-permiso', [TramiteAduanaCatalogosController::class, 'getTiposPermiso']);
+        Route::post('tipos-permiso', [TramiteAduanaCatalogosController::class, 'storeTipoPermiso']);
+    });
+
+    // Trámites consolidado cotizacion aduana (permisos)
+    Route::group(['prefix' => 'consolidado-cotizacion-aduana'], function () {
+        Route::get('tramites', [ConsolidadoCotizacionAduanaTramitesController::class, 'index']);
+        Route::post('tramites', [ConsolidadoCotizacionAduanaTramitesController::class, 'store']);
+        Route::get('tramites/{id}', [ConsolidadoCotizacionAduanaTramitesController::class, 'show']);
+        Route::put('tramites/{id}', [ConsolidadoCotizacionAduanaTramitesController::class, 'update']);
+        Route::delete('tramites/{id}', [ConsolidadoCotizacionAduanaTramitesController::class, 'destroy']);
+
+        // Documentos de trámite
+        Route::get('tramites/{idTramite}/documentos', [TramiteAduanaDocumentosController::class, 'index']);
+        Route::post('tramites/{idTramite}/documentos', [TramiteAduanaDocumentosController::class, 'store']);
+        Route::delete('tramites/documentos/{id}', [TramiteAduanaDocumentosController::class, 'destroy']);
+        Route::get('tramites/documentos/{id}/download', [TramiteAduanaDocumentosController::class, 'download']);
+        // Categorías (carpetas) del trámite
+        Route::get('tramites/{idTramite}/categorias', [TramiteAduanaDocumentosController::class, 'indexCategorias']);
+        Route::post('tramites/{idTramite}/categorias', [TramiteAduanaDocumentosController::class, 'storeCategoria']);
     });
 
     // Clientes
