@@ -8,19 +8,20 @@ use Illuminate\Support\Collection;
 class CalendarActivityService
 {
     /**
-     * Lista todas las actividades del catálogo (para dropdown "Actividad")
+     * Lista todas las actividades del catálogo ordenadas por `orden` y luego por `name`
      */
     public function listActivities(): Collection
     {
-        return CalendarActivity::orderBy('name')->get();
+        return CalendarActivity::orderBy('orden')->orderBy('name')->get();
     }
 
     /**
-     * Crear una nueva actividad en el catálogo
+     * Crear una nueva actividad en el catálogo asignando el siguiente orden
      */
     public function createActivity(string $name): CalendarActivity
     {
-        return CalendarActivity::create(['name' => $name]);
+        $maxOrden = CalendarActivity::max('orden') ?? 0;
+        return CalendarActivity::create(['name' => $name, 'orden' => $maxOrden + 1]);
     }
 
     /**
@@ -34,6 +35,16 @@ class CalendarActivityService
         }
         $activity->update(['name' => $name]);
         return $activity->fresh();
+    }
+
+    /**
+     * Reordenar actividades del catálogo dado un array de ids en el nuevo orden
+     */
+    public function reorderActivities(array $orderedIds): void
+    {
+        foreach ($orderedIds as $index => $id) {
+            CalendarActivity::where('id', $id)->update(['orden' => $index + 1]);
+        }
     }
 
     /**

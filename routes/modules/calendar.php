@@ -33,6 +33,7 @@ Route::group(['prefix' => 'calendar', 'middleware' => 'jwt.auth'], function () {
     Route::post('/activity-catalog', [CalendarActivityController::class, 'store']);
     Route::put('/activity-catalog/{id}', [CalendarActivityController::class, 'updateCatalog']);
     Route::delete('/activity-catalog/{id}', [CalendarActivityController::class, 'destroy']);
+    Route::post('/activity-catalog/reorder', [CalendarActivityController::class, 'reorderCatalog']);
 
     // 2. Estado y prioridad - Charges
     Route::get('/charges/{chargeId}/tracking', [CalendarActivityController::class, 'getChargeTracking']);
@@ -51,6 +52,10 @@ Route::group(['prefix' => 'calendar', 'middleware' => 'jwt.auth'], function () {
     // 4. Colores
     Route::get('/colors', [CalendarActivityController::class, 'getColors']);
     Route::put('/colors', [CalendarActivityController::class, 'updateColor']);
+
+    // Colores por consolidado
+    Route::get('/consolidado-colors', [CalendarActivityController::class, 'getConsolidadoColors']);
+    Route::put('/consolidado-colors', [CalendarActivityController::class, 'updateConsolidadoColor']);
 
     // 5. Contenedores
     Route::get('/contenedores', [CalendarActivityController::class, 'getContenedores']);

@@ -7,6 +7,7 @@ use App\Models\Calendar\Calendar;
 use App\Models\Calendar\CalendarActivity;
 use App\Models\Calendar\CalendarEventCharge;
 use App\Models\Calendar\CalendarUserColorConfig;
+use App\Models\Calendar\CalendarConsolidadoColorConfig;
 use App\Models\Usuario;
 use App\Models\CargaConsolidada\Contenedor;
 use App\Services\Calendar\CalendarActivityService;
@@ -42,7 +43,7 @@ class CalendarActivityController extends Controller
     {
         try {
             $activities = $this->activityService->listActivities();
-            $data = $activities->map(fn ($a) => ['id' => $a->id, 'name' => $a->name]);
+            $data = $activities->map(fn ($a) => ['id' => $a->id, 'name' => $a->name, 'orden' => $a->orden ?? 0]);
             return response()->json([
                 'success' => true,
                 'data' => $data,
@@ -603,5 +604,78 @@ class CalendarActivityController extends Controller
             'data' => $data,
             'message' => 'Historial de actividad obtenido correctamente',
         ]);
+    }
+
+    /**
+     * POST /api/calendar/activity-catalog/reorder - Reordenar catálogo. Solo Jefe.
+     */
+    public function reorderCatalog(Request $request): JsonResponse
+    {
+        if (!$this->permissionService->canManageActivities(JWTAuth::parseToken()->authenticate())) {
+            return response()->json(['success' => false, 'message' => 'Sin permiso para reordenar el catálogo'], 403);
+        }
+        $request->validate(['ids' => 'required|array', 'ids.*' => 'integer|exists:calendar_activities,id']);
+        try {
+            $this->activityService->reorderActivities($request->input('ids'));
+            return response()->json(['success' => true, 'message' => 'Catálogo reordenado correctamente']);
+        } catch (\Exception $e) {
+            Log::error('CalendarActivityController@reorderCatalog: ' . $e->getMessage());
+            return response()->json(['success' => false, 'message' => 'Error al reordenar'], 500);
+        }
+    }
+
+    /**
+     * GET /api/calendar/consolidado-colors - Colores por consolidado del usuario autenticado
+     */
+    public function getConsolidadoColors(): JsonResponse
+    {
+        try {
+            $user = JWTAuth::parseToken()->authenticate();
+            $calendarId = Calendar::where('user_id', $user->getIdUsuario())->value('id');
+            if (!$calendarId) {
+                return response()->json(['success' => true, 'data' => [], 'message' => 'Sin colores de consolidado']);
+            }
+            $configs = CalendarConsolidadoColorConfig::where('calendar_id', $calendarId)->get();
+            $data = $configs->map(fn ($c) => [
+                'id' => $c->id,
+                'calendar_id' => $c->calendar_id,
+                'contenedor_id' => $c->contenedor_id,
+                'color_code' => $c->color_code,
+            ]);
+            return response()->json(['success' => true, 'data' => $data, 'message' => 'Colores de consolidado obtenidos']);
+        } catch (\Exception $e) {
+            Log::error('CalendarActivityController@getConsolidadoColors: ' . $e->getMessage());
+            return response()->json(['success' => false, 'message' => 'Error al obtener colores de consolidado'], 500);
+        }
+    }
+
+    /**
+     * PUT /api/calendar/consolidado-colors - Guardar color de un consolidado. Solo Jefe.
+     */
+    public function updateConsolidadoColor(Request $request): JsonResponse
+    {
+        if (!$this->permissionService->canManageColors(JWTAuth::parseToken()->authenticate())) {
+            return response()->json(['success' => false, 'message' => 'Solo el Jefe de Importaciones puede configurar colores'], 403);
+        }
+        $request->validate([
+            'contenedor_id' => 'required|integer|exists:carga_consolidada_contenedor,id',
+            'color_code'    => 'required|string|max:20',
+        ]);
+        try {
+            $user = JWTAuth::parseToken()->authenticate();
+            $calendarId = Calendar::where('user_id', $user->getIdUsuario())->value('id');
+            if (!$calendarId) {
+                $cal = Calendar::firstOrCreate(['user_id' => $user->getIdUsuario()], ['user_id' => $user->getIdUsuario()]);
+                $calendarId = $cal->id;
+            }
+            CalendarConsolidadoColorConfig::updateOrCreate(
+                ['calendar_id' => $calendarId, 'contenedor_id' => $request->contenedor_id],
+                ['color_code' => $request->color_code]
+            );
+            return response()->json(['success' => true, 'message' => 'Color de consolidado actualizado correctamente']);
+        } catch (\Exception $e) {
+            Log::error('CalendarActivityController@updateConsolidadoColor: ' . $e->getMessage());
+            return response()->json(['success' => false, 'message' => 'Error al actualizar color de consolidado'], 500);
+        }
     }
 }
