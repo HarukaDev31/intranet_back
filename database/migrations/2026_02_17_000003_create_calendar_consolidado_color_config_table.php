@@ -7,7 +7,8 @@ use Illuminate\Support\Facades\Schema;
 class CreateCalendarConsolidadoColorConfigTable extends Migration
 {
     public function up()
-    {
+    { //drop if exists
+        Schema::dropIfExists('calendar_consolidado_color_config');
         Schema::create('calendar_consolidado_color_config', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('calendar_id');
@@ -20,8 +21,8 @@ class CreateCalendarConsolidadoColorConfigTable extends Migration
                 ->on('calendars')
                 ->onDelete('cascade');
 
-            $table->unique(['calendar_id', 'contenedor_id']);
-            $table->index('contenedor_id');
+            $table->unique(['calendar_id', 'contenedor_id'], 'cal_consol_color_cal_cont_unique');
+            $table->index('contenedor_id', 'cal_consol_color_cont_idx');
         });
     }
 
