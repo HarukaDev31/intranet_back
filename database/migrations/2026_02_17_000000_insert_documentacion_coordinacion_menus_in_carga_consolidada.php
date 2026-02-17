@@ -12,7 +12,7 @@ class InsertDocumentacionCoordinacionMenusInCargaConsolidada extends Migration
      */
     public function up()
     {
-        $cargaConsolidada = DB::table('menu')->where('No_Menu', 'Carga Consolidada')->latest()->first();
+        $cargaConsolidada = DB::table('menu')->where('No_Menu', 'Carga Consolidada')->orderBy('ID_Menu', 'desc')->first();
 
         if (!$cargaConsolidada) {
             return;
