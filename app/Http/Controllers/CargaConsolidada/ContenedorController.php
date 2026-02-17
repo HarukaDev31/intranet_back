@@ -119,7 +119,15 @@ class ContenedorController extends Controller
             $query = Contenedor::with('pais');
             $user = JWTAuth::parseToken()->authenticate();
             $completado = $request->completado ?? false;
-            if ($user->getNombreGrupo() == Usuario::ROL_DOCUMENTACION || $user->getNombreGrupo() == Usuario::ROL_JEFE_IMPORTACION) {
+            // Si el token es Jefe Importación y la petición envía "role", usar ese rol para filtrar (vista coordinación vs documentación)
+            $effectiveRole = $user->getNombreGrupo();
+            if ($user->getNombreGrupo() == Usuario::ROL_JEFE_IMPORTACION && $request->filled('role')) {
+                $requestedRole = trim((string) $request->role);
+                if (in_array($requestedRole, [Usuario::ROL_COORDINACION, Usuario::ROL_DOCUMENTACION], true)) {
+                    $effectiveRole = $requestedRole;
+                }
+            }
+            if ($effectiveRole == Usuario::ROL_DOCUMENTACION || $effectiveRole == Usuario::ROL_JEFE_IMPORTACION) {
                 if ($completado) {
                     $query->where('estado_documentacion', '=', Contenedor::CONTEDOR_CERRADO);
                 } else {
@@ -506,20 +514,38 @@ class ContenedorController extends Controller
      *     path="/carga-consolidada/contenedor/{idContenedor}/pasos",
      *     tags={"Contenedor"},
      *     summary="Obtener pasos del contenedor",
-     *     description="Obtiene los pasos de proceso del contenedor según el rol del usuario",
+     *     description="Obtiene los pasos de proceso del contenedor según el rol del usuario. Si el token es Jefe Importación y se envía query 'role' (Coordinación o Documentacion), se usa ese rol para devolver los pasos correspondientes.",
      *     operationId="getContenedorPasos",
      *     security={{"bearerAuth":{}}},
      *     @OA\Parameter(name="idContenedor", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Parameter(name="role", in="query", required=false, description="Rol de vista (Coordinación, Documentacion). Usado cuando el usuario es Jefe Importación.", @OA\Schema(type="string", enum={"Coordinación", "Documentacion"})),
      *     @OA\Response(response=200, description="Pasos obtenidos exitosamente")
      * )
      */
-    public function getContenedorPasos($idContenedor)
+    public function getContenedorPasos(Request $request, $idContenedor)
     {
         try {
             $user = JWTAuth::user();
             $role = $user->getNombreGrupo();
+            // Si el token es Jefe Importación y la petición envía "role" (query), usar ese rol para decidir qué pasos devolver
+            // El role puede venir separado por coma (ej. "Coordinación,Documentacion"), se toma el primer rol válido
+            if ($role == Usuario::ROL_JEFE_IMPORTACION && $request->filled('role')) {
+                $rolesPermitidos = [
+                    Usuario::ROL_COTIZADOR,
+                    Usuario::ROL_COORDINACION,
+                    Usuario::ROL_DOCUMENTACION,
+                    Usuario::ROL_ADMINISTRACION,
+                ];
+                $rolesParts = array_map('trim', explode(',', (string) $request->input('role')));
+                foreach ($rolesParts as $part) {
+                    if (in_array($part, $rolesPermitidos, true)) {
+                        $role = $part;
+                        break;
+                    }
+                }
+            }
             $query = ContenedorPasos::where('id_pedido', $idContenedor)->orderBy('id_order', 'asc');
-
+            Log::info('role', [$role]);
             switch ($role) {
                 case Usuario::ROL_COTIZADOR:
                     // Aseguramos que sólo consultamos pasos del cotizador
@@ -540,6 +566,9 @@ class ContenedorController extends Controller
                     //if not exists tipe Jefe Importacion, get documentacion steps
                         $query->where('tipo', 'DOCUMENTACION');
                     
+                    break;
+                case Usuario::ROL_COORDINACION:
+                    $query->where('tipo', 'COTIZADOR');
                     break;
                 default:
                     $query->where('tipo', 'COTIZADOR');
