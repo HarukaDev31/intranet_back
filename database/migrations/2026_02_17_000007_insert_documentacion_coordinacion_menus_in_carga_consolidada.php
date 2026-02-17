@@ -56,7 +56,7 @@ class InsertDocumentacionCoordinacionMenusInCargaConsolidada extends Migration
             'Txt_Url_Video' => NULL,
             'No_Menu_China' => NULL,
             'show_father' => 1,
-            'url_intranet_v2' => 'carga-consolidada/documentacion/abiertos',
+            'url_intranet_v2' => 'cargaconsolidada/documentacion/abiertos',
         ]);
 
         // Documentación > Completados
@@ -74,7 +74,7 @@ class InsertDocumentacionCoordinacionMenusInCargaConsolidada extends Migration
             'Txt_Url_Video' => NULL,
             'No_Menu_China' => NULL,
             'show_father' => 1,
-            'url_intranet_v2' => 'carga-consolidada/documentacion/completados',
+            'url_intranet_v2' => 'cargaconsolidada/documentacion/completados',
         ]);
 
         // Coordinación (hijo de Carga Consolidada)
@@ -110,7 +110,7 @@ class InsertDocumentacionCoordinacionMenusInCargaConsolidada extends Migration
             'Txt_Url_Video' => NULL,
             'No_Menu_China' => NULL,
             'show_father' => 1,
-            'url_intranet_v2' => 'carga-consolidada/coordinacion/abiertos',
+            'url_intranet_v2' => 'cargaconsolidada/coordinacion/abiertos',
         ]);
 
         // Coordinación > Completados
@@ -128,7 +128,7 @@ class InsertDocumentacionCoordinacionMenusInCargaConsolidada extends Migration
             'Txt_Url_Video' => NULL,
             'No_Menu_China' => NULL,
             'show_father' => 1,
-            'url_intranet_v2' => 'carga-consolidada/coordinacion/completados',
+            'url_intranet_v2' => 'cargaconsolidada/coordinacion/completados',
         ]);
     }
 
