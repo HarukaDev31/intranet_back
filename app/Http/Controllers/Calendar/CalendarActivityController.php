@@ -650,7 +650,8 @@ class CalendarActivityController extends Controller
     }
 
     /**
-     * PUT /api/calendar/consolidado-colors - Guardar color de un consolidado. Solo Jefe.
+     * PUT /api/calendar/consolidado-colors - Guardar colores de consolidados en batch. Solo Jefe.
+     * Body: { items: [{ contenedor_id, color_code }, ...] }
      */
     public function updateConsolidadoColor(Request $request): JsonResponse
     {
@@ -658,8 +659,9 @@ class CalendarActivityController extends Controller
             return response()->json(['success' => false, 'message' => 'Solo el Jefe de Importaciones puede configurar colores'], 403);
         }
         $request->validate([
-            'contenedor_id' => 'required|integer|exists:carga_consolidada_contenedor,id',
-            'color_code'    => 'required|string|max:20',
+            'items'                  => 'required|array|min:1',
+            'items.*.contenedor_id'  => 'required|integer|exists:carga_consolidada_contenedor,id',
+            'items.*.color_code'     => 'required|string|max:20',
         ]);
         try {
             $user = JWTAuth::parseToken()->authenticate();
@@ -668,14 +670,16 @@ class CalendarActivityController extends Controller
                 $cal = Calendar::firstOrCreate(['user_id' => $user->getIdUsuario()], ['user_id' => $user->getIdUsuario()]);
                 $calendarId = $cal->id;
             }
-            CalendarConsolidadoColorConfig::updateOrCreate(
-                ['calendar_id' => $calendarId, 'contenedor_id' => $request->contenedor_id],
-                ['color_code' => $request->color_code]
-            );
-            return response()->json(['success' => true, 'message' => 'Color de consolidado actualizado correctamente']);
+            foreach ($request->input('items') as $item) {
+                CalendarConsolidadoColorConfig::updateOrCreate(
+                    ['calendar_id' => $calendarId, 'contenedor_id' => $item['contenedor_id']],
+                    ['color_code' => $item['color_code']]
+                );
+            }
+            return response()->json(['success' => true, 'message' => 'Colores de consolidado actualizados correctamente']);
         } catch (\Exception $e) {
             Log::error('CalendarActivityController@updateConsolidadoColor: ' . $e->getMessage());
-            return response()->json(['success' => false, 'message' => 'Error al actualizar color de consolidado'], 500);
+            return response()->json(['success' => false, 'message' => 'Error al actualizar colores de consolidado'], 500);
         }
     }
 }
