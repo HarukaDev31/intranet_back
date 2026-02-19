@@ -118,7 +118,11 @@ class ContenedorController extends Controller
 
             $query = Contenedor::with('pais');
             $user = JWTAuth::parseToken()->authenticate();
-            $completado = $request->completado ?? false;
+            // Aceptar completado como booleano; si viene por query puede ser string "true"/"false"
+            $completado = filter_var($request->completado, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+            if ($completado === null) {
+                $completado = false;
+            }
             // Si el token es Jefe Importación y la petición envía "role", usar ese rol para filtrar (vista coordinación vs documentación)
             $effectiveRole = $user->getNombreGrupo();
             if ($user->getNombreGrupo() == Usuario::ROL_JEFE_IMPORTACION && $request->filled('role')) {

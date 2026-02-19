@@ -4,6 +4,7 @@ namespace App\Services\BaseDatos;
 
 use App\Models\CargaConsolidada\ConsolidadoCotizacionAduanaTramite;
 use App\Models\CargaConsolidada\TramiteAduanaCategoria;
+use App\Models\CargaConsolidada\TramiteAduanaPago;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
@@ -31,7 +32,8 @@ class TramiteAduanaService
             $query->where(function ($q) use ($term) {
                 $q->whereHas('entidad', function ($q) use ($term) { $q->where('nombre', 'like', "%{$term}%"); })
                     ->orWhereHas('tiposPermiso', function ($q) use ($term) { $q->where('nombre', 'like', "%{$term}%"); })
-                    ->orWhereHas('cliente', function ($q) use ($term) { $q->where('nombre', 'like', "%{$term}%")->orWhere('documento', 'like', "%{$term}%"); });
+                    ->orWhereHas('cliente', function ($q) use ($term) { $q->where('nombre', 'like', "%{$term}%")->orWhere('documento', 'like', "%{$term}%"); })
+                    ->orWhereHas('cotizacion', function ($q) use ($term) { $q->where('nombre', 'like', "%{$term}%")->orWhere('documento', 'like', "%{$term}%"); });
             });
         }
         if ($request->filled('id_consolidado')) {
@@ -87,47 +89,61 @@ class TramiteAduanaService
     }
 
     /**
-     * Crear trámite
+     * Crear trámite (acepta tipos_permiso como array; los datos por tipo van en el pivot)
      */
     public function crear(Request $request): array
     {
         $validated = $request->validate([
-            'id_consolidado'                      => 'required|integer',
-            'id_entidad'                          => 'required|integer',
-            'tipos_permiso'                       => 'required|array|min:1',
-            'tipos_permiso.*.id_tipo_permiso'     => 'required|integer',
-            'tipos_permiso.*.derecho_entidad'     => 'required|numeric|min:0',
-            'tipos_permiso.*.estado'              => 'nullable|in:PENDIENTE,SD,PAGADO,EN_TRAMITE,RECHAZADO,COMPLETADO',
-            'precio'                              => 'required|numeric|min:0',
-            'id_cotizacion'                       => 'nullable|integer',
-            'id_cliente'                          => 'nullable|integer',
-            'f_inicio'                            => 'nullable|date',
-            'f_termino'                           => 'nullable|date',
-            'f_caducidad'                         => 'nullable|date',
-            'dias'                                => 'nullable|integer|min:0',
-            'estado'                              => 'nullable|in:PENDIENTE,SD,PAGADO,EN_TRAMITE,RECHAZADO,COMPLETADO',
-            'tramitador'                          => 'nullable|numeric|min:0',
+            'id_consolidado' => 'required|integer',
+            'id_entidad' => 'required|integer',
+            'precio' => 'required|numeric|min:0',
+            'tipos_permiso' => 'required|array|min:1',
+            'tipos_permiso.*.id_tipo_permiso' => 'required|integer',
+            'tipos_permiso.*.derecho_entidad' => 'required|numeric|min:0',
+            'tipos_permiso.*.f_inicio' => 'nullable|date',
+            'tipos_permiso.*.f_termino' => 'nullable|date',
+            'tipos_permiso.*.f_caducidad' => 'nullable|date',
+            'tipos_permiso.*.dias' => 'nullable|integer|min:0',
+            'tipos_permiso.*.estado' => 'nullable|in:PENDIENTE,SD,PAGADO,EN_TRAMITE,RECHAZADO,COMPLETADO',
+            'id_cotizacion' => 'nullable|integer',
+            'id_cliente' => 'nullable|integer',
+            'tramitador' => 'nullable|numeric|min:0',
+            'estado' => 'nullable|in:PENDIENTE,SD,PAGADO,EN_TRAMITE,RECHAZADO,COMPLETADO',
         ]);
 
-        $tramiteData = collect($validated)->except('tipos_permiso')->all();
-        $tramiteData['estado'] = $tramiteData['estado'] ?? 'PENDIENTE';
+        $tramiteData = [
+            'id_consolidado' => $validated['id_consolidado'],
+            'id_entidad' => $validated['id_entidad'],
+            'precio' => $validated['precio'],
+            'id_cotizacion' => $validated['id_cotizacion'] ?? null,
+            'id_cliente' => null,
+            'estado' => $validated['estado'] ?? 'PENDIENTE',
+            'tramitador' => $validated['tramitador'] ?? null,
+        ];
+        if (!empty($validated['id_cotizacion'])) {
+            $tramiteData['id_cliente'] = null;
+        }
 
         try {
             $tramite = ConsolidadoCotizacionAduanaTramite::create($tramiteData);
 
-            // Sincronizar tipos de permiso con sus derechos y estados individuales
-            $pivotData = collect($validated['tipos_permiso'])->mapWithKeys(function ($tp) {
-                return [$tp['id_tipo_permiso'] => [
+            $pivotData = [];
+            foreach ($validated['tipos_permiso'] as $tp) {
+                $pivotData[$tp['id_tipo_permiso']] = [
                     'derecho_entidad' => $tp['derecho_entidad'],
                     'estado' => $tp['estado'] ?? 'PENDIENTE',
-                ]];
-            })->all();
-            $tramite->tiposPermiso()->sync($pivotData);
+                    'f_inicio' => $tp['f_inicio'] ?? null,
+                    'f_termino' => $tp['f_termino'] ?? null,
+                    'f_caducidad' => $tp['f_caducidad'] ?? null,
+                    'dias' => $tp['dias'] ?? null,
+                ];
+            }
+            $tramite->tiposPermiso()->attach($pivotData);
 
-            $tipoIds = collect($validated['tipos_permiso'])->pluck('id_tipo_permiso')->all();
+            $tipoIds = array_column($validated['tipos_permiso'], 'id_tipo_permiso');
             TramiteAduanaCategoria::crearCategoriasParaTramiteConTipos($tramite->id, $tipoIds);
-            $tramite->load(['cotizacion', 'consolidado', 'entidad', 'tiposPermiso', 'cliente']);
 
+            $tramite->load(['cotizacion', 'consolidado', 'entidad', 'tiposPermiso', 'cliente']);
             return [
                 'success' => true,
                 'data' => $this->mapearTramite($tramite),
@@ -139,7 +155,7 @@ class TramiteAduanaService
     }
 
     /**
-     * Actualizar trámite
+     * Actualizar trámite (acepta tipos_permiso como array; sincroniza el pivot)
      */
     public function actualizar(int $id, Request $request): array
     {
@@ -149,38 +165,48 @@ class TramiteAduanaService
         }
 
         $validated = $request->validate([
-            'id_consolidado'                      => 'sometimes|integer',
-            'id_entidad'                          => 'sometimes|integer',
-            'tipos_permiso'                       => 'sometimes|array|min:1',
-            'tipos_permiso.*.id_tipo_permiso'     => 'required_with:tipos_permiso|integer',
-            'tipos_permiso.*.derecho_entidad'     => 'required_with:tipos_permiso|numeric|min:0',
-            'tipos_permiso.*.estado'              => 'nullable|in:PENDIENTE,SD,PAGADO,EN_TRAMITE,RECHAZADO,COMPLETADO',
-            'precio'                              => 'sometimes|numeric|min:0',
-            'id_cotizacion'                       => 'nullable|integer',
-            'id_cliente'                          => 'nullable|integer',
-            'f_inicio'                            => 'nullable|date',
-            'f_termino'                           => 'nullable|date',
-            'f_caducidad'                         => 'nullable|date',
-            'dias'                                => 'nullable|integer|min:0',
-            'estado'                              => 'nullable|in:PENDIENTE,SD,PAGADO,EN_TRAMITE,RECHAZADO,COMPLETADO',
-            'tramitador'                          => 'nullable|numeric|min:0',
+            'id_consolidado' => 'sometimes|integer',
+            'id_entidad' => 'sometimes|integer',
+            'precio' => 'sometimes|numeric|min:0',
+            'tipos_permiso' => 'sometimes|array|min:1',
+            'tipos_permiso.*.id_tipo_permiso' => 'required_with:tipos_permiso|integer',
+            'tipos_permiso.*.derecho_entidad' => 'required_with:tipos_permiso|numeric|min:0',
+            'tipos_permiso.*.f_inicio' => 'nullable|date',
+            'tipos_permiso.*.f_termino' => 'nullable|date',
+            'tipos_permiso.*.f_caducidad' => 'nullable|date',
+            'tipos_permiso.*.dias' => 'nullable|integer|min:0',
+            'tipos_permiso.*.estado' => 'nullable|in:PENDIENTE,SD,PAGADO,EN_TRAMITE,RECHAZADO,COMPLETADO',
+            'id_cotizacion' => 'nullable|integer',
+            'id_cliente' => 'nullable|integer',
+            'tramitador' => 'nullable|numeric|min:0',
+            'estado' => 'nullable|in:PENDIENTE,SD,PAGADO,EN_TRAMITE,RECHAZADO,COMPLETADO',
         ]);
 
+        $tramiteData = collect($validated)->except('tipos_permiso')->filter(function ($v, $k) {
+            return in_array($k, ['id_consolidado', 'id_entidad', 'precio', 'id_cotizacion', 'id_cliente', 'estado', 'tramitador'], true);
+        })->all();
+        if (array_key_exists('id_cotizacion', $validated) && !empty($validated['id_cotizacion'])) {
+            $tramiteData['id_cliente'] = null;
+        }
+
         try {
-            $tramiteData = collect($validated)->except('tipos_permiso')->all();
             $tramite->update($tramiteData);
 
-            // Sincronizar tipos de permiso solo si se envían en el request
-            if ($request->has('tipos_permiso') && isset($validated['tipos_permiso'])) {
-                $pivotData = collect($validated['tipos_permiso'])->mapWithKeys(function ($tp) {
-                    $pivotRow = ['derecho_entidad' => $tp['derecho_entidad']];
-                    if (isset($tp['estado'])) {
-                        $pivotRow['estado'] = $tp['estado'];
-                    }
-                    return [$tp['id_tipo_permiso'] => $pivotRow];
-                })->all();
+            if (isset($validated['tipos_permiso'])) {
+                $pivotData = [];
+                foreach ($validated['tipos_permiso'] as $tp) {
+                    $pivotData[$tp['id_tipo_permiso']] = [
+                        'derecho_entidad' => $tp['derecho_entidad'],
+                        'estado' => $tp['estado'] ?? 'PENDIENTE',
+                        'f_inicio' => $tp['f_inicio'] ?? null,
+                        'f_termino' => $tp['f_termino'] ?? null,
+                        'f_caducidad' => $tp['f_caducidad'] ?? null,
+                        'dias' => $tp['dias'] ?? null,
+                    ];
+                }
                 $tramite->tiposPermiso()->sync($pivotData);
-                $tipoIds = collect($validated['tipos_permiso'])->pluck('id_tipo_permiso')->all();
+
+                $tipoIds = array_column($validated['tipos_permiso'], 'id_tipo_permiso');
                 TramiteAduanaCategoria::asegurarCategoriasParaTramite($tramite->id, $tipoIds);
             }
 
@@ -205,82 +231,12 @@ class TramiteAduanaService
             return ['success' => false, 'error' => 'Trámite no encontrado'];
         }
         try {
-            $tramite->tiposPermiso()->detach();
             $tramite->delete();
             return ['success' => true];
         } catch (\Exception $e) {
             Log::error('Error al eliminar trámite aduana: ' . $e->getMessage());
             return ['success' => false, 'error' => $e->getMessage()];
         }
-    }
-
-    /**
-     * Actualizar el estado de un tipo de permiso en el pivot (sin tocar el resto del trámite)
-     */
-    public function actualizarEstadoTipoPermiso(int $tramiteId, int $tipoPermisoId, string $estado): array
-    {
-        $tramite = ConsolidadoCotizacionAduanaTramite::find($tramiteId);
-        if (!$tramite) {
-            return ['success' => false, 'error' => 'Trámite no encontrado'];
-        }
-
-        $estados = ConsolidadoCotizacionAduanaTramite::ESTADOS;
-        if (!in_array($estado, $estados)) {
-            return ['success' => false, 'error' => 'Estado no válido'];
-        }
-
-        $exists = $tramite->tiposPermiso()->wherePivot('id_tipo_permiso', $tipoPermisoId)->exists();
-        if (!$exists) {
-            return ['success' => false, 'error' => 'Tipo de permiso no asociado a este trámite'];
-        }
-
-        $tramite->tiposPermiso()->updateExistingPivot($tipoPermisoId, ['estado' => $estado]);
-
-        return ['success' => true, 'data' => ['estado' => $estado]];
-    }
-
-    /**
-     * Actualiza f_inicio y/o f_termino del tipo_permiso (pivot). Calcula dias = diferencia en días.
-     * @param string|null $f_inicio Fecha Y-m-d
-     * @param string|null $f_termino Fecha Y-m-d
-     */
-    public function actualizarFechasTipoPermiso(int $tramiteId, int $tipoPermisoId, ?string $f_inicio = null, ?string $f_termino = null): array
-    {
-        $tramite = ConsolidadoCotizacionAduanaTramite::with('tiposPermiso')->find($tramiteId);
-        if (!$tramite) {
-            return ['success' => false, 'error' => 'Trámite no encontrado'];
-        }
-
-        $pivot = $tramite->tiposPermiso->firstWhere('id', $tipoPermisoId);
-        if (!$pivot) {
-            return ['success' => false, 'error' => 'Tipo de permiso no asociado a este trámite'];
-        }
-
-        $updates = [];
-        if ($f_inicio !== null) {
-            $updates['f_inicio'] = $f_inicio;
-        }
-        if ($f_termino !== null) {
-            $updates['f_termino'] = $f_termino;
-        }
-
-        if (!empty($updates)) {
-            $tramite->tiposPermiso()->updateExistingPivot($tipoPermisoId, $updates);
-        }
-
-        // Recalcular dias si tenemos ambas fechas (leer pivot actualizado)
-        $pivotRow = \Illuminate\Support\Facades\DB::table('tramite_aduana_tramite_tipo_permiso')
-            ->where('id_tramite', $tramiteId)
-            ->where('id_tipo_permiso', $tipoPermisoId)
-            ->first();
-        if ($pivotRow && $pivotRow->f_inicio && $pivotRow->f_termino) {
-            $d1 = \Carbon\Carbon::parse($pivotRow->f_inicio);
-            $d2 = \Carbon\Carbon::parse($pivotRow->f_termino);
-            $dias = (int) abs($d1->diffInDays($d2, false));
-            $tramite->tiposPermiso()->updateExistingPivot($tipoPermisoId, ['dias' => $dias]);
-        }
-
-        return ['success' => true];
     }
 
     private function mapearTramite(ConsolidadoCotizacionAduanaTramite $t): array
@@ -306,6 +262,28 @@ class TramiteAduanaService
             ];
         }
 
+        $tiposPermiso = $t->tiposPermiso->map(function ($tp) {
+            $pivot = $tp->pivot;
+            $formatDate = function ($value) {
+                if ($value === null || $value === '') return null;
+                try {
+                    return \Carbon\Carbon::parse($value)->format('Y-m-d');
+                } catch (\Throwable $e) {
+                    return null;
+                }
+            };
+            return [
+                'id' => $tp->id,
+                'nombre_permiso' => $tp->nombre ?? null,
+                'derecho_entidad' => (float) ($pivot->derecho_entidad ?? 0),
+                'estado' => $pivot->estado ?? 'PENDIENTE',
+                'f_inicio' => $formatDate($pivot->f_inicio ?? null),
+                'f_termino' => $formatDate($pivot->f_termino ?? null),
+                'f_caducidad' => $formatDate($pivot->f_caducidad ?? null),
+                'dias' => $pivot->dias,
+            ];
+        })->all();
+
         return [
             'id' => $t->id,
             'id_cotizacion' => $t->id_cotizacion,
@@ -313,12 +291,12 @@ class TramiteAduanaService
             'id_cliente' => $t->id_cliente,
             'id_entidad' => $t->id_entidad,
             'precio' => (float) $t->precio,
+            'tramitador' => $t->tramitador !== null ? (float) $t->tramitador : null,
             'f_inicio' => $t->f_inicio ? $t->f_inicio->format('Y-m-d') : null,
             'f_termino' => $t->f_termino ? $t->f_termino->format('Y-m-d') : null,
             'f_caducidad' => $t->f_caducidad ? $t->f_caducidad->format('Y-m-d') : null,
             'dias' => $t->dias,
             'estado' => $t->estado,
-            'tramitador' => $t->tramitador !== null ? (float) $t->tramitador : null,
             'created_at' => $t->created_at ? $t->created_at->toIso8601String() : null,
             'updated_at' => $t->updated_at ? $t->updated_at->toIso8601String() : null,
             'cotizacion' => $cotizacion ? ['id' => $cotizacion->id, 'nombre' => $cotizacion->nombre ?? null] : null,
@@ -328,20 +306,9 @@ class TramiteAduanaService
                 'nombre' => $consolidado->carga ?? null,
             ] : null,
             'entidad' => $t->entidad ? ['id' => $t->entidad->id, 'nombre' => $t->entidad->nombre] : null,
-            'tipos_permiso' => $t->tiposPermiso->map(function ($tp) {
-                $p = $tp->pivot;
-                return [
-                    'id' => $tp->id,
-                    'nombre_permiso' => $tp->nombre,
-                    'derecho_entidad' => (float) $p->derecho_entidad,
-                    'estado' => $p->estado ?? 'PENDIENTE',
-                    'f_inicio' => $p->f_inicio ? (\Carbon\Carbon::parse($p->f_inicio)->format('Y-m-d')) : null,
-                    'f_termino' => $p->f_termino ? (\Carbon\Carbon::parse($p->f_termino)->format('Y-m-d')) : null,
-                    'f_caducidad' => $p->f_caducidad ? (\Carbon\Carbon::parse($p->f_caducidad)->format('Y-m-d')) : null,
-                    'dias' => $p->dias,
-                ];
-            })->all(),
+            'tipos_permiso' => $tiposPermiso,
             'cliente' => $cliente,
+            'total_pago_servicio' => (float) TramiteAduanaPago::where('id_tramite', $t->id)->sum('monto'),
         ];
     }
 

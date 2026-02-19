@@ -100,8 +100,12 @@ Route::group(['prefix' => 'base-datos', 'middleware' => 'jwt.auth'], function ()
     Route::group(['prefix' => 'tramite-aduana-catalogos'], function () {
         Route::get('entidades', [TramiteAduanaCatalogosController::class, 'getEntidades']);
         Route::post('entidades', [TramiteAduanaCatalogosController::class, 'storeEntidad']);
+        Route::put('entidades/{id}', [TramiteAduanaCatalogosController::class, 'updateEntidad']);
+        Route::delete('entidades/{id}', [TramiteAduanaCatalogosController::class, 'destroyEntidad']);
         Route::get('tipos-permiso', [TramiteAduanaCatalogosController::class, 'getTiposPermiso']);
         Route::post('tipos-permiso', [TramiteAduanaCatalogosController::class, 'storeTipoPermiso']);
+        Route::put('tipos-permiso/{id}', [TramiteAduanaCatalogosController::class, 'updateTipoPermiso']);
+        Route::delete('tipos-permiso/{id}', [TramiteAduanaCatalogosController::class, 'destroyTipoPermiso']);
     });
 
     // Trámites consolidado cotizacion aduana (permisos)
@@ -121,7 +125,6 @@ Route::group(['prefix' => 'base-datos', 'middleware' => 'jwt.auth'], function ()
         Route::post('tramites/{idTramite}/documentos/batch', [TramiteAduanaDocumentosController::class, 'storeBatch']);
         Route::post('tramites/{idTramite}/guardar-todo', [TramiteAduanaDocumentosController::class, 'guardarTodo']);
         Route::post('tramites/{idTramite}/tipos-permiso/{idTipoPermiso}/guardar', [TramiteAduanaDocumentosController::class, 'guardarTipoPermiso']);
-        Route::post('tramites/{idTramite}/tipos-permiso/{idTipoPermiso}/pago', [TramiteAduanaDocumentosController::class, 'asignarPago']);
         Route::delete('tramites/documentos/{id}', [TramiteAduanaDocumentosController::class, 'destroy']);
         Route::get('tramites/documentos/{id}/download', [TramiteAduanaDocumentosController::class, 'download']);
         // Categorías (carpetas) del trámite

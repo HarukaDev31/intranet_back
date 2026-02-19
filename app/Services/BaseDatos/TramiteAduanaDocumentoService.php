@@ -71,6 +71,29 @@ class TramiteAduanaDocumentoService
 
             $pagoServicio = $documentos->filter(fn($d) => is_null($d->id_tipo_permiso) && ($d->seccion ?? '') === 'pago_servicio')->values()->map($mapDoc)->all();
 
+            $pagosRegistros = TramiteAduanaPago::where('id_tramite', $idTramite)->with('documento')->orderBy('id')->get();
+            $docIdsConDatos = $pagosRegistros->pluck('id_documento')->all();
+            $pagosConDatos = $pagosRegistros->map(function ($pago) use ($mapDoc) {
+                $doc = $pago->documento;
+                if (!$doc) return null;
+                return [
+                    'document'   => $mapDoc($doc),
+                    'monto'      => $pago->monto !== null ? (string) $pago->monto : null,
+                    'fecha_pago' => $pago->fecha_pago ? $pago->fecha_pago->format('Y-m-d') : null,
+                    'banco'      => $pago->observacion ?: null,
+                ];
+            })->filter()->values()->all();
+            foreach ($pagoServicio as $doc) {
+                if (!in_array($doc['id'], $docIdsConDatos, true)) {
+                    $pagosConDatos[] = [
+                        'document'   => $doc,
+                        'monto'      => null,
+                        'fecha_pago' => null,
+                        'banco'      => null,
+                    ];
+                }
+            }
+
             $tiposPermisoSections = $tramite->tiposPermiso->map(function ($tp) use ($documentos, $mapDoc, $seguimientoPorTipo) {
                 $docsPermiso = $documentos->filter(fn($d) => (int)$d->id_tipo_permiso === (int)$tp->id);
                 $fCaducidad = $tp->pivot->f_caducidad ?? null;
@@ -93,19 +116,35 @@ class TramiteAduanaDocumentoService
                 'id_tipo_permiso' => $c->id_tipo_permiso,
             ])->all();
 
+            $clienteNombre = null;
+            if ($tramite->cliente) {
+                $clienteNombre = $tramite->cliente->nombre ?? $tramite->cliente->documento ?? null;
+            } elseif ($tramite->cotizacion) {
+                $clienteNombre = $tramite->cotizacion->nombre ?? $tramite->cotizacion->documento ?? null;
+            }
+            $carga = $tramite->consolidado ? ($tramite->consolidado->carga ?? null) : null;
+            if ($carga !== null && $tramite->consolidado && $tramite->consolidado->f_inicio) {
+                $anio = \Carbon\Carbon::parse($tramite->consolidado->f_inicio)->format('Y');
+                $carga = '#' . $carga . ' - ' . $anio;
+            } elseif ($carga !== null) {
+                $carga = '#' . $carga;
+            }
+
             return [
                 'success'              => true,
                 'tramite'              => [
-                    'id'          => $tramite->id,
-                    'estado'      => $tramite->estado,
-                    'entidad'     => $tramite->entidad ? $tramite->entidad->nombre : null,
+                    'id'            => $tramite->id,
+                    'estado'        => $tramite->estado,
+                    'entidad'       => $tramite->entidad ? $tramite->entidad->nombre : null,
+                    'cliente'       => $clienteNombre,
                     'tipos_permiso' => $tramite->tiposPermiso->pluck('nombre')->all(),
-                    'consolidado' => $tramite->consolidado ? ($tramite->consolidado->carga ?? null) : null,
-                    'f_caducidad' => $tramite->f_caducidad ? $tramite->f_caducidad->format('Y-m-d') : null,
+                    'consolidado'   => $carga,
+                    'f_caducidad'   => $tramite->f_caducidad ? $tramite->f_caducidad->format('Y-m-d') : null,
                 ],
                 'categorias'                => $categoriasPayload,
                 'tipos_permiso_sections'   => $tiposPermisoSections,
                 'pago_servicio'             => $pagoServicio,
+                'pagos_con_datos'           => $pagosConDatos,
                 'seguimiento_compartido'    => $seguimientoCompartido,
                 'seguimiento_por_tipo'      => $seguimientoPorTipo,
                 'data'                      => $documentos->map($mapDoc)->all(),
@@ -457,19 +496,48 @@ class TramiteAduanaDocumentoService
             }
         }
 
-        // 4) Pago (voucher): si viene pago_voucher + pago_monto, crear documento pago_servicio y registro en tramite_aduana_pagos
-        $voucher = $request->file('pago_voucher');
-        if ($voucher && $voucher->isValid() && $request->filled('pago_monto')) {
-            $categoriaPago = TramiteAduanaCategoria::firstOrCreate(
-                [
-                    'id_tramite'      => $idTramite,
-                    'nombre'          => TramiteAduanaCategoria::NOMBRE_PAGO_SERVICIO,
-                    'seccion'         => TramiteAduanaCategoria::SECCION_PAGO_SERVICIO,
-                    'id_tipo_permiso' => null,
-                ],
-                ['id_tramite' => $idTramite, 'nombre' => TramiteAduanaCategoria::NOMBRE_PAGO_SERVICIO, 'seccion' => TramiteAduanaCategoria::SECCION_PAGO_SERVICIO, 'id_tipo_permiso' => null]
-            );
-            $filename = time() . '_' . uniqid() . '_pago.' . $voucher->getClientOriginalExtension();
+        // 4) Pagos (vouchers): acepta array pago_voucher[], pago_monto[], etc.; crea un documento y un registro por cada uno
+        $vouchers = $request->file('pago_voucher');
+        if (!is_array($vouchers)) {
+            $vouchers = $request->file('pago_voucher') ? [$request->file('pago_voucher')] : [];
+        }
+        $montos = $request->input('pago_monto', []);
+        $bancos = $request->input('pago_banco', []);
+        $fechas = $request->input('pago_fecha_cierre', []);
+        if (!is_array($montos)) {
+            $montos = $montos !== null && $montos !== '' ? [$montos] : [];
+        }
+        if (!is_array($bancos)) {
+            $bancos = $bancos !== null && $bancos !== '' ? [$bancos] : [];
+        }
+        if (!is_array($fechas)) {
+            $fechas = $fechas !== null && $fechas !== '' ? [$fechas] : [];
+        }
+        $primerTipoPermiso = $tramite->tiposPermiso->first();
+        $idTipoPermisoPago = $primerTipoPermiso ? (int) $primerTipoPermiso->id : null;
+        $categoriaPago = null;
+        $n = count($vouchers);
+        for ($i = 0; $i < $n; $i++) {
+            $voucher = $vouchers[$i] ?? null;
+            if (!$voucher || !$voucher->isValid()) {
+                continue;
+            }
+            $montoVal = isset($montos[$i]) ? trim((string) $montos[$i]) : '';
+            if ($montoVal === '') {
+                continue;
+            }
+            if ($categoriaPago === null) {
+                $categoriaPago = TramiteAduanaCategoria::firstOrCreate(
+                    [
+                        'id_tramite'      => $idTramite,
+                        'nombre'          => TramiteAduanaCategoria::NOMBRE_PAGO_SERVICIO,
+                        'seccion'         => TramiteAduanaCategoria::SECCION_PAGO_SERVICIO,
+                        'id_tipo_permiso' => null,
+                    ],
+                    ['id_tramite' => $idTramite, 'nombre' => TramiteAduanaCategoria::NOMBRE_PAGO_SERVICIO, 'seccion' => TramiteAduanaCategoria::SECCION_PAGO_SERVICIO, 'id_tipo_permiso' => null]
+                );
+            }
+            $filename = time() . '_' . uniqid() . '_pago_' . $i . '.' . $voucher->getClientOriginalExtension();
             $path = $voucher->storeAs('tramites/documentos', $filename, 'public');
             $documentoPago = TramiteAduanaDocumento::create([
                 'id_tramite'       => $idTramite,
@@ -497,23 +565,56 @@ class TramiteAduanaDocumentoService
                 'url'              => $documentoPago->url,
                 'created_at'       => $documentoPago->created_at ? $documentoPago->created_at->toIso8601String() : null,
             ];
-            $fechaPago = $request->input('pago_fecha_cierre');
-            $observacion = $request->input('pago_banco', '');
-            $primerTipoPermiso = $tramite->tiposPermiso->first();
-            $idTipoPermisoPago = $primerTipoPermiso ? (int) $primerTipoPermiso->id : null;
+            $fechaPago = isset($fechas[$i]) && trim((string) $fechas[$i]) !== '' ? $fechas[$i] : now()->format('Y-m-d');
+            $observacion = isset($bancos[$i]) ? trim((string) $bancos[$i]) : '';
             if ($idTipoPermisoPago !== null) {
-                TramiteAduanaPago::updateOrCreate(
-                    [
-                        'id_tramite'      => $idTramite,
-                        'id_tipo_permiso' => $idTipoPermisoPago,
-                    ],
-                    [
-                        'id_documento' => $documentoPago->id,
-                        'monto'         => $request->input('pago_monto'),
-                        'fecha_pago'    => $fechaPago ?: now()->format('Y-m-d'),
-                        'observacion'   => $observacion,
-                    ]
-                );
+                TramiteAduanaPago::create([
+                    'id_tramite'      => $idTramite,
+                    'id_tipo_permiso' => $idTipoPermisoPago,
+                    'id_documento'   => $documentoPago->id,
+                    'monto'          => $montoVal,
+                    'fecha_pago'     => $fechaPago,
+                    'observacion'    => $observacion,
+                ]);
+            }
+        }
+
+        // 5) Actualizar datos de pagos ya subidos (monto, banco, fecha)
+        $pagoActualizacionesJson = $request->input('pago_actualizaciones');
+        if ($pagoActualizacionesJson !== null && $pagoActualizacionesJson !== '') {
+            $pagoActualizaciones = json_decode($pagoActualizacionesJson, true);
+            if (is_array($pagoActualizaciones)) {
+                $primerTipo = $tramite->tiposPermiso->first();
+                $idTipoPermisoPago = $primerTipo ? (int) $primerTipo->id : null;
+                foreach ($pagoActualizaciones as $up) {
+                    $idDoc = isset($up['id_documento']) ? (int) $up['id_documento'] : 0;
+                    if ($idDoc <= 0) {
+                        continue;
+                    }
+                    $monto = isset($up['monto']) ? (trim((string) $up['monto']) ?: null) : null;
+                    $banco = isset($up['banco']) ? (trim((string) $up['banco']) ?: null) : null;
+                    $fechaPago = isset($up['fecha_cierre']) && trim((string) $up['fecha_cierre']) !== '' ? $up['fecha_cierre'] : null;
+                    $pago = TramiteAduanaPago::where('id_tramite', $idTramite)->where('id_documento', $idDoc)->first();
+                    if ($pago) {
+                        $pago->monto = $monto;
+                        $pago->observacion = $banco;
+                        $pago->fecha_pago = $fechaPago;
+                        $pago->save();
+                    } elseif ($idTipoPermisoPago !== null) {
+                        TramiteAduanaPago::updateOrCreate(
+                            [
+                                'id_tramite'      => $idTramite,
+                                'id_tipo_permiso' => $idTipoPermisoPago,
+                            ],
+                            [
+                                'id_documento' => $idDoc,
+                                'monto'        => $monto,
+                                'observacion'  => $banco,
+                                'fecha_pago'   => $fechaPago,
+                            ]
+                        );
+                    }
+                }
             }
         }
 

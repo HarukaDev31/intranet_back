@@ -60,4 +60,44 @@ class TramiteAduanaCatalogosController extends Controller
         $status = $result['success'] ? 201 : 422;
         return response()->json($result, $status);
     }
+
+    /**
+     * PUT /api/base-datos/tramite-aduana-catalogos/entidades/{id}
+     */
+    public function updateEntidad(Request $request, int $id): JsonResponse
+    {
+        $result = $this->catalogoService->actualizarEntidad($id, $request);
+        $status = $result['success'] ? 200 : ($result['error'] === 'Entidad no encontrada' ? 404 : 422);
+        return response()->json($result, $status);
+    }
+
+    /**
+     * DELETE /api/base-datos/tramite-aduana-catalogos/entidades/{id}
+     */
+    public function destroyEntidad(int $id): JsonResponse
+    {
+        $result = $this->catalogoService->eliminarEntidad($id);
+        $status = $result['success'] ? 200 : ($result['error'] === 'Entidad no encontrada' ? 404 : 500);
+        return response()->json($result, $status);
+    }
+
+    /**
+     * PUT /api/base-datos/tramite-aduana-catalogos/tipos-permiso/{id}
+     */
+    public function updateTipoPermiso(Request $request, int $id): JsonResponse
+    {
+        $result = $this->catalogoService->actualizarTipoPermiso($id, $request);
+        $status = $result['success'] ? 200 : ($result['error'] === 'Tipo de permiso no encontrado' ? 404 : 422);
+        return response()->json($result, $status);
+    }
+
+    /**
+     * DELETE /api/base-datos/tramite-aduana-catalogos/tipos-permiso/{id}
+     */
+    public function destroyTipoPermiso(int $id): JsonResponse
+    {
+        $result = $this->catalogoService->eliminarTipoPermiso($id);
+        $status = $result['success'] ? 200 : ($result['error'] === 'Tipo de permiso no encontrado' ? 404 : 500);
+        return response()->json($result, $status);
+    }
 }

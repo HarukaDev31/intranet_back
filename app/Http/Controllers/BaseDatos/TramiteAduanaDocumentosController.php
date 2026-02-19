@@ -130,34 +130,4 @@ class TramiteAduanaDocumentosController extends Controller
         }
         return response()->json($result);
     }
-
-    /**
-     * POST tramites/{idTramite}/tipos-permiso/{idTipoPermiso}/pago
-     * Asigna un documento de pago_servicio (seleccionado en el modal) a la fila permiso.
-     * Body: { id_documento (required), monto?, fecha_pago?, observacion? }
-     */
-    public function asignarPago(Request $request, int $idTramite, int $idTipoPermiso): JsonResponse
-    {
-        $request->validate([
-            'id_documento' => 'required|integer',
-            'monto'        => 'nullable|numeric',
-            'fecha_pago'   => 'nullable|date',
-            'observacion'  => 'nullable|string|max:500',
-        ]);
-
-        $result = $this->documentoService->asignarPagoServicio(
-            $idTramite,
-            $idTipoPermiso,
-            (int) $request->input('id_documento'),
-            $request->input('monto'),
-            $request->input('fecha_pago'),
-            $request->input('observacion')
-        );
-
-        if (!$result['success']) {
-            $status = ($result['error'] ?? '') === 'Trámite no encontrado' ? 404 : 422;
-            return response()->json($result, $status);
-        }
-        return response()->json($result);
-    }
 }
