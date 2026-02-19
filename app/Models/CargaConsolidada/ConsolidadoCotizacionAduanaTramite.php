@@ -4,6 +4,7 @@ namespace App\Models\CargaConsolidada;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use App\Models\BaseDatos\Clientes\Cliente;
 
@@ -16,19 +17,18 @@ class ConsolidadoCotizacionAduanaTramite extends Model
         'id_consolidado',
         'id_cliente',
         'id_entidad',
-        'id_tipo_permiso',
-        'derecho_entidad',
         'precio',
         'f_inicio',
         'f_termino',
         'f_caducidad',
         'dias',
         'estado',
+        'tramitador',
     ];
 
     protected $casts = [
-        'derecho_entidad' => 'decimal:4',
         'precio' => 'decimal:4',
+        'tramitador' => 'decimal:2',
         'f_inicio' => 'date',
         'f_termino' => 'date',
         'f_caducidad' => 'date',
@@ -61,9 +61,14 @@ class ConsolidadoCotizacionAduanaTramite extends Model
         return $this->belongsTo(TramiteAduanaEntidad::class, 'id_entidad', 'id');
     }
 
-    public function tipoPermiso(): BelongsTo
+    public function tiposPermiso(): BelongsToMany
     {
-        return $this->belongsTo(TramiteAduanaTipoPermiso::class, 'id_tipo_permiso', 'id');
+        return $this->belongsToMany(
+            TramiteAduanaTipoPermiso::class,
+            'tramite_aduana_tramite_tipo_permiso',
+            'id_tramite',
+            'id_tipo_permiso'
+        )->withPivot('derecho_entidad', 'estado', 'f_inicio', 'f_termino', 'f_caducidad', 'dias')->withTimestamps();
     }
 
     public function cliente(): BelongsTo
@@ -79,5 +84,10 @@ class ConsolidadoCotizacionAduanaTramite extends Model
     public function documentos(): HasMany
     {
         return $this->hasMany(TramiteAduanaDocumento::class, 'id_tramite');
+    }
+
+    public function pagos(): HasMany
+    {
+        return $this->hasMany(TramiteAduanaPago::class, 'id_tramite');
     }
 }

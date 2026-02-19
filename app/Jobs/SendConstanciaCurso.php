@@ -48,7 +48,7 @@ class SendConstanciaCurso implements ShouldQueue
             $phoneNumberId = '51' . $phoneNumberId;
         }
         //check if number has @c.us
-        if (!str_ends_with($phoneNumberId, '@c.us')) {
+        if (substr($phoneNumberId, -5) !== '@c.us') {
             $phoneNumberId .= '@c.us'; // Asegurar que el número tenga el formato correcto
         }
         $this->phoneNumberId = $phoneNumberId;

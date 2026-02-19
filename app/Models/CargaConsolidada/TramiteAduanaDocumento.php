@@ -12,6 +12,8 @@ class TramiteAduanaDocumento extends BaseMediaModel
     protected $fillable = [
         'id_tramite',
         'id_categoria',
+        'id_tipo_permiso',
+        'seccion',
         'nombre_documento',
         'extension',
         'peso',

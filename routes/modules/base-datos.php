@@ -111,10 +111,17 @@ Route::group(['prefix' => 'base-datos', 'middleware' => 'jwt.auth'], function ()
         Route::get('tramites/{id}', [ConsolidadoCotizacionAduanaTramitesController::class, 'show']);
         Route::put('tramites/{id}', [ConsolidadoCotizacionAduanaTramitesController::class, 'update']);
         Route::delete('tramites/{id}', [ConsolidadoCotizacionAduanaTramitesController::class, 'destroy']);
+        // Estado individual por tipo de permiso (pivot)
+        Route::patch('tramites/{tramiteId}/tipo-permiso/{tipoPermisoId}/estado', [ConsolidadoCotizacionAduanaTramitesController::class, 'updateTipoPermisoEstado']);
+        Route::patch('tramites/{tramiteId}/tipos-permiso/{tipoPermisoId}/fechas', [ConsolidadoCotizacionAduanaTramitesController::class, 'updateTipoPermisoFechas']);
 
         // Documentos de trámite
         Route::get('tramites/{idTramite}/documentos', [TramiteAduanaDocumentosController::class, 'index']);
         Route::post('tramites/{idTramite}/documentos', [TramiteAduanaDocumentosController::class, 'store']);
+        Route::post('tramites/{idTramite}/documentos/batch', [TramiteAduanaDocumentosController::class, 'storeBatch']);
+        Route::post('tramites/{idTramite}/guardar-todo', [TramiteAduanaDocumentosController::class, 'guardarTodo']);
+        Route::post('tramites/{idTramite}/tipos-permiso/{idTipoPermiso}/guardar', [TramiteAduanaDocumentosController::class, 'guardarTipoPermiso']);
+        Route::post('tramites/{idTramite}/tipos-permiso/{idTipoPermiso}/pago', [TramiteAduanaDocumentosController::class, 'asignarPago']);
         Route::delete('tramites/documentos/{id}', [TramiteAduanaDocumentosController::class, 'destroy']);
         Route::get('tramites/documentos/{id}/download', [TramiteAduanaDocumentosController::class, 'download']);
         // Categorías (carpetas) del trámite

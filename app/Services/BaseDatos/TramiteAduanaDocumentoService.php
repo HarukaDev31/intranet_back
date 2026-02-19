@@ -4,6 +4,7 @@ namespace App\Services\BaseDatos;
 
 use App\Models\CargaConsolidada\TramiteAduanaDocumento;
 use App\Models\CargaConsolidada\TramiteAduanaCategoria;
+use App\Models\CargaConsolidada\TramiteAduanaPago;
 use App\Models\CargaConsolidada\ConsolidadoCotizacionAduanaTramite;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -11,49 +12,103 @@ use Illuminate\Support\Facades\Storage;
 
 class TramiteAduanaDocumentoService
 {
+    /** Secciones válidas */
+    const SECCIONES = ['documentos_tramite', 'fotos', 'pago_servicio', 'seguimiento'];
+
     public function listarPorTramite(int $idTramite): array
     {
         try {
             $tramite = ConsolidadoCotizacionAduanaTramite::with([
-                'consolidado', 'entidad', 'tipoPermiso', 'cliente', 'cotizacion'
+                'consolidado', 'entidad', 'tiposPermiso', 'cliente', 'cotizacion'
             ])->find($idTramite);
 
             if (!$tramite) {
                 return ['success' => false, 'error' => 'Trámite no encontrado'];
             }
 
-            $documentos = TramiteAduanaDocumento::with('categoria')
-                ->where('id_tramite', $idTramite)
-                ->orderBy('id_categoria')
-                ->orderBy('created_at', 'desc')
+            // Asegurar categorías para los tipos actuales del trámite
+            $tipoIds = $tramite->tiposPermiso->pluck('id')->all();
+            TramiteAduanaCategoria::asegurarCategoriasParaTramite($idTramite, $tipoIds);
+
+            $categorias = TramiteAduanaCategoria::where('id_tramite', $idTramite)
+                ->orderBy('seccion')
+                ->orderBy('id_tipo_permiso')
+                ->orderBy('nombre')
+                ->get();
+            $catSeguimiento = $categorias->firstWhere('nombre', TramiteAduanaCategoria::NOMBRE_SEGUIMIENTO_COMPARTIDO);
+            $idCategoriaRH = $catSeguimiento ? $catSeguimiento->id : null;
+            $categoriasPorTipo = $categorias->groupBy('id_tipo_permiso'); // null = compartidas
+
+            $documentos = TramiteAduanaDocumento::where('id_tramite', $idTramite)
+                ->orderBy('seccion')
+                ->orderBy('created_at', 'asc')
                 ->get();
 
-            $data = $documentos->map(function ($doc) {
+            $mapDoc = function ($doc) {
                 return [
-                    'id' => $doc->id,
-                    'id_tramite' => $doc->id_tramite,
-                    'id_categoria' => $doc->id_categoria,
-                    'categoria' => $doc->categoria ? $doc->categoria->nombre : null,
+                    'id'               => $doc->id,
+                    'id_tramite'       => $doc->id_tramite,
+                    'id_tipo_permiso'  => $doc->id_tipo_permiso,
+                    'seccion'          => $doc->seccion ?? 'documentos_tramite',
+                    'id_categoria'     => $doc->id_categoria,
                     'nombre_documento' => $doc->nombre_documento,
-                    'extension' => $doc->extension,
-                    'peso' => $doc->peso,
-                    'nombre_original' => $doc->nombre_original,
-                    'ruta' => $doc->ruta,
-                    'url' => $doc->url,
-                    'created_at' => $doc->created_at ? $doc->created_at->toIso8601String() : null,
+                    'extension'        => $doc->extension,
+                    'peso'             => $doc->peso,
+                    'nombre_original'  => $doc->nombre_original,
+                    'ruta'             => $doc->ruta,
+                    'url'              => $doc->url,
+                    'created_at'       => $doc->created_at ? $doc->created_at->toIso8601String() : null,
+                ];
+            };
+
+            $categoriaIdToTipo = $categorias->keyBy('id')->map(fn($c) => $c->id_tipo_permiso)->all();
+            $docsSeguimiento = $documentos->filter(fn($d) => ($d->seccion ?? '') === 'seguimiento');
+            $seguimientoCompartido = $docsSeguimiento->filter(fn($d) => ($categoriaIdToTipo[$d->id_categoria] ?? null) === null)->values()->map($mapDoc)->all();
+            $seguimientoPorTipo = $tramite->tiposPermiso->mapWithKeys(function ($tp) use ($docsSeguimiento, $categoriaIdToTipo, $mapDoc) {
+                $docs = $docsSeguimiento->filter(fn($d) => (int)($categoriaIdToTipo[$d->id_categoria] ?? 0) === (int)$tp->id);
+                return [$tp->id => $docs->values()->map($mapDoc)->all()];
+            })->all();
+
+            $pagoServicio = $documentos->filter(fn($d) => is_null($d->id_tipo_permiso) && ($d->seccion ?? '') === 'pago_servicio')->values()->map($mapDoc)->all();
+
+            $tiposPermisoSections = $tramite->tiposPermiso->map(function ($tp) use ($documentos, $mapDoc, $seguimientoPorTipo) {
+                $docsPermiso = $documentos->filter(fn($d) => (int)$d->id_tipo_permiso === (int)$tp->id);
+                $fCaducidad = $tp->pivot->f_caducidad ?? null;
+                return [
+                    'id_tipo_permiso'     => $tp->id,
+                    'nombre'              => $tp->nombre,
+                    'estado'              => $tp->pivot->estado ?? 'PENDIENTE',
+                    'f_caducidad'         => $fCaducidad ? (\Carbon\Carbon::parse($fCaducidad)->format('Y-m-d')) : null,
+                    'documentos_tramite'  => $docsPermiso->filter(fn($d) => ($d->seccion ?? 'documentos_tramite') === 'documentos_tramite')->values()->map($mapDoc)->all(),
+                    'fotos'               => $docsPermiso->filter(fn($d) => ($d->seccion ?? '') === 'fotos')->values()->map($mapDoc)->all(),
+                    'seguimiento'         => $seguimientoPorTipo[$tp->id] ?? [],
                 ];
             })->all();
 
+            $categoriasPayload = $categorias->map(fn($c) => [
+                'id'              => $c->id,
+                'id_tramite'      => $c->id_tramite,
+                'nombre'          => $c->nombre,
+                'seccion'         => $c->seccion ?? 'documentos_tramite',
+                'id_tipo_permiso' => $c->id_tipo_permiso,
+            ])->all();
+
             return [
-                'success' => true,
-                'data' => $data,
-                'tramite' => [
-                    'id' => $tramite->id,
-                    'estado' => $tramite->estado,
-                    'entidad' => $tramite->entidad ? $tramite->entidad->nombre : null,
-                    'tipo_permiso' => $tramite->tipoPermiso ? $tramite->tipoPermiso->nombre : null,
+                'success'              => true,
+                'tramite'              => [
+                    'id'          => $tramite->id,
+                    'estado'      => $tramite->estado,
+                    'entidad'     => $tramite->entidad ? $tramite->entidad->nombre : null,
+                    'tipos_permiso' => $tramite->tiposPermiso->pluck('nombre')->all(),
                     'consolidado' => $tramite->consolidado ? ($tramite->consolidado->carga ?? null) : null,
+                    'f_caducidad' => $tramite->f_caducidad ? $tramite->f_caducidad->format('Y-m-d') : null,
                 ],
+                'categorias'                => $categoriasPayload,
+                'tipos_permiso_sections'   => $tiposPermisoSections,
+                'pago_servicio'             => $pagoServicio,
+                'seguimiento_compartido'    => $seguimientoCompartido,
+                'seguimiento_por_tipo'      => $seguimientoPorTipo,
+                'data'                      => $documentos->map($mapDoc)->all(),
             ];
         } catch (\Exception $e) {
             Log::error('Error al listar documentos del trámite: ' . $e->getMessage());
@@ -64,10 +119,13 @@ class TramiteAduanaDocumentoService
     public function crear(Request $request, int $idTramite): array
     {
         $request->validate([
-            'categoria' => 'required|string|max:255',
             'nombre_documento' => 'required|string|max:255',
-            'archivo' => 'required|file|max:204800',
-            'id_categoria' => 'sometimes|nullable|integer|exists:tramite_aduana_categorias,id',
+            'archivo'          => 'required|file|max:204800',
+            'seccion'          => 'nullable|string|in:documentos_tramite,fotos,pago_servicio,seguimiento',
+            'id_tipo_permiso'  => 'nullable|integer',
+            // legacy
+            'categoria'        => 'nullable|string|max:255',
+            'id_categoria'     => 'sometimes|nullable|integer', // -1 = crear nueva categoría con el nombre en categoria
         ]);
 
         try {
@@ -76,63 +134,510 @@ class TramiteAduanaDocumentoService
                 return ['success' => false, 'error' => 'Trámite no encontrado'];
             }
 
-            $nombreCategoria = $request->categoria;
-            $idCategoria = $request->input('id_categoria');
+            $seccion       = $request->input('seccion', 'documentos_tramite');
+            $idTipoPermiso = $request->input('id_tipo_permiso');
+            $idCategoria   = $request->input('id_categoria');
+            $nombreCategoria = $request->input('categoria', $seccion);
+            $crearCategoria = ($idCategoria === null || (int) $idCategoria === -1) && $nombreCategoria;
 
-            if ($idCategoria) {
-                $categoria = TramiteAduanaCategoria::where('id', $idCategoria)
-                    ->where('id_tramite', $idTramite)
-                    ->first();
-                if (!$categoria) {
-                    return ['success' => false, 'error' => 'Categoría no pertenece al trámite'];
+            if ($idCategoria && (int) $idCategoria > 0) {
+                $cat = TramiteAduanaCategoria::find($idCategoria);
+                if ($cat && $cat->id_tramite == $idTramite) {
+                    if ($seccion === 'seguimiento' && $cat->id_tipo_permiso !== null) {
+                        $idTipoPermiso = $cat->id_tipo_permiso;
+                    }
+                    if ($seccion === 'documentos_tramite' && $cat->id_tipo_permiso !== null) {
+                        $idTipoPermiso = $cat->id_tipo_permiso;
+                    }
                 }
-            } else {
-                $categoria = TramiteAduanaCategoria::firstOrCreate(
-                    [
-                        'id_tramite' => $idTramite,
-                        'nombre' => $nombreCategoria,
-                    ]
-                );
+            }
+            if ($crearCategoria) {
+                $cat = TramiteAduanaCategoria::firstOrCreate([
+                    'id_tramite'      => $idTramite,
+                    'nombre'          => $nombreCategoria,
+                    'seccion'         => $seccion,
+                    'id_tipo_permiso' => $idTipoPermiso,
+                ]);
+                $idCategoria = $cat->id;
             }
 
-            $archivo = $request->file('archivo');
+            $archivo  = $request->file('archivo');
             $filename = time() . '_' . uniqid() . '.' . $archivo->getClientOriginalExtension();
-            $path = $archivo->storeAs('tramites/documentos', $filename, 'public');
+            $path     = $archivo->storeAs('tramites/documentos', $filename, 'public');
 
             $documento = TramiteAduanaDocumento::create([
-                'id_tramite' => $idTramite,
-                'id_categoria' => $categoria->id,
+                'id_tramite'       => $idTramite,
+                'id_categoria'     => $idCategoria,
+                'id_tipo_permiso'  => $idTipoPermiso ?: null,
+                'seccion'          => $seccion,
                 'nombre_documento' => $request->nombre_documento,
-                'extension' => $archivo->getClientOriginalExtension(),
-                'peso' => $archivo->getSize(),
-                'nombre_original' => $archivo->getClientOriginalName(),
-                'ruta' => $path,
+                'extension'        => $archivo->getClientOriginalExtension(),
+                'peso'             => $archivo->getSize(),
+                'nombre_original'  => $archivo->getClientOriginalName(),
+                'ruta'             => $path,
             ]);
-
-            $documento->load('categoria');
-
-            $this->actualizarEstadoTramitePorCategoria($tramite, $nombreCategoria);
 
             return [
                 'success' => true,
-                'data' => [
-                    'id' => $documento->id,
-                    'id_tramite' => $documento->id_tramite,
-                    'id_categoria' => $documento->id_categoria,
-                    'categoria' => $documento->categoria ? $documento->categoria->nombre : $nombreCategoria,
+                'data'    => [
+                    'id'               => $documento->id,
+                    'id_tramite'       => $documento->id_tramite,
+                    'id_tipo_permiso'  => $documento->id_tipo_permiso,
+                    'seccion'          => $documento->seccion,
+                    'id_categoria'     => $documento->id_categoria,
                     'nombre_documento' => $documento->nombre_documento,
-                    'extension' => $documento->extension,
-                    'peso' => $documento->peso,
-                    'nombre_original' => $documento->nombre_original,
-                    'ruta' => $documento->ruta,
-                    'url' => $documento->url,
-                    'created_at' => $documento->created_at ? $documento->created_at->toIso8601String() : null,
+                    'extension'        => $documento->extension,
+                    'peso'             => $documento->peso,
+                    'nombre_original'  => $documento->nombre_original,
+                    'ruta'             => $documento->ruta,
+                    'url'              => $documento->url,
+                    'created_at'       => $documento->created_at ? $documento->created_at->toIso8601String() : null,
                 ],
             ];
         } catch (\Exception $e) {
             Log::error('Error al crear documento del trámite: ' . $e->getMessage());
             return ['success' => false, 'error' => $e->getMessage()];
         }
+    }
+
+    /**
+     * Crea múltiples documentos en una sola petición.
+     * FormData: id_tipo_permiso[] (int), archivo[] (file), seccion[] (string), id_categoria[] (int, -1 = crear nueva), categoria[] (string nombre).
+     */
+    public function crearBatch(Request $request, int $idTramite): array
+    {
+        $tramite = ConsolidadoCotizacionAduanaTramite::find($idTramite);
+        if (!$tramite) {
+            return ['success' => false, 'error' => 'Trámite no encontrado'];
+        }
+
+        $idTipoPermisos = $request->input('id_tipo_permiso', []);
+        $archivos        = $request->file('archivo', []);
+        $secciones       = $request->input('seccion', []);
+        $idCategorias    = $request->input('id_categoria', []);
+        $categorias      = $request->input('categoria', []);
+
+        if (!is_array($archivos)) {
+            $archivos = $archivos ? [$archivos] : [];
+        }
+        $n = count($archivos);
+        if ($n === 0) {
+            return ['success' => true, 'data' => []];
+        }
+
+        $idTipoPermisos = is_array($idTipoPermisos) ? array_values($idTipoPermisos) : [];
+        $secciones      = is_array($secciones) ? array_values($secciones) : [];
+        $idCategorias   = is_array($idCategorias) ? array_values($idCategorias) : [];
+        $categorias     = is_array($categorias) ? array_values($categorias) : [];
+
+        $created = [];
+        try {
+            for ($i = 0; $i < $n; $i++) {
+                $archivo = $archivos[$i] ?? null;
+                if (!$archivo || !$archivo->isValid()) {
+                    continue;
+                }
+                $idTipoPermiso = (int) ($idTipoPermisos[$i] ?? 0);
+                $seccion      = $secciones[$i] ?? 'documentos_tramite';
+                if (!in_array($seccion, self::SECCIONES, true)) {
+                    $seccion = 'documentos_tramite';
+                }
+                $idCategoria   = isset($idCategorias[$i]) ? (int) $idCategorias[$i] : null;
+                $nombreCategoria = $categorias[$i] ?? $seccion;
+                $crearCategoria = ($idCategoria === null || $idCategoria === -1) && $nombreCategoria;
+
+                if ($idCategoria > 0) {
+                    $cat = TramiteAduanaCategoria::find($idCategoria);
+                    if ($cat && $cat->id_tramite == $idTramite) {
+                        if ($seccion === 'seguimiento' && $cat->id_tipo_permiso !== null) {
+                            $idTipoPermiso = $cat->id_tipo_permiso;
+                        }
+                        if ($seccion === 'documentos_tramite' && $cat->id_tipo_permiso !== null) {
+                            $idTipoPermiso = $cat->id_tipo_permiso;
+                        }
+                    }
+                }
+                if ($crearCategoria) {
+                    $cat = TramiteAduanaCategoria::firstOrCreate([
+                        'id_tramite'      => $idTramite,
+                        'nombre'          => $nombreCategoria,
+                        'seccion'         => $seccion,
+                        'id_tipo_permiso' => $idTipoPermiso ?: null,
+                    ]);
+                    $idCategoria = $cat->id;
+                }
+
+                $filename = time() . '_' . uniqid() . '_' . $i . '.' . $archivo->getClientOriginalExtension();
+                $path     = $archivo->storeAs('tramites/documentos', $filename, 'public');
+
+                $documento = TramiteAduanaDocumento::create([
+                    'id_tramite'       => $idTramite,
+                    'id_categoria'     => $idCategoria ?? null,
+                    'id_tipo_permiso'  => $idTipoPermiso ?: null,
+                    'seccion'          => $seccion,
+                    'nombre_documento' => $archivo->getClientOriginalName(),
+                    'extension'        => $archivo->getClientOriginalExtension(),
+                    'peso'             => $archivo->getSize(),
+                    'nombre_original'  => $archivo->getClientOriginalName(),
+                    'ruta'             => $path,
+                ]);
+
+                $created[] = [
+                    'id'               => $documento->id,
+                    'id_tramite'       => $documento->id_tramite,
+                    'id_tipo_permiso'  => $documento->id_tipo_permiso,
+                    'seccion'          => $documento->seccion,
+                    'id_categoria'     => $documento->id_categoria,
+                    'nombre_documento' => $documento->nombre_documento,
+                    'extension'        => $documento->extension,
+                    'peso'             => $documento->peso,
+                    'nombre_original'  => $documento->nombre_original,
+                    'ruta'             => $documento->ruta,
+                    'url'              => $documento->url,
+                    'created_at'       => $documento->created_at ? $documento->created_at->toIso8601String() : null,
+                ];
+            }
+            return ['success' => true, 'data' => $created];
+        } catch (\Exception $e) {
+            Log::error('Error al crear batch de documentos: ' . $e->getMessage());
+            return ['success' => false, 'error' => $e->getMessage(), 'data' => []];
+        }
+    }
+
+    /**
+     * Guardar todo en una petición: crear documentos (batch) + guardar tipos permiso + f_caducidad por tipo (pivot).
+     * FormData: id_tipo_permiso[], archivo[], seccion[], id_categoria[], categoria[] (opcional),
+     *           guardar_tipos (JSON: array de { id_tipo_permiso, documentos_tramite_ids, fotos_ids, seguimiento_ids, f_caducidad? }).
+     */
+    public function guardarTodo(Request $request, int $idTramite): array
+    {
+        $tramite = ConsolidadoCotizacionAduanaTramite::with('tiposPermiso')->find($idTramite);
+        if (!$tramite) {
+            return ['success' => false, 'error' => 'Trámite no encontrado', 'data' => []];
+        }
+
+        $guardarTiposJson = $request->input('guardar_tipos');
+        if ($guardarTiposJson === null || $guardarTiposJson === '') {
+            return ['success' => false, 'error' => 'guardar_tipos es requerido', 'data' => []];
+        }
+
+        $guardarTipos = json_decode($guardarTiposJson, true);
+        if (!is_array($guardarTipos)) {
+            return ['success' => false, 'error' => 'guardar_tipos debe ser un JSON válido', 'data' => []];
+        }
+
+        // 1) Crear documentos (misma lógica que crearBatch)
+        $created = [];
+        $archivos = $request->file('archivo', []);
+        if (!is_array($archivos)) {
+            $archivos = $archivos ? [$archivos] : [];
+        }
+        $n = count($archivos);
+
+        if ($n > 0) {
+            $idTipoPermisos = is_array($request->input('id_tipo_permiso', [])) ? array_values($request->input('id_tipo_permiso', [])) : [];
+            $secciones      = is_array($request->input('seccion', [])) ? array_values($request->input('seccion', [])) : [];
+            $idCategorias   = is_array($request->input('id_categoria', [])) ? array_values($request->input('id_categoria', [])) : [];
+            $categorias     = is_array($request->input('categoria', [])) ? array_values($request->input('categoria', [])) : [];
+
+            for ($i = 0; $i < $n; $i++) {
+                $archivo = $archivos[$i] ?? null;
+                if (!$archivo || !$archivo->isValid()) {
+                    continue;
+                }
+                $idTipoPermiso = (int) ($idTipoPermisos[$i] ?? 0);
+                $seccion      = $secciones[$i] ?? 'documentos_tramite';
+                if (!in_array($seccion, self::SECCIONES, true)) {
+                    $seccion = 'documentos_tramite';
+                }
+                $idCategoria   = isset($idCategorias[$i]) ? (int) $idCategorias[$i] : null;
+                $nombreCategoria = $categorias[$i] ?? $seccion;
+                $crearCategoria = ($idCategoria === null || $idCategoria === -1) && $nombreCategoria;
+
+                if ($idCategoria > 0) {
+                    $cat = TramiteAduanaCategoria::find($idCategoria);
+                    if ($cat && $cat->id_tramite == $idTramite) {
+                        if ($seccion === 'seguimiento' && $cat->id_tipo_permiso !== null) {
+                            $idTipoPermiso = $cat->id_tipo_permiso;
+                        }
+                        if ($seccion === 'documentos_tramite' && $cat->id_tipo_permiso !== null) {
+                            $idTipoPermiso = $cat->id_tipo_permiso;
+                        }
+                    }
+                }
+                if ($crearCategoria) {
+                    $cat = TramiteAduanaCategoria::firstOrCreate([
+                        'id_tramite'      => $idTramite,
+                        'nombre'          => $nombreCategoria,
+                        'seccion'         => $seccion,
+                        'id_tipo_permiso' => $idTipoPermiso ?: null,
+                    ]);
+                    $idCategoria = $cat->id;
+                }
+
+                $filename = time() . '_' . uniqid() . '_' . $i . '.' . $archivo->getClientOriginalExtension();
+                $path     = $archivo->storeAs('tramites/documentos', $filename, 'public');
+
+                $documento = TramiteAduanaDocumento::create([
+                    'id_tramite'       => $idTramite,
+                    'id_categoria'     => $idCategoria ?? null,
+                    'id_tipo_permiso'  => $idTipoPermiso ?: null,
+                    'seccion'          => $seccion,
+                    'nombre_documento' => $archivo->getClientOriginalName(),
+                    'extension'        => $archivo->getClientOriginalExtension(),
+                    'peso'             => $archivo->getSize(),
+                    'nombre_original'  => $archivo->getClientOriginalName(),
+                    'ruta'             => $path,
+                ]);
+
+                $created[] = [
+                    'id'               => $documento->id,
+                    'id_tramite'       => $documento->id_tramite,
+                    'id_tipo_permiso'  => $documento->id_tipo_permiso,
+                    'seccion'          => $documento->seccion,
+                    'id_categoria'     => $documento->id_categoria,
+                    'categoria'        => $nombreCategoria,
+                    'nombre_documento' => $documento->nombre_documento,
+                    'extension'        => $documento->extension,
+                    'peso'             => $documento->peso,
+                    'nombre_original'  => $documento->nombre_original,
+                    'ruta'             => $documento->ruta,
+                    'url'              => $documento->url,
+                    'created_at'       => $documento->created_at ? $documento->created_at->toIso8601String() : null,
+                ];
+
+                // 2) Añadir id del documento creado al guardar_tipos correspondiente
+                foreach ($guardarTipos as &$item) {
+                    $tipoId = (int) ($item['id_tipo_permiso'] ?? 0);
+                    if ($tipoId !== (int) $documento->id_tipo_permiso) {
+                        continue;
+                    }
+                    $item['documentos_tramite_ids'] = $item['documentos_tramite_ids'] ?? [];
+                    $item['fotos_ids'] = $item['fotos_ids'] ?? [];
+                    $item['seguimiento_ids'] = $item['seguimiento_ids'] ?? [];
+                    if ($seccion === 'documentos_tramite') {
+                        $item['documentos_tramite_ids'][] = $documento->id;
+                    } elseif ($seccion === 'fotos') {
+                        $item['fotos_ids'][] = $documento->id;
+                    } elseif ($seccion === 'seguimiento') {
+                        $item['seguimiento_ids'][] = $documento->id;
+                    }
+                    break;
+                }
+                unset($item);
+
+                // 2b) Actualizar f_inicio / f_termino del tipo_permiso según categoría (todo en guardar-todo)
+                if ($documento->id_tipo_permiso) {
+                    $this->aplicarFechasPorCategoria($idTramite, (int) $documento->id_tipo_permiso, $nombreCategoria);
+                }
+                // 2c) Actualizar estado del tipo_permiso según reglas: SD / En trámite / Completado (por categoría)
+                if ($documento->id_tipo_permiso) {
+                    $this->aplicarEstadoPorCategoria($tramite, (int) $documento->id_tipo_permiso, $nombreCategoria, $seccion);
+                }
+            }
+        }
+
+        // 3) Guardar cada tipo permiso (sincronizar ids por sección) y actualizar f_caducidad por tipo (pivot)
+        foreach ($guardarTipos as $item) {
+            $idTipoPermiso = (int) ($item['id_tipo_permiso'] ?? 0);
+            $docIds = array_map('intval', array_filter($item['documentos_tramite_ids'] ?? [], fn($id) => is_numeric($id)));
+            $fotoIds = array_map('intval', array_filter($item['fotos_ids'] ?? [], fn($id) => is_numeric($id)));
+            $segIds = array_map('intval', array_filter($item['seguimiento_ids'] ?? [], fn($id) => is_numeric($id)));
+
+            $result = $this->guardarTipoPermiso($idTramite, $idTipoPermiso, $docIds, $fotoIds, $segIds);
+            if (!$result['success']) {
+                Log::warning('guardarTodo: fallo guardarTipoPermiso tipo ' . $idTipoPermiso . ': ' . ($result['error'] ?? ''));
+                // Continuamos con el resto
+            }
+
+            // f_caducidad por tipo_permiso (pivot)
+            $fCaducidad = $item['f_caducidad'] ?? null;
+            if ($fCaducidad !== null && $fCaducidad !== '') {
+                $tramite->tiposPermiso()->updateExistingPivot($idTipoPermiso, ['f_caducidad' => $fCaducidad]);
+            }
+        }
+
+        // 4) Pago (voucher): si viene pago_voucher + pago_monto, crear documento pago_servicio y registro en tramite_aduana_pagos
+        $voucher = $request->file('pago_voucher');
+        if ($voucher && $voucher->isValid() && $request->filled('pago_monto')) {
+            $categoriaPago = TramiteAduanaCategoria::firstOrCreate(
+                [
+                    'id_tramite'      => $idTramite,
+                    'nombre'          => TramiteAduanaCategoria::NOMBRE_PAGO_SERVICIO,
+                    'seccion'         => TramiteAduanaCategoria::SECCION_PAGO_SERVICIO,
+                    'id_tipo_permiso' => null,
+                ],
+                ['id_tramite' => $idTramite, 'nombre' => TramiteAduanaCategoria::NOMBRE_PAGO_SERVICIO, 'seccion' => TramiteAduanaCategoria::SECCION_PAGO_SERVICIO, 'id_tipo_permiso' => null]
+            );
+            $filename = time() . '_' . uniqid() . '_pago.' . $voucher->getClientOriginalExtension();
+            $path = $voucher->storeAs('tramites/documentos', $filename, 'public');
+            $documentoPago = TramiteAduanaDocumento::create([
+                'id_tramite'       => $idTramite,
+                'id_categoria'     => $categoriaPago->id,
+                'id_tipo_permiso'  => null,
+                'seccion'          => 'pago_servicio',
+                'nombre_documento' => $voucher->getClientOriginalName(),
+                'extension'        => $voucher->getClientOriginalExtension(),
+                'peso'             => $voucher->getSize(),
+                'nombre_original'  => $voucher->getClientOriginalName(),
+                'ruta'             => $path,
+            ]);
+            $created[] = [
+                'id'               => $documentoPago->id,
+                'id_tramite'       => $documentoPago->id_tramite,
+                'id_tipo_permiso'  => $documentoPago->id_tipo_permiso,
+                'seccion'          => $documentoPago->seccion,
+                'id_categoria'     => $documentoPago->id_categoria,
+                'categoria'        => TramiteAduanaCategoria::NOMBRE_PAGO_SERVICIO,
+                'nombre_documento' => $documentoPago->nombre_documento,
+                'extension'        => $documentoPago->extension,
+                'peso'             => $documentoPago->peso,
+                'nombre_original'  => $documentoPago->nombre_original,
+                'ruta'             => $documentoPago->ruta,
+                'url'              => $documentoPago->url,
+                'created_at'       => $documentoPago->created_at ? $documentoPago->created_at->toIso8601String() : null,
+            ];
+            $fechaPago = $request->input('pago_fecha_cierre');
+            $observacion = $request->input('pago_banco', '');
+            $primerTipoPermiso = $tramite->tiposPermiso->first();
+            $idTipoPermisoPago = $primerTipoPermiso ? (int) $primerTipoPermiso->id : null;
+            if ($idTipoPermisoPago !== null) {
+                TramiteAduanaPago::updateOrCreate(
+                    [
+                        'id_tramite'      => $idTramite,
+                        'id_tipo_permiso' => $idTipoPermisoPago,
+                    ],
+                    [
+                        'id_documento' => $documentoPago->id,
+                        'monto'         => $request->input('pago_monto'),
+                        'fecha_pago'    => $fechaPago ?: now()->format('Y-m-d'),
+                        'observacion'   => $observacion,
+                    ]
+                );
+            }
+        }
+
+        return ['success' => true, 'data' => $created];
+    }
+
+    /**
+     * Si la categoría es Expediente/CPB → actualiza f_inicio; Decreto o Hoja resumen → f_termino. Días lo calcula el servicio de trámite.
+     */
+    private function aplicarFechasPorCategoria(int $idTramite, int $idTipoPermiso, string $nombreCategoria): void
+    {
+        $n = strtolower(trim($nombreCategoria));
+        $hoy = now()->format('Y-m-d');
+        $tramiteService = app(TramiteAduanaService::class);
+
+        if (((strpos($n, 'expediente') !== false) && (strpos($n, 'cpb') !== false)) || $n === 'expediente cpb' || $n === 'expediente o cpb') {
+            $tramiteService->actualizarFechasTipoPermiso($idTramite, $idTipoPermiso, $hoy, null);
+        } elseif (strpos($n, 'decreto') !== false || strpos($n, 'hoja resumen') !== false) {
+            $tramiteService->actualizarFechasTipoPermiso($idTramite, $idTipoPermiso, null, $hoy);
+        }
+    }
+
+    /** Jerarquía de estados automáticos: solo se asciende, no se retrocede al subir. Al borrar un archivo se recalcula. */
+    private const ESTADO_NIVEL = [
+        'PENDIENTE'  => 0,
+        'SD'         => 1,
+        'PAGADO'     => 1,
+        'EN_TRAMITE' => 2,
+        'COMPLETADO' => 3,
+        'RECHAZADO'  => -1, // manual, no se sobrescribe
+    ];
+
+    /**
+     * Cambios de estado por tipo_permiso según subida de documentos (solo ascender, jerarquía):
+     * - Rechazado: solo manual (no se sobrescribe).
+     * - PENDIENTE < SD < EN_TRAMITE < COMPLETADO: si ya está COMPLETADO, subir otro doc no retrocede.
+     * - Cualquier "documentos para tramite" → SD.
+     * - Expediente o CPB → EN_TRAMITE.
+     * - Decreto resolutivo u hoja resumen → COMPLETADO.
+     */
+    private function aplicarEstadoPorCategoria(
+        ConsolidadoCotizacionAduanaTramite $tramite,
+        int $idTipoPermiso,
+        string $nombreCategoria,
+        string $seccion
+    ): void {
+        $pivot = $tramite->tiposPermiso->firstWhere('id', $idTipoPermiso);
+        if (!$pivot) {
+            return;
+        }
+        $estadoActual = $pivot->pivot->estado ?? 'PENDIENTE';
+        if ($estadoActual === 'RECHAZADO') {
+            return;
+        }
+
+        $nivelActual = self::ESTADO_NIVEL[$estadoActual] ?? 0;
+        $n = strtolower(trim($nombreCategoria));
+
+        $nuevoEstado = null;
+        if (strpos($n, 'decreto') !== false || strpos($n, 'hoja resumen') !== false) {
+            $nuevoEstado = 'COMPLETADO';
+        } elseif (((strpos($n, 'expediente') !== false) && (strpos($n, 'cpb') !== false)) || $n === 'expediente cpb' || $n === 'expediente o cpb') {
+            $nuevoEstado = 'EN_TRAMITE';
+        } elseif ($seccion === 'documentos_tramite') {
+            $nuevoEstado = 'SD';
+        }
+
+        if ($nuevoEstado !== null) {
+            $nivelNuevo = self::ESTADO_NIVEL[$nuevoEstado] ?? 0;
+            if ($nivelNuevo > $nivelActual) {
+                app(TramiteAduanaService::class)->actualizarEstadoTipoPermiso($tramite->id, $idTipoPermiso, $nuevoEstado);
+            }
+        }
+    }
+
+    /**
+     * Recalcula el estado del tipo_permiso según los documentos que quedan (tracking al borrar).
+     * Si se borra el archivo que daba COMPLETADO/EN_TRAMITE/SD, vuelve al estado que corresponda.
+     */
+    private function recalcularEstadoTipoPermiso(int $idTramite, int $idTipoPermiso): void
+    {
+        $tramite = ConsolidadoCotizacionAduanaTramite::with('tiposPermiso')->find($idTramite);
+        if (!$tramite) {
+            return;
+        }
+        $pivot = $tramite->tiposPermiso->firstWhere('id', $idTipoPermiso);
+        if (!$pivot || ($pivot->pivot->estado ?? '') === 'RECHAZADO') {
+            return;
+        }
+
+        $documentos = TramiteAduanaDocumento::where('id_tramite', $idTramite)
+            ->where('id_tipo_permiso', $idTipoPermiso)
+            ->whereIn('seccion', ['documentos_tramite', 'seguimiento'])
+            ->with('categoria')
+            ->get();
+
+        $tieneDecretoHoja = false;
+        $tieneExpedienteCpb = false;
+        $tieneDocumentosTramite = false;
+
+        foreach ($documentos as $doc) {
+            $nombreCat = ($doc->categoria !== null ? $doc->categoria->nombre : null) ?? '';
+            $n = strtolower(trim($nombreCat));
+            if (strpos($n, 'decreto') !== false || strpos($n, 'hoja resumen') !== false) {
+                $tieneDecretoHoja = true;
+            }
+            if (((strpos($n, 'expediente') !== false) && (strpos($n, 'cpb') !== false)) || $n === 'expediente cpb' || $n === 'expediente o cpb') {
+                $tieneExpedienteCpb = true;
+            }
+            if (($doc->seccion ?? '') === 'documentos_tramite') {
+                $tieneDocumentosTramite = true;
+            }
+        }
+
+        $nuevoEstado = 'PENDIENTE';
+        if ($tieneDecretoHoja) {
+            $nuevoEstado = 'COMPLETADO';
+        } elseif ($tieneExpedienteCpb) {
+            $nuevoEstado = 'EN_TRAMITE';
+        } elseif ($tieneDocumentosTramite) {
+            $nuevoEstado = 'SD';
+        }
+
+        $tramite->tiposPermiso()->updateExistingPivot($idTipoPermiso, ['estado' => $nuevoEstado]);
     }
 
     public function eliminar(int $id): array
@@ -143,11 +648,18 @@ class TramiteAduanaDocumentoService
                 return ['success' => false, 'error' => 'Documento no encontrado'];
             }
 
+            $idTramite = $documento->id_tramite;
+            $idTipoPermiso = $documento->id_tipo_permiso;
+
             if (Storage::disk('public')->exists($documento->ruta)) {
                 Storage::disk('public')->delete($documento->ruta);
             }
 
             $documento->delete();
+
+            if ($idTipoPermiso !== null) {
+                $this->recalcularEstadoTipoPermiso($idTramite, (int) $idTipoPermiso);
+            }
 
             return ['success' => true];
         } catch (\Exception $e) {
@@ -170,8 +682,8 @@ class TramiteAduanaDocumentoService
             }
 
             return [
-                'success' => true,
-                'filePath' => $filePath,
+                'success'         => true,
+                'filePath'        => $filePath,
                 'nombre_original' => $documento->nombre_original,
             ];
         } catch (\Exception $e) {
@@ -180,9 +692,6 @@ class TramiteAduanaDocumentoService
         }
     }
 
-    /**
-     * Listar categorías (carpetas) de un trámite. Siempre incluye las 3 por defecto si el trámite existe.
-     */
     public function listarCategorias(int $idTramite): array
     {
         try {
@@ -195,13 +704,13 @@ class TramiteAduanaDocumentoService
                 ->orderBy('nombre')
                 ->get();
 
-            $data = $categorias->map(function ($c) {
-                return [
-                    'id' => $c->id,
-                    'id_tramite' => $c->id_tramite,
-                    'nombre' => $c->nombre,
-                ];
-            })->all();
+            $data = $categorias->map(fn($c) => [
+                'id'              => $c->id,
+                'id_tramite'      => $c->id_tramite,
+                'nombre'          => $c->nombre,
+                'seccion'         => $c->seccion ?? 'documentos_tramite',
+                'id_tipo_permiso' => $c->id_tipo_permiso,
+            ])->all();
 
             return ['success' => true, 'data' => $data];
         } catch (\Exception $e) {
@@ -210,12 +719,13 @@ class TramiteAduanaDocumentoService
         }
     }
 
-    /**
-     * Crear una categoría (carpeta) para un trámite. firstOrCreate por (id_tramite, nombre).
-     */
     public function crearCategoria(Request $request, int $idTramite): array
     {
-        $request->validate(['nombre' => 'required|string|max:255']);
+        $request->validate([
+            'nombre'          => 'required|string|max:255',
+            'seccion'         => 'nullable|string|in:documentos_tramite,seguimiento',
+            'id_tipo_permiso' => 'nullable|integer',
+        ]);
 
         try {
             $tramite = ConsolidadoCotizacionAduanaTramite::find($idTramite);
@@ -223,19 +733,24 @@ class TramiteAduanaDocumentoService
                 return ['success' => false, 'error' => 'Trámite no encontrado'];
             }
 
-            $categoria = TramiteAduanaCategoria::firstOrCreate(
-                [
-                    'id_tramite' => $idTramite,
-                    'nombre' => $request->nombre,
-                ]
-            );
+            $seccion = $request->input('seccion', 'documentos_tramite');
+            $idTipoPermiso = $request->input('id_tipo_permiso');
+
+            $categoria = TramiteAduanaCategoria::firstOrCreate([
+                'id_tramite'      => $idTramite,
+                'nombre'          => $request->nombre,
+                'seccion'         => $seccion,
+                'id_tipo_permiso' => $idTipoPermiso,
+            ]);
 
             return [
                 'success' => true,
-                'data' => [
-                    'id' => $categoria->id,
-                    'id_tramite' => $categoria->id_tramite,
-                    'nombre' => $categoria->nombre,
+                'data'    => [
+                    'id'              => $categoria->id,
+                    'id_tramite'      => $categoria->id_tramite,
+                    'nombre'          => $categoria->nombre,
+                    'seccion'         => $categoria->seccion ?? 'documentos_tramite',
+                    'id_tipo_permiso' => $categoria->id_tipo_permiso,
                 ],
             ];
         } catch (\Exception $e) {
@@ -245,70 +760,51 @@ class TramiteAduanaDocumentoService
     }
 
     /**
-     * Nivel del estado para no degradar: solo se actualiza si el nuevo nivel es mayor.
-     * PENDIENTE/RECHAZADO < SD/PAGADO < EN_TRAMITE < COMPLETADO
+     * Guarda la asignación de documentos por sección para un tipo de permiso (tab).
+     * Payload: documentos_tramite_ids, fotos_ids, seguimiento_ids (arrays de IDs).
      */
-    private function nivelEstado($estado)
+    public function guardarTipoPermiso(int $idTramite, int $idTipoPermiso, array $documentosTramiteIds, array $fotosIds, array $seguimientoIds): array
     {
-        $niveles = [
-            'PENDIENTE' => 0,
-            'RECHAZADO' => 0,
-            'SD' => 1,
-            'PAGADO' => 1,
-            'EN_TRAMITE' => 2,
-            'COMPLETADO' => 3,
-        ];
+        try {
+            $tramite = ConsolidadoCotizacionAduanaTramite::with('tiposPermiso')->find($idTramite);
+            if (!$tramite) {
+                return ['success' => false, 'error' => 'Trámite no encontrado'];
+            }
 
-        return isset($niveles[$estado]) ? $niveles[$estado] : 0;
-    }
+            $tieneTipo = $tramite->tiposPermiso->contains('id', $idTipoPermiso);
+            if (!$tieneTipo) {
+                return ['success' => false, 'error' => 'El tipo de permiso no pertenece a este trámite'];
+            }
 
-    /**
-     * Actualiza estado y fechas del trámite según la categoría del documento subido.
-     * - No se degrada: si ya está EN_TRAMITE y se sube algo que sería SD, se mantiene EN_TRAMITE.
-     * - Documento resolutivo → COMPLETADO + f_termino = hoy
-     * - CPB de tramite → EN_TRAMITE (solo si nivel actual es menor)
-     * - Cualquier otro → SD (solo si nivel actual es menor)
-     * - f_inicio: se establece cuando se sube cualquier archivo (si aún es null).
-     */
-    private function actualizarEstadoTramitePorCategoria(ConsolidadoCotizacionAduanaTramite $tramite, string $nombreCategoria): void
-    {
-        $nombreCategoria = trim($nombreCategoria);
-        if ($nombreCategoria === '') {
-            return;
-        }
+            $docIds = array_map('intval', array_filter($documentosTramiteIds, fn($id) => is_numeric($id)));
+            $fotoIds = array_map('intval', array_filter($fotosIds, fn($id) => is_numeric($id)));
+            $segIds = array_map('intval', array_filter($seguimientoIds, fn($id) => is_numeric($id)));
+            $todosIds = array_unique(array_merge($docIds, $fotoIds, $segIds));
 
-        $nuevoEstado = null;
-        if ($nombreCategoria === 'Documento resolutivo') {
-            $nuevoEstado = 'COMPLETADO';
-        } elseif ($nombreCategoria === 'CPB de tramite') {
-            $nuevoEstado = 'EN_TRAMITE';
-        } else {
-            $nuevoEstado = 'SD';
-        }
+            if (!empty($todosIds)) {
+                $documentos = TramiteAduanaDocumento::where('id_tramite', $idTramite)->whereIn('id', $todosIds)->get();
+                foreach ($documentos as $doc) {
+                    $id = (int) $doc->id;
+                    if (in_array($id, $docIds, true)) {
+                        $doc->seccion = 'documentos_tramite';
+                        $doc->id_tipo_permiso = $idTipoPermiso;
+                        $doc->save();
+                    } elseif (in_array($id, $fotoIds, true)) {
+                        $doc->seccion = 'fotos';
+                        $doc->id_tipo_permiso = $idTipoPermiso;
+                        $doc->save();
+                    } elseif (in_array($id, $segIds, true)) {
+                        $doc->seccion = 'seguimiento';
+                        $doc->id_tipo_permiso = $idTipoPermiso;
+                        $doc->save();
+                    }
+                }
+            }
 
-        $actualizado = false;
-        $nivelActual = $this->nivelEstado($tramite->estado ?? 'PENDIENTE');
-        $nivelNuevo = $this->nivelEstado($nuevoEstado);
-
-        if (in_array($nuevoEstado, ConsolidadoCotizacionAduanaTramite::ESTADOS, true) && $nivelNuevo > $nivelActual) {
-            $tramite->estado = $nuevoEstado;
-            $actualizado = true;
-        }
-
-        // f_inicio: al subir cualquier archivo, si aún no tiene fecha de inicio
-        if ($tramite->f_inicio === null) {
-            $tramite->f_inicio = now()->toDateString();
-            $actualizado = true;
-        }
-
-        // f_termino: al subir el documento resolutivo
-        if ($nombreCategoria === 'Documento resolutivo') {
-            $tramite->f_termino = now()->toDateString();
-            $actualizado = true;
-        }
-
-        if ($actualizado) {
-            $tramite->save();
+            return ['success' => true];
+        } catch (\Exception $e) {
+            Log::error('Error al guardar tipo permiso documentos: ' . $e->getMessage());
+            return ['success' => false, 'error' => $e->getMessage()];
         }
     }
 }

@@ -67,6 +67,55 @@ class ConsolidadoCotizacionAduanaTramitesController extends Controller
     }
 
     /**
+     * Actualizar el estado de un tipo de permiso en el pivot
+     */
+    public function updateTipoPermisoEstado(Request $request, int $tramiteId, int $tipoPermisoId): JsonResponse
+    {
+        $request->validate([
+            'estado' => 'required|string|in:PENDIENTE,SD,PAGADO,EN_TRAMITE,RECHAZADO,COMPLETADO',
+        ]);
+
+        $result = $this->tramiteAduanaService->actualizarEstadoTipoPermiso(
+            $tramiteId,
+            $tipoPermisoId,
+            $request->estado
+        );
+
+        if (!$result['success']) {
+            $status = (strpos($result['error'] ?? '', 'encontrado') !== false) ? 404 : 422;
+            return response()->json($result, $status);
+        }
+
+        return response()->json($result);
+    }
+
+    /**
+     * PATCH tramites/{id}/tipos-permiso/{idTipoPermiso}/fechas
+     * Body: { f_inicio?: "Y-m-d", f_termino?: "Y-m-d" }. Calcula dias en el backend.
+     */
+    public function updateTipoPermisoFechas(Request $request, int $tramiteId, int $tipoPermisoId): JsonResponse
+    {
+        $request->validate([
+            'f_inicio'  => 'nullable|date_format:Y-m-d',
+            'f_termino' => 'nullable|date_format:Y-m-d',
+        ]);
+
+        $result = $this->tramiteAduanaService->actualizarFechasTipoPermiso(
+            $tramiteId,
+            $tipoPermisoId,
+            $request->input('f_inicio'),
+            $request->input('f_termino')
+        );
+
+        if (!$result['success']) {
+            $status = (strpos($result['error'] ?? '', 'encontrado') !== false) ? 404 : 422;
+            return response()->json($result, $status);
+        }
+
+        return response()->json($result);
+    }
+
+    /**
      * Eliminar trámite
      */
     public function destroy(int $id): JsonResponse
