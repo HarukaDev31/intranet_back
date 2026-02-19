@@ -5,6 +5,8 @@ namespace App\Services\BaseDatos;
 use App\Models\CargaConsolidada\TramiteAduanaDocumento;
 use App\Models\CargaConsolidada\TramiteAduanaCategoria;
 use App\Models\CargaConsolidada\TramiteAduanaPago;
+use App\Models\CargaConsolidada\PagoPermisoDerechoTramite;
+use App\Models\CargaConsolidada\PagoPermisoTramite;
 use App\Models\CargaConsolidada\ConsolidadoCotizacionAduanaTramite;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -61,60 +63,71 @@ class TramiteAduanaDocumentoService
                 ];
             };
 
-            $categoriaIdToTipo = $categorias->keyBy('id')->map(fn($c) => $c->id_tipo_permiso)->all();
-            $docsSeguimiento = $documentos->filter(fn($d) => ($d->seccion ?? '') === 'seguimiento');
-            $seguimientoCompartido = $docsSeguimiento->filter(fn($d) => ($categoriaIdToTipo[$d->id_categoria] ?? null) === null)->values()->map($mapDoc)->all();
+            $categoriaIdToTipo = $categorias->keyBy('id')->map(function ($c) { return $c->id_tipo_permiso; })->all();
+            $docsSeguimiento = $documentos->filter(function ($d) { return ($d->seccion ?? '') === 'seguimiento'; });
+            $seguimientoCompartido = $docsSeguimiento->filter(function ($d) use ($categoriaIdToTipo) { return ($categoriaIdToTipo[$d->id_categoria] ?? null) === null; })->values()->map($mapDoc)->all();
             $seguimientoPorTipo = $tramite->tiposPermiso->mapWithKeys(function ($tp) use ($docsSeguimiento, $categoriaIdToTipo, $mapDoc) {
-                $docs = $docsSeguimiento->filter(fn($d) => (int)($categoriaIdToTipo[$d->id_categoria] ?? 0) === (int)$tp->id);
+                $docs = $docsSeguimiento->filter(function ($d) use ($categoriaIdToTipo, $tp) { return (int)($categoriaIdToTipo[$d->id_categoria] ?? 0) === (int)$tp->id; });
                 return [$tp->id => $docs->values()->map($mapDoc)->all()];
             })->all();
 
-            $pagoServicio = $documentos->filter(fn($d) => is_null($d->id_tipo_permiso) && ($d->seccion ?? '') === 'pago_servicio')->values()->map($mapDoc)->all();
+            $pagoServicio = $documentos->filter(function ($d) { return is_null($d->id_tipo_permiso) && ($d->seccion ?? '') === 'pago_servicio'; })->values()->map($mapDoc)->all();
 
             $pagosRegistros = TramiteAduanaPago::where('id_tramite', $idTramite)->with('documento')->orderBy('id')->get();
             $docIdsConDatos = $pagosRegistros->pluck('id_documento')->all();
             $pagosConDatos = $pagosRegistros->map(function ($pago) use ($mapDoc) {
                 $doc = $pago->documento;
                 if (!$doc) return null;
+                $estado = in_array($pago->estado_administracion ?? '', ['PENDIENTE', 'CONFIRMADO', 'OBSERVADO'], true)
+                    ? $pago->estado_administracion
+                    : 'PENDIENTE';
                 return [
-                    'document'   => $mapDoc($doc),
-                    'monto'      => $pago->monto !== null ? (string) $pago->monto : null,
-                    'fecha_pago' => $pago->fecha_pago ? $pago->fecha_pago->format('Y-m-d') : null,
-                    'banco'      => $pago->observacion ?: null,
+                    'document'            => $mapDoc($doc),
+                    'monto'              => $pago->monto !== null ? (string) $pago->monto : null,
+                    'fecha_pago'         => $pago->fecha_pago ? $pago->fecha_pago->format('Y-m-d') : null,
+                    'banco'              => $pago->observacion ?: null,
+                    'estado_verificacion' => $estado,
+                    'estado'             => $estado,
+                    'status'             => $estado,
                 ];
             })->filter()->values()->all();
             foreach ($pagoServicio as $doc) {
                 if (!in_array($doc['id'], $docIdsConDatos, true)) {
                     $pagosConDatos[] = [
-                        'document'   => $doc,
-                        'monto'      => null,
-                        'fecha_pago' => null,
-                        'banco'      => null,
+                        'document'            => $doc,
+                        'monto'               => null,
+                        'fecha_pago'          => null,
+                        'banco'               => null,
+                        'estado_verificacion' => 'PENDIENTE',
+                        'estado'              => 'PENDIENTE',
+                        'status'              => 'PENDIENTE',
                     ];
                 }
             }
 
             $tiposPermisoSections = $tramite->tiposPermiso->map(function ($tp) use ($documentos, $mapDoc, $seguimientoPorTipo) {
-                $docsPermiso = $documentos->filter(fn($d) => (int)$d->id_tipo_permiso === (int)$tp->id);
+                $docsPermiso = $documentos->filter(function ($d) use ($tp) { return (int)$d->id_tipo_permiso === (int)$tp->id; });
                 $fCaducidad = $tp->pivot->f_caducidad ?? null;
                 return [
                     'id_tipo_permiso'     => $tp->id,
                     'nombre'              => $tp->nombre,
                     'estado'              => $tp->pivot->estado ?? 'PENDIENTE',
                     'f_caducidad'         => $fCaducidad ? (\Carbon\Carbon::parse($fCaducidad)->format('Y-m-d')) : null,
-                    'documentos_tramite'  => $docsPermiso->filter(fn($d) => ($d->seccion ?? 'documentos_tramite') === 'documentos_tramite')->values()->map($mapDoc)->all(),
-                    'fotos'               => $docsPermiso->filter(fn($d) => ($d->seccion ?? '') === 'fotos')->values()->map($mapDoc)->all(),
+                    'documentos_tramite'  => $docsPermiso->filter(function ($d) { return ($d->seccion ?? 'documentos_tramite') === 'documentos_tramite'; })->values()->map($mapDoc)->all(),
+                    'fotos'               => $docsPermiso->filter(function ($d) { return ($d->seccion ?? '') === 'fotos'; })->values()->map($mapDoc)->all(),
                     'seguimiento'         => $seguimientoPorTipo[$tp->id] ?? [],
                 ];
             })->all();
 
-            $categoriasPayload = $categorias->map(fn($c) => [
-                'id'              => $c->id,
-                'id_tramite'      => $c->id_tramite,
-                'nombre'          => $c->nombre,
-                'seccion'         => $c->seccion ?? 'documentos_tramite',
-                'id_tipo_permiso' => $c->id_tipo_permiso,
-            ])->all();
+            $categoriasPayload = $categorias->map(function ($c) {
+                return [
+                    'id'              => $c->id,
+                    'id_tramite'      => $c->id_tramite,
+                    'nombre'          => $c->nombre,
+                    'seccion'         => $c->seccion ?? 'documentos_tramite',
+                    'id_tipo_permiso' => $c->id_tipo_permiso,
+                ];
+            })->all();
 
             $clienteNombre = null;
             if ($tramite->cliente) {
@@ -130,6 +143,42 @@ class TramiteAduanaDocumentoService
                 $carga = '#' . $carga;
             }
 
+            $comprobantesDerecho = PagoPermisoDerechoTramite::where('id_tramite', $idTramite)->orderBy('id_tipo_permiso')->orderBy('id')->get();
+            $mapComprobanteDerecho = function ($c) {
+                return [
+                    'id'              => $c->id,
+                    'id_tipo_permiso' => $c->id_tipo_permiso,
+                    'url'             => $c->url,
+                    'nombre_original'  => $c->nombre_original,
+                    'extension'       => $c->extension,
+                    'peso'            => $c->peso,
+                    'monto'           => $c->monto !== null ? (string) $c->monto : null,
+                    'banco'           => $c->banco,
+                    'fecha_cierre'    => $c->fecha_cierre ? $c->fecha_cierre->format('Y-m-d') : null,
+                ];
+            };
+            $comprobantesDerechoPorTipo = [];
+            foreach ($comprobantesDerecho as $c) {
+                $idTipo = (int) $c->id_tipo_permiso;
+                if (!isset($comprobantesDerechoPorTipo[$idTipo])) {
+                    $comprobantesDerechoPorTipo[$idTipo] = [];
+                }
+                $comprobantesDerechoPorTipo[$idTipo][] = $mapComprobanteDerecho($c);
+            }
+
+            $comprobantesTramitador = PagoPermisoTramite::where('id_tramite', $idTramite)->orderBy('id')->get()->map(function ($c) {
+                return [
+                    'id'             => $c->id,
+                    'url'            => $c->url,
+                    'nombre_original' => $c->nombre_original,
+                    'extension'      => $c->extension,
+                    'peso'           => $c->peso,
+                    'monto'          => $c->monto !== null ? (string) $c->monto : null,
+                    'banco'          => $c->banco,
+                    'fecha_cierre'   => $c->fecha_cierre ? $c->fecha_cierre->format('Y-m-d') : null,
+                ];
+            })->all();
+
             return [
                 'success'              => true,
                 'tramite'              => [
@@ -141,13 +190,15 @@ class TramiteAduanaDocumentoService
                     'consolidado'   => $carga,
                     'f_caducidad'   => $tramite->f_caducidad ? $tramite->f_caducidad->format('Y-m-d') : null,
                 ],
-                'categorias'                => $categoriasPayload,
-                'tipos_permiso_sections'   => $tiposPermisoSections,
-                'pago_servicio'             => $pagoServicio,
-                'pagos_con_datos'           => $pagosConDatos,
-                'seguimiento_compartido'    => $seguimientoCompartido,
-                'seguimiento_por_tipo'      => $seguimientoPorTipo,
-                'data'                      => $documentos->map($mapDoc)->all(),
+                'categorias'                   => $categoriasPayload,
+                'tipos_permiso_sections'      => $tiposPermisoSections,
+                'pago_servicio'                => $pagoServicio,
+                'pagos_con_datos'              => $pagosConDatos,
+                'seguimiento_compartido'       => $seguimientoCompartido,
+                'seguimiento_por_tipo'         => $seguimientoPorTipo,
+                'comprobantes_derecho_por_tipo' => $comprobantesDerechoPorTipo,
+                'comprobantes_tramitador'      => $comprobantesTramitador,
+                'data'                         => $documentos->map($mapDoc)->all(),
             ];
         } catch (\Exception $e) {
             Log::error('Error al listar documentos del trámite: ' . $e->getMessage());
@@ -479,9 +530,9 @@ class TramiteAduanaDocumentoService
         // 3) Guardar cada tipo permiso (sincronizar ids por sección) y actualizar f_caducidad por tipo (pivot)
         foreach ($guardarTipos as $item) {
             $idTipoPermiso = (int) ($item['id_tipo_permiso'] ?? 0);
-            $docIds = array_map('intval', array_filter($item['documentos_tramite_ids'] ?? [], fn($id) => is_numeric($id)));
-            $fotoIds = array_map('intval', array_filter($item['fotos_ids'] ?? [], fn($id) => is_numeric($id)));
-            $segIds = array_map('intval', array_filter($item['seguimiento_ids'] ?? [], fn($id) => is_numeric($id)));
+            $docIds = array_map('intval', array_filter($item['documentos_tramite_ids'] ?? [], function ($id) { return is_numeric($id); }));
+            $fotoIds = array_map('intval', array_filter($item['fotos_ids'] ?? [], function ($id) { return is_numeric($id); }));
+            $segIds = array_map('intval', array_filter($item['seguimiento_ids'] ?? [], function ($id) { return is_numeric($id); }));
 
             $result = $this->guardarTipoPermiso($idTramite, $idTipoPermiso, $docIds, $fotoIds, $segIds);
             if (!$result['success']) {
@@ -805,13 +856,15 @@ class TramiteAduanaDocumentoService
                 ->orderBy('nombre')
                 ->get();
 
-            $data = $categorias->map(fn($c) => [
-                'id'              => $c->id,
-                'id_tramite'      => $c->id_tramite,
-                'nombre'          => $c->nombre,
-                'seccion'         => $c->seccion ?? 'documentos_tramite',
-                'id_tipo_permiso' => $c->id_tipo_permiso,
-            ])->all();
+            $data = $categorias->map(function ($c) {
+                return [
+                    'id'              => $c->id,
+                    'id_tramite'      => $c->id_tramite,
+                    'nombre'          => $c->nombre,
+                    'seccion'         => $c->seccion ?? 'documentos_tramite',
+                    'id_tipo_permiso' => $c->id_tipo_permiso,
+                ];
+            })->all();
 
             return ['success' => true, 'data' => $data];
         } catch (\Exception $e) {
@@ -861,6 +914,276 @@ class TramiteAduanaDocumentoService
     }
 
     /**
+     * POST guardar-verificacion: actualiza estado_administracion de pagos de servicio y sube comprobantes (derecho por tipo, tramitador).
+     * FormData: estados_pago_servicio (JSON), comprobante_derecho_{id_tipo_permiso} (file), pago_derecho_{id}_monto/banco/fecha_cierre, comprobante_tramitador (file), pago_tramitador_monto/banco/fecha_cierre.
+     */
+    public function guardarVerificacion(Request $request, int $idTramite): array
+    {
+        $tramite = ConsolidadoCotizacionAduanaTramite::with('tiposPermiso')->find($idTramite);
+        if (!$tramite) {
+            return ['success' => false, 'error' => 'Trámite no encontrado'];
+        }
+
+        $estadosJson = $request->input('estados_pago_servicio');
+        if ($estadosJson !== null && $estadosJson !== '') {
+            $estados = json_decode($estadosJson, true);
+            if (is_array($estados)) {
+                $primerTipo = $tramite->tiposPermiso->first();
+                $idTipoPermisoDefault = $primerTipo ? (int) $primerTipo->id : null;
+                foreach ($estados as $item) {
+                    $idDoc = isset($item['id_documento']) ? (int) $item['id_documento'] : 0;
+                    $estado = isset($item['estado']) && in_array($item['estado'], ['PENDIENTE', 'CONFIRMADO', 'OBSERVADO'], true)
+                        ? $item['estado']
+                        : 'PENDIENTE';
+                    if ($idDoc <= 0) {
+                        continue;
+                    }
+                    $pago = TramiteAduanaPago::where('id_tramite', $idTramite)->where('id_documento', $idDoc)->first();
+                    if ($pago) {
+                        $pago->estado_administracion = $estado;
+                        $pago->save();
+                    } elseif ($idTipoPermisoDefault !== null) {
+                        TramiteAduanaPago::create([
+                            'id_tramite'             => $idTramite,
+                            'id_tipo_permiso'        => $idTipoPermisoDefault,
+                            'id_documento'           => $idDoc,
+                            'estado_administracion'  => $estado,
+                        ]);
+                    }
+                }
+            }
+        }
+
+        // Múltiples comprobantes por tipo: comprobante_derecho_{id} o comprobante_derecho_{id}_{idx}, pago_derecho_{id}_{idx}_monto/banco/fecha_cierre
+        $allKeys = array_keys($request->all());
+        foreach ($allKeys as $key) {
+            if (strpos($key, 'comprobante_derecho_') !== 0) {
+                continue;
+            }
+            $file = $request->file($key);
+            if (!$file || !$file->isValid()) {
+                continue;
+            }
+            $suffix = substr($key, strlen('comprobante_derecho_'));
+            $parts = explode('_', $suffix, 2);
+            $idTipoPermiso = (int) $parts[0];
+            $idx = isset($parts[1]) ? (int) $parts[1] : 0;
+            if ($idTipoPermiso <= 0) {
+                continue;
+            }
+            $prefix = 'pago_derecho_' . $idTipoPermiso . '_' . $idx . '_';
+            $monto = $request->input($prefix . 'monto') ?? $request->input('pago_derecho_' . $idTipoPermiso . '_monto');
+            $banco = $request->input($prefix . 'banco') ?? $request->input('pago_derecho_' . $idTipoPermiso . '_banco');
+            $fechaCierre = $request->input($prefix . 'fecha_cierre') ?? $request->input('pago_derecho_' . $idTipoPermiso . '_fecha_cierre');
+            $filename = time() . '_' . uniqid() . '_der_' . $idTipoPermiso . '.' . $file->getClientOriginalExtension();
+            $path = $file->storeAs('tramites/documentos', $filename, 'public');
+            PagoPermisoDerechoTramite::create([
+                'id_tramite'      => $idTramite,
+                'id_tipo_permiso' => $idTipoPermiso,
+                'ruta'            => $path,
+                'nombre_original' => $file->getClientOriginalName(),
+                'extension'       => $file->getClientOriginalExtension(),
+                'peso'            => $file->getSize(),
+                'monto'           => $monto !== null && $monto !== '' ? $monto : null,
+                'banco'           => $banco ?: null,
+                'fecha_cierre'    => $fechaCierre ?: null,
+            ]);
+        }
+
+        // Múltiples comprobantes tramitador: comprobante_tramitador_{idx}, pago_tramitador_{idx}_monto/banco/fecha_cierre (y comprobante_tramitador sin índice = índice 0)
+        $tramitadorIndex = 0;
+        foreach (['comprobante_tramitador', 'comprobante_tramitador_0'] as $tryKey) {
+            $fileTramitador = $request->file($tryKey);
+            if ($fileTramitador && $fileTramitador->isValid()) {
+                $prefix = $tramitadorIndex === 0 ? 'pago_tramitador_' : 'pago_tramitador_' . $tramitadorIndex . '_';
+                $monto = $request->input($prefix . 'monto') ?? $request->input('pago_tramitador_monto');
+                $banco = $request->input($prefix . 'banco') ?? $request->input('pago_tramitador_banco');
+                $fechaCierre = $request->input($prefix . 'fecha_cierre') ?? $request->input('pago_tramitador_fecha_cierre');
+                $filename = time() . '_' . uniqid() . '_tramitador.' . $fileTramitador->getClientOriginalExtension();
+                $path = $fileTramitador->storeAs('tramites/documentos', $filename, 'public');
+                PagoPermisoTramite::create([
+                    'id_tramite'      => $idTramite,
+                    'ruta'            => $path,
+                    'nombre_original' => $fileTramitador->getClientOriginalName(),
+                    'extension'       => $fileTramitador->getClientOriginalExtension(),
+                    'peso'            => $fileTramitador->getSize(),
+                    'monto'           => $monto !== null && $monto !== '' ? $monto : null,
+                    'banco'           => $banco ?: null,
+                    'fecha_cierre'    => $fechaCierre ?: null,
+                ]);
+                break;
+            }
+        }
+        foreach ($allKeys as $key) {
+            if (!preg_match('/^comprobante_tramitador_(\d+)$/', $key, $m) || (int) $m[1] === 0) {
+                continue;
+            }
+            $idx = (int) $m[1];
+            $fileTramitador = $request->file($key);
+            if (!$fileTramitador || !$fileTramitador->isValid()) {
+                continue;
+            }
+            $prefix = 'pago_tramitador_' . $idx . '_';
+            $monto = $request->input($prefix . 'monto');
+            $banco = $request->input($prefix . 'banco');
+            $fechaCierre = $request->input($prefix . 'fecha_cierre');
+            $filename = time() . '_' . uniqid() . '_tramitador.' . $fileTramitador->getClientOriginalExtension();
+            $path = $fileTramitador->storeAs('tramites/documentos', $filename, 'public');
+            PagoPermisoTramite::create([
+                'id_tramite'      => $idTramite,
+                'ruta'            => $path,
+                'nombre_original' => $fileTramitador->getClientOriginalName(),
+                'extension'       => $fileTramitador->getClientOriginalExtension(),
+                'peso'            => $fileTramitador->getSize(),
+                'monto'           => $monto !== null && $monto !== '' ? $monto : null,
+                'banco'           => $banco ?: null,
+                'fecha_cierre'    => $fechaCierre ?: null,
+            ]);
+        }
+
+        // Actualizar comprobantes existentes (mismo método, sin otros endpoints)
+        $actualizarDerechoJson = $request->input('comprobante_derecho_actualizar');
+        if ($actualizarDerechoJson !== null && $actualizarDerechoJson !== '') {
+            $items = json_decode($actualizarDerechoJson, true);
+            if (is_array($items)) {
+                foreach ($items as $item) {
+                    $idComp = isset($item['id']) ? (int) $item['id'] : 0;
+                    if ($idComp <= 0) {
+                        continue;
+                    }
+                    $row = PagoPermisoDerechoTramite::where('id_tramite', $idTramite)->where('id', $idComp)->first();
+                    if ($row) {
+                        if (array_key_exists('monto', $item)) {
+                            $row->monto = $item['monto'] !== null && $item['monto'] !== '' ? $item['monto'] : null;
+                        }
+                        if (array_key_exists('banco', $item)) {
+                            $row->banco = $item['banco'] ?: null;
+                        }
+                        if (array_key_exists('fecha_cierre', $item)) {
+                            $row->fecha_cierre = $item['fecha_cierre'] ?: null;
+                        }
+                        $row->save();
+                    }
+                }
+            }
+        }
+
+        $actualizarTramitadorJson = $request->input('comprobante_tramitador_actualizar');
+        if ($actualizarTramitadorJson !== null && $actualizarTramitadorJson !== '') {
+            $items = json_decode($actualizarTramitadorJson, true);
+            if (is_array($items)) {
+                foreach ($items as $item) {
+                    $idComp = isset($item['id']) ? (int) $item['id'] : 0;
+                    if ($idComp <= 0) {
+                        continue;
+                    }
+                    $row = PagoPermisoTramite::where('id_tramite', $idTramite)->where('id', $idComp)->first();
+                    if ($row) {
+                        if (array_key_exists('monto', $item)) {
+                            $row->monto = $item['monto'] !== null && $item['monto'] !== '' ? $item['monto'] : null;
+                        }
+                        if (array_key_exists('banco', $item)) {
+                            $row->banco = $item['banco'] ?: null;
+                        }
+                        if (array_key_exists('fecha_cierre', $item)) {
+                            $row->fecha_cierre = $item['fecha_cierre'] ?: null;
+                        }
+                        $row->save();
+                    }
+                }
+            }
+        }
+
+        // Reemplazar archivo de comprobantes existentes: comprobante_derecho_reemplazar_{id}, comprobante_tramitador_reemplazar_{id}
+        foreach ($allKeys as $key) {
+            if (strpos($key, 'comprobante_derecho_reemplazar_') !== 0) {
+                continue;
+            }
+            $idComp = (int) str_replace('comprobante_derecho_reemplazar_', '', $key);
+            if ($idComp <= 0) {
+                continue;
+            }
+            $file = $request->file($key);
+            if (!$file || !$file->isValid()) {
+                continue;
+            }
+            $row = PagoPermisoDerechoTramite::where('id_tramite', $idTramite)->where('id', $idComp)->first();
+            if ($row) {
+                if (Storage::disk('public')->exists($row->ruta)) {
+                    Storage::disk('public')->delete($row->ruta);
+                }
+                $filename = time() . '_' . uniqid() . '_der_repl_' . $idComp . '.' . $file->getClientOriginalExtension();
+                $path = $file->storeAs('tramites/documentos', $filename, 'public');
+                $row->ruta = $path;
+                $row->nombre_original = $file->getClientOriginalName();
+                $row->extension = $file->getClientOriginalExtension();
+                $row->peso = $file->getSize();
+                $row->save();
+            }
+        }
+        foreach ($allKeys as $key) {
+            if (strpos($key, 'comprobante_tramitador_reemplazar_') !== 0) {
+                continue;
+            }
+            $idComp = (int) str_replace('comprobante_tramitador_reemplazar_', '', $key);
+            if ($idComp <= 0) {
+                continue;
+            }
+            $file = $request->file($key);
+            if (!$file || !$file->isValid()) {
+                continue;
+            }
+            $row = PagoPermisoTramite::where('id_tramite', $idTramite)->where('id', $idComp)->first();
+            if ($row) {
+                if (Storage::disk('public')->exists($row->ruta)) {
+                    Storage::disk('public')->delete($row->ruta);
+                }
+                $filename = time() . '_' . uniqid() . '_tram_repl_' . $idComp . '.' . $file->getClientOriginalExtension();
+                $path = $file->storeAs('tramites/documentos', $filename, 'public');
+                $row->ruta = $path;
+                $row->nombre_original = $file->getClientOriginalName();
+                $row->extension = $file->getClientOriginalExtension();
+                $row->peso = $file->getSize();
+                $row->save();
+            }
+        }
+
+        return ['success' => true];
+    }
+
+    /**
+     * Eliminar comprobante de derecho de trámite (solo administración). Borra el registro y el archivo en storage.
+     */
+    public function eliminarComprobanteDerecho(int $idTramite, int $idComprobante): array
+    {
+        $row = PagoPermisoDerechoTramite::where('id_tramite', $idTramite)->where('id', $idComprobante)->first();
+        if (!$row) {
+            return ['success' => false, 'error' => 'Comprobante no encontrado'];
+        }
+        if (Storage::disk('public')->exists($row->ruta)) {
+            Storage::disk('public')->delete($row->ruta);
+        }
+        $row->delete();
+        return ['success' => true];
+    }
+
+    /**
+     * Eliminar comprobante del tramitador (solo administración). Borra el registro y el archivo en storage.
+     */
+    public function eliminarComprobanteTramitador(int $idTramite, int $idComprobante): array
+    {
+        $row = PagoPermisoTramite::where('id_tramite', $idTramite)->where('id', $idComprobante)->first();
+        if (!$row) {
+            return ['success' => false, 'error' => 'Comprobante no encontrado'];
+        }
+        if (Storage::disk('public')->exists($row->ruta)) {
+            Storage::disk('public')->delete($row->ruta);
+        }
+        $row->delete();
+        return ['success' => true];
+    }
+
+    /**
      * Guarda la asignación de documentos por sección para un tipo de permiso (tab).
      * Payload: documentos_tramite_ids, fotos_ids, seguimiento_ids (arrays de IDs).
      */
@@ -877,9 +1200,9 @@ class TramiteAduanaDocumentoService
                 return ['success' => false, 'error' => 'El tipo de permiso no pertenece a este trámite'];
             }
 
-            $docIds = array_map('intval', array_filter($documentosTramiteIds, fn($id) => is_numeric($id)));
-            $fotoIds = array_map('intval', array_filter($fotosIds, fn($id) => is_numeric($id)));
-            $segIds = array_map('intval', array_filter($seguimientoIds, fn($id) => is_numeric($id)));
+            $docIds = array_map('intval', array_filter($documentosTramiteIds, function ($id) { return is_numeric($id); }));
+            $fotoIds = array_map('intval', array_filter($fotosIds, function ($id) { return is_numeric($id); }));
+            $segIds = array_map('intval', array_filter($seguimientoIds, function ($id) { return is_numeric($id); }));
             $todosIds = array_unique(array_merge($docIds, $fotoIds, $segIds));
 
             if (!empty($todosIds)) {

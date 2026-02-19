@@ -124,6 +124,9 @@ Route::group(['prefix' => 'base-datos', 'middleware' => 'jwt.auth'], function ()
         Route::post('tramites/{idTramite}/documentos', [TramiteAduanaDocumentosController::class, 'store']);
         Route::post('tramites/{idTramite}/documentos/batch', [TramiteAduanaDocumentosController::class, 'storeBatch']);
         Route::post('tramites/{idTramite}/guardar-todo', [TramiteAduanaDocumentosController::class, 'guardarTodo']);
+        Route::post('tramites/{idTramite}/guardar-verificacion', [TramiteAduanaDocumentosController::class, 'guardarVerificacion']);
+        Route::delete('tramites/{idTramite}/comprobantes-derecho/{idComprobante}', [TramiteAduanaDocumentosController::class, 'destroyComprobanteDerecho']);
+        Route::delete('tramites/{idTramite}/comprobantes-tramitador/{idComprobante}', [TramiteAduanaDocumentosController::class, 'destroyComprobanteTramitador']);
         Route::post('tramites/{idTramite}/tipos-permiso/{idTipoPermiso}/guardar', [TramiteAduanaDocumentosController::class, 'guardarTipoPermiso']);
         Route::delete('tramites/documentos/{id}', [TramiteAduanaDocumentosController::class, 'destroy']);
         Route::get('tramites/documentos/{id}/download', [TramiteAduanaDocumentosController::class, 'download']);

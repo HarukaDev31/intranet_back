@@ -58,6 +58,7 @@ class PagosController extends Controller
                     'contenedor_consolidado_cotizacion.*',
                     'carga_consolidada_contenedor.id as id_consolidado',
                     'carga_consolidada_contenedor.carga as carga',
+                    'carga_consolidada_contenedor.f_inicio as f_inicio',
                     DB::raw('(
                         SELECT COUNT(*)
                         FROM contenedor_consolidado_cotizacion_coordinacion_pagos as ccp
@@ -113,8 +114,10 @@ class PagosController extends Controller
                 $query->where('contenedor_consolidado_cotizacion.estado', $request->estado);
             }
 
-            // Filtro por campaña
-            if ($request->filled('campana') && $request->campana != '0') {
+            // Filtro por contenedor (id único) o por campaña/carga (legacy)
+            if ($request->filled('id_contenedor')) {
+                $query->where('carga_consolidada_contenedor.id', $request->id_contenedor);
+            } elseif ($request->filled('campana') && $request->campana != '0') {
                 $query->where('carga_consolidada_contenedor.carga', $request->campana);
             }
 
@@ -253,8 +256,10 @@ class PagosController extends Controller
 
                 $pagosDetalle = $this->procesarPagosDetalle($cotizacion->pagos_details);
 
+                $anio = $cotizacion->f_inicio ? date('Y', strtotime($cotizacion->f_inicio)) : date('Y');
                 $data[] = [
                     'id' => $cotizacion->id,
+                    'id_consolidado' => $cotizacion->id_consolidado,
                     'index' => $index,
                     'fecha' => Carbon::parse($cotizacion->fecha)->format('d-m-Y'),
                     'nombre' => $cotizacion->nombre,
@@ -262,6 +267,7 @@ class PagosController extends Controller
                     'telefono' => $cotizacion->telefono,
                     'tipo' => "Consolidado",
                     'carga' => $cotizacion->carga,
+                    'carga_display' => '#' . $cotizacion->carga . ' - ' . $anio,
                     'estado_pago' => $estadoPago,
                     'monto_a_pagar' => (($aPagar) == 0 ? $cotizacion->monto : $aPagar),
                     'monto_a_pagar_formateado' => number_format((($aPagar) == 0 ? $cotizacion->monto : $aPagar), 2, '.', ''),
@@ -551,15 +557,19 @@ class PagosController extends Controller
     {
         try {
             $cargas = DB::table('carga_consolidada_contenedor as cc')
-                ->select('cc.carga')
-                ->distinct()
-                ->where('cc.empresa','!=','1')
-                ->orderBy('cc.carga')
+                ->select('cc.id', 'cc.carga', 'cc.f_inicio')
+                ->where('cc.empresa', '!=', '1')
+                ->orderByRaw('COALESCE(YEAR(cc.f_inicio), 2025) ASC, CAST(cc.carga AS UNSIGNED) ASC')
                 ->get();
-            //carga is string number order by number
-            $cargas = $cargas->sortBy(function($carga) {
-                return (int) $carga->carga;
+
+            $cargas = $cargas->map(function ($c) {
+                $anio = $c->f_inicio ? date('Y', strtotime($c->f_inicio)) : '2025';
+                return [
+                    'value' => (string) $c->id,
+                    'label' => '#' . $c->carga . ' - ' . $anio,
+                ];
             });
+
             return $cargas->values();
         } catch (\Exception $e) {
             Log::error('Error en getCargasDisponibles: ' . $e->getMessage());

@@ -222,6 +222,75 @@ class TramiteAduanaService
     }
 
     /**
+     * Actualizar f_inicio y/o f_termino del pivot tramite-tipo_permiso.
+     * Solo se actualizan los valores no null. Recalcula "dias" si ambas fechas están presentes.
+     */
+    public function actualizarFechasTipoPermiso(int $idTramite, int $idTipoPermiso, ?string $fInicio, ?string $fTermino): array
+    {
+        $tramite = ConsolidadoCotizacionAduanaTramite::with('tiposPermiso')->find($idTramite);
+        if (!$tramite) {
+            return ['success' => false, 'error' => 'Trámite no encontrado'];
+        }
+        $pivot = $tramite->tiposPermiso->firstWhere('id', $idTipoPermiso);
+        if (!$pivot) {
+            return ['success' => false, 'error' => 'Tipo de permiso no encontrado en el trámite'];
+        }
+        $updates = [];
+        if ($fInicio !== null) {
+            $updates['f_inicio'] = $fInicio;
+        }
+        if ($fTermino !== null) {
+            $updates['f_termino'] = $fTermino;
+        }
+        if (empty($updates)) {
+            return ['success' => true];
+        }
+        $newInicio = $updates['f_inicio'] ?? $pivot->pivot->f_inicio;
+        $newTermino = $updates['f_termino'] ?? $pivot->pivot->f_termino;
+        if ($newInicio && $newTermino) {
+            try {
+                $dias = (int) \Carbon\Carbon::parse($newInicio)->diffInDays(\Carbon\Carbon::parse($newTermino), false);
+                $updates['dias'] = max(0, $dias);
+            } catch (\Throwable $e) {
+                // ignorar error de fechas; dias queda sin actualizar
+            }
+        }
+        try {
+            $tramite->tiposPermiso()->updateExistingPivot($idTipoPermiso, $updates);
+            return ['success' => true];
+        } catch (\Exception $e) {
+            Log::error('Error actualizarFechasTipoPermiso: ' . $e->getMessage());
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    /**
+     * Actualizar estado del pivot tramite-tipo_permiso.
+     */
+    public function actualizarEstadoTipoPermiso(int $idTramite, int $idTipoPermiso, string $estado): array
+    {
+        $tramite = ConsolidadoCotizacionAduanaTramite::with('tiposPermiso')->find($idTramite);
+        if (!$tramite) {
+            return ['success' => false, 'error' => 'Trámite no encontrado'];
+        }
+        $pivot = $tramite->tiposPermiso->firstWhere('id', $idTipoPermiso);
+        if (!$pivot) {
+            return ['success' => false, 'error' => 'Tipo de permiso no encontrado en el trámite'];
+        }
+        $validos = ['PENDIENTE', 'SD', 'PAGADO', 'EN_TRAMITE', 'RECHAZADO', 'COMPLETADO'];
+        if (!in_array(strtoupper($estado), $validos, true)) {
+            return ['success' => false, 'error' => 'Estado no válido'];
+        }
+        try {
+            $tramite->tiposPermiso()->updateExistingPivot($idTipoPermiso, ['estado' => strtoupper($estado)]);
+            return ['success' => true];
+        } catch (\Exception $e) {
+            Log::error('Error actualizarEstadoTipoPermiso: ' . $e->getMessage());
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    /**
      * Eliminar trámite
      */
     public function eliminar(int $id): array

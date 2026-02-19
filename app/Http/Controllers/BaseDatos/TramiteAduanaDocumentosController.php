@@ -98,6 +98,45 @@ class TramiteAduanaDocumentosController extends Controller
     }
 
     /**
+     * POST tramites/{idTramite}/guardar-verificacion
+     * FormData: estados_pago_servicio (JSON), comprobante_derecho_{id}, comprobante_tramitador (file).
+     */
+    public function guardarVerificacion(Request $request, int $idTramite): JsonResponse
+    {
+        $result = $this->documentoService->guardarVerificacion($request, $idTramite);
+        if (!$result['success']) {
+            return response()->json($result, 422);
+        }
+        return response()->json($result);
+    }
+
+    /**
+     * DELETE tramites/{idTramite}/comprobantes-derecho/{idComprobante}
+     * Solo administración. Elimina comprobante de pago derecho de trámite (tabla pagos_permiso_derecho_tramite).
+     */
+    public function destroyComprobanteDerecho(int $idTramite, int $idComprobante): JsonResponse
+    {
+        $result = $this->documentoService->eliminarComprobanteDerecho($idTramite, $idComprobante);
+        if (!$result['success']) {
+            return response()->json($result, 404);
+        }
+        return response()->json($result);
+    }
+
+    /**
+     * DELETE tramites/{idTramite}/comprobantes-tramitador/{idComprobante}
+     * Solo administración. Elimina comprobante del tramitador (tabla pagos_permiso_tramite).
+     */
+    public function destroyComprobanteTramitador(int $idTramite, int $idComprobante): JsonResponse
+    {
+        $result = $this->documentoService->eliminarComprobanteTramitador($idTramite, $idComprobante);
+        if (!$result['success']) {
+            return response()->json($result, 404);
+        }
+        return response()->json($result);
+    }
+
+    /**
      * POST tramites/{idTramite}/tipos-permiso/{idTipoPermiso}/guardar
      * Body: { documentos_tramite_ids: [], fotos_ids: [], seguimiento_ids: [] }
      */

@@ -1987,7 +1987,7 @@ class EntregaController extends Controller
             }
         }
 
-        // Filtro por contenedor específico
+        // Filtro por contenedor (id único; en front value = id del contenedor)
         if ($request->has('carga') && $request->carga && $request->carga != 'todos') {
             $query->where('C.id', $request->carga);
         }
@@ -2010,7 +2010,7 @@ class EntregaController extends Controller
         $perPage = $request->input('per_page', 100);
         $data = $query->paginate($perPage, ['*'], 'page', $page);
         Log::info('data: ' . json_encode($data));
-        //foreach pago_details generate url
+        //foreach pago_details generate url y formato carga #carga -año
         foreach ($data->items() as $item) {
             $item->pagos_details = json_decode($item->pagos_details, true);
             if (is_array($item->pagos_details)) {
@@ -2020,6 +2020,8 @@ class EntregaController extends Controller
                     }
                 }
             }
+            $anio = !empty($item->f_inicio) ? date('Y', strtotime($item->f_inicio)) : date('Y');
+            $item->carga_display = '#' . $item->carga . ' - ' . $anio;
         }
         return response()->json([
             'data' => $data->items(),
@@ -2039,7 +2041,7 @@ class EntregaController extends Controller
     {
         try {
             $cargas = DB::table('carga_consolidada_contenedor as cc')
-                ->select('cc.id', 'cc.carga')
+                ->select('cc.id', 'cc.carga', 'cc.f_inicio')
                 ->distinct()
                 ->where('cc.empresa', '!=', '1')
                 ->orderBy('cc.carga')
@@ -2049,7 +2051,11 @@ class EntregaController extends Controller
                 return (int) $carga->carga;
             });
             return $cargas->values()->map(function ($carga) {
-                return ['value' => (int) $carga->id, 'label' => "Contenedor #" . $carga->carga];
+                $anio = $carga->f_inicio ? date('Y', strtotime($carga->f_inicio)) : date('Y');
+                return [
+                    'value' => (string) $carga->id,
+                    'label' => '#' . $carga->carga . ' - ' . $anio,
+                ];
             });
         } catch (\Exception $e) {
             Log::error('Error en getCargasDisponibles: ' . $e->getMessage());

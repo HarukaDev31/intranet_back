@@ -5,26 +5,34 @@ namespace App\Models\CargaConsolidada;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-class TramiteAduanaPago extends Model
+class PagoPermisoDerechoTramite extends Model
 {
-    protected $table = 'tramite_aduana_pagos';
+    protected $table = 'pagos_permiso_derecho_tramite';
 
     protected $fillable = [
         'id_tramite',
         'id_tipo_permiso',
-        'id_documento',
+        'ruta',
+        'nombre_original',
+        'extension',
+        'peso',
         'monto',
-        'fecha_pago',
-        'observacion',
-        'estado_administracion',
+        'banco',
+        'fecha_cierre',
     ];
 
     protected $casts = [
+        'peso' => 'integer',
         'monto' => 'decimal:2',
-        'fecha_pago' => 'date',
+        'fecha_cierre' => 'date',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
     ];
+
+    public function getUrlAttribute(): string
+    {
+        return asset('storage/' . $this->ruta);
+    }
 
     public function tramite(): BelongsTo
     {
@@ -34,10 +42,5 @@ class TramiteAduanaPago extends Model
     public function tipoPermiso(): BelongsTo
     {
         return $this->belongsTo(TramiteAduanaTipoPermiso::class, 'id_tipo_permiso');
-    }
-
-    public function documento(): BelongsTo
-    {
-        return $this->belongsTo(TramiteAduanaDocumento::class, 'id_documento');
     }
 }
