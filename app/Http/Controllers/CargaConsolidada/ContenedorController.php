@@ -132,7 +132,7 @@ class ContenedorController extends Controller
                     $effectiveRole = $requestedRole;
                 }
             }
-            if ($effectiveRole == Usuario::ROL_DOCUMENTACION || $effectiveRole == Usuario::ROL_JEFE_IMPORTACION) {
+            if ($effectiveRole == Usuario::ROL_DOCUMENTACION || $effectiveRole == Usuario::ROL_JEFE_IMPORTACION || $effectiveRole == Usuario::ROL_COORDINACION) {
                 if ($completado) {
                     $query->where('estado_documentacion', '=', Contenedor::CONTEDOR_CERRADO);
                 } else {
