@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Models\ViaticoRetribucion;
 use App\Traits\WhatsappTrait;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -11,23 +12,31 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
+/**
+ * Envía por WhatsApp el mensaje y el comprobante de una retribución.
+ * Un viático puede tener varias retribuciones; se despacha un job por cada retribución nueva.
+ */
 class SendViaticoWhatsappNotificationJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, WhatsappTrait;
 
     public $message;
     public $userId;
-    public $paymentReceiptPath; 
+    public $paymentReceiptPath;
     public $userPhone;
+    /** Id de la retribución; al terminar de enviar se actualiza sended_at para no reenviar */
+    public $retribucionId;
+
     /**
      * Create a new job instance.
      */
-    public function __construct(string $message, int $userId, ?string $paymentReceiptPath = null, ?string $userPhone = null)
+    public function __construct(string $message, int $userId, ?string $paymentReceiptPath = null, ?string $userPhone = null, ?int $retribucionId = null)
     {
         $this->message = $message;
         $this->userId = $userId;
         $this->paymentReceiptPath = $paymentReceiptPath;
         $this->userPhone = $userPhone;
+        $this->retribucionId = $retribucionId;
         $this->onQueue('notificaciones');
     }
 
@@ -61,7 +70,16 @@ class SendViaticoWhatsappNotificationJob implements ShouldQueue
                 }
                 if (file_exists($fullPath) && is_readable($fullPath)) {
                     $mime = mime_content_type($fullPath) ?: 'application/octet-stream';
-                    $this->sendMedia($fullPath, $mime, null, $this->phoneNumberId, 0, 'administracion');
+                    if ($mime === 'application/octet-stream') {
+                        $mime = $this->getMimeByExtension($fullPath);
+                    }
+                    $fileName = basename($fullPath);
+                    $this->sendMedia($fullPath, $mime, null, $this->phoneNumberId, 0, 'administracion', $fileName);
+                    Log::info('SendViaticoWhatsappNotificationJob: imagen/archivo enviado', [
+                        'retribucionId' => $this->retribucionId,
+                        'fileName' => $fileName,
+                        'mime' => $mime
+                    ]);
                 } else {
                     Log::warning('SendViaticoWhatsappNotificationJob: archivo no encontrado o no legible', [
                         'path' => $this->paymentReceiptPath,
@@ -72,6 +90,10 @@ class SendViaticoWhatsappNotificationJob implements ShouldQueue
                     ]);
                 }
             }
+
+            if ($this->retribucionId) {
+                ViaticoRetribucion::where('id', $this->retribucionId)->update(['sended_at' => now()]);
+            }
         } catch (\Exception $e) {
             Log::error('SendViaticoWhatsappNotificationJob: ' . $e->getMessage(), [
                 'userId' => $this->userId,
@@ -79,5 +101,23 @@ class SendViaticoWhatsappNotificationJob implements ShouldQueue
             ]);
             throw $e;
         }
+    }
+
+    /**
+     * MIME por extensión para que las imágenes se envíen correctamente (jpg, png, webp, pdf).
+     */
+    private function getMimeByExtension(string $filePath): string
+    {
+        $ext = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
+        $map = [
+            'jpg' => 'image/jpeg',
+            'jpeg' => 'image/jpeg',
+            'png' => 'image/png',
+            'gif' => 'image/gif',
+            'webp' => 'image/webp',
+            'svg' => 'image/svg+xml',
+            'pdf' => 'application/pdf',
+        ];
+        return $map[$ext] ?? 'application/octet-stream';
     }
 }

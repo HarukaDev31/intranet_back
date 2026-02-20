@@ -19,6 +19,7 @@ class Viatico extends Model
         'expense_description',
         'total_amount',
         'status',
+        'codigo_confirmado',
         'receipt_file',
         'payment_receipt_file',
         'user_id'
@@ -52,6 +53,14 @@ class Viatico extends Model
     public function pagos()
     {
         return $this->hasMany(ViaticoPago::class);
+    }
+
+    /**
+     * Relación con comprobantes de retribución (múltiples)
+     */
+    public function retribuciones()
+    {
+        return $this->hasMany(ViaticoRetribucion::class)->orderBy('orden')->orderBy('id');
     }
 
     /**

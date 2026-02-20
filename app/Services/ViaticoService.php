@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Viatico;
 use App\Models\ViaticoPago;
+use App\Models\ViaticoRetribucion;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
@@ -63,28 +64,77 @@ class ViaticoService
     }
 
     /**
-     * Actualizar un viático (items con id = actualizar, sin id = crear; no enviados = eliminar)
+     * Actualizar un viático (items con id = actualizar, sin id = crear; no enviados = eliminar).
+     * Un viático puede tener varias retribuciones. payment_receipt_file: agrega una más (tabla viaticos_retribuciones).
+     * delete_retribucion_id: elimina una retribución por id.
+     * delete_file: elimina todas las retribuciones y pone estado Pendiente.
      */
     public function actualizarViatico(Viatico $viatico, array $data, ?UploadedFile $archivo = null, array $itemFiles = []): Viatico
     {
         $rutaNuevaGuardada = null;
+        $nuevaRetribucion = null;
 
         try {
             $archivosAEliminar = [];
 
-            if ($archivo) {
-                if ($viatico->payment_receipt_file) {
-                    $archivosAEliminar[] = $viatico->payment_receipt_file;
+            // Eliminar una retribución concreta (permitido aunque el viático esté CONFIRMED)
+            $deleteRetribucionId = $data['delete_retribucion_id'] ?? null;
+            if ($deleteRetribucionId) {
+                $retribucion = ViaticoRetribucion::where('viatico_id', $viatico->id)->find($deleteRetribucionId);
+                if ($retribucion && $retribucion->file_path) {
+                    $archivosAEliminar[] = $retribucion->file_path;
                 }
+                ViaticoRetribucion::where('viatico_id', $viatico->id)->where('id', $deleteRetribucionId)->delete();
+                unset($data['delete_retribucion_id']);
+                // Actualizar payment_receipt_file legacy con la siguiente retribución o null
+                $siguiente = ViaticoRetribucion::where('viatico_id', $viatico->id)->orderBy('orden')->orderBy('id')->first();
+                $data['payment_receipt_file'] = $siguiente ? $siguiente->file_path : null;
+                // Si la suma de las retribuciones restantes es menor que el total, pasar a PENDING
+                $sumaRetribuciones = ViaticoRetribucion::where('viatico_id', $viatico->id)->sum('monto');
+                $totalAmount = (float) $viatico->total_amount;
+                if (abs($sumaRetribuciones - $totalAmount) >= 0.02) {
+                    $data['status'] = Viatico::STATUS_PENDING;
+                }
+            }
+
+            // Agregar una nueva retribución (archivo + banco, monto, fecha opcionales)
+            $nuevaRetribucion = null;
+            if ($archivo) {
                 $rutaNuevaGuardada = $this->guardarArchivo($archivo);
+                $maxOrden = ViaticoRetribucion::where('viatico_id', $viatico->id)->max('orden') ?? 0;
+                $fechaCierre = isset($data['payment_receipt_fecha_cierre'])
+                    ? (\Carbon\Carbon::parse($data['payment_receipt_fecha_cierre'])->format('Y-m-d'))
+                    : null;
+                $nuevaRetribucion = ViaticoRetribucion::create([
+                    'viatico_id' => $viatico->id,
+                    'file_path' => $rutaNuevaGuardada,
+                    'file_original_name' => $archivo->getClientOriginalName(),
+                    'banco' => $data['payment_receipt_banco'] ?? null,
+                    'monto' => isset($data['payment_receipt_monto']) ? (float) $data['payment_receipt_monto'] : null,
+                    'fecha_cierre' => $fechaCierre,
+                    'orden' => $maxOrden + 1,
+                ]);
                 $data['payment_receipt_file'] = $rutaNuevaGuardada;
-                $data['status'] = Viatico::STATUS_CONFIRMED;
+                // Pasar a CONFIRMED solo si la suma de todas las retribuciones = total del viático
+                $sumaRetribuciones = ViaticoRetribucion::where('viatico_id', $viatico->id)->sum('monto');
+                $totalAmount = (float) $viatico->total_amount;
+                if (abs($sumaRetribuciones - $totalAmount) < 0.02) {
+                    $data['status'] = Viatico::STATUS_CONFIRMED;
+                } else {
+                    $data['status'] = Viatico::STATUS_PENDING;
+                }
             }
 
             if (isset($data['delete_file']) && $data['delete_file'] === true) {
                 if ($viatico->receipt_file) {
                     $archivosAEliminar[] = $viatico->receipt_file;
                 }
+                foreach ($viatico->retribuciones as $r) {
+                    if ($r->file_path) {
+                        $archivosAEliminar[] = $r->file_path;
+                    }
+                }
+                ViaticoRetribucion::where('viatico_id', $viatico->id)->delete();
                 $data['payment_receipt_file'] = null;
                 $data['status'] = Viatico::STATUS_PENDING;
                 unset($data['delete_file']);
@@ -94,6 +144,15 @@ class ViaticoService
             unset($data['items']);
 
             DB::beginTransaction();
+            if (isset($data['status']) && $data['status'] === Viatico::STATUS_CONFIRMED && empty($viatico->codigo_confirmado)) {
+                $year = date('Y');
+                $nextIndex = Viatico::where('status', Viatico::STATUS_CONFIRMED)
+                    ->whereNotNull('codigo_confirmado')
+                    ->where('codigo_confirmado', 'like', "VI{$year}%")
+                    ->lockForUpdate()
+                    ->count() + 1;
+                $data['codigo_confirmado'] = 'VI' . $year . str_pad((string) $nextIndex, 3, '0', STR_PAD_LEFT);
+            }
             $viatico->update($data);
 
             if ($items !== null) {
@@ -145,7 +204,11 @@ class ViaticoService
                 $this->eliminarArchivo($ruta);
             }
 
-            return $viatico->load(['usuario', 'pagos']);
+            $viatico->load(['usuario', 'pagos', 'retribuciones']);
+            if ($nuevaRetribucion !== null) {
+                $viatico->nueva_retribucion = $nuevaRetribucion;
+            }
+            return $viatico;
         } catch (\Exception $e) {
             DB::rollBack();
             if ($rutaNuevaGuardada) {
@@ -221,7 +284,7 @@ class ViaticoService
      */
     public function obtenerViaticos(array $filtros = [])
     {
-        $query = Viatico::with(['usuario', 'pagos']);
+        $query = Viatico::with(['usuario', 'pagos', 'retribuciones']);
 
         // Filtrar por usuario si no es administración
         if (isset($filtros['user_id'])) {
@@ -246,12 +309,17 @@ class ViaticoService
             $query->where('requesting_area', $filtros['requesting_area']);
         }
 
-        // Búsqueda por asunto o descripción
-        if (isset($filtros['search'])) {
-            $search = $filtros['search'];
-            $query->where(function($q) use ($search) {
+        // Búsqueda por asunto, descripción, código o monto
+        if (isset($filtros['search']) && trim($filtros['search']) !== '') {
+            $search = trim($filtros['search']);
+            $query->where(function ($q) use ($search) {
                 $q->where('subject', 'like', "%{$search}%")
-                  ->orWhere('expense_description', 'like', "%{$search}%");
+                  ->orWhere('expense_description', 'like', "%{$search}%")
+                  ->orWhere('codigo_confirmado', 'like', "%{$search}%");
+                if (is_numeric(str_replace([',', ' ', '.'], '', $search))) {
+                    $amount = (float) str_replace(',', '.', $search);
+                    $q->orWhereBetween('total_amount', [$amount - 0.02, $amount + 0.02]);
+                }
             });
         }
 
@@ -268,7 +336,7 @@ class ViaticoService
      */
     public function obtenerViaticoPorId(int $id): ?Viatico
     {
-        return Viatico::with(['usuario', 'pagos'])->find($id);
+        return Viatico::with(['usuario', 'pagos', 'retribuciones'])->find($id);
     }
 
     /**
@@ -280,9 +348,17 @@ class ViaticoService
             if ($viatico->receipt_file) {
                 $this->eliminarArchivo($viatico->receipt_file);
             }
+            if ($viatico->payment_receipt_file) {
+                $this->eliminarArchivo($viatico->payment_receipt_file);
+            }
             foreach ($viatico->pagos as $pago) {
                 if ($pago->file_path) {
                     $this->eliminarArchivo($pago->file_path);
+                }
+            }
+            foreach ($viatico->retribuciones as $r) {
+                if ($r->file_path) {
+                    $this->eliminarArchivo($r->file_path);
                 }
             }
             return $viatico->delete();
