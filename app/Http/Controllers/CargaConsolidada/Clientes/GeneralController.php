@@ -20,6 +20,7 @@ use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use Exception;
 use App\Traits\WhatsappTrait;
 use App\Models\CargaConsolidada\Contenedor;
+use App\Models\CargaConsolidada\ConsolidadoCotizacionAduanaTramite;
 
 class GeneralController extends Controller
 {
@@ -175,6 +176,50 @@ class GeneralController extends Controller
         // usar 'id_cotizacion' porque 'id' puede venir ambigua por el join con C.*
         $ids = collect($cotizaciones)->pluck('id_cotizacion')->filter()->all();
 
+        // Estado permiso por tipo, por cotización (para roles Coordinación, Documentación, Jefe Importación, Cotizador)
+        $estadoPermisoPorCotizacion = [];
+        $effectiveRole = $user ? $user->getNombreGrupo() : null;
+        if ($user && $user->getNombreGrupo() == Usuario::ROL_JEFE_IMPORTACION && $request->filled('role')) {
+            $requestedRole = trim((string) $request->role);
+            if (in_array($requestedRole, [Usuario::ROL_COORDINACION, Usuario::ROL_DOCUMENTACION], true)) {
+                $effectiveRole = $requestedRole;
+            }
+        }
+        $idTramitePorCotizacion = [];
+        if (in_array($effectiveRole, [Usuario::ROL_COORDINACION, Usuario::ROL_DOCUMENTACION, Usuario::ROL_JEFE_IMPORTACION, Usuario::ROL_COTIZADOR], true) && !empty($ids)) {
+            $tramites = ConsolidadoCotizacionAduanaTramite::where('id_consolidado', (int) $idContenedor)
+                ->whereIn('id_cotizacion', $ids)
+                ->with(['tiposPermiso' => function ($q) { $q->withTrashed(); }])
+                ->get();
+            foreach ($tramites as $tramite) {
+                $idCot = $tramite->id_cotizacion;
+                if ($idCot === null) {
+                    continue;
+                }
+                $idTramitePorCotizacion[$idCot] = $tramite->id;
+                foreach ($tramite->tiposPermiso as $tipo) {
+                    $pivot = $tipo->pivot;
+                    $estado = $pivot->estado ?? 'PENDIENTE';
+                    if (!isset($estadoPermisoPorCotizacion[$idCot][$tipo->id])) {
+                        $estadoPermisoPorCotizacion[$idCot][$tipo->id] = [
+                            'id_tipo_permiso' => $tipo->id,
+                            'nombre_permiso' => $tipo->nombre ?? 'Permiso',
+                            'estado' => $estado,
+                        ];
+                    } else {
+                        $orden = ['PENDIENTE' => 0, 'SD' => 1, 'EN_TRAMITE' => 2, 'PAGADO' => 3, 'RECHAZADO' => 4, 'COMPLETADO' => 5];
+                        $actual = $estadoPermisoPorCotizacion[$idCot][$tipo->id]['estado'];
+                        if (($orden[$estado] ?? 99) < ($orden[$actual] ?? 99)) {
+                            $estadoPermisoPorCotizacion[$idCot][$tipo->id]['estado'] = $estado;
+                        }
+                    }
+                }
+            }
+            foreach ($estadoPermisoPorCotizacion as $idC => $porTipo) {
+                $estadoPermisoPorCotizacion[$idC] = array_values($porTipo);
+            }
+        }
+
         // Obtener proveedores relacionados en una sola consulta y agrupar por id_cotizacion
         // Nota: sólo cargar proveedores si el usuario es del rol Documentacion
         $proveedores = collect();
@@ -203,7 +248,7 @@ class GeneralController extends Controller
 
         // Mapear cotizaciones devolviendo todas las columnas originales
         // y, si el usuario es Documentacion, añadir el array 'proveedores' por cotización
-        $dataTransformed = collect($cotizaciones)->map(function ($cot) use ($proveedores, $user) {
+        $dataTransformed = collect($cotizaciones)->map(function ($cot) use ($proveedores, $user, $estadoPermisoPorCotizacion, $idTramitePorCotizacion) {
             // Convertir el objeto a array para mantener todos los campos originales
             $itemArr = (array) $cot;
 
@@ -217,6 +262,11 @@ class GeneralController extends Controller
 
             // Por defecto, devolver proveedores vacío
             $itemArr['proveedores'] = [];
+
+            // Estado permiso por tipo (para columna Estado en perfil Documentación) e id_tramite para enlace a vista permiso
+            $idCotizacion = $cot->id_cotizacion ?? $cot->id ?? null;
+            $itemArr['estado_permiso_por_tipo'] = $idCotizacion !== null ? ($estadoPermisoPorCotizacion[$idCotizacion] ?? []) : [];
+            $itemArr['id_tramite'] = $idCotizacion !== null ? ($idTramitePorCotizacion[$idCotizacion] ?? null) : null;
 
             // Si el usuario es Documentacion, incluir proveedores completos (id, code_supplier, archivos y estados)
             if ($user && ($user->getNombreGrupo() == Usuario::ROL_DOCUMENTACION || $user->getNombreGrupo() == Usuario::ROL_JEFE_IMPORTACION) && $proveedores) {

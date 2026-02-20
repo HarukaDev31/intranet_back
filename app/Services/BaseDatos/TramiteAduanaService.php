@@ -3,6 +3,8 @@
 namespace App\Services\BaseDatos;
 
 use App\Models\CargaConsolidada\ConsolidadoCotizacionAduanaTramite;
+use App\Models\CargaConsolidada\PagoPermisoDerechoTramite;
+use App\Models\CargaConsolidada\PagoPermisoTramite;
 use App\Models\CargaConsolidada\TramiteAduanaCategoria;
 use App\Models\CargaConsolidada\TramiteAduanaPago;
 use Illuminate\Http\Request;
@@ -310,9 +312,14 @@ class TramiteAduanaService
 
     private function mapearTramite(ConsolidadoCotizacionAduanaTramite $t): array
     {
+        $t->loadMissing('entidad');
         $consolidado = $t->consolidado;
         $cotizacion = $t->cotizacion;
         $cliente = $t->cliente;
+        $entidadModel = $t->entidad;
+        if (!$entidadModel && $t->id_entidad) {
+            $entidadModel = \App\Models\CargaConsolidada\TramiteAduanaEntidad::withTrashed()->find($t->id_entidad);
+        }
         if (!$cliente && $cotizacion) {
             $cliente = (object)[
                 'id' => $cotizacion->id,
@@ -374,10 +381,14 @@ class TramiteAduanaService
                 'codigo' => self::formatoConsolidadoCodigo($consolidado),
                 'nombre' => $consolidado->carga ?? null,
             ] : null,
-            'entidad' => $t->entidad ? ['id' => $t->entidad->id, 'nombre' => $t->entidad->nombre] : null,
+            'entidad' => $entidadModel ? ['id' => $entidadModel->id, 'nombre' => $entidadModel->nombre ?? ''] : null,
             'tipos_permiso' => $tiposPermiso,
             'cliente' => $cliente,
             'total_pago_servicio' => (float) TramiteAduanaPago::where('id_tramite', $t->id)->sum('monto'),
+            'pagos_servicio_count' => (int) TramiteAduanaPago::where('id_tramite', $t->id)->count(),
+            'pagos_servicio_confirmados' => (int) TramiteAduanaPago::where('id_tramite', $t->id)->where('estado_administracion', 'CONFIRMADO')->count(),
+            'total_comprobantes_tramitador' => (float) PagoPermisoTramite::where('id_tramite', $t->id)->sum('monto'),
+            'total_comprobantes_derecho_por_tipo' => $this->totalesComprobantesDerechoPorTipo($t->id, $t->tiposPermiso->pluck('id')->all()),
         ];
     }
 
@@ -390,5 +401,22 @@ class TramiteAduanaService
             return null;
         }
         return '#' . $carga . ($anio !== '' ? ' - ' . $anio : '');
+    }
+
+    /** Suma de montos de comprobantes de derecho por id_tipo_permiso (para lista) */
+    private function totalesComprobantesDerechoPorTipo(int $idTramite, array $tipoIds): array
+    {
+        $totales = PagoPermisoDerechoTramite::where('id_tramite', $idTramite)
+            ->selectRaw('id_tipo_permiso, COALESCE(SUM(monto), 0) as total')
+            ->groupBy('id_tipo_permiso')
+            ->get()
+            ->keyBy('id_tipo_permiso')
+            ->map(fn ($row) => (float) $row->total)
+            ->all();
+        $out = [];
+        foreach ($tipoIds as $id) {
+            $out[(string) $id] = (float) ($totales[$id] ?? 0);
+        }
+        return $out;
     }
 }

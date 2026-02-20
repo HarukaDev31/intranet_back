@@ -5,6 +5,7 @@ namespace App\Http\Controllers\CargaConsolidada;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\CargaConsolidada\Cotizacion;
+use App\Models\CargaConsolidada\ConsolidadoCotizacionAduanaTramite;
 use App\Models\Usuario;
 use Illuminate\Support\Facades\DB;
 use Tymon\JWTAuth\Facades\JWTAuth;
@@ -144,6 +145,54 @@ class CotizacionPagosController extends Controller
             if ($user->No_Grupo != Usuario::ROL_COTIZADOR) {
                 $filteredResults = $filteredResults->sortBy('id');
             }
+
+            // Estado permiso por tipo, por cotización (para roles Coordinación, Documentación, Jefe Importación, Cotizador)
+            $estadoPermisoPorCotizacion = [];
+            $effectiveRole = $user->getNombreGrupo();
+            if ($user->getNombreGrupo() == Usuario::ROL_JEFE_IMPORTACION && $request->filled('role')) {
+                $requestedRole = trim((string) $request->role);
+                if (in_array($requestedRole, [Usuario::ROL_COORDINACION, Usuario::ROL_DOCUMENTACION], true)) {
+                    $effectiveRole = $requestedRole;
+                }
+            }
+            $idTramitePorCotizacion = [];
+            if (in_array($effectiveRole, [Usuario::ROL_COORDINACION, Usuario::ROL_DOCUMENTACION, Usuario::ROL_JEFE_IMPORTACION, Usuario::ROL_COTIZADOR], true)) {
+                $cotizacionIds = $filteredResults->pluck('id_cotizacion')->filter()->values()->unique()->all();
+                if (!empty($cotizacionIds)) {
+                    $tramites = ConsolidadoCotizacionAduanaTramite::where('id_consolidado', (int) $idContenedor)
+                        ->whereIn('id_cotizacion', $cotizacionIds)
+                        ->with(['tiposPermiso' => function ($q) { $q->withTrashed(); }])
+                        ->get();
+                    foreach ($tramites as $tramite) {
+                        $idCot = $tramite->id_cotizacion;
+                        if ($idCot === null) {
+                            continue;
+                        }
+                        $idTramitePorCotizacion[$idCot] = $tramite->id;
+                        foreach ($tramite->tiposPermiso as $tipo) {
+                            $pivot = $tipo->pivot;
+                            $estado = $pivot->estado ?? 'PENDIENTE';
+                            if (!isset($estadoPermisoPorCotizacion[$idCot][$tipo->id])) {
+                                $estadoPermisoPorCotizacion[$idCot][$tipo->id] = [
+                                    'id_tipo_permiso' => $tipo->id,
+                                    'nombre_permiso' => $tipo->nombre ?? 'Permiso',
+                                    'estado' => $estado,
+                                ];
+                            } else {
+                                $orden = ['PENDIENTE' => 0, 'SD' => 1, 'EN_TRAMITE' => 2, 'PAGADO' => 3, 'RECHAZADO' => 4, 'COMPLETADO' => 5];
+                                $actual = $estadoPermisoPorCotizacion[$idCot][$tipo->id]['estado'];
+                                if (($orden[$estado] ?? 99) < ($orden[$actual] ?? 99)) {
+                                    $estadoPermisoPorCotizacion[$idCot][$tipo->id]['estado'] = $estado;
+                                }
+                            }
+                        }
+                    }
+                    foreach ($estadoPermisoPorCotizacion as $idC => $porTipo) {
+                        $estadoPermisoPorCotizacion[$idC] = array_values($porTipo);
+                    }
+                }
+            }
+
             // Procesar resultados y filtrar datos corruptos
             $data = $filteredResults
                 ->filter(function ($row) {
@@ -163,7 +212,7 @@ class CotizacionPagosController extends Controller
                     return true;
                 })
                 ->values() // Reindexar el array
-                ->map(function ($row, $index) {
+                ->map(function ($row, $index) use ($estadoPermisoPorCotizacion, $idTramitePorCotizacion) {
                     // Limpiar y codificar correctamente los campos de texto
                     $nombre = $this->cleanText($row->nombre ?? '');
                     $tipoCliente = $this->cleanText($row->name ?? '');
@@ -196,7 +245,9 @@ class CotizacionPagosController extends Controller
                         'id_cotizacion' => $row->id_cotizacion,
                         'id_contenedor'=>$row->id_contenedor,
                         'id_contenedor_pago'=>$row->id_contenedor_pago,
-                        'pagos' => $pagos
+                        'pagos' => $pagos,
+                        'estado_permiso_por_tipo' => $estadoPermisoPorCotizacion[$row->id_cotizacion] ?? [],
+                        'id_tramite' => $idTramitePorCotizacion[$row->id_cotizacion] ?? null,
                     ];
                 });
                 // Paginación manual para la colección

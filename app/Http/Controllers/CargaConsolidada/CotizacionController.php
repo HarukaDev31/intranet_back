@@ -9,6 +9,7 @@ use App\Models\CargaConsolidada\Cotizacion;
 use App\Models\CargaConsolidada\TipoCliente;
 use App\Models\CargaConsolidada\CotizacionProveedor;
 use App\Models\CargaConsolidada\Contenedor;
+use App\Models\CargaConsolidada\ConsolidadoCotizacionAduanaTramite;
 use App\Services\CargaConsolidada\CotizacionService;
 use App\Services\CargaConsolidada\CotizacionExportService;
 use App\Models\Usuario;
@@ -212,6 +213,53 @@ class CotizacionController extends Controller
             $page = $request->input('page', 1);
             $results = $query->paginate($perPage, ['*'], 'page', $page);
 
+            // Estado permiso por tipo, por cotización (para roles Coordinación, Documentación, Jefe Importación, Cotizador)
+            $estadoPermisoPorCotizacion = [];
+            $effectiveRole = $rol;
+            if ($user->getNombreGrupo() == Usuario::ROL_JEFE_IMPORTACION && $request->filled('role')) {
+                $requestedRole = trim((string) $request->role);
+                if (in_array($requestedRole, [Usuario::ROL_COORDINACION, Usuario::ROL_DOCUMENTACION], true)) {
+                    $effectiveRole = $requestedRole;
+                }
+            }
+            $idTramitePorCotizacion = [];
+            if (in_array($effectiveRole, [Usuario::ROL_COORDINACION, Usuario::ROL_DOCUMENTACION, Usuario::ROL_JEFE_IMPORTACION, Usuario::ROL_COTIZADOR], true)) {
+                $cotizacionIds = $results->pluck('id')->filter()->values()->all();
+                if (!empty($cotizacionIds)) {
+                    $tramites = ConsolidadoCotizacionAduanaTramite::where('id_consolidado', (int) $idContenedor)
+                        ->whereIn('id_cotizacion', $cotizacionIds)
+                        ->with(['tiposPermiso' => function ($q) { $q->withTrashed(); }])
+                        ->get();
+                    foreach ($tramites as $tramite) {
+                        $idCot = $tramite->id_cotizacion;
+                        if ($idCot === null) {
+                            continue;
+                        }
+                        $idTramitePorCotizacion[$idCot] = $tramite->id;
+                        foreach ($tramite->tiposPermiso as $tipo) {
+                            $pivot = $tipo->pivot;
+                            $estado = $pivot->estado ?? 'PENDIENTE';
+                            if (!isset($estadoPermisoPorCotizacion[$idCot][$tipo->id])) {
+                                $estadoPermisoPorCotizacion[$idCot][$tipo->id] = [
+                                    'id_tipo_permiso' => $tipo->id,
+                                    'nombre_permiso' => $tipo->nombre ?? 'Permiso',
+                                    'estado' => $estado,
+                                ];
+                            } else {
+                                $orden = ['PENDIENTE' => 0, 'SD' => 1, 'EN_TRAMITE' => 2, 'PAGADO' => 3, 'RECHAZADO' => 4, 'COMPLETADO' => 5];
+                                $actual = $estadoPermisoPorCotizacion[$idCot][$tipo->id]['estado'];
+                                if (($orden[$estado] ?? 99) < ($orden[$actual] ?? 99)) {
+                                    $estadoPermisoPorCotizacion[$idCot][$tipo->id]['estado'] = $estado;
+                                }
+                            }
+                        }
+                    }
+                    foreach ($estadoPermisoPorCotizacion as $idC => $porTipo) {
+                        $estadoPermisoPorCotizacion[$idC] = array_values($porTipo);
+                    }
+                }
+            }
+
             $userId = auth()->id();
 
             $files = DB::table('carga_consolidada_contenedor')
@@ -227,7 +275,7 @@ class CotizacionController extends Controller
             }
 
             // Transformar los datos para la respuesta
-            $data = $results->map(function ($cotizacion) use ($files) {
+            $data = $results->map(function ($cotizacion) use ($files, $estadoPermisoPorCotizacion, $idTramitePorCotizacion) {
                 // Obtener url_cotizacion_pdf de calculadora_importacion si existe
                 $urlCotizacionPdf = null;
                 if ($cotizacion->id) {
@@ -271,6 +319,8 @@ class CotizacionController extends Controller
                     'from_calculator' => $cotizacion->from_calculator,
                     'cod_contract_calculator' => optional($cotizacion->calculadoraImportacion)->cod_cotizacion,
                     'tarifa_descuento' => optional($cotizacion->calculadoraImportacion)->tarifa_descuento,
+                    'estado_permiso_por_tipo' => $estadoPermisoPorCotizacion[$cotizacion->id] ?? [],
+                    'id_tramite' => $idTramitePorCotizacion[$cotizacion->id] ?? null,
                 ];
             });
 

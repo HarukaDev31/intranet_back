@@ -22,6 +22,7 @@ use App\Traits\WhatsappTrait;
 use App\Traits\GoogleSheetsHelper;
 use Carbon\Carbon;
 use App\Models\CargaConsolidada\Pago;
+use App\Models\CargaConsolidada\ConsolidadoCotizacionAduanaTramite;
 
 class ContenedorController extends Controller
 {
@@ -218,7 +219,40 @@ class ContenedorController extends Controller
                 }
             }
 
-            $items = collect($data->items())->map(function ($c) use ($cbmVendidos, $cbmEmbarcados) {
+            // Estado permiso por tipo_permiso (vista Coordinación / Documentación)
+            $estadoPermisoPorContenedor = [];
+            if ($pageIds && in_array($effectiveRole, [Usuario::ROL_COORDINACION, Usuario::ROL_DOCUMENTACION], true)) {
+                $tramites = ConsolidadoCotizacionAduanaTramite::whereIn('id_consolidado', $pageIds)
+                    ->with(['tiposPermiso' => function ($q) { $q->withTrashed(); }])
+                    ->get();
+                foreach ($tramites as $tramite) {
+                    $idConsolidado = $tramite->id_consolidado;
+                    foreach ($tramite->tiposPermiso as $tipo) {
+                        $pivot = $tipo->pivot;
+                        $estado = $pivot->estado ?? 'PENDIENTE';
+                        if (!isset($estadoPermisoPorContenedor[$idConsolidado][$tipo->id])) {
+                            $estadoPermisoPorContenedor[$idConsolidado][$tipo->id] = [
+                                'id_tipo_permiso' => $tipo->id,
+                                'nombre_permiso' => $tipo->nombre ?? 'Permiso',
+                                'estado' => $estado,
+                            ];
+                        } else {
+                            // Si ya existe, preferir estado "menos completo" (PENDIENTE > EN_TRAMITE > COMPLETADO)
+                            $orden = ['PENDIENTE' => 0, 'SD' => 1, 'EN_TRAMITE' => 2, 'PAGADO' => 3, 'RECHAZADO' => 4, 'COMPLETADO' => 5];
+                            $actual = $estadoPermisoPorContenedor[$idConsolidado][$tipo->id]['estado'];
+                            if (($orden[$estado] ?? 99) < ($orden[$actual] ?? 99)) {
+                                $estadoPermisoPorContenedor[$idConsolidado][$tipo->id]['estado'] = $estado;
+                            }
+                        }
+                    }
+                }
+                // Convertir a listas indexadas por contenedor
+                foreach ($estadoPermisoPorContenedor as $id => $porTipo) {
+                    $estadoPermisoPorContenedor[$id] = array_values($porTipo);
+                }
+            }
+
+            $items = collect($data->items())->map(function ($c) use ($cbmVendidos, $cbmEmbarcados, $estadoPermisoPorContenedor, $effectiveRole) {
                 $cbm_total_peru = 0;
                 $cbm_total_china = 0;
                 if ($c->estado_china === Contenedor::CONTEDOR_CERRADO) {
@@ -257,7 +291,9 @@ class ContenedorController extends Controller
                     //colocar decimales
                     'cbm_total_peru' => number_format($cbm_total_peru, 2),
                     'cbm_total_china' => number_format($cbm_total_china, 2),
-                ];
+                ] + (in_array($effectiveRole, [Usuario::ROL_COORDINACION, Usuario::ROL_DOCUMENTACION], true)
+                    ? ['estado_permiso_por_tipo' => $estadoPermisoPorContenedor[$c->id] ?? []]
+                    : []);
             });
 
             return response()->json([
@@ -449,12 +485,48 @@ class ContenedorController extends Controller
      *     @OA\Response(response=200, description="Contenedor obtenido exitosamente")
      * )
      */
-    public function show($id)
+    public function show(Request $request, $id)
     {
-        // Implementación básica
-        $query = Contenedor::where('id', $id);
-        $data = $query->first();
-
+        $contenedor = Contenedor::with('pais')->find($id);
+        if (!$contenedor) {
+            return response()->json(['success' => false, 'message' => 'Contenedor no encontrado'], 404);
+        }
+        $data = $contenedor->toArray();
+        $user = JWTAuth::parseToken()->authenticate();
+        $effectiveRole = $user->getNombreGrupo();
+        if ($user->getNombreGrupo() == Usuario::ROL_JEFE_IMPORTACION && $request->filled('role')) {
+            $requestedRole = trim((string) $request->role);
+            if (in_array($requestedRole, [Usuario::ROL_COORDINACION, Usuario::ROL_DOCUMENTACION], true)) {
+                $effectiveRole = $requestedRole;
+            }
+        }
+        $rolesConEstadoPermiso = [Usuario::ROL_COORDINACION, Usuario::ROL_DOCUMENTACION, Usuario::ROL_JEFE_IMPORTACION, Usuario::ROL_COTIZADOR];
+        if (in_array($effectiveRole, $rolesConEstadoPermiso, true)) {
+            $tramites = ConsolidadoCotizacionAduanaTramite::where('id_consolidado', (int) $id)
+                ->with(['tiposPermiso' => function ($q) { $q->withTrashed(); }])
+                ->get();
+            $porTipo = [];
+            foreach ($tramites as $tramite) {
+                foreach ($tramite->tiposPermiso as $tipo) {
+                    $pivot = $tipo->pivot;
+                    $estado = $pivot->estado ?? 'PENDIENTE';
+                    if (!isset($porTipo[$tipo->id])) {
+                        $porTipo[$tipo->id] = [
+                            'id_tipo_permiso' => $tipo->id,
+                            'nombre_permiso' => $tipo->nombre ?? 'Permiso',
+                            'estado' => $estado,
+                        ];
+                    } else {
+                        $orden = ['PENDIENTE' => 0, 'SD' => 1, 'EN_TRAMITE' => 2, 'PAGADO' => 3, 'RECHAZADO' => 4, 'COMPLETADO' => 5];
+                        $actual = $porTipo[$tipo->id]['estado'];
+                        if (($orden[$estado] ?? 99) < ($orden[$actual] ?? 99)) {
+                            $porTipo[$tipo->id]['estado'] = $estado;
+                        }
+                    }
+                }
+            }
+            $data['estado_permiso_por_tipo'] = array_values($porTipo);
+        }
         return response()->json(['data' => $data, 'success' => true]);
     }
 
