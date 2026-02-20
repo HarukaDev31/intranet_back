@@ -12,8 +12,12 @@ return new class extends Migration
      */
     public function up(): void
     {
+        //where deleted_at is null
+        //first set all in code_confirmado to null
+        DB::table('viaticos')->where('status', 'CONFIRMED')->update(['codigo_confirmado' => null]);
         $confirmedSinCodigo = DB::table('viaticos')
             ->where('status', 'CONFIRMED')
+            ->whereNull('deleted_at')
             ->where(function ($q) {
                 $q->whereNull('codigo_confirmado')
                   ->orWhere('codigo_confirmado', '');
@@ -28,6 +32,7 @@ return new class extends Migration
             if (!isset($indicesPorAnio[$year])) {
                 $maxExistente = DB::table('viaticos')
                     ->where('codigo_confirmado', 'like', 'VI' . $year . '%')
+                    ->whereNull('deleted_at')
                     ->whereNotNull('codigo_confirmado')
                     ->where('codigo_confirmado', '!=', '')
                     ->count();
@@ -36,7 +41,7 @@ return new class extends Migration
             $indicesPorAnio[$year]++;
             $codigo = 'VI' . $year . str_pad((string) $indicesPorAnio[$year], 3, '0', STR_PAD_LEFT);
 
-            DB::table('viaticos')->where('id', $viatico->id)->update(['codigo_confirmado' => $codigo]);
+            DB::table('viaticos')->where('id', $viatico->id)->whereNull('deleted_at')->update(['codigo_confirmado' => $codigo]);
         }
     }
 
