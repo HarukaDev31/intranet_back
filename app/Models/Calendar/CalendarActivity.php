@@ -9,7 +9,7 @@ class CalendarActivity extends Model
 {
     protected $table = 'calendar_activities';
 
-    protected $fillable = ['name', 'orden'];
+    protected $fillable = ['name', 'orden', 'color_code'];
 
     protected $casts = [
         'created_at' => 'datetime',

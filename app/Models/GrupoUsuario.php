@@ -8,10 +8,13 @@ class GrupoUsuario extends Model
 {
     protected $table = 'grupo_usuario';
     protected $primaryKey = 'ID_Grupo_Usuario';
-    
+    public $timestamps = false;
+
     protected $fillable = [
         'ID_Usuario',
-        'ID_Grupo'
+        'ID_Grupo',
+        'ID_Empresa',
+        'ID_Organizacion',
     ];
 
     /**

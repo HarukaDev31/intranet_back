@@ -8,14 +8,16 @@ class Grupo extends Model
 {
     protected $table = 'grupo';
     protected $primaryKey = 'ID_Grupo';
-    
+    public $timestamps = false;
+
     protected $fillable = [
         'ID_Empresa',
         'ID_Organizacion',
         'No_Grupo',
         'No_Grupo_Descripcion',
         'Nu_Tipo_Privilegio_Acceso',
-        'Nu_Notificacion'
+        'Nu_Notificacion',
+        'Nu_Estado',
     ];
 
     /**

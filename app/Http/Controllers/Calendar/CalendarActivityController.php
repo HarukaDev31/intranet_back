@@ -43,7 +43,7 @@ class CalendarActivityController extends Controller
     {
         try {
             $activities = $this->activityService->listActivities();
-            $data = $activities->map(fn ($a) => ['id' => $a->id, 'name' => $a->name, 'orden' => $a->orden ?? 0]);
+            $data = $activities->map(fn ($a) => ['id' => $a->id, 'name' => $a->name, 'orden' => $a->orden ?? 0, 'color_code' => $a->color_code]);
             return response()->json([
                 'success' => true,
                 'data' => $data,
@@ -81,7 +81,7 @@ class CalendarActivityController extends Controller
             $activity = $this->activityService->createActivity($name);
             return response()->json([
                 'success' => true,
-                'data' => ['id' => $activity->id, 'name' => $activity->name],
+                'data' => ['id' => $activity->id, 'name' => $activity->name, 'orden' => $activity->orden ?? 0, 'color_code' => $activity->color_code],
                 'message' => 'Actividad creada en el catálogo',
             ], 201);
         } catch (\Exception $e) {
@@ -100,6 +100,7 @@ class CalendarActivityController extends Controller
         }
         $v = Validator::make($request->all(), [
             'name' => 'required|string|min:3|max:255',
+            'color_code' => 'nullable|string|max:20',
         ], [
             'name.required' => 'El nombre es requerido',
             'name.min' => 'El nombre debe tener al menos 3 caracteres',
@@ -109,16 +110,17 @@ class CalendarActivityController extends Controller
             return response()->json(['success' => false, 'message' => $msg], 400);
         }
         $name = $request->input('name');
+        $colorCode = $request->input('color_code');
         if (CalendarActivity::where('name', $name)->where('id', '!=', $id)->exists()) {
             return response()->json(['success' => false, 'message' => 'Ya existe una actividad con ese nombre'], 400);
         }
-        $activity = $this->activityService->updateActivity($id, $name);
+        $activity = $this->activityService->updateActivity($id, $name, $colorCode);
         if (!$activity) {
             return response()->json(['success' => false, 'message' => 'Actividad no encontrada'], 404);
         }
         return response()->json([
             'success' => true,
-            'data' => ['id' => $activity->id, 'name' => $activity->name],
+            'data' => ['id' => $activity->id, 'name' => $activity->name, 'orden' => $activity->orden ?? 0, 'color_code' => $activity->color_code],
             'message' => 'Actividad actualizada',
         ]);
     }
@@ -268,6 +270,7 @@ class CalendarActivityController extends Controller
         }
         $v = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
+            'activity_id' => 'nullable|integer|exists:calendar_activities,id',
             'priority' => 'nullable|integer|in:0,1,2',
             'contenedor_id' => 'nullable|integer|exists:carga_consolidada_contenedor,id',
             'notes' => 'nullable|string',
@@ -285,7 +288,7 @@ class CalendarActivityController extends Controller
                 ['user_id' => $user->getIdUsuario()],
                 ['user_id' => $user->getIdUsuario()]
             );
-            $data = $request->only(['name', 'priority', 'contenedor_id', 'notes', 'start_date', 'end_date']);
+            $data = $request->only(['name', 'activity_id', 'priority', 'contenedor_id', 'notes', 'start_date', 'end_date']);
             $data['responsable_ids'] = $request->input('responsable_ids', []);
             $event = $this->eventService->createActivityEvent($calendar->id, $data, $user->getIdUsuario());
             $formatted = $this->eventService->formatEventForResponse($event);
@@ -309,7 +312,7 @@ class CalendarActivityController extends Controller
             return response()->json(['success' => false, 'message' => 'No tienes permiso para editar actividades'], 403);
         }
         $user = JWTAuth::parseToken()->authenticate();
-        $data = $request->only(['name', 'priority', 'contenedor_id', 'notes', 'start_date', 'end_date', 'responsable_ids']);
+        $data = $request->only(['name', 'activity_id', 'priority', 'contenedor_id', 'notes', 'start_date', 'end_date', 'responsable_ids']);
         $event = $this->eventService->updateEvent($id, $user->getIdUsuario(), $data, true);
         if (!$event) {
             return response()->json(['success' => false, 'message' => 'Actividad no encontrada'], 404);

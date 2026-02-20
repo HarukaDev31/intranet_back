@@ -137,6 +137,7 @@ class CalendarEventService
         return [
             'id' => $event->id,
             'calendar_id' => $event->calendar_id,
+            'activity_id' => $event->activity_id,
             'priority' => $event->priority,
             'name' => $event->name,
             'contenedor_id' => $event->contenedor_id,

@@ -145,7 +145,7 @@ class ContenedorController extends Controller
                     $query->where('estado_china', '!=', Contenedor::CONTEDOR_CERRADO);
                 }
             }
-            //where empresa is 1
+            //where empresa is 1 x
             $query->where('empresa', '!=', 1);
             //filtrar por los que f_cierre no este vacio
 
@@ -731,6 +731,42 @@ class ContenedorController extends Controller
 
         return response()->json(['data' => $data, 'success' => true]);
     }
+
+    /**
+     * Consolidados con estado_documentacion no completado (para el select del modal de permisos/trámites).
+     * Respuesta ligera: solo id y carga.
+     *
+     * @OA\Get(
+     *     path="/carga-consolidada/contenedor/valid-containers-documentacion",
+     *     tags={"Contenedor"},
+     *     summary="Contenedores con documentación no completada",
+     *     description="Lista ligera de contenedores para dropdown de permisos (solo id y carga)",
+     *     operationId="getValidContainersDocumentacion",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Response(response=200, description="Lista de contenedores { data: [{ id, carga }] }")
+     * )
+     */
+    public function getValidContainersDocumentacion()
+    {
+        $data = Contenedor::where('empresa', '!=', 1)
+            ->where('estado_documentacion', '!=', Contenedor::ESTADOS_DOCUMENTACION['COMPLETADO'])
+            ->orderByRaw('CAST(carga AS UNSIGNED) DESC')
+            ->get(['id', 'carga', 'f_inicio'])
+            ->map(function ($c) {
+                $anio = $c->f_inicio
+                    ? Carbon::parse($c->f_inicio)->format('Y')
+                    : Carbon::now()->format('Y');
+                return [
+                    'id' => (int) $c->id,
+                    'carga' => $c->carga . ' - ' . $anio,
+                ];
+            })
+            ->values()
+            ->all();
+
+        return response()->json(['success' => true, 'data' => $data]);
+    }
+
     /**
      * @OA\Get(
      *     path="/carga-consolidada/contenedor/cargas-disponibles",

@@ -82,6 +82,9 @@ require __DIR__.'/modules/notificaciones.php';
 // Módulo de Opciones Generales
 require __DIR__.'/modules/options.php';
 
+// Módulo de Panel de Acceso (Cargos, Usuarios, Permisos de Menú)
+require __DIR__.'/modules/panel-acceso.php';
+
 // Módulo de Calendario
 require __DIR__.'/modules/calendar.php';
 

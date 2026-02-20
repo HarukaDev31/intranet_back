@@ -3,6 +3,7 @@
 namespace App\Services\Calendar;
 
 use App\Models\Calendar\CalendarActivity;
+use App\Models\Calendar\CalendarEvent;
 use Illuminate\Support\Collection;
 
 class CalendarActivityService
@@ -25,15 +26,27 @@ class CalendarActivityService
     }
 
     /**
-     * Actualizar nombre de una actividad del catálogo
+     * Actualizar nombre y/o color de una actividad del catálogo.
+     * Además, asigna este activity_id a todos los eventos que tengan el mismo nombre y activity_id null,
+     * para que hereden el color sin tener que editar cada evento.
      */
-    public function updateActivity(int $id, string $name): ?CalendarActivity
+    public function updateActivity(int $id, string $name, ?string $colorCode = null): ?CalendarActivity
     {
         $activity = CalendarActivity::find($id);
         if (!$activity) {
             return null;
         }
-        $activity->update(['name' => $name]);
+        $data = ['name' => $name];
+        if ($colorCode !== null) {
+            $data['color_code'] = $colorCode ?: null;
+        }
+        $activity->update($data);
+
+        // Asignar esta actividad a eventos que tienen el mismo nombre pero sin activity_id
+        CalendarEvent::whereNull('activity_id')
+            ->where('name', $name)
+            ->update(['activity_id' => $id]);
+
         return $activity->fresh();
     }
 
