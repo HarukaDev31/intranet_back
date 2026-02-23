@@ -89,8 +89,17 @@ class TramiteAduanaCatalogoService
             'nombre' => 'required|string|max:255',
         ]);
 
+        $nombre = trim($validated['nombre']);
+        if (TramiteAduanaEntidad::whereRaw('LOWER(nombre) = ?', [strtolower($nombre)])->exists()) {
+            return [
+                'success' => false,
+                'data' => null,
+                'error' => 'Ya existe una entidad con ese nombre.',
+            ];
+        }
+
         try {
-            $entidad = TramiteAduanaEntidad::create($validated);
+            $entidad = TramiteAduanaEntidad::create(['nombre' => $nombre]);
             return [
                 'success' => true,
                 'data' => [
