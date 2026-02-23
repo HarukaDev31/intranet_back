@@ -22,7 +22,12 @@ class CalendarActivityService
     public function createActivity(string $name): CalendarActivity
     {
         $maxOrden = CalendarActivity::max('orden') ?? 0;
-        return CalendarActivity::create(['name' => $name, 'orden' => $maxOrden + 1]);
+        return CalendarActivity::create([
+            'name'           => $name,
+            'orden'          => $maxOrden + 1,
+            'allow_saturday' => true,
+            'allow_sunday'   => true,
+        ]);
     }
 
     /**
@@ -30,7 +35,7 @@ class CalendarActivityService
      * Además, asigna este activity_id a todos los eventos que tengan el mismo nombre y activity_id null,
      * para que hereden el color sin tener que editar cada evento.
      */
-    public function updateActivity(int $id, string $name, ?string $colorCode = null): ?CalendarActivity
+    public function updateActivity(int $id, string $name, ?string $colorCode = null, array $extras = []): ?CalendarActivity
     {
         $activity = CalendarActivity::find($id);
         if (!$activity) {
@@ -39,6 +44,15 @@ class CalendarActivityService
         $data = ['name' => $name];
         if ($colorCode !== null) {
             $data['color_code'] = $colorCode ?: null;
+        }
+        if (array_key_exists('allow_saturday', $extras)) {
+            $data['allow_saturday'] = (bool) $extras['allow_saturday'];
+        }
+        if (array_key_exists('allow_sunday', $extras)) {
+            $data['allow_sunday'] = (bool) $extras['allow_sunday'];
+        }
+        if (array_key_exists('default_priority', $extras)) {
+            $data['default_priority'] = (int) ($extras['default_priority'] ?? 0);
         }
         $activity->update($data);
 

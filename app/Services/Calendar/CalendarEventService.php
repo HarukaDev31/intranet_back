@@ -184,11 +184,25 @@ class CalendarEventService
                 'notes'         => $notes,
             ]);
 
-            // Días del evento (desde start_date hasta end_date)
+            // Días del evento (desde start_date hasta end_date).
+            // Si la actividad tiene allow_saturday/allow_sunday, incluir esos días; si no, omitirlos.
+            $activity = $event->activity_id ? CalendarActivity::find($event->activity_id) : null;
+            $allowSaturday = $activity ? (bool) $activity->allow_saturday : true;
+            $allowSunday = $activity ? (bool) $activity->allow_sunday : true;
+
             $start = new \DateTime($startDate);
             $end = new \DateTime($endDate);
             $current = clone $start;
             while ($current <= $end) {
+                $dayOfWeek = (int) $current->format('w'); // 0=domingo, 6=sábado
+                if ($dayOfWeek === 0 && !$allowSunday) {
+                    $current->modify('+1 day');
+                    continue;
+                }
+                if ($dayOfWeek === 6 && !$allowSaturday) {
+                    $current->modify('+1 day');
+                    continue;
+                }
                 CalendarEventDay::create([
                     'calendar_id'        => $calendar->id,
                     'calendar_event_id'  => $event->id,
@@ -253,10 +267,23 @@ class CalendarEventService
 
             if (!empty($data['start_date']) && !empty($data['end_date'])) {
                 CalendarEventDay::where('calendar_event_id', $event->id)->delete();
+                $activity = ($data['activity_id'] ?? $event->activity_id) ? CalendarActivity::find($data['activity_id'] ?? $event->activity_id) : null;
+                $allowSaturday = $activity ? (bool) $activity->allow_saturday : true;
+                $allowSunday = $activity ? (bool) $activity->allow_sunday : true;
+
                 $start = new \DateTime($data['start_date']);
                 $end = new \DateTime($data['end_date']);
                 $current = clone $start;
                 while ($current <= $end) {
+                    $dayOfWeek = (int) $current->format('w');
+                    if ($dayOfWeek === 0 && !$allowSunday) {
+                        $current->modify('+1 day');
+                        continue;
+                    }
+                    if ($dayOfWeek === 6 && !$allowSaturday) {
+                        $current->modify('+1 day');
+                        continue;
+                    }
                     CalendarEventDay::create([
                         'calendar_id' => $event->calendar_id,
                         'calendar_event_id' => $event->id,

@@ -43,7 +43,15 @@ class CalendarActivityController extends Controller
     {
         try {
             $activities = $this->activityService->listActivities();
-            $data = $activities->map(fn ($a) => ['id' => $a->id, 'name' => $a->name, 'orden' => $a->orden ?? 0, 'color_code' => $a->color_code]);
+            $data = $activities->map(fn ($a) => [
+                'id' => $a->id,
+                'name' => $a->name,
+                'orden' => $a->orden ?? 0,
+                'color_code' => $a->color_code,
+                'allow_saturday' => (bool) $a->allow_saturday,
+                'allow_sunday' => (bool) $a->allow_sunday,
+                'default_priority' => (int) ($a->default_priority ?? 0),
+            ]);
             return response()->json([
                 'success' => true,
                 'data' => $data,
@@ -81,7 +89,15 @@ class CalendarActivityController extends Controller
             $activity = $this->activityService->createActivity($name);
             return response()->json([
                 'success' => true,
-                'data' => ['id' => $activity->id, 'name' => $activity->name, 'orden' => $activity->orden ?? 0, 'color_code' => $activity->color_code],
+                'data' => [
+                    'id' => $activity->id,
+                    'name' => $activity->name,
+                    'orden' => $activity->orden ?? 0,
+                    'color_code' => $activity->color_code,
+                    'allow_saturday' => (bool) $activity->allow_saturday,
+                    'allow_sunday' => (bool) $activity->allow_sunday,
+                    'default_priority' => (int) ($activity->default_priority ?? 0),
+                ],
                 'message' => 'Actividad creada en el catálogo',
             ], 201);
         } catch (\Exception $e) {
@@ -101,6 +117,9 @@ class CalendarActivityController extends Controller
         $v = Validator::make($request->all(), [
             'name' => 'required|string|min:3|max:255',
             'color_code' => 'nullable|string|max:20',
+            'allow_saturday' => 'nullable|boolean',
+            'allow_sunday' => 'nullable|boolean',
+            'default_priority' => 'nullable|integer|in:0,1,2',
         ], [
             'name.required' => 'El nombre es requerido',
             'name.min' => 'El nombre debe tener al menos 3 caracteres',
@@ -111,16 +130,25 @@ class CalendarActivityController extends Controller
         }
         $name = $request->input('name');
         $colorCode = $request->input('color_code');
+        $extras = $request->only(['allow_saturday', 'allow_sunday', 'default_priority']);
         if (CalendarActivity::where('name', $name)->where('id', '!=', $id)->exists()) {
             return response()->json(['success' => false, 'message' => 'Ya existe una actividad con ese nombre'], 400);
         }
-        $activity = $this->activityService->updateActivity($id, $name, $colorCode);
+        $activity = $this->activityService->updateActivity($id, $name, $colorCode, $extras);
         if (!$activity) {
             return response()->json(['success' => false, 'message' => 'Actividad no encontrada'], 404);
         }
         return response()->json([
             'success' => true,
-            'data' => ['id' => $activity->id, 'name' => $activity->name, 'orden' => $activity->orden ?? 0, 'color_code' => $activity->color_code],
+            'data' => [
+                'id' => $activity->id,
+                'name' => $activity->name,
+                'orden' => $activity->orden ?? 0,
+                'color_code' => $activity->color_code,
+                'allow_saturday' => (bool) $activity->allow_saturday,
+                'allow_sunday' => (bool) $activity->allow_sunday,
+                'default_priority' => (int) ($activity->default_priority ?? 0),
+            ],
             'message' => 'Actividad actualizada',
         ]);
     }

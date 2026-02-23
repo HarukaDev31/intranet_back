@@ -9,9 +9,12 @@ class CalendarActivity extends Model
 {
     protected $table = 'calendar_activities';
 
-    protected $fillable = ['name', 'orden', 'color_code'];
+    protected $fillable = ['name', 'orden', 'color_code', 'allow_saturday', 'allow_sunday', 'default_priority'];
 
     protected $casts = [
+        'allow_saturday' => 'boolean',
+        'allow_sunday' => 'boolean',
+        'default_priority' => 'integer',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
     ];
