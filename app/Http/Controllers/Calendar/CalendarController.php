@@ -32,7 +32,9 @@ class CalendarController extends Controller
         try {
             $user = JWTAuth::parseToken()->authenticate();
             $userId = $user->getIdUsuario();
-            $onlyMyCharges = !$this->permissionService->isJefeImportaciones($user);
+            $isJefe = $this->permissionService->isJefeImportaciones($user);
+            // Por defecto, si no es jefe, solo ve eventos donde está asignado. Pero si eligió "Todos" (no envía responsable_id ni responsable_ids), debe ver lo mismo que el jefe.
+            $onlyMyCharges = !$isJefe;
 
             $contenedorIds = $request->input('contenedor_ids');
             if (is_array($contenedorIds)) {
@@ -74,6 +76,11 @@ class CalendarController extends Controller
                 if (empty($responsableIds)) {
                     $responsableIds = null;
                 }
+            }
+
+            // Si no es jefe pero eligió "Todos" en responsable (no envió responsable_id ni responsable_ids), debe ver lo mismo que el jefe.
+            if (!$isJefe && $responsableIds === null) {
+                $onlyMyCharges = false;
             }
 
             $events = $this->eventService->getEventsForUser(
