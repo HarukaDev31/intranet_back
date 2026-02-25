@@ -514,7 +514,8 @@ class CalendarActivityController extends Controller
     {
         try {
             $user = JWTAuth::parseToken()->authenticate();
-            $calendarId = Calendar::where('user_id', $user->getIdUsuario())->value('id');
+            //not filter by user id
+            $calendarId = Calendar::value('id');
             if (!$calendarId) {
                 return response()->json(['success' => true, 'data' => [], 'message' => 'Configuración de colores obtenida']);
             }
@@ -662,7 +663,7 @@ class CalendarActivityController extends Controller
     {
         try {
             $user = JWTAuth::parseToken()->authenticate();
-            $calendarId = Calendar::where('user_id', $user->getIdUsuario())->value('id');
+            $calendarId = Calendar::value('id');
             if (!$calendarId) {
                 return response()->json(['success' => true, 'data' => [], 'message' => 'Sin colores de consolidado']);
             }
