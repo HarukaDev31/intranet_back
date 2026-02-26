@@ -53,6 +53,13 @@ class PagosController extends Controller
             $perPage = $request->get('limit', 100);
             $page = $request->get('page', 1);
 
+            // Filtros desde query param 'filters' (JSON: estado_inspeccion, estado_pago) o params directos
+            $filtersJson = $request->get('filters');
+            $filters = is_string($filtersJson) ? json_decode($filtersJson, true) : $filtersJson;
+            $filters = is_array($filters) ? $filters : [];
+            $estadoPagoFiltro = $filters['estado_pago'] ?? $request->get('estado_pago');
+            $estadoInspeccionFiltro = $filters['estado_inspeccion'] ?? null;
+
             $query = Cotizacion::with(['contenedor', 'pagos.concepto'])
                 ->select([
                     'contenedor_consolidado_cotizacion.*',

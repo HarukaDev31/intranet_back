@@ -259,6 +259,7 @@ class PagosController extends Controller
                 'monto' => $request->monto,
                 'payment_date' => date('Y-m-d', strtotime($request->fecha)),
                 'banco' => $request->banco,
+                'created_by' => $user->ID_Usuario,
                 'created_at' => now(),
                 'updated_at' => now()
             ];

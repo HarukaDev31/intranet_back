@@ -18,7 +18,8 @@ class Pago extends Model
         'banco',
         'is_confirmed',
         'status',
-        'confirmation_date'
+        'confirmation_date',
+        'created_by'
     ];
 
     protected $casts = [

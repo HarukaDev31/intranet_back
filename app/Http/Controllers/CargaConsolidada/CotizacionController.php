@@ -196,7 +196,7 @@ class CotizacionController extends Controller
                     $query->where('estado_cotizador', 'CONFIRMADO');
                     break;
 
-                case Usuario::ROL_COORDINACION:
+                case Usuario::ROL_COORDINACION || Usuario::ROL_CONTABILIDAD:
                     $query->where('estado_cotizador', 'CONFIRMADO');
                     break;
                 case Usuario::ROL_ALMACEN_CHINA:
@@ -488,7 +488,12 @@ class CotizacionController extends Controller
                     SELECT lista_embarque_url
                     FROM carga_consolidada_contenedor
                     WHERE id = ' . $idContenedor . '
-                ) as lista_embarque_url')
+                ) as lista_embarque_url'),
+                DB::raw('(
+                    SELECT f_cierre
+                    FROM carga_consolidada_contenedor
+                    WHERE id = ' . $idContenedor . '
+                ) as f_cierre')
             ])
             ->first();
         // Preparar los headers
@@ -541,8 +546,8 @@ class CotizacionController extends Controller
             Usuario::ROL_COTIZADOR => ['cbm_vendido', 'cbm_pendiente', 'cbm_embarcado', 'qty_items', 'cbm_total_peru', 'cbm_total_china'],
             Usuario::ROL_ALMACEN_CHINA => ['cbm_total_china', 'cbm_total_peru', 'qty_items'],
             Usuario::ROL_ADMINISTRACION => ['cbm_total_china', 'cbm_total_peru', 'qty_items', 'total_logistica', 'total_logistica_pagado'],
-            Usuario::ROL_COORDINACION => ['cbm_total_china', 'cbm_total_peru', 'qty_items', 'total_logistica', 'total_logistica_pagado']
-            //por defecto:todos
+            Usuario::ROL_COORDINACION => ['cbm_total_china', 'cbm_total_peru', 'qty_items', 'total_logistica', 'total_logistica_pagado'],
+            Usuario::ROL_CONTABILIDAD => ['cbm_total_china', 'cbm_total_peru', 'qty_items', 'total_logistica', 'total_logistica_pagado']
         ];
         $userIdCheck = $user->ID_Usuario;
         if (array_key_exists($usergroup, $roleAllowedMap)) {
@@ -554,6 +559,10 @@ class CotizacionController extends Controller
             // Si el rol no está en el mapa, devolver todos los headers
             return $headersData;
         }
+
+        // Headers exclusivos para el tab de pagos (solo contabilidad) - solo en cotizacion-final
+        $headersDataPagos = [];
+
         if ($userIdCheck == "28791" || $userIdCheck == "28911") {
             // CBM Vendido por usuario (estado CONFIRMADO)
             //remove cbm_vendido 
@@ -672,6 +681,7 @@ class CotizacionController extends Controller
             return response()->json([
                 'success' => true,
                 'data' => $headersData,
+                'data_pagos' => $headersDataPagos,
                 'carga' => $contenedor->carga,
                 'lista_embarque_url' =>$this->generateImageUrl($contenedor->lista_embarque_url) ? $this->generateImageUrl($contenedor->lista_embarque_url) : null
             ]);
@@ -689,6 +699,7 @@ class CotizacionController extends Controller
         return response()->json([
             'success' => true,
             'data' => $headersData,
+            'data_pagos' => $headersDataPagos,
             'carga' => $contenedor->carga,
             'lista_embarque_url' => $this->generateImageUrl($contenedor->lista_embarque_url) ? $this->generateImageUrl($contenedor->lista_embarque_url) : null
         ]);

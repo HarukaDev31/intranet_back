@@ -273,7 +273,32 @@ trait WhatsappTrait
         }
     }
 
-    public function sendMessage($message, $phoneNumberId = null, $sleep = 0,$fromNumber='consolidado'): array
+    /**
+     * Envía un mensaje de texto por WhatsApp.
+     *
+     * @param string      $message       Texto del mensaje a enviar.
+     * @param string|null $phoneNumberId Número de destino en formato internacional (ej: 51912345678@c.us).
+     *                                   Si es null, usa $this->phoneNumberId.
+     * @param int         $sleep         Segundos de espera antes de enviar (útil para Jobs encadenados).
+     * @param string      $fromNumber    Instancia de WhatsApp desde la que se envía.
+     *
+     *   Instancias disponibles (fromNumber):
+     *   ─────────────────────────────────────────────────────────────────
+     *   'consolidado'    → Número principal del servicio de consolidado.
+     *                      Usado para mensajes de cotizaciones, pagos, entrega.
+     *                      (valor por defecto)
+     *   'administracion' → Número de la oficina de administración.
+     *                      Usado para factura comercial, guía de remisión,
+     *                      viáticos y comunicaciones administrativas.
+     *   'ventas'         → Número del equipo de ventas.
+     *                      Usado para cotizaciones proveedor / propuestas comerciales.
+     *   ─────────────────────────────────────────────────────────────────
+     *   Nota: para rutas dedicadas sin fromNumber (inspecciones, bienvenida,
+     *   cursos) usa sendMediaInspection(), sendWelcome() o sendMessageCurso().
+     *
+     * @return array ['status' => bool, 'response' => array]
+     */
+    public function sendMessage($message, $phoneNumberId = null, $sleep = 0, $fromNumber = 'consolidado'): array
     {
         $phoneNumberId = $phoneNumberId ? $phoneNumberId : $this->phoneNumberId;
 
@@ -304,7 +329,35 @@ trait WhatsappTrait
             'sleep' => $sleep
         ]);
     }
-    public function sendMedia($filePath, $mimeType = null, $message = null, $phoneNumberId = null, $sleep = 0,$fromNumber='consolidado',$fileName=null)
+    /**
+     * Envía un archivo (media) por WhatsApp.
+     *
+     * @param string      $filePath      Ruta absoluta del archivo en el servidor.
+     * @param string|null $mimeType      MIME type del archivo (ej: 'application/pdf', 'image/jpg').
+     * @param string|null $message       Mensaje de caption adjunto al archivo.
+     * @param string|null $phoneNumberId Número de destino en formato internacional (ej: 51912345678@c.us).
+     *                                   Si es null, usa $this->phoneNumberId.
+     * @param int         $sleep         Segundos de espera antes de enviar.
+     * @param string      $fromNumber    Instancia de WhatsApp desde la que se envía.
+     *
+     *   Instancias disponibles (fromNumber):
+     *   ─────────────────────────────────────────────────────────────────
+     *   'consolidado'    → Número principal del servicio de consolidado.
+     *                      Usado para pagos (números de cuenta), rotulado,
+     *                      cargo de entrega firmado.
+     *                      (valor por defecto)
+     *   'administracion' → Número de la oficina de administración.
+     *                      Usado para envío de factura comercial, guía de
+     *                      remisión, comprobantes contables y viáticos.
+     *   'ventas'         → Número del equipo de ventas.
+     *                      Usado para cotizaciones proveedor en PDF.
+     *   ─────────────────────────────────────────────────────────────────
+     *
+     * @param string|null $fileName      Nombre del archivo que verá el destinatario.
+     *                                   Si es null, usa basename($filePath).
+     * @return array|false Respuesta de la API o false en caso de error.
+     */
+    public function sendMedia($filePath, $mimeType = null, $message = null, $phoneNumberId = null, $sleep = 0, $fromNumber = 'consolidado', $fileName = null)
     {
         try {
             $phoneNumberId = $phoneNumberId ? $phoneNumberId : $this->phoneNumberId;

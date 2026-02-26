@@ -18,6 +18,7 @@ use App\Http\Controllers\CargaConsolidada\CotizacionPagosController;
 use App\Http\Controllers\CargaConsolidada\AduanaController;
 use App\Http\Controllers\CargaConsolidada\Clientes\PagosController as ClientesPagosController;
 use App\Http\Controllers\CargaConsolidada\EntregaController;
+use App\Http\Controllers\CargaConsolidada\InspeccionadosController;
 use App\Http\Controllers\Commons\Google\SheetController;
 
 /*
@@ -171,6 +172,18 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
             Route::delete('/general/delete-guia-remision/{idContenedor}', [FacturaGuiaController::class, 'deleteGuiaRemision']);
             Route::post('/send-factura/{idCotizacion}', [FacturaGuiaController::class, 'sendFactura']);
             Route::post('/send-guia/{idCotizacion}', [FacturaGuiaController::class, 'sendGuia']);
+
+            // Contabilidad — comprobantes, constancias de pago, detalle, enviar formulario
+            Route::prefix('contabilidad')->group(function () {
+                Route::post('/upload-comprobante', [FacturaGuiaController::class, 'uploadComprobante']);
+                Route::post('/upload-constancia/{comprobanteId}', [FacturaGuiaController::class, 'uploadConstancia']);
+                Route::delete('/delete-comprobante/{id}', [FacturaGuiaController::class, 'deleteComprobante']);
+                Route::delete('/delete-constancia/{id}', [FacturaGuiaController::class, 'deleteDetraccion']);
+                Route::get('/detalle/{idCotizacion}', [FacturaGuiaController::class, 'getContabilidadDetalle']);
+                Route::put('/nota/{idCotizacion}', [FacturaGuiaController::class, 'saveNotaContabilidad']);
+                Route::get('/clientes/{idContenedor}', [FacturaGuiaController::class, 'getClientesContenedor']);
+                Route::post('/enviar-formulario/{idContenedor}', [FacturaGuiaController::class, 'enviarFormulario']);
+            });
         });
         
         // Aduana
@@ -290,6 +303,9 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
         Route::put('cursos/saveStatus/{idPago}', [PagosController::class, 'updateStatusCurso']);
         Route::put('cursos/updateNota/{idPedidoCurso}', [PagosController::class, 'updateNotaCurso']);
     });
+
+    // Inspeccionados (vista global Contabilidad)
+    Route::get('inspeccionados', [InspeccionadosController::class, 'index']);
 
     // Importación
     Route::group(['prefix' => 'import'], function () {

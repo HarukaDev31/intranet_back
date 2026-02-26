@@ -7,14 +7,31 @@ use Illuminate\Http\Request;
 use App\Models\CargaConsolidada\Cotizacion;
 use App\Models\CargaConsolidada\Contenedor;
 use App\Models\CargaConsolidada\FacturaComercial;
+use App\Models\CargaConsolidada\Comprobante;
+use App\Models\CargaConsolidada\Detraccion;
+use App\Services\CargaConsolidada\GeminiService;
 use App\Traits\WhatsappTrait;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\URL;
 use App\Traits\FileTrait;
 class FacturaGuiaController extends Controller
 {
     use WhatsappTrait;
     use FileTrait;
+
+    /**
+     * Genera una URL absoluta y firmada temporalmente para que el front solo la abra.
+     */
+    private function absoluteSignedFileUrl(string $routeName, array $params, \DateTimeInterface $expiration): string
+    {
+        $url = URL::temporarySignedRoute($routeName, $expiration, $params);
+        if (!str_starts_with($url, 'http://') && !str_starts_with($url, 'https://')) {
+            $url = rtrim(config('app.url'), '/') . '/' . ltrim($url, '/');
+        }
+        return $url;
+    }
+
     /**
      * @OA\Get(
      *     path="/carga-consolidada/contenedores/{idContenedor}/factura-guia",
@@ -39,6 +56,12 @@ class FacturaGuiaController extends Controller
             ->with(['facturasComerciales' => function ($q) {
                 $q->select('id', 'quotation_id', 'file_name', 'file_path', 'size', 'mime_type', 'created_at');
             }])
+            ->with(['comprobantes' => function ($q) {
+                $q->select('id', 'quotation_id', 'tipo_comprobante', 'valor_comprobante', 'tiene_detraccion', 'monto_detraccion_soles', 'file_name', 'file_path', 'extracted_by_ai', 'created_at');
+                $q->with(['constancia' => function ($q2) {
+                    $q2->select('id', 'comprobante_id', 'monto_detraccion', 'file_path');
+                }]);
+            }])
             ->join(
                 'contenedor_consolidado_tipo_cliente',
                 'contenedor_consolidado_cotizacion.id_tipo_cliente',
@@ -52,12 +75,51 @@ class FacturaGuiaController extends Controller
             ->where('contenedor_consolidado_cotizacion.estado_cotizador', "CONFIRMADO")
             ->paginate($perPage);
 
-        // Agregar facturas_comerciales a cada item
+        // Agregar facturas_comerciales, comprobantes y detracciones a cada item
         $items = collect($query->items())->map(function ($item) {
             $item->facturas_comerciales = $item->facturasComerciales;
             $item->id_cotizacion = $item->id;
             $item->file_path = $this->generateImageUrl($item->file_path);
             unset($item->facturasComerciales);
+
+            // Datos de contabilidad: relación de todos los comprobantes (tipo, valor, detracción, comprobante)
+            $comprobantesRaw = $item->comprobantes ?? collect();
+            $item->total_comprobantes = round($comprobantesRaw->sum('valor_comprobante'), 2);
+            $totalDetracciones = 0;
+            $item->comprobantes = $comprobantesRaw->map(function ($c) use (&$totalDetracciones) {
+                $montoDetraccion = null;
+                $detraccion_file_url = null;
+                if ($c->tiene_detraccion) {
+                    // Monto del comprobante (monto_detraccion_soles) o de la constancia si existe
+                    $montoDetraccion = (float) ($c->monto_detraccion_soles ?? ($c->constancia ? $c->constancia->monto_detraccion : null) ?? 0);
+                    $totalDetracciones += $montoDetraccion;
+                    if ($c->constancia && !empty($c->constancia->file_path)) {
+                        $detraccion_file_url = $this->absoluteSignedFileUrl('carga-consolidada.contabilidad.constancia.file', ['id' => $c->constancia->id], now()->addMinutes(30));
+                    }
+                }
+                return (object) [
+                    'id'                   => $c->id,
+                    'tipo_comprobante'     => $c->tipo_comprobante,
+                    'valor_comprobante'    => $c->valor_comprobante !== null ? round((float) $c->valor_comprobante, 2) : null,
+                    'tiene_detraccion'     => (bool) $c->tiene_detraccion,
+                    'detraccion'           => $montoDetraccion !== null ? [
+                        'monto'    => round($montoDetraccion, 2),
+                        'file_url' => $detraccion_file_url,
+                    ] : null,
+                    'comprobante_file_url' => $c->file_path
+                        ? $this->absoluteSignedFileUrl('carga-consolidada.contabilidad.comprobante.file', ['id' => $c->id], now()->addMinutes(30))
+                        : null,
+                    'file_name'            => $c->file_name ?? null,
+                ];
+            })->values()->all();
+            $item->total_detracciones = round($totalDetracciones, 2);
+            $item->tipo_comprobante = $comprobantesRaw->isNotEmpty() ? $comprobantesRaw->first()->tipo_comprobante : null;
+            $item->comprobantes_count = $comprobantesRaw->count();
+            $primero = $item->comprobantes[0] ?? null;
+            $item->comprobante_file_url = $primero && !empty($primero->comprobante_file_url) ? $primero->comprobante_file_url : null;
+            $item->detraccion_file_url = $primero && isset($primero->detraccion) && !empty($primero->detraccion->file_url) ? $primero->detraccion->file_url : null;
+            $item->registrado = !empty($item->delivery_form_registered_at);
+
             return $item;
         });
 
@@ -757,6 +819,521 @@ Cualquier duda nos escribe.  ¡Gracias! */
                 'success' => false,
                 'error' => 'Error al enviar la guía de remisión por WhatsApp: ' . $e->getMessage()
             ], 500);
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // CONTABILIDAD — Comprobantes, Detracciones, Detalle, Enviar formulario
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Sube un comprobante (factura/boleta) para una cotización.
+     * Extrae tipo_comprobante y valor_comprobante usando Gemini 2.0 Flash.
+     *
+     * POST /carga-consolidada/contenedor/factura-guia/contabilidad/upload-comprobante
+     * Body (multipart): idCotizacion, file
+     */
+    public function uploadComprobante(Request $request)
+    {
+        try {
+            $idCotizacion = $request->idCotizacion;
+            $file = $request->file('file');
+
+            if (!$idCotizacion || !$file || !$file->isValid()) {
+                return response()->json(['success' => false, 'message' => 'idCotizacion y file son requeridos'], 400);
+            }
+
+            $cotizacion = Cotizacion::find($idCotizacion);
+            if (!$cotizacion) {
+                return response()->json(['success' => false, 'message' => 'Cotización no encontrada'], 404);
+            }
+
+            $originalName = $file->getClientOriginalName();
+            $fileSize     = $file->getSize();
+            $mimeType     = $file->getMimeType();
+
+            $storedPath = $file->storeAs(
+                'cargaconsolidada/comprobantes/' . $idCotizacion,
+                $originalName
+            );
+
+            $tipoComprobante        = null;
+            $valorComprobante       = null;
+            $tieneDetraccion        = false;
+            $montoDetraccionDolares = null;
+            $montoDetraccionSoles   = null;
+            $extractedByAi          = false;
+
+            $geminiSupportedMimes = [
+                'application/pdf',
+                'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            ];
+
+            if (in_array($mimeType, $geminiSupportedMimes)) {
+                $gemini       = new GeminiService();
+                $filePath     = storage_path('app/' . $storedPath);
+                $geminiResult = $gemini->extractFromComprobante($filePath, $mimeType);
+
+                if ($geminiResult['success']) {
+                    $tipoComprobante        = $geminiResult['tipo_comprobante'];
+                    $valorComprobante       = $geminiResult['valor_comprobante'];
+                    $tieneDetraccion        = !empty($geminiResult['tiene_detraccion']);
+                    $montoDetraccionDolares = $geminiResult['monto_detraccion_dolares'];
+                    $montoDetraccionSoles   = $geminiResult['monto_detraccion_soles'];
+                    $extractedByAi          = true;
+                } else {
+                    Log::warning('GeminiService no pudo extraer datos del comprobante', [
+                        'quotation_id' => $idCotizacion,
+                        'error'        => $geminiResult['error'],
+                    ]);
+                }
+            }
+
+            $comprobante = Comprobante::create([
+                'quotation_id'             => $idCotizacion,
+                'tipo_comprobante'         => $tipoComprobante,
+                'valor_comprobante'        => $valorComprobante,
+                'tiene_detraccion'         => $tieneDetraccion ? 1 : 0,
+                'monto_detraccion_dolares' => $montoDetraccionDolares,
+                'monto_detraccion_soles'   => $montoDetraccionSoles,
+                'file_name'                => $originalName,
+                'file_path'                => $storedPath,
+                'size'                     => $fileSize,
+                'mime_type'                => $mimeType,
+                'extracted_by_ai'          => $extractedByAi ? 1 : 0,
+            ]);
+            $comprobante->file_url = $this->absoluteSignedFileUrl('carga-consolidada.contabilidad.comprobante.file', ['id' => $comprobante->id], now()->addMinutes(30));
+
+            return response()->json([
+                'success'   => true,
+                'message'   => 'Comprobante subido correctamente',
+                'data'      => $comprobante,
+                'extracted' => $extractedByAi,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error al subir comprobante', [
+                'quotation_id' => $request->idCotizacion,
+                'error'        => $e->getMessage(),
+            ]);
+            return response()->json(['success' => false, 'message' => 'Error al subir comprobante: ' . $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Sube la constancia de pago de detracción vinculada a un comprobante específico.
+     * Extrae el monto del depósito usando Gemini 2.0 Flash.
+     *
+     * POST /carga-consolidada/contenedor/factura-guia/contabilidad/upload-constancia/{comprobanteId}
+     * Body (multipart): file
+     */
+    public function uploadConstancia(Request $request, $comprobanteId)
+    {
+        try {
+            $file = $request->file('file');
+
+            if (!$file || !$file->isValid()) {
+                return response()->json(['success' => false, 'message' => 'file es requerido'], 400);
+            }
+
+            $comprobante = Comprobante::find($comprobanteId);
+            if (!$comprobante) {
+                return response()->json(['success' => false, 'message' => 'Comprobante no encontrado'], 404);
+            }
+
+            // Si ya existe una constancia previa para este comprobante, eliminarla
+            $constanciaPrevia = Detraccion::where('comprobante_id', $comprobanteId)->first();
+            if ($constanciaPrevia) {
+                $prevPath = storage_path('app/' . $constanciaPrevia->file_path);
+                if (file_exists($prevPath)) {
+                    unlink($prevPath);
+                }
+                $constanciaPrevia->delete();
+            }
+
+            $originalName = $file->getClientOriginalName();
+            $fileSize     = $file->getSize();
+            $mimeType     = $file->getMimeType();
+
+            $storedPath = $file->storeAs(
+                'cargaconsolidada/constancias/' . $comprobante->quotation_id,
+                $originalName
+            );
+
+            $montoConstanciaSoles = null;
+            $extractedByAi        = false;
+
+            $geminiSupportedMimes = [
+                'application/pdf',
+                'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            ];
+
+            if (in_array($mimeType, $geminiSupportedMimes)) {
+                $gemini       = new GeminiService();
+                $filePath     = storage_path('app/' . $storedPath);
+                $geminiResult = $gemini->extractFromConstancia($filePath, $mimeType);
+
+                if ($geminiResult['success']) {
+                    $montoConstanciaSoles = $geminiResult['monto_constancia_soles'];
+                    $extractedByAi        = true;
+                } else {
+                    Log::warning('GeminiService no pudo extraer datos de la constancia', [
+                        'comprobante_id' => $comprobanteId,
+                        'error'          => $geminiResult['error'],
+                    ]);
+                }
+            }
+
+            $constancia = Detraccion::create([
+                'quotation_id'    => $comprobante->quotation_id,
+                'comprobante_id'  => $comprobante->id,
+                'monto_detraccion'=> $montoConstanciaSoles,
+                'file_name'       => $originalName,
+                'file_path'       => $storedPath,
+                'size'            => $fileSize,
+                'mime_type'       => $mimeType,
+                'extracted_by_ai' => $extractedByAi ? 1 : 0,
+            ]);
+            $constancia->file_url = $this->absoluteSignedFileUrl('carga-consolidada.contabilidad.constancia.file', ['id' => $constancia->id], now()->addMinutes(30));
+
+            return response()->json([
+                'success'   => true,
+                'message'   => 'Constancia de pago subida correctamente',
+                'data'      => $constancia,
+                'extracted' => $extractedByAi,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error al subir constancia de detracción', [
+                'comprobante_id' => $comprobanteId,
+                'error'          => $e->getMessage(),
+            ]);
+            return response()->json(['success' => false, 'message' => 'Error al subir constancia: ' . $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Elimina un comprobante por su ID.
+     *
+     * DELETE /carga-consolidada/contenedor/factura-guia/contabilidad/delete-comprobante/{id}
+     */
+    public function deleteComprobante($id)
+    {
+        try {
+            $comprobante = Comprobante::find($id);
+            if (!$comprobante) {
+                return response()->json(['success' => false, 'message' => 'Comprobante no encontrado'], 404);
+            }
+
+            // Eliminar constancia de pago vinculada si existe
+            $constancia = Detraccion::where('comprobante_id', $id)->first();
+            if ($constancia) {
+                $constanciaPath = storage_path('app/' . $constancia->file_path);
+                if (file_exists($constanciaPath)) {
+                    unlink($constanciaPath);
+                }
+                $constancia->delete();
+            }
+
+            $filePath = storage_path('app/' . $comprobante->file_path);
+            if (file_exists($filePath)) {
+                unlink($filePath);
+            }
+
+            $comprobante->delete();
+
+            return response()->json(['success' => true, 'message' => 'Comprobante eliminado correctamente']);
+        } catch (\Exception $e) {
+            Log::error('Error al eliminar comprobante', ['id' => $id, 'error' => $e->getMessage()]);
+            return response()->json(['success' => false, 'message' => 'Error al eliminar comprobante: ' . $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Elimina una detracción por su ID.
+     *
+     * DELETE /carga-consolidada/contenedor/factura-guia/contabilidad/delete-detraccion/{id}
+     */
+    public function deleteDetraccion($id)
+    {
+        try {
+            $detraccion = Detraccion::find($id);
+            if (!$detraccion) {
+                return response()->json(['success' => false, 'message' => 'Detracción no encontrada'], 404);
+            }
+
+            $filePath = storage_path('app/' . $detraccion->file_path);
+            if (file_exists($filePath)) {
+                unlink($filePath);
+            }
+
+            $detraccion->delete();
+
+            return response()->json(['success' => true, 'message' => 'Detracción eliminada correctamente']);
+        } catch (\Exception $e) {
+            Log::error('Error al eliminar detracción', ['id' => $id, 'error' => $e->getMessage()]);
+            return response()->json(['success' => false, 'message' => 'Error al eliminar detracción: ' . $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Sirve el archivo de un comprobante por ID (evita URLs con rutas concatenadas).
+     * GET .../contabilidad/comprobante/{id}/file
+     */
+    public function serveComprobanteFile($id)
+    {
+        $comprobante = Comprobante::find($id);
+        if (!$comprobante || empty($comprobante->file_path)) {
+            abort(404, 'Comprobante no encontrado');
+        }
+        $fullPath = storage_path('app/' . $comprobante->file_path);
+        if (!is_file($fullPath)) {
+            Log::warning('FacturaGuia: Archivo de comprobante no encontrado en disco', ['id' => $id, 'file_path' => $comprobante->file_path]);
+            abort(404, 'Archivo no encontrado');
+        }
+        $mime = $comprobante->mime_type ?: mime_content_type($fullPath);
+        return response()->file($fullPath, [
+            'Content-Type' => $mime,
+            'Content-Disposition' => 'inline; filename="' . basename($comprobante->file_path) . '"',
+        ]);
+    }
+
+    /**
+     * Sirve el archivo de una constancia de detracción por ID.
+     * GET .../contabilidad/constancia/{id}/file
+     */
+    public function serveConstanciaFile($id)
+    {
+        $detraccion = Detraccion::find($id);
+        if (!$detraccion || empty($detraccion->file_path)) {
+            abort(404, 'Constancia no encontrada');
+        }
+        $fullPath = storage_path('app/' . $detraccion->file_path);
+        if (!is_file($fullPath)) {
+            Log::warning('Archivo de constancia no encontrado en disco', ['id' => $id, 'file_path' => $detraccion->file_path]);
+            abort(404, 'Archivo no encontrado');
+        }
+        $mime = $detraccion->mime_type ?: mime_content_type($fullPath);
+        return response()->file($fullPath, [
+            'Content-Type' => $mime,
+            'Content-Disposition' => 'inline; filename="' . basename($detraccion->file_path) . '"',
+        ]);
+    }
+
+    /**
+     * Devuelve el detalle de contabilidad para una cotización (vista VER).
+     * Incluye: comprobantes, detracciones, guías de remisión, datos del panel lateral.
+     *
+     * GET /carga-consolidada/contenedor/factura-guia/contabilidad/detalle/{idCotizacion}
+     */
+    public function getContabilidadDetalle($idCotizacion)
+    {
+        try {
+            $cotizacion = Cotizacion::find($idCotizacion);
+            if (!$cotizacion) {
+                return response()->json(['success' => false, 'message' => 'Cotización no encontrada'], 404);
+            }
+
+            // Cargar comprobantes con su constancia de pago anidada
+            $comprobantes = Comprobante::where('quotation_id', $idCotizacion)
+                ->orderBy('created_at', 'desc')
+                ->get()
+                ->map(function ($item) {
+                    $item->file_url = $item->file_path
+                        ? $this->absoluteSignedFileUrl('carga-consolidada.contabilidad.comprobante.file', ['id' => $item->id], now()->addMinutes(30))
+                        : null;
+
+                    // Constancia de pago vinculada (solo si tiene detraccion)
+                    $item->constancia = null;
+                    if ($item->tiene_detraccion) {
+                        $constancia = Detraccion::where('comprobante_id', $item->id)->first();
+                        if ($constancia) {
+                            $constancia->file_url = $constancia->file_path
+                                ? $this->absoluteSignedFileUrl('carga-consolidada.contabilidad.constancia.file', ['id' => $constancia->id], now()->addMinutes(30))
+                                : null;
+                            $item->constancia = $constancia;
+                        }
+                    }
+
+                    return $item;
+                });
+
+            $totalComprobantes = $comprobantes->sum('valor_comprobante');
+            // Total detracciones = suma de montos declarados en soles (de los comprobantes)
+            $totalDetracciones = $comprobantes
+                ->where('tiene_detraccion', true)
+                ->sum('monto_detraccion_soles');
+
+            // Panel lateral: estado de documentos clave
+            $panel = [
+                'tiene_cotizacion_inicial' => !empty($cotizacion->cotizacion_rel_url),
+                'tiene_cotizacion_final'   => !empty($cotizacion->cotizacion_final_url),
+                'tiene_contrato'           => !empty($cotizacion->cotizacion_contrato_url),
+                'guia_remision_url'        => $cotizacion->guia_remision_url
+                    ? $this->generateImageUrl('cargaconsolidada/guiaremision/' . $idCotizacion . '/' . $cotizacion->guia_remision_url)
+                    : null,
+                'guia_remision_file_name'  => $cotizacion->guia_remision_url,
+                'nota_contabilidad'        => $cotizacion->nota_contabilidad,
+            ];
+
+            // Datos básicos del cliente
+            $cliente = [
+                'id_cotizacion' => $cotizacion->id,
+                'nombre'        => $cotizacion->nombre,
+                'documento'     => $cotizacion->documento,
+                'telefono'      => $cotizacion->telefono,
+                'correo'        => $cotizacion->correo,
+            ];
+
+            return response()->json([
+                'success'            => true,
+                'cliente'            => $cliente,
+                'comprobantes'       => $comprobantes,
+                'total_comprobantes' => round($totalComprobantes, 2),
+                'total_detracciones' => round($totalDetracciones, 2),
+                'panel'              => $panel,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error al obtener detalle contabilidad', [
+                'id_cotizacion' => $idCotizacion,
+                'error'         => $e->getMessage(),
+            ]);
+            return response()->json(['success' => false, 'message' => 'Error al obtener detalle: ' . $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Guarda la nota interna de contabilidad de una cotización.
+     *
+     * PUT /carga-consolidada/contenedor/factura-guia/contabilidad/nota/{idCotizacion}
+     * Body (JSON): nota
+     */
+    public function saveNotaContabilidad(Request $request, $idCotizacion)
+    {
+        try {
+            $cotizacion = Cotizacion::find($idCotizacion);
+            if (!$cotizacion) {
+                return response()->json(['success' => false, 'message' => 'Cotización no encontrada'], 404);
+            }
+
+            $cotizacion->nota_contabilidad = $request->nota;
+            $cotizacion->save();
+
+            return response()->json(['success' => true, 'message' => 'Nota guardada correctamente']);
+        } catch (\Exception $e) {
+            Log::error('Error al guardar nota contabilidad', [
+                'id_cotizacion' => $idCotizacion,
+                'error'         => $e->getMessage(),
+            ]);
+            return response()->json(['success' => false, 'message' => 'Error al guardar nota: ' . $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Envía el formulario de entrega por WhatsApp (instancia 'administracion') a los
+     * clientes seleccionados de un contenedor.
+     * Construye el link como APP_URL_CLIENTES + /formulario/{idCotizacion}
+     *
+     * POST /carga-consolidada/contenedor/factura-guia/contabilidad/enviar-formulario/{idContenedor}
+     * Body (JSON): { cotizacion_ids: [1, 2, 3] }
+     */
+    public function enviarFormulario(Request $request, $idContenedor)
+    {
+        try {
+            $cotizacionIds = $request->input('cotizacion_ids', []);
+
+            if (empty($cotizacionIds)) {
+                return response()->json(['success' => false, 'message' => 'Debe seleccionar al menos un cliente'], 400);
+            }
+
+            $clientesUrlBase = env('APP_URL_CLIENTES', 'http://localhost:3001');
+            $enviados = [];
+            $errores  = [];
+
+            foreach ($cotizacionIds as $idCotizacion) {
+                $cotizacion = Cotizacion::find($idCotizacion);
+                if (!$cotizacion) {
+                    $errores[] = ['id' => $idCotizacion, 'error' => 'Cotización no encontrada'];
+                    continue;
+                }
+
+                $telefono = preg_replace('/\D+/', '', $cotizacion->telefono);
+                if (empty($telefono)) {
+                    $errores[] = ['id' => $idCotizacion, 'nombre' => $cotizacion->nombre, 'error' => 'Sin teléfono'];
+                    continue;
+                }
+
+                if (strlen($telefono) < 9) {
+                    $telefono = '51' . $telefono;
+                }
+                $numeroWhatsapp = $telefono . '@c.us';
+
+                $link    = $clientesUrlBase . '/formulario/' . $idCotizacion;
+                $message = "Hola " . $cotizacion->nombre . " 👋,\n\n" .
+                           "Te enviamos el enlace para completar tu formulario de entrega:\n" .
+                           $link . "\n\n" .
+                           "Por favor, complétalo para coordinar la entrega de tu mercadería. ¡Gracias!";
+
+                $result = $this->sendMessage($message, $numeroWhatsapp, 0, 'administracion');
+
+                if ($result && isset($result['status']) && $result['status']) {
+                    $enviados[] = ['id' => $idCotizacion, 'nombre' => $cotizacion->nombre];
+                } else {
+                    $errores[] = ['id' => $idCotizacion, 'nombre' => $cotizacion->nombre, 'error' => 'Error al enviar WhatsApp'];
+                }
+            }
+
+            return response()->json([
+                'success'  => true,
+                'enviados' => $enviados,
+                'errores'  => $errores,
+                'message'  => count($enviados) . ' mensaje(s) enviado(s) correctamente',
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error al enviar formularios por WhatsApp', [
+                'id_contenedor' => $idContenedor,
+                'error'         => $e->getMessage(),
+            ]);
+            return response()->json(['success' => false, 'message' => 'Error al enviar formularios: ' . $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Devuelve lista de cotizaciones de un contenedor para el modal "Enviar formulario"
+     * (nombre, telefono, si ya tiene formulario registrado).
+     *
+     * GET /carga-consolidada/contenedor/factura-guia/contabilidad/clientes/{idContenedor}
+     */
+    public function getClientesContenedor($idContenedor)
+    {
+        try {
+            $cotizaciones = Cotizacion::select(
+                'contenedor_consolidado_cotizacion.id',
+                'contenedor_consolidado_cotizacion.nombre',
+                'contenedor_consolidado_cotizacion.telefono',
+                'contenedor_consolidado_cotizacion.correo',
+                'contenedor_consolidado_cotizacion.documento',
+                'contenedor_consolidado_cotizacion.delivery_form_registered_at'
+            )
+                ->where('id_contenedor', $idContenedor)
+                ->whereNotNull('estado_cliente')
+                ->whereNull('id_cliente_importacion')
+                ->where('estado_cotizador', 'CONFIRMADO')
+                ->orderBy('nombre', 'asc')
+                ->get()
+                ->map(function ($item) {
+                    $item->registrado = !empty($item->delivery_form_registered_at);
+                    return $item;
+                });
+
+            return response()->json([
+                'success' => true,
+                'data'    => $cotizaciones,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error al obtener clientes del contenedor para enviar formulario', [
+                'id_contenedor' => $idContenedor,
+                'error'         => $e->getMessage(),
+            ]);
+            return response()->json(['success' => false, 'message' => 'Error: ' . $e->getMessage()], 500);
         }
     }
 }

@@ -3,6 +3,7 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Models\BaseDatos\Clientes\Cliente;
+use App\Http\Controllers\CargaConsolidada\FacturaGuiaController;
 
 /*
 |--------------------------------------------------------------------------
@@ -63,6 +64,14 @@ require __DIR__.'/modules/base-datos.php';
 
 // Módulo de Cursos
 require __DIR__.'/modules/cursos.php';
+
+// Archivos de contabilidad (comprobante/constancia) — sin JWT, con URL firmada (para abrir en nueva pestaña)
+Route::get('/carga-consolidada/contenedor/factura-guia/contabilidad/comprobante/{id}/file', [FacturaGuiaController::class, 'serveComprobanteFile'])
+    ->middleware('signed')
+    ->name('carga-consolidada.contabilidad.comprobante.file');
+Route::get('/carga-consolidada/contenedor/factura-guia/contabilidad/constancia/{id}/file', [FacturaGuiaController::class, 'serveConstanciaFile'])
+    ->middleware('signed')
+    ->name('carga-consolidada.contabilidad.constancia.file');
 
 // Módulo de Carga Consolidada
 require __DIR__.'/modules/carga-consolidada.php';

@@ -43,6 +43,7 @@ class CotizacionPagosController extends Controller
                 ], 401);
             }
 
+            $table_proveedores = 'contenedor_consolidado_cotizacion_proveedores';
             // Usar consulta SQL directa para mejor control de codificación
             $sql = "
                 SELECT 
@@ -62,7 +63,18 @@ class CotizacionPagosController extends Controller
                         JOIN {$this->table_pagos_concept} ccp ON cccp.id_concept = ccp.id
                         WHERE cccp.id_cotizacion = CC.id
                         AND ccp.name = 'LOGISTICA'
-                    ) AS pagos_count
+                    ) AS pagos_count,
+                    (
+                        SELECT COUNT(*)
+                        FROM {$table_proveedores} prov
+                        WHERE prov.id_cotizacion = CC.id
+                    ) AS total_proveedores,
+                    (
+                        SELECT COUNT(*)
+                        FROM {$table_proveedores} prov
+                        WHERE prov.id_cotizacion = CC.id
+                        AND prov.estados_proveedor IN ('INSPECTION', 'LOADED')
+                    ) AS inspeccionados_count
                 FROM {$this->table_contenedor_cotizacion} CC
                 LEFT JOIN {$this->table_contenedor_tipo_cliente} TC ON TC.id = CC.id_tipo_cliente
                 WHERE CC.id_contenedor = ?
@@ -82,6 +94,15 @@ class CotizacionPagosController extends Controller
             $filteredResults = collect($results)->filter(function ($item) {
                 return is_null($item->id_cliente_importacion ?? null);
             });
+
+            // Filtrar por cotización cuando viene idCotizacion (ej. desde inspeccionados → ver en tab pagos)
+            $idCotizacionFilter = $request->get('id_cotizacion') ?: $request->get('idCotizacion');
+            if ($idCotizacionFilter !== null && $idCotizacionFilter !== '') {
+                $idCotInt = (int) $idCotizacionFilter;
+                $filteredResults = $filteredResults->filter(function ($item) use ($idCotInt) {
+                    return (int) ($item->id_cotizacion ?? 0) === $idCotInt;
+                })->values();
+            }
 
             // Aplicar búsqueda simple si viene el parámetro 'search'
             // Solo buscar por nombre, documento (DNI) o número (teléfono)
@@ -231,16 +252,33 @@ class CotizacionPagosController extends Controller
                     // Obtener los pagos de esta cotización
                     $pagos = $this->getPagosCotizacion($row->id_cotizacion);
 
+                    // Estado inspección: si la cotización tiene todos sus proveedores inspeccionados
+                    $totalProveedores = (int) ($row->total_proveedores ?? 0);
+                    $inspeccionadosCount = (int) ($row->inspeccionados_count ?? 0);
+                    $estadoInspeccion = 'Pendiente';
+                    if ($totalProveedores > 0) {
+                        if ($inspeccionadosCount >= $totalProveedores) {
+                            $estadoInspeccion = 'Completado';
+                        } elseif ($inspeccionadosCount > 0) {
+                            $estadoInspeccion = 'Inspeccionado';
+                        }
+                    }
+
+                    $monto = (float) ($row->monto ?? 0);
+                    $totalPagos = (float) ($row->total_pagos ?? 0);
+                    $diferencia = $monto - $totalPagos;
+
                     return [
                         'index' => $index + 1,
                         'nombre' => $this->cleanText(ucwords(strtolower($nombre))),
                         'documento' => $this->cleanText($row->documento ?? ''),
                         'telefono' => $this->cleanText($row->telefono ?? ''),
+                        'correo' => $this->cleanText($row->correo ?? ''),
                         'tipo_cliente' => ucwords(strtolower($tipoCliente)),
                         'estado_pago' => $estadoPago,
                         'tipo_pago' => 'Logistica',
-                        'monto' => $row->monto ?? 0,
-                        'total_pagos' => $row->total_pagos ?? 0,
+                        'monto' => $monto,
+                        'total_pagos' => $totalPagos,
                         'pagos_count' => $row->pagos_count ?? 0,
                         'id_cotizacion' => $row->id_cotizacion,
                         'id_contenedor'=>$row->id_contenedor,
@@ -248,8 +286,29 @@ class CotizacionPagosController extends Controller
                         'pagos' => $pagos,
                         'estado_permiso_por_tipo' => $estadoPermisoPorCotizacion[$row->id_cotizacion] ?? [],
                         'id_tramite' => $idTramitePorCotizacion[$row->id_cotizacion] ?? null,
+                        'estado_inspeccion' => $estadoInspeccion,
+                        'diferencia' => round($diferencia, 2),
                     ];
                 });
+
+            // Filtros por inspección y estado de pago (query param 'filters' JSON: estado_inspeccion, estado_pago)
+            $filtersJson = $request->get('filters');
+            if (!empty($filtersJson)) {
+                $filters = is_string($filtersJson) ? json_decode($filtersJson, true) : $filtersJson;
+                if (is_array($filters)) {
+                    if (!empty($filters['estado_inspeccion'])) {
+                        $data = $data->filter(function ($item) use ($filters) {
+                            return ($item['estado_inspeccion'] ?? 'Pendiente') === $filters['estado_inspeccion'];
+                        })->values();
+                    }
+                    if (!empty($filters['estado_pago'])) {
+                        $data = $data->filter(function ($item) use ($filters) {
+                            return ($item['estado_pago'] ?? '') === $filters['estado_pago'];
+                        })->values();
+                    }
+                }
+            }
+
                 // Paginación manual para la colección
                 $perPage = $request->get('limit', 100);
                 $page = $request->get('page', 1);

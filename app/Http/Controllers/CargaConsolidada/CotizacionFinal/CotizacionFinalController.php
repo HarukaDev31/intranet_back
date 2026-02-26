@@ -288,6 +288,9 @@ class CotizacionFinalController extends Controller
                         ->orWhere('contenedor_consolidado_cotizacion.telefono', 'LIKE', "%{$search}%");
                 });
             }
+            if ($request->has('estado_cotizacion_final') && $request->estado_cotizacion_final !== '' && $request->estado_cotizacion_final !== 'todos') {
+                $query->where('contenedor_consolidado_cotizacion.estado_cotizacion_final', $request->estado_cotizacion_final);
+            }
 
             $perPage = $request->input('per_page', 10);
             $query->whereNull('id_cliente_importacion');
@@ -308,6 +311,8 @@ class CotizacionFinalController extends Controller
                     $pago['voucher_url'] = $this->generateImageUrl($pago['voucher_url']);
                     return $pago;
                 }, $pagos);
+                $totalLi = (float)($row->total_logistica_impuestos ?? 0);
+                $totalPag = (float)($row->total_pagos ?? 0);
                 $subdata = [
                     'index' => $index,
                     'id_contenedor_pago' => $row->id_contenedor_pago,
@@ -321,7 +326,9 @@ class CotizacionFinalController extends Controller
                     'total_pagos' => $row->total_pagos == 0 ? "0.00" : $row->total_pagos,
                     'pagos_count' => $row->pagos_count,
                     'id_cotizacion' => $row->id_cotizacion,
-                    'pagos' => json_encode($pagos)
+                    'pagos' => json_encode($pagos),
+                    'estado_cotizacion_final' => $row->estado_cotizacion_final ?? null,
+                    'diferencia' => round($totalLi - $totalPag, 2),
                 ];
 
                 $transformedData[] = $subdata;
@@ -2671,7 +2678,7 @@ class CotizacionFinalController extends Controller
      */
     private function addCurrencyFormatting(array $headers)
     {
-        $keysToFormat = ['total_logistica', 'total_logistica_pagado', 'total_fob', 'total_impuestos','total_vendido_logistica_impuestos', 'total_pagado'];
+        $keysToFormat = ['total_logistica', 'total_logistica_pagado', 'total_fob', 'total_impuestos', 'total_vendido_logistica_impuestos', 'total_pagado', 'total_diferencia_impuestos_logistica'];
         foreach ($headers as $k => $item) {
             if (is_array($item) && array_key_exists('value', $item) && in_array($k, $keysToFormat)) {
                 $headers[$k]['value'] = $this->formatCurrency($item['value']);
@@ -2800,9 +2807,9 @@ class CotizacionFinalController extends Controller
                 ->where('cccp.id_contenedor', $idContenedor)
                 ->first();
 
-            // Obtener bl_file_url y lista_empaque_file_url del contenedor
+            // Obtener bl_file_url, lista_empaque_file_url, carga y f_puerto del contenedor
             $result2 = DB::table($this->table)
-                ->select('bl_file_url', 'lista_embarque_url', 'carga')
+                ->select('bl_file_url', 'lista_embarque_url', 'carga', 'f_puerto')
                 ->where('id', $idContenedor)
                 ->first();
 
@@ -2834,12 +2841,18 @@ class CotizacionFinalController extends Controller
                         "label" => "FOB",
                         "icon" => "cryptocurrency-color:soc"
                     ],
+                    'total_diferencia_impuestos_logistica' => [
+                        "value" => (float)($result->total_vendido_logistica_impuestos ?? 0) - (float)($result->total_pagado ?? 0),
+                        "label" => "Total Diferencia",
+                        "icon" => "cryptocurrency-color:soc"
+                    ],
                 ];
                 $dataHeaders = $this->addCurrencyFormatting($dataHeaders);
                 return response()->json([
                     'success' => true,
                     'data' => $dataHeaders,
-                    'carga' => $result2->carga ?? ''
+                    'carga' => $result2->carga ?? '',
+                    'f_puerto' => $result2->f_puerto ? \Carbon\Carbon::parse($result2->f_puerto)->format('d/m/Y') : null,
                 ]);
             }
 
@@ -2875,12 +2888,18 @@ class CotizacionFinalController extends Controller
                         "label" => "Vendido",
                         "icon" => "cryptocurrency-color:soc"
                     ],
+                    'total_diferencia_impuestos_logistica' => [
+                        "value" => (float)($result->total_vendido_logistica_impuestos ?? 0) - (float)($result->total_pagado ?? 0),
+                        "label" => "Total Diferencia",
+                        "icon" => "cryptocurrency-color:soc"
+                    ],
                 ];
                 $dataHeaders = $this->addCurrencyFormatting($dataHeaders);
                 return response()->json([
                     'success' => true,
                     'data' => $dataHeaders,
-                    'carga' => $result2->carga ?? ''
+                    'carga' => $result2->carga ?? '',
+                    'f_puerto' => $result2->f_puerto ? \Carbon\Carbon::parse($result2->f_puerto)->format('d/m/Y') : null,
                 ]);
             } else {
                 return response()->json([
@@ -2893,7 +2912,8 @@ class CotizacionFinalController extends Controller
                         'cbm_total_peru' => ["value" => 0, "label" => "CBM Total Perú", "icon" => "https://upload.wikimedia.org/wikipedia/commons/c/cf/Flag_of_Peru.svg"],
                         'total_fob' => ["value" => 0, "label" => "FOB", "icon" => "fas fa-dollar-sign"]
                     ],
-                    'carga' => ''
+                    'carga' => '',
+                    'f_puerto' => ($result2 && $result2->f_puerto) ? \Carbon\Carbon::parse($result2->f_puerto)->format('d/m/Y') : null,
                 ]);
             }
         } catch (\Exception $e) {

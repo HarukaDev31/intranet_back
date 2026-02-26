@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use App\Models\Usuario;
 use App\Models\CalculadoraImportacion;
+use App\Models\CargaConsolidada\Comprobante;
+use App\Models\CargaConsolidada\Detraccion;
 
 class Cotizacion extends Model
 {
@@ -82,7 +84,8 @@ class Cotizacion extends Model
         'autosigned_contract_at',
         'cotizacion_contrato_autosigned_url',
         'from_calculator',
-        'id_contenedor_destino'
+        'id_contenedor_destino',
+        'nota_contabilidad',
     ];
 
     /**
@@ -241,8 +244,24 @@ class Cotizacion extends Model
      * Relación con Facturas Comerciales
      */
     public function facturasComerciales()
-        {
-            return $this->hasMany(FacturaComercial::class, 'quotation_id', 'id');
+    {
+        return $this->hasMany(FacturaComercial::class, 'quotation_id', 'id');
+    }
+
+    /**
+     * Relación con Comprobantes (Contabilidad)
+     */
+    public function comprobantes()
+    {
+        return $this->hasMany(Comprobante::class, 'quotation_id', 'id');
+    }
+
+    /**
+     * Relación con Detracciones (Contabilidad)
+     */
+    public function detracciones()
+    {
+        return $this->hasMany(Detraccion::class, 'quotation_id', 'id');
     }
 
     /**
