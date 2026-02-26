@@ -2784,21 +2784,25 @@ class CotizacionFinalController extends Controller
                         AND (id_contenedor_pago IS NULL OR id_contenedor_pago = ' . $idContenedor . ')
                     ) as total_vendido_logistica_impuestos'),
                     
-                    // Total pagado logistica
+                    // Total pagado logistica (solo cotizaciones con id_contenedor_pago nulo o igual al actual)
                     DB::raw('(
-                        SELECT COALESCE(SUM(monto), 0)
-                        FROM ' . $this->table_contenedor_consolidado_cotizacion_coordinacion_pagos . ' 
-                        JOIN ' . $this->table_pagos_concept . ' ON ' . $this->table_contenedor_consolidado_cotizacion_coordinacion_pagos . '.id_concept = ' . $this->table_pagos_concept . '.id
-                        WHERE id_contenedor = ' . $idContenedor . '
+                        SELECT COALESCE(SUM(p.monto), 0)
+                        FROM ' . $this->table_contenedor_consolidado_cotizacion_coordinacion_pagos . ' p
+                        JOIN ' . $this->table_pagos_concept . ' ON p.id_concept = ' . $this->table_pagos_concept . '.id
+                        JOIN ' . $this->table_contenedor_cotizacion . ' cc_p ON p.id_cotizacion = cc_p.id
+                        WHERE p.id_contenedor = ' . $idContenedor . '
+                        AND (cc_p.id_contenedor_pago IS NULL OR cc_p.id_contenedor_pago = ' . $idContenedor . ')
                         AND ' . $this->table_pagos_concept . '.name = "LOGISTICA"
                     ) as total_logistica_pagado'),
                     
-                    // Total pagado (logistica + impuestos)
+                    // Total pagado (logistica + impuestos) (solo cotizaciones con id_contenedor_pago nulo o igual al actual)
                     DB::raw('(
-                        SELECT COALESCE(SUM(monto), 0)
-                        FROM ' . $this->table_contenedor_consolidado_cotizacion_coordinacion_pagos . ' 
-                        JOIN ' . $this->table_pagos_concept . ' ON ' . $this->table_contenedor_consolidado_cotizacion_coordinacion_pagos . '.id_concept = ' . $this->table_pagos_concept . '.id
-                        WHERE id_contenedor = ' . $idContenedor . '
+                        SELECT COALESCE(SUM(p.monto), 0)
+                        FROM ' . $this->table_contenedor_consolidado_cotizacion_coordinacion_pagos . ' p
+                        JOIN ' . $this->table_pagos_concept . ' ON p.id_concept = ' . $this->table_pagos_concept . '.id
+                        JOIN ' . $this->table_contenedor_cotizacion . ' cc_p ON p.id_cotizacion = cc_p.id
+                        WHERE p.id_contenedor = ' . $idContenedor . '
+                        AND (cc_p.id_contenedor_pago IS NULL OR cc_p.id_contenedor_pago = ' . $idContenedor . ')
                         AND (' . $this->table_pagos_concept . '.name = "LOGISTICA"
                         OR ' . $this->table_pagos_concept . '.name = "IMPUESTOS")
                     ) as total_pagado')

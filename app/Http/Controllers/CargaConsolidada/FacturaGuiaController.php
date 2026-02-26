@@ -97,6 +97,10 @@ class FacturaGuiaController extends Controller
                         $detraccion_file_url = $this->absoluteSignedFileUrl('carga-consolidada.contabilidad.constancia.file', ['id' => $c->constancia->id], now()->addMinutes(30));
                     }
                 }
+                // Siempre convertir file_path a URL absoluta firmada; no exponer file_path al front
+                $comprobanteSignedUrl = !empty($c->file_path)
+                    ? $this->absoluteSignedFileUrl('carga-consolidada.contabilidad.comprobante.file', ['id' => $c->id], now()->addMinutes(30))
+                    : null;
                 return (object) [
                     'id'                   => $c->id,
                     'tipo_comprobante'     => $c->tipo_comprobante,
@@ -106,9 +110,8 @@ class FacturaGuiaController extends Controller
                         'monto'    => round($montoDetraccion, 2),
                         'file_url' => $detraccion_file_url,
                     ] : null,
-                    'comprobante_file_url' => $c->file_path
-                        ? $this->absoluteSignedFileUrl('carga-consolidada.contabilidad.comprobante.file', ['id' => $c->id], now()->addMinutes(30))
-                        : null,
+                    'comprobante_file_url' => $comprobanteSignedUrl,
+                    'file_url'             => $comprobanteSignedUrl,
                     'file_name'            => $c->file_name ?? null,
                 ];
             })->values()->all();
@@ -1137,18 +1140,21 @@ Cualquier duda nos escribe.  ¡Gracias! */
                 ->orderBy('created_at', 'desc')
                 ->get()
                 ->map(function ($item) {
-                    $item->file_url = $item->file_path
+                    // Convertir file_path a URL absoluta firmada; no exponer file_path al front
+                    $item->file_url = !empty($item->file_path)
                         ? $this->absoluteSignedFileUrl('carga-consolidada.contabilidad.comprobante.file', ['id' => $item->id], now()->addMinutes(30))
                         : null;
+                    unset($item->file_path);
 
                     // Constancia de pago vinculada (solo si tiene detraccion)
                     $item->constancia = null;
                     if ($item->tiene_detraccion) {
                         $constancia = Detraccion::where('comprobante_id', $item->id)->first();
                         if ($constancia) {
-                            $constancia->file_url = $constancia->file_path
+                            $constancia->file_url = !empty($constancia->file_path)
                                 ? $this->absoluteSignedFileUrl('carga-consolidada.contabilidad.constancia.file', ['id' => $constancia->id], now()->addMinutes(30))
                                 : null;
+                            unset($constancia->file_path);
                             $item->constancia = $constancia;
                         }
                     }
