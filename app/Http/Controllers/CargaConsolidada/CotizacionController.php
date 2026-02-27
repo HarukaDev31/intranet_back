@@ -538,7 +538,12 @@ class CotizacionController extends Controller
                 'label' => 'Logist.',
                 'icon' => 'cryptocurrency-color:soc'
             ],
-
+            //total_diferencia_impuestos_logistica
+            'total_diferencia_logistica' => [
+                'value' => $headers ? $headers->total_logistica - $headers->total_logistica_pagado : 0,
+                'label' => 'Total Diferencia',
+                'icon' => 'cryptocurrency-color:soc'
+            ],
 
 
         ];
@@ -547,7 +552,7 @@ class CotizacionController extends Controller
             Usuario::ROL_ALMACEN_CHINA => ['cbm_total_china', 'cbm_total_peru', 'qty_items'],
             Usuario::ROL_ADMINISTRACION => ['cbm_total_china', 'cbm_total_peru', 'qty_items', 'total_logistica', 'total_logistica_pagado'],
             Usuario::ROL_COORDINACION => ['cbm_total_china', 'cbm_total_peru', 'qty_items', 'total_logistica', 'total_logistica_pagado'],
-            Usuario::ROL_CONTABILIDAD => ['cbm_total_china', 'cbm_total_peru', 'qty_items', 'total_logistica', 'total_logistica_pagado']
+            Usuario::ROL_CONTABILIDAD => ['cbm_total_china', 'cbm_total_peru', 'qty_items', 'total_logistica', 'total_logistica_pagado', 'total_diferencia_logistica']
         ];
         $userIdCheck = $user->ID_Usuario;
         if (array_key_exists($usergroup, $roleAllowedMap)) {
