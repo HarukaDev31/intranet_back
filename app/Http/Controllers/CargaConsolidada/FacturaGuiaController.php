@@ -1427,7 +1427,7 @@ Cualquier duda nos escribe.  ¡Gracias! */
     /**
      * Envía el formulario de entrega por WhatsApp (instancia 'administracion') a los
      * clientes seleccionados de un contenedor.
-     * Construye el link como APP_URL_CLIENTES + /formulario/{idCotizacion}
+     * Construye el link como APP_URL_CLIENTES + /formulario-comprobante/{idContenedor}
      *
      * POST /carga-consolidada/contenedor/factura-guia/contabilidad/enviar-formulario/{idContenedor}
      * Body (JSON): { cotizacion_ids: [1, 2, 3] }
@@ -1463,11 +1463,11 @@ Cualquier duda nos escribe.  ¡Gracias! */
                 }
                 $numeroWhatsapp = $telefono . '@c.us';
 
-                $link    = $clientesUrlBase . '/formulario/' . $idCotizacion;
+                $link    = $clientesUrlBase . '/formulario-comprobante/' . $idContenedor;
                 $message = "Hola " . $cotizacion->nombre . " 👋,\n\n" .
-                           "Te enviamos el enlace para completar tu formulario de entrega:\n" .
+                           "Te enviamos el enlace para completar tu formulario de comprobante:\n" .
                            $link . "\n\n" .
-                           "Por favor, complétalo para coordinar la entrega de tu mercadería. ¡Gracias!";
+                           "Por favor, complétalo con tus datos de facturación. ¡Gracias!";
 
                 $result = $this->sendMessage($message, $numeroWhatsapp, 0, 'administracion');
 
@@ -1646,10 +1646,10 @@ Cualquier duda nos escribe.  ¡Gracias! */
             $numeroWhatsapp = $telefono . '@c.us';
 
             $clientesUrlBase = env('APP_URL_CLIENTES', 'http://localhost:3001');
-            $link = $clientesUrlBase . '/formulario/' . $idCotizacion;
+            $link = $clientesUrlBase . '/formulario-comprobante/' . $cotizacion->id_contenedor;
 
             $message = "Buen día somos del area de contabilidad de Pro Business.\n" .
-                "Te invitamos a llenar el siguiente formulario para recibir tu carga,\n" .
+                "Te invitamos a llenar el siguiente formulario con tus datos de comprobante:\n" .
                 $link;
 
             $result = $this->sendMessage($message, $numeroWhatsapp, 0, 'administracion');

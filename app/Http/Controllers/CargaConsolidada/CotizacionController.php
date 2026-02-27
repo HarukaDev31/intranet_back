@@ -60,7 +60,7 @@ class CotizacionController extends Controller
             if (!is_array($item) || !array_key_exists('value', $item)) {
                 continue;
             }
-            if (in_array($key, ['total_logistica', 'total_logistica_pagado'])) {
+            if (in_array($key, ['total_logistica', 'total_logistica_pagado', 'total_diferencia_logistica'])) {
                 $headers[$key]['value'] = $this->formatCurrency($item['value']);
             }
         }
@@ -540,7 +540,7 @@ class CotizacionController extends Controller
             ],
             //total_diferencia_impuestos_logistica
             'total_diferencia_logistica' => [
-                'value' => $headers ? $headers->total_logistica - $headers->total_logistica_pagado : 0,
+                'value' => $headers ? round($headers->total_logistica - $headers->total_logistica_pagado, 2) : 0,
                 'label' => 'Total Diferencia',
                 'icon' => 'cryptocurrency-color:soc'
             ],

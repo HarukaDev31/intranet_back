@@ -19,6 +19,7 @@ use App\Http\Controllers\CargaConsolidada\AduanaController;
 use App\Http\Controllers\CargaConsolidada\Clientes\PagosController as ClientesPagosController;
 use App\Http\Controllers\CargaConsolidada\EntregaController;
 use App\Http\Controllers\CargaConsolidada\InspeccionadosController;
+use App\Http\Controllers\Clientes\ComprobanteFormController;
 use App\Http\Controllers\Commons\Google\SheetController;
 
 /*
@@ -188,6 +189,8 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
                 Route::post('/send-guias/{idCotizacion}', [FacturaGuiaController::class, 'sendGuiasContabilidad']);
                 Route::post('/send-detracciones/{idCotizacion}', [FacturaGuiaController::class, 'sendDetraccionesContabilidad']);
                 Route::post('/send-formulario/{idCotizacion}', [FacturaGuiaController::class, 'sendFormularioContabilidad']);
+                // Formulario comprobante enviado por el cliente
+                Route::get('/comprobante-form/{idCotizacion}', [ComprobanteFormController::class, 'getFormByCotizacion']);
             });
         });
         
