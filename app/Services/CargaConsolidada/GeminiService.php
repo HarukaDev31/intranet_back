@@ -57,9 +57,10 @@ class GeminiService
             '- tiene_detraccion: true si el documento menciona detracción o "Sistema de Pago de Obligaciones Tributarias", false en caso contrario. ' .
             '- monto_detraccion_dolares: si tiene_detraccion es true, el monto de la detracción en la moneda del comprobante (usualmente USD). Solo el número. null si no hay detracción. ' .
             '- monto_detraccion_soles: si tiene_detraccion es true, el monto de la detracción en soles (campo "Importe de la detracción (SOLES)" o similar). Solo el número. null si no hay detracción. ' .
-            'Responde ÚNICAMENTE con el objeto JSON. No escribas frases como "Here is the JSON" ni ningún texto antes o después del JSON.';
+            'Responde ÚNICAMENTE con el objeto JSON en una sola línea (sin saltos de línea ni espacios extra). No escribas frases como "Here is the JSON" ni ningún texto antes o después del JSON.';
 
-        $result = $this->callGemini($filePath, $mimeType, $prompt, 512);
+        // 1024 tokens para evitar truncado del JSON (Gemini a veces devuelve JSON formateado con muchos espacios)
+        $result = $this->callGemini($filePath, $mimeType, $prompt, 1024);
 
         if (!$result['success']) {
             return array_merge($this->errorResultComprobante(), ['error' => $result['error']]);

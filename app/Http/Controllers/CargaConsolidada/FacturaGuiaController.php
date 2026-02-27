@@ -7,10 +7,15 @@ use Illuminate\Http\Request;
 use App\Models\CargaConsolidada\Cotizacion;
 use App\Models\CargaConsolidada\Contenedor;
 use App\Models\CargaConsolidada\FacturaComercial;
+use App\Models\CargaConsolidada\GuiaRemision;
 use App\Models\CargaConsolidada\Comprobante;
 use App\Models\CargaConsolidada\Detraccion;
+use App\Models\CargaConsolidada\Pago;
 use App\Services\CargaConsolidada\GeminiService;
 use App\Traits\WhatsappTrait;
+use App\Jobs\SendContabilidadComprobantesJob;
+use App\Jobs\SendContabilidadGuiasJob;
+use App\Jobs\SendContabilidadDetraccionesJob;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
@@ -56,11 +61,17 @@ class FacturaGuiaController extends Controller
             ->with(['facturasComerciales' => function ($q) {
                 $q->select('id', 'quotation_id', 'file_name', 'file_path', 'size', 'mime_type', 'created_at');
             }])
+            ->with(['guiasRemision' => function ($q) {
+                $q->select('id', 'quotation_id', 'file_name', 'file_path', 'created_at')->orderBy('created_at', 'desc');
+            }])
             ->with(['comprobantes' => function ($q) {
                 $q->select('id', 'quotation_id', 'tipo_comprobante', 'valor_comprobante', 'tiene_detraccion', 'monto_detraccion_soles', 'file_name', 'file_path', 'extracted_by_ai', 'created_at');
                 $q->with(['constancia' => function ($q2) {
                     $q2->select('id', 'comprobante_id', 'monto_detraccion', 'file_path');
                 }]);
+            }])
+            ->with(['pagos' => function ($q) {
+                $q->select('id', 'id_cotizacion', 'monto', 'status');
             }])
             ->join(
                 'contenedor_consolidado_tipo_cliente',
@@ -77,51 +88,96 @@ class FacturaGuiaController extends Controller
 
         // Agregar facturas_comerciales, comprobantes y detracciones a cada item
         $items = collect($query->items())->map(function ($item) {
-            $item->facturas_comerciales = $item->facturasComerciales;
             $item->id_cotizacion = $item->id;
-            $item->file_path = $this->generateImageUrl($item->file_path);
+            // file_path de cotización: no exponer ruta relativa; solo enviar URL absoluta firmada (no hay ruta por cotización, se deja null)
+            $item->file_path = null;
+            // Facturas comerciales: convertir file_path relativo a URL absoluta firmada
+            $item->facturas_comerciales = collect($item->facturasComerciales ?? [])->map(function ($f) {
+                $signedUrl = !empty($f->file_path)
+                    ? $this->absoluteSignedFileUrl('carga-consolidada.factura-comercial.file', ['id' => $f->id], now()->addMinutes(30))
+                    : null;
+                return (object) [
+                    'id'        => $f->id,
+                    'file_name' => $f->file_name ?? null,
+                    'file_path' => $signedUrl,
+                    'size'      => $f->size ?? null,
+                    'mime_type' => $f->mime_type ?? null,
+                    'created_at'=> $f->created_at ?? null,
+                ];
+            })->values()->all();
             unset($item->facturasComerciales);
 
             // Datos de contabilidad: relación de todos los comprobantes (tipo, valor, detracción, comprobante)
             $comprobantesRaw = $item->comprobantes ?? collect();
             $item->total_comprobantes = round($comprobantesRaw->sum('valor_comprobante'), 2);
             $totalDetracciones = 0;
-            $item->comprobantes = $comprobantesRaw->map(function ($c) use (&$totalDetracciones) {
+            $mappedComprobantes = $comprobantesRaw->map(function ($c) use (&$totalDetracciones) {
                 $montoDetraccion = null;
                 $detraccion_file_url = null;
                 if ($c->tiene_detraccion) {
-                    // Monto del comprobante (monto_detraccion_soles) o de la constancia si existe
                     $montoDetraccion = (float) ($c->monto_detraccion_soles ?? ($c->constancia ? $c->constancia->monto_detraccion : null) ?? 0);
                     $totalDetracciones += $montoDetraccion;
                     if ($c->constancia && !empty($c->constancia->file_path)) {
                         $detraccion_file_url = $this->absoluteSignedFileUrl('carga-consolidada.contabilidad.constancia.file', ['id' => $c->constancia->id], now()->addMinutes(30));
                     }
                 }
-                // Siempre convertir file_path a URL absoluta firmada; no exponer file_path al front
                 $comprobanteSignedUrl = !empty($c->file_path)
                     ? $this->absoluteSignedFileUrl('carga-consolidada.contabilidad.comprobante.file', ['id' => $c->id], now()->addMinutes(30))
                     : null;
-                return (object) [
+                return [
                     'id'                   => $c->id,
+                    'quotation_id'         => $c->quotation_id,
                     'tipo_comprobante'     => $c->tipo_comprobante,
                     'valor_comprobante'    => $c->valor_comprobante !== null ? round((float) $c->valor_comprobante, 2) : null,
                     'tiene_detraccion'     => (bool) $c->tiene_detraccion,
+                    'monto_detraccion_soles' => $c->monto_detraccion_soles,
                     'detraccion'           => $montoDetraccion !== null ? [
                         'monto'    => round($montoDetraccion, 2),
                         'file_url' => $detraccion_file_url,
                     ] : null,
                     'comprobante_file_url' => $comprobanteSignedUrl,
-                    'file_url'             => $comprobanteSignedUrl,
+                    'file_path'            => $comprobanteSignedUrl,
                     'file_name'            => $c->file_name ?? null,
+                    'extracted_by_ai'      => (bool) ($c->extracted_by_ai ?? false),
+                    'created_at'           => $c->created_at ?? null,
+                    'constancia'           => null,
                 ];
             })->values()->all();
+
+            $item->setRelation('comprobantes', collect($mappedComprobantes));
+            $item->comprobantes = $mappedComprobantes;
             $item->total_detracciones = round($totalDetracciones, 2);
             $item->tipo_comprobante = $comprobantesRaw->isNotEmpty() ? $comprobantesRaw->first()->tipo_comprobante : null;
             $item->comprobantes_count = $comprobantesRaw->count();
-            $primero = $item->comprobantes[0] ?? null;
-            $item->comprobante_file_url = $primero && !empty($primero->comprobante_file_url) ? $primero->comprobante_file_url : null;
-            $item->detraccion_file_url = $primero && isset($primero->detraccion) && !empty($primero->detraccion->file_url) ? $primero->detraccion->file_url : null;
+            $primero = $mappedComprobantes[0] ?? null;
+            $item->comprobante_file_url = $primero && !empty($primero['comprobante_file_url']) ? $primero['comprobante_file_url'] : null;
+            $item->detraccion_file_url = $primero && isset($primero['detraccion']['file_url']) && !empty($primero['detraccion']['file_url']) ? $primero['detraccion']['file_url'] : null;
             $item->registrado = !empty($item->delivery_form_registered_at);
+
+            // Guías de remisión (múltiples por cotización)
+            $guiasRaw = $item->guiasRemision ?? collect();
+            $item->guias_remision = $guiasRaw->map(function ($g) {
+                $signedUrl = $this->absoluteSignedFileUrl('carga-consolidada.guia-remision.file', ['id' => $g->id], now()->addMinutes(30));
+                return [
+                    'id'        => $g->id,
+                    'file_name' => $g->file_name,
+                    'file_url'  => $signedUrl,
+                ];
+            })->values()->all();
+            $item->guia_remision_url = !empty($item->guias_remision[0]['file_url'])
+                ? $item->guias_remision[0]['file_url']
+                : ($item->guia_remision_url ? $this->generateImageUrl('cargaconsolidada/guiaremision/' . $item->id . '/' . $item->guia_remision_url) : null);
+            unset($item->guiasRemision);
+
+            // Datos de pagos para cálculo de estado
+            $pagosRaw = $item->pagos ?? collect();
+            $montoPagar = (float) ($item->logistica_final ?? 0) + (float) ($item->impuestos_final ?? 0);
+            $totalPagado = (float) $pagosRaw->sum('monto');
+            $totalPagadoConfirmado = (float) $pagosRaw->where('status', 'CONFIRMADO')->sum('monto');
+            $item->monto_a_pagar = round($montoPagar, 2);
+            $item->total_pagado = round($totalPagado, 2);
+            $item->total_pagado_confirmado = round($totalPagadoConfirmado, 2);
+            unset($item->pagos);
 
             return $item;
         });
@@ -163,23 +219,57 @@ class FacturaGuiaController extends Controller
     public function uploadGuiaRemision(Request $request)
     {
         try {
-            $idContenedor = $request->idCotizacion;
+            $idCotizacion = $request->input('idCotizacion');
             $file = $request->file('file');
-            $file->storeAs('cargaconsolidada/guiaremision/' . $idContenedor, $file->getClientOriginalName());
-            //update guia remision url
-            $cotizacion = Cotizacion::find($idContenedor);
-            $cotizacion->guia_remision_url = $file->getClientOriginalName();
-            $cotizacion->save();
+
+            if (!$idCotizacion || !$file || !$file->isValid()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'idCotizacion y file son requeridos',
+                ], 400);
+            }
+
+            $cotizacion = Cotizacion::find($idCotizacion);
+            if (!$cotizacion) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Cotización no encontrada',
+                ], 404);
+            }
+
+            $originalName = $file->getClientOriginalName();
+            $uniqueName = time() . '_' . preg_replace('/[^a-zA-Z0-9._-]/', '_', $originalName);
+            $storedPath = $file->storeAs(
+                'cargaconsolidada/guiaremision/' . $idCotizacion,
+                $uniqueName
+            );
+
+            $guia = GuiaRemision::create([
+                'quotation_id' => (int) $idCotizacion,
+                'file_name'    => $originalName,
+                'file_path'    => $storedPath,
+                'size'         => $file->getSize(),
+                'mime_type'    => $file->getMimeType(),
+            ]);
+
             return response()->json([
                 'success' => true,
-                'message' => 'Guia remision actualizada correctamente',
-                'path' => $file->getClientOriginalName()
+                'message' => 'Guía de remisión subida correctamente',
+                'data'    => [
+                    'id'        => $guia->id,
+                    'file_name' => $guia->file_name,
+                    'file_path' => $guia->file_path,
+                ],
             ]);
         } catch (\Exception $e) {
+            Log::error('Error al subir guía de remisión', [
+                'id_cotizacion' => $request->input('idCotizacion'),
+                'error'         => $e->getMessage(),
+            ]);
             return response()->json([
                 'success' => false,
-                'message' => 'Error al actualizar guia remision: ' . $e->getMessage()
-            ]);
+                'message' => 'Error al subir guía de remisión: ' . $e->getMessage(),
+            ], 500);
         }
     }
     /**
@@ -350,11 +440,44 @@ class FacturaGuiaController extends Controller
     {
         try {
             $contenedor = Contenedor::where('id', $idContenedor)->first();
-            $headers = [];
+
+            // Sumar total_comprobantes y total_detracciones de todas las cotizaciones del contenedor
+            $cotizaciones = Cotizacion::where('id_contenedor', $idContenedor)
+                ->whereNotNull('estado_cliente')
+                ->whereNull('id_cliente_importacion')
+                ->where('estado_cotizador', 'CONFIRMADO')
+                ->with(['comprobantes.constancia'])
+                ->get();
+
+            $totalComprobantes = 0;
+            $totalDetracciones = 0;
+            foreach ($cotizaciones as $cot) {
+                foreach ($cot->comprobantes ?? [] as $c) {
+                    $totalComprobantes += (float) ($c->valor_comprobante ?? 0);
+                    if ($c->tiene_detraccion) {
+                        $monto = (float) ($c->monto_detraccion_soles ?? ($c->constancia ? $c->constancia->monto_detraccion : 0) ?? 0);
+                        $totalDetracciones += $monto;
+                    }
+                }
+            }
+
+            $headers = [
+                [
+                    'icon'  => 'i-heroicons-document-text',
+                    'label' => 'Total Comprobantes',
+                    'value' => 'S/ ' . number_format($totalComprobantes, 2),
+                ],
+                [
+                    'icon'  => 'i-heroicons-banknotes',
+                    'label' => 'Total Detracciones',
+                    'value' => 'S/ ' . number_format($totalDetracciones, 2),
+                ],
+            ];
+
             return response()->json([
                 'success' => true,
-                'data' => $headers,
-                'carga' => $contenedor->carga ?? ''
+                'data'    => $headers,
+                'carga'   => $contenedor->carga ?? '',
             ]);
         } catch (\Exception $e) {
             return response()->json([
@@ -484,36 +607,67 @@ class FacturaGuiaController extends Controller
     }
     /**
      * @OA\Delete(
-     *     path="/carga-consolidada/contenedor/factura-guia/general/delete-guia-remision/{idContenedor}",
+     *     path="/carga-consolidada/contenedor/factura-guia/general/delete-guia-remision/{id}",
      *     tags={"Factura y Guía"},
      *     summary="Eliminar guía de remisión",
-     *     description="Elimina la guía de remisión de una cotización",
+     *     description="Elimina una guía de remisión por su ID",
      *     operationId="deleteGuiaRemision",
      *     security={{"bearerAuth":{}}},
-     *     @OA\Parameter(name="idContenedor", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Parameter(name="id", in="path", required=true, @OA\Schema(type="integer"), description="ID de la guía de remisión"),
      *     @OA\Response(response=200, description="Guía eliminada exitosamente"),
      *     @OA\Response(response=404, description="Guía no encontrada")
      * )
      */
-    public function deleteGuiaRemision($idContenedor)
+    public function deleteGuiaRemision($id)
     {
-        $cotizacion = Cotizacion::find($idContenedor);
-        if($cotizacion->guia_remision_url){
-            $path = storage_path('app/' . $cotizacion->guia_remision_url);
-            if(file_exists($path)){
+        try {
+            $guia = GuiaRemision::find($id);
+            if (!$guia) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Guía de remisión no encontrada',
+                ], 404);
+            }
+
+            $path = storage_path('app/' . $guia->file_path);
+            if (file_exists($path)) {
                 unlink($path);
             }
-        }else{
+
+            $guia->delete();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Guía de remisión eliminada correctamente',
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error al eliminar guía de remisión', ['id' => $id, 'error' => $e->getMessage()]);
             return response()->json([
                 'success' => false,
-                'message' => 'Guia remision no encontrada'
-            ]);
+                'message' => 'Error al eliminar guía: ' . $e->getMessage(),
+            ], 500);
         }
-        $cotizacion->guia_remision_url = null;
-        $cotizacion->save();
-        return response()->json([
-            'success' => true,
-            'message' => 'Guia remision eliminada correctamente'
+    }
+
+    /**
+     * Sirve el archivo de una guía de remisión por ID (URL firmada).
+     * GET .../general/guia-remision/{id}/file
+     */
+    public function serveGuiaRemisionFile($id)
+    {
+        $guia = GuiaRemision::find($id);
+        if (!$guia || empty($guia->file_path)) {
+            abort(404, 'Guía de remisión no encontrada');
+        }
+        $fullPath = storage_path('app/' . $guia->file_path);
+        if (!is_file($fullPath)) {
+            Log::warning('FacturaGuia: Archivo de guía de remisión no encontrado en disco', ['id' => $id, 'file_path' => $guia->file_path]);
+            abort(404, 'Archivo no encontrado');
+        }
+        $mime = $guia->mime_type ?: mime_content_type($fullPath);
+        return response()->file($fullPath, [
+            'Content-Type'        => $mime,
+            'Content-Disposition' => 'inline; filename="' . basename($guia->file_name) . '"',
         ]);
     }
 
@@ -693,16 +847,20 @@ class FacturaGuiaController extends Controller
                 ], 404);
             }
 
-            // Validar que la guía existe
-            if (!$cotizacion->guia_remision_url) {
+            // Primera guía: de la tabla guias_remision o legacy cotizacion.guia_remision_url
+            $primeraGuia = GuiaRemision::where('quotation_id', $idCotizacion)->orderBy('created_at', 'desc')->first();
+            if ($primeraGuia) {
+                $filePath = storage_path('app/' . $primeraGuia->file_path);
+                $fileName = $primeraGuia->file_name;
+            } elseif ($cotizacion->guia_remision_url) {
+                $filePath = storage_path('app/cargaconsolidada/guiaremision/' . $idCotizacion . '/' . $cotizacion->guia_remision_url);
+                $fileName = $cotizacion->guia_remision_url;
+            } else {
                 return response()->json([
                     'success' => false,
                     'error' => 'No hay guía de remisión disponible para esta cotización'
                 ], 400);
             }
-
-            // Obtener la ruta del archivo
-            $filePath = storage_path('app/cargaconsolidada/guiaremision/' . $idCotizacion . '/' . $cotizacion->guia_remision_url);
             
             if (!file_exists($filePath)) {
                 return response()->json([
@@ -754,15 +912,14 @@ Cualquier duda nos escribe.  ¡Gracias! */
             }
 
             // Enviar documento por WhatsApp
-            // sendMedia($filePath, $mimeType = null, $message = null, $phoneNumberId = null, $sleep = 0, $fromNumber = 'consolidado', $fileName = null)
-            $result = $this->sendMedia($filePath, $mimeType, $message, $numeroWhatsapp, 0, 'administracion', $cotizacion->guia_remision_url);
+            $result = $this->sendMedia($filePath, $mimeType, $message, $numeroWhatsapp, 0, 'administracion', $fileName);
 
             // Verificar si sendMedia devolvió false (error)
             if ($result === false) {
                 Log::error('Error al enviar guía por WhatsApp: sendMedia devolvió false', [
                     'id_cotizacion' => $idCotizacion,
                     'telefono' => $numeroWhatsapp,
-                    'archivo' => $cotizacion->guia_remision_url
+                    'archivo' => $fileName
                 ]);
 
                 return response()->json([
@@ -788,7 +945,7 @@ Cualquier duda nos escribe.  ¡Gracias! */
                 Log::info('Guía de remisión enviada por WhatsApp', [
                     'id_cotizacion' => $idCotizacion,
                     'telefono' => $numeroWhatsapp,
-                    'archivo' => $cotizacion->guia_remision_url
+                    'archivo' => $fileName
                 ]);
 
                 return response()->json([
@@ -1100,6 +1257,28 @@ Cualquier duda nos escribe.  ¡Gracias! */
     }
 
     /**
+     * Sirve el archivo de una factura comercial por ID (URL firmada).
+     * GET .../general/factura-comercial/{id}/file
+     */
+    public function serveFacturaComercialFile($id)
+    {
+        $factura = FacturaComercial::find($id);
+        if (!$factura || empty($factura->file_path)) {
+            abort(404, 'Factura comercial no encontrada');
+        }
+        $fullPath = storage_path('app/' . $factura->file_path);
+        if (!is_file($fullPath)) {
+            Log::warning('FacturaGuia: Archivo de factura comercial no encontrado en disco', ['id' => $id, 'file_path' => $factura->file_path]);
+            abort(404, 'Archivo no encontrado');
+        }
+        $mime = $factura->mime_type ?: mime_content_type($fullPath);
+        return response()->file($fullPath, [
+            'Content-Type' => $mime,
+            'Content-Disposition' => 'inline; filename="' . basename($factura->file_path) . '"',
+        ]);
+    }
+
+    /**
      * Sirve el archivo de una constancia de detracción por ID.
      * GET .../contabilidad/constancia/{id}/file
      */
@@ -1135,26 +1314,27 @@ Cualquier duda nos escribe.  ¡Gracias! */
                 return response()->json(['success' => false, 'message' => 'Cotización no encontrada'], 404);
             }
 
-            // Cargar comprobantes con su constancia de pago anidada
+            // Cargar comprobantes con su constancia de pago anidada; file_path siempre como URL absoluta firmada
             $comprobantes = Comprobante::where('quotation_id', $idCotizacion)
                 ->orderBy('created_at', 'desc')
                 ->get()
                 ->map(function ($item) {
-                    // Convertir file_path a URL absoluta firmada; no exponer file_path al front
-                    $item->file_url = !empty($item->file_path)
+                    $signedComprobanteUrl = !empty($item->file_path)
                         ? $this->absoluteSignedFileUrl('carga-consolidada.contabilidad.comprobante.file', ['id' => $item->id], now()->addMinutes(30))
                         : null;
-                    unset($item->file_path);
+                    $item->file_url  = $signedComprobanteUrl;
+                    $item->file_path = $signedComprobanteUrl;
 
                     // Constancia de pago vinculada (solo si tiene detraccion)
                     $item->constancia = null;
                     if ($item->tiene_detraccion) {
                         $constancia = Detraccion::where('comprobante_id', $item->id)->first();
                         if ($constancia) {
-                            $constancia->file_url = !empty($constancia->file_path)
+                            $signedConstanciaUrl = !empty($constancia->file_path)
                                 ? $this->absoluteSignedFileUrl('carga-consolidada.contabilidad.constancia.file', ['id' => $constancia->id], now()->addMinutes(30))
                                 : null;
-                            unset($constancia->file_path);
+                            $constancia->file_url  = $signedConstanciaUrl;
+                            $constancia->file_path = $signedConstanciaUrl;
                             $item->constancia = $constancia;
                         }
                     }
@@ -1168,15 +1348,26 @@ Cualquier duda nos escribe.  ¡Gracias! */
                 ->where('tiene_detraccion', true)
                 ->sum('monto_detraccion_soles');
 
-            // Panel lateral: estado de documentos clave
+            // Guías de remisión (múltiples)
+            $guiasRemision = GuiaRemision::where('quotation_id', $idCotizacion)->orderBy('created_at', 'desc')->get();
+            $guiasRemisionList = $guiasRemision->map(function ($g) {
+                $signedUrl = $this->absoluteSignedFileUrl('carga-consolidada.guia-remision.file', ['id' => $g->id], now()->addMinutes(30));
+                return [
+                    'id'        => $g->id,
+                    'file_name' => $g->file_name,
+                    'file_url'  => $signedUrl,
+                ];
+            })->values()->all();
+            $primeraGuia = $guiasRemision->first();
             $panel = [
                 'tiene_cotizacion_inicial' => !empty($cotizacion->cotizacion_rel_url),
                 'tiene_cotizacion_final'   => !empty($cotizacion->cotizacion_final_url),
                 'tiene_contrato'           => !empty($cotizacion->cotizacion_contrato_url),
-                'guia_remision_url'        => $cotizacion->guia_remision_url
-                    ? $this->generateImageUrl('cargaconsolidada/guiaremision/' . $idCotizacion . '/' . $cotizacion->guia_remision_url)
-                    : null,
-                'guia_remision_file_name'  => $cotizacion->guia_remision_url,
+                'guias_remision'           => $guiasRemisionList,
+                'guia_remision_url'        => $primeraGuia
+                    ? $this->absoluteSignedFileUrl('carga-consolidada.guia-remision.file', ['id' => $primeraGuia->id], now()->addMinutes(30))
+                    : ($cotizacion->guia_remision_url ? $this->generateImageUrl('cargaconsolidada/guiaremision/' . $idCotizacion . '/' . $cotizacion->guia_remision_url) : null),
+                'guia_remision_file_name'  => $primeraGuia ? $primeraGuia->file_name : $cotizacion->guia_remision_url,
                 'nota_contabilidad'        => $cotizacion->nota_contabilidad,
             ];
 
@@ -1340,6 +1531,137 @@ Cualquier duda nos escribe.  ¡Gracias! */
                 'error'         => $e->getMessage(),
             ]);
             return response()->json(['success' => false, 'message' => 'Error: ' . $e->getMessage()], 500);
+        }
+    }
+
+    // ─── Contabilidad: envío individual por cotización ───────────────────────
+
+    /**
+     * Envía los comprobantes (PDF) al cliente por WhatsApp (instancia administracion).
+     * POST /contabilidad/send-comprobantes/{idCotizacion}
+     */
+    public function sendComprobantesContabilidad($idCotizacion)
+    {
+        try {
+            $cotizacion = Cotizacion::find($idCotizacion);
+            if (!$cotizacion) {
+                return response()->json(['success' => false, 'error' => 'Cotización no encontrada'], 404);
+            }
+            $telefono = preg_replace('/\D+/', '', $cotizacion->telefono ?? '');
+            if (empty($telefono)) {
+                return response()->json(['success' => false, 'error' => 'El cliente no tiene un número de teléfono válido'], 400);
+            }
+            if (Comprobante::where('quotation_id', $idCotizacion)->doesntExist()) {
+                return response()->json(['success' => false, 'error' => 'No hay comprobantes disponibles para esta cotización'], 400);
+            }
+
+            SendContabilidadComprobantesJob::dispatch((int) $idCotizacion);
+
+            return response()->json(['success' => true, 'message' => 'Comprobantes en cola de envío por WhatsApp']);
+        } catch (\Exception $e) {
+            Log::error('Error al encolar comprobantes contabilidad', ['id_cotizacion' => $idCotizacion, 'error' => $e->getMessage()]);
+            return response()->json(['success' => false, 'error' => 'Error: ' . $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Envía la guía de remisión al cliente por WhatsApp (instancia administracion) — via Job.
+     * POST /contabilidad/send-guias/{idCotizacion}
+     */
+    public function sendGuiasContabilidad($idCotizacion)
+    {
+        try {
+            $cotizacion = Cotizacion::find($idCotizacion);
+            if (!$cotizacion) {
+                return response()->json(['success' => false, 'error' => 'Cotización no encontrada'], 404);
+            }
+            $telefono = preg_replace('/\D+/', '', $cotizacion->telefono ?? '');
+            if (empty($telefono)) {
+                return response()->json(['success' => false, 'error' => 'El cliente no tiene un número de teléfono válido'], 400);
+            }
+            if (GuiaRemision::where('quotation_id', $idCotizacion)->doesntExist()) {
+                return response()->json(['success' => false, 'error' => 'No hay guías de remisión disponibles para esta cotización'], 400);
+            }
+
+            SendContabilidadGuiasJob::dispatch((int) $idCotizacion);
+
+            return response()->json(['success' => true, 'message' => 'Guías en cola de envío por WhatsApp']);
+        } catch (\Exception $e) {
+            Log::error('Error al encolar guías contabilidad', ['id_cotizacion' => $idCotizacion, 'error' => $e->getMessage()]);
+            return response()->json(['success' => false, 'error' => 'Error: ' . $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Envía la constancia de detracción al cliente por WhatsApp (instancia administracion) — via Job.
+     * POST /contabilidad/send-detracciones/{idCotizacion}
+     */
+    public function sendDetraccionesContabilidad($idCotizacion)
+    {
+        try {
+            $cotizacion = Cotizacion::find($idCotizacion);
+            if (!$cotizacion) {
+                return response()->json(['success' => false, 'error' => 'Cotización no encontrada'], 404);
+            }
+            $telefono = preg_replace('/\D+/', '', $cotizacion->telefono ?? '');
+            if (empty($telefono)) {
+                return response()->json(['success' => false, 'error' => 'El cliente no tiene un número de teléfono válido'], 400);
+            }
+            $tieneConstancias = Comprobante::where('quotation_id', $idCotizacion)
+                ->where('tiene_detraccion', true)
+                ->whereHas('constancia')
+                ->exists();
+            if (!$tieneConstancias) {
+                return response()->json(['success' => false, 'error' => 'No hay constancias de detracción subidas para esta cotización'], 400);
+            }
+
+            SendContabilidadDetraccionesJob::dispatch((int) $idCotizacion);
+
+            return response()->json(['success' => true, 'message' => 'Detracciones en cola de envío por WhatsApp']);
+        } catch (\Exception $e) {
+            Log::error('Error al encolar detracciones contabilidad', ['id_cotizacion' => $idCotizacion, 'error' => $e->getMessage()]);
+            return response()->json(['success' => false, 'error' => 'Error: ' . $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Envía el formulario de entrega (link) al cliente por WhatsApp (instancia administracion).
+     * POST /contabilidad/send-formulario/{idCotizacion}
+     */
+    public function sendFormularioContabilidad($idCotizacion)
+    {
+        try {
+            $cotizacion = Cotizacion::find($idCotizacion);
+            if (!$cotizacion) {
+                return response()->json(['success' => false, 'error' => 'Cotización no encontrada'], 404);
+            }
+
+            $telefono = preg_replace('/\D+/', '', $cotizacion->telefono ?? '');
+            if (empty($telefono)) {
+                return response()->json(['success' => false, 'error' => 'El cliente no tiene un número de teléfono válido'], 400);
+            }
+            if (strlen($telefono) < 9) {
+                $telefono = '51' . $telefono;
+            }
+            $numeroWhatsapp = $telefono . '@c.us';
+
+            $clientesUrlBase = env('APP_URL_CLIENTES', 'http://localhost:3001');
+            $link = $clientesUrlBase . '/formulario/' . $idCotizacion;
+
+            $message = "Buen día somos del area de contabilidad de Pro Business.\n" .
+                "Te invitamos a llenar el siguiente formulario para recibir tu carga,\n" .
+                $link;
+
+            $result = $this->sendMessage($message, $numeroWhatsapp, 0, 'administracion');
+
+            if ($result && isset($result['status']) && $result['status']) {
+                return response()->json(['success' => true, 'message' => 'Formulario enviado correctamente por WhatsApp']);
+            }
+
+            return response()->json(['success' => false, 'error' => 'No se pudo enviar el formulario por WhatsApp'], 500);
+        } catch (\Exception $e) {
+            Log::error('Error al enviar formulario contabilidad por WhatsApp', ['id_cotizacion' => $idCotizacion, 'error' => $e->getMessage()]);
+            return response()->json(['success' => false, 'error' => 'Error: ' . $e->getMessage()], 500);
         }
     }
 }

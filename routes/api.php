@@ -72,6 +72,12 @@ Route::get('/carga-consolidada/contenedor/factura-guia/contabilidad/comprobante/
 Route::get('/carga-consolidada/contenedor/factura-guia/contabilidad/constancia/{id}/file', [FacturaGuiaController::class, 'serveConstanciaFile'])
     ->middleware('signed')
     ->name('carga-consolidada.contabilidad.constancia.file');
+Route::get('/carga-consolidada/contenedor/factura-guia/general/factura-comercial/{id}/file', [FacturaGuiaController::class, 'serveFacturaComercialFile'])
+    ->middleware('signed')
+    ->name('carga-consolidada.factura-comercial.file');
+Route::get('/carga-consolidada/contenedor/factura-guia/general/guia-remision/{id}/file', [FacturaGuiaController::class, 'serveGuiaRemisionFile'])
+    ->middleware('signed')
+    ->name('carga-consolidada.guia-remision.file');
 
 // Módulo de Carga Consolidada
 require __DIR__.'/modules/carga-consolidada.php';
