@@ -177,6 +177,13 @@ class CotizacionFinalController extends Controller
                     $pagado_verificado = true;
                 }
 
+                $tipoEntrega = null;
+                if (DB::table('consolidado_delivery_form_lima')->where('id_cotizacion', $row->id_cotizacion)->exists()) {
+                    $tipoEntrega = 'Lima';
+                } elseif (DB::table('consolidado_delivery_form_province')->where('id_cotizacion', $row->id_cotizacion)->exists()) {
+                    $tipoEntrega = 'Provincia';
+                }
+
                 $subdata = [
                     'index' => $index,
                     'nombre' => $this->cleanUtf8String($row->nombre_upper ?? $row->nombre),
@@ -184,6 +191,7 @@ class CotizacionFinalController extends Controller
                     'correo' => $this->cleanUtf8String($row->correo),
                     'telefono' => $this->cleanUtf8String($row->telefono),
                     'tipo_cliente' => $this->cleanUtf8String($row->name),
+                    'tipo_entrega' => $tipoEntrega,
                     'volumen_final' => $row->volumen_final_formateado ?? $row->volumen_final,
                     'fob_final' => $row->fob_final_formateado ?? $row->fob_final,
                     'logistica_final' => $row->logistica_final_formateado ?? $row->logistica_final,
