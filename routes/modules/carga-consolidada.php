@@ -167,17 +167,21 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
 
             Route::get('/general/{idContenedor}/headers', [FacturaGuiaController::class, 'getHeadersData']);
             Route::post('/general/upload-guia-remision', [FacturaGuiaController::class, 'uploadGuiaRemision']);
+            Route::post('/general/upload-guias-remision-batch', [FacturaGuiaController::class, 'uploadGuiasRemisionBatch']);
             Route::post('/general/upload-factura-comercial', [FacturaGuiaController::class, 'uploadFacturaComercial']);
             Route::get('/general/{idContenedor}', [FacturaGuiaController::class, 'getContenedorFacturaGuia']);
             Route::delete('/general/delete-factura-comercial/{idContenedor}', [FacturaGuiaController::class, 'deleteFacturaComercial']);
             Route::delete('/general/delete-guia-remision/{idContenedor}', [FacturaGuiaController::class, 'deleteGuiaRemision']);
+            Route::delete('/general/delete-guia-remision-item/{guiaId}', [FacturaGuiaController::class, 'deleteGuiaRemisionItem']);
             Route::post('/send-factura/{idCotizacion}', [FacturaGuiaController::class, 'sendFactura']);
             Route::post('/send-guia/{idCotizacion}', [FacturaGuiaController::class, 'sendGuia']);
 
             // Contabilidad — comprobantes, constancias de pago, detalle, enviar formulario
             Route::prefix('contabilidad')->group(function () {
                 Route::post('/upload-comprobante', [FacturaGuiaController::class, 'uploadComprobante']);
+                Route::post('/upload-comprobantes-batch', [FacturaGuiaController::class, 'uploadComprobantesBatch']);
                 Route::post('/upload-constancia/{comprobanteId}', [FacturaGuiaController::class, 'uploadConstancia']);
+                Route::post('/upload-constancias-batch', [FacturaGuiaController::class, 'uploadConstanciasBatch']);
                 Route::delete('/delete-comprobante/{id}', [FacturaGuiaController::class, 'deleteComprobante']);
                 Route::delete('/delete-constancia/{id}', [FacturaGuiaController::class, 'deleteDetraccion']);
                 Route::get('/detalle/{idCotizacion}', [FacturaGuiaController::class, 'getContabilidadDetalle']);

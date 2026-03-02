@@ -2812,7 +2812,7 @@ class CotizacionFinalController extends Controller
 
             // Obtener bl_file_url, lista_empaque_file_url, carga y f_puerto del contenedor
             $result2 = DB::table($this->table)
-                ->select('bl_file_url', 'lista_embarque_url', 'carga', 'f_puerto')
+                ->select('bl_file_url', 'lista_embarque_url', 'carga', 'fecha_arribo','f_puerto')
                 ->where('id', $idContenedor)
                 ->first();
 
@@ -2855,7 +2855,8 @@ class CotizacionFinalController extends Controller
                     'success' => true,
                     'data' => $dataHeaders,
                     'carga' => $result2->carga ?? '',
-                    'f_puerto' => $result2->f_puerto ? \Carbon\Carbon::parse($result2->f_puerto)->format('d/m/Y') : null,
+                    //fecha_arribo is null use f_puerto
+                    'f_puerto' => $result2->fecha_arribo ? \Carbon\Carbon::parse($result2->fecha_arribo)->format('d/m/Y') : ($result2->f_puerto ? \Carbon\Carbon::parse($result2->f_puerto)->format('d/m/Y') : null),
                 ]);
             }
 
@@ -2902,7 +2903,7 @@ class CotizacionFinalController extends Controller
                     'success' => true,
                     'data' => $dataHeaders,
                     'carga' => $result2->carga ?? '',
-                    'f_puerto' => $result2->f_puerto ? \Carbon\Carbon::parse($result2->f_puerto)->format('d/m/Y') : null,
+                    'f_puerto' => $result2->fecha_arribo ? \Carbon\Carbon::parse($result2->fecha_arribo)->format('d/m/Y') : ($result2->f_puerto ? \Carbon\Carbon::parse($result2->f_puerto)->format('d/m/Y') : null),
                 ]);
             } else {
                 return response()->json([
@@ -2916,7 +2917,7 @@ class CotizacionFinalController extends Controller
                         'total_fob' => ["value" => 0, "label" => "FOB", "icon" => "fas fa-dollar-sign"]
                     ],
                     'carga' => '',
-                    'f_puerto' => ($result2 && $result2->f_puerto) ? \Carbon\Carbon::parse($result2->f_puerto)->format('d/m/Y') : null,
+                    'f_puerto' => $result2->fecha_arribo ? \Carbon\Carbon::parse($result2->fecha_arribo)->format('d/m/Y') : ($result2->f_puerto ? \Carbon\Carbon::parse($result2->f_puerto)->format('d/m/Y') : null),
                 ]);
             }
         } catch (\Exception $e) {

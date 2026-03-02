@@ -116,8 +116,6 @@ require __DIR__.'/modules/external/delivery.php';
 require __DIR__.'/modules/external/importaciones.php';
 // Módulo de Contenedores
 require __DIR__.'/modules/external/containers.php';
-// Módulo de Formulario Comprobante (clientes)
-require __DIR__.'/modules/external/comprobante-form.php';
 // Módulo de Location
 require __DIR__.'/modules/external/commons/location.php';
 // Módulo de Contenedores

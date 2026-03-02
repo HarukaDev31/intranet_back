@@ -249,14 +249,6 @@ class Cotizacion extends Model
     }
 
     /**
-     * Múltiples guías de remisión por cotización.
-     */
-    public function guiasRemision()
-    {
-        return $this->hasMany(GuiaRemision::class, 'quotation_id', 'id');
-    }
-
-    /**
      * Relación con Comprobantes (Contabilidad)
      */
     public function comprobantes()
