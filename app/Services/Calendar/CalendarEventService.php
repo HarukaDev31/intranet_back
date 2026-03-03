@@ -32,8 +32,10 @@ class CalendarEventService
         ?array $contenedorIds = null,
         ?string $status = null,
         ?int $priority = null,
-        bool $onlyMyCharges = false
-    ): Collection {
+        bool $onlyMyCharges = false,
+        int $page = 1,
+        int $perPage = 0
+    ) {
         $calendarIds = Calendar::pluck('id');
         $query = CalendarEvent::whereIn('calendar_id', $calendarIds)
             ->with(['activity', 'eventDays', 'charges.user', 'contenedor']);
@@ -41,8 +43,13 @@ class CalendarEventService
         if ($onlyMyCharges) {
             $query->whereHas('charges', fn ($q) => $q->where('user_id', $userId));
         }
+        // Filtro de fecha solo si se envían explícitamente (sin filtro por defecto)
         if ($startDate && $endDate) {
             $query->whereHas('eventDays', fn ($q) => $q->whereBetween('date', [$startDate, $endDate]));
+        } elseif ($startDate) {
+            $query->whereHas('eventDays', fn ($q) => $q->where('date', '>=', $startDate));
+        } elseif ($endDate) {
+            $query->whereHas('eventDays', fn ($q) => $q->where('date', '<=', $endDate));
         }
         if ($responsableIds !== null && count($responsableIds) > 0) {
             $query->whereHas('charges', fn ($q) => $q->whereIn('user_id', $responsableIds));
@@ -57,12 +64,48 @@ class CalendarEventService
             $query->where('priority', $priority);
         }
 
-        // Ordenar por fecha de inicio (mínima fecha en event_days) ascendente: las que empiezan antes primero
-        $events = $query->orderByRaw('(
+        // Ordenar por fecha de inicio (mínima fecha en event_days) ascendente
+        $query->orderByRaw('(
             SELECT MIN(ced.date)
             FROM calendar_event_days ced
             WHERE ced.calendar_event_id = calendar_events.id
-        ) ASC')->get();
+        ) ASC');
+
+        if ($perPage > 0) {
+            // Calcular progreso del usuario sobre TODOS los resultados (antes de paginar)
+            $subIds = (clone $query)->select('calendar_events.id');
+            $chargeStats = DB::table('calendar_event_charges')
+                ->where('user_id', $userId)
+                ->whereIn('calendar_event_id', $subIds)
+                ->selectRaw('status, COUNT(*) as cnt')
+                ->groupBy('status')
+                ->get()
+                ->keyBy('status');
+            $myProgress = [
+                'total'       => (int) $chargeStats->sum('cnt'),
+                'completadas' => (int) (optional($chargeStats->get('COMPLETADO'))->cnt ?? 0),
+                'en_progreso' => (int) (optional($chargeStats->get('PROGRESO'))->cnt ?? 0),
+                'pendientes'  => (int) (optional($chargeStats->get('PENDIENTE'))->cnt ?? 0),
+            ];
+
+            $paginator = $query->paginate($perPage, ['*'], 'page', $page);
+            $data = collect($paginator->items())
+                ->map(fn ($event) => $this->formatEventForResponse($event))
+                ->values()
+                ->all();
+            return [
+                'data'        => $data,
+                'meta'        => [
+                    'current_page' => $paginator->currentPage(),
+                    'last_page'    => $paginator->lastPage(),
+                    'per_page'     => $paginator->perPage(),
+                    'total'        => $paginator->total(),
+                ],
+                'my_progress' => $myProgress,
+            ];
+        }
+
+        $events = $query->get();
         return $events->map(fn ($event) => $this->formatEventForResponse($event));
     }
 
@@ -574,15 +617,42 @@ class CalendarEventService
 
     /**
      * Progreso del equipo (por eventos) y por responsable (por charges).
+     * Acepta los mismos filtros que getEventsForUser para mostrar stats en contexto filtrado.
      */
-    public function getProgress(?string $startDate = null, ?string $endDate = null, ?int $calendarId = null): array
-    {
-        $eventQuery = CalendarEvent::with(['charges' => fn ($q) => $q->whereNull('removed_at')]);
+    public function getProgress(
+        ?string $startDate = null,
+        ?string $endDate = null,
+        ?int $calendarId = null,
+        ?array $responsableIds = null,
+        ?array $contenedorIds = null,
+        ?string $status = null,
+        ?int $priority = null
+    ): array {
+        $allCalendarIds = Calendar::pluck('id');
+        $eventQuery = CalendarEvent::whereIn('calendar_id', $allCalendarIds)
+            ->with(['charges' => fn ($q) => $q->whereNull('removed_at')]);
+
         if ($calendarId) {
             $eventQuery->where('calendar_id', $calendarId);
         }
         if ($startDate && $endDate) {
             $eventQuery->whereHas('eventDays', fn ($q) => $q->whereBetween('date', [$startDate, $endDate]));
+        } elseif ($startDate) {
+            $eventQuery->whereHas('eventDays', fn ($q) => $q->where('date', '>=', $startDate));
+        } elseif ($endDate) {
+            $eventQuery->whereHas('eventDays', fn ($q) => $q->where('date', '<=', $endDate));
+        }
+        if ($responsableIds !== null && count($responsableIds) > 0) {
+            $eventQuery->whereHas('charges', fn ($q) => $q->whereIn('user_id', $responsableIds));
+        }
+        if ($contenedorIds !== null && count($contenedorIds) > 0) {
+            $eventQuery->whereIn('contenedor_id', $contenedorIds);
+        }
+        if ($status !== null) {
+            $eventQuery->whereHas('charges', fn ($q) => $q->where('status', $status));
+        }
+        if ($priority !== null) {
+            $eventQuery->where('priority', $priority);
         }
         $events = $eventQuery->get();
         $teamCompletadas = 0;

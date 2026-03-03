@@ -83,7 +83,10 @@ class CalendarController extends Controller
                 $onlyMyCharges = false;
             }
 
-            $events = $this->eventService->getEventsForUser(
+            $page    = max(1, (int) $request->input('page', 1));
+            $perPage = max(0, (int) $request->input('per_page', 0));
+
+            $result = $this->eventService->getEventsForUser(
                 $userId,
                 $request->input('start_date'),
                 $request->input('end_date'),
@@ -91,11 +94,26 @@ class CalendarController extends Controller
                 $contenedorIds,
                 $request->input('status'),
                 $request->input('priority') !== null ? (int) $request->input('priority') : null,
-                $onlyMyCharges
+                $onlyMyCharges,
+                $page,
+                $perPage
             );
+
+            // Respuesta paginada
+            if (is_array($result) && isset($result['meta'])) {
+                return response()->json([
+                    'success'     => true,
+                    'data'        => $result['data'],
+                    'meta'        => $result['meta'],
+                    'my_progress' => $result['my_progress'] ?? null,
+                    'message'     => 'Actividades obtenidas correctamente',
+                ]);
+            }
+
+            // Respuesta sin paginación (Collection)
             return response()->json([
                 'success' => true,
-                'data' => $events->values()->all(),
+                'data'    => $result->values()->all(),
                 'message' => 'Actividades obtenidas correctamente',
             ]);
         } catch (\Exception $e) {

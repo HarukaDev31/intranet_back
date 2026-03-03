@@ -588,12 +588,39 @@ class CalendarActivityController extends Controller
         if (!$this->permissionService->canViewTeamProgress(JWTAuth::parseToken()->authenticate())) {
             return response()->json(['success' => false, 'message' => 'No tienes permiso para ver el progreso del equipo'], 403);
         }
-        $user = JWTAuth::parseToken()->authenticate();
-        $calendarId = null;
+
+        // Parsear responsable_ids (array o CSV)
+        $responsableIds = null;
+        $rawIds = $request->input('responsable_ids');
+        if (is_array($rawIds)) {
+            $responsableIds = array_values(array_filter(array_map('intval', $rawIds)));
+        } elseif (is_string($rawIds) && $rawIds !== '') {
+            $responsableIds = array_values(array_filter(array_map('intval', explode(',', $rawIds))));
+        }
+        if ($responsableIds !== null && empty($responsableIds)) {
+            $responsableIds = null;
+        }
+
+        // Parsear contenedor_ids (array o CSV)
+        $contenedorIds = null;
+        $rawContenedores = $request->input('contenedor_ids');
+        if (is_array($rawContenedores)) {
+            $contenedorIds = array_values(array_filter(array_map('intval', $rawContenedores)));
+        } elseif (is_string($rawContenedores) && $rawContenedores !== '') {
+            $contenedorIds = array_values(array_filter(array_map('intval', explode(',', $rawContenedores))));
+        }
+        if ($contenedorIds !== null && empty($contenedorIds)) {
+            $contenedorIds = null;
+        }
+
         $data = $this->eventService->getProgress(
             $request->input('start_date'),
             $request->input('end_date'),
-            $calendarId
+            null,
+            $responsableIds,
+            $contenedorIds,
+            $request->input('status'),
+            $request->input('priority') !== null ? (int) $request->input('priority') : null
         );
         return response()->json(['success' => true, 'data' => $data, 'message' => 'Progreso obtenido correctamente']);
     }
