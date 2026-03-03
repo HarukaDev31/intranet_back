@@ -961,13 +961,15 @@ Le estaré informando cualquier avance 🫡.";
                 ->select([
                     'u.ID_Usuario as id',
                     'u.No_Nombres_Apellidos as nombre',
+                    'g.No_Grupo as role',
                     DB::raw('COUNT(DISTINCT cc.id) as total_cotizaciones'),
                     DB::raw('COALESCE(SUM(cccp.cbm_total), 0) as volumen_total')
-                ])
+                ])//join grupo
+                ->join('grupo as g', 'u.ID_Grupo', '=', 'g.ID_Grupo')
                 ->join('contenedor_consolidado_cotizacion as cc', 'u.ID_Usuario', '=', 'cc.id_usuario','left')
-                ->join('contenedor_consolidado_cotizacion_proveedores as cccp', 'cc.id', '=', 'cccp.id_cotizacion','left')
-                ->join('carga_consolidada_contenedor as cont', 'cc.id_contenedor', '=', 'cont.id','left')
-                ->groupBy('u.ID_Usuario', 'u.No_Nombres_Apellidos');
+                ->join('contenedor_consolidado_cotizacion_proveedores as cccp', 'cc.id', '=', 'cccp.id_cotizacion')
+                ->join('carga_consolidada_contenedor as cont', 'cc.id_contenedor', '=', 'cont.id')
+                ->groupBy('u.ID_Usuario', 'u.No_Nombres_Apellidos', 'g.No_Grupo');
 
             if ($fechaInicio && $fechaFin) {
                 $query->whereBetween('cont.fecha_zarpe', [$fechaInicio, $fechaFin]);
@@ -980,6 +982,11 @@ Le estaré informando cualquier avance 🫡.";
             $query->whereNotIn('u.No_Nombres_Apellidos', ['Danitza', 'Leonardo', 'Frank Oviedo']);
            
             $vendedores = $query->get()->map(function($item) {
+                //if item role is not COTIZADOR Not return item
+                Log::info('item' . json_encode($item));
+                if ($item->role != Usuario::ROL_COTIZADOR) {
+                    return null;
+                }
                 return [
                     'value' => $item->id,
                     'label' => $item->nombre,
