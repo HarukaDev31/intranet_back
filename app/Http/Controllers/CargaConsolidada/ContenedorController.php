@@ -979,7 +979,7 @@ Le estaré informando cualquier avance 🫡.";
                 $query->where('cc.id_contenedor', $idContenedor);
             }
             //not returns row with nombre  contains Danitza Leonardo y frank
-            $query->whereNotIn('u.No_Nombres_Apellidos', ['Danitza', 'Leonardo', 'Frank Oviedo']);
+            $query->whereNotIn('u.No_Nombres_Apellidos', ['Danitza', 'Leonardo', 'Frank Oviedo','Importaciones']);
            
             $vendedores = $query->get()->map(function($item) {
                 //if item role is not COTIZADOR Not return item
