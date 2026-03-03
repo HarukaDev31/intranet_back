@@ -89,10 +89,12 @@ class ViaticoService
                 // Actualizar payment_receipt_file legacy con la siguiente retribución o null
                 $siguiente = ViaticoRetribucion::where('viatico_id', $viatico->id)->orderBy('orden')->orderBy('id')->first();
                 $data['payment_receipt_file'] = $siguiente ? $siguiente->file_path : null;
-                // Si la suma de las retribuciones restantes es menor que el total, pasar a PENDING
-                $sumaRetribuciones = ViaticoRetribucion::where('viatico_id', $viatico->id)->sum('monto');
+                // Recalcular estado según la suma restante
+                $sumaRetribuciones = (float) ViaticoRetribucion::where('viatico_id', $viatico->id)->sum('monto');
                 $totalAmount = (float) $viatico->total_amount;
-                if (abs($sumaRetribuciones - $totalAmount) >= 0.02) {
+                if ($sumaRetribuciones >= $totalAmount - 0.02) {
+                    $data['status'] = Viatico::STATUS_CONFIRMED;
+                } else {
                     $data['status'] = Viatico::STATUS_PENDING;
                 }
             }
@@ -115,10 +117,10 @@ class ViaticoService
                     'orden' => $maxOrden + 1,
                 ]);
                 $data['payment_receipt_file'] = $rutaNuevaGuardada;
-                // Pasar a CONFIRMED solo si la suma de todas las retribuciones = total del viático
+                // Pasar a CONFIRMED si la suma de todas las retribuciones >= total del viático
                 $sumaRetribuciones = ViaticoRetribucion::where('viatico_id', $viatico->id)->sum('monto');
                 $totalAmount = (float) $viatico->total_amount;
-                if (abs($sumaRetribuciones - $totalAmount) < 0.02) {
+                if ($sumaRetribuciones >= $totalAmount - 0.02) {
                     $data['status'] = Viatico::STATUS_CONFIRMED;
                 } else {
                     $data['status'] = Viatico::STATUS_PENDING;
