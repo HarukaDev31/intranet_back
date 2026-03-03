@@ -502,6 +502,17 @@ class CalendarEventService
             'changed_by' => $changedBy,
         ]);
         $charge->load('user');
+
+        // Notificar al jefe y otros responsables vía WebSocket
+        $event = CalendarEvent::with(['calendar', 'charges'])->find($charge->calendar_event_id);
+        if ($event) {
+            $userIdsToNotify = $this->getCalendarNotificationUserIds($event);
+            $userIdsToNotify = array_values(array_filter($userIdsToNotify, fn ($id) => (int) $id !== $changedBy));
+            if (!empty($userIdsToNotify)) {
+                CalendarActivityUpdated::dispatch($event->id, $event->calendar_id, $event->contenedor_id, $userIdsToNotify, $changedBy);
+            }
+        }
+
         return $charge;
     }
 
@@ -534,6 +545,14 @@ class CalendarEventService
             }
         }
         $event->load(['activity', 'eventDays', 'charges.user', 'contenedor']);
+
+        // Notificar al jefe y otros responsables vía WebSocket
+        $userIdsToNotify = $this->getCalendarNotificationUserIds($event);
+        $userIdsToNotify = array_values(array_filter($userIdsToNotify, fn ($id) => (int) $id !== $userId));
+        if (!empty($userIdsToNotify)) {
+            CalendarActivityUpdated::dispatch($event->id, $event->calendar_id, $event->contenedor_id, $userIdsToNotify, $userId);
+        }
+
         return $event;
     }
 
@@ -544,6 +563,17 @@ class CalendarEventService
             return null;
         }
         $charge->update(['notes' => $notes]);
+
+        // Notificar al jefe y otros responsables vía WebSocket
+        $event = CalendarEvent::with(['calendar', 'charges'])->find($charge->calendar_event_id);
+        if ($event) {
+            $userIdsToNotify = $this->getCalendarNotificationUserIds($event);
+            $userIdsToNotify = array_values(array_filter($userIdsToNotify, fn ($id) => (int) $id !== $userId));
+            if (!empty($userIdsToNotify)) {
+                CalendarActivityUpdated::dispatch($event->id, $event->calendar_id, $event->contenedor_id, $userIdsToNotify, $userId);
+            }
+        }
+
         return $charge;
     }
 
@@ -568,6 +598,14 @@ class CalendarEventService
         }
         $event->update(['notes' => $notes]);
         $event->load(['activity', 'eventDays', 'charges.user', 'contenedor']);
+
+        // Notificar al jefe y otros responsables vía WebSocket
+        $userIdsToNotify = $this->getCalendarNotificationUserIds($event);
+        $userIdsToNotify = array_values(array_filter($userIdsToNotify, fn ($id) => (int) $id !== $userId));
+        if (!empty($userIdsToNotify)) {
+            CalendarActivityUpdated::dispatch($event->id, $event->calendar_id, $event->contenedor_id, $userIdsToNotify, $userId);
+        }
+
         return $event;
     }
 
