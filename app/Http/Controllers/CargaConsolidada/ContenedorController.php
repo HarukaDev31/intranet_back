@@ -964,9 +964,9 @@ Le estaré informando cualquier avance 🫡.";
                     DB::raw('COUNT(DISTINCT cc.id) as total_cotizaciones'),
                     DB::raw('COALESCE(SUM(cccp.cbm_total), 0) as volumen_total')
                 ])
-                ->join('contenedor_consolidado_cotizacion as cc', 'u.ID_Usuario', '=', 'cc.id_usuario')
-                ->join('contenedor_consolidado_cotizacion_proveedores as cccp', 'cc.id', '=', 'cccp.id_cotizacion')
-                ->join('carga_consolidada_contenedor as cont', 'cc.id_contenedor', '=', 'cont.id')
+                ->join('contenedor_consolidado_cotizacion as cc', 'u.ID_Usuario', '=', 'cc.id_usuario','left')
+                ->join('contenedor_consolidado_cotizacion_proveedores as cccp', 'cc.id', '=', 'cccp.id_cotizacion','left')
+                ->join('carga_consolidada_contenedor as cont', 'cc.id_contenedor', '=', 'cont.id','left')
                 ->groupBy('u.ID_Usuario', 'u.No_Nombres_Apellidos');
 
             if ($fechaInicio && $fechaFin) {
