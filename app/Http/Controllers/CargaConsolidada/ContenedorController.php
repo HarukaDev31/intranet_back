@@ -981,19 +981,20 @@ Le estaré informando cualquier avance 🫡.";
             //not returns row with nombre  contains Danitza Leonardo y frank
             $query->whereNotIn('u.No_Nombres_Apellidos', ['Danitza', 'Leonardo', 'Frank Oviedo','Importaciones']);
            
-            $vendedores = $query->get()->map(function($item) {
-                //if item role is not COTIZADOR Not return item
-                Log::info('item' . json_encode($item));
-                if ($item->role != Usuario::ROL_COTIZADOR) {
-                    return null;
-                }
-                return [
-                    'value' => $item->id,
-                    'label' => $item->nombre,
-                    'total_cotizaciones' => $item->total_cotizaciones,
-                    'volumen_total' => round($item->volumen_total, 2)
-                ];
-            })->filter();
+            $vendedores = $query->get()
+                ->filter(function($item) {
+                    // Only return items where role is COTIZADOR
+                    return $item->role == Usuario::ROL_COTIZADOR;
+                })
+                ->map(function($item) {
+                    return [
+                        'value' => $item->id,
+                        'label' => $item->nombre,
+                        'total_cotizaciones' => $item->total_cotizaciones,
+                        'volumen_total' => round($item->volumen_total, 2)
+                    ];
+                })
+                ->values(); // Reindex as array of objects
 
             return response()->json([
                 'success' => true,
