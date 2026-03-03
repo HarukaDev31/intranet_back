@@ -993,7 +993,7 @@ Le estaré informando cualquier avance 🫡.";
                     'total_cotizaciones' => $item->total_cotizaciones,
                     'volumen_total' => round($item->volumen_total, 2)
                 ];
-            });
+            })->filter();
 
             return response()->json([
                 'success' => true,
