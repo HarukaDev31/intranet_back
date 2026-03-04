@@ -12,6 +12,7 @@ class Campana extends Model
     
     protected $fillable = [
         'Fe_Creacion',
+        'No_Campana',
         'Fe_Inicio',
         'Fe_Fin',
         'Fe_Borrado'

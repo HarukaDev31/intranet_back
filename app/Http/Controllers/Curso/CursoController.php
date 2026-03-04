@@ -320,15 +320,16 @@ class CursoController extends Controller
         try {
             // Obtener campañas activas
             $campanas = Campana::activas()
-                ->select('ID_Campana', 'Fe_Inicio', 'Fe_Fin')
+                ->select('ID_Campana', 'No_Campana', 'Fe_Inicio', 'Fe_Fin')
                 ->orderBy('Fe_Inicio', 'desc')
                 ->get()
                 ->map(function ($campana) {
                     $mes = Carbon::parse($campana->Fe_Inicio)->locale('es')->monthName;
+                    $anio = Carbon::parse($campana->Fe_Inicio)->year;
+                    $label = $campana->No_Campana ?: ($mes . ' ' . $anio);
                     return [
                         'value' => $campana->ID_Campana,
-                        'label' => $mes,
-
+                        'label' => $label,
                     ];
                 });
 

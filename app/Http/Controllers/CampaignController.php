@@ -306,11 +306,22 @@ class CampaignController extends Controller
             $fe_fin = $request->Fe_Fin;
             $dias = $request->Dias_Seleccionados;
 
+            // Generar nombre por defecto si no se proporciona
+            $meses_es = [
+                1 => 'Enero', 2 => 'Febrero', 3 => 'Marzo', 4 => 'Abril',
+                5 => 'Mayo', 6 => 'Junio', 7 => 'Julio', 8 => 'Agosto',
+                9 => 'Septiembre', 10 => 'Octubre', 11 => 'Noviembre', 12 => 'Diciembre'
+            ];
+            $mes = (int) date('n', strtotime($fe_inicio));
+            $anio = date('Y', strtotime($fe_inicio));
+            $no_campana = $request->get('No_Campana', $meses_es[$mes] . ' ' . $anio);
+
             // Insertar campaña
             $data = [
                 'Fe_Inicio'   => $fe_inicio,
                 'Fe_Fin'      => $fe_fin,
-                'Fe_Creacion' => now()
+                'Fe_Creacion' => now(),
+                'No_Campana'  => $no_campana
             ];
 
             $id = DB::table('campana_curso')->insertGetId($data);
@@ -321,30 +332,23 @@ class CampaignController extends Controller
                     ->select([
                         'c.ID_Campana',
                         'c.Fe_Creacion',
+                        'c.No_Campana',
                         'c.Fe_Inicio',
                         'c.Fe_Fin',
                         DB::raw('MONTH(c.Fe_Inicio) as Mes_Numero'),
+                        DB::raw('YEAR(c.Fe_Inicio) as Anio_Numero'),
                         DB::raw('(SELECT COUNT(*) FROM pedido_curso p WHERE p.ID_Campana = c.ID_Campana) as cantidad_personas')
                     ])
                     ->where('c.ID_Campana', $id)
                     ->first();
 
-                // Traduce el mes a español
                 $meses_es = [
-                    1 => 'Enero',
-                    2 => 'Febrero',
-                    3 => 'Marzo',
-                    4 => 'Abril',
-                    5 => 'Mayo',
-                    6 => 'Junio',
-                    7 => 'Julio',
-                    8 => 'Agosto',
-                    9 => 'Septiembre',
-                    10 => 'Octubre',
-                    11 => 'Noviembre',
-                    12 => 'Diciembre'
+                    1 => 'Enero', 2 => 'Febrero', 3 => 'Marzo', 4 => 'Abril',
+                    5 => 'Mayo', 6 => 'Junio', 7 => 'Julio', 8 => 'Agosto',
+                    9 => 'Septiembre', 10 => 'Octubre', 11 => 'Noviembre', 12 => 'Diciembre'
                 ];
-                $no_campana = $meses_es[(int)$campana->Mes_Numero];
+                $no_campana = $campana->No_Campana
+                    ?: ($meses_es[(int)$campana->Mes_Numero] . ' ' . $campana->Anio_Numero);
 
                 // Armar array por posición (igual que en getCampanas)
                 $data_row = [
@@ -421,35 +425,26 @@ class CampaignController extends Controller
                 ->select([
                     'c.ID_Campana',
                     'c.Fe_Creacion',
+                    'c.No_Campana',
                     'c.Fe_Inicio',
                     'c.Fe_Fin',
                     DB::raw('MONTH(c.Fe_Inicio) as Mes_Numero'),
+                    DB::raw('YEAR(c.Fe_Inicio) as Anio_Numero'),
                     DB::raw('(SELECT COUNT(*) FROM pedido_curso p WHERE p.ID_Campana = c.ID_Campana) as cantidad_personas')
                 ])
                 ->orderBy('c.ID_Campana', 'desc')
                 ->get();
 
-            $data = [];
-
-            // Traduce el mes a español
+            // Traduce el mes a español (fallback si No_Campana es null)
             $meses_es = [
-                1 => 'Enero',
-                2 => 'Febrero',
-                3 => 'Marzo',
-                4 => 'Abril',
-                5 => 'Mayo',
-                6 => 'Junio',
-                7 => 'Julio',
-                8 => 'Agosto',
-                9 => 'Septiembre',
-                10 => 'Octubre',
-                11 => 'Noviembre',
-                12 => 'Diciembre'
+                1 => 'Enero', 2 => 'Febrero', 3 => 'Marzo', 4 => 'Abril',
+                5 => 'Mayo', 6 => 'Junio', 7 => 'Julio', 8 => 'Agosto',
+                9 => 'Septiembre', 10 => 'Octubre', 11 => 'Noviembre', 12 => 'Diciembre'
             ];
 
-            //map to data to format date to text
             $data = $campanas->map(function ($campana) use ($meses_es) {
-                $no_campana = $meses_es[(int)$campana->Mes_Numero];
+                $no_campana = $campana->No_Campana
+                    ?: ($meses_es[(int)$campana->Mes_Numero] . ' ' . $campana->Anio_Numero);
                 return [
                     'ID_Campana' => $campana->ID_Campana,
                     'Fe_Creacion' => date('d/m/Y', strtotime($campana->Fe_Creacion)),
@@ -457,7 +452,6 @@ class CampaignController extends Controller
                     'Fe_Inicio' => date('d/m/Y', strtotime($campana->Fe_Inicio)),
                     'Fe_Fin' => date('d/m/Y', strtotime($campana->Fe_Fin)),
                     'cantidad_personas' => $campana->cantidad_personas,
-                   
                 ];
             });
             $data = $data->toArray();
