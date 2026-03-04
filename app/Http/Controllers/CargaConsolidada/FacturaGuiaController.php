@@ -1742,7 +1742,7 @@ Cualquier duda nos escribe.  ¡Gracias! */
                 }
                 $numeroWhatsapp = $telefono . '@c.us';
 
-                $link    = $clientesUrlBase . '/formulario/' . $idCotizacion;
+                $link    = $clientesUrlBase . '/formulario-comprobante/' . $idCotizacion;
                 $message = "Hola " . $cotizacion->nombre . " 👋,\n\n" .
                            "Te enviamos el enlace para completar tu formulario de entrega:\n" .
                            $link . "\n\n" .
