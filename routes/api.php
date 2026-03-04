@@ -120,6 +120,8 @@ require __DIR__.'/modules/external/containers.php';
 require __DIR__.'/modules/external/commons/location.php';
 // Módulo de Contenedores
 require __DIR__.'/modules/external/commons/container.php';
+// Módulo de Formulario de Comprobante
+require __DIR__.'/modules/external/comprobante-form.php';
 
 // Google Sheets API Routes
 Route::prefix('google-sheets')->group(function () {
