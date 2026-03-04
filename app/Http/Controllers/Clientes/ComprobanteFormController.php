@@ -126,4 +126,32 @@ class ComprobanteFormController extends Controller
             return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
         }
     }
+
+    /**
+     * Actualiza el formulario de comprobante (edicion interna por contabilidad).
+     * PUT /carga-consolidada/contenedor/factura-guia/contabilidad/comprobante-form/{idCotizacion}
+     */
+    public function updateForm(Request $request, $idCotizacion)
+    {
+        try {
+            $form = ComprobanteForm::where('id_cotizacion', $idCotizacion)->first();
+
+            if (!$form) {
+                return response()->json(['success' => false, 'message' => 'Formulario no encontrado'], 404);
+            }
+
+            $form->tipo_comprobante = $request->input('tipo_comprobante', $form->tipo_comprobante);
+            $form->destino_entrega  = $request->input('destino_entrega', $form->destino_entrega);
+            $form->razon_social     = $request->input('razon_social', $form->razon_social);
+            $form->ruc              = $request->input('ruc', $form->ruc);
+            $form->nombre_completo  = $request->input('nombre_completo', $form->nombre_completo);
+            $form->dni_carnet       = $request->input('dni_carnet', $form->dni_carnet);
+            $form->save();
+
+            return response()->json(['success' => true, 'message' => 'Formulario actualizado correctamente', 'data' => $form]);
+        } catch (\Exception $e) {
+            Log::error('ComprobanteFormController@updateForm', ['error' => $e->getMessage()]);
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+        }
+    }
 }

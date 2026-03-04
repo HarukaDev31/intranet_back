@@ -195,6 +195,7 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
                 Route::post('/send-formulario/{idCotizacion}', [FacturaGuiaController::class, 'sendFormularioContabilidad']);
                 // Formulario comprobante enviado por el cliente
                 Route::get('/comprobante-form/{idCotizacion}', [ComprobanteFormController::class, 'getFormByCotizacion']);
+                Route::put('/comprobante-form/{idCotizacion}', [ComprobanteFormController::class, 'updateForm']);
             });
         });
         
