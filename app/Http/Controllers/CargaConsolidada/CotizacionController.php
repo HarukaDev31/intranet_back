@@ -688,6 +688,7 @@ class CotizacionController extends Controller
                 'data' => $headersData,
                 'data_pagos' => $headersDataPagos,
                 'carga' => $contenedor->carga,
+                'f_cierre' => $contenedor->fecha_cierre??$contenedor->f_cierre,
                 'lista_embarque_url' =>$this->generateImageUrl($contenedor->lista_embarque_url) ? $this->generateImageUrl($contenedor->lista_embarque_url) : null
             ]);
         }
@@ -705,6 +706,7 @@ class CotizacionController extends Controller
             'success' => true,
             'data' => $headersData,
             'data_pagos' => $headersDataPagos,
+            'f_cierre' => $contenedor->fecha_cierre??$contenedor->f_cierre,
             'carga' => $contenedor->carga,
             'lista_embarque_url' => $this->generateImageUrl($contenedor->lista_embarque_url) ? $this->generateImageUrl($contenedor->lista_embarque_url) : null
         ]);
