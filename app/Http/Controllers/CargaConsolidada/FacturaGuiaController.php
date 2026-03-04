@@ -1744,9 +1744,11 @@ Cualquier duda nos escribe.  ¡Gracias! */
 
                 $link    = $clientesUrlBase . '/formulario-comprobante/' . $idContenedor;
                 $message = "Hola " . $cotizacion->nombre . " 👋,\n\n" .
-                           "Te enviamos el enlace para completar tu formulario de entrega:\n" .
+                           "Somos del área contable de Pro Business.\n" .
+                           "Tu carga ya está rumbo a Perú.\n\n" .
+                           "Por favor completa el formulario para enviarte tu comprobante cuando recibas tus productos:\n\n" .
                            $link . "\n\n" .
-                           "Por favor, complétalo para coordinar la entrega de tu mercadería. ¡Gracias!";
+                           "*Crearse una cuenta si en caso es su primera vez.*";
 
                 $result = $this->sendMessage($message, $numeroWhatsapp, 0, 'administracion');
 
