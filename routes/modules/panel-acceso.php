@@ -3,8 +3,11 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\PanelAcceso\GrupoController;
 use App\Http\Controllers\PanelAcceso\UsuarioAdminController;
+use App\Http\Controllers\PanelAcceso\UsuarioExternoController;
 use App\Http\Controllers\PanelAcceso\MenuAccesoController;
 use App\Http\Controllers\PanelAcceso\MenuCatalogoController;
+use App\Http\Controllers\PanelAcceso\PermisoMenuUsuarioController;
+use App\Http\Controllers\PanelAcceso\MenuExternoController;
 
 /*
 |--------------------------------------------------------------------------
@@ -43,6 +46,30 @@ Route::group(['prefix' => 'panel-acceso', 'middleware' => 'jwt.auth'], function 
     // -----------------------------------------------------------------------
     Route::get('menu-acceso/{empresaId}/{orgId}/{grupoId}', [MenuAccesoController::class, 'getMenuPorGrupo']);
     Route::post('menu-acceso', [MenuAccesoController::class, 'guardarPermisos']);
+
+    // -----------------------------------------------------------------------
+    // Usuarios Externos
+    // -----------------------------------------------------------------------
+    Route::get('usuarios-externos', [UsuarioExternoController::class, 'index']);
+    Route::post('usuarios-externos', [UsuarioExternoController::class, 'store']);
+    Route::get('usuarios-externos/{id}', [UsuarioExternoController::class, 'show']);
+    Route::put('usuarios-externos/{id}', [UsuarioExternoController::class, 'update']);
+    Route::delete('usuarios-externos/{id}', [UsuarioExternoController::class, 'destroy']);
+
+    // -----------------------------------------------------------------------
+    // Permisos de Menú por Usuario Externo
+    // -----------------------------------------------------------------------
+    Route::get('menu-usuario/{userId}', [PermisoMenuUsuarioController::class, 'getMenuPorUsuario']);
+    Route::post('menu-usuario', [PermisoMenuUsuarioController::class, 'guardarPermisos']);
+
+    // -----------------------------------------------------------------------
+    // Catálogo de Menús Externos (menu_user)
+    // -----------------------------------------------------------------------
+    Route::get('menus-externos', [MenuExternoController::class, 'index']);
+    Route::post('menus-externos', [MenuExternoController::class, 'store']);
+    Route::put('menus-externos/{id}', [MenuExternoController::class, 'update']);
+    Route::delete('menus-externos/{id}', [MenuExternoController::class, 'destroy']);
+    Route::get('menus-externos/{id}/usuarios', [MenuExternoController::class, 'getUsuariosConAcceso']);
 
     // -----------------------------------------------------------------------
     // Catálogo de Menús (Mantenedor)

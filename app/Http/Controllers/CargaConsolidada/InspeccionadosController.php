@@ -113,9 +113,8 @@ class InspeccionadosController extends Controller
                 ->whereNotNull('CC.estado_cliente')
                 ->whereExists(function ($q) {
                     $q->select(DB::raw(1))
-                      ->from($this->table_proveedores . ' as prov_check')
-                      ->whereColumn('prov_check.id_cotizacion', 'CC.id')
-                      ->whereIn('prov_check.estados_proveedor', ['INSPECTION', 'LOADED']);
+                      ->from('contenedor_consolidado_almacen_inspection as insp_check')
+                      ->whereColumn('insp_check.id_cotizacion', 'CC.id');
                 })
                 ->orderBy('CONT.f_inicio', 'desc');
 

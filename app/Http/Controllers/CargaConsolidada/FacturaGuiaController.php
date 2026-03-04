@@ -154,13 +154,10 @@ class FacturaGuiaController extends Controller
                 $guiasRemision = [['id' => 0, 'file_name' => 'Guía', 'file_url' => $guiaUrlLegacy]];
             }
 
-            $registrado = ComprobanteForm::where('id_cotizacion', $item->id)->exists();
-            $tipoEntrega = null;
-            if (ConsolidadoDeliveryFormLima::where('id_cotizacion', $item->id)->exists()) {
-                $tipoEntrega = 'Lima';
-            } elseif (ConsolidadoDeliveryFormProvince::where('id_cotizacion', $item->id)->exists()) {
-                $tipoEntrega = 'Provincia';
-            }
+            $comprobanteForm = ComprobanteForm::where('id_cotizacion', $item->id)->first();
+            $registrado = $comprobanteForm !== null;
+            $tipoEntrega = $comprobanteForm ? $comprobanteForm->destino_entrega : null;
+            $formTipoComprobante = $comprobanteForm ? $comprobanteForm->tipo_comprobante : null;
 
             return [
                 'id_cotizacion' => $item->id,
@@ -179,6 +176,7 @@ class FacturaGuiaController extends Controller
                 'guias_remision' => $guiasRemision,
                 'registrado' => $registrado,
                 'tipo_entrega' => $tipoEntrega,
+                'form_tipo_comprobante' => $formTipoComprobante,
                 'comprobantes' => $mappedComprobantes,
                 'total_pagado' => (float) ($item->total_pagos_monto ?? 0),
                 'total_pagado_confirmado' => (float) ($item->total_pagos_monto ?? 0),
@@ -521,18 +519,24 @@ class FacturaGuiaController extends Controller
             $contenedor = Contenedor::where('id', $idContenedor)->first();
             // Cotizaciones del contenedor (comprobantes/detracciones están por quotation_id = id de cotización)
             $cotizacionIds = Cotizacion::where('id_contenedor', $idContenedor)->pluck('id');
-            $totalDetracciones = Detraccion::whereIn('quotation_id', $cotizacionIds)->sum('monto_detraccion');
             $totalComprobantes = Comprobante::whereIn('quotation_id', $cotizacionIds)->sum('valor_comprobante');
+            $totalDetracciones = Comprobante::whereIn('quotation_id', $cotizacionIds)->where('tiene_detraccion', true)->sum('monto_detraccion_soles');
+            $detraccionPagado = Detraccion::whereIn('quotation_id', $cotizacionIds)->sum('monto_detraccion');
             $headers = [
+                'total_comprobantes' => [
+                    'value' => $totalComprobantes,
+                    'label' => 'Total comprobantes',
+                    'icon' => 'fas fa-file-alt'
+                ],
                 'total_detracciones' => [
                     'value' => $totalDetracciones,
                     'label' => 'Total detracciones',
                     'icon' => 'fas fa-money-bill-alt'
                 ],
-                'total_comprobantes' => [
-                    'value' => $totalComprobantes,
-                    'label' => 'Total comprobantes',
-                    'icon' => 'fas fa-file-alt'
+                'detraccion_pagado' => [
+                    'value' => $detraccionPagado,
+                    'label' => 'Detraccion pagado',
+                    'icon' => 'fas fa-check-circle'
                 ]
             ];
             return response()->json([

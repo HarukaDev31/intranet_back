@@ -39,6 +39,7 @@ class RegisterRequest extends FormRequest
             'distrito_id' => 'nullable|integer|exists:distrito,ID_Distrito',
             'no_como_entero' => 'nullable|integer',
             'no_otros_como_entero_empresa' => 'nullable|string',
+            'pais_id' => 'nullable|integer|exists:pais,ID_Pais',
         ];
     }
 

@@ -1255,6 +1255,7 @@ class AuthController extends Controller
                 'distrito_id' => $validatedData['distrito_id'] ?? null,
                 'no_como_entero' => $validatedData['no_como_entero'] ?? null,
                 'no_otros_como_entero_empresa' => $validatedData['no_otros_como_entero_empresa'] ?? null,
+                'pais_id' => $validatedData['pais_id'] ?? null,
             ]);
 
             Log::info('user created', $user->toArray());
