@@ -19,6 +19,7 @@ Route::group(['prefix' => 'calculadora-importacion', 'middleware' => 'jwt.auth']
     Route::get('tarifas', [CalculadoraImportacionController::class, 'getTarifas']);
     Route::post('duplicate/{id}', [CalculadoraImportacionController::class, 'duplicate']);
     Route::get('/', [CalculadoraImportacionController::class, 'index']);
+    Route::get('export-list', [CalculadoraImportacionController::class, 'exportList']);
     Route::post('export-cotizacion', [CalculadoraImportacionController::class, 'exportCotizacion']);
     Route::post('/', [CalculadoraImportacionController::class, 'store']);
     Route::get('/cliente', [CalculadoraImportacionController::class, 'getCalculosPorCliente']);

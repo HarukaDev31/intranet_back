@@ -20,6 +20,8 @@ use App\Models\CargaConsolidada\Cotizacion;
 use App\Models\UserCotizacionExport;
 use App\Http\Controllers\CargaConsolidada\CotizacionController;
 use Illuminate\Support\Str;
+use Maatwebsite\Excel\Facades\Excel;
+use App\Exports\CalculadoraImportacionExport;
 
 class CalculadoraImportacionController extends Controller
 {
@@ -310,12 +312,21 @@ class CalculadoraImportacionController extends Controller
         try {
             $query = CalculadoraImportacion::with(['proveedores.productos', 'cliente', 'contenedor', 'creador', 'vendedor', 'cotizacion']);
 
-            //filter optional campania=54&estado_calculadora=PENDIENTE
+            //filter optional campania=54&estado_calculadora=PENDIENTE&vendedor=id_usuario
             if ($request->has('campania') && $request->campania) {
                 $query->where('id_carga_consolidada_contenedor', $request->campania);
             }
             if ($request->has('estado_calculadora') && $request->estado_calculadora) {
                 $query->where('estado', $request->estado_calculadora);
+            }
+            if ($request->has('vendedor') && $request->vendedor) {
+                $query->where('id_usuario', $request->vendedor);
+            }
+            if ($request->has('fecha_inicio') && $request->fecha_inicio) {
+                $query->whereDate('created_at', '>=', $request->fecha_inicio);
+            }
+            if ($request->has('fecha_fin') && $request->fecha_fin) {
+                $query->whereDate('created_at', '<=', $request->fecha_fin);
             }
 
             // Ordenamiento
@@ -356,6 +367,14 @@ class CalculadoraImportacionController extends Controller
             //get all estados calculadora label=estado value=estado
             $estadoCalculadora = CalculadoraImportacion::getEstadosDisponiblesFilter();
 
+            // Vendedores que tienen cotizaciones (para filtro)
+            $vendedoresIds = CalculadoraImportacion::whereNotNull('id_usuario')->distinct()->pluck('id_usuario');
+            $vendedores = \App\Models\Usuario::whereIn('ID_Usuario', $vendedoresIds)
+                ->get()
+                ->map(function ($u) {
+                    return ['id' => $u->ID_Usuario, 'label' => $u->No_Nombres_Apellidos ?? 'Usuario ' . $u->ID_Usuario, 'value' => $u->ID_Usuario];
+                });
+
             // Contar cotizaciones realizadas (estado COTIZADO y CONFIRMADO)
             $cotizacionesRealizadas = CalculadoraImportacion::whereIn('estado', ['COTIZADO', 'CONFIRMADO'])->count();
 
@@ -392,7 +411,8 @@ class CalculadoraImportacionController extends Controller
                 ],
                 'filters' => [
                     'contenedores' => $contenedores,
-                    'estadoCalculadora' => $estadoCalculadora
+                    'estadoCalculadora' => $estadoCalculadora,
+                    'vendedores' => $vendedores
                 ]
             ]);
         } catch (\Exception $e) {
@@ -402,6 +422,65 @@ class CalculadoraImportacionController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Exportar listado de cotizaciones calculadora a XLSX (mismos filtros que index).
+     */
+    public function exportList(Request $request)
+    {
+        try {
+            $query = CalculadoraImportacion::with(['proveedores.productos', 'cliente', 'contenedor', 'creador', 'vendedor', 'cotizacion']);
+
+            if ($request->has('campania') && $request->campania) {
+                $query->where('id_carga_consolidada_contenedor', $request->campania);
+            }
+            if ($request->has('estado_calculadora') && $request->estado_calculadora) {
+                $query->where('estado', $request->estado_calculadora);
+            }
+            if ($request->has('vendedor') && $request->vendedor) {
+                $query->where('id_usuario', $request->vendedor);
+            }
+            if ($request->has('fecha_inicio') && $request->fecha_inicio) {
+                $query->whereDate('created_at', '>=', $request->fecha_inicio);
+            }
+            if ($request->has('fecha_fin') && $request->fecha_fin) {
+                $query->whereDate('created_at', '<=', $request->fecha_fin);
+            }
+
+            $sortBy = $request->get('sort_by', 'created_at');
+            $sortOrder = $request->get('sort_order', 'desc');
+            $query->orderBy($sortBy, $sortOrder);
+
+            $search = $request->get('search', '');
+            if ($search !== '') {
+                $query->where('nombre_cliente', 'like', '%' . $search . '%');
+            }
+
+            $calculos = $query->limit(10000)->get();
+
+            foreach ($calculos as $calculadora) {
+                $calculadora->totales = $this->calculadoraImportacionService->calcularTotales($calculadora);
+                $calculadora->nombre_creador = optional($calculadora->creador)->No_Nombres_Apellidos;
+                $calculadora->nombre_vendedor = optional($calculadora->vendedor)->No_Nombres_Apellidos;
+                $calculadora->carga_contenedor = '  #' . optional($calculadora->contenedor)->carga . '-' . ($calculadora->contenedor ? Carbon::parse($calculadora->contenedor->f_inicio)->format('Y') : '2025');
+            }
+
+            $filename = 'cotizaciones_calculadora_' . Carbon::now()->format('Y-m-d') . '.xlsx';
+
+            return Excel::download(
+                new CalculadoraImportacionExport($calculos),
+                $filename,
+                \Maatwebsite\Excel\Excel::XLSX
+            );
+        } catch (\Exception $e) {
+            Log::error('Error al exportar cotizaciones calculadora: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al exportar: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
     private function generateUrl($ruta)
     {
         if ($ruta) {
