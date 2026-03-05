@@ -19,6 +19,7 @@ use App\Http\Controllers\CargaConsolidada\AduanaController;
 use App\Http\Controllers\CargaConsolidada\Clientes\PagosController as ClientesPagosController;
 use App\Http\Controllers\CargaConsolidada\EntregaController;
 use App\Http\Controllers\CargaConsolidada\InspeccionadosController;
+use App\Http\Controllers\CargaConsolidada\BoletinQuimicoController;
 use App\Http\Controllers\Clientes\ComprobanteFormController;
 use App\Http\Controllers\Commons\Google\SheetController;
 
@@ -319,6 +320,21 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
 
     // Inspeccionados (vista global Contabilidad)
     Route::get('inspeccionados', [InspeccionadosController::class, 'index']);
+
+    // Boletín químico
+    Route::group(['prefix' => 'boletin-quimico'], function () {
+       
+        Route::get('contenedores', [BoletinQuimicoController::class, 'getContenedores']);
+        Route::get('contenedor/{idContenedor}/clientes', [BoletinQuimicoController::class, 'getClientesByContenedor']);
+        Route::get('cotizacion/{idCotizacion}/items', [BoletinQuimicoController::class, 'getItemsByCotizacion']);
+        Route::get('contenedor/{idContenedor}/items', [BoletinQuimicoController::class, 'getItemsByContenedor']);
+        Route::get('item/{id}/pagos', [BoletinQuimicoController::class, 'getPagosByItem']);
+        Route::get('item/{id}', [BoletinQuimicoController::class, 'getItemDetalle']);
+        Route::post('pago', [BoletinQuimicoController::class, 'storePago']);
+        Route::put('pago/{idPago}', [BoletinQuimicoController::class, 'updateEstadoPago']);
+        Route::get('/', [BoletinQuimicoController::class, 'index']);
+        Route::post('/', [BoletinQuimicoController::class, 'store']);
+    });
 
     // Importación
     Route::group(['prefix' => 'import'], function () {

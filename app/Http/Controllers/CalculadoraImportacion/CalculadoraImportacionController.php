@@ -516,7 +516,7 @@ class CalculadoraImportacionController extends Controller
                 'id' => 'nullable|integer|exists:calculadora_importacion,id',
                 'clienteInfo.nombre' => 'required_if:clienteInfo.tipoDocumento,DNI|nullable|string',
                 'clienteInfo.tipoDocumento' => 'required|string|in:DNI,RUC',
-                'clienteInfo.dni' => 'required_if:clienteInfo.tipoDocumento,DNI|nullable|string',
+                'clienteInfo.dni' => 'nullable|string',
                 'clienteInfo.ruc' => 'required_if:clienteInfo.tipoDocumento,RUC|nullable|string',
                 'clienteInfo.empresa' => 'required_if:clienteInfo.tipoDocumento,RUC|nullable|string',
                 'clienteInfo.whatsapp' => 'nullable|string',
