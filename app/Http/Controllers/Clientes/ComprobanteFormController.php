@@ -29,6 +29,7 @@ class ComprobanteFormController extends Controller
                 ->whereNull('id_cliente_importacion')
                 ->where('estado_cotizador', 'CONFIRMADO')
                 ->whereNotNull('estado_cliente')
+                ->whereNotIn('id', ComprobanteForm::select('id_cotizacion'))
                 ->get()
                 ->map(fn($c) => [
                     'value' => $c->uuid,

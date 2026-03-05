@@ -11,6 +11,7 @@ use App\Models\CargaConsolidada\Comprobante;
 use App\Models\CargaConsolidada\Detraccion;
 use App\Services\CargaConsolidada\GeminiService;
 use App\Traits\WhatsappTrait;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
@@ -52,7 +53,14 @@ class FacturaGuiaController extends Controller
      */
     public function getContenedorFacturaGuia(Request $request, $idContenedor)
     {
-        $perPage = $request->input('per_page', 10);
+        $perPage = (int) $request->input('per_page', 10);
+        $search = trim((string) $request->input('search', ''));
+        $filters = [];
+        if ($request->has('filters')) {
+            $raw = $request->input('filters');
+            $filters = is_string($raw) ? json_decode($raw, true) : $raw;
+            $filters = is_array($filters) ? $filters : [];
+        }
 
         $query = Cotizacion::select(
             'contenedor_consolidado_cotizacion.id',
@@ -88,8 +96,37 @@ class FacturaGuiaController extends Controller
             ->where('contenedor_consolidado_cotizacion.id_contenedor', $idContenedor)
             ->whereNotNull('contenedor_consolidado_cotizacion.estado_cliente')
             ->whereNull('contenedor_consolidado_cotizacion.id_cliente_importacion')
-            ->where('contenedor_consolidado_cotizacion.estado_cotizador', "CONFIRMADO")
-            ->paginate($perPage);
+            ->where('contenedor_consolidado_cotizacion.estado_cotizador', "CONFIRMADO");
+
+        if ($search !== '') {
+            $term = '%' . $search . '%';
+            $query->where(function ($q) use ($term) {
+                $q->where('contenedor_consolidado_cotizacion.nombre', 'like', $term)
+                    ->orWhere('contenedor_consolidado_cotizacion.telefono', 'like', $term);
+            });
+        }
+
+        $registrado = $filters['registrado'] ?? null;
+        if ($registrado === '1') {
+            $query->whereExists(function ($q) {
+                $q->select(DB::raw(1))
+                    ->from('consolidado_comprobante_forms')
+                    ->whereColumn('consolidado_comprobante_forms.id_cotizacion', 'contenedor_consolidado_cotizacion.id');
+            });
+        } elseif ($registrado === '0') {
+            $query->whereNotExists(function ($q) {
+                $q->select(DB::raw(1))
+                    ->from('consolidado_comprobante_forms')
+                    ->whereColumn('consolidado_comprobante_forms.id_cotizacion', 'contenedor_consolidado_cotizacion.id');
+            });
+        }
+
+        $estadoCotizacion = $filters['estado_cotizacion_final'] ?? null;
+        if (!empty($estadoCotizacion) && $estadoCotizacion !== 'todos') {
+            $query->where('contenedor_consolidado_cotizacion.estado_cotizacion_final', $estadoCotizacion);
+        }
+
+        $query = $query->paginate($perPage);
 
         $items = collect($query->items())->map(function ($item) {
             $facturasComerciales = collect($item->facturasComerciales ?? []);
@@ -1750,10 +1787,11 @@ Cualquier duda nos escribe.  ¡Gracias! */
                 $link    = $clientesUrlBase . '/formulario-comprobante/' . $idContenedor;
                 $message = "Hola " . $cotizacion->nombre . " 👋,\n\n" .
                            "Somos del área contable de Pro Business.\n" .
-                           "Tu carga ya está rumbo a Perú.\n\n" .
+                           "Tu carga del consolidado #" . $cotizacion->contenedor->carga . " ya está rumbo a Perú.\n\n" .
                            "Por favor completa el formulario para enviarte tu comprobante cuando recibas tus productos:\n\n" .
                            $link . "\n\n" .
-                           "*Crearse una cuenta si en caso es su primera vez.*";
+                           "*Crearse una cuenta si en caso es su primera vez.*"
+                           ;
 
                 $result = $this->sendMessage($message, $numeroWhatsapp, 0, 'administracion');
 
@@ -1794,7 +1832,8 @@ Cualquier duda nos escribe.  ¡Gracias! */
                 'contenedor_consolidado_cotizacion.telefono',
                 'contenedor_consolidado_cotizacion.correo',
                 'contenedor_consolidado_cotizacion.documento',
-                'contenedor_consolidado_cotizacion.delivery_form_registered_at'
+                'contenedor_consolidado_cotizacion.delivery_form_registered_at',
+                'contenedor_consolidado_cotizacion.id_contenedor_pago'
             )
                 ->where('id_contenedor', $idContenedor)
                 ->whereNotNull('estado_cliente')
