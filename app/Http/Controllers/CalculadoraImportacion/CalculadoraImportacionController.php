@@ -514,11 +514,11 @@ class CalculadoraImportacionController extends Controller
 
             $request->validate([
                 'id' => 'nullable|integer|exists:calculadora_importacion,id',
-                'clienteInfo.nombre' => 'required|string',
+                'clienteInfo.nombre' => 'required_if:clienteInfo.tipoDocumento,DNI|nullable|string',
                 'clienteInfo.tipoDocumento' => 'required|string|in:DNI,RUC',
-                'clienteInfo.dni' => 'sometimes:clienteInfo.tipoDocumento,DNI|string|nullable',
-                'clienteInfo.ruc' => 'sometimes:clienteInfo.tipoDocumento,RUC|string|nullable',
-                'clienteInfo.empresa' => 'required_if:clienteInfo.tipoDocumento,RUC|string|nullable',
+                'clienteInfo.dni' => 'required_if:clienteInfo.tipoDocumento,DNI|nullable|string',
+                'clienteInfo.ruc' => 'required_if:clienteInfo.tipoDocumento,RUC|nullable|string',
+                'clienteInfo.empresa' => 'required_if:clienteInfo.tipoDocumento,RUC|nullable|string',
                 'clienteInfo.whatsapp' => 'nullable|string',
                 'clienteInfo.correo' => 'nullable|string',
                 'clienteInfo.tipoCliente' => 'required|string',

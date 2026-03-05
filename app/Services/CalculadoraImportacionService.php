@@ -54,6 +54,9 @@ class CalculadoraImportacionService
 
             // Determinar campos según tipo de documento
             $tipoDocumento = $data['clienteInfo']['tipoDocumento'] ?? 'DNI';
+            $nombreCliente = $tipoDocumento === 'RUC' && empty(trim($data['clienteInfo']['nombre'] ?? ''))
+                ? ($data['clienteInfo']['empresa'] ?? $data['clienteInfo']['razonSocial'] ?? '')
+                : ($data['clienteInfo']['nombre'] ?? '');
 
             // Obtener tipo_cambio del request, si es null o 0 usar 3.75 por defecto
             $tipoCambio = (!empty($data['tipo_cambio']) && $data['tipo_cambio'] > 0) ? $data['tipo_cambio'] : 3.75;
@@ -63,7 +66,7 @@ class CalculadoraImportacionService
                 'id_cliente' => $cliente ? $cliente->id : null,
                 'id_usuario' => $data['id_usuario'] ?? null,
                 'created_by' => $data['created_by'] ?? null,
-                'nombre_cliente' => $data['clienteInfo']['nombre'],
+                'nombre_cliente' => $nombreCliente,
                 'tipo_documento' => $tipoDocumento,
                 'id_carga_consolidada_contenedor' => $data['id_carga_consolidada_contenedor'] ?? null,
                 'dni_cliente' => $tipoDocumento === 'DNI' ? ($data['clienteInfo']['dni'] ?? null) : null,
@@ -193,6 +196,9 @@ class CalculadoraImportacionService
 
             // Determinar campos según tipo de documento
             $tipoDocumento = $data['clienteInfo']['tipoDocumento'] ?? 'DNI';
+            $nombreCliente = $tipoDocumento === 'RUC' && empty(trim($data['clienteInfo']['nombre'] ?? ''))
+                ? ($data['clienteInfo']['empresa'] ?? $data['clienteInfo']['razonSocial'] ?? '')
+                : ($data['clienteInfo']['nombre'] ?? '');
 
             // Obtener tipo_cambio del request, si es null o 0 usar el valor existente o 3.75 por defecto
             $tipoCambio = (!empty($data['tipo_cambio']) && $data['tipo_cambio'] > 0) ? $data['tipo_cambio'] : ($calculadora->tc ?? 3.75);
@@ -200,7 +206,7 @@ class CalculadoraImportacionService
             // Actualizar registro principal
             $calculadora->update([
                 'id_cliente' => $cliente ? $cliente->id : $calculadora->id_cliente,
-                'nombre_cliente' => $data['clienteInfo']['nombre'],
+                'nombre_cliente' => $nombreCliente,
                 'tipo_documento' => $tipoDocumento,
                 'id_carga_consolidada_contenedor' => $data['id_carga_consolidada_contenedor'] ?? $calculadora->id_carga_consolidada_contenedor,
                 'dni_cliente' => $tipoDocumento === 'DNI' ? ($data['clienteInfo']['dni'] ?? null) : null,
@@ -411,22 +417,48 @@ class CalculadoraImportacionService
     }
 
     /**
-     * Buscar o crear cliente basado en la información proporcionada
+     * Buscar o crear cliente basado en la información proporcionada (DNI o RUC)
      */
     private function buscarOcrearCliente(array $clienteInfo): ?Cliente
     {
-        if (empty($clienteInfo['dni'])) {
+        $tipoDocumento = $clienteInfo['tipoDocumento'] ?? 'DNI';
+        $whatsapp = is_array($clienteInfo['whatsapp'] ?? null) ? ($clienteInfo['whatsapp']['value'] ?? $clienteInfo['whatsapp']) : ($clienteInfo['whatsapp'] ?? null);
+
+        if ($tipoDocumento === 'RUC') {
+            $ruc = trim($clienteInfo['ruc'] ?? '');
+            if ($ruc === '') {
+                return null;
+            }
+            $cliente = Cliente::where('ruc', $ruc)->first();
+            if (!$cliente) {
+                $nombre = trim($clienteInfo['nombre'] ?? '');
+                $empresa = $clienteInfo['empresa'] ?? $clienteInfo['razonSocial'] ?? '';
+                $cliente = Cliente::create([
+                    'nombre' => $nombre !== '' ? $nombre : $empresa,
+                    'documento' => null,
+                    'ruc' => $ruc,
+                    'empresa' => $empresa,
+                    'correo' => $clienteInfo['correo'] ?? null,
+                    'telefono' => $whatsapp,
+                    'tipo_cliente' => $clienteInfo['tipoCliente'] ?? 'NUEVO'
+                ]);
+            }
+            return $cliente;
+        }
+
+        $dni = trim($clienteInfo['dni'] ?? '');
+        if ($dni === '') {
             return null;
         }
 
-        $cliente = Cliente::where('documento', $clienteInfo['dni'])->first();
+        $cliente = Cliente::where('documento', $dni)->first();
 
         if (!$cliente) {
             $cliente = Cliente::create([
-                'nombre' => $clienteInfo['nombre'],
-                'documento' => $clienteInfo['dni'],
-                'correo' => $clienteInfo['correo'] ?: null,
-                'telefono' => $clienteInfo['whatsapp']['value'] ?? null,
+                'nombre' => $clienteInfo['nombre'] ?? '',
+                'documento' => $dni,
+                'correo' => $clienteInfo['correo'] ?? null,
+                'telefono' => $whatsapp,
                 'tipo_cliente' => $clienteInfo['tipoCliente'] ?? 'NUEVO'
             ]);
         }
