@@ -469,6 +469,77 @@ class ImportacionesController extends Controller
     }
 
     /**
+     * Inspección por UUID sin autenticación (acceso por enlace público).
+     * GET /api/contenedor/external/inspeccion/{uuid}
+     */
+    public function getInspeccionByUuidPublic(Request $request, $uuid)
+    {
+        try {
+            $cotizacion = DB::table('contenedor_consolidado_cotizacion as main')
+                ->select([
+                    'main.id',
+                    'main.uuid',
+                    'main.nombre',
+                    'main.estado_cotizador',
+                    DB::raw("(
+                        SELECT JSON_ARRAYAGG(
+                            JSON_OBJECT(
+                                'code_supplier', prov.code_supplier,
+                                'id', prov.id,
+                                'volumen_doc', prov.volumen_doc,
+                                'valor_doc', prov.valor_doc,
+                                'factura_comercial', prov.factura_comercial,
+                                'excel_confirmacion', prov.excel_confirmacion,
+                                'packing_list', prov.packing_list
+                            )
+                        )
+                        FROM contenedor_consolidado_cotizacion_proveedores prov
+                        WHERE prov.id_cotizacion = main.id
+                    ) as providers"),
+                    DB::raw("(
+                        SELECT JSON_ARRAYAGG(
+                            JSON_OBJECT(
+                                'id', inspection_docs.id,
+                                'file_url', inspection_docs.file_path,
+                                'file_name', inspection_docs.file_name,
+                                'id_proveedor', inspection_docs.id_proveedor,
+                                'file_ext', inspection_docs.file_type
+                            )
+                        )
+                        FROM contenedor_consolidado_almacen_inspection inspection_docs
+                        WHERE inspection_docs.id_cotizacion = main.id
+                    ) as files_almacen_inspection")
+                ])
+                ->where('main.uuid', $uuid)
+                ->where('main.estado_cotizador', 'CONFIRMADO')
+                ->first();
+
+            if (!$cotizacion) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Cotización no encontrada',
+                    'data' => null
+                ], 404);
+            }
+
+            $cotizacion->providers = json_decode($cotizacion->providers, true) ?? [];
+            $cotizacion->files_almacen_inspection = json_decode($cotizacion->files_almacen_inspection, true) ?? [];
+
+            return response()->json([
+                'success' => true,
+                'data' => $cotizacion
+            ]);
+        } catch (\Exception $e) {
+            Log::error('getInspeccionByUuidPublic: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al obtener inspecciones: ' . $e->getMessage(),
+                'data' => null
+            ], 500);
+        }
+    }
+
+    /**
      * @OA\Get(
      *     path="/clientes/importaciones/trayecto/seguimiento/{uuid}",
      *     tags={"Importaciones Externo"},
