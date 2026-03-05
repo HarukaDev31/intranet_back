@@ -2005,6 +2005,27 @@ class EntregaController extends Controller
         $sortOrder = $request->input('sort_order', 'asc');
         $query->orderBy($sortField, $sortOrder);
 
+        // Total general (sin paginación, convirtiendo HAVING en WHERE equivalente)
+        $tablePagos = $this->table_contenedor_consolidado_cotizacion_coordinacion_pagos;
+        $tableConcept = $this->table_pagos_concept;
+        $totalQuery = clone $query;
+        $totalQuery->havings = null;
+        $totalQuery->bindings['having'] = [];
+        if ($request->has('estado') && $request->estado) {
+            $estado = $request->estado;
+            $pagoSub = "(SELECT IFNULL(SUM(cccp.monto), 0) FROM {$tablePagos} cccp JOIN {$tableConcept} ccp ON cccp.id_concept = ccp.id WHERE cccp.id_cotizacion = CC.id AND ccp.name = 'DELIVERY')";
+            if ($estado === 'PENDIENTE') {
+                $totalQuery->whereRaw("{$pagoSub} = 0");
+            } elseif ($estado === 'ADELANTO') {
+                $totalQuery->whereRaw("{$pagoSub} > 0 AND {$pagoSub} < CC.total_pago_delivery");
+            } elseif ($estado === 'PAGADO') {
+                $totalQuery->whereRaw("{$pagoSub} = CC.total_pago_delivery");
+            } elseif ($estado === 'SOBREPAGO') {
+                $totalQuery->whereRaw("{$pagoSub} > CC.total_pago_delivery");
+            }
+        }
+        $totalGeneral = round((float) $totalQuery->sum('CC.total_pago_delivery'), 2);
+
         // Paginación
         $page = $request->input('page', 1);
         $perPage = $request->input('per_page', 100);
@@ -2023,6 +2044,7 @@ class EntregaController extends Controller
             $anio = !empty($item->f_inicio) ? date('Y', strtotime($item->f_inicio)) : date('Y');
             $item->carga_display = '#' . $item->carga . ' - ' . $anio;
         }
+        $pageSubtotalDelivery = array_sum(array_map(function ($item) { return (float) $item->total_pago_delivery; }, $data->items()));
         return response()->json([
             'data' => $data->items(),
             'success' => true,
@@ -2034,7 +2056,11 @@ class EntregaController extends Controller
                 'from' => $data->firstItem(),
                 'to' => $data->lastItem()
             ],
-            'cargas_disponibles' => $this->getCargasDisponibles()
+            'cargas_disponibles' => $this->getCargasDisponibles(),
+            'headers' => [
+                ['label' => 'Subtotal pagina', 'value' => 'S/ ' . number_format($pageSubtotalDelivery, 2, '.', ','), 'icon' => 'i-heroicons-banknotes'],
+                ['label' => 'Total general', 'value' => 'S/ ' . number_format((float) $totalGeneral, 2, '.', ','), 'icon' => 'i-heroicons-calculator'],
+            ],
         ]);
     }
     private function getCargasDisponibles()

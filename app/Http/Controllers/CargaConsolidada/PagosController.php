@@ -22,9 +22,11 @@ use App\Models\TipoDocumentoIdentidad;
 use App\Models\Campana;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
+use App\Traits\WhatsappTrait;
 
 class PagosController extends Controller
 {
+    use WhatsappTrait;
     /**
      * @OA\Get(
      *     path="/carga-consolidada/pagos",
@@ -246,6 +248,9 @@ class PagosController extends Controller
                 }
             }
 
+            // Total general de todos los registros que coinciden con los filtros
+            $totalGeneral = (clone $query)->sum(DB::raw('CASE WHEN (contenedor_consolidado_cotizacion.logistica_final + contenedor_consolidado_cotizacion.impuestos_final) = 0 THEN contenedor_consolidado_cotizacion.monto ELSE (contenedor_consolidado_cotizacion.logistica_final + contenedor_consolidado_cotizacion.impuestos_final) END'));
+
             // Obtener datos paginados
             $cotizaciones = $query->paginate($perPage, ['*'], 'page', $page);
 
@@ -299,6 +304,10 @@ class PagosController extends Controller
                     'to' => $cotizaciones->lastItem(),
                 ],
                 'cargas_disponibles' => $cargasDisponibles,
+                'headers' => [
+                    ['label' => 'Subtotal pagina', 'value' => '$ ' . number_format(array_sum(array_column($data, 'monto_a_pagar')), 2, '.', ','), 'icon' => 'i-heroicons-banknotes'],
+                    ['label' => 'Total general', 'value' => '$ ' . number_format((float) $totalGeneral, 2, '.', ','), 'icon' => 'i-heroicons-calculator'],
+                ],
             ]);
         } catch (\Exception $e) {
             Log::error('PagosController getConsolidadoPagos: ' . $e->getMessage());
@@ -697,6 +706,34 @@ class PagosController extends Controller
                 Log::error('Error sincronizando estado cotizacion tras actualizar pago: ' . $e->getMessage());
             }
 
+            // Enviar WhatsApp al cliente si el pago fue CONFIRMADO
+            if ($request->input('status') === 'CONFIRMADO') {
+                try {
+                    $pago->load('concepto', 'cotizacion.contenedor');
+                    $cotizacion = $pago->cotizacion;
+                    $conceptoName = $pago->concepto ? $pago->concepto->name : 'Pago';
+                    $montoFormateado = number_format((float) $pago->monto, 2, '.', ',');
+                    $esDelivery = $conceptoName === 'DELIVERY';
+                    $moneda = $esDelivery ? 'S/' : '$';
+                    $telefono = $cotizacion ? preg_replace('/\s+/', '', $cotizacion->telefono) . '@c.us' : '';
+                    $nombre = $cotizacion ? $cotizacion->nombre : '';
+
+                    $message = "Hola {$nombre}, somos del area de contabilidad de Pro Business.\n";
+                    $message .= "Le informamos que su pago ha sido registrado exitosamente:\n";
+                    $message .= "Monto: {$moneda} {$montoFormateado}\n";
+                    $message .= "Servicio: {$conceptoName}";
+                    if (!$esDelivery && $cotizacion && $cotizacion->contenedor) {
+                        $message .= "\nConsolidado: #{$cotizacion->contenedor->carga}";
+                    }
+
+                    if ($telefono) {
+                        $this->sendMessage($message, $telefono, 0, 'administracion');
+                    }
+                } catch (\Exception $e) {
+                    Log::error('Error enviando WhatsApp confirmacion pago: ' . $e->getMessage());
+                }
+            }
+
             return response()->json([
                 'success' => true,
                 'message' => 'Pago actualizado correctamente',
@@ -1087,6 +1124,9 @@ class PagosController extends Controller
                 }
             }
 
+            // Total general de todos los registros que coinciden con los filtros
+            $totalGeneral = (clone $query)->sum(DB::raw('pedido_curso.Ss_Total'));
+
             // Obtener datos paginados
             $cursos = $query->paginate($perPage, ['*'], 'page', $page);
 
@@ -1138,6 +1178,10 @@ class PagosController extends Controller
                     'to' => $cursos->lastItem(),
                 ],
                 'campanas_disponibles' => $campanasDisponibles,
+                'headers' => [
+                    ['label' => 'Subtotal pagina', 'value' => 'S/ ' . number_format(array_sum(array_column($data, 'monto_a_pagar')), 2, '.', ','), 'icon' => 'i-heroicons-banknotes'],
+                    ['label' => 'Total general', 'value' => 'S/ ' . number_format((float) $totalGeneral, 2, '.', ','), 'icon' => 'i-heroicons-calculator'],
+                ],
             ]);
         } catch (\Exception $e) {
             Log::error('PagosController getCursosPagos: ' . $e->getMessage());
@@ -1322,6 +1366,28 @@ class PagosController extends Controller
             $pedidoCurso->status = $request->input('status');
             $pedidoCurso->timestamps = false;
             $pedidoCurso->save();
+
+            if ($request->input('status') === 'CONFIRMADO') {
+                try {
+                    $pedidoCurso->load('concepto', 'pedidoCurso');
+                    $curso = $pedidoCurso->pedidoCurso;
+                    $conceptoName = $pedidoCurso->concepto ? $pedidoCurso->concepto->name : 'Pago';
+                    $montoFormateado = number_format((float) $pedidoCurso->monto, 2, '.', ',');
+                    $nombre = $curso ? $curso->No_Entidad : '';
+                    $telefono = $curso ? preg_replace('/\s+/', '', $curso->Nu_Celular_Entidad) . '@c.us' : '';
+
+                    $message = "Hola {$nombre}, somos del area de contabilidad de Pro Business.\n";
+                    $message .= "Le informamos que su pago ha sido registrado exitosamente:\n";
+                    $message .= "Monto: S/ {$montoFormateado}\n";
+                    $message .= "Servicio: {$conceptoName}";
+
+                    if ($telefono) {
+                        $this->sendMessage($message, $telefono, 0, 'administracion');
+                    }
+                } catch (\Exception $e) {
+                    Log::error('Error enviando WhatsApp confirmacion pago curso: ' . $e->getMessage());
+                }
+            }
 
             return response()->json(['success' => true, 'message' => 'Estado del curso actualizado correctamente']);
         } catch (\Exception $e) {

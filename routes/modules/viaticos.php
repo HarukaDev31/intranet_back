@@ -13,6 +13,8 @@ use App\Http\Controllers\ViaticoController;
 */
 
 Route::group(['prefix' => 'viaticos', 'middleware' => 'jwt.auth'], function () {
+    Route::get('/export', [ViaticoController::class, 'export']);
+
     // Rutas generales
     Route::get('/', [ViaticoController::class, 'index']);
     Route::post('/', [ViaticoController::class, 'store']);

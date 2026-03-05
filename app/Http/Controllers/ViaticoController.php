@@ -14,6 +14,8 @@ use App\Jobs\SendViaticoWhatsappNotificationJob;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
+use Maatwebsite\Excel\Facades\Excel;
+use App\Exports\ViaticosExport;
 
 class ViaticoController extends Controller
 {
@@ -49,6 +51,9 @@ class ViaticoController extends Controller
 
             $query = $this->viaticoService->obtenerViaticos($filtros);
 
+            // Total general (sin paginacion)
+            $grandTotal = (clone $query)->sum('total_amount');
+
             // Paginación
             $perPage = $request->get('per_page', 10);
             $page = (int) $request->get('page', 1);
@@ -78,6 +83,12 @@ class ViaticoController extends Controller
                 $viatico->nombre_usuario = optional($viatico->usuario)->No_Nombres_Apellidos ?? 'N/A';
             }
 
+            // Subtotal pagina
+            $pageTotal = 0;
+            foreach ($data as $item) {
+                $pageTotal += (float) $item->total_amount;
+            }
+
             return response()->json([
                 'success' => true,
                 'data' => $data,
@@ -88,7 +99,11 @@ class ViaticoController extends Controller
                     'total' => $viaticos->total(),
                     'from' => $viaticos->firstItem(),
                     'to' => $viaticos->lastItem()
-                ]
+                ],
+                'headers' => [
+                    ['label' => 'Subtotal pagina', 'value' => 'S/ ' . number_format($pageTotal, 2, '.', ','), 'icon' => 'i-heroicons-banknotes'],
+                    ['label' => 'Total general', 'value' => 'S/ ' . number_format((float) $grandTotal, 2, '.', ','), 'icon' => 'i-heroicons-calculator'],
+                ],
             ]);
         } catch (\Exception $e) {
             Log::error('Error al obtener viáticos: ' . $e->getMessage());
@@ -129,6 +144,44 @@ class ViaticoController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Error al obtener viáticos completados: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Exportar viáticos como XLSX ordenados por codigo_confirmado DESC
+     */
+    public function export(Request $request)
+    {
+        try {
+            $filtros = [
+                'status' => $request->get('status'),
+                'fecha_inicio' => $request->get('fecha_inicio'),
+                'fecha_fin' => $request->get('fecha_fin'),
+                'search' => $request->get('search'),
+                'sort_by' => 'codigo_confirmado',
+                'sort_order' => 'desc',
+                'requesting_area' => $request->get('requesting_area'),
+            ];
+
+            $user = auth()->user();
+            $grupo = $user->grupo ?? null;
+            if (!$grupo || $grupo->No_Grupo !== 'Administración') {
+                $filtros['user_id'] = $user->ID_Usuario;
+            }
+
+            $viaticos = $this->viaticoService->obtenerViaticos($filtros)->get();
+
+            return Excel::download(
+                new ViaticosExport($viaticos),
+                'viaticos.xlsx',
+                \Maatwebsite\Excel\Excel::XLSX
+            );
+        } catch (\Exception $e) {
+            Log::error('Error al exportar viaticos: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al exportar viaticos: ' . $e->getMessage()
             ], 500);
         }
     }
