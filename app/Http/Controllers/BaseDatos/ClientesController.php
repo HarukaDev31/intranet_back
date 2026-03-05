@@ -201,32 +201,7 @@ class ClientesController extends Controller
             $baseUrl = env('APP_URL_CLIENTES', 'https://clientes.probusiness.pe');
             $recuperarContrasenaUrl = rtrim($baseUrl, '/') . '/recuperar-contrasena';
 
-            // Enviar mensaje por WhatsApp
-            if (!empty($cliente->telefono)) {
-                $telefono = trim($cliente->telefono);
-                $telefono = preg_replace('/[^0-9]/', '', $telefono);
-                
-                if (strlen($telefono) == 9) {
-                    $telefono = '51' . $telefono . '@c.us';
-                } else {
-                    $telefono = $telefono . '@c.us';
-                }
-
-                $whatsappMessage = "¡Hola {$cliente->nombre}! 👋\n\n";
-                $whatsappMessage .= "Para recuperar tu contraseña, puedes hacerlo a través del siguiente enlace:\n";
-                $whatsappMessage .= "{$recuperarContrasenaUrl}\n\n";
-                $whatsappMessage .= "Si tienes algún problema, no dudes en contactarnos.\n\n";
-                $whatsappMessage .= "¡Saludos!\nEquipo Probusiness";
-
-                $response = $this->sendMessageCurso($whatsappMessage, $telefono);
-
-                if (!$response['status']) {
-                    Log::error('Error al enviar WhatsApp de recuperación de contraseña', [
-                        'cliente_id' => $id,
-                        'response' => $response
-                    ]);
-                }
-            }
+           
 
             // Enviar correo electrónico
             if (!empty($cliente->correo)) {

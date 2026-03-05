@@ -175,6 +175,7 @@ class FacturaGuiaController extends Controller
                 'guia_remision_url' => $guiaUrlLegacy,
                 'guias_remision' => $guiasRemision,
                 'registrado' => $registrado,
+                'comprobante_form' => $comprobanteForm,
                 'tipo_entrega' => $tipoEntrega,
                 'form_tipo_comprobante' => $formTipoComprobante,
                 'comprobantes' => $mappedComprobantes,
