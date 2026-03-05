@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\CalculadoraImportacion\CalculadoraImportacionController;
+use App\Http\Controllers\CalculadoraImportacion\CalculadoraImportacionDocumentosController;
 
 /*
 |--------------------------------------------------------------------------
@@ -20,9 +21,15 @@ Route::group(['prefix' => 'calculadora-importacion', 'middleware' => 'jwt.auth']
     Route::get('/', [CalculadoraImportacionController::class, 'index']);
     Route::post('export-cotizacion', [CalculadoraImportacionController::class, 'exportCotizacion']);
     Route::post('/', [CalculadoraImportacionController::class, 'store']);
-    Route::get('/{id}', [CalculadoraImportacionController::class, 'show']);
     Route::get('/cliente', [CalculadoraImportacionController::class, 'getCalculosPorCliente']);
     Route::post('/change-estado/{id}', [CalculadoraImportacionController::class, 'changeEstado']);
+
+    // Documentos asociados a cotización calculadora
+    Route::get('/{id}/documentos', [CalculadoraImportacionDocumentosController::class, 'index']);
+    Route::post('/{id}/documentos', [CalculadoraImportacionDocumentosController::class, 'store']);
+    Route::delete('/documentos/{idDocumento}', [CalculadoraImportacionDocumentosController::class, 'destroy']);
+
+    Route::get('/{id}', [CalculadoraImportacionController::class, 'show']);
     Route::delete('/{id}', [CalculadoraImportacionController::class, 'destroy']);
 });
 

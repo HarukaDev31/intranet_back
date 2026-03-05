@@ -207,4 +207,12 @@ class CalculadoraImportacion extends Model
     {
         return $this->belongsTo(\App\Models\CargaConsolidada\Cotizacion::class, 'id_cotizacion');
     }
+
+    /**
+     * Documentos asociados a esta cotización (calculadora).
+     */
+    public function documents(): HasMany
+    {
+        return $this->hasMany(CalculadoraImportacionDocumento::class, 'id_calculadora_importacion');
+    }
 }
