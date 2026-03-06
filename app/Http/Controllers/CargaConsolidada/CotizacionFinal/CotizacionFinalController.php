@@ -3086,34 +3086,38 @@ class CotizacionFinalController extends Controller
 
             $cotizacionFinalUrl = $cotizacion->cotizacion_final_url;
             Log::info('cotizacionFinalUrl: ' . $cotizacionFinalUrl);
+
+            // Normalizar: quitar prefijo "storage/" o "/" para tener ruta relativa bajo storage/app/public
+            $relativePath = preg_replace('#^storage/#', '', ltrim($cotizacionFinalUrl, '/'));
+
             // Intentar diferentes ubicaciones
             $possiblePaths = [];
-            
-            // Nueva ubicación: storage/app/public/CargaConsolidada/cotizacionfinal/{idContenedor}
-            $possiblePaths[] = storage_path('app/public/' . $cotizacionFinalUrl);
-            
+
+            // 1) storage/app/public (ruta física)
+            $possiblePaths[] = storage_path('app/public/' . $relativePath);
+            // 2) public/storage (symlink a storage/app/public; coincide con URL /storage/...)
+            $possiblePaths[] = public_path('storage/' . $relativePath);
+
             // Ubicación legacy
             if (strpos($cotizacionFinalUrl, 'http') === 0) {
                 $fileUrl = str_replace(' ', '%20', $cotizacionFinalUrl);
-                $possiblePaths[] = $fileUrl; // URL completa
+                $possiblePaths[] = $fileUrl;
             } else {
                 $possiblePaths[] = public_path('assets/downloads/' . basename($cotizacionFinalUrl));
                 $possiblePaths[] = public_path($cotizacionFinalUrl);
             }
-            
+
             // Buscar el archivo en las ubicaciones posibles
             $fileContent = false;
-            
+
             foreach ($possiblePaths as $path) {
                 if (strpos($path, 'http') === 0) {
-                    // Es una URL, usar file_get_contents
                     $fileContent = @file_get_contents($path);
-                } else if (file_exists($path)) {
-                    // Es un archivo local
-                    $fileContent = file_get_contents($path);
+                } elseif (file_exists($path)) {
+                    $fileContent = @file_get_contents($path);
                 }
-                
-                if ($fileContent !== false) {
+
+                if ($fileContent !== false && $fileContent !== '') {
                     break;
                 }
             }
