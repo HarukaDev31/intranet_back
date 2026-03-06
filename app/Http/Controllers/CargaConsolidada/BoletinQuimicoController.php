@@ -34,7 +34,7 @@ class BoletinQuimicoController extends Controller
                 ->join('contenedor_consolidado_cotizacion as C', 'C.id', '=', 'boletin_quimico_cotizacion_item.id_cotizacion')
                 ->join('carga_consolidada_contenedor as CONT', 'CONT.id', '=', 'boletin_quimico_cotizacion_item.id_contenedor')
                 ->groupBy('boletin_quimico_cotizacion_item.id_cotizacion', 'boletin_quimico_cotizacion_item.id_contenedor')
-                ->orderBy('boletin_quimico_cotizacion_item.id_cotizacion');
+                ->orderByRaw('(SELECT MAX(pbq.id) FROM pagos_boletin_quimico pbq INNER JOIN boletin_quimico_cotizacion_item bqi ON bqi.id = pbq.id_boletin_quimico_item WHERE bqi.id_cotizacion = boletin_quimico_cotizacion_item.id_cotizacion AND bqi.id_contenedor = boletin_quimico_cotizacion_item.id_contenedor) IS NULL ASC, (SELECT MAX(pbq.id) FROM pagos_boletin_quimico pbq INNER JOIN boletin_quimico_cotizacion_item bqi ON bqi.id = pbq.id_boletin_quimico_item WHERE bqi.id_cotizacion = boletin_quimico_cotizacion_item.id_cotizacion AND bqi.id_contenedor = boletin_quimico_cotizacion_item.id_contenedor) DESC');
 
             if ($search !== '') {
                 $term = '%' . $search . '%';
@@ -68,7 +68,7 @@ class BoletinQuimicoController extends Controller
 
             $items = BoletinQuimicoCotizacionItem::query()
                 ->select('boletin_quimico_cotizacion_item.*')
-                ->with(['cotizacion:id,nombre,id_contenedor', 'cotizacionProveedorItem:id,final_name,initial_name', 'contenedor:id,carga,f_cierre', 'pagos'])
+                ->with(['cotizacion:id,nombre,id_contenedor', 'cotizacionProveedorItem:id,final_name,initial_name', 'contenedor:id,carga,f_cierre', 'pagos' => fn ($q) => $q->orderBy('id', 'desc')])
                 ->withSum('pagos as total_pagado', 'monto')
                 ->withCount('pagos as pagos_count')
                 ->whereIn('id_cotizacion', $cotizacionIds)
@@ -410,7 +410,7 @@ class BoletinQuimicoController extends Controller
     public function getItemDetalle($id)
     {
         try {
-            $item = BoletinQuimicoCotizacionItem::with(['cotizacion:id,nombre,documento,telefono', 'contenedor:id,carga', 'cotizacionProveedorItem', 'pagos'])
+            $item = BoletinQuimicoCotizacionItem::with(['cotizacion:id,nombre,documento,telefono', 'contenedor:id,carga', 'cotizacionProveedorItem', 'pagos' => fn ($q) => $q->orderBy('id', 'desc')])
                 ->findOrFail($id);
             $proveedorItem = $item->cotizacionProveedorItem;
             $itemNombre = $proveedorItem ? ($proveedorItem->final_name ?: $proveedorItem->initial_name) : '—';

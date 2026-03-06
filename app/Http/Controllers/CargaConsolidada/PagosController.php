@@ -101,7 +101,8 @@ class PagosController extends Controller
                     ) as pagos_details')
                 ])
                 ->join('carga_consolidada_contenedor', 'carga_consolidada_contenedor.id', '=', 'contenedor_consolidado_cotizacion.id_contenedor')
-                ->whereNull('contenedor_consolidado_cotizacion.id_cliente_importacion')->orderBy('contenedor_consolidado_cotizacion.id', 'asc');
+                ->whereNull('contenedor_consolidado_cotizacion.id_cliente_importacion')
+                ->orderByRaw('(SELECT MAX(ccp.id) FROM contenedor_consolidado_cotizacion_coordinacion_pagos ccp JOIN cotizacion_coordinacion_pagos_concept ccpc ON ccp.id_concept = ccpc.id WHERE ccp.id_cotizacion = contenedor_consolidado_cotizacion.id AND (ccpc.name = "LOGISTICA" OR ccpc.name = "IMPUESTOS")) IS NULL ASC, (SELECT MAX(ccp.id) FROM contenedor_consolidado_cotizacion_coordinacion_pagos ccp JOIN cotizacion_coordinacion_pagos_concept ccpc ON ccp.id_concept = ccpc.id WHERE ccp.id_cotizacion = contenedor_consolidado_cotizacion.id AND (ccpc.name = "LOGISTICA" OR ccpc.name = "IMPUESTOS")) DESC, contenedor_consolidado_cotizacion.id DESC');
 
 
             //if idCotizacion is not null, then add where id_cotizacion = $idCotizacion
@@ -470,6 +471,9 @@ class PagosController extends Controller
         $pagosProcesados = [];
 
         if ($pagos) {
+            usort($pagos, function ($a, $b) {
+                return (int) ($b['id_pago'] ?? 0) - (int) ($a['id_pago'] ?? 0);
+            });
             foreach ($pagos as $pago) {
                 $pagosProcesados[] = [
                     'id_pago' => $pago['id_pago'],
@@ -602,7 +606,7 @@ class PagosController extends Controller
             $pagos = Pago::with('concepto')
                 ->where('id_cotizacion', $idCotizacion)
                 ->whereIn('id_concept', [PagoConcept::CONCEPT_PAGO_LOGISTICA, PagoConcept::CONCEPT_PAGO_IMPUESTOS])
-                ->orderBy('payment_date', 'asc')
+                ->orderBy('id', 'desc')
                 ->get();
             foreach ($pagos as $pago) {
                 $pago->voucher_url = $this->generateImageUrl($pago->voucher_url);
@@ -622,7 +626,7 @@ class PagosController extends Controller
             $pagos = Pago::with('concepto')
                 ->where('id_cotizacion', $idCotizacion)
                 ->whereIn('id_concept', [PagoConcept::CONCEPT_PAGO_DELIVERY])
-                ->orderBy('payment_date', 'asc')
+                ->orderBy('id', 'desc')
                 ->get();
             foreach ($pagos as $pago) {
                 $pago->voucher_url = $this->generateImageUrl($pago->voucher_url);
@@ -995,7 +999,7 @@ class PagosController extends Controller
                 ->leftJoin('distrito', 'distrito.ID_Distrito', '=', 'entidad.ID_Distrito')
                 ->leftJoin('provincia', 'provincia.ID_Provincia', '=', 'entidad.ID_Provincia')
                 ->leftJoin('departamento', 'departamento.ID_Departamento', '=', 'entidad.ID_Departamento')
-                ->orderBy('pedido_curso.ID_Pedido_Curso', 'asc');
+                ->orderByRaw('(SELECT MAX(cccp.id) FROM pedido_curso_pagos cccp WHERE cccp.id_pedido_curso = pedido_curso.ID_Pedido_Curso AND cccp.id_concept = ' . PedidoCursoPagoConcept::CONCEPT_PAGO_ADELANTO_CURSO . ') IS NULL ASC, (SELECT MAX(cccp.id) FROM pedido_curso_pagos cccp WHERE cccp.id_pedido_curso = pedido_curso.ID_Pedido_Curso AND cccp.id_concept = ' . PedidoCursoPagoConcept::CONCEPT_PAGO_ADELANTO_CURSO . ') DESC, pedido_curso.ID_Pedido_Curso DESC');
 
             // Filtro por empresa del usuario autenticado
 
@@ -1202,6 +1206,9 @@ class PagosController extends Controller
         $pagosProcesados = [];
 
         if ($pagos) {
+            usort($pagos, function ($a, $b) {
+                return (int) ($b['id_pago'] ?? 0) - (int) ($a['id_pago'] ?? 0);
+            });
             foreach ($pagos as $pago) {
                 $pagosProcesados[] = [
                     'id' => $pago['id_pago'],
@@ -1294,7 +1301,7 @@ class PagosController extends Controller
             $pagos = PedidoCursoPago::with('concepto')
                 ->where('id_pedido_curso', $idPedidoCurso)
                 ->where('id_concept', PedidoCursoPagoConcept::CONCEPT_PAGO_ADELANTO_CURSO)
-                ->orderBy('payment_date', 'asc')
+                ->orderBy('id', 'desc')
                 ->get();
             foreach ($pagos as $pago) {
                 $pago->voucher_url = $this->generateImageUrl($pago->voucher_url);

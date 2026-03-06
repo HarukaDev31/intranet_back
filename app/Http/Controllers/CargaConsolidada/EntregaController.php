@@ -657,7 +657,7 @@ class EntregaController extends Controller
                     JOIN {$this->table_pagos_concept} ccp2 ON cccp2.id_concept = ccp2.id
                     WHERE cccp2.id_cotizacion = CC.id
                     AND (ccp2.id = {$this->CONCEPT_PAGO_LOGISTICA} OR ccp2.id = {$this->CONCEPT_PAGO_IMPUESTOS})
-                    ORDER BY cccp2.payment_date ASC, cccp2.id ASC
+                    ORDER BY cccp2.id DESC
                 ) AS pagos_details"),
                 //same but pagos concept delivery
                 DB::raw("(
@@ -676,7 +676,7 @@ class EntregaController extends Controller
                     JOIN {$this->table_pagos_concept} ccp2 ON cccp2.id_concept = ccp2.id
                     WHERE cccp2.id_cotizacion = CC.id
                     AND ccp2.id = {$this->CONCEPT_PAGO_DELIVERY}
-                    ORDER BY cccp2.payment_date ASC, cccp2.id ASC
+                    ORDER BY cccp2.id DESC
                 ) AS pagos_details_delivery"),
             ]);
 
@@ -704,7 +704,7 @@ class EntregaController extends Controller
         // Orden y paginación
         $page = (int) $request->input('currentPage', 1);
         $perPage = (int) $request->input('itemsPerPage', 100);
-        $data = $query->orderBy('CC.id', 'asc')->paginate($perPage, ['*'], 'page', $page);
+        $data = $query->orderByRaw('(SELECT MAX(cccp.id) FROM ' . $this->table_contenedor_consolidado_cotizacion_coordinacion_pagos . ' cccp WHERE cccp.id_cotizacion = CC.id AND cccp.id_concept = ' . $this->CONCEPT_PAGO_DELIVERY . ') IS NULL ASC, (SELECT MAX(cccp.id) FROM ' . $this->table_contenedor_consolidado_cotizacion_coordinacion_pagos . ' cccp WHERE cccp.id_cotizacion = CC.id AND cccp.id_concept = ' . $this->CONCEPT_PAGO_DELIVERY . ') DESC, CC.id DESC')->paginate($perPage, ['*'], 'page', $page);
 
         // Mapa de códigos de origen (misma lógica que ClienteService::transformarDatosClientes)
         $sourceMap = [

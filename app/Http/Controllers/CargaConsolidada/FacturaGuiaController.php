@@ -163,6 +163,7 @@ class FacturaGuiaController extends Controller
                     'tiene_detraccion' => (bool) $c->tiene_detraccion,
                     'detraccion' => $montoDetraccion !== null ? [
                         'monto' => round($montoDetraccion, 2),
+                        'monto_pagado' => ($c->constancia && $c->constancia->monto_detraccion !== null) ? round((float) $c->constancia->monto_detraccion, 2) : null,
                         'file_url' => $detraccion_file_url,
                     ] : null,
                     'comprobante_file_url' => $comprobanteSignedUrl,
