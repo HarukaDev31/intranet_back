@@ -177,12 +177,13 @@ class CotizacionFinalController extends Controller
                     $pagado_verificado = true;
                 }
 
-                $tipoEntrega = null;
-                if (DB::table('consolidado_delivery_form_lima')->where('id_cotizacion', $row->id_cotizacion)->exists()) {
-                    $tipoEntrega = 'Lima';
-                } elseif (DB::table('consolidado_delivery_form_province')->where('id_cotizacion', $row->id_cotizacion)->exists()) {
-                    $tipoEntrega = 'Provincia';
-                }
+                // T. Entrega para contabilidad: desde consolidado_comprobante_forms (ComprobanteForm)
+                $comprobanteForm = DB::table('consolidado_comprobante_forms')
+                    ->where('id_cotizacion', $row->id_cotizacion)
+                    ->first();
+                $tipoEntrega = $comprobanteForm && !empty($comprobanteForm->destino_entrega)
+                    ? trim($comprobanteForm->destino_entrega)
+                    : null;
 
                 $subdata = [
                     'index' => $index,
