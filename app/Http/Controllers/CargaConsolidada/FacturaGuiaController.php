@@ -1858,4 +1858,263 @@ Cualquier duda nos escribe.  ¡Gracias! */
             return response()->json(['success' => false, 'message' => 'Error: ' . $e->getMessage()], 500);
         }
     }
+
+    /**
+     * Envía por WhatsApp los comprobantes (factura/boleta) de una cotización al cliente.
+     * POST /carga-consolidada/contenedor/factura-guia/contabilidad/send-comprobantes/{idCotizacion}
+     */
+    public function sendComprobantesContabilidad($idCotizacion)
+    {
+        try {
+            $cotizacion = Cotizacion::find($idCotizacion);
+            if (!$cotizacion) {
+                return response()->json(['success' => false, 'error' => 'Cotización no encontrada'], 404);
+            }
+
+            $comprobantes = Comprobante::where('quotation_id', $idCotizacion)->orderBy('id')->get();
+            if ($comprobantes->isEmpty()) {
+                return response()->json(['success' => false, 'error' => 'No hay comprobantes para esta cotización'], 400);
+            }
+
+            $telefono = preg_replace('/\D+/', '', $cotizacion->telefono);
+            if (empty($telefono)) {
+                return response()->json(['success' => false, 'error' => 'El cliente no tiene un número de teléfono válido'], 400);
+            }
+            if (strlen($telefono) < 9) {
+                $telefono = '51' . $telefono;
+            }
+            $numeroWhatsapp = $telefono . '@c.us';
+
+            $contenedor = Contenedor::find($cotizacion->id_contenedor);
+            $carga = $contenedor ? $contenedor->carga : 'N/A';
+            $mensajeInicial = "Hola " . $cotizacion->nombre . " 👋,\n\nTe enviamos los comprobantes de pago de tu consolidado #" . $carga . ".";
+
+            $enviados = 0;
+            $errores = [];
+            foreach ($comprobantes as $idx => $c) {
+                if (empty($c->file_path)) {
+                    continue;
+                }
+                $fullPath = storage_path('app/' . $c->file_path);
+                if (!is_file($fullPath)) {
+                    $errores[] = $c->file_name ?? 'Comprobante';
+                    continue;
+                }
+                $mimeType = $c->mime_type ?: mime_content_type($fullPath);
+                $message = $idx === 0 ? $mensajeInicial : null;
+                $result = $this->sendMedia($fullPath, $mimeType, $message, $numeroWhatsapp, 1, 'administracion', $c->file_name ?? null);
+                if ($result && is_array($result) && !empty($result['status'])) {
+                    $enviados++;
+                } else {
+                    $errores[] = $c->file_name ?? 'Comprobante';
+                }
+            }
+
+            if ($enviados === 0) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'No se pudo enviar ningún comprobante' . (count($errores) ? ': ' . implode(', ', $errores) : ''),
+                ], 500);
+            }
+            return response()->json([
+                'success' => true,
+                'message' => $enviados . ' comprobante(s) enviado(s) correctamente por WhatsApp',
+                'data' => ['enviados' => $enviados, 'errores' => $errores],
+            ]);
+        } catch (\Exception $e) {
+            Log::error('sendComprobantesContabilidad: ' . $e->getMessage(), ['id_cotizacion' => $idCotizacion]);
+            return response()->json(['success' => false, 'error' => 'Error al enviar comprobantes: ' . $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Envía por WhatsApp las guías de remisión de una cotización al cliente.
+     * POST /carga-consolidada/contenedor/factura-guia/contabilidad/send-guias/{idCotizacion}
+     */
+    public function sendGuiasContabilidad($idCotizacion)
+    {
+        try {
+            $cotizacion = Cotizacion::find($idCotizacion);
+            if (!$cotizacion) {
+                return response()->json(['success' => false, 'error' => 'Cotización no encontrada'], 404);
+            }
+
+            $guias = GuiaRemision::where('quotation_id', $idCotizacion)->orderBy('id')->get();
+            $legacyPath = null;
+            if ($guias->isEmpty() && !empty($cotizacion->guia_remision_url)) {
+                $legacyPath = storage_path('app/cargaconsolidada/guiaremision/' . $idCotizacion . '/' . $cotizacion->guia_remision_url);
+                if (!is_file($legacyPath)) {
+                    $legacyPath = null;
+                }
+            }
+            if ($guias->isEmpty() && !$legacyPath) {
+                return response()->json(['success' => false, 'error' => 'No hay guías de remisión para esta cotización'], 400);
+            }
+
+            $telefono = preg_replace('/\D+/', '', $cotizacion->telefono);
+            if (empty($telefono)) {
+                return response()->json(['success' => false, 'error' => 'El cliente no tiene un número de teléfono válido'], 400);
+            }
+            if (strlen($telefono) < 9) {
+                $telefono = '51' . $telefono;
+            }
+            $numeroWhatsapp = $telefono . '@c.us';
+
+            $contenedor = Contenedor::find($cotizacion->id_contenedor);
+            $carga = $contenedor ? $contenedor->carga : 'N/A';
+            $mensajeInicial = "Hola " . $cotizacion->nombre . " 😊,\n\nTe enviamos tu(s) guía(s) de remisión del consolidado #" . $carga . ".";
+
+            $enviados = 0;
+            if ($legacyPath) {
+                $mimeType = mime_content_type($legacyPath);
+                $result = $this->sendMedia($legacyPath, $mimeType, $mensajeInicial, $numeroWhatsapp, 0, 'administracion', $cotizacion->guia_remision_url);
+                if ($result && is_array($result) && !empty($result['status'])) {
+                    $enviados++;
+                }
+            } else {
+                foreach ($guias as $idx => $g) {
+                    if (empty($g->file_path)) {
+                        continue;
+                    }
+                    $fullPath = storage_path('app/' . $g->file_path);
+                    if (!is_file($fullPath)) {
+                        continue;
+                    }
+                    $mimeType = $g->mime_type ?: mime_content_type($fullPath);
+                    $message = $idx === 0 ? $mensajeInicial : null;
+                    $result = $this->sendMedia($fullPath, $mimeType, $message, $numeroWhatsapp, 1, 'administracion', $g->file_name ?? null);
+                    if ($result && is_array($result) && !empty($result['status'])) {
+                        $enviados++;
+                    }
+                }
+            }
+
+            if ($enviados === 0) {
+                return response()->json(['success' => false, 'error' => 'No se pudo enviar ninguna guía por WhatsApp'], 500);
+            }
+            return response()->json([
+                'success' => true,
+                'message' => $enviados . ' guía(s) enviada(s) correctamente por WhatsApp',
+                'data' => ['enviados' => $enviados],
+            ]);
+        } catch (\Exception $e) {
+            Log::error('sendGuiasContabilidad: ' . $e->getMessage(), ['id_cotizacion' => $idCotizacion]);
+            return response()->json(['success' => false, 'error' => 'Error al enviar guías: ' . $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Envía por WhatsApp las constancias de detracción de una cotización al cliente.
+     * POST /carga-consolidada/contenedor/factura-guia/contabilidad/send-detracciones/{idCotizacion}
+     */
+    public function sendDetraccionesContabilidad($idCotizacion)
+    {
+        try {
+            $cotizacion = Cotizacion::find($idCotizacion);
+            if (!$cotizacion) {
+                return response()->json(['success' => false, 'error' => 'Cotización no encontrada'], 404);
+            }
+
+            $comprobantesConDetraccion = Comprobante::where('quotation_id', $idCotizacion)->where('tiene_detraccion', true)->orderBy('id')->get();
+            $constancias = [];
+            foreach ($comprobantesConDetraccion as $c) {
+                $det = Detraccion::where('comprobante_id', $c->id)->first();
+                if ($det && !empty($det->file_path)) {
+                    $constancias[] = $det;
+                }
+            }
+            if (empty($constancias)) {
+                return response()->json(['success' => false, 'error' => 'No hay constancias de detracción para esta cotización'], 400);
+            }
+
+            $telefono = preg_replace('/\D+/', '', $cotizacion->telefono);
+            if (empty($telefono)) {
+                return response()->json(['success' => false, 'error' => 'El cliente no tiene un número de teléfono válido'], 400);
+            }
+            if (strlen($telefono) < 9) {
+                $telefono = '51' . $telefono;
+            }
+            $numeroWhatsapp = $telefono . '@c.us';
+
+            $contenedor = Contenedor::find($cotizacion->id_contenedor);
+            $carga = $contenedor ? $contenedor->carga : 'N/A';
+            $mensajeInicial = "Hola " . $cotizacion->nombre . " 👋,\n\nTe enviamos las constancias de pago de detracción de tu consolidado #" . $carga . ".";
+
+            $enviados = 0;
+            foreach ($constancias as $idx => $det) {
+                $fullPath = storage_path('app/' . $det->file_path);
+                if (!is_file($fullPath)) {
+                    continue;
+                }
+                $mimeType = $det->mime_type ?: mime_content_type($fullPath);
+                $message = $idx === 0 ? $mensajeInicial : null;
+                $result = $this->sendMedia($fullPath, $mimeType, $message, $numeroWhatsapp, 1, 'administracion', $det->file_name ?? null);
+                if ($result && is_array($result) && !empty($result['status'])) {
+                    $enviados++;
+                }
+            }
+
+            if ($enviados === 0) {
+                return response()->json(['success' => false, 'error' => 'No se pudo enviar ninguna constancia por WhatsApp'], 500);
+            }
+            return response()->json([
+                'success' => true,
+                'message' => $enviados . ' constancia(s) de detracción enviada(s) correctamente por WhatsApp',
+                'data' => ['enviados' => $enviados],
+            ]);
+        } catch (\Exception $e) {
+            Log::error('sendDetraccionesContabilidad: ' . $e->getMessage(), ['id_cotizacion' => $idCotizacion]);
+            return response()->json(['success' => false, 'error' => 'Error al enviar detracciones: ' . $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Envía por WhatsApp el enlace al formulario de comprobante para una cotización.
+     * POST /carga-consolidada/contenedor/factura-guia/contabilidad/send-formulario/{idCotizacion}
+     */
+    public function sendFormularioContabilidad($idCotizacion)
+    {
+        try {
+            $cotizacion = Cotizacion::with('contenedor')->find($idCotizacion);
+            if (!$cotizacion) {
+                return response()->json(['success' => false, 'error' => 'Cotización no encontrada'], 404);
+            }
+
+            $telefono = preg_replace('/\D+/', '', $cotizacion->telefono);
+            if (empty($telefono)) {
+                return response()->json(['success' => false, 'error' => 'El cliente no tiene un número de teléfono válido'], 400);
+            }
+            if (strlen($telefono) < 9) {
+                $telefono = '51' . $telefono;
+            }
+            $numeroWhatsapp = $telefono . '@c.us';
+
+            $idContenedor = $cotizacion->id_contenedor;
+            $clientesUrlBase = env('APP_URL_CLIENTES', 'http://localhost:3001');
+            $link = $clientesUrlBase . '/formulario-comprobante/' . $idContenedor;
+            $carga = $cotizacion->contenedor ? $cotizacion->contenedor->carga : 'N/A';
+
+            $message = "Hola " . $cotizacion->nombre . " 👋,\n\n" .
+                "Somos del área contable de Pro Business.\n" .
+                "Tu carga del consolidado #" . $carga . " ya está rumbo a Perú.\n\n" .
+                "Por favor completa el formulario para enviarte tu comprobante cuando recibas tus productos:\n\n" .
+                $link . "\n\n" .
+                "*Crearse una cuenta si en caso es su primera vez.*";
+
+            $result = $this->sendMessage($message, $numeroWhatsapp, 0, 'administracion');
+
+            if ($result && isset($result['status']) && $result['status']) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Formulario enviado correctamente por WhatsApp',
+                    'data' => ['messageId' => $result['response']['messageId'] ?? null, 'sentAt' => now()->toISOString()],
+                ]);
+            }
+            $errorMessage = $result['response']['error'] ?? ($result['error'] ?? 'Error desconocido');
+            return response()->json(['success' => false, 'error' => 'Error al enviar formulario por WhatsApp: ' . $errorMessage], 500);
+        } catch (\Exception $e) {
+            Log::error('sendFormularioContabilidad: ' . $e->getMessage(), ['id_cotizacion' => $idCotizacion]);
+            return response()->json(['success' => false, 'error' => 'Error al enviar formulario: ' . $e->getMessage()], 500);
+        }
+    }
 }
