@@ -242,6 +242,45 @@ class PopulateClientesData extends Command
     }
 
     /**
+     * Actualizar solo los campos del cliente que estén vacíos (null o ''), con los datos de $data.
+     * No se sobrescribe ningún campo que el cliente ya tenga.
+     */
+    private function updateClienteWithData($clienteId, $data)
+    {
+        $cliente = DB::table('clientes')->where('id', $clienteId)->first();
+        if (!$cliente) {
+            return;
+        }
+
+        $updates = [];
+        $nombreIn = trim($data->nombre ?? '');
+        if (strlen($nombreIn) >= 2 && (empty($cliente->nombre) || strlen(trim($cliente->nombre ?? '')) < 2)) {
+            $updates['nombre'] = $nombreIn;
+        }
+        $docIn = isset($data->documento) ? trim((string) $data->documento) : '';
+        if ($docIn !== '' && ($cliente->documento === null || trim((string) $cliente->documento) === '')) {
+            $updates['documento'] = $docIn;
+        }
+        $correoIn = trim($data->correo ?? '');
+        if ($correoIn !== '' && filter_var($correoIn, FILTER_VALIDATE_EMAIL) && ($cliente->correo === null || trim($cliente->correo ?? '') === '')) {
+            $updates['correo'] = $correoIn;
+        }
+        $telefonoNorm = $this->normalizePhone($data->telefono ?? null);
+        $telActual = $cliente->telefono ?? '';
+        if (!empty($telefonoNorm) && strlen($telefonoNorm) >= 7 && (empty($telActual) || strlen(trim($telActual)) < 7)) {
+            $updates['telefono'] = $telefonoNorm;
+        }
+        if (isset($data->fecha) && $data->fecha && (empty($cliente->fecha))) {
+            $updates['fecha'] = $data->fecha;
+        }
+        if (empty($updates)) {
+            return;
+        }
+        $updates['updated_at'] = now();
+        DB::table('clientes')->where('id', $clienteId)->update($updates);
+    }
+
+    /**
      * Normalizar número de teléfono eliminando espacios, caracteres especiales y +
      */
     private function normalizePhone($phone)
@@ -273,8 +312,9 @@ class PopulateClientesData extends Command
             $cliente = DB::table('clientes')
                 ->where('telefono', 'like', $telefonoNormalizado)
                 ->first();
-            
+
             if ($cliente) {
+                $this->updateClienteWithData($cliente->id, $data);
                 return $cliente->id;
             }
         }
@@ -284,8 +324,9 @@ class PopulateClientesData extends Command
             $cliente = DB::table('clientes')
                 ->where('documento', $data->documento)
                 ->first();
-                
+
             if ($cliente) {
+                $this->updateClienteWithData($cliente->id, $data);
                 return $cliente->id;
             }
         }
@@ -295,8 +336,9 @@ class PopulateClientesData extends Command
             $cliente = DB::table('clientes')
                 ->where('correo', $data->correo)
                 ->first();
-                
+
             if ($cliente) {
+                $this->updateClienteWithData($cliente->id, $data);
                 return $cliente->id;
             }
         }
@@ -362,7 +404,7 @@ class PopulateClientesData extends Command
             ->join('entidad as e', 'pc.ID_Entidad', '=', 'e.ID_Entidad')
             ->whereNull('pc.id_cliente')
             ->where('pc.Nu_Estado', 2) // Solo pedidos confirmados
-            ->select('pc.ID_Pedido_Curso', 'e.No_Entidad', 'e.Nu_Celular_Entidad', 'e.Nu_Documento_Identidad', 'e.Txt_Email_Entidad')
+            ->select('pc.ID_Pedido_Curso', 'e.No_Entidad', 'e.Nu_Celular_Entidad', 'e.Nu_Documento_Identidad', 'e.Txt_Email_Entidad', 'e.Fe_Registro as fecha')
             ->get();
 
         $this->info("Total de pedidos a actualizar: " . $pedidos->count());
@@ -406,8 +448,17 @@ class PopulateClientesData extends Command
                     ->where('ID_Pedido_Curso', $pedido->ID_Pedido_Curso)
                     ->update(['id_cliente' => $cliente->id]);
                 $actualizados++;
+                // Actualizar el cliente con los datos de entidad (nombre, documento, correo, telefono, fecha)
+                $entidadData = (object) [
+                    'nombre'   => $pedido->No_Entidad,
+                    'documento'=> $pedido->Nu_Documento_Identidad,
+                    'correo'   => $pedido->Txt_Email_Entidad,
+                    'telefono' => $pedido->Nu_Celular_Entidad,
+                    'fecha'    => $pedido->fecha ?? null,
+                ];
+                $this->updateClienteWithData($cliente->id, $entidadData);
             }
-            
+
             $progressBar->advance();
         }
 
