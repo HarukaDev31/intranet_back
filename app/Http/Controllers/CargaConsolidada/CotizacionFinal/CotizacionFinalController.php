@@ -3085,7 +3085,7 @@ class CotizacionFinalController extends Controller
             }
 
             $cotizacionFinalUrl = $cotizacion->cotizacion_final_url;
-            
+            Log::info('cotizacionFinalUrl: ' . $cotizacionFinalUrl);
             // Intentar diferentes ubicaciones
             $possiblePaths = [];
             
