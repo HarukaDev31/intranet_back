@@ -17,9 +17,11 @@ class CalendarRoleGroupConfig extends Model
         'color_completado',
         'jefe_color_priority_order',
         'miembro_color_priority_order',
+        'show_event_details',
     ];
 
     protected $casts = [
+        'show_event_details' => 'boolean',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
     ];

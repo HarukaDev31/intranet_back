@@ -201,6 +201,7 @@ class CalendarPermissionService
                 'jefe'    => $jefeOrder,
                 'miembro' => $miembroOrder,
             ),
+            'show_event_details' => $groupConfig ? (bool) $groupConfig->show_event_details : false,
             'usa_consolidado' => $roleGroup ? (bool) $roleGroup->usa_consolidado : true,
         ];
     }

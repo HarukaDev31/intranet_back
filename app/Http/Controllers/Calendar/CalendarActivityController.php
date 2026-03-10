@@ -606,10 +606,10 @@ class CalendarActivityController extends Controller
     {
         try {
             $user = JWTAuth::parseToken()->authenticate();
-            //not filter by user id
-            $calendarId = Calendar::value('id');
+            $calendarId = Calendar::where('user_id', $user->getIdUsuario())->value('id');
             if (!$calendarId) {
-                return response()->json(['success' => true, 'data' => [], 'message' => 'Configuración de colores obtenida']);
+                $cal = Calendar::firstOrCreate(['user_id' => $user->getIdUsuario()], ['user_id' => $user->getIdUsuario()]);
+                $calendarId = $cal->id;
             }
             $configs = CalendarUserColorConfig::where('calendar_id', $calendarId)->with('user')->get();
             $data = $configs->map(fn ($c) => [

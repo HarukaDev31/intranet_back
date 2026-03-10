@@ -469,6 +469,7 @@ class CalendarRoleGroupController extends Controller
             'jefe_color_priority_order' => 'nullable|string|max:120',
             'miembro_color_priority_order' => 'nullable|string|max:120',
             'usa_consolidado' => 'nullable|boolean',
+            'show_event_details' => 'nullable|boolean',
         ]);
 
         if ($v->fails()) {
@@ -490,6 +491,9 @@ class CalendarRoleGroupController extends Controller
             }
             if ($request->has('miembro_color_priority_order')) {
                 $configData['miembro_color_priority_order'] = $request->input('miembro_color_priority_order');
+            }
+            if ($request->has('show_event_details')) {
+                $configData['show_event_details'] = $request->boolean('show_event_details');
             }
             $config = CalendarRoleGroupConfig::updateOrCreate(
                 ['role_group_id' => $id],
