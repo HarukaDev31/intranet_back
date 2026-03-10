@@ -47,7 +47,11 @@ class CalendarEventService
             ->with(['activity', 'eventDays', 'charges.user', 'contenedor']);
 
         if ($onlyMyCharges) {
-            $query->whereHas('charges', fn ($q) => $q->where('user_id', $userId));
+            // Miembro: ver eventos donde tiene carga O eventos sin ningún responsable (visibles para todo el grupo)
+            $query->where(function ($q) use ($userId) {
+                $q->whereHas('charges', fn ($c) => $c->where('user_id', $userId))
+                    ->orWhereDoesntHave('charges');
+            });
         }
         // Filtro de fecha solo si se envían explícitamente (sin filtro por defecto)
         if ($startDate && $endDate) {
@@ -58,7 +62,10 @@ class CalendarEventService
             $query->whereHas('eventDays', fn ($q) => $q->where('date', '<=', $endDate));
         }
         if ($responsableIds !== null && count($responsableIds) > 0) {
-            $query->whereHas('charges', fn ($q) => $q->whereIn('user_id', $responsableIds));
+            $query->where(function ($q) use ($responsableIds) {
+                $q->whereHas('charges', fn ($c) => $c->whereIn('user_id', $responsableIds))
+                    ->orWhereDoesntHave('charges');
+            });
         }
         if ($contenedorIds !== null && count($contenedorIds) > 0) {
             $query->whereIn('contenedor_id', $contenedorIds);
@@ -120,11 +127,14 @@ class CalendarEventService
      */
     public function getEventById(int $eventId, int $userId, bool $canSeeAllCalendars = false): ?array
     {
-        $query = CalendarEvent::with(['activity', 'eventDays', 'charges.user', 'contenedor']);
+        $query = CalendarEvent::with(['activity', 'eventDays', 'charges.user', 'contenedor'])->where('id', $eventId);
         if (!$canSeeAllCalendars) {
-            $query->whereHas('charges', fn ($q) => $q->where('user_id', $userId));
+            $query->where(function ($q) use ($userId) {
+                $q->whereHas('charges', fn ($c) => $c->where('user_id', $userId))
+                    ->orWhereDoesntHave('charges');
+            });
         }
-        $event = $query->find($eventId);
+        $event = $query->first();
         return $event ? $this->formatEventForResponse($event) : null;
     }
 

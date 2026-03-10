@@ -168,18 +168,24 @@ class CalendarPermissionService
         $groupConfig = $roleGroup ? $roleGroup->configs->first() : null;
 
         // Orden de prioridad de colores (guardado como CSV en la BD)
-        $defaultOrder = array('ACTIVIDAD', 'CONSOLIDADO', 'PRIORIDAD', 'COMPLETADO');
-        $defaultMemberOrder = array('PRIORIDAD', 'ACTIVIDAD', 'CONSOLIDADO', 'COMPLETADO');
+        $defaultOrder = array('ACTIVIDAD', 'CONSOLIDADO', 'USUARIO', 'PRIORIDAD', 'COMPLETADO');
+        $defaultMemberOrder = array('USUARIO', 'PRIORIDAD', 'ACTIVIDAD', 'CONSOLIDADO', 'COMPLETADO');
 
         $jefeOrder = $defaultOrder;
         $miembroOrder = $defaultMemberOrder;
 
         if ($groupConfig) {
             if (!empty($groupConfig->jefe_color_priority_order)) {
-                $jefeOrder = array_values(array_filter(array_map('trim', explode(',', $groupConfig->jefe_color_priority_order))));
+                $parsed = array_values(array_filter(array_map('trim', explode(',', $groupConfig->jefe_color_priority_order))));
+                if (!empty($parsed)) {
+                    $jefeOrder = $parsed;
+                }
             }
             if (!empty($groupConfig->miembro_color_priority_order)) {
-                $miembroOrder = array_values(array_filter(array_map('trim', explode(',', $groupConfig->miembro_color_priority_order))));
+                $parsed = array_values(array_filter(array_map('trim', explode(',', $groupConfig->miembro_color_priority_order))));
+                if (!empty($parsed)) {
+                    $miembroOrder = $parsed;
+                }
             }
         }
 
