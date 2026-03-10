@@ -264,9 +264,7 @@ class CalculadoraImportacionService
                         ->get();
 
                     foreach ($proveedoresCotizacion as $provCotizacion) {
-                        // Eliminar items primero
-                        \App\Models\CargaConsolidada\CotizacionProveedorItem::where('id_proveedor', $provCotizacion->id)->delete();
-                        // Eliminar proveedor
+                        $this->eliminarDependenciasProveedorCotizacion($provCotizacion->id);
                         $provCotizacion->delete();
                     }
 
@@ -1749,5 +1747,20 @@ class CalculadoraImportacionService
             Log::warning("Error al obtener valor de celda {$cellReference}: " . $e->getMessage());
             return 0.0;
         }
+    }
+
+    /**
+     * Elimina registros en tablas que tienen FK a contenedor_consolidado_cotizacion_proveedores
+     * sin ON DELETE CASCADE, para poder borrar el proveedor sin violar integridad referencial.
+     */
+    private function eliminarDependenciasProveedorCotizacion(int $idProveedorCotizacion): void
+    {
+        // Items del proveedor (contenedor_consolidado_cotizacion_proveedores_items)
+        CotizacionProveedorItem::where('id_proveedor', $idProveedorCotizacion)->delete();
+
+        // Tracking de estados (FK contenedor_proveedor_estados_tracking.id_proveedor -> cccp.id)
+        DB::table('contenedor_proveedor_estados_tracking')
+            ->where('id_proveedor', $idProveedorCotizacion)
+            ->delete();
     }
 }

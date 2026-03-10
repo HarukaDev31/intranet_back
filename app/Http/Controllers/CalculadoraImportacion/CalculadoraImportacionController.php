@@ -1158,11 +1158,54 @@ class CalculadoraImportacionController extends Controller
                     ]);
                     Log::info('cotizacion_file_url actualizado al pasar a COTIZADO', ['cotizacion_id' => $calculadora->id_cotizacion]);
                 }
+
+                // Si ya tenía cotización vinculada: asegurar que los proveedores de la calculadora
+                // tengan code_supplier sincronizado desde cccp, para que al borrar uno se elimine el correcto
+                if ($calculadora->id_cotizacion) {
+                    $this->sincronizarCodeSupplierCalculadoraDesdeCotizacion($calculadora, $calculadora->id_cotizacion);
+                }
             }
             $calculadora->save();
             return response()->json(['success' => true, 'message' => 'Estado cambiado exitosamente']);
         } catch (\Exception $e) {
             return response()->json(['success' => false, 'message' => 'Error al cambiar el estado: ' . $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Sincroniza code_supplier desde contenedor_consolidado_cotizacion_proveedores (cccp)
+     * a calculadora_importacion_proveedores por orden, para que al borrar desde la calculadora
+     * se identifique el proveedor correcto en ambas tablas.
+     */
+    private function sincronizarCodeSupplierCalculadoraDesdeCotizacion(CalculadoraImportacion $calculadora, int $cotizacionId): void
+    {
+        $proveedoresCotizacion = \App\Models\CargaConsolidada\CotizacionProveedor::where('id_cotizacion', $cotizacionId)
+            ->orderBy('id')
+            ->get(['id', 'code_supplier']);
+
+        $proveedoresCalculadora = $calculadora->proveedores()->orderBy('id')->get();
+
+        if ($proveedoresCotizacion->count() !== $proveedoresCalculadora->count()) {
+            Log::warning('Sincronizar code_supplier: distinta cantidad de proveedores', [
+                'calculadora_id' => $calculadora->id,
+                'cotizacion_id' => $cotizacionId,
+                'cccp' => $proveedoresCotizacion->count(),
+                'calculadora' => $proveedoresCalculadora->count(),
+            ]);
+        }
+
+        foreach ($proveedoresCotizacion as $index => $provCotizacion) {
+            $codeSupplier = $provCotizacion->code_supplier;
+            if (empty($codeSupplier)) {
+                continue;
+            }
+            if (isset($proveedoresCalculadora[$index])) {
+                $proveedoresCalculadora[$index]->update(['code_supplier' => $codeSupplier]);
+                Log::info('code_supplier sincronizado a calculadora_importacion_proveedores', [
+                    'calculadora_proveedor_id' => $proveedoresCalculadora[$index]->id,
+                    'code_supplier' => $codeSupplier,
+                ]);
+            }
         }
     }
 
