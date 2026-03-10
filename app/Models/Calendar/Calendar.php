@@ -14,6 +14,7 @@ class Calendar extends Model
 
     protected $fillable = [
         'user_id',
+        'role_group_id',
     ];
 
     protected $casts = [
@@ -51,5 +52,10 @@ class Calendar extends Model
     public function charges(): HasMany
     {
         return $this->hasMany(CalendarEventCharge::class, 'calendar_id');
+    }
+
+    public function roleGroup(): BelongsTo
+    {
+        return $this->belongsTo(CalendarRoleGroup::class, 'role_group_id');
     }
 }

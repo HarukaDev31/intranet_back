@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Calendar\CalendarController;
 use App\Http\Controllers\Calendar\CalendarActivityController;
+use App\Http\Controllers\Calendar\CalendarRoleGroupController;
 
 /*
 |--------------------------------------------------------------------------
@@ -67,4 +68,20 @@ Route::group(['prefix' => 'calendar', 'middleware' => 'jwt.auth'], function () {
     // Formulario "Nueva actividad"
     Route::get('/my-calendar', [CalendarActivityController::class, 'getOrCreateMyCalendar']);
     Route::post('/activity-events', [CalendarActivityController::class, 'storeActivityEvent']);
+
+    // Configuración de calendario (grupos de rol, permisos y colores por grupo)
+    Route::get('/config', [CalendarActivityController::class, 'getCalendarConfig']);
+
+    // 7. Grupos de roles de calendario (mantenedor y contexto de usuario)
+    Route::get('/my-role-groups', [CalendarRoleGroupController::class, 'myRoleGroups']);
+    Route::get('/users', [CalendarRoleGroupController::class, 'getIntranetUsers']);
+    Route::get('/role-groups', [CalendarRoleGroupController::class, 'index']);
+    Route::post('/role-groups', [CalendarRoleGroupController::class, 'store']);
+    Route::put('/role-groups/{id}', [CalendarRoleGroupController::class, 'update']);
+    Route::delete('/role-groups/{id}', [CalendarRoleGroupController::class, 'destroy']);
+    Route::get('/role-groups/{id}/members', [CalendarRoleGroupController::class, 'members']);
+    Route::post('/role-groups/{id}/members', [CalendarRoleGroupController::class, 'addMember']);
+    Route::delete('/role-groups/{id}/members/{memberId}', [CalendarRoleGroupController::class, 'removeMember']);
+    Route::get('/role-groups/{id}/config', [CalendarRoleGroupController::class, 'getConfig']);
+    Route::put('/role-groups/{id}/config', [CalendarRoleGroupController::class, 'updateConfig']);
 });

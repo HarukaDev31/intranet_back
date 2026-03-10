@@ -22,7 +22,10 @@ class CalendarEventService
 {
     use FileTrait;
     /**
-     * Eventos con filtros opcionales y visibilidad por rol (solo mis cargas si no es Jefe).
+     * Eventos con filtros opcionales y visibilidad por rol.
+     * - Si $roleGroupId no es null, solo se consideran calendarios de ese grupo.
+     * - Si $onlyMyCharges = false (usuario JEFE): devuelve eventos de esos calendarios.
+     * - Si $onlyMyCharges = true (miembro): solo eventos donde el usuario tiene una carga (charge).
      */
     public function getEventsForUser(
         int $userId,
@@ -34,9 +37,12 @@ class CalendarEventService
         ?int $priority = null,
         bool $onlyMyCharges = false,
         int $page = 1,
-        int $perPage = 0
+        int $perPage = 0,
+        ?int $roleGroupId = null
     ) {
-        $calendarIds = Calendar::pluck('id');
+        $calendarIds = $roleGroupId !== null
+            ? Calendar::where('role_group_id', $roleGroupId)->pluck('id')->all()
+            : Calendar::pluck('id')->all();
         $query = CalendarEvent::whereIn('calendar_id', $calendarIds)
             ->with(['activity', 'eventDays', 'charges.user', 'contenedor']);
 
@@ -218,8 +224,18 @@ class CalendarEventService
             $contenedorId = $data['contenedor_id'] ?? null;
             $notes = $data['notes'] ?? null;
 
+            // Grupo de rol del evento: tomar el grupo asignado al calendario del usuario;
+            // si no tiene, intentar usar el grupo por defecto CAL_IMPORTACIONES_DEFAULT.
+            $roleGroupId = $calendar->role_group_id;
+            if (!$roleGroupId) {
+                $roleGroupId = DB::table('calendar_role_groups')
+                    ->where('code', 'CAL_IMPORTACIONES_DEFAULT')
+                    ->value('id');
+            }
+
             $event = CalendarEvent::create([
                 'calendar_id'   => $calendar->id,
+                'role_group_id' => $roleGroupId,
                 'activity_id'   => $data['activity_id'] ?? null,
                 'priority'      => $data['priority'] ?? 0,
                 'name'          => $name,
@@ -656,6 +672,8 @@ class CalendarEventService
     /**
      * Progreso del equipo (por eventos) y por responsable (por charges).
      * Acepta los mismos filtros que getEventsForUser para mostrar stats en contexto filtrado.
+     * Si $roleGroupMemberIds no es null, solo se consideran eventos con al menos un charge asignado a esos usuarios,
+     * y by_responsable solo incluye a esos miembros del grupo de calendario.
      */
     public function getProgress(
         ?string $startDate = null,
@@ -664,7 +682,8 @@ class CalendarEventService
         ?array $responsableIds = null,
         ?array $contenedorIds = null,
         ?string $status = null,
-        ?int $priority = null
+        ?int $priority = null,
+        ?array $roleGroupMemberIds = null
     ): array {
         $allCalendarIds = Calendar::pluck('id');
         $eventQuery = CalendarEvent::whereIn('calendar_id', $allCalendarIds)
@@ -672,6 +691,9 @@ class CalendarEventService
 
         if ($calendarId) {
             $eventQuery->where('calendar_id', $calendarId);
+        }
+        if ($roleGroupMemberIds !== null && count($roleGroupMemberIds) > 0) {
+            $eventQuery->whereHas('charges', fn ($q) => $q->whereIn('user_id', $roleGroupMemberIds));
         }
         if ($startDate && $endDate) {
             $eventQuery->whereHas('eventDays', fn ($q) => $q->whereBetween('date', [$startDate, $endDate]));
@@ -753,6 +775,11 @@ class CalendarEventService
                 : 0;
             $row['color'] = $colorMap[$row['user_id']] ?? null;
         }
+
+        if ($roleGroupMemberIds !== null && count($roleGroupMemberIds) > 0) {
+            $byUser = array_intersect_key($byUser, array_flip($roleGroupMemberIds));
+        }
+
         return [
             'team' => [
                 'total_actividades' => $totalActividades,

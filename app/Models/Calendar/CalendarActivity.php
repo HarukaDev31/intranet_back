@@ -3,13 +3,14 @@
 namespace App\Models\Calendar;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class CalendarActivity extends Model
 {
     protected $table = 'calendar_activities';
 
-    protected $fillable = ['name', 'orden', 'color_code', 'allow_saturday', 'allow_sunday', 'default_priority'];
+    protected $fillable = ['name', 'orden', 'color_code', 'allow_saturday', 'allow_sunday', 'default_priority', 'role_group_id'];
 
     protected $casts = [
         'allow_saturday' => 'boolean',
@@ -18,6 +19,11 @@ class CalendarActivity extends Model
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
     ];
+
+    public function roleGroup(): BelongsTo
+    {
+        return $this->belongsTo(CalendarRoleGroup::class, 'role_group_id');
+    }
 
     public function calendarEvents(): HasMany
     {

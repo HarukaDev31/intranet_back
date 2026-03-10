@@ -16,6 +16,7 @@ class CalendarEvent extends Model
 
     protected $fillable = [
         'calendar_id',
+        'role_group_id',
         'activity_id',
         'priority',
         'name',
@@ -36,6 +37,14 @@ class CalendarEvent extends Model
     public function calendar(): BelongsTo
     {
         return $this->belongsTo(Calendar::class, 'calendar_id');
+    }
+
+    /**
+     * Grupo de rol al que pertenece el evento (para segmentar por grupo de calendario).
+     */
+    public function roleGroup(): BelongsTo
+    {
+        return $this->belongsTo(CalendarRoleGroup::class, 'role_group_id');
     }
 
     /**

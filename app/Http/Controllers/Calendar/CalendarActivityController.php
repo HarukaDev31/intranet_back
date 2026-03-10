@@ -5,9 +5,12 @@ namespace App\Http\Controllers\Calendar;
 use App\Http\Controllers\Controller;
 use App\Models\Calendar\Calendar;
 use App\Models\Calendar\CalendarActivity;
+use App\Models\Calendar\CalendarEvent;
 use App\Models\Calendar\CalendarEventCharge;
+use App\Models\Calendar\CalendarRoleGroup;
 use App\Models\Calendar\CalendarUserColorConfig;
 use App\Models\Calendar\CalendarConsolidadoColorConfig;
+use App\Models\Calendar\CalendarRoleGroupMember;
 use App\Models\Usuario;
 use App\Models\CargaConsolidada\Contenedor;
 use App\Services\Calendar\CalendarActivityService;
@@ -37,12 +40,46 @@ class CalendarActivityController extends Controller
     }
 
     /**
-     * GET /api/calendar/activity-catalog - Lista actividades del catálogo
+     * GET /api/calendar/config - Configuración de calendario para el usuario autenticado.
+     * Query opcional: role_group_id (si el usuario pertenece a varios grupos, indica cuál usar).
      */
-    public function index(): JsonResponse
+    public function getCalendarConfig(Request $request): JsonResponse
     {
         try {
-            $activities = $this->activityService->listActivities();
+            $user = JWTAuth::parseToken()->authenticate();
+            $roleGroupId = $request->input('role_group_id');
+            $roleGroupId = $roleGroupId !== null && $roleGroupId !== '' ? (int) $roleGroupId : null;
+            if ($roleGroupId !== null && !$this->permissionService->userBelongsToRoleGroup($user, $roleGroupId)) {
+                return response()->json(['success' => false, 'message' => 'No perteneces a ese grupo de calendario'], 403);
+            }
+            $config = $this->permissionService->getCalendarConfigForUser($user, $roleGroupId);
+
+            return response()->json([
+                'success' => true,
+                'data' => $config,
+                'message' => 'Configuración de calendario obtenida correctamente',
+            ]);
+        } catch (\Exception $e) {
+            Log::error('CalendarActivityController@getCalendarConfig: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al obtener configuración de calendario',
+            ], 500);
+        }
+    }
+
+    /**
+     * GET /api/calendar/activity-catalog - Lista actividades del catálogo del grupo del usuario
+     */
+    public function index(Request $request): JsonResponse
+    {
+        try {
+            $user = JWTAuth::parseToken()->authenticate();
+            $roleGroupId = $this->resolveRoleGroupIdForUser($request, $user);
+            if ($roleGroupId === null) {
+                return response()->json(['success' => false, 'message' => 'El usuario no tiene grupo de calendario asignado'], 400);
+            }
+            $activities = $this->activityService->listActivities($roleGroupId);
             $data = $activities->map(fn ($a) => [
                 'id' => $a->id,
                 'name' => $a->name,
@@ -71,6 +108,11 @@ class CalendarActivityController extends Controller
         if (!$this->permissionService->canManageActivities(JWTAuth::parseToken()->authenticate())) {
             return response()->json(['success' => false, 'message' => 'Solo el Jefe de Importaciones puede crear actividades en el catálogo'], 403);
         }
+        $user = JWTAuth::parseToken()->authenticate();
+        $roleGroupId = $this->resolveRoleGroupIdForUser($request, $user);
+        if ($roleGroupId === null) {
+            return response()->json(['success' => false, 'message' => 'El usuario no tiene grupo de calendario asignado'], 400);
+        }
         $v = Validator::make($request->all(), [
             'name' => 'required|string|min:3|max:255',
         ], [
@@ -82,11 +124,11 @@ class CalendarActivityController extends Controller
             return response()->json(['success' => false, 'message' => $msg], 400);
         }
         $name = $request->input('name');
-        if (CalendarActivity::where('name', $name)->exists()) {
+        if (CalendarActivity::where('name', $name)->where('role_group_id', $roleGroupId)->exists()) {
             return response()->json(['success' => false, 'message' => 'Ya existe una actividad con ese nombre'], 400);
         }
         try {
-            $activity = $this->activityService->createActivity($name);
+            $activity = $this->activityService->createActivity($name, $roleGroupId);
             return response()->json([
                 'success' => true,
                 'data' => [
@@ -114,6 +156,11 @@ class CalendarActivityController extends Controller
         if (!$this->permissionService->canManageActivities(JWTAuth::parseToken()->authenticate())) {
             return response()->json(['success' => false, 'message' => 'No tienes permiso para editar el catálogo'], 403);
         }
+        $user = JWTAuth::parseToken()->authenticate();
+        $roleGroupId = $this->resolveRoleGroupIdForUser($request, $user);
+        if ($roleGroupId === null) {
+            return response()->json(['success' => false, 'message' => 'El usuario no tiene grupo de calendario asignado'], 400);
+        }
         $v = Validator::make($request->all(), [
             'name' => 'required|string|min:3|max:255',
             'color_code' => 'nullable|string|max:20',
@@ -131,10 +178,10 @@ class CalendarActivityController extends Controller
         $name = $request->input('name');
         $colorCode = $request->input('color_code');
         $extras = $request->only(['allow_saturday', 'allow_sunday', 'default_priority']);
-        if (CalendarActivity::where('name', $name)->where('id', '!=', $id)->exists()) {
+        if (CalendarActivity::where('name', $name)->where('role_group_id', $roleGroupId)->where('id', '!=', $id)->exists()) {
             return response()->json(['success' => false, 'message' => 'Ya existe una actividad con ese nombre'], 400);
         }
-        $activity = $this->activityService->updateActivity($id, $name, $colorCode, $extras);
+        $activity = $this->activityService->updateActivity($id, $name, $colorCode, $extras, $roleGroupId);
         if (!$activity) {
             return response()->json(['success' => false, 'message' => 'Actividad no encontrada'], 404);
         }
@@ -156,15 +203,20 @@ class CalendarActivityController extends Controller
     /**
      * DELETE /api/calendar/activity-catalog/{id} - Eliminar actividad del catálogo (solo si no está en uso)
      */
-    public function destroy(int $id): JsonResponse
+    public function destroy(Request $request, int $id): JsonResponse
     {
         if (!$this->permissionService->canManageActivities(JWTAuth::parseToken()->authenticate())) {
             return response()->json(['success' => false, 'message' => 'No tienes permiso para eliminar del catálogo'], 403);
         }
+        $user = JWTAuth::parseToken()->authenticate();
+        $roleGroupId = $this->resolveRoleGroupIdForUser($request, $user);
+        if ($roleGroupId === null) {
+            return response()->json(['success' => false, 'message' => 'El usuario no tiene grupo de calendario asignado'], 400);
+        }
         try {
-            $deleted = $this->activityService->deleteActivity($id);
+            $deleted = $this->activityService->deleteActivity($id, $roleGroupId);
             if (!$deleted) {
-                $activity = CalendarActivity::find($id);
+                $activity = CalendarActivity::where('id', $id)->where('role_group_id', $roleGroupId)->first();
                 if (!$activity) {
                     return response()->json(['success' => false, 'message' => 'Actividad no encontrada'], 404);
                 }
@@ -252,12 +304,17 @@ class CalendarActivityController extends Controller
         ]);
         try {
             $user = JWTAuth::parseToken()->authenticate();
+            $payload = $request->only([
+                'activity_id', 'name', 'start_date', 'end_date',
+                'responsible_user_ids', 'contenedor_id', 'notes',
+            ]);
+            $calendar = Calendar::find((int) $request->calendar_id);
+            if ($calendar && !$this->groupUsaConsolidado($calendar, $user ? $user->getIdUsuario() : null)) {
+                $payload['contenedor_id'] = null;
+            }
             $event = $this->eventService->createActivityEvent(
                 (int) $request->calendar_id,
-                $request->only([
-                    'activity_id', 'name', 'start_date', 'end_date',
-                    'responsible_user_ids', 'contenedor_id', 'notes',
-                ]),
+                $payload,
                 $user ? $user->getIdUsuario() : null
             );
             return response()->json(['success' => true, 'data' => $event], 201);
@@ -318,6 +375,9 @@ class CalendarActivityController extends Controller
             );
             $data = $request->only(['name', 'activity_id', 'priority', 'contenedor_id', 'notes', 'start_date', 'end_date']);
             $data['responsable_ids'] = $request->input('responsable_ids', []);
+            if (!$this->groupUsaConsolidado($calendar, $user->getIdUsuario())) {
+                $data['contenedor_id'] = null;
+            }
             $event = $this->eventService->createActivityEvent($calendar->id, $data, $user->getIdUsuario());
             $formatted = $this->eventService->formatEventForResponse($event);
             return response()->json([
@@ -341,6 +401,10 @@ class CalendarActivityController extends Controller
         }
         $user = JWTAuth::parseToken()->authenticate();
         $data = $request->only(['name', 'activity_id', 'priority', 'contenedor_id', 'notes', 'start_date', 'end_date', 'responsable_ids']);
+        $event = CalendarEvent::find($id);
+        if ($event && !$this->groupUsaConsolidado($event->calendar, $user->getIdUsuario())) {
+            $data['contenedor_id'] = null;
+        }
         $event = $this->eventService->updateEvent($id, $user->getIdUsuario(), $data, true);
         if (!$event) {
             return response()->json(['success' => false, 'message' => 'Actividad no encontrada'], 404);
@@ -438,21 +502,49 @@ class CalendarActivityController extends Controller
     }
 
     /**
-     * GET /api/calendar/responsables - Formato spec (id, nombre, email, avatar, color desde calendar_user_color_config)
+     * GET /api/calendar/responsables - Formato spec (id, nombre, email, avatar, color).
+     * Query opcional: role_group_id. Si viene, devuelve solo miembros de ese grupo (validando que el usuario pertenezca).
+     * Si no, usa el primer grupo del usuario o fallback legacy.
      */
-    public function getResponsables(): JsonResponse
+    public function getResponsables(Request $request): JsonResponse
     {
         try {
             $user = JWTAuth::parseToken()->authenticate();
-            $calendarId = Calendar::where('user_id', $user->getIdUsuario())->value('id');
+            $calendar = Calendar::where('user_id', $user->getIdUsuario())->first();
+            $calendarId = $calendar !== null ? $calendar->id : null;
             $colorByUserId = $calendarId
                 ? CalendarUserColorConfig::where('calendar_id', $calendarId)->get()->keyBy('user_id')
                 : collect();
 
-            $users = Usuario::whereHas('grupo', fn ($q) => $q->whereIn('No_Grupo', [Usuario::ROL_COORDINACION, Usuario::ROL_DOCUMENTACION,Usuario::ROL_JEFE_IMPORTACION]))
-                ->where('Nu_Estado', 1)
-                ->orderBy('No_Nombres_Apellidos')
-                ->get(['ID_Usuario', 'No_Usuario', 'No_Nombres_Apellidos', 'Txt_Email', 'Txt_Foto']);
+            $roleGroupId = $request->input('role_group_id');
+            $roleGroupId = $roleGroupId !== null && $roleGroupId !== '' ? (int) $roleGroupId : null;
+            $member = CalendarRoleGroupMember::where('user_id', $user->getIdUsuario())->first();
+            if ($roleGroupId !== null) {
+                if (!$this->permissionService->userBelongsToRoleGroup($user, $roleGroupId)) {
+                    return response()->json(['success' => false, 'message' => 'No perteneces a ese grupo de calendario'], 403);
+                }
+                $member = CalendarRoleGroupMember::where('user_id', $user->getIdUsuario())
+                    ->where('role_group_id', $roleGroupId)->first();
+            }
+
+            if ($member) {
+                $userIds = CalendarRoleGroupMember::where('role_group_id', $member->role_group_id)
+                    ->pluck('user_id')
+                    ->unique()
+                    ->values()
+                    ->all();
+                $users = Usuario::whereIn('ID_Usuario', $userIds)
+                    ->where('Nu_Estado', 1)
+                    ->orderBy('No_Nombres_Apellidos')
+                    ->get(['ID_Usuario', 'No_Usuario', 'No_Nombres_Apellidos', 'Txt_Email', 'Txt_Foto']);
+            } else {
+                // Sin grupo: fallback a roles legacy (Coordinación, Documentación, Jefe Importación)
+                $users = Usuario::whereHas('grupo', fn ($q) => $q->whereIn('No_Grupo', [Usuario::ROL_COORDINACION, Usuario::ROL_DOCUMENTACION, Usuario::ROL_JEFE_IMPORTACION]))
+                    ->where('Nu_Estado', 1)
+                    ->orderBy('No_Nombres_Apellidos')
+                    ->get(['ID_Usuario', 'No_Usuario', 'No_Nombres_Apellidos', 'Txt_Email', 'Txt_Foto']);
+            }
+
             $data = $users->map(function ($u) use ($colorByUserId) {
                 $color = optional($colorByUserId->get($u->ID_Usuario))->color_code;
                 return [
@@ -582,11 +674,35 @@ class CalendarActivityController extends Controller
 
     /**
      * GET /api/calendar/progress - Progreso del equipo. Solo Jefe.
+     * Obtiene el usuario del JWT, su grupo de calendario y restringe datos a los miembros de ese grupo.
      */
     public function getProgress(Request $request): JsonResponse
     {
-        if (!$this->permissionService->canViewTeamProgress(JWTAuth::parseToken()->authenticate())) {
+        $user = JWTAuth::parseToken()->authenticate();
+        if (!$this->permissionService->canViewTeamProgress($user)) {
             return response()->json(['success' => false, 'message' => 'No tienes permiso para ver el progreso del equipo'], 403);
+        }
+
+        // role_group_id desde query: si viene, validar que el usuario pertenezca y usarlo; si no, usar su primera membresía
+        $roleGroupId = $request->input('role_group_id');
+        $roleGroupId = $roleGroupId !== null && $roleGroupId !== '' ? (int) $roleGroupId : null;
+        if ($roleGroupId !== null && !$this->permissionService->userBelongsToRoleGroup($user, $roleGroupId)) {
+            return response()->json(['success' => false, 'message' => 'No perteneces a ese grupo de calendario'], 403);
+        }
+        if ($roleGroupId === null) {
+            $membership = CalendarRoleGroupMember::where('user_id', $user->getIdUsuario())->first();
+            if ($membership !== null) {
+                $roleGroupId = (int) $membership->role_group_id;
+            }
+        }
+
+        $roleGroupMemberIds = null;
+        if ($roleGroupId !== null) {
+            $roleGroupMemberIds = CalendarRoleGroupMember::where('role_group_id', $roleGroupId)
+                ->pluck('user_id')
+                ->unique()
+                ->values()
+                ->all();
         }
 
         // Parsear responsable_ids (array o CSV)
@@ -620,7 +736,8 @@ class CalendarActivityController extends Controller
             $responsableIds,
             $contenedorIds,
             $request->input('status'),
-            $request->input('priority') !== null ? (int) $request->input('priority') : null
+            $request->input('priority') !== null ? (int) $request->input('priority') : null,
+            $roleGroupMemberIds
         );
         return response()->json(['success' => true, 'data' => $data, 'message' => 'Progreso obtenido correctamente']);
     }
@@ -673,9 +790,19 @@ class CalendarActivityController extends Controller
         if (!$this->permissionService->canManageActivities(JWTAuth::parseToken()->authenticate())) {
             return response()->json(['success' => false, 'message' => 'Sin permiso para reordenar el catálogo'], 403);
         }
+        $user = JWTAuth::parseToken()->authenticate();
+        $roleGroupId = $this->resolveRoleGroupIdForUser($request, $user);
+        if ($roleGroupId === null) {
+            return response()->json(['success' => false, 'message' => 'El usuario no tiene grupo de calendario asignado'], 400);
+        }
         $request->validate(['ids' => 'required|array', 'ids.*' => 'integer|exists:calendar_activities,id']);
+        $ids = $request->input('ids');
+        $countInGroup = CalendarActivity::whereIn('id', $ids)->where('role_group_id', $roleGroupId)->count();
+        if ($countInGroup !== count($ids)) {
+            return response()->json(['success' => false, 'message' => 'Solo se pueden reordenar actividades de tu grupo'], 403);
+        }
         try {
-            $this->activityService->reorderActivities($request->input('ids'));
+            $this->activityService->reorderActivities($ids, $roleGroupId);
             return response()->json(['success' => true, 'message' => 'Catálogo reordenado correctamente']);
         } catch (\Exception $e) {
             Log::error('CalendarActivityController@reorderCatalog: ' . $e->getMessage());
@@ -690,14 +817,29 @@ class CalendarActivityController extends Controller
     {
         try {
             $user = JWTAuth::parseToken()->authenticate();
-            $calendarId = Calendar::value('id');
-            if (!$calendarId) {
+            $calendar = Calendar::where('user_id', $user->getIdUsuario())->first();
+            if (!$calendar) {
                 return response()->json(['success' => true, 'data' => [], 'message' => 'Sin colores de consolidado']);
             }
-            $configs = CalendarConsolidadoColorConfig::where('calendar_id', $calendarId)->get();
+
+            // Resolver grupo de rol del calendario (o del usuario)
+            $roleGroupId = $calendar->role_group_id;
+            if (!$roleGroupId) {
+                $member = CalendarRoleGroupMember::where('user_id', $user->getIdUsuario())->first();
+                if ($member) {
+                    $roleGroupId = $member->role_group_id;
+                }
+            }
+
+            if (!$roleGroupId) {
+                return response()->json(['success' => true, 'data' => [], 'message' => 'Sin colores de consolidado']);
+            }
+
+            $configs = CalendarConsolidadoColorConfig::where('role_group_id', $roleGroupId)->get();
             $data = $configs->map(fn ($c) => [
                 'id' => $c->id,
                 'calendar_id' => $c->calendar_id,
+                'role_group_id' => $c->role_group_id,
                 'contenedor_id' => $c->contenedor_id,
                 'color_code' => $c->color_code,
             ]);
@@ -724,15 +866,36 @@ class CalendarActivityController extends Controller
         ]);
         try {
             $user = JWTAuth::parseToken()->authenticate();
-            $calendarId = Calendar::where('user_id', $user->getIdUsuario())->value('id');
-            if (!$calendarId) {
-                $cal = Calendar::firstOrCreate(['user_id' => $user->getIdUsuario()], ['user_id' => $user->getIdUsuario()]);
-                $calendarId = $cal->id;
+            $calendar = Calendar::firstOrCreate(
+                ['user_id' => $user->getIdUsuario()],
+                ['user_id' => $user->getIdUsuario()]
+            );
+
+            // Grupo de rol asociado al calendario / usuario
+            $roleGroupId = $calendar->role_group_id;
+            if (!$roleGroupId) {
+                $member = CalendarRoleGroupMember::where('user_id', $user->getIdUsuario())->first();
+                if ($member) {
+                    $roleGroupId = $member->role_group_id;
+                    $calendar->role_group_id = $roleGroupId;
+                    $calendar->save();
+                }
             }
+
+            if (!$roleGroupId) {
+                return response()->json(['success' => false, 'message' => 'El usuario no tiene grupo de calendario asignado'], 400);
+            }
+
             foreach ($request->input('items') as $item) {
                 CalendarConsolidadoColorConfig::updateOrCreate(
-                    ['calendar_id' => $calendarId, 'contenedor_id' => $item['contenedor_id']],
-                    ['color_code' => $item['color_code']]
+                    [
+                        'role_group_id' => $roleGroupId,
+                        'contenedor_id' => $item['contenedor_id'],
+                    ],
+                    [
+                        'calendar_id' => $calendar->id,
+                        'color_code' => $item['color_code'],
+                    ]
                 );
             }
             return response()->json(['success' => true, 'message' => 'Colores de consolidado actualizados correctamente']);
@@ -740,5 +903,42 @@ class CalendarActivityController extends Controller
             Log::error('CalendarActivityController@updateConsolidadoColor: ' . $e->getMessage());
             return response()->json(['success' => false, 'message' => 'Error al actualizar colores de consolidado'], 500);
         }
+    }
+
+    /**
+     * Resuelve el role_group_id para el usuario: query role_group_id (validando membresía) o primera membresía.
+     */
+    private function resolveRoleGroupIdForUser(Request $request, $user): ?int
+    {
+        $roleGroupId = $request->input('role_group_id');
+        $roleGroupId = $roleGroupId !== null && $roleGroupId !== '' ? (int) $roleGroupId : null;
+        if ($roleGroupId !== null && !$this->permissionService->userBelongsToRoleGroup($user, $roleGroupId)) {
+            return null;
+        }
+        if ($roleGroupId === null) {
+            $member = CalendarRoleGroupMember::where('user_id', $user->getIdUsuario())->first();
+            $roleGroupId = $member ? (int) $member->role_group_id : null;
+        }
+        return $roleGroupId;
+    }
+
+    /**
+     * Indica si el grupo de calendario del usuario usa consolidado.
+     * Si el calendario no tiene role_group_id, se obtiene de la membresía del usuario.
+     */
+    private function groupUsaConsolidado(?Calendar $calendar, ?int $userId): bool
+    {
+        $roleGroupId = null;
+        if ($calendar && $calendar->role_group_id) {
+            $roleGroupId = $calendar->role_group_id;
+        } elseif ($userId) {
+            $roleGroupId = CalendarRoleGroupMember::where('user_id', $userId)->value('role_group_id');
+        }
+        if (!$roleGroupId) {
+            return true;
+        }
+        $group = CalendarRoleGroup::find($roleGroupId);
+
+        return $group ? (bool) $group->usa_consolidado : true;
     }
 }

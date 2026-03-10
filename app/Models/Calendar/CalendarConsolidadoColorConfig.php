@@ -12,6 +12,7 @@ class CalendarConsolidadoColorConfig extends Model
 
     protected $fillable = [
         'calendar_id',
+        'role_group_id',
         'contenedor_id',
         'color_code',
     ];
@@ -24,6 +25,11 @@ class CalendarConsolidadoColorConfig extends Model
     public function calendar(): BelongsTo
     {
         return $this->belongsTo(Calendar::class, 'calendar_id');
+    }
+
+    public function roleGroup(): BelongsTo
+    {
+        return $this->belongsTo(CalendarRoleGroup::class, 'role_group_id');
     }
 
     public function contenedor(): BelongsTo

@@ -32,6 +32,11 @@ class CalendarController extends Controller
         try {
             $user = JWTAuth::parseToken()->authenticate();
             $userId = $user->getIdUsuario();
+            $roleGroupId = $request->input('role_group_id');
+            $roleGroupId = $roleGroupId !== null && $roleGroupId !== '' ? (int) $roleGroupId : null;
+            if ($roleGroupId !== null && !$this->permissionService->userBelongsToRoleGroup($user, $roleGroupId)) {
+                return response()->json(['success' => false, 'message' => 'No perteneces a ese grupo de calendario'], 403);
+            }
             $isJefe = $this->permissionService->isJefeImportaciones($user);
             // Por defecto, si no es jefe, solo ve eventos donde está asignado. Pero si eligió "Todos" (no envía responsable_id ni responsable_ids), debe ver lo mismo que el jefe.
             $onlyMyCharges = !$isJefe;
@@ -96,7 +101,8 @@ class CalendarController extends Controller
                 $request->input('priority') !== null ? (int) $request->input('priority') : null,
                 $onlyMyCharges,
                 $page,
-                $perPage
+                $perPage,
+                $roleGroupId
             );
 
             // Respuesta paginada
