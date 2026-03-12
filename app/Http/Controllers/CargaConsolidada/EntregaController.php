@@ -2315,6 +2315,7 @@ class EntregaController extends Controller
         ]);
     }
     /**
+     * 
      * @OA\Get(
      *     path="/carga-consolidada/contenedor/entrega/entregas/detalle/{idCotizacion}",
      *     tags={"Entregas"},
@@ -3853,6 +3854,51 @@ Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, 
     }
 
     /**
+     * Registra el PDF de cargo de entrega firmado en la tabla de conformidad (Lima o Provincia)
+     * para que aparezca en getEntregasDetalle bajo el key 'conformidad'.
+     */
+    private function registrarCargoEntregaEnConformidad(int $idContenedor, int $idCotizacion, string $relativePath, string $fullPath): void
+    {
+        $formLima = DB::table('consolidado_delivery_form_lima')
+            ->where('id_cotizacion', $idCotizacion)
+            ->where('id_contenedor', $idContenedor)
+            ->value('id');
+
+        $formProvince = DB::table('consolidado_delivery_form_province')
+            ->where('id_cotizacion', $idCotizacion)
+            ->where('id_contenedor', $idContenedor)
+            ->value('id');
+
+        // Misma lógica que getEntregasDetalle: Provincia (0) tiene preferencia si existe, sino Lima (1)
+        if ($formProvince) {
+            $tableName = 'consolidado_delivery_form_province_conformidad';
+            $formIdField = 'consolidado_delivery_form_province_id';
+            $formId = $formProvince;
+        } elseif ($formLima) {
+            $tableName = 'consolidado_delivery_form_lima_conformidad';
+            $formIdField = 'consolidado_delivery_form_lima_id';
+            $formId = $formLima;
+        } else {
+            return;
+        }
+
+        $fileSize = file_exists($fullPath) ? filesize($fullPath) : null;
+        $filename = basename($fullPath);
+
+        DB::table($tableName)->insert([
+            $formIdField => $formId,
+            'id_cotizacion' => $idCotizacion,
+            'id_contenedor' => $idContenedor,
+            'file_path' => $relativePath,
+            'file_type' => 'application/pdf',
+            'file_size' => $fileSize,
+            'file_original_name' => $filename,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    }
+
+    /**
      * Firma el cargo de entrega: recibe nombre, dni y firma (base64).
      * Genera el PDF con el blade cargo_entrega, lo guarda y envía WhatsApp.
      */
@@ -3934,6 +3980,9 @@ Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, 
                 ->where('id', $idCotizacion)
                 ->where('id_contenedor', $idContenedor)
                 ->update(['cargo_entrega_pdf_firmado_url' => $relativePath]);
+
+            // Registrar el PDF firmado en la tabla de conformidad (Lima o Provincia) según el tipo de formulario
+            $this->registrarCargoEntregaEnConformidad($idContenedor, $idCotizacion, $relativePath, $publicDir . DIRECTORY_SEPARATOR . $filename);
 
             $numeroWhatsapp = preg_replace('/[^0-9]/', '', $row->telefono ?? '');
             if (strlen($numeroWhatsapp) < 9) {
