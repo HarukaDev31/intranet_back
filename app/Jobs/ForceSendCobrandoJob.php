@@ -61,7 +61,7 @@ class ForceSendCobrandoJob implements ShouldQueue
             $contenedor = Contenedor::findOrFail($this->idContainer);
             $carga = $contenedor->carga;
             $fechaCierre = $contenedor->f_cierre;
-
+            $anioContenedor = Carbon::parse($fechaCierre)->year;
             // Formatear fecha de cierre
             $fCierre = Carbon::parse($fechaCierre)->locale('es')->format('d F');
             $meses = [
@@ -105,8 +105,9 @@ class ForceSendCobrandoJob implements ShouldQueue
                 $pendiente = 0;
             }
 
+            // Tomar el año de la fecha de inicio del contenedor
             $message = "Reserva de espacio:\n" .
-                "*Consolidado #" . $carga . "-2025*\n\n" .
+                "*Consolidado #" . $carga . "-$anioContenedor*\n\n" .
                 "Ahora tienes que hacer el pago del CBM preliminar para poder subir su carga en nuestro contenedor.\n\n" .
                 "☑ CBM Preliminar: " . $volumen . " cbm\n" .
                 "☑ Costo CBM: $" . $valorCot . "\n";
