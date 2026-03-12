@@ -82,6 +82,9 @@ class CalculadoraImportacionService
                 'tarifa_descuento' => $data['tarifaDescuento'] ?? 0,
                 'tc' => $tipoCambio,
                 'estado' => CalculadoraImportacion::ESTADO_PENDIENTE,
+                'es_imo' => !empty($data['es_imo']),
+                'usa_yuan' => !empty($data['usa_yuan']),
+                'tc_yuan_usado' => isset($data['tc_yuan_usado']) ? $data['tc_yuan_usado'] : null,
 
             ]);
             $totalProductos = 0;
@@ -221,6 +224,9 @@ class CalculadoraImportacionService
                 'tarifa' => $data['tarifa']['tarifa'] ?? $calculadora->tarifa,
                 'tarifa_descuento' => $data['tarifaDescuento'] ?? $calculadora->tarifa_descuento,
                 'tc' => $tipoCambio,
+                'es_imo' => !empty($data['es_imo']),
+                'usa_yuan' => !empty($data['usa_yuan']),
+                'tc_yuan_usado' => array_key_exists('tc_yuan_usado', $data) ? $data['tc_yuan_usado'] : $calculadora->tc_yuan_usado,
             ]);
 
             // Obtener proveedores existentes con sus códigos antes de eliminarlos
@@ -469,7 +475,7 @@ class CalculadoraImportacionService
      */
     public function obtenerCalculo(int $id): ?CalculadoraImportacion
     {
-        return CalculadoraImportacion::with(['proveedores.productos', 'cliente'])->find($id);
+        return CalculadoraImportacion::with(['proveedores.productos', 'cliente', 'contenedor.tcYuan'])->find($id);
     }
 
     /**

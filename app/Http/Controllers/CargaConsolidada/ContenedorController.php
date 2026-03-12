@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\CargaConsolidada\Contenedor;
 use App\Models\CargaConsolidada\ContenedorPasos;
+use App\Models\CargaConsolidada\ContenedorTcYuan;
 use App\Models\Usuario;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
@@ -14,6 +15,7 @@ use App\Jobs\ProcessPackingListUploadJob;
 use App\Models\CargaConsolidada\Cotizacion;
 use App\Models\CargaConsolidada\CotizacionProveedor;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use App\Models\CalculadoraImportacion;
 use App\Models\Notificacion;
@@ -117,7 +119,7 @@ class ContenedorController extends Controller
     {
         try {
 
-            $query = Contenedor::with('pais');
+            $query = Contenedor::with(['pais', 'tcYuan']);
             $user = JWTAuth::parseToken()->authenticate();
             // Aceptar completado como booleano; si viene por query puede ser string "true"/"false"
             $completado = filter_var($request->completado, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
@@ -288,6 +290,8 @@ class ContenedorController extends Controller
                     'valor_fob' => $c->valor_fob,
                     'valor_flete' => $c->valor_flete,
                     'costo_destino' => $c->costo_destino,
+                    'limite_cbm_imo' => $c->limite_cbm_imo,
+                    'tc_yuan' => $c->tcYuan ? (float) $c->tcYuan->tc_yuan : null,
                     //colocar decimales
                     'cbm_total_peru' => number_format($cbm_total_peru, 2),
                     'cbm_total_china' => number_format($cbm_total_china, 2),
@@ -344,6 +348,8 @@ class ContenedorController extends Controller
     {
         try {
             $data = $request->all();
+                $tcYuan = isset($data['tc_yuan']) ? $data['tc_yuan'] : null;
+                unset($data['tc_yuan']);
                 if ($data['id']) {
                     $contenedor = Contenedor::find($data['id']);
                     $contenedor->update($data);
@@ -364,7 +370,12 @@ class ContenedorController extends Controller
                     $contenedor = Contenedor::create($data);
                     $this->generateSteps($contenedor->id);
             }
-
+                if ($tcYuan !== null && $tcYuan !== '') {
+                    ContenedorTcYuan::updateOrCreate(
+                        ['id_contenedor' => $contenedor->id],
+                        ['tc_yuan' => $tcYuan]
+                    );
+                }
 
             return response()->json([
                 "status"         => true,
@@ -487,11 +498,12 @@ class ContenedorController extends Controller
      */
     public function show(Request $request, $id)
     {
-        $contenedor = Contenedor::with('pais')->find($id);
+        $contenedor = Contenedor::with(['pais', 'tcYuan'])->find($id);
         if (!$contenedor) {
             return response()->json(['success' => false, 'message' => 'Contenedor no encontrado'], 404);
         }
         $data = $contenedor->toArray();
+        $data['tc_yuan'] = $contenedor->tcYuan ? (float) $contenedor->tcYuan->tc_yuan : null;
         $user = JWTAuth::parseToken()->authenticate();
         $effectiveRole = $user->getNombreGrupo();
         if ($user->getNombreGrupo() == Usuario::ROL_JEFE_IMPORTACION && $request->filled('role')) {
@@ -801,10 +813,10 @@ class ContenedorController extends Controller
      * )
      */
     public function getCargasDisponiblesDropdown(Request $request){
-        $year = $request->year?$request->year:date('Y');
-        $cargas = Contenedor::where('empresa', '!=', 1)
+        $year = $request->year ? $request->year : date('Y');
+        $cargas = Contenedor::with('tcYuan')
+            ->where('empresa', '!=', 1)
             ->whereYear('f_inicio', $year)
-            //get row with f_inicio null where year is 2025
             ->where(function($query) use ($year){
                 $query->whereYear('f_inicio', $year)
                     ->orWhereNull('f_inicio');
@@ -812,15 +824,78 @@ class ContenedorController extends Controller
             ->where('estado_china', '!=', Contenedor::CONTEDOR_CERRADO)
             ->orderByRaw('CAST(carga AS UNSIGNED) DESC')
             ->get();
-        //return value label 
-        return $cargas->map(function($carga){
+        $data = $cargas->map(function($carga){
             return [
                 'value' => $carga->id,
-                'label' => 'Contenedor #'.$carga->carga.' - '.Carbon::parse($carga->f_inicio??'2025-01-01')->format('Y'),
+                'label' => 'Contenedor #'.$carga->carga.' - '.Carbon::parse($carga->f_inicio ?? '2025-01-01')->format('Y'),
+                'tc_yuan' => $carga->tcYuan ? (float) $carga->tcYuan->tc_yuan : null,
             ];
         });
-        return response()->json(['data' => $cargas, 'success' => true]);
+        return response()->json(['data' => $data, 'success' => true]);
     }
+
+    /** Clave de configuración para TC Yuan global (vista consolidados). */
+    /**
+     * GET TC Yuan global (para barra superior en vista consolidados).
+     * Devuelve el valor vigente = último registro del historial.
+     */
+    public function getTcYuanGlobal()
+    {
+        try {
+            if (Schema::hasTable('tc_yuan_global_historial')) {
+                $row = DB::table('tc_yuan_global_historial')->orderByDesc('id')->first();
+                if ($row && $row->tc_yuan !== null) {
+                    return response()->json(['success' => true, 'tc_yuan' => (float) $row->tc_yuan]);
+                }
+            }
+            // Fallback a sistema_config por compatibilidad
+            if (Schema::hasTable('sistema_config')) {
+                $row = DB::table('sistema_config')->where('key', 'tc_yuan_global')->first();
+                $value = $row && $row->value !== null && $row->value !== '' ? (float) $row->value : null;
+                return response()->json(['success' => true, 'tc_yuan' => $value]);
+            }
+            return response()->json(['success' => true, 'tc_yuan' => null]);
+        } catch (\Exception $e) {
+            Log::error('Error al obtener TC Yuan global: ' . $e->getMessage());
+            return response()->json(['success' => true, 'tc_yuan' => null]);
+        }
+    }
+
+    /**
+     * PUT/POST TC Yuan global (guardar desde barra superior).
+     * Crea un nuevo registro en el historial y cierra el anterior (actualiza updated_at).
+     */
+    public function updateTcYuanGlobal(Request $request)
+    {
+        $request->validate(['tc_yuan' => 'nullable|numeric|min:0']);
+        $value = $request->input('tc_yuan');
+        if ($value !== null && is_string($value)) {
+            $value = trim($value) === '' ? null : $value;
+        }
+        $v = $value !== null && $value !== '' ? (string) $value : null;
+        try {
+            if (!Schema::hasTable('tc_yuan_global_historial')) {
+                return response()->json(['success' => false, 'message' => 'Tabla tc_yuan_global_historial no existe. Ejecute: php artisan migrate.'], 503);
+            }
+            $now = now();
+            // Cerrar el registro vigente actual (actualizar su updated_at)
+            $ultimo = DB::table('tc_yuan_global_historial')->orderByDesc('id')->first();
+            if ($ultimo) {
+                DB::table('tc_yuan_global_historial')->where('id', $ultimo->id)->update(['updated_at' => $now]);
+            }
+            // Crear nuevo registro (vigente: solo created_at; updated_at = null hasta el próximo guardado)
+            DB::table('tc_yuan_global_historial')->insert([
+                'tc_yuan' => $v,
+                'created_at' => $now,
+                'updated_at' => null,
+            ]);
+            return response()->json(['success' => true, 'tc_yuan' => $v !== null ? (float) $v : null]);
+        } catch (\Exception $e) {
+            Log::error('Error al guardar TC Yuan global: ' . $e->getMessage());
+            return response()->json(['success' => false, 'message' => 'Error al guardar: ' . $e->getMessage()], 500);
+        }
+    }
+
     /**
      * @OA\Post(
      *     path="/carga-consolidada/cotizaciones/mover-consolidado",

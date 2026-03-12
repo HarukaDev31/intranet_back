@@ -40,6 +40,9 @@ class CalculadoraImportacion extends Model
         'logistica',
         'estado',
         'id_carga_consolidada_contenedor',
+        'es_imo',
+        'usa_yuan',
+        'tc_yuan_usado',
     ];
 
     protected $casts = [
@@ -53,7 +56,10 @@ class CalculadoraImportacion extends Model
         'total_impuestos' => 'decimal:10',
         'logistica' => 'decimal:10',
         'estado' => 'string',
-        'id_carga_consolidada_contenedor' => 'integer'
+        'id_carga_consolidada_contenedor' => 'integer',
+        'es_imo' => 'boolean',
+        'usa_yuan' => 'boolean',
+        'tc_yuan_usado' => 'decimal:8',
     ];
 
         // Constantes para los estados

@@ -56,7 +56,8 @@ class Contenedor extends Model
         'multa',
         'observaciones',
         'fecha_documentacion_max',
-        'f_inicio'
+        'f_inicio',
+        'limite_cbm_imo',
     ];
 
     /**
@@ -79,6 +80,7 @@ class Contenedor extends Model
         'ajuste_valor' => 'decimal:2',
         'multa' => 'decimal:2',
         'f_inicio' => 'date',
+        'limite_cbm_imo' => 'decimal:2',
     ];
 
     /**
@@ -150,6 +152,14 @@ class Contenedor extends Model
     public function pais()
     {
         return $this->belongsTo(Pais::class, 'id_pais', 'ID_Pais');
+    }
+
+    /**
+     * TC Yuan vigente del consolidado (periodo dado por created_at/updated_at).
+     */
+    public function tcYuan()
+    {
+        return $this->hasOne(ContenedorTcYuan::class, 'id_contenedor');
     }
 
     /**

@@ -432,6 +432,13 @@ class CotizacionController extends Controller
                     FROM contenedor_consolidado_cotizacion
                     WHERE id_contenedor = ' . $idContenedor . '
                     AND estado_cotizador = "CONFIRMADO"
+                    AND es_imo = 1
+                ) as cbm_total_imo'),
+                DB::raw('(
+                    SELECT COALESCE(SUM(volumen), 0)
+                    FROM contenedor_consolidado_cotizacion
+                    WHERE id_contenedor = ' . $idContenedor . '
+                    AND estado_cotizador = "CONFIRMADO"
                     AND id_usuario = ' . $userId . '
                 ) as cbm_vendido'),
                 DB::raw('(
@@ -508,6 +515,11 @@ class CotizacionController extends Controller
                 'label' => '',
                 'icon' => 'https://upload.wikimedia.org/wikipedia/commons/c/cf/Flag_of_Peru.svg'
             ],
+            'cbm_total_imo' => [
+                'value' => $headers ? $headers->cbm_total_imo : 0,
+                'label' => 'CBM IMO',
+                'icon' => 'mdi:biohazard'
+            ],
             'cbm_vendido' => [
                 'value' => $headers ? $headers->cbm_vendido : 0,
                 'label' => 'CBM Vendido',
@@ -548,7 +560,7 @@ class CotizacionController extends Controller
 
         ];
         $roleAllowedMap = [
-            Usuario::ROL_COTIZADOR => ['cbm_vendido', 'cbm_pendiente', 'cbm_embarcado', 'qty_items', 'cbm_total_peru', 'cbm_total_china'],
+            Usuario::ROL_COTIZADOR => ['cbm_vendido', 'cbm_pendiente', 'cbm_embarcado', 'qty_items', 'cbm_total_peru', 'cbm_total_china','cbm_total_imo'],
             Usuario::ROL_ALMACEN_CHINA => ['cbm_total_china', 'cbm_total_peru', 'qty_items'],
             Usuario::ROL_ADMINISTRACION => ['cbm_total_china', 'cbm_total_peru', 'qty_items', 'total_logistica', 'total_logistica_pagado'],
             Usuario::ROL_COORDINACION => ['cbm_total_china', 'cbm_total_peru', 'qty_items', 'total_logistica', 'total_logistica_pagado'],

@@ -84,6 +84,7 @@ class Cotizacion extends Model
         'autosigned_contract_at',
         'cotizacion_contrato_autosigned_url',
         'from_calculator',
+        'es_imo',
         'id_contenedor_destino',
         'nota_contabilidad',
     ];
@@ -116,6 +117,7 @@ class Cotizacion extends Model
         'delivery_form_registered_at' => 'date',
         'total_pago_delivery' => 'decimal:2',
         'from_calculator' => 'boolean',
+        'es_imo' => 'boolean',
     ];
 
     /**

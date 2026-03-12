@@ -533,11 +533,53 @@ class CalculadoraImportacionController extends Controller
                 'proveedores.*.productos.*.antidumpingCU' => 'nullable|numeric|min:0',
                 'proveedores.*.productos.*.adValoremP' => 'nullable|numeric|min:0',
                 'tarifaTotalExtraProveedor' => 'nullable|numeric|min:0',
-                'tarifaTotalExtraItem' => 'nullable|numeric|min:0'
+                'tarifaTotalExtraItem' => 'nullable|numeric|min:0',
+                'es_imo' => 'nullable|boolean',
             ]);
 
             $data = $request->all();
             $data['created_by'] = auth()->id();
+
+            // Validar límite de CBM IMO por contenedor (si aplica)
+            if (!empty($data['es_imo']) && !empty($data['id_carga_consolidada_contenedor'])) {
+                $contenedorId = (int) $data['id_carga_consolidada_contenedor'];
+                $contenedor = Contenedor::find($contenedorId);
+
+                if ($contenedor && $contenedor->limite_cbm_imo !== null) {
+                    // CBM total del payload actual
+                    $nuevoCbm = 0.0;
+                    if (!empty($data['proveedores']) && is_array($data['proveedores'])) {
+                        foreach ($data['proveedores'] as $proveedor) {
+                            $nuevoCbm += (float) ($proveedor['cbm'] ?? 0);
+                        }
+                    }
+
+                    // CBM IMO ya registrado en otras calculadoras para este contenedor
+                    $query = CalculadoraImportacion::query()
+                        ->join('calculadora_importacion_proveedores as cip', 'calculadora_importacion.id', '=', 'cip.id_calculadora_importacion')
+                        ->where('calculadora_importacion.id_carga_consolidada_contenedor', $contenedorId)
+                        ->where('calculadora_importacion.es_imo', true);
+
+                    // En edición, excluir la propia calculadora de la suma
+                    if (!empty($data['id'])) {
+                        $query->where('calculadora_importacion.id', '!=', (int) $data['id']);
+                    }
+
+                    $cbmExistente = (float) $query->sum('cip.cbm');
+                    $cbmTotal = $cbmExistente + $nuevoCbm;
+
+                    if ($cbmTotal > (float) $contenedor->limite_cbm_imo) {
+                        return response()->json([
+                            'success' => false,
+                            'message' => sprintf(
+                                'No se puede guardar la cotización IMO: el volumen total IMO (%.2f CBM) supera el límite del consolidado (%.2f CBM).',
+                                $cbmTotal,
+                                (float) $contenedor->limite_cbm_imo
+                            ),
+                        ], 422);
+                    }
+                }
+            }
 
             // Si viene ID, es una actualización
             if ($request->has('id') && $request->id) {
@@ -804,7 +846,8 @@ class CalculadoraImportacionController extends Controller
                 // Actualizar from_calculator, id_usuario y cotizacion_file_url (Excel)
                 $updateData = [
                     'id_usuario' => $calculadora->id_usuario,
-                    'from_calculator' => true
+                    'from_calculator' => true,
+                    'es_imo' => (bool) ($data['es_imo'] ?? $calculadora->es_imo ?? false),
                 ];
                 if ($calculadora->url_cotizacion) {
                     $updateData['cotizacion_file_url'] = $calculadora->url_cotizacion;
@@ -899,11 +942,17 @@ class CalculadoraImportacionController extends Controller
 
             $totales = $this->calculadoraImportacionService->calcularTotales($calculadora);
 
+            $tcYuanActual = null;
+            if ($calculadora->contenedor && $calculadora->contenedor->relationLoaded('tcYuan') && $calculadora->contenedor->tcYuan) {
+                $tcYuanActual = (float) $calculadora->contenedor->tcYuan->tc_yuan;
+            }
+
             return response()->json([
                 'success' => true,
                 'data' => [
                     'calculadora' => $calculadora,
-                    'totales' => $totales
+                    'totales' => $totales,
+                    'tc_yuan_actual' => $tcYuanActual,
                 ]
             ]);
         } catch (\Exception $e) {
@@ -1127,6 +1176,7 @@ class CalculadoraImportacionController extends Controller
                                 'id_usuario' => $calculadora->id_usuario ?? $currentUserId,
                                 'from_calculator' => true,
                                 'cotizacion_file_url' => $calculadora->url_cotizacion,
+                                'es_imo' => (bool) ($data['es_imo'] ?? $calculadora->es_imo ?? false),
                             ]);
 
                             $calculadora->id_cotizacion = $cotizacionId;
