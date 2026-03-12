@@ -11,6 +11,7 @@ use App\Models\Calendar\CalendarRoleGroup;
 use App\Models\Calendar\CalendarUserColorConfig;
 use App\Models\Calendar\CalendarConsolidadoColorConfig;
 use App\Models\Calendar\CalendarRoleGroupMember;
+use App\Models\Calendar\CalendarEventSubtask;
 use App\Models\Usuario;
 use App\Models\CargaConsolidada\Contenedor;
 use App\Services\Calendar\CalendarActivityService;
@@ -19,8 +20,10 @@ use App\Services\Calendar\CalendarPermissionService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Tymon\JWTAuth\Facades\JWTAuth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\DB;
 use App\Traits\FileTrait;
 class CalendarActivityController extends Controller
 {
@@ -45,6 +48,7 @@ class CalendarActivityController extends Controller
      */
     public function getCalendarConfig(Request $request): JsonResponse
     {
+        $startedAt = microtime(true);
         try {
             $user = JWTAuth::parseToken()->authenticate();
             $roleGroupId = $request->input('role_group_id');
@@ -54,13 +58,21 @@ class CalendarActivityController extends Controller
             }
             $config = $this->permissionService->getCalendarConfigForUser($user, $roleGroupId);
 
+            Log::info('calendar.getCalendarConfig OK', [
+                'user_id' => $user->getIdUsuario(),
+                'role_group_id' => $roleGroupId,
+                'duration_ms' => (microtime(true) - $startedAt) * 1000,
+            ]);
+
             return response()->json([
                 'success' => true,
                 'data' => $config,
                 'message' => 'Configuración de calendario obtenida correctamente',
             ]);
         } catch (\Exception $e) {
-            Log::error('CalendarActivityController@getCalendarConfig: ' . $e->getMessage());
+            Log::error('CalendarActivityController@getCalendarConfig: ' . $e->getMessage(), [
+                'duration_ms' => (microtime(true) - $startedAt) * 1000,
+            ]);
             return response()->json([
                 'success' => false,
                 'message' => 'Error al obtener configuración de calendario',
@@ -73,29 +85,45 @@ class CalendarActivityController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
+        $startedAt = microtime(true);
         try {
             $user = JWTAuth::parseToken()->authenticate();
             $roleGroupId = $this->resolveRoleGroupIdForUser($request, $user);
             if ($roleGroupId === null) {
                 return response()->json(['success' => false, 'message' => 'El usuario no tiene grupo de calendario asignado'], 400);
             }
-            $activities = $this->activityService->listActivities($roleGroupId);
-            $data = $activities->map(fn ($a) => [
-                'id' => $a->id,
-                'name' => $a->name,
-                'orden' => $a->orden ?? 0,
-                'color_code' => $a->color_code,
-                'allow_saturday' => (bool) $a->allow_saturday,
-                'allow_sunday' => (bool) $a->allow_sunday,
-                'default_priority' => (int) ($a->default_priority ?? 0),
+
+            $cacheKey = 'calendar:activity-catalog:role_group:' . $roleGroupId;
+            $data = Cache::remember($cacheKey, 300, function () use ($roleGroupId) {
+                $activities = $this->activityService->listActivities($roleGroupId);
+                return $activities->map(function ($a) {
+                    return [
+                        'id' => $a->id,
+                        'name' => $a->name,
+                        'orden' => $a->orden ?? 0,
+                        'color_code' => $a->color_code,
+                        'allow_saturday' => (bool) $a->allow_saturday,
+                        'allow_sunday' => (bool) $a->allow_sunday,
+                        'default_priority' => (int) ($a->default_priority ?? 0),
+                    ];
+                })->values()->all();
+            });
+
+            Log::info('calendar.activityCatalog OK', [
+                'role_group_id' => $roleGroupId,
+                'items' => count($data),
+                'duration_ms' => (microtime(true) - $startedAt) * 1000,
             ]);
+
             return response()->json([
                 'success' => true,
                 'data' => $data,
                 'message' => 'Catálogo de actividades obtenido',
             ]);
         } catch (\Exception $e) {
-            Log::error('CalendarActivityController@index: ' . $e->getMessage());
+            Log::error('CalendarActivityController@index: ' . $e->getMessage(), [
+                'duration_ms' => (microtime(true) - $startedAt) * 1000,
+            ]);
             return response()->json(['success' => false, 'message' => 'Error al listar actividades'], 500);
         }
     }
@@ -129,6 +157,7 @@ class CalendarActivityController extends Controller
         }
         try {
             $activity = $this->activityService->createActivity($name, $roleGroupId);
+            Cache::forget('calendar:activity-catalog:role_group:' . $roleGroupId);
             return response()->json([
                 'success' => true,
                 'data' => [
@@ -185,6 +214,7 @@ class CalendarActivityController extends Controller
         if (!$activity) {
             return response()->json(['success' => false, 'message' => 'Actividad no encontrada'], 404);
         }
+        Cache::forget('calendar:activity-catalog:role_group:' . $roleGroupId);
         return response()->json([
             'success' => true,
             'data' => [
@@ -225,6 +255,7 @@ class CalendarActivityController extends Controller
                     'message' => 'No se puede eliminar porque está siendo usada en eventos',
                 ], 400);
             }
+            Cache::forget('calendar:activity-catalog:role_group:' . $roleGroupId);
             return response()->json(['success' => true, 'message' => 'Actividad eliminada del catálogo']);
         } catch (\Exception $e) {
             Log::error('CalendarActivityController@destroy: ' . $e->getMessage());
@@ -502,19 +533,150 @@ class CalendarActivityController extends Controller
     }
 
     /**
+     * POST /api/calendar/charges/{chargeId}/subtasks
+     * Crear una subtarea para un responsable (charge) específico.
+     * Jefe: puede crear para cualquier responsable; Coordinación/Documentación: solo para su propio charge.
+     */
+    public function storeSubtask(Request $request, int $chargeId): JsonResponse
+    {
+        $v = Validator::make($request->all(), [
+            'name' => 'required|string|max:255',
+            'duration_hours' => 'nullable|integer|min:0',
+            'status' => 'nullable|string|in:PENDIENTE,PROGRESO,COMPLETADO',
+        ]);
+        if ($v->fails()) {
+            return response()->json(['success' => false, 'errors' => $v->errors()], 422);
+        }
+
+        $user = JWTAuth::parseToken()->authenticate();
+        $charge = CalendarEventCharge::find($chargeId);
+        if (!$charge) {
+            return response()->json(['success' => false, 'message' => 'Carga no encontrada'], 404);
+        }
+
+        $canChangeAny = $this->permissionService->canChangeAnyChargeStatus($user);
+        $isOwn = $charge->user_id === $user->getIdUsuario();
+        if (!$canChangeAny && !$isOwn) {
+            return response()->json(['success' => false, 'message' => 'No puedes gestionar subtareas de otro responsable'], 403);
+        }
+
+        $name = $request->input('name');
+        $duration = (int) $request->input('duration_hours', 0);
+        $status = $request->input('status', CalendarEventSubtask::STATUS_PENDIENTE);
+
+        $subtask = $this->eventService->createSubtask($chargeId, $name, $duration, $status);
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'id' => $subtask->id,
+                'calendar_event_charge_id' => $subtask->calendar_event_charge_id,
+                'name' => $subtask->name,
+                'duration_hours' => (int) $subtask->duration_hours,
+                'status' => $subtask->status,
+                'created_at' => $subtask->created_at ? $subtask->created_at->format('c') : null,
+                'updated_at' => $subtask->updated_at ? $subtask->updated_at->format('c') : null,
+            ],
+            'message' => 'Subtarea creada correctamente',
+        ], 201);
+    }
+
+    /**
+     * PUT /api/calendar/subtasks/{id}
+     * Actualizar una subtarea existente.
+     */
+    public function updateSubtask(Request $request, int $id): JsonResponse
+    {
+        $v = Validator::make($request->all(), [
+            'name' => 'nullable|string|max:255',
+            'duration_hours' => 'nullable|integer|min:0',
+            'status' => 'nullable|string|in:PENDIENTE,PROGRESO,COMPLETADO',
+        ]);
+        if ($v->fails()) {
+            return response()->json(['success' => false, 'errors' => $v->errors()], 422);
+        }
+
+        $user = JWTAuth::parseToken()->authenticate();
+        $subtask = CalendarEventSubtask::find($id);
+        if (!$subtask) {
+            return response()->json(['success' => false, 'message' => 'Subtarea no encontrada'], 404);
+        }
+
+        $charge = CalendarEventCharge::find($subtask->calendar_event_charge_id);
+        if (!$charge) {
+            return response()->json(['success' => false, 'message' => 'Carga asociada no encontrada'], 404);
+        }
+
+        $canChangeAny = $this->permissionService->canChangeAnyChargeStatus($user);
+        $isOwn = $charge->user_id === $user->getIdUsuario();
+        if (!$canChangeAny && !$isOwn) {
+            return response()->json(['success' => false, 'message' => 'No puedes gestionar subtareas de otro responsable'], 403);
+        }
+
+        $data = $request->only(['name', 'duration_hours', 'status']);
+        $updated = $this->eventService->updateSubtask($id, $data);
+        if (!$updated) {
+            return response()->json(['success' => false, 'message' => 'Subtarea no encontrada'], 404);
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'id' => $updated->id,
+                'calendar_event_charge_id' => $updated->calendar_event_charge_id,
+                'name' => $updated->name,
+                'duration_hours' => (int) $updated->duration_hours,
+                'status' => $updated->status,
+                'created_at' => $updated->created_at ? $updated->created_at->format('c') : null,
+                'updated_at' => $updated->updated_at ? $updated->updated_at->format('c') : null,
+            ],
+            'message' => 'Subtarea actualizada correctamente',
+        ]);
+    }
+
+    /**
+     * DELETE /api/calendar/subtasks/{id}
+     * Eliminar una subtarea existente.
+     */
+    public function destroySubtask(int $id): JsonResponse
+    {
+        $user = JWTAuth::parseToken()->authenticate();
+        $subtask = CalendarEventSubtask::find($id);
+        if (!$subtask) {
+            return response()->json(['success' => false, 'message' => 'Subtarea no encontrada'], 404);
+        }
+
+        $charge = CalendarEventCharge::find($subtask->calendar_event_charge_id);
+        if (!$charge) {
+            return response()->json(['success' => false, 'message' => 'Carga asociada no encontrada'], 404);
+        }
+
+        $canChangeAny = $this->permissionService->canChangeAnyChargeStatus($user);
+        $isOwn = $charge->user_id === $user->getIdUsuario();
+        if (!$canChangeAny && !$isOwn) {
+            return response()->json(['success' => false, 'message' => 'No puedes gestionar subtareas de otro responsable'], 403);
+        }
+
+        $deleted = $this->eventService->deleteSubtask($id);
+        if (!$deleted) {
+            return response()->json(['success' => false, 'message' => 'No se pudo eliminar la subtarea'], 500);
+        }
+
+        return response()->json(['success' => true, 'message' => 'Subtarea eliminada correctamente']);
+    }
+
+    /**
      * GET /api/calendar/responsables - Formato spec (id, nombre, email, avatar, color).
      * Query opcional: role_group_id. Si viene, devuelve solo miembros de ese grupo (validando que el usuario pertenezca).
      * Si no, usa el primer grupo del usuario o fallback legacy.
      */
     public function getResponsables(Request $request): JsonResponse
     {
+        $startedAt = microtime(true);
         try {
             $user = JWTAuth::parseToken()->authenticate();
             $calendar = Calendar::where('user_id', $user->getIdUsuario())->first();
             $calendarId = $calendar !== null ? $calendar->id : null;
-            $colorByUserId = $calendarId
-                ? CalendarUserColorConfig::where('calendar_id', $calendarId)->get()->keyBy('user_id')
-                : collect();
 
             $roleGroupId = $request->input('role_group_id');
             $roleGroupId = $roleGroupId !== null && $roleGroupId !== '' ? (int) $roleGroupId : null;
@@ -527,37 +689,59 @@ class CalendarActivityController extends Controller
                     ->where('role_group_id', $roleGroupId)->first();
             }
 
-            if ($member) {
-                $userIds = CalendarRoleGroupMember::where('role_group_id', $member->role_group_id)
-                    ->pluck('user_id')
-                    ->unique()
-                    ->values()
-                    ->all();
-                $users = Usuario::whereIn('ID_Usuario', $userIds)
-                    ->where('Nu_Estado', 1)
-                    ->orderBy('No_Nombres_Apellidos')
-                    ->get(['ID_Usuario', 'No_Usuario', 'No_Nombres_Apellidos', 'Txt_Email', 'Txt_Foto']);
-            } else {
-                // Sin grupo: fallback a roles legacy (Coordinación, Documentación, Jefe Importación)
-                $users = Usuario::whereHas('grupo', fn ($q) => $q->whereIn('No_Grupo', [Usuario::ROL_COORDINACION, Usuario::ROL_DOCUMENTACION, Usuario::ROL_JEFE_IMPORTACION]))
-                    ->where('Nu_Estado', 1)
-                    ->orderBy('No_Nombres_Apellidos')
-                    ->get(['ID_Usuario', 'No_Usuario', 'No_Nombres_Apellidos', 'Txt_Email', 'Txt_Foto']);
-            }
+            $groupKey = $member ? (int) $member->role_group_id : 0;
+            $cacheKey = 'calendar:responsables:user:' . $user->getIdUsuario() . ':group:' . $groupKey;
 
-            $data = $users->map(function ($u) use ($colorByUserId) {
-                $color = optional($colorByUserId->get($u->ID_Usuario))->color_code;
-                return [
-                    'id' => $u->ID_Usuario,
-                    'nombre' => $u->No_Nombres_Apellidos ?: $u->No_Usuario,
-                    'email' => $u->Txt_Email ?? null,
-                    'avatar' => $this->generateImageUrl($u->Txt_Foto ?? null),
-                    'color' => $color,
-                ];
+            $data = Cache::remember($cacheKey, 300, function () use ($calendarId, $member) {
+                $colorByUserId = $calendarId
+                    ? CalendarUserColorConfig::where('calendar_id', $calendarId)->get()->keyBy('user_id')
+                    : collect();
+
+                if ($member) {
+                    $userIds = CalendarRoleGroupMember::where('role_group_id', $member->role_group_id)
+                        ->pluck('user_id')
+                        ->unique()
+                        ->values()
+                        ->all();
+                    $users = Usuario::whereIn('ID_Usuario', $userIds)
+                        ->where('Nu_Estado', 1)
+                        ->orderBy('No_Nombres_Apellidos')
+                        ->get(['ID_Usuario', 'No_Usuario', 'No_Nombres_Apellidos', 'Txt_Email', 'Txt_Foto']);
+                } else {
+                    // Sin grupo: fallback a roles legacy (Coordinación, Documentación, Jefe Importación)
+                    $users = Usuario::whereHas('grupo', function ($q) {
+                        $q->whereIn('No_Grupo', [Usuario::ROL_COORDINACION, Usuario::ROL_DOCUMENTACION, Usuario::ROL_JEFE_IMPORTACION]);
+                    })
+                        ->where('Nu_Estado', 1)
+                        ->orderBy('No_Nombres_Apellidos')
+                        ->get(['ID_Usuario', 'No_Usuario', 'No_Nombres_Apellidos', 'Txt_Email', 'Txt_Foto']);
+                }
+
+                return $users->map(function ($u) use ($colorByUserId) {
+                    $color = optional($colorByUserId->get($u->ID_Usuario))->color_code;
+                    return [
+                        'id' => $u->ID_Usuario,
+                        'nombre' => $u->No_Nombres_Apellidos ?: $u->No_Usuario,
+                        'email' => $u->Txt_Email ?? null,
+                        'avatar' => $this->generateImageUrl($u->Txt_Foto ?? null),
+                        'color' => $color,
+                    ];
+                })->values()->all();
             });
+
+            Log::info('calendar.getResponsables OK', [
+                'user_id' => $user->getIdUsuario(),
+                'calendar_id' => $calendarId,
+                'role_group_id' => $member ? $member->role_group_id : null,
+                'count' => count($data),
+                'duration_ms' => (microtime(true) - $startedAt) * 1000,
+            ]);
+
             return response()->json(['success' => true, 'data' => $data, 'message' => 'Responsables obtenidos correctamente']);
         } catch (\Exception $e) {
-            Log::error('CalendarActivityController@getResponsables: ' . $e->getMessage());
+            Log::error('CalendarActivityController@getResponsables: ' . $e->getMessage(), [
+                'duration_ms' => (microtime(true) - $startedAt) * 1000,
+            ]);
             return response()->json(['success' => false, 'message' => 'Error al listar responsables'], 500);
         }
     }
@@ -604,6 +788,7 @@ class CalendarActivityController extends Controller
      */
     public function getColors(): JsonResponse
     {
+        $startedAt = microtime(true);
         try {
             $user = JWTAuth::parseToken()->authenticate();
             $calendarId = Calendar::where('user_id', $user->getIdUsuario())->value('id');
@@ -611,17 +796,36 @@ class CalendarActivityController extends Controller
                 $cal = Calendar::firstOrCreate(['user_id' => $user->getIdUsuario()], ['user_id' => $user->getIdUsuario()]);
                 $calendarId = $cal->id;
             }
-            $configs = CalendarUserColorConfig::where('calendar_id', $calendarId)->with('user')->get();
-            $data = $configs->map(fn ($c) => [
-                'id' => $c->id,
-                'calendar_id' => $c->calendar_id,
-                'user_id' => $c->user_id,
-                'color_code' => $c->color_code,
-                'user' => $c->user ? ['id' => $c->user->ID_Usuario, 'nombre' => $c->user->No_Nombres_Apellidos ?: $c->user->No_Usuario] : null,
+
+            $cacheKey = 'calendar:colors:calendar:' . $calendarId;
+            $data = Cache::remember($cacheKey, 300, function () use ($calendarId) {
+                $configs = CalendarUserColorConfig::where('calendar_id', $calendarId)->with('user')->get();
+                return $configs->map(function ($c) {
+                    return [
+                        'id' => $c->id,
+                        'calendar_id' => $c->calendar_id,
+                        'user_id' => $c->user_id,
+                        'color_code' => $c->color_code,
+                        'user' => $c->user ? [
+                            'id' => $c->user->ID_Usuario,
+                            'nombre' => $c->user->No_Nombres_Apellidos ?: $c->user->No_Usuario,
+                        ] : null,
+                    ];
+                })->values()->all();
+            });
+
+            Log::info('calendar.getColors OK', [
+                'user_id' => $user->getIdUsuario(),
+                'calendar_id' => $calendarId,
+                'count' => count($data),
+                'duration_ms' => (microtime(true) - $startedAt) * 1000,
             ]);
+
             return response()->json(['success' => true, 'data' => $data, 'message' => 'Configuración de colores obtenida']);
         } catch (\Exception $e) {
-            Log::error('CalendarActivityController@getColors: ' . $e->getMessage());
+            Log::error('CalendarActivityController@getColors: ' . $e->getMessage(), [
+                'duration_ms' => (microtime(true) - $startedAt) * 1000,
+            ]);
             return response()->json(['success' => false, 'message' => 'Error al obtener colores'], 500);
         }
     }
@@ -645,6 +849,12 @@ class CalendarActivityController extends Controller
             ['calendar_id' => $calendarId, 'user_id' => $request->user_id],
             ['color_code' => $request->color_code]
         );
+        Cache::forget('calendar:colors:calendar:' . $calendarId);
+
+        // También invalidar cache de responsables del grupo principal del usuario
+        $member = CalendarRoleGroupMember::where('user_id', $user->getIdUsuario())->first();
+        $groupKey = $member ? (int) $member->role_group_id : 0;
+        Cache::forget('calendar:responsables:user:' . $user->getIdUsuario() . ':group:' . $groupKey);
         return response()->json(['success' => true, 'message' => 'Color actualizado correctamente']);
     }
 
@@ -653,21 +863,36 @@ class CalendarActivityController extends Controller
      */
     public function getContenedores(): JsonResponse
     {
+        $startedAt = microtime(true);
         try {
-            $year = request()->input('year', date('Y'));
-            $contenedores = Contenedor::where('empresa', '!=', 1)
-                ->where('estado_documentacion', '!=', Contenedor::CONTEDOR_CERRADO)
-                ->orderByRaw('COALESCE(YEAR(f_inicio), 2025) ASC, CAST(carga AS UNSIGNED) ASC')
-                ->get(['id', 'carga', 'f_inicio']);
-            $data = $contenedores->map(function ($c) {
-                $anio = $c->f_inicio ? $c->f_inicio->format('Y') : '2025';
-                $nombre = '#' . $c->carga . ' - ' . $anio;
-                $codigo = 'CONT-' . $anio . '-' . str_pad((string) $c->id, 3, '0', STR_PAD_LEFT);
-                return ['id' => $c->id, 'nombre' => $nombre, 'codigo' => $codigo];
+            $year = (int) request()->input('year', date('Y'));
+            $cacheKey = 'calendar:contenedores:year:' . $year;
+
+            $data = Cache::remember($cacheKey, 600, function () use ($year) {
+                $contenedores = Contenedor::where('empresa', '!=', 1)
+                    ->where('estado_documentacion', '!=', Contenedor::CONTEDOR_CERRADO)
+                    ->orderByRaw('COALESCE(YEAR(f_inicio), 2025) ASC, CAST(carga AS UNSIGNED) ASC')
+                    ->get(['id', 'carga', 'f_inicio']);
+
+                return $contenedores->map(function ($c) {
+                    $anio = $c->f_inicio ? $c->f_inicio->format('Y') : '2025';
+                    $nombre = '#' . $c->carga . ' - ' . $anio;
+                    $codigo = 'CONT-' . $anio . '-' . str_pad((string) $c->id, 3, '0', STR_PAD_LEFT);
+                    return ['id' => $c->id, 'nombre' => $nombre, 'codigo' => $codigo];
+                })->values()->all();
             });
+
+            Log::info('calendar.getContenedores OK', [
+                'year' => $year,
+                'count' => count($data),
+                'duration_ms' => (microtime(true) - $startedAt) * 1000,
+            ]);
+
             return response()->json(['success' => true, 'data' => $data, 'message' => 'Contenedores obtenidos correctamente']);
         } catch (\Exception $e) {
-            Log::error('CalendarActivityController@getContenedores: ' . $e->getMessage());
+            Log::error('CalendarActivityController@getContenedores: ' . $e->getMessage(), [
+                'duration_ms' => (microtime(true) - $startedAt) * 1000,
+            ]);
             return response()->json(['success' => false, 'message' => 'Error al listar contenedores'], 500);
         }
     }
@@ -803,6 +1028,7 @@ class CalendarActivityController extends Controller
         }
         try {
             $this->activityService->reorderActivities($ids, $roleGroupId);
+            Cache::forget('calendar:activity-catalog:role_group:' . $roleGroupId);
             return response()->json(['success' => true, 'message' => 'Catálogo reordenado correctamente']);
         } catch (\Exception $e) {
             Log::error('CalendarActivityController@reorderCatalog: ' . $e->getMessage());
@@ -811,10 +1037,45 @@ class CalendarActivityController extends Controller
     }
 
     /**
+     * POST /api/calendar/events/reorder - Reordenar actividades/eventos en el calendario (vista mes).
+     * Body: { ids: [eventId1, eventId2, ...] } en el orden deseado.
+     * Solo Jefe de Importaciones.
+     */
+    public function reorderEvents(Request $request): JsonResponse
+    {
+        if (!$this->permissionService->canManageActivities(JWTAuth::parseToken()->authenticate())) {
+            return response()->json(['success' => false, 'message' => 'Sin permiso para reordenar actividades'], 403);
+        }
+
+        $request->validate([
+            'ids' => 'required|array|min:1',
+            'ids.*' => 'integer|exists:calendar_events,id',
+        ]);
+
+        $ids = $request->input('ids', []);
+
+        try {
+            DB::transaction(function () use ($ids) {
+                $order = 1;
+                foreach ($ids as $id) {
+                    CalendarEvent::where('id', (int) $id)->update(['display_order' => $order]);
+                    $order++;
+                }
+            });
+
+            return response()->json(['success' => true, 'message' => 'Actividades reordenadas correctamente']);
+        } catch (\Exception $e) {
+            Log::error('CalendarActivityController@reorderEvents: ' . $e->getMessage());
+            return response()->json(['success' => false, 'message' => 'Error al reordenar actividades'], 500);
+        }
+    }
+
+    /**
      * GET /api/calendar/consolidado-colors - Colores por consolidado del usuario autenticado
      */
     public function getConsolidadoColors(): JsonResponse
     {
+        $startedAt = microtime(true);
         try {
             $user = JWTAuth::parseToken()->authenticate();
             $calendar = Calendar::where('user_id', $user->getIdUsuario())->first();
@@ -835,17 +1096,32 @@ class CalendarActivityController extends Controller
                 return response()->json(['success' => true, 'data' => [], 'message' => 'Sin colores de consolidado']);
             }
 
-            $configs = CalendarConsolidadoColorConfig::where('role_group_id', $roleGroupId)->get();
-            $data = $configs->map(fn ($c) => [
-                'id' => $c->id,
-                'calendar_id' => $c->calendar_id,
-                'role_group_id' => $c->role_group_id,
-                'contenedor_id' => $c->contenedor_id,
-                'color_code' => $c->color_code,
+            $cacheKey = 'calendar:consolidado-colors:group:' . $roleGroupId;
+            $data = Cache::remember($cacheKey, 300, function () use ($roleGroupId) {
+                $configs = CalendarConsolidadoColorConfig::where('role_group_id', $roleGroupId)->get();
+                return $configs->map(function ($c) {
+                    return [
+                        'id' => $c->id,
+                        'calendar_id' => $c->calendar_id,
+                        'role_group_id' => $c->role_group_id,
+                        'contenedor_id' => $c->contenedor_id,
+                        'color_code' => $c->color_code,
+                    ];
+                })->values()->all();
+            });
+
+            Log::info('calendar.getConsolidadoColors OK', [
+                'user_id' => $user->getIdUsuario(),
+                'role_group_id' => $roleGroupId,
+                'count' => count($data),
+                'duration_ms' => (microtime(true) - $startedAt) * 1000,
             ]);
+
             return response()->json(['success' => true, 'data' => $data, 'message' => 'Colores de consolidado obtenidos']);
         } catch (\Exception $e) {
-            Log::error('CalendarActivityController@getConsolidadoColors: ' . $e->getMessage());
+            Log::error('CalendarActivityController@getConsolidadoColors: ' . $e->getMessage(), [
+                'duration_ms' => (microtime(true) - $startedAt) * 1000,
+            ]);
             return response()->json(['success' => false, 'message' => 'Error al obtener colores de consolidado'], 500);
         }
     }
@@ -898,6 +1174,7 @@ class CalendarActivityController extends Controller
                     ]
                 );
             }
+            Cache::forget('calendar:consolidado-colors:group:' . $roleGroupId);
             return response()->json(['success' => true, 'message' => 'Colores de consolidado actualizados correctamente']);
         } catch (\Exception $e) {
             Log::error('CalendarActivityController@updateConsolidadoColor: ' . $e->getMessage());

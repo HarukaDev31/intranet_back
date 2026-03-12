@@ -22,6 +22,7 @@ class CalendarEvent extends Model
         'name',
         'contenedor_id',
         'notes',
+        'display_order',
     ];
 
     protected $casts = [

@@ -18,6 +18,7 @@ Route::group(['prefix' => 'calendar', 'middleware' => 'jwt.auth'], function () {
     Route::post('/events', [CalendarController::class, 'createEvent']);
     Route::put('/events/{id}', [CalendarController::class, 'updateEvent']);
     Route::put('/events/{id}/status', [CalendarController::class, 'updateEventStatus']);
+    Route::post('/events/reorder', [CalendarActivityController::class, 'reorderEvents']);
     Route::delete('/events/{id}', [CalendarController::class, 'deleteEvent']);
     Route::put('/events/{id}/move', [CalendarController::class, 'moveEvent']);
 
@@ -40,6 +41,11 @@ Route::group(['prefix' => 'calendar', 'middleware' => 'jwt.auth'], function () {
     Route::get('/charges/{chargeId}/tracking', [CalendarActivityController::class, 'getChargeTracking']);
     Route::put('/charges/{chargeId}/status', [CalendarActivityController::class, 'updateChargeStatus']);
     Route::put('/charges/{chargeId}/notes', [CalendarActivityController::class, 'updateChargeNotes']);
+
+    // Subtareas por responsable (charge)
+    Route::post('/charges/{chargeId}/subtasks', [CalendarActivityController::class, 'storeSubtask']);
+    Route::put('/subtasks/{id}', [CalendarActivityController::class, 'updateSubtask']);
+    Route::delete('/subtasks/{id}', [CalendarActivityController::class, 'destroySubtask']);
 
     // Tracking / Historial por actividad
     Route::get('/activities/{activityId}/tracking', [CalendarActivityController::class, 'getActivityTracking']);

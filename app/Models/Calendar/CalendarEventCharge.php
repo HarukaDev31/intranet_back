@@ -6,9 +6,12 @@ use App\Models\Usuario;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class CalendarEventCharge extends Model
 {
+    use SoftDeletes;
+
     const STATUS_PENDIENTE = 'PENDIENTE';
     const STATUS_PROGRESO = 'PROGRESO';
     const STATUS_COMPLETADO = 'COMPLETADO';
@@ -30,6 +33,7 @@ class CalendarEventCharge extends Model
         'removed_at' => 'datetime',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
+        'deleted_at' => 'datetime',
     ];
 
     /**
@@ -62,5 +66,13 @@ class CalendarEventCharge extends Model
     public function tracking(): HasMany
     {
         return $this->hasMany(CalendarEventChargeTracking::class, 'calendar_event_charge_id');
+    }
+
+    /**
+     * Subtareas asociadas a este responsable.
+     */
+    public function subtasks(): HasMany
+    {
+        return $this->hasMany(CalendarEventSubtask::class, 'calendar_event_charge_id');
     }
 }

@@ -8,6 +8,7 @@ use App\Models\Calendar\CalendarEventCharge;
 use App\Models\Calendar\CalendarEventChargeTracking;
 use App\Models\Calendar\CalendarEventDay;
 use App\Models\Calendar\CalendarActivity;
+use App\Models\Calendar\CalendarEventSubtask;
 use App\Models\Calendar\CalendarUserColorConfig;
 use App\Events\CalendarActivityCreated;
 use App\Events\CalendarActivityUpdated;
@@ -16,6 +17,7 @@ use App\Models\Notificacion;
 use App\Models\Usuario;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Collection;
 use App\Traits\FileTrait;
 class CalendarEventService
@@ -40,11 +42,39 @@ class CalendarEventService
         int $perPage = 0,
         ?int $roleGroupId = null
     ) {
+        $startedAt = microtime(true);
+
+        $useCache = !$onlyMyCharges
+            && $perPage === 0
+            && ($responsableIds === null || count($responsableIds) === 0)
+            && ($contenedorIds === null || count($contenedorIds) === 0)
+            && $status === null
+            && $priority === null;
+
+        $cacheKey = null;
+        if ($useCache) {
+            $roleKey = $roleGroupId !== null ? (int) $roleGroupId : 0;
+            $startKey = $startDate ?: 'null';
+            $endKey = $endDate ?: 'null';
+            $cacheKey = "calendar:events:list:role_group:{$roleKey}:start:{$startKey}:end:{$endKey}";
+            $cached = Cache::get($cacheKey);
+            if ($cached !== null) {
+                Log::info('calendar.getEventsForUser CACHE_HIT', [
+                    'role_group_id' => $roleGroupId,
+                    'user_id' => $userId,
+                    'start_date' => $startDate,
+                    'end_date' => $endDate,
+                    'duration_ms' => (microtime(true) - $startedAt) * 1000,
+                ]);
+                return $cached;
+            }
+        }
+
         $calendarIds = $roleGroupId !== null
             ? Calendar::where('role_group_id', $roleGroupId)->pluck('id')->all()
             : Calendar::pluck('id')->all();
         $query = CalendarEvent::whereIn('calendar_id', $calendarIds)
-            ->with(['activity', 'eventDays', 'charges.user', 'contenedor']);
+            ->with(['activity', 'eventDays', 'charges.user', 'charges.subtasks', 'contenedor']);
 
         if ($onlyMyCharges) {
             // Miembro: ver eventos donde tiene carga O eventos sin ningún responsable (visibles para todo el grupo)
@@ -83,6 +113,9 @@ class CalendarEventService
             FROM calendar_event_days ced
             WHERE ced.calendar_event_id = calendar_events.id
         ) ASC');
+        // Segundo criterio: orden manual para la vista (drag & drop en frontend)
+        $query->orderBy('display_order', 'asc')
+              ->orderBy('id', 'asc');
 
         if ($perPage > 0) {
             // Calcular progreso del usuario sobre TODOS los resultados (antes de paginar)
@@ -119,7 +152,35 @@ class CalendarEventService
         }
 
         $events = $query->get();
-        return $events->map(fn ($event) => $this->formatEventForResponse($event));
+
+        // Optimización: evitar N+1 sobre calendar_user_color_config cargando todos los colores
+        // de los calendarios involucrados en un solo query y reutilizándolos por evento.
+        $calendarIdsForEvents = $events->pluck('calendar_id')->filter()->unique()->values();
+        $colorConfigsByCalendar = CalendarUserColorConfig::whereIn('calendar_id', $calendarIdsForEvents)
+            ->get()
+            ->groupBy('calendar_id');
+
+        $result = $events->map(function ($event) use ($colorConfigsByCalendar) {
+            /** @var \Illuminate\Support\Collection $map */
+            $map = $colorConfigsByCalendar->get($event->calendar_id, collect())->keyBy('user_id');
+            return $this->formatEventForResponseWithColorMap($event, $map);
+        });
+
+        if ($useCache && $cacheKey !== null) {
+            // TTL corto para minimizar riesgo de datos viejos si la invalidación falla
+            Cache::put($cacheKey, $result, 60);
+        }
+
+        Log::info('calendar.getEventsForUser DB_MISS', [
+            'role_group_id' => $roleGroupId,
+            'user_id' => $userId,
+            'start_date' => $startDate,
+            'end_date' => $endDate,
+            'events_count' => $events->count(),
+            'duration_ms' => (microtime(true) - $startedAt) * 1000,
+        ]);
+
+        return $result;
     }
 
     /**
@@ -127,7 +188,7 @@ class CalendarEventService
      */
     public function getEventById(int $eventId, int $userId, bool $canSeeAllCalendars = false): ?array
     {
-        $query = CalendarEvent::with(['activity', 'eventDays', 'charges.user', 'contenedor'])->where('id', $eventId);
+        $query = CalendarEvent::with(['activity', 'eventDays', 'charges.user', 'charges.subtasks', 'contenedor'])->where('id', $eventId);
         if (!$canSeeAllCalendars) {
             $query->where(function ($q) use ($userId) {
                 $q->whereHas('charges', fn ($c) => $c->where('user_id', $userId))
@@ -143,6 +204,18 @@ class CalendarEventService
      */
     public function formatEventForResponse(CalendarEvent $event): array
     {
+        $colorByUserId = CalendarUserColorConfig::where('calendar_id', $event->calendar_id)
+            ->get()
+            ->keyBy('user_id');
+
+        return $this->formatEventForResponseWithColorMap($event, $colorByUserId);
+    }
+
+    /**
+     * Versión optimizada que reutiliza un mapa de colores ya cargado para evitar N+1.
+     */
+    private function formatEventForResponseWithColorMap(CalendarEvent $event, Collection $colorByUserId): array
+    {
         $days = $event->eventDays->sortBy('date');
         $first = $days->first();
         $last = $days->last();
@@ -157,13 +230,20 @@ class CalendarEventService
             'date' => $d->date->format('Y-m-d'),
         ])->values()->toArray();
 
-        $colorByUserId = CalendarUserColorConfig::where('calendar_id', $event->calendar_id)
-            ->get()
-            ->keyBy('user_id');
-
         $chargesArray = $event->charges->map(function ($c) use ($colorByUserId) {
             $u = $c->user;
             $color = optional($colorByUserId->get($c->user_id))->color_code;
+            $subtasks = $c->subtasks ? $c->subtasks->map(function ($s) {
+                return [
+                    'id' => $s->id,
+                    'calendar_event_charge_id' => $s->calendar_event_charge_id,
+                    'name' => $s->name,
+                    'duration_hours' => (int) $s->duration_hours,
+                    'status' => $s->status,
+                    'created_at' => $s->created_at ? $s->created_at->format('c') : null,
+                    'updated_at' => $s->updated_at ? $s->updated_at->format('c') : null,
+                ];
+            })->values()->all() : [];
             return [
                 'id' => $c->id,
                 'calendar_id' => $c->calendar_id,
@@ -173,6 +253,7 @@ class CalendarEventService
                 'assigned_at' => $c->assigned_at ? $c->assigned_at->format('c') : null,
                 'removed_at' => $c->removed_at ? $c->removed_at->format('c') : null,
                 'status' => $c->status,
+                'subtasks' => $subtasks,
                 'user' => $u ? [
                     'id' => $u->ID_Usuario,
                     'nombre' => $u->No_Nombres_Apellidos ?: $u->No_Usuario,
@@ -200,6 +281,7 @@ class CalendarEventService
             'priority' => $event->priority,
             'name' => $event->name,
             'contenedor_id' => $event->contenedor_id,
+            'display_order' => $event->display_order,
             'notes' => $event->notes,
             'created_at' => $event->created_at ? $event->created_at->format('c') : null,
             'updated_at' => $event->updated_at ? $event->updated_at->format('c') : null,
@@ -310,6 +392,8 @@ class CalendarEventService
             $triggeredByUserId
         );
 
+        $this->clearEventsCache();
+
         return $event;
     }
 
@@ -405,6 +489,7 @@ class CalendarEventService
                 $userId
             );
         }
+        $this->clearEventsCache();
         return $event;
     }
 
@@ -437,6 +522,9 @@ class CalendarEventService
                 $contenedorId,
                 $userId
             );
+        }
+        if ($deleted) {
+            $this->clearEventsCache();
         }
         return $deleted;
     }
@@ -539,6 +627,8 @@ class CalendarEventService
             }
         }
 
+        $this->clearEventsCache();
+
         return $charge;
     }
 
@@ -579,6 +669,8 @@ class CalendarEventService
             CalendarActivityUpdated::dispatch($event->id, $event->calendar_id, $event->contenedor_id, $userIdsToNotify, $userId);
         }
 
+        $this->clearEventsCache();
+
         return $event;
     }
 
@@ -600,6 +692,8 @@ class CalendarEventService
             }
         }
 
+        $this->clearEventsCache();
+
         return $charge;
     }
 
@@ -612,6 +706,7 @@ class CalendarEventService
         }
         $event->update(['priority' => $priority]);
         $event->load(['activity', 'eventDays', 'charges.user', 'contenedor']);
+        $this->clearEventsCache();
         return $event;
     }
 
@@ -631,6 +726,8 @@ class CalendarEventService
         if (!empty($userIdsToNotify)) {
             CalendarActivityUpdated::dispatch($event->id, $event->calendar_id, $event->contenedor_id, $userIdsToNotify, $userId);
         }
+
+        $this->clearEventsCache();
 
         return $event;
     }
@@ -661,6 +758,7 @@ class CalendarEventService
             'changed_by' => $requestUserId,
         ]);
         $charge->load('user');
+        $this->clearEventsCache();
         return $charge;
     }
 
@@ -676,7 +774,11 @@ class CalendarEventService
             return false;
         }
         $charge->update(['removed_at' => now()]);
-        return (bool) $charge->delete();
+        $deleted = (bool) $charge->delete();
+        if ($deleted) {
+            $this->clearEventsCache();
+        }
+        return $deleted;
     }
 
     /**
@@ -906,6 +1008,76 @@ class CalendarEventService
             $userIds[] = $uid;
         }
         return array_values(array_unique($userIds));
+    }
+
+    /**
+     * Limpia el caché de listados grandes de eventos (vista de mes).
+     */
+    public function clearEventsCache(): void
+    {
+        try {
+            // Usamos el cliente Redis directamente para borrar por patrón.
+            $redis = app('redis')->connection();
+            $keys = $redis->keys('calendar:events:list:*');
+            if (!empty($keys)) {
+                $redis->del($keys);
+            }
+        } catch (\Throwable $e) {
+            Log::warning('No se pudo limpiar el caché de eventos de calendario: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Crear una subtarea para un responsable (charge) específico.
+     */
+    public function createSubtask(int $chargeId, string $name, int $durationHours, string $status): CalendarEventSubtask
+    {
+        return CalendarEventSubtask::create([
+            'calendar_event_charge_id' => $chargeId,
+            'name' => $name,
+            'duration_hours' => $durationHours,
+            'status' => $status,
+        ]);
+    }
+
+    /**
+     * Actualizar una subtarea existente.
+     */
+    public function updateSubtask(int $subtaskId, array $data): ?CalendarEventSubtask
+    {
+        $subtask = CalendarEventSubtask::find($subtaskId);
+        if (!$subtask) {
+            return null;
+        }
+
+        $fields = [];
+        if (array_key_exists('name', $data)) {
+            $fields['name'] = $data['name'];
+        }
+        if (array_key_exists('duration_hours', $data)) {
+            $fields['duration_hours'] = (int) $data['duration_hours'];
+        }
+        if (array_key_exists('status', $data)) {
+            $fields['status'] = $data['status'];
+        }
+
+        if (!empty($fields)) {
+            $subtask->update($fields);
+        }
+
+        return $subtask;
+    }
+
+    /**
+     * Eliminar una subtarea.
+     */
+    public function deleteSubtask(int $subtaskId): bool
+    {
+        $subtask = CalendarEventSubtask::find($subtaskId);
+        if (!$subtask) {
+            return false;
+        }
+        return (bool) $subtask->delete();
     }
 
     private function resolveEventName(array $data): string
