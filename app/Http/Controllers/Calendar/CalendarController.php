@@ -90,6 +90,8 @@ class CalendarController extends Controller
 
             $page    = max(1, (int) $request->input('page', 1));
             $perPage = max(0, (int) $request->input('per_page', 0));
+            $eventId = $request->input('event_id');
+            $eventId = is_numeric($eventId) ? (int) $eventId : null;
 
             $result = $this->eventService->getEventsForUser(
                 $userId,
@@ -102,7 +104,8 @@ class CalendarController extends Controller
                 $onlyMyCharges,
                 $page,
                 $perPage,
-                $roleGroupId
+                $roleGroupId,
+                $eventId
             );
 
             // Respuesta paginada

@@ -543,6 +543,7 @@ class CalendarActivityController extends Controller
             'name' => 'required|string|max:255',
             'duration_hours' => 'nullable|integer|min:0',
             'status' => 'nullable|string|in:PENDIENTE,PROGRESO,COMPLETADO',
+            'end_date' => 'nullable|date_format:Y-m-d',
         ]);
         if ($v->fails()) {
             return response()->json(['success' => false, 'errors' => $v->errors()], 422);
@@ -563,8 +564,9 @@ class CalendarActivityController extends Controller
         $name = $request->input('name');
         $duration = (int) $request->input('duration_hours', 0);
         $status = $request->input('status', CalendarEventSubtask::STATUS_PENDIENTE);
+        $endDate = $request->input('end_date');
 
-        $subtask = $this->eventService->createSubtask($chargeId, $name, $duration, $status);
+        $subtask = $this->eventService->createSubtask($chargeId, $name, $duration, $status, $endDate);
 
         return response()->json([
             'success' => true,
@@ -574,6 +576,7 @@ class CalendarActivityController extends Controller
                 'name' => $subtask->name,
                 'duration_hours' => (int) $subtask->duration_hours,
                 'status' => $subtask->status,
+                'end_date' => $subtask->end_date ? $subtask->end_date->format('Y-m-d') : null,
                 'created_at' => $subtask->created_at ? $subtask->created_at->format('c') : null,
                 'updated_at' => $subtask->updated_at ? $subtask->updated_at->format('c') : null,
             ],
@@ -591,6 +594,7 @@ class CalendarActivityController extends Controller
             'name' => 'nullable|string|max:255',
             'duration_hours' => 'nullable|integer|min:0',
             'status' => 'nullable|string|in:PENDIENTE,PROGRESO,COMPLETADO',
+            'end_date' => 'nullable|date_format:Y-m-d',
         ]);
         if ($v->fails()) {
             return response()->json(['success' => false, 'errors' => $v->errors()], 422);
@@ -613,7 +617,7 @@ class CalendarActivityController extends Controller
             return response()->json(['success' => false, 'message' => 'No puedes gestionar subtareas de otro responsable'], 403);
         }
 
-        $data = $request->only(['name', 'duration_hours', 'status']);
+        $data = $request->only(['name', 'duration_hours', 'status', 'end_date']);
         $updated = $this->eventService->updateSubtask($id, $data);
         if (!$updated) {
             return response()->json(['success' => false, 'message' => 'Subtarea no encontrada'], 404);
@@ -627,6 +631,7 @@ class CalendarActivityController extends Controller
                 'name' => $updated->name,
                 'duration_hours' => (int) $updated->duration_hours,
                 'status' => $updated->status,
+                'end_date' => $updated->end_date ? $updated->end_date->format('Y-m-d') : null,
                 'created_at' => $updated->created_at ? $updated->created_at->format('c') : null,
                 'updated_at' => $updated->updated_at ? $updated->updated_at->format('c') : null,
             ],

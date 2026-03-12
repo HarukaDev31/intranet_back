@@ -40,7 +40,8 @@ class CalendarEventService
         bool $onlyMyCharges = false,
         int $page = 1,
         int $perPage = 0,
-        ?int $roleGroupId = null
+        ?int $roleGroupId = null,
+        ?int $eventId = null
     ) {
         $startedAt = microtime(true);
 
@@ -49,7 +50,8 @@ class CalendarEventService
             && ($responsableIds === null || count($responsableIds) === 0)
             && ($contenedorIds === null || count($contenedorIds) === 0)
             && $status === null
-            && $priority === null;
+            && $priority === null
+            && $eventId === null;
 
         $cacheKey = null;
         if ($useCache) {
@@ -76,6 +78,9 @@ class CalendarEventService
         $query = CalendarEvent::whereIn('calendar_id', $calendarIds)
             ->with(['activity', 'eventDays', 'charges.user', 'charges.subtasks', 'contenedor']);
 
+        if ($eventId !== null) {
+            $query->where('id', $eventId);
+        }
         if ($onlyMyCharges) {
             // Miembro: ver eventos donde tiene carga O eventos sin ningún responsable (visibles para todo el grupo)
             $query->where(function ($q) use ($userId) {
@@ -239,6 +244,7 @@ class CalendarEventService
                     'calendar_event_charge_id' => $s->calendar_event_charge_id,
                     'name' => $s->name,
                     'duration_hours' => (int) $s->duration_hours,
+                    'end_date' => $s->end_date ? $s->end_date->format('Y-m-d') : null,
                     'status' => $s->status,
                     'created_at' => $s->created_at ? $s->created_at->format('c') : null,
                     'updated_at' => $s->updated_at ? $s->updated_at->format('c') : null,
@@ -274,6 +280,17 @@ class CalendarEventService
             ];
         }
 
+        // Estado del evento derivado de los charges: COMPLETADO si todos completados, PENDIENTE si alguno pendiente, sino PROGRESO
+        $chargeStatuses = collect($chargesArray)->pluck('status')->filter()->values();
+        $eventStatus = CalendarEventCharge::STATUS_PROGRESO;
+        if ($chargeStatuses->isEmpty()) {
+            $eventStatus = CalendarEventCharge::STATUS_PENDIENTE;
+        } elseif ($chargeStatuses->every(fn ($s) => $s === CalendarEventCharge::STATUS_COMPLETADO)) {
+            $eventStatus = CalendarEventCharge::STATUS_COMPLETADO;
+        } elseif ($chargeStatuses->contains(CalendarEventCharge::STATUS_PENDIENTE)) {
+            $eventStatus = CalendarEventCharge::STATUS_PENDIENTE;
+        }
+
         return [
             'id' => $event->id,
             'calendar_id' => $event->calendar_id,
@@ -283,6 +300,7 @@ class CalendarEventService
             'contenedor_id' => $event->contenedor_id,
             'display_order' => $event->display_order,
             'notes' => $event->notes,
+            'status' => $eventStatus,
             'created_at' => $event->created_at ? $event->created_at->format('c') : null,
             'updated_at' => $event->updated_at ? $event->updated_at->format('c') : null,
             'deleted_at' => $event->deleted_at ? $event->deleted_at->format('c') : null,
@@ -1028,16 +1046,72 @@ class CalendarEventService
     }
 
     /**
-     * Crear una subtarea para un responsable (charge) específico.
+     * Calcula el estado del charge a partir de sus subtareas.
+     * - COMPLETADO si tiene al menos una subtarea y todas están COMPLETADO.
+     * - PENDIENTE si no tiene subtareas o todas están PENDIENTE.
+     * - PROGRESO en el resto de casos.
      */
-    public function createSubtask(int $chargeId, string $name, int $durationHours, string $status): CalendarEventSubtask
+    private function computeChargeStatusFromSubtasks(CalendarEventCharge $charge): string
     {
-        return CalendarEventSubtask::create([
+        $subtasks = $charge->subtasks ?? $charge->subtasks()->get();
+        if ($subtasks->isEmpty()) {
+            return CalendarEventCharge::STATUS_PENDIENTE;
+        }
+        $allCompleted = $subtasks->every(fn ($s) => $s->status === CalendarEventSubtask::STATUS_COMPLETADO);
+        if ($allCompleted) {
+            return CalendarEventCharge::STATUS_COMPLETADO;
+        }
+        $allPendiente = $subtasks->every(fn ($s) => $s->status === CalendarEventSubtask::STATUS_PENDIENTE);
+        if ($allPendiente) {
+            return CalendarEventCharge::STATUS_PENDIENTE;
+        }
+        return CalendarEventCharge::STATUS_PROGRESO;
+    }
+
+    /**
+     * Actualiza el status del charge según sus subtareas y opcionalmente registra en tracking.
+     */
+    private function syncChargeStatusFromSubtasks(int $chargeId, ?int $changedBy = null): void
+    {
+        $charge = CalendarEventCharge::with('subtasks')->find($chargeId);
+        if (!$charge) {
+            return;
+        }
+        $newStatus = $this->computeChargeStatusFromSubtasks($charge);
+        if ($charge->status === $newStatus) {
+            return;
+        }
+        $fromStatus = $charge->status;
+        $charge->update(['status' => $newStatus]);
+        CalendarEventChargeTracking::create([
+            'calendar_event_charge_id' => $charge->id,
+            'from_status' => $fromStatus,
+            'to_status' => $newStatus,
+            'changed_at' => now(),
+            'changed_by' => $changedBy ?? $charge->user_id,
+        ]);
+        $this->clearEventsCache();
+    }
+
+    /**
+     * Crear una subtarea para un responsable (charge) específico.
+     * @param string|null $endDate Fecha fin en formato Y-m-d
+     */
+    public function createSubtask(int $chargeId, string $name, int $durationHours, string $status, $endDate = null): CalendarEventSubtask
+    {
+        $attrs = [
             'calendar_event_charge_id' => $chargeId,
             'name' => $name,
             'duration_hours' => $durationHours,
             'status' => $status,
-        ]);
+        ];
+        if ($endDate !== null && $endDate !== '') {
+            $attrs['end_date'] = $endDate;
+        }
+        $subtask = CalendarEventSubtask::create($attrs);
+        $this->syncChargeStatusFromSubtasks($chargeId);
+        $this->clearEventsCache();
+        return $subtask;
     }
 
     /**
@@ -1060,11 +1134,16 @@ class CalendarEventService
         if (array_key_exists('status', $data)) {
             $fields['status'] = $data['status'];
         }
+        if (array_key_exists('end_date', $data)) {
+            $fields['end_date'] = $data['end_date'] ?: null;
+        }
 
         if (!empty($fields)) {
             $subtask->update($fields);
         }
 
+        $this->syncChargeStatusFromSubtasks($subtask->calendar_event_charge_id);
+        $this->clearEventsCache();
         return $subtask;
     }
 
@@ -1077,7 +1156,13 @@ class CalendarEventService
         if (!$subtask) {
             return false;
         }
-        return (bool) $subtask->delete();
+        $chargeId = $subtask->calendar_event_charge_id;
+        $deleted = (bool) $subtask->delete();
+        if ($deleted) {
+            $this->syncChargeStatusFromSubtasks($chargeId);
+            $this->clearEventsCache();
+        }
+        return $deleted;
     }
 
     private function resolveEventName(array $data): string

@@ -17,7 +17,12 @@ class CalendarEventSubtask extends Model
         'calendar_event_charge_id',
         'name',
         'duration_hours',
+        'end_date',
         'status',
+    ];
+
+    protected $casts = [
+        'end_date' => 'date',
     ];
 
     /**
