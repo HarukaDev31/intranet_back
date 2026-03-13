@@ -13,6 +13,8 @@ class CreateCalendarEventSubtasksTable extends Migration
      */
     public function up()
     {
+        //if not exists
+        if (!Schema::hasTable('calendar_event_subtasks')) {
         Schema::create('calendar_event_subtasks', function (Blueprint $table) {
             $table->bigIncrements('id');
             $table->unsignedBigInteger('calendar_event_charge_id');
@@ -27,6 +29,7 @@ class CreateCalendarEventSubtasksTable extends Migration
                 ->on('calendar_event_charges')
                 ->onDelete('cascade');
         });
+        }
     }
 
     /**
