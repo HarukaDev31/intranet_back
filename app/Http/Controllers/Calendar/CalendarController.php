@@ -92,6 +92,8 @@ class CalendarController extends Controller
             $perPage = max(0, (int) $request->input('per_page', 0));
             $eventId = $request->input('event_id');
             $eventId = is_numeric($eventId) ? (int) $eventId : null;
+            $hasCharges = (bool) $request->input('has_charges', false);
+            $orderDesc  = (bool) $request->input('order_desc', false);
 
             $result = $this->eventService->getEventsForUser(
                 $userId,
@@ -105,17 +107,21 @@ class CalendarController extends Controller
                 $page,
                 $perPage,
                 $roleGroupId,
-                $eventId
+                $eventId,
+                $hasCharges,
+                $orderDesc,
+                $isJefe
             );
 
             // Respuesta paginada
             if (is_array($result) && isset($result['meta'])) {
                 return response()->json([
-                    'success'     => true,
-                    'data'        => $result['data'],
-                    'meta'        => $result['meta'],
-                    'my_progress' => $result['my_progress'] ?? null,
-                    'message'     => 'Actividades obtenidas correctamente',
+                    'success'         => true,
+                    'data'            => $result['data'],
+                    'meta'            => $result['meta'],
+                    'my_progress'     => $result['my_progress'] ?? null,
+                    'global_progress' => $result['global_progress'] ?? null,
+                    'message'         => 'Actividades obtenidas correctamente',
                 ]);
             }
 

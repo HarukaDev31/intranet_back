@@ -41,7 +41,10 @@ class CalendarEventService
         int $page = 1,
         int $perPage = 0,
         ?int $roleGroupId = null,
-        ?int $eventId = null
+        ?int $eventId = null,
+        bool $hasCharges = false,
+        bool $orderDesc = false,
+        bool $isJefe = false
     ) {
         $startedAt = microtime(true);
 
@@ -106,21 +109,44 @@ class CalendarEventService
             $query->whereIn('contenedor_id', $contenedorIds);
         }
         if ($status !== null) {
-            $query->whereHas('charges', fn ($q) => $q->where('status', $status));
+            if ($isJefe) {
+                // Jefe: filtrar por status global resuelto de la actividad.
+                //   COMPLETADO = todas las charges son COMPLETADO
+                //   PENDIENTE  = todas las charges son PENDIENTE
+                //   PROGRESO   = cualquier mezcla (no todos iguales)
+                if ($status === 'COMPLETADO') {
+                    $query->whereHas('charges')
+                          ->whereDoesntHave('charges', fn ($q) => $q->where('status', '!=', 'COMPLETADO'));
+                } elseif ($status === 'PENDIENTE') {
+                    $query->whereHas('charges')
+                          ->whereDoesntHave('charges', fn ($q) => $q->where('status', '!=', 'PENDIENTE'));
+                } elseif ($status === 'PROGRESO') {
+                    // Mezcla: tiene al menos una no-COMPLETADO y al menos una no-PENDIENTE
+                    $query->whereHas('charges', fn ($q) => $q->where('status', '!=', 'COMPLETADO'))
+                          ->whereHas('charges', fn ($q) => $q->where('status', '!=', 'PENDIENTE'));
+                }
+            } else {
+                // No-jefe: filtrar por el status de SU propia charge
+                $query->whereHas('charges', fn ($q) => $q->where('user_id', $userId)->where('status', $status));
+            }
         }
         if ($priority !== null) {
             $query->where('priority', $priority);
         }
 
-        // Ordenar por fecha de inicio (mínima fecha en event_days) ascendente
+        if ($hasCharges) {
+            $query->whereHas('charges');
+        }
+
+        $dateOrder = $orderDesc ? 'DESC' : 'ASC';
+        $idOrder   = $orderDesc ? 'desc' : 'asc';
         $query->orderByRaw('(
             SELECT MIN(ced.date)
             FROM calendar_event_days ced
             WHERE ced.calendar_event_id = calendar_events.id
-        ) ASC');
-        // Segundo criterio: orden manual para la vista (drag & drop en frontend)
+        ) ' . $dateOrder);
         $query->orderBy('display_order', 'asc')
-              ->orderBy('id', 'asc');
+              ->orderBy('id', $idOrder);
 
         if ($perPage > 0) {
             // Calcular progreso del usuario sobre TODOS los resultados (antes de paginar)
@@ -139,20 +165,45 @@ class CalendarEventService
                 'pendientes'  => (int) (optional($chargeStats->get('PENDIENTE'))->cnt ?? 0),
             ];
 
+            // Progreso global por actividad (1 actividad = 1 conteo sin importar cuántos responsables tenga).
+            //   COMPLETADO = todas las charges son COMPLETADO
+            //   PENDIENTE  = todas las charges son PENDIENTE
+            //   PROGRESO   = cualquier mezcla (no todos iguales)
+            $activityStatuses = DB::table('calendar_event_charges')
+                ->whereIn('calendar_event_id', $subIds)
+                ->groupBy('calendar_event_id')
+                ->selectRaw("calendar_event_id, CASE
+                    WHEN COUNT(CASE WHEN status != 'COMPLETADO' THEN 1 END) = 0 THEN 'COMPLETADO'
+                    WHEN COUNT(CASE WHEN status != 'PENDIENTE' THEN 1 END) = 0 THEN 'PENDIENTE'
+                    ELSE 'PROGRESO'
+                END AS resolved_status")
+                ->get();
+            $globalTotal       = $activityStatuses->count();
+            $globalCompletadas = $activityStatuses->where('resolved_status', 'COMPLETADO')->count();
+            $globalEnProgreso  = $activityStatuses->where('resolved_status', 'PROGRESO')->count();
+            $globalPendientes  = $activityStatuses->where('resolved_status', 'PENDIENTE')->count();
+            $globalProgress = [
+                'total'       => $globalTotal,
+                'completadas' => $globalCompletadas,
+                'en_progreso' => $globalEnProgreso,
+                'pendientes'  => $globalPendientes,
+            ];
+
             $paginator = $query->paginate($perPage, ['*'], 'page', $page);
             $data = collect($paginator->items())
                 ->map(fn ($event) => $this->formatEventForResponse($event))
                 ->values()
                 ->all();
             return [
-                'data'        => $data,
-                'meta'        => [
+                'data'            => $data,
+                'meta'            => [
                     'current_page' => $paginator->currentPage(),
                     'last_page'    => $paginator->lastPage(),
                     'per_page'     => $paginator->perPage(),
                     'total'        => $paginator->total(),
                 ],
-                'my_progress' => $myProgress,
+                'my_progress'     => $myProgress,
+                'global_progress' => $globalProgress,
             ];
         }
 
