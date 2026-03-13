@@ -33,6 +33,7 @@ Route::group(['prefix' => 'base-datos', 'middleware' => 'jwt.auth'], function ()
         Route::get('export', [ProductosController::class, 'export']);
         Route::post('import-excel', [ProductosController::class, 'importExcel']);
         Route::delete('delete-excel/{id}', [ProductosController::class, 'deleteExcel']);
+        Route::post('{id}/update-image', [ProductosController::class, 'updateImage']);
         Route::get('{id}', [ProductosController::class, 'show']);
         Route::put('{id}', [ProductosController::class, 'update']);
     });

@@ -120,9 +120,9 @@ class ProductosController extends Controller
                 $query->where('productos_importados_excel.tipo_producto', $request->tipoProducto);
             }
 
-            // Filtrar por campaña (join) -> usar la columna completa de la tabla join
+            // Filtrar por campaña (join) -> usar el id del contenedor
             if ($request->has('campana') && $request->campana && $request->campana !== 'todos') {
-                $query->where('carga_consolidada_contenedor.carga', $request->campana);
+                $query->where('carga_consolidada_contenedor.id', $request->campana);
             }
 
             // Ordenar por carga consolidada más reciente y por año de cierre (descendente)
@@ -190,17 +190,26 @@ class ProductosController extends Controller
     public function filterOptions()
     {
         try {
-            // Obtener solo las cargas que tienen productos (disponibles)
-            $cargas = ProductoImportadoExcel::leftJoin('carga_consolidada_contenedor', 'productos_importados_excel.idContenedor', '=', 'carga_consolidada_contenedor.id')
-                ->whereNotNull('carga_consolidada_contenedor.carga')
-                ->where('carga_consolidada_contenedor.carga', '!=', '')
-                ->distinct()
-                ->orderByRaw('CAST(carga_consolidada_contenedor.carga AS UNSIGNED)')
-                ->pluck('carga_consolidada_contenedor.carga')
+            // Obtener todas las cargas con año (de f_cierre del contenedor)
+            $cargas = Contenedor::whereNotNull('carga')
+                ->where('carga', '!=', '')
+                ->whereNotNull('f_inicio')
+                ->select(
+                    'id',
+                    'carga',
+                    DB::raw('YEAR(f_cierre) as anio')
+                )
+                ->orderByRaw('YEAR(f_cierre) DESC, CAST(carga AS UNSIGNED) DESC')
+                ->get()
                 ->map(function ($c) {
-                    return trim((string)$c);
+                    $carga = trim((string)$c->carga);
+                    $anio = $c->anio ? (string)$c->anio : '';
+                    return array(
+                        'value' => (string)$c->id,
+                        'label' => '#' . $carga . ($anio ? '-' . $anio : '')
+                    );
                 })
-                ->filter()
+                ->filter(function ($c) { return !empty($c['value']); })
                 ->values()
                 ->toArray();
 
@@ -642,6 +651,54 @@ class ProductosController extends Controller
             ], 500);
         }
     }
+    public function updateImage(Request $request, $id)
+    {
+        try {
+            $producto = ProductoImportadoExcel::find($id);
+            if (!$producto) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Producto no encontrado'
+                ], 404);
+            }
+
+            if (!$request->hasFile('imagen')) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No se proporcionó una imagen'
+                ], 400);
+            }
+
+            $request->validate([
+                'imagen' => 'required|image|mimes:jpeg,jpg,png,webp|max:5120'
+            ]);
+
+            $file = $request->file('imagen');
+            $safeFilename = preg_replace('/[#?&=\s]/', '_', pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME));
+            $extension = $file->getClientOriginalExtension();
+            $filename = time() . '_' . $id . '_' . $safeFilename . '.' . $extension;
+
+            $filePath = $file->storeAs('productos/fotos', $filename, 'public');
+
+            $producto->foto = $filePath;
+            $producto->save();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Imagen actualizada correctamente',
+                'data' => [
+                    'foto' => $this->generateImageUrl($filePath)
+                ]
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error al actualizar imagen del producto: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al actualizar la imagen: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
     private function generateImageUrl($ruta)
     {
         if (empty($ruta)) {
