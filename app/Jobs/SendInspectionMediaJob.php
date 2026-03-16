@@ -95,9 +95,9 @@ class SendInspectionMediaJob implements ShouldQueue
                 throw new \Exception('Proveedor no encontrado: ' . $this->idProveedor);
             }
 
-            // Obtener datos de la cotización
+            // Obtener datos de la cotización (uuid para link de vista inspección)
             $cotizacion = Cotizacion::where('id', $proveedor->id_cotizacion)
-                ->select(['volumen', 'monto', 'id_contenedor', 'nombre', 'telefono'])
+                ->select(['volumen', 'monto', 'id_contenedor', 'nombre', 'telefono', 'uuid'])
                 ->first();
 
             if (!$cotizacion) {
@@ -180,11 +180,13 @@ class SendInspectionMediaJob implements ShouldQueue
                 $sendStatus = false;
             }
 
-            // Enviar mensaje principal si corresponde
-
+            // Enviar mensaje principal (fotos/videos se envían después por separado): incluir link a vista inspección
             $qtyBox = $proveedor->qty_box_china ?? $proveedor->qty_box;
+            $baseUrl = rtrim(env('APP_URL_CLIENTES', 'http://localhost:3001'), '/');
+            $inspeccionLink = $baseUrl . '/inspeccion/' . ($cotizacion->uuid ?? '') . '?id_proveedor=' . $this->idProveedor;
             $message = $cliente . '----' . $proveedor->code_supplier . '----' . $qtyBox . ' boxes. ' . "\n\n" .
-                '📦 Tu carga llegó a nuestro almacén de Yiwu, te comparto las fotos y videos. ' . "\n\n";
+                '📦 Tu carga llegó a nuestro almacén de Yiwu, te comparto las fotos y videos. ' . "\n\n" .
+                '🔗 Ver inspección: ' . $inspeccionLink;
 
             $this->sendMessage($message, $telefono);
             Log::info("Mensaje principal enviado", ['telefono' => $telefono]);

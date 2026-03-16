@@ -2008,8 +2008,11 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
             $telefono = $this->formatPhoneNumber($cotizacion->telefono);
             $qtyBox = $proveedor->qty_box_china ?? $proveedor->qty_box;
 
-            // Preparar mensaje inicial de inspección (se enviará solo una vez en sendInspectionFiles)
-            $inspectionMessage = $this->buildInspectionMessage($cotizacion->nombre, $proveedor->code_supplier, $qtyBox);
+            // Preparar mensaje inicial de inspección (se enviará solo una vez; incluir link a vista inspección)
+            $baseUrl = rtrim(env('APP_URL_CLIENTES', 'http://localhost:3001'), '/');
+            $cotizacionUuid = Cotizacion::where('id', $idCotizacion)->value('uuid');
+            $inspeccionViewUrl = $baseUrl . '/inspeccion/' . ($cotizacionUuid ?? '') . '?id_proveedor=' . $idProveedor;
+            $inspectionMessage = $this->buildInspectionMessage($cotizacion->nombre, $proveedor->code_supplier, $qtyBox, $inspeccionViewUrl);
             $proveedorsWithFilesSended = AlmacenInspection::where('id_cotizacion', $idCotizacion)
                 ->where('send_status', 'SENDED')
                 ->count();
@@ -2112,12 +2115,16 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
     }
 
     /**
-     * Construir mensaje de inspección
+     * Construir mensaje de inspección (link a vista solo cuando se envían fotos/videos por separado)
      */
-    private function buildInspectionMessage($cliente, $codeSupplier, $qtyBox)
+    private function buildInspectionMessage($cliente, $codeSupplier, $qtyBox, $inspeccionViewUrl = null)
     {
-        return $cliente . '----' . $codeSupplier . '----' . $qtyBox . ' boxes.' . "\n\n" .
+        $msg = $cliente . '----' . $codeSupplier . '----' . $qtyBox . ' boxes.' . "\n\n" .
             '📦 Tu carga llegó a nuestro almacén de Yiwu, te comparto las fotos y videos.' . "\n\n";
+        if (!empty($inspeccionViewUrl)) {
+            $msg .= '🔗 Ver inspección: ' . $inspeccionViewUrl;
+        }
+        return $msg;
     }
 
     /**
