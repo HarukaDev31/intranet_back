@@ -494,10 +494,19 @@ class CalculadoraImportacionController extends Controller
     public function store(Request $request)
     {
         try {
-            // Convertir strings vacíos a null en campos numéricos de productos
+            // Normalizar strings vacíos en campos numéricos (evitar "data was invalid")
             $data = $request->all();
             if (isset($data['proveedores']) && is_array($data['proveedores'])) {
                 foreach ($data['proveedores'] as $i => $proveedor) {
+                    if (isset($proveedor['peso']) && $proveedor['peso'] === '') {
+                        $data['proveedores'][$i]['peso'] = 0;
+                    }
+                    if (isset($proveedor['cbm']) && $proveedor['cbm'] === '') {
+                        $data['proveedores'][$i]['cbm'] = 0;
+                    }
+                    if (isset($proveedor['qtyCaja']) && $proveedor['qtyCaja'] === '') {
+                        $data['proveedores'][$i]['qtyCaja'] = 0;
+                    }
                     if (isset($proveedor['productos']) && is_array($proveedor['productos'])) {
                         foreach ($proveedor['productos'] as $j => $producto) {
                             if (isset($producto['antidumpingCU']) && $producto['antidumpingCU'] === '') {
@@ -505,6 +514,9 @@ class CalculadoraImportacionController extends Controller
                             }
                             if (isset($producto['adValoremP']) && $producto['adValoremP'] === '') {
                                 $data['proveedores'][$i]['productos'][$j]['adValoremP'] = null;
+                            }
+                            if (isset($producto['cantidad']) && $producto['cantidad'] === '') {
+                                $data['proveedores'][$i]['productos'][$j]['cantidad'] = 1;
                             }
                         }
                     }
@@ -529,7 +541,7 @@ class CalculadoraImportacionController extends Controller
                 'proveedores.*.productos' => 'required|array|min:1',
                 'proveedores.*.productos.*.nombre' => 'required|string',
                 'proveedores.*.productos.*.precio' => 'required|numeric|min:0',
-                'proveedores.*.productos.*.cantidad' => 'required|integer|min:1',
+                'proveedores.*.productos.*.cantidad' => 'required|numeric|min:0',
                 'proveedores.*.productos.*.antidumpingCU' => 'nullable|numeric|min:0',
                 'proveedores.*.productos.*.adValoremP' => 'nullable|numeric|min:0',
                 'tarifaTotalExtraProveedor' => 'nullable|numeric|min:0',
