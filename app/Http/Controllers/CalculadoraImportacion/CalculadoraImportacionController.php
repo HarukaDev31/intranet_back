@@ -660,6 +660,7 @@ class CalculadoraImportacionController extends Controller
                 ]
             ]);
         } catch (\Exception $e) {
+            Log::error('Error al guardar el cálculo: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
                 'message' => 'Error al guardar el cálculo: ' . $e->getMessage()
