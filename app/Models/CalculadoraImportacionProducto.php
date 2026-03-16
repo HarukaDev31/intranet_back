@@ -25,7 +25,7 @@ class CalculadoraImportacionProducto extends Model
     protected $casts = [
         'precio' => 'decimal:10',
         'valoracion' => 'integer',
-        'cantidad' => 'integer',
+        'cantidad' => 'float',
         'antidumping_cu' => 'decimal:10',
         'ad_valorem_p' => 'decimal:10'
     ];

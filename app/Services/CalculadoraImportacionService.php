@@ -103,7 +103,7 @@ class CalculadoraImportacionService
                         'nombre' => $productoData['nombre'],
                         'precio' => $productoData['precio'],
                         'valoracion' => $productoData['valoracion'] ?? 0,
-                        'cantidad' => (int) round((float) ($productoData['cantidad'] ?? 0)),
+                        'cantidad' => (float) ($productoData['cantidad'] ?? 0),
                         'antidumping_cu' => $productoData['antidumpingCU'] ?? 0,
                         'ad_valorem_p' => $productoData['adValoremP'] ?? 0
                     ]);
@@ -315,7 +315,7 @@ class CalculadoraImportacionService
                         'nombre' => $productoData['nombre'],
                         'precio' => $productoData['precio'],
                         'valoracion' => $productoData['valoracion'] ?? 0,
-                        'cantidad' => (int) round((float) ($productoData['cantidad'] ?? 0)),
+                        'cantidad' => (float) ($productoData['cantidad'] ?? 0),
                         'antidumping_cu' => $productoData['antidumpingCU'] ?? 0,
                         'ad_valorem_p' => $productoData['adValoremP'] ?? 0,
                     ]);
@@ -1376,7 +1376,7 @@ class CalculadoraImportacionService
                     'nombre' => $p->nombre,
                     'precio' => (float) $p->precio,
                     'valoracion' => (float) ($p->valoracion ?? 0),
-                    'cantidad' => (int) $p->cantidad,
+                    'cantidad' => (float) $p->cantidad,
                     'antidumpingCU' => (float) ($p->antidumping_cu ?? 0),
                     'adValoremP' => (float) ($p->ad_valorem_p ?? 0),
                 ];

@@ -494,35 +494,40 @@ class CalculadoraImportacionController extends Controller
     public function store(Request $request)
     {
         try {
-            // Normalizar strings vacíos en campos numéricos (evitar "data was invalid")
+            // Normalizar campos numéricos (null, "" o no numérico -> valor por defecto) para evitar "data was invalid"
             $data = $request->all();
             if (isset($data['proveedores']) && is_array($data['proveedores'])) {
                 foreach ($data['proveedores'] as $i => $proveedor) {
-                    if (isset($proveedor['peso']) && $proveedor['peso'] === '') {
-                        $data['proveedores'][$i]['peso'] = 0;
+                    $p = &$data['proveedores'][$i];
+                    if (!isset($p['peso']) || $p['peso'] === '' || $p['peso'] === null || !is_numeric($p['peso'])) {
+                        $p['peso'] = 0;
                     }
-                    if (isset($proveedor['cbm']) && $proveedor['cbm'] === '') {
-                        $data['proveedores'][$i]['cbm'] = 0;
+                    if (!isset($p['cbm']) || $p['cbm'] === '' || $p['cbm'] === null || !is_numeric($p['cbm'])) {
+                        $p['cbm'] = 0;
                     }
-                    if (isset($proveedor['qtyCaja']) && $proveedor['qtyCaja'] === '') {
-                        $data['proveedores'][$i]['qtyCaja'] = 0;
+                    if (!isset($p['qtyCaja']) || $p['qtyCaja'] === '' || $p['qtyCaja'] === null || !is_numeric($p['qtyCaja'])) {
+                        $p['qtyCaja'] = 0;
                     }
-                    if (isset($proveedor['productos']) && is_array($proveedor['productos'])) {
-                        foreach ($proveedor['productos'] as $j => $producto) {
-                            if (isset($producto['antidumpingCU']) && $producto['antidumpingCU'] === '') {
-                                $data['proveedores'][$i]['productos'][$j]['antidumpingCU'] = null;
+                    if (isset($p['productos']) && is_array($p['productos'])) {
+                        foreach ($p['productos'] as $j => $producto) {
+                            $prod = &$data['proveedores'][$i]['productos'][$j];
+                            if (!isset($prod['antidumpingCU']) || $prod['antidumpingCU'] === '') {
+                                $prod['antidumpingCU'] = null;
                             }
-                            if (isset($producto['adValoremP']) && $producto['adValoremP'] === '') {
-                                $data['proveedores'][$i]['productos'][$j]['adValoremP'] = null;
+                            if (!isset($prod['adValoremP']) || $prod['adValoremP'] === '') {
+                                $prod['adValoremP'] = null;
                             }
-                            if (isset($producto['cantidad']) && $producto['cantidad'] === '') {
-                                $data['proveedores'][$i]['productos'][$j]['cantidad'] = 1;
+                            if (!isset($prod['cantidad']) || $prod['cantidad'] === '' || $prod['cantidad'] === null || !is_numeric($prod['cantidad'])) {
+                                $prod['cantidad'] = 1;
+                            }
+                            if (!isset($prod['valoracion']) || $prod['valoracion'] === '' || $prod['valoracion'] === null || !is_numeric($prod['valoracion'])) {
+                                $prod['valoracion'] = 0;
                             }
                         }
                     }
                 }
             }
-            $request->merge($data);
+            $request->replace($data);
 
             $request->validate([
                 'id' => 'nullable|integer|exists:calculadora_importacion,id',
@@ -542,6 +547,7 @@ class CalculadoraImportacionController extends Controller
                 'proveedores.*.productos.*.nombre' => 'required|string',
                 'proveedores.*.productos.*.precio' => 'required|numeric|min:0',
                 'proveedores.*.productos.*.cantidad' => 'required|numeric|min:0',
+                'proveedores.*.productos.*.valoracion' => 'nullable|numeric|min:0',
                 'proveedores.*.productos.*.antidumpingCU' => 'nullable|numeric|min:0',
                 'proveedores.*.productos.*.adValoremP' => 'nullable|numeric|min:0',
                 'tarifaTotalExtraProveedor' => 'nullable|numeric|min:0',
@@ -671,6 +677,19 @@ class CalculadoraImportacionController extends Controller
                     'totales' => $totales
                 ]
             ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            $errors = $e->errors();
+            $lista = [];
+            foreach ($errors as $campo => $mensajes) {
+                $lista[] = $campo . ': ' . implode(' ', $mensajes);
+            }
+            $mensajeDescriptivo = 'Error de validación. ' . implode(' | ', $lista);
+            Log::warning('Calculadora validación fallida', ['errors' => $errors]);
+            return response()->json([
+                'success' => false,
+                'message' => $mensajeDescriptivo,
+                'errors' => $errors,
+            ], 422);
         } catch (\Exception $e) {
             Log::error('Error al guardar el cálculo: ' . $e->getMessage());
             return response()->json([
