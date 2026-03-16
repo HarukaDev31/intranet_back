@@ -58,10 +58,11 @@ class CalendarEventService
 
         $cacheKey = null;
         if ($useCache) {
+            $version = (int) Cache::get('calendar:events:list:version', 0);
             $roleKey = $roleGroupId !== null ? (int) $roleGroupId : 0;
             $startKey = $startDate ?: 'null';
             $endKey = $endDate ?: 'null';
-            $cacheKey = "calendar:events:list:role_group:{$roleKey}:start:{$startKey}:end:{$endKey}";
+            $cacheKey = "calendar:events:list:role_group:{$roleKey}:start:{$startKey}:end:{$endKey}:v:{$version}";
             $cached = Cache::get($cacheKey);
             if ($cached !== null) {
                 Log::info('calendar.getEventsForUser CACHE_HIT', [
@@ -1080,19 +1081,17 @@ class CalendarEventService
     }
 
     /**
-     * Limpia el caché de listados grandes de eventos (vista de mes).
+     * Invalida el caché de listados de eventos (crear/actualizar/borrar evento, etc.).
+     * Usa una versión para que funcione con cualquier driver (file, redis, database):
+     * al incrementar la versión, las claves antiguas dejan de usarse y la siguiente petición obtiene datos frescos.
      */
     public function clearEventsCache(): void
     {
         try {
-            // Usamos el cliente Redis directamente para borrar por patrón.
-            $redis = app('redis')->connection();
-            $keys = $redis->keys('calendar:events:list:*');
-            if (!empty($keys)) {
-                $redis->del($keys);
-            }
+            $version = (int) Cache::get('calendar:events:list:version', 0);
+            Cache::put('calendar:events:list:version', $version + 1, 86400 * 365);
         } catch (\Throwable $e) {
-            Log::warning('No se pudo limpiar el caché de eventos de calendario: ' . $e->getMessage());
+            Log::warning('No se pudo invalidar el caché de eventos de calendario: ' . $e->getMessage());
         }
     }
 
