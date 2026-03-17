@@ -565,56 +565,18 @@ class ClienteService
      */
     private function obtenerClientesConFiltroCategoria($query, $filtroCategoria, $page, $perPage)
     {
-        $todosLosClientes = $query->get();
-        //filter clientes where id_cliente_importacion es nulo
-       
-        $todosLosIds = $todosLosClientes->pluck('id')->toArray();
-        $serviciosPorCliente = $this->obtenerServiciosEnLote($todosLosIds);
+        // Aplicar filtro de categoría en BD (evita cargar todos los clientes en memoria)
+        $clientes = $query->porCategoria($filtroCategoria)->paginate($perPage, ['*'], 'page', $page);
 
-        // Filtrar por categoría
-        $clientesFiltrados = [];
-        foreach ($todosLosClientes as $cliente) {
-            $servicios = $serviciosPorCliente[$cliente->id] ?? [];
-            $categoria = $this->determinarCategoriaCliente($servicios);
+        $clienteIds = $clientes->pluck('id')->toArray();
+        $serviciosPorCliente = $this->obtenerServiciosEnLote($clienteIds);
+        $datosTransformados = $this->transformarDatosClientes($clientes->items(), $serviciosPorCliente);
 
-            if ($categoria === $filtroCategoria) {
-                $primerServicio = !empty($servicios) ? $servicios[0] : null;
-                
-                $clientesFiltrados[] = [
-                    'id' => $cliente->id,
-                    'nombre' => $cliente->nombre,
-                    'documento' => $cliente->documento,
-                    'correo' => $cliente->correo,
-                    'telefono' => $cliente->telefono,
-                    'fecha' => $cliente->fecha ? $cliente->fecha->format('d/m/Y') : null,
-                    'categoria' => $categoria,
-                    'primer_servicio' => $primerServicio ? [
-                        'servicio' => $primerServicio['servicio'],
-                        'fecha' => Carbon::parse($primerServicio['fecha'])->format('d/m/Y'),
-                        'categoria' => $categoria
-                    ] : null,
-                    'total_servicios' => count($servicios),
-                    'servicios' => collect($servicios)->map(function ($servicio) use ($categoria) {
-                        return [
-                            'servicio' => $servicio['servicio'],
-                            'fecha' => Carbon::parse($servicio['fecha'])->format('d/m/Y'),
-                            'categoria' => $categoria
-                        ];
-                    })
-                ];
-            }
-        }
-
-        // Paginar manualmente
-        $total = count($clientesFiltrados);
-        $offset = ($page - 1) * $perPage;
-        $clientesPaginados = array_slice($clientesFiltrados, $offset, $perPage);
-
-        return [$clientesPaginados, [
-            'total' => $total,
-            'per_page' => $perPage,
-            'current_page' => $page,
-            'last_page' => ceil($total / $perPage)
+        return [$datosTransformados, [
+            'total' => $clientes->total(),
+            'per_page' => $clientes->perPage(),
+            'current_page' => $clientes->currentPage(),
+            'last_page' => $clientes->lastPage(),
         ]];
     }
 
@@ -663,6 +625,7 @@ class ClienteService
 
         // Obtener servicios de contenedor_consolidado_cotizacion
         $cotizaciones = DB::table('contenedor_consolidado_cotizacion')
+            ->whereNotNull('estado_cliente')
             ->where('estado_cotizador', 'CONFIRMADO')
             ->whereIn('id_cliente', $clienteIds)
             ->select(
@@ -1162,104 +1125,61 @@ class ClienteService
      */
     private function obtenerEstadisticasHeader(Request $request)
     {
-        // Aplicar TODOS los filtros incluyendo categoría
         $queryBase = Cliente::query();
         $this->aplicarFiltros($queryBase, $request);
 
-        // Verificar si hay filtro de categoría
         $filtroCategoria = $request->has('categoria') && !empty($request->categoria) && $request->categoria != 'todos'
             ? $request->categoria : null;
 
         if ($filtroCategoria) {
-            // Con filtro de categoría - aplicar lógica especial
-            $todosLosClientes = $queryBase->get();
-            $todosLosIds = $todosLosClientes->pluck('id')->toArray();
-            $serviciosPorCliente = $this->obtenerServiciosEnLote($todosLosIds);
-
-            // Filtrar por categoría
-            $clientesFiltrados = [];
-            foreach ($todosLosClientes as $cliente) {
-                $servicios = $serviciosPorCliente[$cliente->id] ?? [];
-                $categoria = $this->determinarCategoriaCliente($servicios);
-
-                if ($categoria === $filtroCategoria) {
-                    $clientesFiltrados[] = $cliente;
-                }
-            }
-        } else {
-            // Sin filtro de categoría - obtener todos los clientes filtrados
-            $clientesFiltrados = $queryBase->get();
+            $queryBase->porCategoria($filtroCategoria);
         }
 
-        // Obtener IDs de clientes (manejar tanto arrays como colecciones)
-        if (is_array($clientesFiltrados)) {
-            $clienteIds = array_column($clientesFiltrados, 'id');
-        } else {
-            $clienteIds = $clientesFiltrados->pluck('id')->toArray();
-        }
+        // Quitar ORDER BY para conteos/subconsultas
+        $queryIds = (clone $queryBase)->reorder()->select('clientes.id');
 
-        if (empty($clienteIds)) {
+        $totalClientes = (clone $queryBase)->reorder()->count('clientes.id');
+
+        if ($totalClientes === 0) {
             return [
-                'total_clientes' => [
-                    'value' => 0,
-                    'label' => 'Clientes'
-                ],
-                'total_clientes_curso' => [
-                    'value' => 0,
-                    'label' => 'Curso'
-                ],
-                'total_clientes_consolidado' => [
-                    'value' => 0,
-                    'label' => 'Consolidado'
-                ]
+                'total_clientes' => ['value' => 0, 'label' => 'Clientes'],
+                'total_clientes_curso' => ['value' => 0, 'label' => 'Curso'],
+                'total_clientes_consolidado' => ['value' => 0, 'label' => 'Consolidado'],
             ];
         }
 
-        // Obtener servicios para calcular estadísticas
-        $serviciosPorCliente = $this->obtenerServiciosEnLote($clienteIds);
+        // Fecha mínima de CURSO por cliente
+        $minCurso = DB::table('pedido_curso as pc')
+            ->join('entidad as e', 'pc.ID_Entidad', '=', 'e.ID_Entidad')
+            ->where('pc.Nu_Estado', 2)
+            ->whereNotNull('pc.id_cliente')
+            ->groupBy('pc.id_cliente')
+            ->select('pc.id_cliente', DB::raw('MIN(e.Fe_Registro) as min_curso'));
 
-        $totalClientes = count($clientesFiltrados);
-        $clientesCurso = 0;
-        $clientesConsolidado = 0;
-        ///count clientes
-        $clientes = count($clientesFiltrados);
-        $index = 0;
-        foreach ($clientesFiltrados as $cliente) {
-            Log::info("Procesando cliente {$index} de {$totalClientes}");
-            $servicios = $serviciosPorCliente[$cliente->id] ?? [];
-            Log::info("Servicios del cliente {$cliente->id}: " . json_encode($servicios));
-            $primerServicio = !empty($servicios) ? $servicios[0] : null;
+        // Fecha mínima de CONSOLIDADO por cliente (solo confirmados)
+        $minConsolidado = DB::table('contenedor_consolidado_cotizacion as ccc')
+            ->where('ccc.estado_cotizador', 'CONFIRMADO')
+            ->whereNotNull('ccc.id_cliente')
+            ->groupBy('ccc.id_cliente')
+            ->select('ccc.id_cliente', DB::raw('MIN(ccc.fecha) as min_consolidado'));
 
-            if ($primerServicio) {
-                // Determinar tipo basado en el primer servicio
-                if (strpos(strtolower($primerServicio['servicio']), 'curso') !== false) {
-                    Log::info("Cliente {$cliente->id} es cliente curso");
-                    $clientesCurso++;
-                    $index++;
-
-                } elseif (strpos(strtolower($primerServicio['servicio']), 'consolidado') !== false) {
-                    Log::info("Cliente {$cliente->id} es cliente consolidado");
-                    $clientesConsolidado++;
-                    $index++;
-                    
-                }
-            }
-
-        }
+        // Contar primer servicio por tipo comparando fechas mínimas
+        $stats = DB::query()
+            ->fromSub($queryIds, 'fc')
+            ->leftJoinSub($minCurso, 'mc', function ($join) {
+                $join->on('mc.id_cliente', '=', 'fc.id');
+            })
+            ->leftJoinSub($minConsolidado, 'mco', function ($join) {
+                $join->on('mco.id_cliente', '=', 'fc.id');
+            })
+            ->selectRaw('SUM(CASE WHEN mc.min_curso IS NOT NULL AND (mco.min_consolidado IS NULL OR mc.min_curso <= mco.min_consolidado) THEN 1 ELSE 0 END) as curso_first')
+            ->selectRaw('SUM(CASE WHEN mco.min_consolidado IS NOT NULL AND (mc.min_curso IS NULL OR mco.min_consolidado < mc.min_curso) THEN 1 ELSE 0 END) as consolidado_first')
+            ->first();
 
         return [
-            'total_clientes' => [
-                'value' => $index,
-                'label' => 'Clientes'
-            ],
-            'total_clientes_curso' => [
-                'value' => $clientesCurso,
-                'label' => 'Curso'
-            ],
-            'total_clientes_consolidado' => [
-                'value' => $clientesConsolidado,
-                'label' => 'Consolidado'
-            ]
+            'total_clientes' => ['value' => (int) $totalClientes, 'label' => 'Clientes'],
+            'total_clientes_curso' => ['value' => (int) ($stats->curso_first ?? 0), 'label' => 'Curso'],
+            'total_clientes_consolidado' => ['value' => (int) ($stats->consolidado_first ?? 0), 'label' => 'Consolidado'],
         ];
     }
 

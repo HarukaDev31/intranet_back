@@ -14,6 +14,7 @@ use App\Models\ImportCliente;
 use App\Services\BaseDatos\Clientes\ClienteService;
 use App\Services\BaseDatos\Clientes\ClienteExportService;
 use App\Services\BaseDatos\Clientes\ClienteImportService;
+use App\Services\BaseDatos\Clientes\ClienteCacheService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
@@ -33,15 +34,18 @@ class ClientesController extends Controller
     protected $clienteService;
     protected $clienteExportService;
     protected $clienteImportService;
+    protected ClienteCacheService $clienteCacheService;
 
     public function __construct(
         ClienteService $clienteService,
         ClienteExportService $clienteExportService,
-        ClienteImportService $clienteImportService
+        ClienteImportService $clienteImportService,
+        ClienteCacheService $clienteCacheService
     ) {
         $this->clienteService = $clienteService;
         $this->clienteExportService = $clienteExportService;
         $this->clienteImportService = $clienteImportService;
+        $this->clienteCacheService = $clienteCacheService;
     }
 
     /**
@@ -109,15 +113,22 @@ class ClientesController extends Controller
             $perPage = $request->get('itemsPerPage', 100);
             $page = $request->get('currentPage', 1);
 
-            // Usar el servicio para obtener datos
-            $result = $this->clienteService->obtenerClientes($request, $page, $perPage, $search);
-
-            return response()->json([
-                'success' => true,
-                'data' => $result['data'],
-                'pagination' => $result['pagination'],
-                'headers' => $result['headers']
+            $params = array_merge($request->query(), [
+                'user_id' => auth()->id(),
             ]);
+
+            $payload = $this->clienteCacheService->rememberIndex($params, function () use ($request, $page, $perPage, $search) {
+                $result = $this->clienteService->obtenerClientes($request, $page, $perPage, $search);
+
+                return [
+                    'success' => true,
+                    'data' => $result['data'],
+                    'pagination' => $result['pagination'],
+                    'headers' => $result['headers'],
+                ];
+            });
+
+            return response()->json($payload);
         } catch (\Exception $e) {
             Log::error('Error al obtener clientes: ' . $e->getMessage());
             return response()->json([
@@ -160,20 +171,32 @@ class ClientesController extends Controller
     public function show($id): JsonResponse
     {
         try {
-            $result = $this->clienteService->obtenerClientePorId($id);
+            $idInt = (int) $id;
+            $payload = $this->clienteCacheService->rememberShow($idInt, function () use ($idInt) {
+                $result = $this->clienteService->obtenerClientePorId($idInt);
 
-            if (!$result['success']) {
-                return response()->json([
-                    'success' => false,
-                    'message' => $result['message']
-                ], $result['status'] ?? 404);
+                if (!$result['success']) {
+                    return [
+                        'success' => false,
+                        'message' => $result['message'],
+                        '_http_code' => $result['status'] ?? 404,
+                    ];
+                }
+
+                return [
+                    'success' => true,
+                    'data' => $result['data'],
+                    'message' => 'Cliente obtenido exitosamente',
+                ];
+            });
+
+            if (isset($payload['_http_code'])) {
+                $code = (int) $payload['_http_code'];
+                unset($payload['_http_code']);
+                return response()->json($payload, $code);
             }
 
-            return response()->json([
-                'success' => true,
-                'data' => $result['data'],
-                'message' => 'Cliente obtenido exitosamente'
-            ]);
+            return response()->json($payload);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -323,6 +346,8 @@ class ClientesController extends Controller
             ]);
             Log::info('Importando clientes desde Excel');
             $result = $this->clienteImportService->importarClientes($request);
+            // Invalidate cache por cambios masivos
+            $this->clienteCacheService->invalidateAfterWrite();
 
             return response()->json([
                 'success' => true,
@@ -465,6 +490,8 @@ class ClientesController extends Controller
     {
         try {
             $result = $this->clienteImportService->eliminarImportacion($id);
+            // Invalidate cache por cambios masivos
+            $this->clienteCacheService->invalidateAfterWrite();
             
             return response()->json([
                 'success' => true, 
