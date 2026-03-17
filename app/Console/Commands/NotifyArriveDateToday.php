@@ -38,7 +38,10 @@ class NotifyArriveDateToday extends Command
         $providers = CotizacionProveedor::where(function ($q) use ($today) {
             $q->whereDate('arrive_date_china', $today)
               ->orWhereDate('arrive_date', $today);
-        })->get();
+        })
+            // Solo los proveedores que aún NO tienen ningún archivo/row en contenedor_consolidado_almacen_inspection
+            ->doesntHave('inspectionAlmacen')
+            ->get();
 
         $controller = new CotizacionProveedorController();
         $count = 0;

@@ -1913,6 +1913,14 @@ class EntregaController extends Controller
                     AND ccp.name = 'DELIVERY'
                     ORDER BY cccp.payment_date ASC, cccp.id ASC
                 ) AS pagos_details"),
+                // Última fecha de pago de DELIVERY (para ordenar)
+                DB::raw("(
+                    SELECT MAX(cccp.payment_date)
+                    FROM {$this->table_contenedor_consolidado_cotizacion_coordinacion_pagos} cccp
+                    JOIN {$this->table_pagos_concept} ccp ON cccp.id_concept = ccp.id
+                    WHERE cccp.id_cotizacion = CC.id
+                    AND ccp.name = 'DELIVERY'
+                ) AS last_delivery_payment_date"),
                 // Campo calculado para el estado de pago
                 DB::raw("CASE 
                     WHEN (
@@ -2000,10 +2008,8 @@ class EntregaController extends Controller
             $query->whereDate('CC.fecha', '<=', $request->fecha_fin);
         }
 
-        // Ordenamiento
-        $sortField = $request->input('sort_by', 'CC.id');
-        $sortOrder = $request->input('sort_order', 'asc');
-        $query->orderBy($sortField, $sortOrder);
+        // Ordenamiento: por fecha de pago DELIVERY más reciente primero
+        $query->orderByDesc('last_delivery_payment_date')->orderByDesc('CC.id');
 
         // Total general (sin paginación, convirtiendo HAVING en WHERE equivalente)
         $tablePagos = $this->table_contenedor_consolidado_cotizacion_coordinacion_pagos;
@@ -2030,7 +2036,6 @@ class EntregaController extends Controller
         $page = $request->input('page', 1);
         $perPage = $request->input('per_page', 100);
         $data = $query->paginate($perPage, ['*'], 'page', $page);
-        Log::info('data: ' . json_encode($data));
         //foreach pago_details generate url y formato carga #carga -año
         foreach ($data->items() as $item) {
             $item->pagos_details = json_decode($item->pagos_details, true);
@@ -2041,6 +2046,8 @@ class EntregaController extends Controller
                     }
                 }
             }
+            // Reemplazar "fecha" por la última fecha de pago DELIVERY
+            $item->fecha = $item->last_delivery_payment_date ?? $item->fecha;
             $anio = !empty($item->f_inicio) ? date('Y', strtotime($item->f_inicio)) : date('Y');
             $item->carga_display = '#' . $item->carga . ' - ' . $anio;
         }
