@@ -86,7 +86,11 @@ class CalculadoraImportacionController extends Controller
     public function getClientesByWhatsapp(Request $request)
     {
         try {
-            $whatsapp = $request->whatsapp;
+            $request->validate([
+                'whatsapp' => 'required|string',
+            ]);
+
+            $whatsapp = (string) $request->whatsapp;
 
             $clientesTransformados = $this->cacheService->rememberClientesByWhatsapp($whatsapp, function () use ($whatsapp) {
                 return $this->clienteWhatsappLookupService->searchClientesByWhatsapp($whatsapp);

@@ -37,8 +37,13 @@ class CalculadoraImportacionCacheService
         return $this->rememberTagged($key, now()->addMinutes(5), $resolver);
     }
 
-    public function rememberClientesByWhatsapp(string $whatsapp, callable $resolver): array
+    public function rememberClientesByWhatsapp(?string $whatsapp, callable $resolver): array
     {
+        if (empty($whatsapp)) {
+            // Si no hay whatsapp, no cachear (evitar TypeError y keys vacías).
+            $value = $resolver();
+            return is_array($value) ? $value : (array) $value;
+        }
         $normalized = preg_replace('/[^0-9]/', '', $whatsapp);
         if (Str::startsWith($normalized, '51') && strlen($normalized) === 11) {
             $normalized = substr($normalized, 2);
