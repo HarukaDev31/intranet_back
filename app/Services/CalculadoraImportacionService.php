@@ -1768,5 +1768,25 @@ class CalculadoraImportacionService
         DB::table('contenedor_proveedor_estados_tracking')
             ->where('id_proveedor', $idProveedorCotizacion)
             ->delete();
+
+        // Documentación en almacén (FK contenedor_consolidado_almacen_documentacion.id_proveedor -> cccp.id)
+        DB::table('contenedor_consolidado_almacen_documentacion')
+            ->where('id_proveedor', $idProveedorCotizacion)
+            ->delete();
+
+        // Inspección en almacén (FK contenedor_consolidado_almacen_inspection.id_proveedor -> cccp.id)
+        DB::table('contenedor_consolidado_almacen_inspection')
+            ->where('id_proveedor', $idProveedorCotizacion)
+            ->delete();
+
+        // Documentos del proveedor (perfil cotizador)
+        DB::table('contenedor_consolidado_cotizacion_cotizador_proveedor_documentos')
+            ->where('id_proveedor', $idProveedorCotizacion)
+            ->delete();
+
+        // Documentación por proveedor (cotización)
+        DB::table('contenedor_consolidado_cotizacion_documentacion')
+            ->where('id_proveedor', $idProveedorCotizacion)
+            ->delete();
     }
 }
