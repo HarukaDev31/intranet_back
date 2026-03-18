@@ -187,6 +187,29 @@ class CalculadoraImportacionController extends Controller
                 if ($request->has('vendedor') && $request->vendedor) {
                     $query->where('id_usuario', $request->vendedor);
                 }
+
+                // Filtro por vinculación de proveedores (cotización desvinculada/mapeo incompleto)
+                // - desvinculadas: existe al menos un proveedor con code_supplier vacío o id_proveedor null
+                // - vinculadas: todos los proveedores tienen code_supplier no vacío y id_proveedor no null
+                if ($request->has('proveedores_vinculados') && $request->proveedores_vinculados) {
+                    $vinculacion = (string) $request->proveedores_vinculados;
+
+                    $invalidProveedor = function ($q) {
+                        $q->where(function ($q2) {
+                            $q2->whereNull('id_proveedor')
+                                ->orWhereNull('code_supplier')
+                                ->orWhereRaw('TRIM(code_supplier) = \'\'');
+                        });
+                    };
+
+                    if ($vinculacion === 'desvinculadas') {
+                        $query->whereHas('proveedores', $invalidProveedor);
+                    } elseif ($vinculacion === 'vinculadas') {
+                        $query->whereHas('proveedores')
+                            ->whereDoesntHave('proveedores', $invalidProveedor);
+                    }
+                }
+
                 if ($request->has('fecha_inicio') && $request->fecha_inicio) {
                     $query->whereDate('created_at', '>=', $request->fecha_inicio);
                 }
@@ -299,6 +322,26 @@ class CalculadoraImportacionController extends Controller
             }
             if ($request->has('vendedor') && $request->vendedor) {
                 $query->where('id_usuario', $request->vendedor);
+            }
+
+            // Filtro por vinculación de proveedores (cotización desvinculada/mapeo incompleto)
+            if ($request->has('proveedores_vinculados') && $request->proveedores_vinculados) {
+                $vinculacion = (string) $request->proveedores_vinculados;
+
+                $invalidProveedor = function ($q) {
+                    $q->where(function ($q2) {
+                        $q2->whereNull('id_proveedor')
+                            ->orWhereNull('code_supplier')
+                            ->orWhereRaw('TRIM(code_supplier) = \'\'');
+                    });
+                };
+
+                if ($vinculacion === 'desvinculadas') {
+                    $query->whereHas('proveedores', $invalidProveedor);
+                } elseif ($vinculacion === 'vinculadas') {
+                    $query->whereHas('proveedores')
+                        ->whereDoesntHave('proveedores', $invalidProveedor);
+                }
             }
             if ($request->has('fecha_inicio') && $request->fecha_inicio) {
                 $query->whereDate('created_at', '>=', $request->fecha_inicio);
@@ -1071,9 +1114,104 @@ class CalculadoraImportacionController extends Controller
     }
 
     /**
-     * Sincroniza code_supplier desde contenedor_consolidado_cotizacion_proveedores (cccp)
-     * a calculadora_importacion_proveedores por orden, para que al borrar desde la calculadora
-     * se identifique el proveedor correcto en ambas tablas.
+     * Vincula / crea la cotización en carga consolidada desde una fila de calculadora,
+     * sin necesidad de cambiar manualmente el estado en el front a "COTIZADO".
+     *
+     * Esto permite que el front muestre un indicador de "desvinculada" y un botón
+     * para ejecutar el sync de la cotización (y luego habilitar la vista de documentos).
+     */
+    public function vincularCotizacionDesdeCalculadora($id)
+    {
+        try {
+            $id = (int) $id;
+            $calculadora = CalculadoraImportacion::find($id);
+
+            if (!$calculadora) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Calculadora no encontrada'
+                ], 404);
+            }
+
+            if (!$calculadora->url_cotizacion || !$calculadora->id_carga_consolidada_contenedor) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'La calculadora no tiene URL de cotización o contenedor consolidado asociado'
+                ], 400);
+            }
+
+            // Generar cod_cotizacion si aún no existe (igual que en changeEstado -> COTIZADO)
+            if (!$calculadora->cod_cotizacion) {
+                $lastCotizacion = CalculadoraImportacion::where('cod_cotizacion', 'like', 'CO%')
+                    ->where('id', '!=', $id)
+                    ->orderBy('cod_cotizacion', 'desc')
+                    ->first();
+
+                $lastSequentialNumber = 0;
+                if ($lastCotizacion && preg_match('/(\d{4})$/', $lastCotizacion->cod_cotizacion, $matches)) {
+                    $lastSequentialNumber = intval($matches[1]);
+                }
+
+                $newSequentialNumber = $lastSequentialNumber ? $lastSequentialNumber + 1 : 1;
+                $calculadora->cod_cotizacion = 'CO' . date('m') . date('y') . str_pad($newSequentialNumber, 4, '0', STR_PAD_LEFT);
+                $calculadora->save();
+            }
+
+            // Modificar el Excel para agregar fechas de pago y código de cotización (D7)
+            if ($calculadora->url_cotizacion && $calculadora->id_carga_consolidada_contenedor) {
+                $this->modificarExcelConFechas($calculadora);
+            }
+
+            // Regenerar boleta PDF para reflejar el Excel actualizado (si aplica)
+            if ($calculadora->url_cotizacion) {
+                $boletaInfo = $this->calculadoraImportacionService->regenerarBoletaPdf($calculadora);
+                if ($boletaInfo && !empty($boletaInfo['url'])) {
+                    $calculadora->url_cotizacion_pdf = $boletaInfo['url'];
+                    $calculadora->save();
+                }
+            }
+
+            // Si no existe cotización vinculada, crear desde la Excel
+            if (!$calculadora->id_cotizacion) {
+                $this->cotizacionSyncService->crearCotizacionDesdeCalculadoraExcel($calculadora);
+                $calculadora->refresh();
+            }
+
+            // Actualizar cotización relacionada con el nuevo Excel (archivo + datos mínimos)
+            if ($calculadora->id_cotizacion && $calculadora->url_cotizacion) {
+                Cotizacion::where('id', $calculadora->id_cotizacion)->update([
+                    'cotizacion_file_url' => $calculadora->url_cotizacion,
+                ]);
+            }
+
+            // Asegurar que los proveedores de la calculadora queden sincronizados desde la cotización (emparejando por orden)
+            if ($calculadora->id_cotizacion) {
+                $this->sincronizarCodeSupplierCalculadoraDesdeCotizacion($calculadora, $calculadora->id_cotizacion);
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Cotización vinculada correctamente',
+                'data' => [
+                    'id_cotizacion' => $calculadora->id_cotizacion
+                ]
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error en vincularCotizacionDesdeCalculadora: ' . $e->getMessage(), [
+                'id' => $id
+            ]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al vincular la cotización: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Sincroniza `code_supplier` y `id_proveedor` desde
+     * `contenedor_consolidado_cotizacion_proveedores` (cccp) hacia
+     * `calculadora_importacion_proveedores`, emparejando por orden (misma lógica usada
+     * para `code_supplier`).
      */
     private function sincronizarCodeSupplierCalculadoraDesdeCotizacion(CalculadoraImportacion $calculadora, int $cotizacionId): void
     {
@@ -1081,7 +1219,9 @@ class CalculadoraImportacionController extends Controller
             ->orderBy('id')
             ->get(['id', 'code_supplier']);
 
-        $proveedoresCalculadora = $calculadora->proveedores()->orderBy('id')->get();
+        $proveedoresCalculadora = $calculadora->proveedores()
+            ->orderBy('id')
+            ->get(['id', 'code_supplier', 'id_proveedor']);
 
         if ($proveedoresCotizacion->count() !== $proveedoresCalculadora->count()) {
             Log::warning('Sincronizar code_supplier: distinta cantidad de proveedores', [
@@ -1094,14 +1234,21 @@ class CalculadoraImportacionController extends Controller
 
         foreach ($proveedoresCotizacion as $index => $provCotizacion) {
             $codeSupplier = $provCotizacion->code_supplier;
-            if (empty($codeSupplier)) {
-                continue;
-            }
             if (isset($proveedoresCalculadora[$index])) {
-                $proveedoresCalculadora[$index]->update(['code_supplier' => $codeSupplier]);
-                Log::info('code_supplier sincronizado a calculadora_importacion_proveedores', [
+                $updateData = [
+                    'id_proveedor' => $provCotizacion->id,
+                ];
+
+                if (!empty($codeSupplier)) {
+                    $updateData['code_supplier'] = $codeSupplier;
+                }
+
+                $proveedoresCalculadora[$index]->update($updateData);
+
+                Log::info('Proveedor sincronizado a calculadora_importacion_proveedores', [
                     'calculadora_proveedor_id' => $proveedoresCalculadora[$index]->id,
                     'code_supplier' => $codeSupplier,
+                    'id_proveedor' => $provCotizacion->id,
                 ]);
             }
         }

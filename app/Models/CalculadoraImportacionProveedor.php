@@ -15,6 +15,8 @@ class CalculadoraImportacionProveedor extends Model
 
     protected $fillable = [
         'id_calculadora_importacion',
+        // Referencia al proveedor real creado en `contenedor_consolidado_cotizacion_proveedores`
+        'id_proveedor',
         'cbm',
         'peso',
         'qty_caja',

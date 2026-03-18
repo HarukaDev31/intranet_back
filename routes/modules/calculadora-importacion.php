@@ -22,6 +22,9 @@ Route::group(['prefix' => 'calculadora-importacion', 'middleware' => 'jwt.auth']
     Route::get('export-list', [CalculadoraImportacionController::class, 'exportList']);
     Route::post('export-cotizacion', [CalculadoraImportacionController::class, 'exportCotizacion']);
     Route::post('/', [CalculadoraImportacionController::class, 'store']);
+    // Vincula / crea la cotización en carga consolidada desde una fila de calculadora
+    // sin necesidad de cambiar el estado manualmente a "COTIZADO" desde el front.
+    Route::post('vincular-cotizacion/{id}', [CalculadoraImportacionController::class, 'vincularCotizacionDesdeCalculadora']);
     Route::get('/cliente', [CalculadoraImportacionController::class, 'getCalculosPorCliente']);
     Route::post('/change-estado/{id}', [CalculadoraImportacionController::class, 'changeEstado']);
 
