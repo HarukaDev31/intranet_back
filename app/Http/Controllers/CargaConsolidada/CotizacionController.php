@@ -1454,6 +1454,12 @@ class CotizacionController extends Controller
             $volumen = $sheet->getCell('I11')->getCalculatedValue();
             $valorCot = $sheet->getCell('J14')->getCalculatedValue();
 
+            // Normalizar texto para evitar errores de encoding/collation
+            $nombre = $this->normalizarCampoTexto($nombre);
+            $documento = $this->normalizarCampoTexto($documento);
+            $correo = $this->normalizarCampoTexto($correo);
+            $telefono = $this->normalizarTelefono($telefono);
+
             //get calculated value from cell e9
             $fecha = $sheet->getCell('E9')->getValue();
             if ($fecha == "=+TODAY()") {
@@ -1546,6 +1552,12 @@ class CotizacionController extends Controller
             $telefono = $sheet->getCell('B11')->getValue();
             $volumen = $sheet->getCell('I11')->getCalculatedValue();
             $valorCot = $sheet->getCell('J14')->getCalculatedValue();
+
+            // Normalizar texto para evitar errores de encoding/collation
+            $nombre = $this->normalizarCampoTexto($nombre);
+            $documento = $this->normalizarCampoTexto($documento);
+            $correo = $this->normalizarCampoTexto($correo);
+            $telefono = $this->normalizarTelefono($telefono);
 
             //get calculated value from cell e9
             $fecha = $sheet->getCell('E9')->getValue();
@@ -1891,6 +1903,50 @@ class CotizacionController extends Controller
 
         // Si no se puede parsear, devolver la fecha actual
         return date('Y-m-d');
+    }
+
+    /**
+     * Normaliza texto proveniente de Excel/formularios para evitar problemas de
+     * encoding/collation en MySQL (p.ej. caracteres invisibles de formato).
+     */
+    private function normalizarCampoTexto($value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        // Excel puede devolver números; lo pasamos a string para normalizar.
+        $text = is_string($value) ? $value : (string) $value;
+
+        // Normalizar NBSP
+        $text = str_replace("\xC2\xA0", ' ', $text);
+
+        // Eliminar cualquier carácter "format" invisible (Unicode Cf),
+        // incluyendo U+2060 (WORD JOINER) que aparece en tu caso.
+        $text = preg_replace('/\p{Cf}/u', '', $text);
+
+        // Eliminar caracteres de control (fallback)
+        $text = preg_replace('/[\x00-\x1F\x7F]/u', '', $text);
+
+        // Eliminar invisibles típicos (fallback extra)
+        $text = preg_replace('/[\x{200B}-\x{200F}\x{202A}-\x{202E}\x{2060}\x{00AD}\x{FEFF}]/u', '', $text);
+
+        // Colapsar espacios y trim
+        $text = preg_replace('/\s+/u', ' ', $text);
+        $text = trim($text);
+
+        return $text === '' ? null : $text;
+    }
+
+    private function normalizarTelefono($value): ?string
+    {
+        $text = $this->normalizarCampoTexto($value);
+        if ($text === null) {
+            return null;
+        }
+
+        $digits = preg_replace('/\D+/u', '', $text);
+        return $digits === '' ? null : $digits;
     }
 
     /**
@@ -3606,6 +3662,7 @@ class CotizacionController extends Controller
             // TEMPORALMENTE DESHABILITADO: Número de ventas bloqueado
             // Enviar mensaje usando sendMessageVentas (desde el número de ventas)
             // $wspMessageData = $this->sendMessageVentas($message, $telefono);
+            $wspMessageData = null;
             
             if (!(is_array($wspMessageData) && isset($wspMessageData['status']) && $wspMessageData['status'] === true)) {
                 Log::warning('Respuesta inesperada al enviar recordatorio de firma por WhatsApp: ' . json_encode($wspMessageData));
