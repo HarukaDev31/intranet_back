@@ -877,7 +877,6 @@ class PagosController extends Controller
 
             // Calcular total pagado sumando todos los pagos
             $totalPagado = $details->sum('monto');
-            $details['voucher_url'] = $this->generateImageUrl($details['voucher_url']);
             return response()->json([
                 'success' => true,
                 'data' => $details,
