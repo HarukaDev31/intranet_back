@@ -491,38 +491,77 @@ class PagosController extends Controller
 
         return $pagosProcesados;
     }
+    private function generateUrl($ruta)
+    {
+        return $this->generateImageUrl($ruta);
+    }
+
     private function generateImageUrl($ruta)
     {
         if (empty($ruta)) {
             return null;
         }
 
-        // Si ya es una URL completa, devolverla tal como está
-        if (filter_var($ruta, FILTER_VALIDATE_URL)) {
-            return $ruta;
-        }
-        //if ruta contains public remove it
-        if (strpos($ruta, 'public/') !== false) {
-            $ruta = str_replace('public/', '', $ruta);
-        }
-        //if ruta contains app.url but not /storage/ then add /storage/
-        if (strpos($ruta, config('app.url')) !== false && strpos($ruta, '/storage/') === false) {
-            $ruta = config('app.url') . '/storage/' . $ruta;
-            return $ruta;
+        $ruta = trim((string) $ruta);
+
+        // Si ya viene absoluta, solo normalizar/escapar caracteres problemáticos (ej: # en nombre de archivo)
+        if (preg_match('/^https?:\/\//i', $ruta)) {
+            return $this->encodeUrlPath($ruta);
         }
 
-        // Limpiar la ruta de barras iniciales para evitar doble slash
+        // Normalizar rutas relativas típicas del storage de Laravel
+        $ruta = str_replace('\\', '/', $ruta);
         $ruta = ltrim($ruta, '/');
 
-        // Construir URL manualmente para evitar problemas con Storage::url()
-        $baseUrl = config('app.url');
-        $storagePath = '/storage/';
+        if (strpos($ruta, 'public/') === 0) {
+            $ruta = substr($ruta, 7); // remove "public/"
+        }
+        if (strpos($ruta, 'storage/') === 0) {
+            $ruta = substr($ruta, 8); // remove "storage/"
+        }
 
-        // Asegurar que no haya doble slash
-        $baseUrl = rtrim($baseUrl, '/');
-        $storagePath = ltrim($storagePath, '/');
-        $ruta = ltrim($ruta, '/');
-        return $baseUrl .  '/'. $storagePath .  '/' . $ruta;
+        $absoluteUrl = rtrim(config('app.url'), '/') . '/storage/' . ltrim($ruta, '/');
+        return $this->encodeUrlPath($absoluteUrl);
+    }
+
+    /**
+     * Codifica de forma segura el path de una URL para soportar caracteres especiales
+     * como "#" dentro de nombres de archivo.
+     */
+    private function encodeUrlPath(string $url): string
+    {
+        $parts = parse_url($url);
+        if ($parts === false) {
+            return str_replace('#', '%23', $url);
+        }
+
+        $scheme = $parts['scheme'] ?? null;
+        $host = $parts['host'] ?? null;
+        $port = isset($parts['port']) ? ':' . $parts['port'] : '';
+        $user = $parts['user'] ?? null;
+        $pass = $parts['pass'] ?? null;
+        $auth = $user !== null ? $user . ($pass !== null ? ':' . $pass : '') . '@' : '';
+
+        $path = $parts['path'] ?? '';
+        $segments = array_map(
+            static fn($segment) => rawurlencode(rawurldecode($segment)),
+            explode('/', $path)
+        );
+        $encodedPath = implode('/', $segments);
+
+        // Cuando el archivo contiene "#" sin codificar, parse_url lo coloca como fragment.
+        // Lo reinyectamos al path codificado para que el recurso sea accesible.
+        if (isset($parts['fragment']) && $parts['fragment'] !== '') {
+            $encodedPath .= '%23' . rawurlencode(rawurldecode($parts['fragment']));
+        }
+
+        $query = isset($parts['query']) ? '?' . $parts['query'] : '';
+
+        if ($scheme && $host) {
+            return $scheme . '://' . $auth . $host . $port . $encodedPath . $query;
+        }
+
+        return $encodedPath . $query;
     }
     /**
      * Obtener campañas disponibles
@@ -838,14 +877,14 @@ class PagosController extends Controller
 
             // Calcular total pagado sumando todos los pagos
             $totalPagado = $details->sum('monto');
-
+            $details['voucher_url'] = $this->generateImageUrl($details['voucher_url']);
             return response()->json([
                 'success' => true,
                 'data' => $details,
                 'nota' => $cotizacion->note_administracion ?? '',
                 'cliente' => $cotizacion->nombre ?? '',
-                'cotizacion_inicial_url' => $cotizacion->cotizacion_file_url ?? '',
-                'cotizacion_final_url' => $cotizacion->cotizacion_final_url ?? '',
+                'cotizacion_inicial_url' => $this->generateUrl($cotizacion->cotizacion_file_url ?? ''),
+                'cotizacion_final_url' => $this->generateUrl($cotizacion->cotizacion_final_url ?? ''),
                 'total_a_pagar' => $aPagar,
                 'total_a_pagar_formateado' => number_format($aPagar, 2, '.', ''),
                 'total_pagado' => $totalPagado,
@@ -897,8 +936,8 @@ class PagosController extends Controller
                 'data' => $details,
                 'nota' => $cotizacion->note_administracion ?? '',
                 'cliente' => $cotizacion->nombre ?? '',
-                'cotizacion_inicial_url' => $cotizacion->cotizacion_file_url ?? '',
-                'cotizacion_final_url' => $cotizacion->cotizacion_final_url ?? '',
+                'cotizacion_inicial_url' => $this->generateUrl($cotizacion->cotizacion_file_url ?? ''),
+                'cotizacion_final_url' => $this->generateUrl($cotizacion->cotizacion_final_url ?? ''),
                 'total_a_pagar' => $aPagar,
                 'total_a_pagar_formateado' => number_format($aPagar, 2, '.', ''),
                 'total_pagado' => $totalPagado,
