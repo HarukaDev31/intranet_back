@@ -16,6 +16,7 @@ class DatabaseSeeder extends Seeder
         $this->call([
             AuthSeeder::class,
             CalculadoraImportacionSeeder::class,
+            WebCursoPlanSeeder::class,
         ]);
     }
 }

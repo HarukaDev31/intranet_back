@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Curso\CursoController;
+use App\Http\Controllers\Curso\WebCursoPlanController;
 
 /*
 |--------------------------------------------------------------------------
@@ -46,6 +47,12 @@ Route::group(['prefix' => 'cursos', 'middleware' => 'jwt.auth'], function () {
     Route::get('campana/{id}', [CursoController::class, 'getCampanaById']);
     Route::get('campanas-activas', [CursoController::class, 'getCampanasActivas']);
     Route::put('pedido/{id}/campana', [CursoController::class, 'asignarCampanaPedido']);
-    
+
+    /** Planes landing web curso membresía (gestión desde intranet Vue) */
+    Route::get('web-planes-membresia', [WebCursoPlanController::class, 'index']);
+    Route::post('web-planes-membresia', [WebCursoPlanController::class, 'store']);
+    Route::put('web-planes-membresia/{id}', [WebCursoPlanController::class, 'update']);
+    Route::delete('web-planes-membresia/{id}', [WebCursoPlanController::class, 'destroy']);
+
     Route::delete('{id}', [CursoController::class, 'eliminarPedido']);
 });

@@ -123,6 +123,12 @@ require __DIR__.'/modules/external/commons/container.php';
 // Módulo de Formulario de Comprobante
 require __DIR__.'/modules/external/comprobante-form.php';
 
+// API pública para páginas web (planes curso membresía, etc.)
+require __DIR__.'/modules/public-curso-membresia.php';
+
+// API pública: países y ubigeo (formularios web)
+require __DIR__.'/modules/public-ubicacion.php';
+
 // Google Sheets API Routes
 Route::prefix('google-sheets')->group(function () {
     Route::get('/test-connection', [SheetController::class, 'testConnection']);
