@@ -27,6 +27,9 @@ return [
 
     // ✅ Permitir EXPLÍCITAMENTE los dominios que necesitas
     'allowed_origins' => [
+        // Sitio público (apex): fetch desde https://probusiness.pe/ hacia intranetback API
+        'https://probusiness.pe',
+        'http://probusiness.pe',
         'https://clientes.probusiness.pe',
         'https://app.probusiness.pe',
         'https://admin.probusiness.pe',
@@ -37,9 +40,9 @@ return [
         'http://localhost:8000',
     ],
 
-    // ✅ También permitir cualquier subdominio de probusiness.pe
+    // ✅ Subdominios Y dominio raíz probusiness.pe (el patrón .*\.probusiness.pe NO cubre el apex)
     'allowed_origins_patterns' => [
-        '#^https?://.*\.probusiness\.pe(:\d+)?$#',
+        '#^https?://(?:[a-zA-Z0-9-]+\.)?probusiness\.pe(:\d+)?$#',
         '#^http://localhost(:\d+)?$#',
     ],
 
