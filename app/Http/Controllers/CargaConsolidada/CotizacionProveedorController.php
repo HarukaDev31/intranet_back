@@ -202,6 +202,7 @@ class CotizacionProveedorController extends Controller
 
                 case Usuario::ROL_COORDINACION:
                 case Usuario::ROL_CONTABILIDAD:
+                case Usuario::ROL_JEFE_IMPORTACION:
                     $query->where('main.estado_cotizador', 'CONFIRMADO');
                     break;
                 case Usuario::ROL_ALMACEN_CHINA:
