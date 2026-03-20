@@ -1216,11 +1216,11 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                 "📦 En caso hubiera variaciones en el cubicaje se cobrará la diferencia en la cotización final.\n\n" .
                 "Apenas haga el pago, envíe por este medio para hacer la reserva.";
 
-            $this->sendMessage($message);
+            $this->sendMessage($message,'administracion');
 
             // Enviar imagen de pagos
             $pagosUrl = public_path('assets/images/pagos-full.jpg');
-            $this->sendMedia($pagosUrl, 'image/jpg');
+            $this->sendMedia($pagosUrl, 'image/jpg','administracion');
 
             return "success";
         } catch (Exception $e) {
@@ -2277,7 +2277,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
             "📦 En caso hubiera variaciones en el cubicaje se cobrará la diferencia en la cotización final.\n\n" .
             "Apenas haga el pago, envíe por este medio para hacer la reserva.";
 
-        $this->sendMessage($message, $telefono, 10);
+        $this->sendMessage($message, $telefono, 10,'administracion');
     }
 
     /**

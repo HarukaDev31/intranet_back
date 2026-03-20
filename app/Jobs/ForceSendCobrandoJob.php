@@ -122,11 +122,11 @@ class ForceSendCobrandoJob implements ShouldQueue
                 "Apenas haga el pago, envíe por este medio para hacer la reserva.";
 
             // Enviar mensaje
-            $this->sendMessage($message);
+            $this->sendMessage($message,'administracion');
 
             // Enviar imagen de pagos
             $pagosUrl = public_path('assets/images/pagos-full.jpg');
-            $this->sendMedia($pagosUrl, 'image/jpg',null,$telefono,10);
+            $this->sendMedia($pagosUrl, 'image/jpg',null,$telefono,10,'administracion');
 
             Log::info("Mensaje de cobranza enviado exitosamente via Job", [
                 'id_cotizacion' => $this->idCotizacion,
