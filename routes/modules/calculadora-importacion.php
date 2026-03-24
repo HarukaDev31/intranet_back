@@ -17,6 +17,7 @@ use App\Http\Controllers\CalculadoraImportacion\CalculadoraImportacionDocumentos
 Route::group(['prefix' => 'calculadora-importacion', 'middleware' => 'jwt.auth'], function () {
     Route::post('clientes', [CalculadoraImportacionController::class, 'getClientesByWhatsapp']);
     Route::get('tarifas', [CalculadoraImportacionController::class, 'getTarifas']);
+    Route::put('tarifas/{id}', [CalculadoraImportacionController::class, 'updateTarifa']);
     Route::post('duplicate/{id}', [CalculadoraImportacionController::class, 'duplicate']);
     Route::get('/', [CalculadoraImportacionController::class, 'index']);
     Route::get('export-list', [CalculadoraImportacionController::class, 'exportList']);

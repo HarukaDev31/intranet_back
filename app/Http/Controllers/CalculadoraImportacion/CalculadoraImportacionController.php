@@ -146,6 +146,8 @@ class CalculadoraImportacionController extends Controller
                         'label' => $tarifa->tipoCliente->nombre,
                         'id_tipo_cliente' => $tarifa->tipoCliente->id,
                         'value' => $tarifa->tipoCliente->nombre,
+                        'created_at' => $tarifa->created_at ? $tarifa->created_at->toIso8601String() : null,
+                        'updated_at' => $tarifa->updated_at ? $tarifa->updated_at->toIso8601String() : null,
                     ];
                 })->values()->all();
 
@@ -160,6 +162,43 @@ class CalculadoraImportacionController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Error al obtener tarifas: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Actualizar solo el monto (value) de una tarifa. Rangos CBM y tipo no se modifican.
+     */
+    public function updateTarifa(Request $request, $id)
+    {
+        try {
+            $validated = $request->validate([
+                'value' => 'required|numeric|min:0',
+            ]);
+
+            $tarifa = CalculadoraTarifasConsolidado::whereNull('deleted_at')->findOrFail((int) $id);
+            $tarifa->value = $validated['value'];
+            $tarifa->save();
+            $tarifa->refresh();
+
+            $this->cacheService->flushTarifas();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Tarifa actualizada correctamente.',
+                'data' => [
+                    'id' => $tarifa->id,
+                    'tarifa' => (float) $tarifa->value,
+                    'created_at' => $tarifa->created_at ? $tarifa->created_at->toIso8601String() : null,
+                    'updated_at' => $tarifa->updated_at ? $tarifa->updated_at->toIso8601String() : null,
+                ],
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            throw $e;
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al actualizar la tarifa: ' . $e->getMessage(),
             ], 500);
         }
     }
