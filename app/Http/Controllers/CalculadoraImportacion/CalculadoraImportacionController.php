@@ -167,17 +167,19 @@ class CalculadoraImportacionController extends Controller
     }
 
     /**
-     * Actualizar solo el monto (value) de una tarifa. Rangos CBM y tipo no se modifican.
+     * Actualizar monto (value) y tipo (PLAIN|STANDARD) de una tarifa. Rangos CBM no se modifican.
      */
     public function updateTarifa(Request $request, $id)
     {
         try {
             $validated = $request->validate([
                 'value' => 'required|numeric|min:0',
+                'type' => 'required|in:PLAIN,STANDARD',
             ]);
 
             $tarifa = CalculadoraTarifasConsolidado::whereNull('deleted_at')->findOrFail((int) $id);
             $tarifa->value = $validated['value'];
+            $tarifa->type = $validated['type'];
             $tarifa->save();
             $tarifa->refresh();
 
@@ -189,6 +191,7 @@ class CalculadoraImportacionController extends Controller
                 'data' => [
                     'id' => $tarifa->id,
                     'tarifa' => (float) $tarifa->value,
+                    'type' => $tarifa->type,
                     'created_at' => $tarifa->created_at ? $tarifa->created_at->toIso8601String() : null,
                     'updated_at' => $tarifa->updated_at ? $tarifa->updated_at->toIso8601String() : null,
                 ],
