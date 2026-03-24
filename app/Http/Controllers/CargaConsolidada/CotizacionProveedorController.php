@@ -1643,11 +1643,10 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                     }
                 }
                 $message .= "Total diferencia: " . $totalDiferencia;
-                $message .= "\n📦 Las variaciones en el cubicaje se cobrará la diferencia en la cotización final.";
+                $message .= "\n📦 La variación de CBM se actualizará en la cotización Final.";
                 if ($cotizacion->send_alert_difference_cbm_status == 'PENDING') {
                     $response = $this->sendMessage($message);
                     if ($response && isset($response['status']) && $response['status'] === true) {
-                        //update cotizacion set send_alert_difference_cbm_status = 'PENDING'
                         Log::info('sendAlertDifferenceCbmMessage sent: ' . $message);
                         $cotizacion->send_alert_difference_cbm_status = 'SENDED';
                         $cotizacion->save();
