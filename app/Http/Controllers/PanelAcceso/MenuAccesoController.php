@@ -147,86 +147,63 @@ class MenuAccesoController extends Controller
      */
     private function insertarMenusConJerarquia(int $idEmpresa, int $idGrupoUsuario, array $menus): void
     {
-        $EID_Menu_Padre     = '';
-        $EID_Menu_Sub_Padre = '';
+        $inserted = [];
 
         foreach ($menus as $idMenu => $crud) {
-            // Insertar menú abuelo si existe
-            $abuelo = DB::selectOne(
-                'SELECT COUNT(*) AS existe FROM menu WHERE ID_Menu = (SELECT ID_Padre FROM menu WHERE ID_Menu = (SELECT ID_Padre FROM menu WHERE ID_Menu = ? LIMIT 1) LIMIT 1) LIMIT 1',
-                [$idMenu]
-            );
+            $idMenu = (int) $idMenu;
+            if ($idMenu <= 0) continue;
 
-            if ($abuelo && $abuelo->existe > 0) {
-                $rowAbuelo = DB::selectOne(
-                    'SELECT ID_Menu FROM menu WHERE ID_Menu = (SELECT ID_Padre FROM menu WHERE ID_Menu = (SELECT ID_Padre FROM menu WHERE ID_Menu = ? LIMIT 1) LIMIT 1) LIMIT 1',
-                    [$idMenu]
-                );
-                $idAbuelo = $rowAbuelo->ID_Menu;
+            // Insertar toda la cadena de ancestros hasta la raíz (ID_Padre = 0),
+            // porque el login construye el árbol desde los padres raíz.
+            $currentId = $idMenu;
+            $guard = 0;
+            while ($currentId > 0 && $guard < 25) {
+                $guard++;
 
-                if ($EID_Menu_Padre != $idAbuelo) {
-                    $yaExiste = DB::selectOne(
-                        'SELECT COUNT(*) AS existe FROM menu_acceso WHERE ID_Grupo_Usuario = ? AND ID_Menu = ?',
-                        [$idGrupoUsuario, $idAbuelo]
-                    );
-                    if ($yaExiste->existe == 0) {
+                if (!isset($inserted[$currentId])) {
+                    $yaExiste = DB::table('menu_acceso')
+                        ->where('ID_Grupo_Usuario', $idGrupoUsuario)
+                        ->where('ID_Menu', $currentId)
+                        ->exists();
+
+                    if (!$yaExiste) {
+                        // Para ancestros, dar permisos completos para que el nodo sea visible/navegable.
                         DB::table('menu_acceso')->insert([
-                            'ID_Empresa'      => $idEmpresa,
-                            'ID_Menu'         => $idAbuelo,
-                            'ID_Grupo_Usuario'=> $idGrupoUsuario,
-                            'Nu_Consultar'    => 1,
-                            'Nu_Agregar'      => 1,
-                            'Nu_Editar'       => 1,
-                            'Nu_Eliminar'     => 1,
+                            'ID_Empresa'       => $idEmpresa,
+                            'ID_Menu'          => $currentId,
+                            'ID_Grupo_Usuario' => $idGrupoUsuario,
+                            'Nu_Consultar'     => 1,
+                            'Nu_Agregar'       => 1,
+                            'Nu_Editar'        => 1,
+                            'Nu_Eliminar'      => 1,
                         ]);
                     }
-                    $EID_Menu_Padre = $idAbuelo;
+
+                    $inserted[$currentId] = true;
                 }
+
+                $padreId = (int) (DB::table('menu')->where('ID_Menu', $currentId)->value('ID_Padre') ?? 0);
+                if ($padreId <= 0) {
+                    break;
+                }
+
+                // Si hubiera ciclos corruptos en datos, evitamos loop infinito.
+                if ($padreId === $currentId) {
+                    break;
+                }
+                $currentId = $padreId;
             }
 
-            // Insertar menú padre si existe
-            $padre = DB::selectOne(
-                'SELECT COUNT(*) AS existe FROM menu WHERE ID_Menu = (SELECT ID_Padre FROM menu WHERE ID_Menu = ? LIMIT 1) LIMIT 1',
-                [$idMenu]
-            );
-
-            if ($padre && $padre->existe > 0) {
-                $rowPadre = DB::selectOne(
-                    'SELECT ID_Menu FROM menu WHERE ID_Menu = (SELECT ID_Padre FROM menu WHERE ID_Menu = ? LIMIT 1) LIMIT 1',
-                    [$idMenu]
-                );
-                $idPadre = $rowPadre->ID_Menu;
-
-                if ($EID_Menu_Sub_Padre != $idPadre) {
-                    $yaExiste = DB::selectOne(
-                        'SELECT COUNT(*) AS existe FROM menu_acceso WHERE ID_Grupo_Usuario = ? AND ID_Menu = ?',
-                        [$idGrupoUsuario, $idPadre]
-                    );
-                    if ($yaExiste->existe == 0) {
-                        DB::table('menu_acceso')->insert([
-                            'ID_Empresa'      => $idEmpresa,
-                            'ID_Menu'         => $idPadre,
-                            'ID_Grupo_Usuario'=> $idGrupoUsuario,
-                            'Nu_Consultar'    => 1,
-                            'Nu_Agregar'      => 1,
-                            'Nu_Editar'       => 1,
-                            'Nu_Eliminar'     => 1,
-                        ]);
-                    }
-                    $EID_Menu_Sub_Padre = $idPadre;
-                }
-            }
-
-            // Insertar el menú hijo con sus permisos
-            DB::table('menu_acceso')->insert([
-                'ID_Empresa'      => $idEmpresa,
-                'ID_Menu'         => $idMenu,
-                'ID_Grupo_Usuario'=> $idGrupoUsuario,
-                'Nu_Consultar'    => isset($crud['Nu_Consultar']) ? 1 : 0,
-                'Nu_Agregar'      => isset($crud['Nu_Agregar'])   ? 1 : 0,
-                'Nu_Editar'       => isset($crud['Nu_Editar'])    ? 1 : 0,
-                'Nu_Eliminar'     => isset($crud['Nu_Eliminar'])  ? 1 : 0,
-            ]);
+            // Finalmente, actualizar el menú seleccionado con sus permisos reales (no 1/1/1/1).
+            DB::table('menu_acceso')
+                ->where('ID_Grupo_Usuario', $idGrupoUsuario)
+                ->where('ID_Menu', $idMenu)
+                ->update([
+                    'Nu_Consultar' => isset($crud['Nu_Consultar']) ? 1 : 0,
+                    'Nu_Agregar'   => isset($crud['Nu_Agregar'])   ? 1 : 0,
+                    'Nu_Editar'    => isset($crud['Nu_Editar'])    ? 1 : 0,
+                    'Nu_Eliminar'  => isset($crud['Nu_Eliminar'])  ? 1 : 0,
+                ]);
         }
     }
 

@@ -1027,6 +1027,47 @@ class AuthController extends Controller
             //orde by Nu_Orden
             $arrMenuPadre = collect($arrMenuPadre)->sortBy('Nu_Orden')->toArray();
 
+            // Asegurar que el menú "Inicio" siempre esté disponible y aparezca primero.
+            // Este ítem puede existir en BD aunque no esté asignado en menu_acceso.
+            $inicioMenu = DB::table('menu')
+                ->where('Nu_Activo', 0)
+                ->where('ID_Padre', 0)
+                ->where(function ($q) {
+                    $q->where('No_Menu', 'Inicio')
+                        ->orWhere('url_intranet_v2', 'inicio')
+                        ->orWhere('No_Menu_Url', 'inicio')
+                        ->orWhere('No_Menu_Url', '/');
+                })
+                ->orderByRaw("CASE WHEN No_Menu = 'Inicio' THEN 0 ELSE 1 END")
+                ->orderBy('Nu_Orden')
+                ->orderBy('ID_Menu')
+                ->first();
+
+            if ($inicioMenu) {
+                $inicioId = (int) $inicioMenu->ID_Menu;
+                $inicioIdx = null;
+                foreach ($arrMenuPadre as $idx => $m) {
+                    if (isset($m->ID_Menu) && (int) $m->ID_Menu === $inicioId) {
+                        $inicioIdx = $idx;
+                        break;
+                    }
+                }
+
+                if ($inicioIdx !== null) {
+                    $inicioExistente = $arrMenuPadre[$inicioIdx];
+                    unset($arrMenuPadre[$inicioIdx]);
+                    $arrMenuPadre = array_values($arrMenuPadre);
+                    array_unshift($arrMenuPadre, $inicioExistente);
+                } else {
+                    $inicioMenu->Nu_Cantidad_Menu_Padre = (int) DB::table('menu')
+                        ->where('ID_Padre', $inicioId)
+                        ->where('Nu_Activo', 0)
+                        ->count();
+                    $inicioMenu->Hijos = [];
+                    array_unshift($arrMenuPadre, $inicioMenu);
+                }
+            }
+
             // Si hay menús asignados específicamente al usuario 28911 (vía su registro en `grupo_usuario`),
             // esos menús deben ocultarse a todos los demás usuarios del mismo grupo.
             // Los menús marcados específicamente para uno o varios usuarios (ej. 28911, 28791)
