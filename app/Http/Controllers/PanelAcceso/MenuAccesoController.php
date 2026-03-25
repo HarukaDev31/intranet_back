@@ -224,6 +224,17 @@ class MenuAccesoController extends Controller
             $idMenu = (int) $idMenu;
             if ($idMenu <= 0) continue;
 
+            // Si el menú no existe en catálogo, no podemos asignarlo (evita FK error).
+            $menuExiste = DB::table('menu')->where('ID_Menu', $idMenu)->exists();
+            if (!$menuExiste) {
+                Log::warning('menu_acceso.guardar_permisos.menu_inexistente', [
+                    'id_grupo_usuario' => $idGrupoUsuario,
+                    'id_empresa' => $idEmpresa,
+                    'id_menu' => $idMenu,
+                ]);
+                continue;
+            }
+
             // Insertar toda la cadena de ancestros hasta la raíz (ID_Padre = 0),
             // porque el login construye el árbol desde los padres raíz.
             $currentId = $idMenu;
@@ -232,6 +243,18 @@ class MenuAccesoController extends Controller
                 $guard++;
 
                 if (!isset($inserted[$currentId])) {
+                    // Si el ancestro no existe en `menu`, cortar la cadena (evita FK error).
+                    $existeEnCatalogo = DB::table('menu')->where('ID_Menu', $currentId)->exists();
+                    if (!$existeEnCatalogo) {
+                        Log::warning('menu_acceso.guardar_permisos.ancestro_inexistente', [
+                            'id_grupo_usuario' => $idGrupoUsuario,
+                            'id_empresa' => $idEmpresa,
+                            'id_menu_origen' => $idMenu,
+                            'id_menu_ancestro' => $currentId,
+                        ]);
+                        break;
+                    }
+
                     $yaExiste = DB::table('menu_acceso')
                         ->where('ID_Grupo_Usuario', $idGrupoUsuario)
                         ->where('ID_Menu', $currentId)
