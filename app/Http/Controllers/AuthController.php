@@ -967,13 +967,32 @@ class AuthController extends Controller
     private function obtenerMenusUsuario($usuario)
     {
         try {
+            // OJO: no confiar 100% en usuario.ID_Grupo; algunos usuarios pueden tener su grupo real en grupo_usuario.
             $idGrupo = $usuario->ID_Grupo;
             $noUsuario = $usuario->No_Usuario;
             $idUsuario = $usuario->ID_Usuario;
 
-            // Obtener ID_Grupo_Usuario del usuario (si existe)
-            $grupoUsuarioRow = DB::table('grupo_usuario')->where('ID_Usuario', $idUsuario)->first();
+            // Obtener el grupo_usuario del usuario, priorizando el que coincide con empresa/organización actuales.
+            $grupoUsuarioRow = DB::table('grupo_usuario as gu')
+                ->join('grupo as g', 'g.ID_Grupo', '=', 'gu.ID_Grupo')
+                ->where('gu.ID_Usuario', $idUsuario)
+                ->where('g.ID_Empresa', $usuario->ID_Empresa)
+                ->where('g.ID_Organizacion', $usuario->ID_Organizacion)
+                ->select('gu.ID_Grupo_Usuario', 'gu.ID_Grupo')
+                ->first();
+
+            if (!$grupoUsuarioRow) {
+                // Fallback: si no hay match por empresa/organización, tomar el primero (legacy).
+                $grupoUsuarioRow = DB::table('grupo_usuario')
+                    ->where('ID_Usuario', $idUsuario)
+                    ->select('ID_Grupo_Usuario', 'ID_Grupo')
+                    ->first();
+            }
+
             $idGrupoUsuario = $grupoUsuarioRow ? $grupoUsuarioRow->ID_Grupo_Usuario : null;
+            if ($grupoUsuarioRow && !empty($grupoUsuarioRow->ID_Grupo)) {
+                $idGrupo = (int) $grupoUsuarioRow->ID_Grupo;
+            }
 
             // Configurar condiciones según el usuario
             $selectDistinct = "DISTINCT";
