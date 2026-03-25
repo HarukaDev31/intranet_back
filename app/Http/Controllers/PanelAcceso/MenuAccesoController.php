@@ -99,32 +99,39 @@ class MenuAccesoController extends Controller
                 'menus'         => 'required|array',
             ]);
 
-            // Obtener ID_Grupo_Usuario
-            $grupoUsuario = DB::selectOne(
-                'SELECT ID_Grupo_Usuario FROM grupo_usuario WHERE ID_Empresa = ? AND ID_Organizacion = ? AND ID_Grupo = ? LIMIT 1',
+            // Obtener TODOS los ID_Grupo_Usuario que correspondan (evitar LIMIT 1, que puede afectar a otro rol/org)
+            $grupoUsuarios = DB::select(
+                'SELECT ID_Grupo_Usuario FROM grupo_usuario WHERE ID_Empresa = ? AND ID_Organizacion = ? AND ID_Grupo = ?',
                 [$request->id_empresa, $request->id_org, $request->id_grupo]
             );
 
-            if (!$grupoUsuario) {
+            if (!$grupoUsuarios || count($grupoUsuarios) === 0) {
                 return response()->json(['success' => false, 'message' => 'No se encontró el grupo de usuario'], 422);
             }
 
-            $idGrupoUsuario = $grupoUsuario->ID_Grupo_Usuario;
-
             DB::beginTransaction();
 
-            // Limpiar permisos anteriores
-            DB::table('menu_acceso')->where('ID_Grupo_Usuario', $idGrupoUsuario)->delete();
+            foreach ($grupoUsuarios as $g) {
+                $idGrupoUsuario = (int) ($g->ID_Grupo_Usuario ?? 0);
+                if (!$idGrupoUsuario) continue;
 
-            // Insertar menús seleccionados (con padres y abuelos automáticos)
-            $this->insertarMenusConJerarquia($request->id_empresa, $idGrupoUsuario, $request->menus);
+                // Limpiar permisos anteriores (solo para ese grupo_usuario)
+                DB::table('menu_acceso')->where('ID_Grupo_Usuario', $idGrupoUsuario)->delete();
 
-            // Insertar menús de seguridad automáticos según el nombre del grupo
-            $this->insertarMenusSeguridad($request->id_empresa, $idGrupoUsuario, $request->id_grupo);
+                // Insertar menús seleccionados (con padres y abuelos automáticos)
+                $this->insertarMenusConJerarquia($request->id_empresa, $idGrupoUsuario, $request->menus);
+
+                // Insertar menús de seguridad automáticos según el nombre del grupo
+                $this->insertarMenusSeguridad($request->id_empresa, $idGrupoUsuario, $request->id_grupo);
+            }
 
             DB::commit();
 
-            return response()->json(['success' => true, 'message' => 'Permisos guardados exitosamente']);
+            return response()->json([
+                'success' => true,
+                'message' => 'Permisos guardados exitosamente',
+                'updated_groups' => count($grupoUsuarios),
+            ]);
         } catch (\Illuminate\Validation\ValidationException $e) {
             DB::rollBack();
             return response()->json(['success' => false, 'message' => $e->errors()], 422);
