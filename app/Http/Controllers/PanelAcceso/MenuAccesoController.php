@@ -199,10 +199,12 @@ class MenuAccesoController extends Controller
                 ->where('ID_Grupo_Usuario', $idGrupoUsuario)
                 ->where('ID_Menu', $idMenu)
                 ->update([
-                    'Nu_Consultar' => isset($crud['Nu_Consultar']) ? 1 : 0,
-                    'Nu_Agregar'   => isset($crud['Nu_Agregar'])   ? 1 : 0,
-                    'Nu_Editar'    => isset($crud['Nu_Editar'])    ? 1 : 0,
-                    'Nu_Eliminar'  => isset($crud['Nu_Eliminar'])  ? 1 : 0,
+                    // Nota: el frontend a veces envía flags explícitos en false.
+                    // `isset()` sería true aunque el valor sea false, así que usamos truthiness real.
+                    'Nu_Consultar' => !empty($crud['Nu_Consultar']) ? 1 : 0,
+                    'Nu_Agregar'   => !empty($crud['Nu_Agregar'])   ? 1 : 0,
+                    'Nu_Editar'    => !empty($crud['Nu_Editar'])    ? 1 : 0,
+                    'Nu_Eliminar'  => !empty($crud['Nu_Eliminar'])  ? 1 : 0,
                 ]);
         }
     }
