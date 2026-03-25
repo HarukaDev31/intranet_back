@@ -99,6 +99,9 @@ class MenuAccesoController extends Controller
                 'menus'         => 'required|array',
             ]);
 
+            $menuIds = array_map('intval', array_keys($request->menus ?? []));
+            $requestedPerms = $request->menus ?? [];
+
             // Obtener TODOS los ID_Grupo_Usuario que correspondan (evitar LIMIT 1, que puede afectar a otro rol/org)
             $grupoUsuarios = DB::select(
                 'SELECT ID_Grupo_Usuario FROM grupo_usuario WHERE ID_Empresa = ? AND ID_Organizacion = ? AND ID_Grupo = ?',
@@ -109,11 +112,45 @@ class MenuAccesoController extends Controller
                 return response()->json(['success' => false, 'message' => 'No se encontró el grupo de usuario'], 422);
             }
 
+            $grupoUsuariosIds = array_values(array_filter(array_map(function ($g) {
+                return (int) ($g->ID_Grupo_Usuario ?? 0);
+            }, $grupoUsuarios)));
+
+            // Usuarios afectados (informativo)
+            $usuariosAfectados = DB::table('grupo_usuario')
+                ->whereIn('ID_Grupo_Usuario', $grupoUsuariosIds)
+                ->pluck('ID_Usuario')
+                ->values()
+                ->toArray();
+
+            Log::info('menu_acceso.guardar_permisos.inicio', [
+                'id_empresa' => (int) $request->id_empresa,
+                'id_org' => (int) $request->id_org,
+                'id_grupo' => (int) $request->id_grupo,
+                'roles_grupo_usuario' => $grupoUsuariosIds,
+                'usuarios_afectados' => $usuariosAfectados,
+                'menu_ids' => $menuIds,
+                'nuevos_permisos' => $requestedPerms,
+            ]);
+
             DB::beginTransaction();
 
             foreach ($grupoUsuarios as $g) {
                 $idGrupoUsuario = (int) ($g->ID_Grupo_Usuario ?? 0);
                 if (!$idGrupoUsuario) continue;
+
+                $oldRows = [];
+                if (!empty($menuIds)) {
+                    $oldRows = DB::table('menu_acceso')
+                        ->where('ID_Grupo_Usuario', $idGrupoUsuario)
+                        ->whereIn('ID_Menu', $menuIds)
+                        ->select('ID_Menu', 'Nu_Consultar', 'Nu_Agregar', 'Nu_Editar', 'Nu_Eliminar')
+                        ->orderBy('ID_Menu')
+                        ->get()
+                        ->toArray();
+                }
+
+                $oldCount = DB::table('menu_acceso')->where('ID_Grupo_Usuario', $idGrupoUsuario)->count();
 
                 // Limpiar permisos anteriores (solo para ese grupo_usuario)
                 DB::table('menu_acceso')->where('ID_Grupo_Usuario', $idGrupoUsuario)->delete();
@@ -123,9 +160,43 @@ class MenuAccesoController extends Controller
 
                 // Insertar menús de seguridad automáticos según el nombre del grupo
                 $this->insertarMenusSeguridad($request->id_empresa, $idGrupoUsuario, $request->id_grupo);
+
+                $newRows = [];
+                if (!empty($menuIds)) {
+                    $newRows = DB::table('menu_acceso')
+                        ->where('ID_Grupo_Usuario', $idGrupoUsuario)
+                        ->whereIn('ID_Menu', $menuIds)
+                        ->select('ID_Menu', 'Nu_Consultar', 'Nu_Agregar', 'Nu_Editar', 'Nu_Eliminar')
+                        ->orderBy('ID_Menu')
+                        ->get()
+                        ->toArray();
+                }
+                $newCount = DB::table('menu_acceso')->where('ID_Grupo_Usuario', $idGrupoUsuario)->count();
+
+                Log::info('menu_acceso.guardar_permisos.resultado', [
+                    'id_grupo_usuario' => $idGrupoUsuario,
+                    'id_empresa' => (int) $request->id_empresa,
+                    'id_org' => (int) $request->id_org,
+                    'id_grupo' => (int) $request->id_grupo,
+                    'antiguos' => [
+                        'count_total' => $oldCount,
+                        'rows_menus_enviados' => $oldRows,
+                    ],
+                    'nuevos' => [
+                        'count_total' => $newCount,
+                        'rows_menus_enviados' => $newRows,
+                    ],
+                ]);
             }
 
             DB::commit();
+
+            Log::info('menu_acceso.guardar_permisos.fin', [
+                'id_empresa' => (int) $request->id_empresa,
+                'id_org' => (int) $request->id_org,
+                'id_grupo' => (int) $request->id_grupo,
+                'updated_groups' => count($grupoUsuarios),
+            ]);
 
             return response()->json([
                 'success' => true,
