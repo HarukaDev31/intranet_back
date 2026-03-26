@@ -106,21 +106,17 @@ class ForceSendCobrandoJob implements ShouldQueue
             }
 
             // Tomar el año de la fecha de inicio del contenedor
-            $message = "Reserva de espacio:\n" .
+            // add Hola @nombre del cliente
+            $message = "Hola " . $cliente . ", te escribe el área de contabilidad de Probusiness. \n\n" .
+                "Reserva de espacio:\n" .
                 "*Consolidado #" . $carga . "-$anioContenedor*\n\n" .
                 "Ahora tienes que hacer el pago del CBM preliminar para poder subir su carga en nuestro contenedor.\n\n" .
                 "☑ CBM Preliminar: " . $volumen . " cbm\n" .
-                "☑ Costo CBM: $" . $valorCot . "\n";
-
-            if (!empty($countPagosLogistica) && $countPagosLogistica > 0) {
-                $message .= "☑ Pendiente de pago CBM: $" . number_format($pendiente, 2) . "\n\n";
-            }
-
-            $message .= "📅 Fecha Limite de pago: " . $fCierre . "\n\n" .
+                "☑ Costo CBM: $" . $valorCot . "\n\n" .
+                "📅 Fecha Limite de pago: " . $fCierre . "\n\n" .
                 "⚠ Nota: Realizar el pago antes del llenado del contenedor.\n\n" .
                 "📦 En caso hubiera variaciones en el cubicaje se cobrará la diferencia en la cotización final.\n\n" .
                 "Apenas haga el pago, envíe por este medio para hacer la reserva.";
-
             // Enviar mensaje
             $this->sendMessage($message,$this->phoneNumberId,0,'administracion');
 
