@@ -1730,87 +1730,58 @@ class CotizacionController extends Controller
             $dataToInsert['id_cotizacion'] = $id;
             $dataToInsert['id_contenedor'] = $cotizacion->id_contenedor;
 
-            // Obtener proveedores existentes con códigos
-            $existingProviders = CotizacionProveedor::where('id_cotizacion', $id)
-                ->whereNotNull('code_supplier')
-                ->pluck('code_supplier')
-                ->toArray();
-            
-            // Eliminar proveedores sin código
-            CotizacionProveedor::where('id_cotizacion', $id)->whereNull('code_supplier')->delete();
-            
             // Obtener datos de proveedores del Excel
             $dataEmbarque = $this->getEmbarqueDataModified($file, $dataToInsert);
-            $newProviders = array_column($dataEmbarque, 'code_supplier');
 
-            // Actualizar proveedores existentes
-            foreach ($existingProviders as $code) {
-                if (in_array($code, $newProviders)) {
-                    $key = array_search($code, $newProviders);
-                    $dataToUpdate = $dataEmbarque[$key];
-                    $items = isset($dataToUpdate['items']) ? $dataToUpdate['items'] : [];
-                    if (isset($dataToUpdate['items'])) {
-                        unset($dataToUpdate['items']);
-                    }
-                    
-                    // Actualizar proveedor
-                    CotizacionProveedor::where('code_supplier', $code)
-                        ->where('id_cotizacion', $id)
-                        ->update($dataToUpdate);
-                    
-                    // Obtener el proveedor actualizado para manejar items
-                    $proveedor = CotizacionProveedor::where('code_supplier', $code)
-                        ->where('id_cotizacion', $id)
-                        ->first();
-                    
-                    // Manejar items del proveedor actualizado
-                    if ($proveedor) {
-                        // Eliminar items antiguos del proveedor
-                        \App\Models\CargaConsolidada\CotizacionProveedorItem::where('id_proveedor', $proveedor->id)->delete();
-                        
-                        // Insertar nuevos items
-                        if (!empty($items)) {
-                            foreach ($items as $item) {
-                                \App\Models\CargaConsolidada\CotizacionProveedorItem::create([
-                                    'id_contenedor' => $proveedor->id_contenedor,
-                                    'id_cotizacion' => $proveedor->id_cotizacion,
-                                    'id_proveedor' => $proveedor->id,
-                                    'initial_price' => $item['initial_price'] ?? null,
-                                    'initial_qty' => $item['initial_qty'] ?? null,
-                                    'initial_name' => $item['initial_name'] ?? null,
-                                    'final_price' => $item['final_price'] ?? null,
-                                    'final_qty' => $item['final_qty'] ?? null,
-                                    'final_name' => $item['final_name'] ?? null,
-                                    'tipo_producto' => $item['tipo_producto'] ?? 'GENERAL',
-                                ]);
-                            }
-                        }
-                    }
-                } else {
-                    // Eliminar proveedor y sus items (ya no está en el Excel)
-                    $proveedorToDelete = CotizacionProveedor::where('code_supplier', $code)
-                        ->where('id_cotizacion', $id)
-                        ->first();
-                    
-                    if ($proveedorToDelete) {
-                        \App\Models\CargaConsolidada\CotizacionProveedorItem::where('id_proveedor', $proveedorToDelete->id)->delete();
-                        $proveedorToDelete->delete();
+            // Actualizar por orden de proveedor para evitar "crear otro" cuando cambia code_supplier (p.ej. cambio de contenedor)
+            $existingProviders = CotizacionProveedor::where('id_cotizacion', $id)
+                ->orderBy('id')
+                ->get();
+
+            $existingCount = $existingProviders->count();
+            $newCount = count($dataEmbarque);
+            $limit = min($existingCount, $newCount);
+
+            for ($i = 0; $i < $limit; $i++) {
+                $proveedor = $existingProviders[$i];
+                $dataToUpdate = $dataEmbarque[$i];
+                $items = isset($dataToUpdate['items']) ? $dataToUpdate['items'] : [];
+                if (isset($dataToUpdate['items'])) {
+                    unset($dataToUpdate['items']);
+                }
+
+                CotizacionProveedor::where('id', $proveedor->id)->update($dataToUpdate);
+
+                \App\Models\CargaConsolidada\CotizacionProveedorItem::where('id_proveedor', $proveedor->id)->delete();
+                if (!empty($items)) {
+                    foreach ($items as $item) {
+                        \App\Models\CargaConsolidada\CotizacionProveedorItem::create([
+                            'id_contenedor' => $dataToUpdate['id_contenedor'] ?? $proveedor->id_contenedor,
+                            'id_cotizacion' => $proveedor->id_cotizacion,
+                            'id_proveedor' => $proveedor->id,
+                            'initial_price' => $item['initial_price'] ?? null,
+                            'initial_qty' => $item['initial_qty'] ?? null,
+                            'initial_name' => $item['initial_name'] ?? null,
+                            'final_price' => $item['final_price'] ?? null,
+                            'final_qty' => $item['final_qty'] ?? null,
+                            'final_name' => $item['final_name'] ?? null,
+                            'tipo_producto' => $item['tipo_producto'] ?? 'GENERAL',
+                        ]);
                     }
                 }
             }
 
-            // Insertar nuevos proveedores (los que tienen códigos que no existían antes)
-            foreach ($dataEmbarque as $data) {
-                if (!in_array($data['code_supplier'], $existingProviders)) {
+            // Si vienen más proveedores nuevos que los existentes, insertarlos
+            if ($newCount > $existingCount) {
+                for ($i = $existingCount; $i < $newCount; $i++) {
+                    $data = $dataEmbarque[$i];
                     $items = isset($data['items']) ? $data['items'] : [];
                     if (isset($data['items'])) {
                         unset($data['items']);
                     }
-                    
+
                     Log::info('Insertando nuevo proveedor desde calculadora: ' . json_encode($data));
                     $provModel = CotizacionProveedor::create($data);
-                    
-                    // Insertar items del nuevo proveedor
                     if ($provModel && !empty($items)) {
                         foreach ($items as $item) {
                             \App\Models\CargaConsolidada\CotizacionProveedorItem::create([
@@ -1826,6 +1797,17 @@ class CotizacionController extends Controller
                                 'tipo_producto' => $item['tipo_producto'] ?? 'GENERAL',
                             ]);
                         }
+                    }
+                }
+            }
+
+            // Si ahora hay menos proveedores que antes, eliminar sobrantes del final
+            if ($existingCount > $newCount) {
+                for ($i = $newCount; $i < $existingCount; $i++) {
+                    $proveedorToDelete = $existingProviders[$i];
+                    if ($proveedorToDelete) {
+                        \App\Models\CargaConsolidada\CotizacionProveedorItem::where('id_proveedor', $proveedorToDelete->id)->delete();
+                        $proveedorToDelete->delete();
                     }
                 }
             }

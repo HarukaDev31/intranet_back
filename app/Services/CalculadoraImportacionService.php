@@ -188,6 +188,20 @@ class CalculadoraImportacionService
     {
         try {
             DB::beginTransaction();
+            $oldContenedorId = (int) ($calculadora->id_carga_consolidada_contenedor ?? 0);
+            $newContenedorId = array_key_exists('id_carga_consolidada_contenedor', $data)
+                ? (int) ($data['id_carga_consolidada_contenedor'] ?? 0)
+                : $oldContenedorId;
+            $contenedorChanged = $oldContenedorId !== $newContenedorId;
+
+            Log::info('[DEBUG CALCULADORA UPDATE] INICIO', [
+                'calculadora_id' => $calculadora->id,
+                'old_contenedor_id' => $oldContenedorId,
+                'new_contenedor_id' => $newContenedorId,
+                'contenedor_changed' => $contenedorChanged,
+                'payload' => $data,
+                'estado_antes' => $this->buildDebugSnapshot($calculadora),
+            ]);
 
             // Cargar relación de contenedor si existe
             if ($calculadora->id_carga_consolidada_contenedor) {
@@ -228,6 +242,22 @@ class CalculadoraImportacionService
                 'usa_yuan' => !empty($data['usa_yuan']),
                 'tc_yuan_usado' => array_key_exists('tc_yuan_usado', $data) ? $data['tc_yuan_usado'] : $calculadora->tc_yuan_usado,
             ]);
+
+            Log::info('[DEBUG CALCULADORA UPDATE] Paso 1 - Cabecera calculadora actualizada', [
+                'calculadora_id' => $calculadora->id,
+                'id_cotizacion' => $calculadora->id_cotizacion,
+                'id_carga_consolidada_contenedor' => $calculadora->id_carga_consolidada_contenedor,
+            ]);
+
+            // Si cambió de consolidado, mover también la cotización vinculada y sus relaciones
+            if ($contenedorChanged && $calculadora->id_cotizacion && $newContenedorId > 0) {
+                $this->moverCotizacionYRelacionadosDeContenedor((int) $calculadora->id_cotizacion, $newContenedorId);
+                Log::info('[DEBUG CALCULADORA UPDATE] Paso 2 - Cotización/proveedores/items movidos de contenedor', [
+                    'calculadora_id' => $calculadora->id,
+                    'cotizacion_id' => $calculadora->id_cotizacion,
+                    'new_contenedor_id' => $newContenedorId,
+                ]);
+            }
 
             // Obtener proveedores existentes con sus códigos antes de eliminarlos
             // Mapear por código para preservarlos correctamente
@@ -282,34 +312,71 @@ class CalculadoraImportacionService
                 }
             }
 
-            // Eliminar proveedores y productos existentes de la calculadora
-            foreach ($calculadora->proveedores as $proveedor) {
-                $proveedor->productos()->delete();
-            }
-            $calculadora->proveedores()->delete();
+            // Actualizar proveedores calculadora en sitio para conservar id_proveedor
+            $existingCalcProviders = $calculadora->proveedores()->orderBy('id')->get();
+            Log::info('[DEBUG CALCULADORA UPDATE] Paso 3 - Proveedores calculadora antes de update in-place', [
+                'calculadora_id' => $calculadora->id,
+                'existing_count' => $existingCalcProviders->count(),
+            ]);
 
-            // Crear nuevos proveedores y productos (preservar códigos existentes si vienen en los datos)
+            $cargaCode = null;
+            if ($contenedorChanged && $newContenedorId > 0) {
+                $cargaCode = DB::table('carga_consolidada_contenedor')
+                    ->where('id', $newContenedorId)
+                    ->value('carga');
+            }
+
+            $payloadProviders = $data['proveedores'] ?? [];
+
+            // Actualizar proveedores y productos existentes (nunca crear en update)
             foreach ($data['proveedores'] as $index => $proveedorData) {
-                // Preservar código existente si viene en los datos (no regenerar)
+                // Si cambió de contenedor, regenerar código de proveedor porque depende de carga/contenedor.
                 $codeSupplier = null;
-                if (isset($proveedorData['code_supplier']) && !empty($proveedorData['code_supplier'])) {
-                    // Si viene en los datos, preservarlo (ya fue generado al pasar a COTIZADO)
+                if ($contenedorChanged && !empty($cargaCode)) {
+                    $codeSupplier = $this->generateCodeSupplier(
+                        (string) $nombreCliente,
+                        (string) $cargaCode,
+                        count($data['proveedores']),
+                        $index + 1
+                    );
+                } elseif (isset($proveedorData['code_supplier']) && !empty($proveedorData['code_supplier'])) {
                     $codeSupplier = $proveedorData['code_supplier'];
                 }
-                // Si no viene código, dejarlo null (solo se genera al pasar a COTIZADO)
 
-                $proveedor = $calculadora->proveedores()->create([
-                    'cbm' => $proveedorData['cbm'] ?? 0,
-                    'peso' => $proveedorData['peso'] ?? 0,
-                    'qty_caja' => $proveedorData['qtyCaja'] ?? 0,
-                    'code_supplier' => $codeSupplier
-                ]);
+                $existingProvider = null;
+                if (!empty($proveedorData['id'])) {
+                    $existingProvider = $existingCalcProviders->firstWhere('id', (int) $proveedorData['id']);
+                }
+                if (!$existingProvider) {
+                    $existingProvider = $existingCalcProviders[$index] ?? null;
+                }
+                if ($existingProvider) {
+                    $existingProvider->update([
+                        'cbm' => $proveedorData['cbm'] ?? 0,
+                        'peso' => $proveedorData['peso'] ?? 0,
+                        'qty_caja' => $proveedorData['qtyCaja'] ?? 0,
+                        'code_supplier' => $codeSupplier,
+                        // Preservar id_proveedor existente
+                    ]);
+                    $proveedor = $existingProvider;
+                } else {
+                    // Permitir alta de nuevos proveedores en update
+                    $proveedor = $calculadora->proveedores()->create([
+                        'cbm' => $proveedorData['cbm'] ?? 0,
+                        'peso' => $proveedorData['peso'] ?? 0,
+                        'qty_caja' => $proveedorData['qtyCaja'] ?? 0,
+                        'code_supplier' => $codeSupplier,
+                        'id_proveedor' => null,
+                    ]);
+                }
 
                 // Agregar código al array de datos para usar en Excel (si existe)
                 if ($codeSupplier) {
                     $data['proveedores'][$index]['code_supplier'] = $codeSupplier;
                 }
 
+                // Reemplazar productos del proveedor, manteniendo el proveedor
+                $proveedor->productos()->delete();
                 foreach ($proveedorData['productos'] as $productoData) {
                     $proveedor->productos()->create([
                         'nombre' => $productoData['nombre'],
@@ -320,6 +387,39 @@ class CalculadoraImportacionService
                         'ad_valorem_p' => $productoData['adValoremP'] ?? 0,
                     ]);
                 }
+            }
+            // Eliminar proveedores sobrantes si payload trae menos de los actuales
+            $payloadIds = collect($payloadProviders)
+                ->pluck('id')
+                ->filter(fn ($v) => !is_null($v) && $v !== '')
+                ->map(fn ($v) => (int) $v)
+                ->all();
+
+            $providersToDelete = empty($payloadIds)
+                ? $existingCalcProviders->slice(count($payloadProviders))
+                : $existingCalcProviders->filter(fn ($p) => !in_array((int) $p->id, $payloadIds, true));
+
+            foreach ($providersToDelete as $provToDelete) {
+                if ($provToDelete) {
+                    $provToDelete->productos()->delete();
+                    $provToDelete->delete();
+                }
+            }
+
+            Log::info('[DEBUG CALCULADORA UPDATE] Paso 4 - Proveedores/productos calculadora actualizados', [
+                'calculadora_id' => $calculadora->id,
+                'proveedores_payload' => count($data['proveedores'] ?? []),
+                'proveedores_previos' => $existingCalcProviders->count(),
+                'contenedor_changed' => $contenedorChanged,
+            ]);
+
+            // Si cambió de contenedor, reflejar id_contenedor y códigos en la cotización vinculada
+            if ($contenedorChanged && $calculadora->id_cotizacion && $newContenedorId > 0) {
+                $this->sincronizarCodigosCotizacionDesdeCalculadora($calculadora);
+                Log::info('[DEBUG CALCULADORA UPDATE] Paso 5 - Códigos sincronizados calculadora -> cotización', [
+                    'calculadora_id' => $calculadora->id,
+                    'cotizacion_id' => $calculadora->id_cotizacion,
+                ]);
             }
 
             // Recalcular totales
@@ -411,6 +511,11 @@ class CalculadoraImportacionService
                 Log::info('[EDITAR COTIZACIÓN] Calculadora guardada exitosamente. ID: ' . $calculadora->id . ', URL: ' . $calculadora->url_cotizacion);
             }
 
+            Log::info('[DEBUG CALCULADORA UPDATE] RESULTADO FINAL PRE-COMMIT', [
+                'calculadora_id' => $calculadora->id,
+                'estado_despues' => $this->buildDebugSnapshot($calculadora),
+            ]);
+
             DB::commit();
             return $calculadora->load(['proveedores.productos']);
         } catch (\Exception $e) {
@@ -418,6 +523,114 @@ class CalculadoraImportacionService
             Log::error('Error al actualizar cálculo de importación: ' . $e->getMessage());
             throw $e;
         }
+    }
+
+    /**
+     * Mueve la cotización relacionada al nuevo contenedor y actualiza proveedores/items vinculados.
+     */
+    private function moverCotizacionYRelacionadosDeContenedor(int $idCotizacion, int $idContenedorNuevo): void
+    {
+        Cotizacion::where('id', $idCotizacion)->update([
+            'id_contenedor' => $idContenedorNuevo,
+        ]);
+
+        CotizacionProveedor::where('id_cotizacion', $idCotizacion)->update([
+            'id_contenedor' => $idContenedorNuevo,
+        ]);
+
+        CotizacionProveedorItem::where('id_cotizacion', $idCotizacion)->update([
+            'id_contenedor' => $idContenedorNuevo,
+        ]);
+    }
+
+    /**
+     * Sincroniza code_supplier de calculadora -> cotización manteniendo el orden de proveedores.
+     */
+    private function sincronizarCodigosCotizacionDesdeCalculadora(CalculadoraImportacion $calculadora): void
+    {
+        if (empty($calculadora->id_cotizacion)) {
+            return;
+        }
+
+        $proveedoresCalc = CalculadoraImportacionProveedor::where('id_calculadora_importacion', $calculadora->id)
+            ->orderBy('id')
+            ->get(['id', 'code_supplier']);
+
+        $proveedoresCot = CotizacionProveedor::where('id_cotizacion', $calculadora->id_cotizacion)
+            ->orderBy('id')
+            ->get(['id']);
+
+        $limite = min($proveedoresCalc->count(), $proveedoresCot->count());
+        for ($i = 0; $i < $limite; $i++) {
+            $codeSupplier = $proveedoresCalc[$i]->code_supplier ?? null;
+            if (!$codeSupplier) {
+                continue;
+            }
+            CotizacionProveedor::where('id', $proveedoresCot[$i]->id)->update([
+                'code_supplier' => $codeSupplier,
+            ]);
+        }
+    }
+
+    /**
+     * Snapshot de depuración completo para update de calculadora/cotización.
+     */
+    private function buildDebugSnapshot(CalculadoraImportacion $calculadora): array
+    {
+        $calculadora->refresh();
+
+        $calcProveedores = CalculadoraImportacionProveedor::where('id_calculadora_importacion', $calculadora->id)
+            ->orderBy('id')
+            ->get(['id', 'id_calculadora_importacion', 'id_proveedor', 'cbm', 'peso', 'qty_caja', 'code_supplier']);
+
+        $calcProveedoresIds = $calcProveedores->pluck('id')->all();
+        $calcItems = CalculadoraImportacionProducto::whereIn('id_proveedor', $calcProveedoresIds)
+            ->orderBy('id')
+            ->get(['id', 'id_proveedor', 'nombre', 'precio', 'cantidad', 'antidumping_cu', 'ad_valorem_p']);
+
+        $cotizacionData = null;
+        if (!empty($calculadora->id_cotizacion)) {
+            $cotizacion = Cotizacion::find($calculadora->id_cotizacion);
+            if ($cotizacion) {
+                $cotProv = CotizacionProveedor::where('id_cotizacion', $cotizacion->id)
+                    ->orderBy('id')
+                    ->get(['id', 'id_cotizacion', 'id_contenedor', 'code_supplier', 'qty_box', 'cbm_total', 'peso']);
+                $cotProvIds = $cotProv->pluck('id')->all();
+                $cotItems = CotizacionProveedorItem::whereIn('id_proveedor', $cotProvIds)
+                    ->orderBy('id')
+                    ->get(['id', 'id_contenedor', 'id_cotizacion', 'id_proveedor', 'initial_name', 'initial_qty', 'initial_price']);
+
+                $cotizacionData = [
+                    'cotizacion' => [
+                        'id' => $cotizacion->id,
+                        'id_contenedor' => $cotizacion->id_contenedor,
+                        'nombre' => $cotizacion->nombre,
+                        'cotizacion_file_url' => $cotizacion->cotizacion_file_url,
+                    ],
+                    'proveedores_count' => $cotProv->count(),
+                    'items_count' => $cotItems->count(),
+                    'proveedores' => $cotProv->toArray(),
+                    'items' => $cotItems->toArray(),
+                ];
+            }
+        }
+
+        return [
+            'calculadora' => [
+                'id' => $calculadora->id,
+                'id_carga_consolidada_contenedor' => $calculadora->id_carga_consolidada_contenedor,
+                'id_cotizacion' => $calculadora->id_cotizacion,
+                'nombre_cliente' => $calculadora->nombre_cliente,
+                'tipo_documento' => $calculadora->tipo_documento,
+                'estado' => $calculadora->estado,
+                'url_cotizacion' => $calculadora->url_cotizacion,
+            ],
+            'calculadora_proveedores_count' => $calcProveedores->count(),
+            'calculadora_items_count' => $calcItems->count(),
+            'calculadora_proveedores' => $calcProveedores->toArray(),
+            'calculadora_items' => $calcItems->toArray(),
+            'cotizacion_relacionada' => $cotizacionData,
+        ];
     }
 
     /**

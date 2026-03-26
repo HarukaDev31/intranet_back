@@ -4,7 +4,9 @@ namespace App\Services\CalculadoraImportacion;
 
 use App\Http\Controllers\CargaConsolidada\CotizacionController;
 use App\Models\CalculadoraImportacion;
+use App\Models\CalculadoraImportacionProveedor;
 use App\Models\CargaConsolidada\Cotizacion;
+use App\Models\CargaConsolidada\CotizacionProveedor;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
@@ -65,6 +67,9 @@ class CalculadoraImportacionCotizacionSyncService
                     $updateData['cotizacion_file_url'] = $calculadora->url_cotizacion;
                 }
                 Cotizacion::where('id', $calculadora->id_cotizacion)->update($updateData);
+
+                // Importante: cuando cccp se crea/actualiza, reflejar su ID en calculadora_importacion_proveedores
+                $this->sincronizarIdProveedorDesdeCotizacion($calculadora);
 
                 Log::info('Cotización actualizada desde calculadora', [
                     'calculadora_id' => $calculadora->id,
@@ -158,6 +163,43 @@ class CalculadoraImportacionCotizacionSyncService
                 'response' => $responseData,
             ]);
         }
+    }
+
+    /**
+     * Sincroniza id_proveedor (cccp.id) y code_supplier desde cotización hacia
+     * calculadora_importacion_proveedores, emparejando por orden.
+     */
+    private function sincronizarIdProveedorDesdeCotizacion(CalculadoraImportacion $calculadora): void
+    {
+        if (empty($calculadora->id_cotizacion)) {
+            return;
+        }
+
+        $proveedoresCotizacion = CotizacionProveedor::where('id_cotizacion', $calculadora->id_cotizacion)
+            ->orderBy('id')
+            ->get(['id', 'code_supplier']);
+
+        $proveedoresCalculadora = CalculadoraImportacionProveedor::where('id_calculadora_importacion', $calculadora->id)
+            ->orderBy('id')
+            ->get(['id', 'id_proveedor', 'code_supplier']);
+
+        $limite = min($proveedoresCotizacion->count(), $proveedoresCalculadora->count());
+        for ($i = 0; $i < $limite; $i++) {
+            $provCot = $proveedoresCotizacion[$i];
+            $provCalc = $proveedoresCalculadora[$i];
+            $provCalc->update([
+                'id_proveedor' => $provCot->id,
+                'code_supplier' => $provCot->code_supplier ?: $provCalc->code_supplier,
+            ]);
+        }
+
+        Log::info('Sincronización id_proveedor calculadora <- cotización completada', [
+            'calculadora_id' => $calculadora->id,
+            'cotizacion_id' => $calculadora->id_cotizacion,
+            'proveedores_cotizacion' => $proveedoresCotizacion->count(),
+            'proveedores_calculadora' => $proveedoresCalculadora->count(),
+            'sincronizados' => $limite,
+        ]);
     }
 }
 
