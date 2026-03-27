@@ -107,6 +107,7 @@ class CalendarRoleGroupController extends Controller
 
         try {
             $query = Usuario::where('Nu_Estado', 1)
+            ->whereNull('ID_Entidad')
                 ->orderBy('No_Nombres_Apellidos');
 
             if ($request->filled('search')) {
