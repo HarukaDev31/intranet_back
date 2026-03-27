@@ -129,6 +129,9 @@ require __DIR__.'/modules/public-curso-membresia.php';
 // API pública: países y ubigeo (formularios web)
 require __DIR__.'/modules/public-ubicacion.php';
 
+// API pública: lead landing consolidado (Astro probusiness_consolidado_landing)
+require __DIR__.'/modules/public-landing-consolidado-lead.php';
+
 // Google Sheets API Routes
 Route::prefix('google-sheets')->group(function () {
     Route::get('/test-connection', [SheetController::class, 'testConnection']);
