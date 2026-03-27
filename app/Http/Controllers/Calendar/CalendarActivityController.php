@@ -17,6 +17,7 @@ use App\Models\CargaConsolidada\Contenedor;
 use App\Services\Calendar\CalendarActivityService;
 use App\Services\Calendar\CalendarEventService;
 use App\Services\Calendar\CalendarPermissionService;
+use App\Services\Calendar\CalendarResponsablesCacheService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Tymon\JWTAuth\Facades\JWTAuth;
@@ -695,7 +696,7 @@ class CalendarActivityController extends Controller
             }
 
             $groupKey = $member ? (int) $member->role_group_id : 0;
-            $cacheKey = 'calendar:responsables:user:' . $user->getIdUsuario() . ':group:' . $groupKey;
+            $cacheKey = CalendarResponsablesCacheService::cacheKey($user->getIdUsuario(), $groupKey);
 
             $data = Cache::remember($cacheKey, 300, function () use ($calendarId, $member) {
                 $colorByUserId = $calendarId
@@ -859,7 +860,7 @@ class CalendarActivityController extends Controller
         // También invalidar cache de responsables del grupo principal del usuario
         $member = CalendarRoleGroupMember::where('user_id', $user->getIdUsuario())->first();
         $groupKey = $member ? (int) $member->role_group_id : 0;
-        Cache::forget('calendar:responsables:user:' . $user->getIdUsuario() . ':group:' . $groupKey);
+        Cache::forget(CalendarResponsablesCacheService::cacheKey($user->getIdUsuario(), $groupKey));
         return response()->json(['success' => true, 'message' => 'Color actualizado correctamente']);
     }
 

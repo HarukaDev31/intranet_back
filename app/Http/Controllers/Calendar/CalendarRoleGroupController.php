@@ -8,6 +8,7 @@ use App\Models\Calendar\CalendarRoleGroupMember;
 use App\Models\Calendar\CalendarRoleGroupConfig;
 use App\Models\Usuario;
 use App\Services\Calendar\CalendarPermissionService;
+use App\Services\Calendar\CalendarResponsablesCacheService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -378,6 +379,8 @@ class CalendarRoleGroupController extends Controller
                 ]
             );
 
+            CalendarResponsablesCacheService::forgetForRoleGroup($id, (int) $request->input('user_id'));
+
             return response()->json([
                 'success' => true,
                 'data' => $member,
@@ -407,7 +410,15 @@ class CalendarRoleGroupController extends Controller
         }
 
         try {
+            $userIdsBefore = CalendarRoleGroupMember::where('role_group_id', $id)
+                ->pluck('user_id')
+                ->unique()
+                ->values()
+                ->all();
+            $removedUserId = (int) $member->user_id;
             $member->delete();
+            CalendarResponsablesCacheService::forgetAfterMemberRemoved($id, $removedUserId, $userIdsBefore);
+
             return response()->json([
                 'success' => true,
                 'message' => 'Miembro eliminado correctamente',
