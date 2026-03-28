@@ -30,6 +30,7 @@ return [
         // Sitio público (apex): fetch desde https://probusiness.pe/ hacia intranetback API
         'https://probusiness.pe',
         'http://probusiness.pe',
+        'https://carga-consolidada.probusiness.pe',
         'https://clientes.probusiness.pe',
         'https://app.probusiness.pe',
         'https://admin.probusiness.pe',
