@@ -13,6 +13,7 @@ class LandingConsolidadoLeadService
             'nombre' => $data['nombre'],
             'whatsapp' => $data['whatsapp'],
             'proveedor' => $data['proveedor'],
+            'codigo_campana' => $data['codigo_campana'],
         ];
 
         if ($request) {

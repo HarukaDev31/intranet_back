@@ -28,6 +28,7 @@ class LandingConsolidadoLeadController extends Controller
             'nombre' => ['required', 'string', 'max:255'],
             'whatsapp' => ['required', 'string', 'max:64'],
             'proveedor' => ['required', 'string', 'in:si,no,buscando'],
+            'codigo_campana' => ['required', 'string', 'max:32'],
         ]);
 
         if ($validator->fails()) {

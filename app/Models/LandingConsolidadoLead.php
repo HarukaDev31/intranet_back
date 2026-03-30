@@ -12,6 +12,7 @@ class LandingConsolidadoLead extends Model
         'nombre',
         'whatsapp',
         'proveedor',
+        'codigo_campana',
         'ip_address',
         'user_agent',
     ];
