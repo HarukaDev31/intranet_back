@@ -73,5 +73,6 @@ class Kernel extends HttpKernel
         'jwt.external' => \App\Http\Middleware\JWTExternalMiddleware::class,
         'logviewer.auth' => \App\Http\Middleware\LogViewerAuth::class,
         'landing.consolidado.form_token' => \App\Http\Middleware\VerifyLandingConsolidadoFormToken::class,
+        'landing.curso.form_token' => \App\Http\Middleware\VerifyLandingCursoFormToken::class,
     ];
 }

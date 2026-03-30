@@ -132,6 +132,9 @@ require __DIR__.'/modules/public-ubicacion.php';
 // API pública: lead landing consolidado (Astro probusiness_consolidado_landing)
 require __DIR__.'/modules/public-landing-consolidado-lead.php';
 
+// API pública: lead landing curso (Astro probusiness_curso_landing)
+require __DIR__.'/modules/public-landing-curso-lead.php';
+
 // Google Sheets API Routes
 Route::prefix('google-sheets')->group(function () {
     Route::get('/test-connection', [SheetController::class, 'testConnection']);
