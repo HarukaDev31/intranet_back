@@ -272,6 +272,7 @@ class CalculadoraImportacionController extends Controller
                 // Calcular totales para cada cálculo
                 $data = $calculos->items();
                 foreach ($data as $calculadora) {
+                    $this->ordenarProveedoresPorId($calculadora);
                     $totales = $this->calculadoraImportacionService->calcularTotales($calculadora);
                     $calculadora->totales = $totales;
                     $calculadora->url_cotizacion = $this->generateUrl($calculadora->url_cotizacion);
@@ -593,6 +594,7 @@ class CalculadoraImportacionController extends Controller
                 }
 
                 $totales = $this->calculadoraImportacionService->calcularTotales($calculadora);
+                $this->ordenarProveedoresPorId($calculadora);
 
                 // Invalidate caches relacionados a esta calculadora
                 $this->cacheService->invalidateAfterWrite($calculadora, [
@@ -619,6 +621,7 @@ class CalculadoraImportacionController extends Controller
             }
 
             $totales = $this->calculadoraImportacionService->calcularTotales($calculadora);
+            $this->ordenarProveedoresPorId($calculadora);
 
             // Invalidate caches globales/listado y caches por cliente/whatsapp
             $this->cacheService->invalidateAfterWrite($calculadora, [
@@ -845,6 +848,7 @@ class CalculadoraImportacionController extends Controller
                     ];
                 }
 
+                $this->ordenarProveedoresPorId($calculadora);
                 $totales = $this->calculadoraImportacionService->calcularTotales($calculadora);
 
                 $tcYuanActual = null;
@@ -866,6 +870,15 @@ class CalculadoraImportacionController extends Controller
                 $code = (int) $payload['_http_code'];
                 unset($payload['_http_code']);
                 return response()->json($payload, $code);
+            }
+
+            // Asegura orden consistente incluso cuando el payload viene desde caché previa.
+            if (
+                isset($payload['success'], $payload['data']['calculadora']) &&
+                $payload['success'] === true &&
+                is_object($payload['data']['calculadora'])
+            ) {
+                $this->ordenarProveedoresPorId($payload['data']['calculadora']);
             }
 
             return response()->json($payload);
@@ -1294,6 +1307,29 @@ class CalculadoraImportacionController extends Controller
                 ]);
             }
         }
+    }
+
+    /**
+     * Ordena proveedores y productos por ID para respuestas consistentes.
+     */
+    private function ordenarProveedoresPorId($calculadora): void
+    {
+        if (!$calculadora || !$calculadora->relationLoaded('proveedores')) {
+            return;
+        }
+
+        $proveedoresOrdenados = $calculadora->proveedores->sortBy('id')->values();
+
+        $proveedoresOrdenados->each(function ($proveedor) {
+            if ($proveedor && $proveedor->relationLoaded('productos')) {
+                $proveedor->setRelation(
+                    'productos',
+                    $proveedor->productos->sortBy('id')->values()
+                );
+            }
+        });
+
+        $calculadora->setRelation('proveedores', $proveedoresOrdenados);
     }
 
     /**
