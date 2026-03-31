@@ -20,7 +20,7 @@ class ClienteCacheService
     public function rememberShow(int $id, callable $resolver): array
     {
         $key = $this->key("show:{$id}");
-        return $this->rememberTagged($key, now()->addMinutes(5), $resolver);
+        return $this->rememberTagged($key, now()->addMinutes(1), $resolver);
     }
 
     public function invalidateAfterWrite(?Cliente $cliente = null): void

@@ -563,7 +563,7 @@ class CalculadoraImportacionController extends Controller
                 if ($calculadora->id_cotizacion && $calculadora->url_cotizacion) {
                     // Recargar proveedores para obtener códigos actualizados
                     $calculadora->load(['proveedores', 'contenedor']);
-                    
+
                     // NO regenerar códigos - solo asegurar que estén escritos en el Excel si ya existen
                     // Los códigos solo se generan al pasar a COTIZADO, no al actualizar
                     if ($calculadora->id_carga_consolidada_contenedor) {
@@ -574,7 +574,7 @@ class CalculadoraImportacionController extends Controller
                             $this->excelService->escribirCodigosExistentesEnExcel($calculadora);
                         }
                     }
-                    
+
                     // Actualizar la cotización relacionada
                     $this->cotizacionSyncService->actualizarCotizacionDesdeCalculadora($calculadora);
                 }
@@ -847,7 +847,7 @@ class CalculadoraImportacionController extends Controller
                         '_http_code' => 404,
                     ];
                 }
-
+                Log::info('calculadora: ' . json_encode($calculadora));
                 $this->ordenarProveedoresPorId($calculadora);
                 $totales = $this->calculadoraImportacionService->calcularTotales($calculadora);
 
