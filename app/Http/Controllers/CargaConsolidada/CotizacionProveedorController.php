@@ -426,7 +426,7 @@ class CotizacionProveedorController extends Controller
 
     public function updateContenedorCotizacionProveedoresByUuid($uuid, Request $request)
     {
-        
+
         try {
             $cotizacion = DB::table('contenedor_consolidado_cotizacion')
                 ->where('uuid', $uuid)
@@ -470,7 +470,7 @@ class CotizacionProveedorController extends Controller
 
                 // Actualizar tracking siguiendo el patrón correcto
                 $ahora = now();
-                
+
                 // Obtener el registro más reciente del tracking
                 $trackingActual = DB::table($this->table_conteneodr_proveedor_estados_tracking)
                     ->where('id_proveedor', $proveedor->id)
@@ -698,7 +698,7 @@ class CotizacionProveedorController extends Controller
                     ->update(['volumen_china' => $volumenChina]);
             }
             // Manejo de estados específicos
-            else if (in_array($estado, ["NC", "C", "R", "NS", "NO LOADED", "INSPECTION", 'WAIT',"NP"])) {
+            else if (in_array($estado, ["NC", "C", "R", "NS", "NO LOADED", "INSPECTION", 'WAIT', "NP"])) {
                 DB::table($this->table_contenedor_cotizacion_proveedores)
                     ->where('id_cotizacion', $idCotizacion)
                     ->where('id', $idProveedor)
@@ -714,7 +714,7 @@ class CotizacionProveedorController extends Controller
 
             // Actualizar tracking siguiendo el patrón correcto
             $ahora = now();
-            
+
             // Obtener el registro más reciente del tracking
             $trackingActual = DB::table($this->table_conteneodr_proveedor_estados_tracking)
                 ->where('id_proveedor', $idProveedor)
@@ -1100,7 +1100,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
 
             // Obtener dominio del frontend
             $domain = WhatsappTrait::getCurrentRequestDomain();
-            
+
             // Dispatch del Job para procesamiento asíncrono
             SendRotuladoJob::dispatch($cliente, $carga, $proveedores, $idCotizacion, $total_movilidad_personal, $domain)->onQueue('importaciones');
 
@@ -1216,11 +1216,11 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                 "📦 En caso hubiera variaciones en el cubicaje se cobrará la diferencia en la cotización final.\n\n" .
                 "Apenas haga el pago, envíe por este medio para hacer la reserva.";
 
-            $this->sendMessage($message,'administracion');
+            $this->sendMessage($message, 'administracion');
 
             // Enviar imagen de pagos
             $pagosUrl = public_path('assets/images/pagos-full.jpg');
-            $this->sendMedia($pagosUrl, 'image/jpg','administracion');
+            $this->sendMedia($pagosUrl, 'image/jpg', 'administracion');
 
             return "success";
         } catch (Exception $e) {
@@ -1297,7 +1297,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
 
                     // Actualizar tracking siguiendo el patrón correcto
                     $ahora = now();
-                    
+
                     // Obtener el registro más reciente del tracking
                     $trackingActual = DB::table($this->table_conteneodr_proveedor_estados_tracking)
                         ->where('id_proveedor', $idProveedor)
@@ -1443,7 +1443,6 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                                 } else {
                                     CotizacionChinaContacted::dispatch($cotizacion, $proveedor, $supplierCode, $data['arrive_date_china'], $message);
                                     $this->crearNotificacionesProveedorContactado($cotizacion, $proveedor, $supplierCode, $carga, $data['arrive_date_china'], $user);
-
                                 }
                                 // Crear notificaciones en la base de datos para Coordinación y Cotizador
                             } catch (\Exception $e) {
@@ -1452,7 +1451,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                         } else {
                             Log::error('Error en updateProveedorData: La fecha de llegada de china no es válida');
                         }
-                    }else{
+                    } else {
                         $usuarioActual = JWTAuth::parseToken()->authenticate();
                         $cotizacion = Cotizacion::find($idCotizacion);
                         $supplierCode = $proveedor->code_supplier;
@@ -1701,7 +1700,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
 
             // Actualizar tracking siguiendo el patrón correcto
             $ahora = now();
-            
+
             // Obtener el registro más reciente del tracking
             $trackingActual = DB::table($this->table_conteneodr_proveedor_estados_tracking)
                 ->where('id_proveedor', $idProveedor)
@@ -2021,12 +2020,11 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
             $usuarioActual = JWTAuth::parseToken()->authenticate();
             $cotizacion = Cotizacion::find($idCotizacion);
             $proveedor = CotizacionProveedor::find($idProveedor);
-            $carga=Contenedor::where('id', $cotizacion->id_contenedor)->first();
+            $carga = Contenedor::where('id', $cotizacion->id_contenedor)->first();
             $this->dispararEventoYNotificacionProveedorInspeccionado($cotizacion, $proveedor, $proveedor->code_supplier, $carga, $usuarioActual);
             $this->crearNotificacionesProveedorInspeccionado($cotizacion, $proveedor, $proveedor->code_supplier, $carga, $usuarioActual);
-    
-           
-            Log::info('proveedorsWithFilesSended: ' . $proveedorsWithFilesSended);
+
+
             if ($proveedorsWithFilesSended < 1) {
                 if ($this->shouldSendReservationMessage($idCotizacion)) {
                     $this->sendReservationMessage($cotizacion, $telefono);
@@ -2259,7 +2257,9 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
             $pendiente = 0;
         }
 
-        $message = "Reserva de espacio:\n" .
+        $message = "
+            Hola " . $cotizacion->nombre . ", te escribe el área de contabilidad de Probusiness. \n\n" .
+            "Reserva de espacio:\n" .
             "*Consolidado #{$contenedor->carga}-2025*\n\n" .
             "Ahora tienes que hacer el pago del CBM preliminar para poder subir su carga en nuestro contenedor.\n\n" .
             "☑ CBM Preliminar: {$cotizacion->volumen} cbm\n" .
@@ -2276,7 +2276,9 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
             "📦 En caso hubiera variaciones en el cubicaje se cobrará la diferencia en la cotización final.\n\n" .
             "Apenas haga el pago, envíe por este medio para hacer la reserva.";
 
-        $this->sendMessage($message, $telefono, 10,'administracion');
+        $this->sendMessage($message, $telefono, 10, 'administracion');
+        $pagosUrl = public_path('assets/images/pagos-full.jpg');
+        $this->sendMedia($pagosUrl, 'image/jpg',null,$telefono,10,'administracion');
     }
 
     /**
@@ -2616,14 +2618,14 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                 if ($file->isValid()) {
                     $filename = time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
                     $path = $file->storeAs(self::INSPECTION_PATH, $filename, 'public');
-                    
+
                     // Normalizar la ruta: asegurar que no tenga 'public/' al inicio
                     // storeAs con disco 'public' devuelve la ruta relativa al disco (ej: 'inspection/filename.mp4')
                     $path = ltrim($path, '/');
                     if (strpos($path, 'public/') === 0) {
                         $path = substr($path, 7); // Remover 'public/' si existe
                     }
-                    
+
                     // Log detallado para debug (igual que en DocumentacionController)
                     Log::info('Archivo de inspección guardado:', [
                         'original_name' => $file->getClientOriginalName(),
@@ -2632,7 +2634,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                         'exists' => Storage::disk('public')->exists($path),
                         'inspection_path_const' => self::INSPECTION_PATH
                     ]);
-                    
+
                     $inspeccion = new AlmacenInspection();
                     $inspeccion->file_name = $file->getClientOriginalName();
                     $inspeccion->file_type = $file->getMimeType();
@@ -2918,7 +2920,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
 
             // Obtener dominio del frontend
             $domain = WhatsappTrait::getCurrentRequestDomain();
-            
+
             // Despachar jobs para cada proveedor
             foreach ($idsProveedores as $idProveedor) {
                 SendInspectionMediaJob::dispatch(
@@ -3170,7 +3172,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
 
             // Obtener dominio del frontend
             $domain = WhatsappTrait::getCurrentRequestDomain();
-            
+
             // Despachar el job para procesar en segundo plano
             ForceSendRotuladoJob::dispatch($idCotizacion, $idsProveedores, $idContainer, $domain)->onQueue('importaciones');
 
@@ -3226,7 +3228,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
 
             // Obtener dominio del frontend
             $domain = WhatsappTrait::getCurrentRequestDomain();
-            
+
             // Despachar el job para procesar en segundo plano
             ForceSendCobrandoJob::dispatch($idCotizacion, $idContainer, $domain)->onQueue('importaciones');
 
@@ -3339,7 +3341,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
 
             // Obtener dominio del frontend
             $domain = WhatsappTrait::getCurrentRequestDomain();
-            
+
             // Despachar el Job para procesar el envío de manera asíncrona
             SendRecordatorioDatosProveedorJob::dispatch($idCotizacion, $idContainer, $proveedores, $domain)->onQueue('importaciones');
 
@@ -3756,7 +3758,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                 'supplier_code' => $supplierCode,
                 'cotizacion_id' => $cotizacion->id
             ]);
-            
+
             $notificacionCoordinacion = Notificacion::create([
                 'titulo' => 'Proveedor Contactado en China',
                 'mensaje' => "El usuario {$usuarioActual->No_Nombres_Apellidos} contactó al proveedor con código {$supplierCode} del cliente {$cotizacion->nombre}",
@@ -3861,7 +3863,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                 'supplier_code' => $supplierCode,
                 'usuario_actual' => $usuarioActual->No_Nombres_Apellidos
             ]);
-            
+
             // Verificar que la notificación de Coordinación se guardó correctamente
             $verificacionCoordinacion = Notificacion::find($notificacionCoordinacion->id);
             Log::info('Verificación de notificación de Coordinación en BD:', [
