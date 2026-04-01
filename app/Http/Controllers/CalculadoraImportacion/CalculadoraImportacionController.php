@@ -561,21 +561,15 @@ class CalculadoraImportacionController extends Controller
 
                 // Si tiene cotización asignada, actualizar también la cotización usando los códigos
                 if ($calculadora->id_cotizacion && $calculadora->url_cotizacion) {
-                    // Recargar proveedores para obtener códigos actualizados
                     $calculadora->load(['proveedores', 'contenedor']);
 
-                    // NO regenerar códigos - solo asegurar que estén escritos en el Excel si ya existen
-                    // Los códigos solo se generan al pasar a COTIZADO, no al actualizar
+                    // Regenerar Excel completo desde BD (payload incluye code_supplier); incluye proveedores nuevos y orden por código.
                     if ($calculadora->id_carga_consolidada_contenedor) {
-                        // Verificar si los proveedores tienen códigos
-                        $proveedoresConCodigo = $calculadora->proveedores()->whereNotNull('code_supplier')->count();
-                        if ($proveedoresConCodigo > 0) {
-                            // Solo escribir códigos existentes en el Excel (no generar nuevos)
-                            $this->excelService->escribirCodigosExistentesEnExcel($calculadora);
-                        }
+                        $this->calculadoraImportacionService->regenerarExcelDesdeCalculadora($calculadora);
+                        $calculadora->refresh();
+                        $calculadora->load(['proveedores', 'contenedor']);
                     }
 
-                    // Actualizar la cotización relacionada
                     $this->cotizacionSyncService->actualizarCotizacionDesdeCalculadora($calculadora);
                 }
 
@@ -1310,7 +1304,7 @@ class CalculadoraImportacionController extends Controller
     }
 
     /**
-     * Ordena proveedores y productos por ID para respuestas consistentes.
+     * Ordena proveedores por code_supplier (y por id como desempate); productos por id.
      */
     private function ordenarProveedoresPorId($calculadora): void
     {
@@ -1318,7 +1312,9 @@ class CalculadoraImportacionController extends Controller
             return;
         }
 
-        $proveedoresOrdenados = $calculadora->proveedores->sortBy('id')->values();
+        $proveedoresOrdenados = $calculadora->proveedores
+            ->sortBy(fn ($p) => [(string) ($p->code_supplier ?? ''), $p->id])
+            ->values();
 
         $proveedoresOrdenados->each(function ($proveedor) {
             if ($proveedor && $proveedor->relationLoaded('productos')) {
@@ -1371,15 +1367,6 @@ class CalculadoraImportacionController extends Controller
     private function generarCodigosProveedorEnExcel($calculadora)
     {
         $this->excelService->generarCodigosProveedorEnExcel($calculadora);
-    }
-
-    /**
-     * Escribir códigos existentes en el Excel (sin generar nuevos)
-     * Solo se usa cuando se actualiza una calculadora que ya tiene códigos
-     */
-    private function escribirCodigosExistentesEnExcel($calculadora)
-    {
-        $this->excelService->escribirCodigosExistentesEnExcel($calculadora);
     }
 
     /**

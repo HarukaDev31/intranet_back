@@ -17,6 +17,7 @@ use App\Models\CargaConsolidada\FacturaComercial;
 use App\Models\CalculadoraTipoCliente;
 use App\Models\CalculadoraTarifasConsolidado;
 use Carbon\Carbon;
+use Illuminate\Support\Collection;
 
 class CalculadoraImportacionService
 {
@@ -1557,10 +1558,10 @@ class CalculadoraImportacionService
     }
 
     /**
-     * Regenerar Excel desde la calculadora cuando el archivo no existe.
-     * Usado en modificarExcelConFechas y actualizarCotizacionDesdeCalculadora.
-     *
-     * @return array|null ['url' => ..., 'totalfob' => ..., etc] o null si falla
+     * Regenerar Excel desde la calculadora (plantilla + datos actuales).
+     * Orden: proveedores ya vinculados a cotización (id_proveedor) por code_supplier;
+     * sin vincular al final por id (orden de alta, como en el payload).
+     * Si hay contenedor y un proveedor nuevo no tiene código, se genera y persiste (índice = posición en esa lista).
      */
     public function regenerarExcelDesdeCalculadora(CalculadoraImportacion $calculadora): ?array
     {
@@ -1581,8 +1582,51 @@ class CalculadoraImportacionService
             'tipoDocumento' => $calculadora->tipo_documento ?? 'DNI',
         ];
 
+        $proveedoresOrdenados = $this->ordenarProveedoresParaRegenerarExcel($calculadora);
+        $totalProv = $proveedoresOrdenados->count();
+
+        $cargaSegmento = null;
+        if ($calculadora->id_carga_consolidada_contenedor && $calculadora->contenedor) {
+            $raw = $calculadora->contenedor->carga;
+            if ($raw !== null && $raw !== '') {
+                $cargaSegmento = (string) $raw;
+            }
+        }
+
+        $allCodeStrings = $proveedoresOrdenados
+            ->pluck('code_supplier')
+            ->map(fn ($c) => trim((string) ($c ?? '')))
+            ->filter()
+            ->values()
+            ->all();
+
+        $nextSupplierIndex = 1;
+        if ($cargaSegmento !== null && $cargaSegmento !== '') {
+            $base = $this->codeSupplierBasePrefix((string) $calculadora->nombre_cliente, $cargaSegmento);
+            $nextSupplierIndex = $this->maxCodeSupplierSuffixForBase($base, $allCodeStrings) + 1;
+        }
+
         $proveedores = [];
-        foreach ($calculadora->proveedores as $prov) {
+        foreach ($proveedoresOrdenados as $prov) {
+            $code = $prov->code_supplier;
+            $sinVinculo = (int) ($prov->id_proveedor ?? 0) <= 0;
+            if (
+                $cargaSegmento
+                && $sinVinculo
+                && ($code === null || $code === '')
+            ) {
+                $code = $this->generateCodeSupplier(
+                    (string) $calculadora->nombre_cliente,
+                    $cargaSegmento,
+                    $totalProv,
+                    $nextSupplierIndex
+                );
+                $nextSupplierIndex++;
+                $allCodeStrings[] = $code;
+                $prov->update(['code_supplier' => $code]);
+                $prov->code_supplier = $code;
+            }
+
             $productos = [];
             foreach ($prov->productos as $p) {
                 $productos[] = [
@@ -1598,7 +1642,7 @@ class CalculadoraImportacionService
                 'cbm' => (float) $prov->cbm,
                 'peso' => (float) $prov->peso,
                 'qtyCaja' => (int) $prov->qty_caja,
-                'code_supplier' => $prov->code_supplier,
+                'code_supplier' => $code,
                 'productos' => $productos,
             ];
         }
@@ -1646,6 +1690,24 @@ class CalculadoraImportacionService
 
         Log::info('[REGENERAR EXCEL] Excel recreado exitosamente', ['calculadora_id' => $calculadora->id, 'url' => $result['url']]);
         return $result;
+    }
+
+    /**
+     * Vinculados a cotización primero (por code_supplier, luego id); sin id_proveedor al final por id (orden de creación).
+     */
+    private function ordenarProveedoresParaRegenerarExcel(CalculadoraImportacion $calculadora): Collection
+    {
+        $all = $calculadora->proveedores;
+        $vinculados = $all
+            ->filter(fn (CalculadoraImportacionProveedor $p) => (int) ($p->id_proveedor ?? 0) > 0)
+            ->sortBy(fn (CalculadoraImportacionProveedor $p) => [(string) ($p->code_supplier ?? ''), $p->id])
+            ->values();
+        $sinVincular = $all
+            ->filter(fn (CalculadoraImportacionProveedor $p) => (int) ($p->id_proveedor ?? 0) <= 0)
+            ->sortBy('id')
+            ->values();
+
+        return $vinculados->concat($sinVincular);
     }
 
     /**
@@ -1910,24 +1972,73 @@ class CalculadoraImportacionService
     }
 
     /**
+     * Prefijo del code_supplier antes de -N (p. ej. JUPE5). Alineado con generateCodeSupplier.
+     */
+    public function codeSupplierBasePrefix(string $nombreCliente, $carga): string
+    {
+        return $this->initialsFromClienteNombre($nombreCliente) . $this->normalizeCargaSegmentForCodeSupplier($carga);
+    }
+
+    /**
+     * Mayor sufijo N entre códigos que coinciden exactamente con {base}-N.
+     */
+    public function maxCodeSupplierSuffixForBase(string $base, iterable $codeSuppliers): int
+    {
+        if ($base === '') {
+            return 0;
+        }
+        $max = 0;
+        $pattern = '/^' . preg_quote($base, '/') . '-(\d+)$/';
+        foreach ($codeSuppliers as $cs) {
+            $t = trim((string) $cs);
+            if ($t === '') {
+                continue;
+            }
+            if (preg_match($pattern, $t, $m)) {
+                $max = max($max, (int) $m[1]);
+            }
+        }
+
+        return $max;
+    }
+
+    private function normalizeCargaSegmentForCodeSupplier($carga): string
+    {
+        if (is_numeric($carga)) {
+            return (string) (int) $carga;
+        }
+        if ($carga !== null && $carga !== '') {
+            return substr((string) $carga, -2);
+        }
+
+        return '';
+    }
+
+    private function initialsFromClienteNombre(string $nombre): string
+    {
+        $words = explode(' ', trim($nombre));
+        $code = '';
+        foreach ($words as $word) {
+            if (strlen($code) >= 4) {
+                break;
+            }
+            if (strlen($word) >= 2) {
+                $code .= strtoupper(substr($word, 0, 2));
+            }
+        }
+
+        return $code;
+    }
+
+    /**
      * Genera código de proveedor basado en nombre del cliente y índice
      * Misma estructura que CotizacionController.generateCodeSupplier
      */
     private function generateCodeSupplier($string, $carga, $rowCount, $index)
     {
-        $words = explode(" ", trim($string));
-        $code = "";
+        $cargaSeg = $this->normalizeCargaSegmentForCodeSupplier($carga);
 
-        // Primeras 2 letras de las primeras 2 palabras (protegido)
-        foreach ($words as $word) {
-            if (strlen($code) >= 4) break; // Ya tenemos 4 caracteres (2 palabras)
-            if (strlen($word) >= 2) { // Solo si la palabra tiene 2+ caracteres
-                $code .= strtoupper(substr($word, 0, 2));
-            }
-        }
-
-        // Completar con ceros y retornar
-        return $code . $carga . "-" . $index;
+        return $this->initialsFromClienteNombre((string) $string) . $cargaSeg . '-' . $index;
     }
 
     /**

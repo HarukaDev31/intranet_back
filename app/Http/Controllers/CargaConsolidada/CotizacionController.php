@@ -1733,55 +1733,75 @@ class CotizacionController extends Controller
             // Obtener datos de proveedores del Excel
             $dataEmbarque = $this->getEmbarqueDataModified($file, $dataToInsert);
 
-            // Actualizar por orden de proveedor para evitar "crear otro" cuando cambia code_supplier (p.ej. cambio de contenedor)
-            $existingProviders = CotizacionProveedor::where('id_cotizacion', $id)
-                ->orderBy('id')
-                ->get();
+            // Emparejar por code_supplier (orden columnas Excel), no por índice orderBy id:
+            // si los ítems se mueven entre proveedores o el orden de columnas no coincide con PK, antes se pisaban filas equivocadas.
+            $existingProviders = CotizacionProveedor::where('id_cotizacion', $id)->get();
 
-            $existingCount = $existingProviders->count();
-            $newCount = count($dataEmbarque);
-            $limit = min($existingCount, $newCount);
-
-            for ($i = 0; $i < $limit; $i++) {
-                $proveedor = $existingProviders[$i];
-                $dataToUpdate = $dataEmbarque[$i];
-                $items = isset($dataToUpdate['items']) ? $dataToUpdate['items'] : [];
-                if (isset($dataToUpdate['items'])) {
-                    unset($dataToUpdate['items']);
-                }
-
-                CotizacionProveedor::where('id', $proveedor->id)->update($dataToUpdate);
-
-                \App\Models\CargaConsolidada\CotizacionProveedorItem::where('id_proveedor', $proveedor->id)->delete();
-                if (!empty($items)) {
-                    foreach ($items as $item) {
-                        \App\Models\CargaConsolidada\CotizacionProveedorItem::create([
-                            'id_contenedor' => $dataToUpdate['id_contenedor'] ?? $proveedor->id_contenedor,
-                            'id_cotizacion' => $proveedor->id_cotizacion,
-                            'id_proveedor' => $proveedor->id,
-                            'initial_price' => $item['initial_price'] ?? null,
-                            'initial_qty' => $item['initial_qty'] ?? null,
-                            'initial_name' => $item['initial_name'] ?? null,
-                            'final_price' => $item['final_price'] ?? null,
-                            'final_qty' => $item['final_qty'] ?? null,
-                            'final_name' => $item['final_name'] ?? null,
-                            'tipo_producto' => $item['tipo_producto'] ?? 'GENERAL',
+            $existingByCode = [];
+            foreach ($existingProviders as $ep) {
+                $ck = trim((string) ($ep->code_supplier ?? ''));
+                if ($ck !== '') {
+                    if (!isset($existingByCode[$ck])) {
+                        $existingByCode[$ck] = $ep;
+                    } else {
+                        Log::warning('updateFromCalculadora: code_supplier duplicado en cotización', [
+                            'cotizacion_id' => $id,
+                            'code_supplier' => $ck,
                         ]);
                     }
                 }
             }
 
-            // Si vienen más proveedores nuevos que los existentes, insertarlos
-            if ($newCount > $existingCount) {
-                for ($i = $existingCount; $i < $newCount; $i++) {
-                    $data = $dataEmbarque[$i];
-                    $items = isset($data['items']) ? $data['items'] : [];
-                    if (isset($data['items'])) {
-                        unset($data['items']);
-                    }
+            $noCodePool = $existingProviders
+                ->filter(fn (CotizacionProveedor $ep) => trim((string) ($ep->code_supplier ?? '')) === '')
+                ->sortBy('id')
+                ->values();
 
-                    Log::info('Insertando nuevo proveedor desde calculadora: ' . json_encode($data));
-                    $provModel = CotizacionProveedor::create($data);
+            $noCodeIndex = 0;
+            $matchedProveedorIds = [];
+
+            foreach ($dataEmbarque as $emb) {
+                $items = isset($emb['items']) ? $emb['items'] : [];
+                $dataRow = $emb;
+                if (isset($dataRow['items'])) {
+                    unset($dataRow['items']);
+                }
+
+                $codeKey = trim((string) ($dataRow['code_supplier'] ?? ''));
+
+                $proveedor = null;
+                if ($codeKey !== '' && isset($existingByCode[$codeKey])) {
+                    $proveedor = $existingByCode[$codeKey];
+                    unset($existingByCode[$codeKey]);
+                } elseif ($noCodeIndex < $noCodePool->count()) {
+                    $proveedor = $noCodePool[$noCodeIndex];
+                    $noCodeIndex++;
+                }
+
+                if ($proveedor !== null) {
+                    $matchedProveedorIds[$proveedor->id] = true;
+                    CotizacionProveedor::where('id', $proveedor->id)->update($dataRow);
+
+                    \App\Models\CargaConsolidada\CotizacionProveedorItem::where('id_proveedor', $proveedor->id)->delete();
+                    if (!empty($items)) {
+                        foreach ($items as $item) {
+                            \App\Models\CargaConsolidada\CotizacionProveedorItem::create([
+                                'id_contenedor' => $dataRow['id_contenedor'] ?? $proveedor->id_contenedor,
+                                'id_cotizacion' => $proveedor->id_cotizacion,
+                                'id_proveedor' => $proveedor->id,
+                                'initial_price' => $item['initial_price'] ?? null,
+                                'initial_qty' => $item['initial_qty'] ?? null,
+                                'initial_name' => $item['initial_name'] ?? null,
+                                'final_price' => $item['final_price'] ?? null,
+                                'final_qty' => $item['final_qty'] ?? null,
+                                'final_name' => $item['final_name'] ?? null,
+                                'tipo_producto' => $item['tipo_producto'] ?? 'GENERAL',
+                            ]);
+                        }
+                    }
+                } else {
+                    Log::info('Insertando nuevo proveedor desde calculadora: ' . json_encode($dataRow));
+                    $provModel = CotizacionProveedor::create($dataRow);
                     if ($provModel && !empty($items)) {
                         foreach ($items as $item) {
                             \App\Models\CargaConsolidada\CotizacionProveedorItem::create([
@@ -1801,14 +1821,10 @@ class CotizacionController extends Controller
                 }
             }
 
-            // Si ahora hay menos proveedores que antes, eliminar sobrantes del final
-            if ($existingCount > $newCount) {
-                for ($i = $newCount; $i < $existingCount; $i++) {
-                    $proveedorToDelete = $existingProviders[$i];
-                    if ($proveedorToDelete) {
-                        \App\Models\CargaConsolidada\CotizacionProveedorItem::where('id_proveedor', $proveedorToDelete->id)->delete();
-                        $proveedorToDelete->delete();
-                    }
+            foreach ($existingProviders as $ep) {
+                if (!isset($matchedProveedorIds[$ep->id])) {
+                    \App\Models\CargaConsolidada\CotizacionProveedorItem::where('id_proveedor', $ep->id)->delete();
+                    $ep->delete();
                 }
             }
 
@@ -3224,9 +3240,16 @@ class CotizacionController extends Controller
             $currentRange = null;
             $processedRanges = []; // Almacena los rangos procesados
             $proveedores = []; // Lista de proveedores
-            $existingCodeIndices = []; // Almacena los índices de códigos existentes
+            $existingCodeIndices = []; // Sufijos N de códigos {base}-N ya presentes en el Excel
 
-            // Primera pasada: recolectar todos los índices de códigos existentes
+            /** @var \App\Services\CalculadoraImportacionService $calcImportSvc */
+            $calcImportSvc = app(\App\Services\CalculadoraImportacionService::class);
+            $codeBaseForIndices = $calcImportSvc->codeSupplierBasePrefix(trim((string) $nameCliente), $carga);
+            $codeBasePattern = $codeBaseForIndices !== ''
+                ? '/^' . preg_quote($codeBaseForIndices, '/') . '-(\d+)$/'
+                : null;
+
+            // Primera pasada: índices existentes solo si el código coincide con la base actual (JUPE5-7, no otro prefijo)
             $tempColumnStart = "C";
             $tempProcessedRanges = [];
             while ($tempColumnStart != $columnTotales) {
@@ -3240,12 +3263,11 @@ class CotizacionController extends Controller
                     $tempProcessedRanges[] = $tempRange;
                 }
                 $tempCode = $this->getDataCell($sheet2, $tempColumnStart . $rowCodeSupplier);
-                if ($tempCode && preg_match('/-(\d+)$/', $tempCode, $matches)) {
-                    $existingCodeIndices[] = (int)$matches[1];
+                if ($tempCode && $codeBasePattern && preg_match($codeBasePattern, trim((string) $tempCode), $matches)) {
+                    $existingCodeIndices[] = (int) $matches[1];
                 }
                 $tempColumnStart = $this->incrementColumn($tempColumnStart);
             }
-            // Siguiente índice disponible para nuevos códigos
             $nextAvailableIndex = empty($existingCodeIndices) ? 1 : max($existingCodeIndices) + 1;
 
             while (!$stop) {
@@ -3357,6 +3379,13 @@ class CotizacionController extends Controller
     }
     public function generateCodeSupplier($string, $carga, $rowCount, $index)
     {
+        if (is_numeric($carga)) {
+            $carga = (string) (int) $carga;
+        } elseif ($carga !== null && $carga !== '') {
+            $carga = substr((string) $carga, -2);
+        } else {
+            $carga = '';
+        }
 
         $words = explode(" ", trim($string));
         $code = "";
@@ -3369,7 +3398,6 @@ class CotizacionController extends Controller
             }
         }
 
-        // Completar con ceros y retornar
         return $code . $carga . "-" . $index;
     }
     /**

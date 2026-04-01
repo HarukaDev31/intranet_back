@@ -167,7 +167,7 @@ class CalculadoraImportacionCotizacionSyncService
 
     /**
      * Sincroniza id_proveedor (cccp.id) y code_supplier desde cotización hacia
-     * calculadora_importacion_proveedores, emparejando por orden.
+     * calculadora_importacion_proveedores, emparejando por code_supplier (no por orden de id).
      */
     private function sincronizarIdProveedorDesdeCotizacion(CalculadoraImportacion $calculadora): void
     {
@@ -175,30 +175,40 @@ class CalculadoraImportacionCotizacionSyncService
             return;
         }
 
-        $proveedoresCotizacion = CotizacionProveedor::where('id_cotizacion', $calculadora->id_cotizacion)
-            ->orderBy('id')
-            ->get(['id', 'code_supplier']);
+        $porCodigo = [];
+        foreach (
+            CotizacionProveedor::where('id_cotizacion', $calculadora->id_cotizacion)
+                ->get(['id', 'code_supplier']) as $cp
+        ) {
+            $ck = trim((string) ($cp->code_supplier ?? ''));
+            if ($ck !== '' && !isset($porCodigo[$ck])) {
+                $porCodigo[$ck] = $cp;
+            }
+        }
 
-        $proveedoresCalculadora = CalculadoraImportacionProveedor::where('id_calculadora_importacion', $calculadora->id)
-            ->orderBy('id')
-            ->get(['id', 'id_proveedor', 'code_supplier']);
-
-        $limite = min($proveedoresCotizacion->count(), $proveedoresCalculadora->count());
-        for ($i = 0; $i < $limite; $i++) {
-            $provCot = $proveedoresCotizacion[$i];
-            $provCalc = $proveedoresCalculadora[$i];
+        $sincronizados = 0;
+        foreach (
+            CalculadoraImportacionProveedor::where('id_calculadora_importacion', $calculadora->id)->get() as $provCalc
+        ) {
+            $ck = trim((string) ($provCalc->code_supplier ?? ''));
+            if ($ck === '') {
+                continue;
+            }
+            $provCot = $porCodigo[$ck] ?? null;
+            if (!$provCot) {
+                continue;
+            }
             $provCalc->update([
                 'id_proveedor' => $provCot->id,
                 'code_supplier' => $provCot->code_supplier ?: $provCalc->code_supplier,
             ]);
+            $sincronizados++;
         }
 
         Log::info('Sincronización id_proveedor calculadora <- cotización completada', [
             'calculadora_id' => $calculadora->id,
             'cotizacion_id' => $calculadora->id_cotizacion,
-            'proveedores_cotizacion' => $proveedoresCotizacion->count(),
-            'proveedores_calculadora' => $proveedoresCalculadora->count(),
-            'sincronizados' => $limite,
+            'sincronizados' => $sincronizados,
         ]);
     }
 }

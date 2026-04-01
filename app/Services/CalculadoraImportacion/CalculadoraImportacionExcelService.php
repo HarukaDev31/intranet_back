@@ -123,132 +123,6 @@ class CalculadoraImportacionExcelService
         }
     }
 
-    public function escribirCodigosExistentesEnExcel(CalculadoraImportacion $calculadora): void
-    {
-        try {
-            $calculadora->load(['contenedor', 'proveedores.productos']);
-
-            $proveedoresConCodigo = $calculadora->proveedores()->whereNotNull('code_supplier')->get();
-            if ($proveedoresConCodigo->isEmpty()) {
-                Log::info('No hay proveedores con códigos para escribir en Excel', ['calculadora_id' => $calculadora->id]);
-                return;
-            }
-
-            $fileUrl = $calculadora->url_cotizacion;
-            $fileContents = $this->downloadFileFromUrl($fileUrl);
-
-            if (!$fileContents) {
-                Log::error('No se pudo descargar el archivo Excel para escribir códigos', [
-                    'calculadora_id' => $calculadora->id,
-                    'url' => $fileUrl,
-                ]);
-                return;
-            }
-
-            $tempPath = storage_path('app/temp');
-            if (!file_exists($tempPath)) {
-                mkdir($tempPath, 0755, true);
-            }
-
-            $extension = pathinfo($fileUrl, PATHINFO_EXTENSION) ?: 'xlsx';
-            $tempFileName = uniqid('excel_write_codes_') . '.' . $extension;
-            $tempFilePath = $tempPath . '/' . $tempFileName;
-            file_put_contents($tempFilePath, $fileContents);
-
-            $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($tempFilePath);
-            $sheet2 = $spreadsheet->getSheet(1);
-
-            $columnStart = "C";
-            $columnTotales = "";
-            $stop = false;
-            while (!$stop) {
-                $cell = $sheet2->getCell($columnStart . "3")->getValue();
-                if (strtoupper(trim($cell)) == "TOTALES") {
-                    $columnTotales = $columnStart;
-                    $stop = true;
-                } else {
-                    $columnStart = $this->incrementColumn($columnStart);
-                }
-            }
-
-            $rowCodeSupplier = 3;
-            $rowProveedores = 4;
-            $columnStart = "C";
-            $processedRanges = [];
-
-            $codigosPorOrden = $proveedoresConCodigo->pluck('code_supplier')->toArray();
-
-            $proveedorIndex = 0;
-            $columnStart = "C";
-            $stop = false;
-            while (!$stop && $proveedorIndex < count($codigosPorOrden)) {
-                if ($columnStart == $columnTotales) {
-                    $stop = true;
-                    break;
-                }
-
-                $cell = $sheet2->getCell($columnStart . $rowProveedores);
-                $currentRange = $cell->getMergeRange();
-
-                if ($currentRange && in_array($currentRange, $processedRanges)) {
-                    $columnStart = $this->incrementColumn($columnStart);
-                    continue;
-                }
-
-                if ($currentRange) {
-                    $processedRanges[] = $currentRange;
-                }
-
-                $codeSupplier = $codigosPorOrden[$proveedorIndex];
-
-                $startCol = $columnStart;
-                $endCol = $columnStart;
-                if ($currentRange) {
-                    $parts = explode(':', $currentRange);
-                    if (count($parts) === 2) {
-                        $startCol = preg_replace('/\d+/', '', $parts[0]);
-                        $endCol = preg_replace('/\d+/', '', $parts[1]);
-                    }
-                }
-
-                $sheet2->setCellValue($startCol . $rowCodeSupplier, $codeSupplier);
-
-                if ($startCol != $endCol) {
-                    $sheet2->mergeCells($startCol . $rowCodeSupplier . ':' . $endCol . $rowCodeSupplier);
-                }
-
-                $columnStart = $this->incrementColumn($endCol);
-                $proveedorIndex++;
-            }
-
-            $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
-            $writer->save($tempFilePath);
-
-            $destinoPath = $this->getFilePathFromUrl($fileUrl);
-            if ($destinoPath && file_exists(dirname($destinoPath))) {
-                copy($tempFilePath, $destinoPath);
-                Log::info('Códigos existentes escritos en Excel exitosamente', [
-                    'calculadora_id' => $calculadora->id,
-                    'total_proveedores' => $proveedorIndex,
-                ]);
-            } else {
-                Log::warning('No se pudo determinar la ruta de destino del archivo', [
-                    'calculadora_id' => $calculadora->id,
-                    'url' => $fileUrl,
-                ]);
-            }
-
-            if (file_exists($tempFilePath)) {
-                unlink($tempFilePath);
-            }
-        } catch (\Exception $e) {
-            Log::error('Error al escribir códigos existentes en Excel: ' . $e->getMessage(), [
-                'calculadora_id' => $calculadora->id ?? null,
-                'trace' => $e->getTraceAsString(),
-            ]);
-        }
-    }
-
     public function generarCodigosProveedorEnExcel(CalculadoraImportacion $calculadora): void
     {
         try {
@@ -326,8 +200,16 @@ class CalculadoraImportacionExcelService
 
             $rowCodeSupplier = 3;
             $rowProveedores = 4;
-            $provider = 1;
             $processedRanges = [];
+
+            $base = $this->calculadoraImportacionService->codeSupplierBasePrefix((string) $nameCliente, $carga);
+            $codesList = $proveedores
+                ->pluck('code_supplier')
+                ->map(fn ($c) => trim((string) ($c ?? '')))
+                ->filter()
+                ->values()
+                ->all();
+            $nextIdx = $this->calculadoraImportacionService->maxCodeSupplierSuffixForBase($base, $codesList) + 1;
 
             $proveedorIndex = 0;
             $columnStart = "C";
@@ -352,7 +234,14 @@ class CalculadoraImportacionExcelService
                 }
 
                 $proveedorCalculadora = $proveedores[$proveedorIndex];
-                $codeSupplier = $this->generateCodeSupplier($nameCliente, $carga, $count, $provider);
+                $existingCode = trim((string) ($proveedorCalculadora->code_supplier ?? ''));
+                if ($base !== '' && $existingCode !== '' && preg_match('/^' . preg_quote($base, '/') . '-\d+$/', $existingCode)) {
+                    $codeSupplier = $existingCode;
+                } else {
+                    $codeSupplier = $this->generateCodeSupplier($nameCliente, $carga, $count, $nextIdx);
+                    $nextIdx++;
+                    $codesList[] = $codeSupplier;
+                }
 
                 $startCol = $columnStart;
                 $endCol = $columnStart;
@@ -373,7 +262,6 @@ class CalculadoraImportacionExcelService
                 CalculadoraImportacionProveedor::where('id', $proveedorId)->update(['code_supplier' => $codeSupplier]);
 
                 $columnStart = $this->incrementColumn($endCol);
-                $provider++;
                 $proveedorIndex++;
             }
 
@@ -515,6 +403,14 @@ class CalculadoraImportacionExcelService
 
     public function generateCodeSupplier(string $string, $carga, $rowCount, int $index): string
     {
+        if (is_numeric($carga)) {
+            $carga = (string) (int) $carga;
+        } elseif ($carga !== null && $carga !== '') {
+            $carga = substr((string) $carga, -2);
+        } else {
+            $carga = '';
+        }
+
         $words = explode(" ", trim($string));
         $code = "";
 
