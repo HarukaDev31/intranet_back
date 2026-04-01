@@ -29,6 +29,7 @@ class LandingCursoLeadController extends Controller
             'whatsapp' => ['required', 'string', 'max:64'],
             'email' => ['required', 'email', 'max:255'],
             'experiencia_importando' => ['required', 'string', 'in:si,no,poca'],
+            'codigo_campana' => ['nullable', 'string', 'max:64'],
         ]);
 
         if ($validator->fails()) {

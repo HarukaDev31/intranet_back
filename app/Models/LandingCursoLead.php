@@ -13,6 +13,7 @@ class LandingCursoLead extends Model
         'whatsapp',
         'email',
         'experiencia_importando',
+        'codigo_campana',
         'ip_address',
         'user_agent',
     ];

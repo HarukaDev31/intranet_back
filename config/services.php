@@ -30,4 +30,14 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
+    /*
+    | Bitrix24 (webhook entrante). Si BITRIX_WEBHOOK_URL está vacío, no se encolan jobs CRM.
+    | Ejemplo: https://tudominio.bitrix24.com/rest/1/tu_codigo_webhook/
+    */
+    'bitrix' => [
+        'webhook_url' => env('BITRIX_WEBHOOK_URL'),
+        'timeout' => (int) env('BITRIX_HTTP_TIMEOUT', 30),
+        'queue' => env('BITRIX_QUEUE', 'default'),
+    ],
+
 ];

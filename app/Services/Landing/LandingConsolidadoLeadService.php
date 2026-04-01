@@ -2,6 +2,7 @@
 
 namespace App\Services\Landing;
 
+use App\Jobs\Crm\SyncLandingLeadToCrmJob;
 use App\Models\LandingConsolidadoLead;
 use Illuminate\Http\Request;
 
@@ -21,6 +22,12 @@ class LandingConsolidadoLeadService
             $payload['user_agent'] = substr((string) $request->userAgent(), 0, 2000);
         }
 
-        return LandingConsolidadoLead::query()->create($payload);
+        $lead = LandingConsolidadoLead::query()->create($payload);
+
+        if (config('services.bitrix.webhook_url')) {
+            SyncLandingLeadToCrmJob::dispatch('consolidado', $lead->id);
+        }
+
+        return $lead;
     }
 }
