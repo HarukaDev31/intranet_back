@@ -1136,12 +1136,14 @@ class CalculadoraImportacionController extends Controller
                     }
                 }
 
-                // Sincronizar Excel en contenedor_consolidado_cotizacion (ya existía id_cotizacion o recién creada)
+                // Sincronizar Excel y vendedor en contenedor_consolidado_cotizacion (ya existía id_cotizacion o recién creada)
                 if ($calculadora->id_cotizacion && $calculadora->url_cotizacion) {
                     Cotizacion::where('id', $calculadora->id_cotizacion)->update([
                         'cotizacion_file_url' => $calculadora->url_cotizacion,
+                        'id_usuario' => $calculadora->id_usuario,
+                        'from_calculator' => true,
                     ]);
-                    Log::info('cotizacion_file_url actualizado al pasar a COTIZADO', ['cotizacion_id' => $calculadora->id_cotizacion]);
+                    Log::info('cotizacion_file_url e id_usuario actualizados al pasar a COTIZADO', ['cotizacion_id' => $calculadora->id_cotizacion]);
                 }
 
                 // Si ya tenía cotización vinculada: asegurar que los proveedores de la calculadora
@@ -1226,10 +1228,12 @@ class CalculadoraImportacionController extends Controller
                 $calculadora->refresh();
             }
 
-            // Actualizar cotización relacionada con el nuevo Excel (archivo + datos mínimos)
+            // Actualizar cotización relacionada con el nuevo Excel (archivo + vendedor)
             if ($calculadora->id_cotizacion && $calculadora->url_cotizacion) {
                 Cotizacion::where('id', $calculadora->id_cotizacion)->update([
                     'cotizacion_file_url' => $calculadora->url_cotizacion,
+                    'id_usuario' => $calculadora->id_usuario,
+                    'from_calculator' => true,
                 ]);
             }
 

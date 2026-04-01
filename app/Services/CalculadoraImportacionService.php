@@ -221,9 +221,10 @@ class CalculadoraImportacionService
             // Obtener tipo_cambio del request, si es null o 0 usar el valor existente o 3.75 por defecto
             $tipoCambio = (!empty($data['tipo_cambio']) && $data['tipo_cambio'] > 0) ? $data['tipo_cambio'] : ($calculadora->tc ?? 3.75);
 
-            // Actualizar registro principal
+            // Actualizar registro principal (id_usuario aquí para que persista aunque falle la regeneración del Excel)
             $calculadora->update([
                 'id_cliente' => $cliente ? $cliente->id : $calculadora->id_cliente,
+                'id_usuario' => array_key_exists('id_usuario', $data) ? $data['id_usuario'] : $calculadora->id_usuario,
                 'nombre_cliente' => $nombreCliente,
                 'tipo_documento' => $tipoDocumento,
                 'id_carga_consolidada_contenedor' => $data['id_carga_consolidada_contenedor'] ?? $calculadora->id_carga_consolidada_contenedor,
@@ -502,13 +503,6 @@ class CalculadoraImportacionService
                 Log::info('[EDITAR COTIZACIÓN] Guardando calculadora con nueva URL: ' . $calculadora->url_cotizacion);
                 $calculadora->save();
 
-                if ($calculadora->id_cotizacion && $calculadora->url_cotizacion) {
-                    Cotizacion::where('id', $calculadora->id_cotizacion)->update([
-                        'cotizacion_file_url' => $calculadora->url_cotizacion,
-                    ]);
-                    Log::info('[EDITAR COTIZACIÓN] cotizacion_file_url actualizado en cotización ID: ' . $calculadora->id_cotizacion);
-                }
-
                 Log::info('[EDITAR COTIZACIÓN] Calculadora guardada exitosamente. ID: ' . $calculadora->id . ', URL: ' . $calculadora->url_cotizacion);
             }
 
@@ -516,6 +510,18 @@ class CalculadoraImportacionService
                 'calculadora_id' => $calculadora->id,
                 'estado_despues' => $this->buildDebugSnapshot($calculadora),
             ]);
+
+            // Sincronizar vendedor y URL en la cotización vinculada siempre (también si falló regenerar Excel)
+            if ($calculadora->id_cotizacion) {
+                $cotHeader = [
+                    'id_usuario' => $calculadora->id_usuario,
+                    'from_calculator' => true,
+                ];
+                if ($calculadora->url_cotizacion) {
+                    $cotHeader['cotizacion_file_url'] = $calculadora->url_cotizacion;
+                }
+                Cotizacion::where('id', $calculadora->id_cotizacion)->update($cotHeader);
+            }
 
             DB::commit();
             return $calculadora->load(['proveedores.productos']);

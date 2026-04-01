@@ -30,6 +30,7 @@ class CalculadoraImportacionCotizacionSyncService
                     'calculadora_id' => $calculadora->id,
                     'url' => $fileUrl,
                 ]);
+                $this->actualizarCabeceraCotizacionDesdeCalculadora($calculadora);
                 return false;
             }
 
@@ -83,13 +84,36 @@ class CalculadoraImportacionCotizacionSyncService
                 'cotizacion_id' => $calculadora->id_cotizacion,
                 'result' => $result,
             ]);
+            $this->actualizarCabeceraCotizacionDesdeCalculadora($calculadora);
             return false;
         } catch (\Exception $e) {
             Log::error('Excepción al actualizar cotización: ' . $e->getMessage(), [
                 'calculadora_id' => $calculadora->id,
             ]);
+            $this->actualizarCabeceraCotizacionDesdeCalculadora($calculadora);
             return false;
         }
+    }
+
+    /**
+     * Actualiza en la cotización vinculada vendedor y URL del Excel sin reprocesar filas
+     * (p. ej. cuando falla la descarga del archivo o updateFromCalculadora).
+     */
+    private function actualizarCabeceraCotizacionDesdeCalculadora(CalculadoraImportacion $calculadora): void
+    {
+        if (empty($calculadora->id_cotizacion)) {
+            return;
+        }
+
+        $updateData = [
+            'id_usuario' => $calculadora->id_usuario,
+            'from_calculator' => true,
+        ];
+        if ($calculadora->url_cotizacion) {
+            $updateData['cotizacion_file_url'] = $calculadora->url_cotizacion;
+        }
+
+        Cotizacion::where('id', $calculadora->id_cotizacion)->update($updateData);
     }
 
     public function crearCotizacionDesdeCalculadoraExcel(CalculadoraImportacion $calculadora): void
