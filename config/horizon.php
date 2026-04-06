@@ -99,9 +99,9 @@ return [
     */
 
     'trim' => [
-        'recent' => 60,
-        'pending' => 60,
-        'completed' => 60,
+        'recent' => 1440,
+        'pending' => 10080,
+        'completed' => 10080,
         'recent_failed' => 10080,
         'failed' => 10080,
         'monitored' => 10080,
