@@ -56,6 +56,7 @@ class EmbarcadosController extends Controller
                     'TC.name as tipo_cliente'
                 ])
                 ->where('CC.id_contenedor', $idContenedor)
+                ->whereNull('CC.deleted_at')
                 ->whereNotNull('CC.estado_cliente')
                 ->whereNull('CC.id_cliente_importacion')
                 ->where('CC.estado_cotizador', 'CONFIRMADO')

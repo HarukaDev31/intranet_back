@@ -103,6 +103,7 @@ class PopulateClientesData extends Command
         // Mismas validaciones que en el modelo Cliente
         $cotizaciones = DB::table('contenedor_consolidado_cotizacion as cot')
             ->whereNotNull('cot.estado_cliente') // Validación del modelo Cliente
+            ->whereNull('cot.deleted_at')
             ->where('cot.estado_cotizador', 'CONFIRMADO') // Validación del modelo Cliente
             ->whereNotNull('cot.telefono')
             ->where('cot.telefono', '!=', '')
@@ -145,6 +146,7 @@ class PopulateClientesData extends Command
                     // Actualizar id_cliente en la cotización
                     DB::table('contenedor_consolidado_cotizacion')
                         ->where('id', $cotizacion->id)
+                        ->whereNull('deleted_at')
                         ->update(['id_cliente' => $clienteId]);
                 }
             }

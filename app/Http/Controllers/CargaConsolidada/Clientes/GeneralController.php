@@ -110,6 +110,7 @@ class GeneralController extends Controller
             ->join('contenedor_consolidado_tipo_cliente as TC', 'TC.id', '=', 'CC.id_tipo_cliente')
             ->leftJoin('usuario as U', 'U.ID_Usuario', '=', 'CC.id_usuario')
             ->where('CC.id_contenedor', $idContenedor)
+            ->whereNull('CC.deleted_at')
             ->whereNotNull('CC.estado_cliente')
             ->whereNull('CC.id_cliente_importacion')
             ->where('CC.estado_cotizador', 'CONFIRMADO')
@@ -849,6 +850,7 @@ class GeneralController extends Controller
             $cot = DB::table('contenedor_consolidado_cotizacion')
                 ->select('id_contenedor', 'telefono')
                 ->where('id', $idCotizacion)
+                ->whereNull('deleted_at')
                 ->first();
 
             if (!$cot) {
@@ -1191,6 +1193,7 @@ class GeneralController extends Controller
             $cot = DB::table('contenedor_consolidado_cotizacion')
                 ->select('nombre', 'telefono')
                 ->where('id', $idCotizacion)
+                ->whereNull('deleted_at')
                 ->first();
 
             if (!$cot) {

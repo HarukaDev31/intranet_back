@@ -4,6 +4,7 @@ namespace App\Models\CargaConsolidada;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use App\Models\Usuario;
 use App\Models\CalculadoraImportacion;
 use App\Models\CargaConsolidada\Comprobante;
@@ -12,6 +13,7 @@ use App\Models\CargaConsolidada\Detraccion;
 class Cotizacion extends Model
 {
     use HasFactory;
+    use SoftDeletes;
 
     /**
      * La tabla asociada al modelo.
@@ -98,6 +100,7 @@ class Cotizacion extends Model
         'fecha' => 'datetime',
         'fecha_confirmacion' => 'datetime',
         'autosigned_contract_at' => 'datetime',
+        'deleted_at' => 'datetime',
         'volumen' => 'decimal:2',
         'valor_doc' => 'decimal:2',
         'valor_cot' => 'decimal:2',

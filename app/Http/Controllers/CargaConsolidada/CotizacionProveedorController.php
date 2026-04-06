@@ -430,6 +430,7 @@ class CotizacionProveedorController extends Controller
         try {
             $cotizacion = DB::table('contenedor_consolidado_cotizacion')
                 ->where('uuid', $uuid)
+                ->whereNull('deleted_at')
                 ->first();
             if (!$cotizacion) {
                 return response()->json([

@@ -52,6 +52,7 @@ class AddUuidsToCotizaciones extends Command
                     $query->whereNull('uuid')
                           ->orWhere('uuid', '');
                 })
+                ->whereNull('deleted_at')
                 ->count();
 
             if ($totalSinUuid === 0) {
@@ -71,6 +72,7 @@ class AddUuidsToCotizaciones extends Command
                         $query->whereNull('uuid')
                               ->orWhere('uuid', '');
                     })
+                    ->whereNull('deleted_at')
                     ->select('id', 'nombre')
                     ->limit($batchSize)
                     ->get();
@@ -90,6 +92,7 @@ class AddUuidsToCotizaciones extends Command
                         try {
                             DB::table('contenedor_consolidado_cotizacion')
                                 ->where('id', $cotizacion->id)
+                                ->whereNull('deleted_at')
                                 ->update(['uuid' => $uuid]);
 
                             $procesadas++;
@@ -120,6 +123,7 @@ class AddUuidsToCotizaciones extends Command
                         $query->whereNull('uuid')
                               ->orWhere('uuid', '');
                     })
+                    ->whereNull('deleted_at')
                     ->count();
 
                 if ($restantesSinUuid === 0) {

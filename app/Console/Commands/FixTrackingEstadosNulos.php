@@ -82,6 +82,7 @@ class FixTrackingEstadosNulos extends Command
                     // Verificar que la cotización exista
                     $cotizacionExists = DB::table('contenedor_consolidado_cotizacion')
                         ->where('id', $trackingNulo->id_cotizacion)
+                        ->whereNull('deleted_at')
                         ->exists();
 
                     if (!$cotizacionExists) {
@@ -100,6 +101,7 @@ class FixTrackingEstadosNulos extends Command
                     // Validar que la cotización asociada esté en estado 'CONFIRMADO'
                     $estadoCotizador = DB::table('contenedor_consolidado_cotizacion')
                         ->where('id', $trackingNulo->id_cotizacion)
+                        ->whereNull('deleted_at')
                         ->value('estado_cotizador');
 
                     if ($estadoCotizador !== 'CONFIRMADO') {

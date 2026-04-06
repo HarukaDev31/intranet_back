@@ -75,6 +75,7 @@ class ContainersController extends Controller
                 // Obtener CBM confirmado por los cotizadores (volumen de cotizaciones confirmadas)
                 $cbmConfirmados = DB::table('contenedor_consolidado_cotizacion')
                     ->whereIn('id_contenedor', $contenedorIds)
+                    ->whereNull('deleted_at')
                     ->where('estado_cotizador', 'CONFIRMADO')
                     ->select('id_contenedor', DB::raw('COALESCE(SUM(volumen), 0) as cbm_confirmado'))
                     ->groupBy('id_contenedor')
@@ -97,6 +98,7 @@ class ContainersController extends Controller
                 if (!empty($telefonoNormalizado)) {
                     $cotizaciones = DB::table('contenedor_consolidado_cotizacion')
                         ->whereIn('id_contenedor', $contenedorIds)
+                        ->whereNull('deleted_at')
                         ->where(function($query) use ($telefonoNormalizado) {
                             // Búsqueda flexible del teléfono normalizado
                             $query->whereRaw('REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(TRIM(telefono), " ", ""), "-", ""), "(", ""), ")", ""), "+", "") LIKE ?', ["%{$telefonoNormalizado}%"])

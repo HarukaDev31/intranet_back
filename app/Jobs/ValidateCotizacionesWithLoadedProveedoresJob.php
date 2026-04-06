@@ -40,6 +40,7 @@ class ValidateCotizacionesWithLoadedProveedoresJob implements ShouldQueue
             $cotizaciones = DB::table('contenedor_consolidado_cotizacion as ccc')
                 ->join('contenedor_consolidado_cotizacion_proveedores as cccp', 'ccc.id', '=', 'cccp.id_cotizacion')
                 ->where('ccc.id_contenedor', $this->contenedorId)
+                ->whereNull('ccc.deleted_at')
                 ->where('cccp.estados_proveedor', 'LOADED')
                 ->whereNotNull('ccc.nombre')
                 ->where('ccc.nombre', '!=', '')

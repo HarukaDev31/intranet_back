@@ -419,6 +419,7 @@ class CotizacionController extends Controller
         $headers = DB::table('contenedor_consolidado_cotizacion_proveedores as cccp')
             ->join('contenedor_consolidado_cotizacion as cc', 'cccp.id_cotizacion', '=', 'cc.id')
             ->where('cccp.id_contenedor', $idContenedor)
+            ->whereNull('cc.deleted_at')
             ->select([
                 DB::raw('COALESCE(SUM(IF(cc.estado_cotizador = "CONFIRMADO", cccp.cbm_total_china, 0)), 0) as cbm_total_china'),
                 DB::raw('(
@@ -426,6 +427,7 @@ class CotizacionController extends Controller
                     FROM contenedor_consolidado_cotizacion
                     WHERE id_contenedor = ' . $idContenedor . '
                     AND estado_cotizador = "CONFIRMADO"
+                    AND deleted_at IS NULL
                 ) as cbm_total_peru'),
                 DB::raw('(
                     SELECT COALESCE(SUM(volumen), 0)
@@ -433,6 +435,7 @@ class CotizacionController extends Controller
                     WHERE id_contenedor = ' . $idContenedor . '
                     AND estado_cotizador = "CONFIRMADO"
                     AND es_imo = 1
+                    AND deleted_at IS NULL
                 ) as cbm_total_imo'),
                 DB::raw('(
                     SELECT COALESCE(SUM(volumen), 0)
@@ -440,6 +443,7 @@ class CotizacionController extends Controller
                     WHERE id_contenedor = ' . $idContenedor . '
                     AND estado_cotizador = "CONFIRMADO"
                     AND id_usuario = ' . $userId . '
+                    AND deleted_at IS NULL
                 ) as cbm_vendido'),
                 DB::raw('(
                     SELECT COALESCE(SUM(volumen), 0)
@@ -447,6 +451,7 @@ class CotizacionController extends Controller
                     WHERE id_contenedor = ' . $idContenedor . '
                     AND estado_cotizador != "CONFIRMADO"
                     AND id_usuario = ' . $userId . '
+                    AND deleted_at IS NULL
                 ) as cbm_pendiente'),
                 DB::raw('(
                     SELECT COALESCE(SUM(cccp.cbm_total_china), 0)
@@ -455,6 +460,7 @@ class CotizacionController extends Controller
                     WHERE cccp.id_contenedor = ' . $idContenedor . '
                     AND cccp.estados_proveedor = "LOADED"
                     AND cc.id_usuario = ' . $userId . '
+                    AND cc.deleted_at IS NULL
                 ) as cbm_embarcado'),
                 DB::raw('(
                     SELECT COALESCE(SUM(monto), 0)
@@ -466,6 +472,7 @@ class CotizacionController extends Controller
                     )
                     AND estado_cotizador = "CONFIRMADO"
                     AND (id_contenedor_pago =' . $idContenedor . ' OR id_contenedor_pago is null)
+                    AND deleted_at IS NULL
 
                 ) as total_logistica'),
                 DB::raw('(
@@ -477,6 +484,7 @@ class CotizacionController extends Controller
                         WHERE id_contenedor = ' . $idContenedor . '
                     )
                     AND estado_cotizador = "CONFIRMADO"
+                    AND deleted_at IS NULL
                 ) as total_qty_items'),
                 DB::raw('(
                     SELECT COALESCE(SUM(monto), 0)
@@ -488,6 +496,7 @@ class CotizacionController extends Controller
                         FROM contenedor_consolidado_cotizacion
                         WHERE id_contenedor = ' . $idContenedor . '
                         AND estado_cotizador = "CONFIRMADO"
+                        AND deleted_at IS NULL
                     )
                     AND pc.name = "LOGISTICA"
                 ) as total_logistica_pagado'),
@@ -588,6 +597,7 @@ class CotizacionController extends Controller
             $vendidoRows = DB::table('contenedor_consolidado_cotizacion as c')
                 ->leftJoin('usuario as u', 'u.ID_Usuario', '=', 'c.id_usuario')
                 ->where('c.id_contenedor', $idContenedor)
+                ->whereNull('c.deleted_at')
                 ->where('c.estado_cotizador', 'CONFIRMADO')
                 ->select(
                     DB::raw('u.No_Nombres_Apellidos as nombre'),
@@ -609,6 +619,7 @@ class CotizacionController extends Controller
             $pendienteRows = DB::table('contenedor_consolidado_cotizacion as c')
                 ->leftJoin('usuario as u', 'u.ID_Usuario', '=', 'c.id_usuario')
                 ->where('c.id_contenedor', $idContenedor)
+                ->whereNull('c.deleted_at')
                 ->where('c.estado_cotizador', '!=', 'CONFIRMADO')
                 ->select(DB::raw('u.No_Nombres_Apellidos as nombre'), DB::raw('COALESCE(SUM(c.volumen),0) as cbm_pendiente'))
                 ->groupBy('u.No_Nombres_Apellidos')
@@ -627,6 +638,7 @@ class CotizacionController extends Controller
                 ->join('contenedor_consolidado_cotizacion as cc', 'cc.id', '=', 'cccp.id_cotizacion')
                 ->leftJoin('usuario as u', 'u.ID_Usuario', '=', 'cc.id_usuario')
                 ->where('cccp.id_contenedor', $idContenedor)
+                ->whereNull('cc.deleted_at')
                 ->where('cccp.estados_proveedor', 'LOADED')
                 ->select(DB::raw('u.No_Nombres_Apellidos as nombre'), DB::raw('COALESCE(SUM(cccp.cbm_total_china),0) as cbm_embarcado'))
                 ->groupBy('u.No_Nombres_Apellidos')

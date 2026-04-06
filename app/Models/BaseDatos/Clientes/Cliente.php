@@ -109,6 +109,7 @@ class Cliente extends Model
         $cotizacion = DB::table('contenedor_consolidado_cotizacion')
             ->join('carga_consolidada_contenedor', 'contenedor_consolidado_cotizacion.id_contenedor', '=', 'carga_consolidada_contenedor.id')
             ->whereNotNull('estado_cliente')
+            ->whereNull('contenedor_consolidado_cotizacion.deleted_at')
             ->where('estado_cotizador', 'CONFIRMADO')
             ->where(function ($query) {
                 // Validar que el teléfono no sea nulo o vacío antes de procesar
@@ -210,6 +211,7 @@ class Cliente extends Model
         $cotizaciones = DB::table('contenedor_consolidado_cotizacion')
             ->join('carga_consolidada_contenedor', 'contenedor_consolidado_cotizacion.id_contenedor', '=', 'carga_consolidada_contenedor.id')
             ->whereNotNull('contenedor_consolidado_cotizacion.estado_cliente')
+            ->whereNull('contenedor_consolidado_cotizacion.deleted_at')
             ->where('contenedor_consolidado_cotizacion.estado_cotizador', 'CONFIRMADO')
             //has one provider at least
             ->where(function ($query) {
@@ -389,6 +391,7 @@ class Cliente extends Model
         $cotizaciones = DB::table('contenedor_consolidado_cotizacion')
             ->join('carga_consolidada_contenedor', 'contenedor_consolidado_cotizacion.id_contenedor', '=', 'carga_consolidada_contenedor.id')
             ->whereNotNull('estado_cliente')
+            ->whereNull('contenedor_consolidado_cotizacion.deleted_at')
             ->where('estado_cotizador', 'CONFIRMADO')
             ->where(function ($query) {
                 // Validar que el teléfono no sea nulo o vacío antes de procesar

@@ -174,6 +174,7 @@ class ContenedorController extends Controller
                 $vendRows = DB::table('contenedor_consolidado_cotizacion_proveedores as cccp')
                     ->join('contenedor_consolidado_cotizacion as cc', 'cccp.id_cotizacion', '=', 'cc.id')
                     ->whereIn('cccp.id_contenedor', $pageIds)
+                    ->whereNull('cc.deleted_at')
                     ->select([
                         'cccp.id_contenedor',
                         DB::raw('COALESCE(SUM(IF(cc.estado_cotizador = "CONFIRMADO", cccp.cbm_total_china, 0)),0) as cbm_total_china'),
@@ -182,6 +183,7 @@ class ContenedorController extends Controller
                             FROM contenedor_consolidado_cotizacion
                             WHERE id_contenedor = cccp.id_contenedor
                             AND estado_cotizador = "CONFIRMADO"
+                            AND deleted_at IS NULL
                         ) as cbm_total_peru')
                     ])
                     ->groupBy('cccp.id_contenedor')
@@ -196,6 +198,7 @@ class ContenedorController extends Controller
                 $embRows = DB::table('contenedor_consolidado_cotizacion_proveedores as p')
                     ->join('contenedor_consolidado_cotizacion as cc', 'p.id_cotizacion', '=', 'cc.id')
                     ->whereIn('p.id_contenedor', $pageIds)
+                    ->whereNull('cc.deleted_at')
                     ->select([
                         'p.id_contenedor',
                         // China: sólo confirmados
@@ -208,7 +211,8 @@ class ContenedorController extends Controller
                                         FROM contenedor_consolidado_cotizacion_proveedores p2
                                         WHERE p2.id_contenedor = p.id_contenedor
                                     )
-                                    AND cc2.estado_cotizador = "CONFIRMADO") as sum_peru')
+                                    AND cc2.estado_cotizador = "CONFIRMADO"
+                                    AND cc2.deleted_at IS NULL) as sum_peru')
                     ])
                     ->whereNull('cc.id_cliente_importacion')
                     ->groupBy('p.id_contenedor')
@@ -1044,6 +1048,7 @@ Le estaré informando cualquier avance 🫡.";
                 ->join('contenedor_consolidado_cotizacion as cc', 'u.ID_Usuario', '=', 'cc.id_usuario','left')
                 ->join('contenedor_consolidado_cotizacion_proveedores as cccp', 'cc.id', '=', 'cccp.id_cotizacion','left')
                 ->join('carga_consolidada_contenedor as cont', 'cc.id_contenedor', '=', 'cont.id','left')
+                ->whereNull('cc.deleted_at')
                 ->groupBy('u.ID_Usuario', 'u.No_Nombres_Apellidos', 'g.No_Grupo');
 
             if ($fechaInicio && $fechaFin) {

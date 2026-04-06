@@ -197,6 +197,7 @@ class ClienteService
                         try {
                             $cotizacionQuery = DB::table('contenedor_consolidado_cotizacion as CC')
                                 ->join('carga_consolidada_contenedor as C', 'C.id', '=', 'CC.id_contenedor')
+                                ->whereNull('CC.deleted_at')
                                 ->where('CC.estado_cotizador', 'CONFIRMADO')
                                 ->whereNotNull('CC.estado_cliente');
 
@@ -626,6 +627,7 @@ class ClienteService
         // Obtener servicios de contenedor_consolidado_cotizacion
         $cotizaciones = DB::table('contenedor_consolidado_cotizacion')
             ->whereNotNull('estado_cliente')
+            ->whereNull('deleted_at')
             ->where('estado_cotizador', 'CONFIRMADO')
             ->whereIn('id_cliente', $clienteIds)
             ->select(
@@ -767,6 +769,7 @@ class ClienteService
                 if (!$provinciaName) {
                     $cotizacion = DB::table('contenedor_consolidado_cotizacion as CC')
                         ->join('carga_consolidada_contenedor as C', 'C.id', '=', 'CC.id_contenedor')
+                        ->whereNull('CC.deleted_at')
                         ->where('CC.estado_cotizador', 'CONFIRMADO')
                         ->whereNotNull('CC.estado_cliente')
                         ->where(function ($q) use ($cliente) {
@@ -950,6 +953,7 @@ class ClienteService
                         try {
                             $cotizacionQuery = DB::table('contenedor_consolidado_cotizacion as CC')
                                 ->join('carga_consolidada_contenedor as C', 'C.id', '=', 'CC.id_contenedor')
+                                ->whereNull('CC.deleted_at')
                                 ->where('CC.estado_cotizador', 'CONFIRMADO')
                                 ->whereNotNull('CC.estado_cliente');
 
@@ -1159,6 +1163,7 @@ class ClienteService
         // Fecha mínima de CONSOLIDADO por cliente (solo confirmados)
         $minConsolidado = DB::table('contenedor_consolidado_cotizacion as ccc')
             ->where('ccc.estado_cotizador', 'CONFIRMADO')
+            ->whereNull('ccc.deleted_at')
             ->whereNotNull('ccc.id_cliente')
             ->groupBy('ccc.id_cliente')
             ->select('ccc.id_cliente', DB::raw('MIN(ccc.fecha) as min_consolidado'));
@@ -1195,6 +1200,7 @@ class ClienteService
                 ->where('cccp.id_contenedor', $idContenedor)
                 ->where('cccp.estados_proveedor', 'LOADED')
                 ->where('cc.estado_cotizador', 'CONFIRMADO')
+                ->whereNull('cc.deleted_at')
                 ->sum('cccp.cbm_total_china');
 
             // Subconsulta para cbm_total
@@ -1203,7 +1209,8 @@ class ClienteService
                 ->whereIn('id_cotizacion', function ($query) {
                     $query->select('id')
                         ->from('contenedor_consolidado_cotizacion')
-                        ->where('estado_cotizador', 'CONFIRMADO');
+                        ->where('estado_cotizador', 'CONFIRMADO')
+                        ->whereNull('deleted_at');
                 })
                 ->sum('cbm_total');
 
@@ -1215,6 +1222,7 @@ class ClienteService
                         ->where('id_contenedor', $idContenedor);
                 })
                 ->where('estado_cotizador', 'CONFIRMADO')
+                ->whereNull('deleted_at')
                 ->whereIn('id', function ($query) use ($idContenedor) {
                     $query->select('id_cotizacion')
                         ->from('contenedor_consolidado_cotizacion_proveedores')
@@ -1231,6 +1239,7 @@ class ClienteService
                         ->where('id_contenedor', $idContenedor);
                 })
                 ->where('estado_cotizador', 'CONFIRMADO')
+                ->whereNull('deleted_at')
                 ->whereIn('id', function ($query) use ($idContenedor) {
                     $query->select('id_cotizacion')
                         ->from('contenedor_consolidado_cotizacion_proveedores')
@@ -1247,6 +1256,7 @@ class ClienteService
                         ->where('id_contenedor', $idContenedor);
                 })
                 ->where('estado_cotizador', 'CONFIRMADO')
+                ->whereNull('deleted_at')
                 ->sum('qty_item');
 
             // Subconsulta para total_logistica_pagado
@@ -1271,6 +1281,7 @@ class ClienteService
             $totalImpuestos = DB::table('contenedor_consolidado_cotizacion')
                 ->where('estado_cotizador', 'CONFIRMADO')
                 ->where('id_contenedor', $idContenedor)
+                ->whereNull('deleted_at')
                 ->sum('impuestos');
 
             return [

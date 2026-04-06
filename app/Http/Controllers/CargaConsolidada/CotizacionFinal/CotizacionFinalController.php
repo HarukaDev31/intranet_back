@@ -374,6 +374,7 @@ class CotizacionFinalController extends Controller
             $cotizacion = DB::table('contenedor_consolidado_cotizacion')
                 ->select('cotizacion_final_url')
                 ->where('id', $idCotizacion)
+                ->whereNull('deleted_at')
                 ->first();
 
             if (!$cotizacion || !$cotizacion->cotizacion_final_url) {

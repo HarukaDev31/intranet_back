@@ -137,6 +137,7 @@ class ClienteWhatsappLookupService
 
         $cotizaciones = DB::table('contenedor_consolidado_cotizacion')
             ->where('estado_cotizador', 'CONFIRMADO')
+            ->whereNull('deleted_at')
             ->whereIn('id_cliente', $clienteIds)
             ->select(
                 'id_cliente',

@@ -65,6 +65,7 @@ class CotizacionCotizadorDocumentacionController extends Controller
                     ) as proveedor_documentos")
                 ])
                 ->where('main.id', $idCotizacion)
+                ->whereNull('main.deleted_at')
                 ->whereNotNull('main.estado')
                 ->first();
 

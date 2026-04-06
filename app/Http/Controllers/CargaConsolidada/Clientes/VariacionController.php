@@ -44,6 +44,7 @@ class VariacionController extends Controller
             ->join('contenedor_consolidado_tipo_cliente as TC', 'TC.id', '=', 'CC.id_tipo_cliente')
             ->leftJoin('usuario as U', 'U.ID_Usuario', '=', 'CC.id_usuario')
             ->where('CC.id_contenedor', $idContenedor)
+            ->whereNull('CC.deleted_at')
             ->whereNotNull('CC.estado_cliente')
             ->whereNull('id_cliente_importacion')
             ->where('CC.estado_cotizador', 'CONFIRMADO')
@@ -188,6 +189,7 @@ class VariacionController extends Controller
                     ) as files_almacen_inspection")
                 ])
                 ->where('main.id', $id)
+                ->whereNull('main.deleted_at')
                 ->whereNotNull('main.estado')
                 ->first();
 
@@ -296,6 +298,7 @@ class VariacionController extends Controller
             $volSelected = $request->volumen;
             $cotizacion = DB::table('contenedor_consolidado_cotizacion')
                 ->where('id', $idCotizacion)
+                ->whereNull('deleted_at')
                 ->update(['vol_selected' => $volSelected]);
             if ($cotizacion) {
                 return response()->json([

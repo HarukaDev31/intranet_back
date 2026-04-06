@@ -616,6 +616,7 @@ class EntregaController extends Controller
                     ->where('P.id_contenedor', '=', $idContenedor);
             })
             ->where('CC.id_contenedor', $idContenedor)
+            ->whereNull('CC.deleted_at')
             ->whereNotNull('CC.estado_cliente')
             ->whereNull('CC.id_cliente_importacion')
             ->where('CC.estado_cotizador', 'CONFIRMADO')
@@ -825,6 +826,7 @@ class EntregaController extends Controller
             })
             ->leftJoin('departamento as DPT', 'DPT.ID_Departamento', '=', 'P.id_department')
             ->where('CC.id_contenedor', $idContenedor)
+            ->whereNull('CC.deleted_at')
             ->whereNotNull('CC.estado_cliente')
             ->whereNull('CC.id_cliente_importacion')
             ->where('CC.estado_cotizador', 'CONFIRMADO')
@@ -963,6 +965,7 @@ class EntregaController extends Controller
             })
             ->leftJoin('consolidado_delivery_range_date as R2', 'R2.id', '=', 'UR2.id_range_date')
             ->where('CC.id_contenedor', $idContenedor)
+            ->whereNull('CC.deleted_at')
             ->whereNotNull('CC.estado_cliente')
             ->whereNull('CC.id_cliente_importacion')
             ->where('CC.estado_cotizador', 'CONFIRMADO')
@@ -1186,6 +1189,7 @@ class EntregaController extends Controller
                 $join->on('PB.id_cotizacion', '=', 'CC.id');
             })
             ->where('CC.id_contenedor', $idContenedor)
+            ->whereNull('CC.deleted_at')
             ->whereNotNull('CC.estado_cliente')
             ->whereNull('CC.id_cliente_importacion')
             ->where('CC.estado_cotizador', 'CONFIRMADO')
@@ -1210,6 +1214,7 @@ class EntregaController extends Controller
                 $join->on('PB.id_cotizacion', '=', 'CC.id');
             })
             ->where('CC.id_contenedor', $idContenedor)
+            ->whereNull('CC.deleted_at')
             ->whereNotNull('CC.estado_cliente')
             ->whereNull('CC.id_cliente_importacion')
             ->where('CC.estado_cotizador', 'CONFIRMADO')
@@ -1323,6 +1328,7 @@ class EntregaController extends Controller
             })
             ->leftJoin('consolidado_delivery_range_date as R2', 'R2.id', '=', 'UR2.id_range_date')
             ->where('CC.id_contenedor', $idContenedor)
+            ->whereNull('CC.deleted_at')
             ->whereNotNull('CC.estado_cliente')
             ->whereNull('CC.id_cliente_importacion')
             ->where('CC.estado_cotizador', 'CONFIRMADO')
@@ -1542,6 +1548,7 @@ class EntregaController extends Controller
                 $join->on('PB.id_cotizacion', '=', 'CC.id');
             })
             ->where('CC.id_contenedor', $idContenedor)
+            ->whereNull('CC.deleted_at')
             ->whereNotNull('CC.estado_cliente')
             ->whereNull('CC.id_cliente_importacion')
             ->where('CC.estado_cotizador', 'CONFIRMADO')
@@ -1566,6 +1573,7 @@ class EntregaController extends Controller
                 $join->on('PB.id_cotizacion', '=', 'CC.id');
             })
             ->where('CC.id_contenedor', $idContenedor)
+            ->whereNull('CC.deleted_at')
             ->whereNotNull('CC.estado_cliente')
             ->whereNull('CC.id_cliente_importacion')
             ->where('CC.estado_cotizador', 'CONFIRMADO')
@@ -1651,6 +1659,7 @@ class EntregaController extends Controller
                     $join->on('CPA.id_cotizacion', '=', 'CC.id');
                 })
                 ->where('CC.id_contenedor', $idContenedor)
+                ->whereNull('CC.deleted_at')
                 ->whereNotNull('CC.estado_cliente')
                 ->whereNull('CC.id_cliente_importacion')
                 ->where('CC.estado_cotizador', 'CONFIRMADO')
@@ -1791,6 +1800,7 @@ class EntregaController extends Controller
                             $relativePath = 'entregas/cargo_entrega/' . $idContenedor . '/' . $pdfName;
                             DB::table('contenedor_consolidado_cotizacion')
                                 ->where('id', $r->id_cotizacion)
+                                ->whereNull('deleted_at')
                                 ->update(['cargo_entrega_pdf_url' => $relativePath]);
                         }
                     } catch (\Exception $e) {
@@ -1948,6 +1958,7 @@ class EntregaController extends Controller
                 END as estado_pago")
             )
 
+            ->whereNull('CC.deleted_at')
             ->whereNotNull('CC.estado_cliente')
             //where has pagos delivery
             ->whereExists(function ($q) {
@@ -2189,6 +2200,7 @@ class EntregaController extends Controller
             )
 
             ->where('CC.id_contenedor', $idContenedor)
+            ->whereNull('CC.deleted_at')
             ->whereNotNull('CC.estado_cliente')
             ->whereNull('CC.id_cliente_importacion')
             ->where('CC.estado_cotizador', 'CONFIRMADO');
@@ -2381,6 +2393,7 @@ class EntregaController extends Controller
             ->leftJoin('consolidado_delivery_range_date as RL', 'RL.id', '=', 'L.id_range_date')
             ->leftJoin('consolidado_delivery_date as DL', 'DL.id', '=', 'RL.id_date')
             ->where('CC.id', $idCotizacion)
+            ->whereNull('CC.deleted_at')
             ->select([
                 'CC.*',
                 'CC.id as cotizacion_id',
@@ -3009,6 +3022,7 @@ Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, 
             // 3) Actualizar la tabla contenedor_consolidado_cotizacion y hacer que delivery_form_registered_at sea NULL
             DB::table('contenedor_consolidado_cotizacion')
                 ->where('id', $idCotizacion)
+                ->whereNull('deleted_at')
                 ->update(['delivery_form_registered_at' => null]);
 
             if ($deleted === 0 && $assignments->count() === 0) {
@@ -3058,6 +3072,7 @@ Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, 
             // Actualizar el campo tipo_servicio en la tabla
             DB::table('contenedor_consolidado_cotizacion')
                 ->where('id', $idCotizacion)
+                ->whereNull('deleted_at')
                 ->update(['tipo_servicio' => $tipoServicio]);
 
             return response()->json(['message' => 'Servicio guardado correctamente', 'success' => true]);
@@ -3762,6 +3777,7 @@ Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, 
             ->join('carga_consolidada_contenedor as C', 'C.id', '=', 'CC.id_contenedor')
             ->where('CC.id', $idCotizacion)
             ->where('CC.id_contenedor', $idContenedor)
+            ->whereNull('CC.deleted_at')
             ->select([
                 'CC.id',
                 'CC.id_contenedor',
@@ -3814,6 +3830,7 @@ Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, 
             ->join('carga_consolidada_contenedor as C', 'C.id', '=', 'CC.id_contenedor')
             ->where('CC.id', $idCotizacion)
             ->where('CC.id_contenedor', $idContenedor)
+            ->whereNull('CC.deleted_at')
             ->select(['CC.nombre as cliente', 'C.carga'])
             ->first();
         if (!$row) return null;
@@ -3852,6 +3869,7 @@ Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, 
             DB::table('contenedor_consolidado_cotizacion')
                 ->where('id', $idCotizacion)
                 ->where('id_contenedor', $idContenedor)
+                ->whereNull('deleted_at')
                 ->update(['cargo_entrega_pdf_url' => $relativePath]);
             return $relativePath;
         } catch (\Throwable $e) {
@@ -3929,6 +3947,7 @@ Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, 
             ->join('carga_consolidada_contenedor as C', 'C.id', '=', 'CC.id_contenedor')
             ->where('CC.id', $idCotizacion)
             ->where('CC.id_contenedor', $idContenedor)
+            ->whereNull('CC.deleted_at')
             ->select([
                 'CC.id',
                 'CC.nombre as cliente',
@@ -3986,6 +4005,7 @@ Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, 
             DB::table('contenedor_consolidado_cotizacion')
                 ->where('id', $idCotizacion)
                 ->where('id_contenedor', $idContenedor)
+                ->whereNull('deleted_at')
                 ->update(['cargo_entrega_pdf_firmado_url' => $relativePath]);
 
             // Registrar el PDF firmado en la tabla de conformidad (Lima o Provincia) según el tipo de formulario

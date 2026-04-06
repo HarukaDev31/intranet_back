@@ -85,6 +85,7 @@ class PagosController extends Controller
                 )
                 ->leftJoin($this->table_contenedor_tipo_cliente . ' AS TC', 'TC.id', '=', 'CC.id_tipo_cliente')
                 ->where('CC.id_contenedor', $idContenedor)
+                ->whereNull('CC.deleted_at')
                 ->whereNull('CC.id_cliente_importacion')
                 ->whereExists(function ($query) {
                     $query->select(DB::raw(1))

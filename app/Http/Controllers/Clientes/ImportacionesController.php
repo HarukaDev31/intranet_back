@@ -434,6 +434,7 @@ class ImportacionesController extends Controller
                     ) as files_almacen_inspection")
                 ])
                 ->where('main.uuid', $uuid) // Validar ID específico
+                ->whereNull('main.deleted_at')
                 ->where(DB::raw('REPLACE(TRIM(main.telefono), " ", "")'), 'like', '%' . $cleanWhatsapp . '%') // Validar que pertenece al cliente
                 ->where('main.estado_cotizador', 'CONFIRMADO')
                 ->whereNull('main.id_cliente_importacion')
@@ -511,6 +512,7 @@ class ImportacionesController extends Controller
                     ) as files_almacen_inspection")
                 ])
                 ->where('main.uuid', $uuid)
+                ->whereNull('main.deleted_at')
                 ->where('main.estado_cotizador', 'CONFIRMADO')
                 ->first();
 

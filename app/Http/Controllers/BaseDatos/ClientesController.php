@@ -915,6 +915,7 @@ class ClientesController extends Controller
         // Buscar en contenedor_consolidado_cotizacion
         $cotizaciones = DB::table('contenedor_consolidado_cotizacion')
             ->leftJoin('carga_consolidada_contenedor as cc', 'contenedor_consolidado_cotizacion.id_contenedor', '=', 'cc.id')
+            ->whereNull('contenedor_consolidado_cotizacion.deleted_at')
             ->whereNotNull('estado_cliente')
             ->where('estado_cotizador', 'CONFIRMADO')
             ->whereIn('id_cliente', $clienteIds)

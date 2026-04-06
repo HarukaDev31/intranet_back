@@ -76,6 +76,7 @@ class GeneralExportService
             ])
             ->leftJoin('contenedor_consolidado_tipo_cliente', 'contenedor_consolidado_tipo_cliente.id', '=', 'contenedor_consolidado_cotizacion.id_tipo_cliente')
             ->where('contenedor_consolidado_cotizacion.id_contenedor', $idContenedor)
+            ->whereNull('contenedor_consolidado_cotizacion.deleted_at')
             ->where('estado_cotizador', 'CONFIRMADO')
             ->whereNotNull('estado_cliente');
 
@@ -84,6 +85,7 @@ class GeneralExportService
             ->select('CC.id', DB::raw('COALESCE(U.No_Nombres_Apellidos, "") as asesor'))
             ->leftJoin('usuario as U', 'U.ID_Usuario', '=', 'CC.id_usuario')
             ->where('CC.id_contenedor', $idContenedor)
+            ->whereNull('CC.deleted_at')
             ->whereNotNull('CC.estado_cliente')
             ->whereNull('CC.id_cliente_importacion');
         if ($request->has('estado_coordinacion') || $request->has('estado_china')) {

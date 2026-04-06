@@ -157,6 +157,7 @@ class AutoSignContracts extends Command
         
         DB::table('contenedor_consolidado_cotizacion')
             ->where('id', $cotizacion->id)
+            ->whereNull('deleted_at')
             ->update([
                 'autosigned_contract_at' => now(),
                 'cotizacion_contrato_autosigned_url' => $fullUrl

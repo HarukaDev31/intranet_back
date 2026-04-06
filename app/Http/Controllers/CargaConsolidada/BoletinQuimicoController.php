@@ -32,6 +32,7 @@ class BoletinQuimicoController extends Controller
             $groupedQuery = BoletinQuimicoCotizacionItem::query()
                 ->select('boletin_quimico_cotizacion_item.id_cotizacion', 'boletin_quimico_cotizacion_item.id_contenedor')
                 ->join('contenedor_consolidado_cotizacion as C', 'C.id', '=', 'boletin_quimico_cotizacion_item.id_cotizacion')
+                ->whereNull('C.deleted_at')
                 ->join('carga_consolidada_contenedor as CONT', 'CONT.id', '=', 'boletin_quimico_cotizacion_item.id_contenedor')
                 ->groupBy('boletin_quimico_cotizacion_item.id_cotizacion', 'boletin_quimico_cotizacion_item.id_contenedor')
                 ->orderByRaw('(SELECT MAX(pbq.id) FROM pagos_boletin_quimico pbq INNER JOIN boletin_quimico_cotizacion_item bqi ON bqi.id = pbq.id_boletin_quimico_item WHERE bqi.id_cotizacion = boletin_quimico_cotizacion_item.id_cotizacion AND bqi.id_contenedor = boletin_quimico_cotizacion_item.id_contenedor) IS NULL ASC, (SELECT MAX(pbq.id) FROM pagos_boletin_quimico pbq INNER JOIN boletin_quimico_cotizacion_item bqi ON bqi.id = pbq.id_boletin_quimico_item WHERE bqi.id_cotizacion = boletin_quimico_cotizacion_item.id_cotizacion AND bqi.id_contenedor = boletin_quimico_cotizacion_item.id_contenedor) DESC');
