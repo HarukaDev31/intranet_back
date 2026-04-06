@@ -20,6 +20,14 @@ class Kernel extends ConsoleKernel
         $schedule->command('clientes:populate --force')->dailyAt('03:00');
         // Ejecutar auto-firma de contratos cada 5 minutos
         $schedule->command('contracts:auto-sign')->everyFiveMinutes();
+        // Reintentar sincronización Bitrix de leads landing pendientes (solo si hay webhook)
+        $schedule->command('landing:enqueue-bitrix-sync')
+            ->everyMinute()
+            ->when(function () {
+                $url = config('services.bitrix.webhook_url');
+
+                return !empty($url) && is_string($url);
+            });
     }
 
     /**

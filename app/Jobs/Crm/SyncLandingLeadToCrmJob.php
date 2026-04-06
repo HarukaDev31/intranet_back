@@ -6,13 +6,14 @@ use App\Models\LandingConsolidadoLead;
 use App\Models\LandingCursoLead;
 use App\Services\Crm\LandingLeadCrmSyncResolver;
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 
-class SyncLandingLeadToCrmJob implements ShouldQueue
+class SyncLandingLeadToCrmJob implements ShouldQueue, ShouldBeUnique
 {
     use Dispatchable;
     use InteractsWithQueue;
@@ -31,6 +32,9 @@ class SyncLandingLeadToCrmJob implements ShouldQueue
     /** @var int */
     public $leadId;
 
+    /** @var int Segundos: evita encolar el mismo lead muchas veces mientras el cron corre cada minuto */
+    public $uniqueFor = 300;
+
     public function __construct(string $funnel, int $leadId)
     {
         $this->funnel = $funnel;
@@ -38,8 +42,20 @@ class SyncLandingLeadToCrmJob implements ShouldQueue
         $this->onQueue(config('services.bitrix.queue', 'default'));
     }
 
+    public function uniqueId(): string
+    {
+        return 'landing-bitrix:' . $this->funnel . ':' . $this->leadId;
+    }
+
     public function handle(LandingLeadCrmSyncResolver $resolver): void
     {
+        Log::info('[CRM] Iniciando sincronización de lead.', [
+            'funnel' => $this->funnel,
+            'lead_id' => $this->leadId,
+            'attempt' => $this->attempts(),
+            'queue' => config('services.bitrix.queue', 'default'),
+        ]);
+
         $adapter = $resolver->resolve($this->funnel);
         if ($adapter === null) {
             Log::debug('[CRM] Sincronización omitida (webhook Bitrix no configurado).', [
@@ -68,6 +84,7 @@ class SyncLandingLeadToCrmJob implements ShouldQueue
                 'lead_id' => $this->leadId,
                 'result' => $result,
             ]);
+            $this->markBitrixSynced();
 
             return;
         }
@@ -77,6 +94,7 @@ class SyncLandingLeadToCrmJob implements ShouldQueue
             'lead_id' => $this->leadId,
             'result' => $result,
         ]);
+        $this->markBitrixSynced();
     }
 
     /**
@@ -92,6 +110,22 @@ class SyncLandingLeadToCrmJob implements ShouldQueue
         }
 
         return null;
+    }
+
+    private function markBitrixSynced(): void
+    {
+        $updated = 0;
+        if ($this->funnel === 'consolidado') {
+            $updated = LandingConsolidadoLead::query()->whereKey($this->leadId)->update(['bitrix_synced_at' => now()]);
+        } elseif ($this->funnel === 'curso') {
+            $updated = LandingCursoLead::query()->whereKey($this->leadId)->update(['bitrix_synced_at' => now()]);
+        }
+
+        Log::info('[CRM] bitrix_synced_at actualizado.', [
+            'funnel' => $this->funnel,
+            'lead_id' => $this->leadId,
+            'rows_updated' => $updated,
+        ]);
     }
 
     public function failed(\Throwable $exception)

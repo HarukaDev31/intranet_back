@@ -15,5 +15,10 @@ class LandingConsolidadoLead extends Model
         'codigo_campana',
         'ip_address',
         'user_agent',
+        'bitrix_synced_at',
+    ];
+
+    protected $casts = [
+        'bitrix_synced_at' => 'datetime',
     ];
 }
