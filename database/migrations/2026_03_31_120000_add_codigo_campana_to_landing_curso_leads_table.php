@@ -8,9 +8,7 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::table('landing_curso_leads', function (Blueprint $table) {
-            $table->string('codigo_campana', 32)->nullable()->after('experiencia_importando');
-        });
+       
     }
 
     public function down(): void
