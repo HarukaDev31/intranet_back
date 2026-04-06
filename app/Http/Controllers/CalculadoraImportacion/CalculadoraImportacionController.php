@@ -502,6 +502,16 @@ class CalculadoraImportacionController extends Controller
             ]);
 
             $data = $request->all();
+            // Compatibilidad: algunos clientes envían "tariftype" en lugar de tarifa.type.
+            if (
+                isset($data['tarifa']) &&
+                is_array($data['tarifa']) &&
+                (!isset($data['tarifa']['type']) || $data['tarifa']['type'] === '')
+            ) {
+                if (isset($data['tarifa']['tariftype']) && $data['tarifa']['tariftype'] !== '') {
+                    $data['tarifa']['type'] = $data['tarifa']['tariftype'];
+                }
+            }
             $data['created_by'] = auth()->id();
 
             // Validar límite de CBM IMO por contenedor (si aplica)
@@ -565,7 +575,10 @@ class CalculadoraImportacionController extends Controller
 
                     // Regenerar Excel completo desde BD (payload incluye code_supplier); incluye proveedores nuevos y orden por código.
                     if ($calculadora->id_carga_consolidada_contenedor) {
-                        $this->calculadoraImportacionService->regenerarExcelDesdeCalculadora($calculadora);
+                        $this->calculadoraImportacionService->regenerarExcelDesdeCalculadora(
+                            $calculadora,
+                            isset($data['tarifa']) && is_array($data['tarifa']) ? $data['tarifa'] : null
+                        );
                         $calculadora->refresh();
                         $calculadora->load(['proveedores', 'contenedor']);
                     }

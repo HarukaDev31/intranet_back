@@ -1570,7 +1570,10 @@ class CalculadoraImportacionService
      * sin vincular al final por id (orden de alta, como en el payload).
      * Si hay contenedor y un proveedor nuevo no tiene código, se genera y persiste (índice = posición en esa lista).
      */
-    public function regenerarExcelDesdeCalculadora(CalculadoraImportacion $calculadora): ?array
+    /**
+     * @param array<string, mixed>|null $tarifaInput
+     */
+    public function regenerarExcelDesdeCalculadora(CalculadoraImportacion $calculadora, ?array $tarifaInput = null): ?array
     {
         $calculadora->load(['proveedores.productos', 'contenedor']);
 
@@ -1661,6 +1664,14 @@ class CalculadoraImportacionService
         $totalExtraItem = (float) ($calculadora->tarifa_total_extra_item ?? 0);
         $totalDescuento = (float) ($calculadora->tarifa_descuento ?? 0);
 
+        $tarifaType = 'CBM';
+        if (is_array($tarifaInput)) {
+            $incomingType = strtoupper(trim((string) (($tarifaInput['type'] ?? $tarifaInput['tariftype'] ?? ''))));
+            if ($incomingType !== '') {
+                $tarifaType = $incomingType;
+            }
+        }
+
         $data = [
             'clienteInfo' => $clienteInfo,
             'proveedores' => $proveedores,
@@ -1673,7 +1684,7 @@ class CalculadoraImportacionService
             'totalDescuento' => $totalDescuento,
             'tarifa' => [
                 'tarifa' => $tarifaVal,
-                'type' => 'CBM',
+                'type' => $tarifaType,
                 'value' => $tarifaVal,
             ],
             'tipo_cambio' => (float) ($calculadora->tc ?? 3.75),
