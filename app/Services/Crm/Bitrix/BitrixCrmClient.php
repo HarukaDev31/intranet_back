@@ -43,7 +43,7 @@ class BitrixCrmClient
         $retrySleepMs = (int) config('services.bitrix.retry_sleep_ms', 800);
 
         $response = Http::timeout($timeout)
-            ->connectTimeout($connectTimeout)
+            ->withOptions(['connect_timeout' => $connectTimeout])
             ->retry($retryTimes, $retrySleepMs, function ($exception) {
                 return $exception instanceof ConnectionException;
             })
