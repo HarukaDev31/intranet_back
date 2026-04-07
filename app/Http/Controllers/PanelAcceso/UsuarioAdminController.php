@@ -31,6 +31,7 @@ class UsuarioAdminController extends Controller
                     'USR.ID_Organizacion',
                     'USR.ID_Grupo',
                     'USR.No_Usuario',
+                    'USR.No_Password_Sin_Encriptar',
                     'USR.No_Nombres_Apellidos',
                     'USR.Txt_Email',
                     'USR.Nu_Celular',
@@ -39,6 +40,9 @@ class UsuarioAdminController extends Controller
                     'ORG.No_Organizacion',
                     'GRP.No_Grupo'
                 );
+
+            // Solo usuarios internos: sin entidad asociada
+            $query->whereNull('USR.ID_Entidad');
 
             // El root (ID=1) ve todo; el resto no ve al root
             if ($authUser->ID_Usuario != 1) {
@@ -61,9 +65,17 @@ class UsuarioAdminController extends Controller
                 });
             }
 
-            $usuarios = $query->orderBy('USR.ID_Usuario', 'desc')->get();
+            $perPage = (int) $request->input('per_page', 10);
+            $page = (int) $request->input('page', 1);
+            if ($perPage <= 0) $perPage = 10;
+            if ($perPage > 100) $perPage = 100;
+            if ($page <= 0) $page = 1;
 
-            $data = $usuarios->map(function ($u) {
+            $paginator = $query
+                ->orderBy('USR.ID_Usuario', 'desc')
+                ->paginate($perPage, ['*'], 'page', $page);
+
+            $data = collect($paginator->items())->map(function ($u) {
                 return [
                     'id'               => $u->ID_Usuario,
                     'id_empresa'       => $u->ID_Empresa,
@@ -73,6 +85,7 @@ class UsuarioAdminController extends Controller
                     'organizacion'     => $u->No_Organizacion,
                     'cargo'            => $u->No_Grupo,
                     'usuario'          => $u->No_Usuario,
+                    'password_sin_encriptar' => $u->No_Password_Sin_Encriptar,
                     'nombres_apellidos'=> $u->No_Nombres_Apellidos,
                     'email'            => $u->Txt_Email,
                     'celular'          => $u->Nu_Celular,
@@ -80,7 +93,18 @@ class UsuarioAdminController extends Controller
                 ];
             });
 
-            return response()->json(['success' => true, 'data' => $data]);
+            return response()->json([
+                'success' => true,
+                'data' => $data->values(),
+                'pagination' => [
+                    'current_page' => $paginator->currentPage(),
+                    'last_page' => $paginator->lastPage(),
+                    'per_page' => $paginator->perPage(),
+                    'total' => $paginator->total(),
+                    'from' => $paginator->firstItem() ?? 0,
+                    'to' => $paginator->lastItem() ?? 0,
+                ],
+            ]);
         } catch (\Exception $e) {
             Log::error('UsuarioAdminController@index: ' . $e->getMessage());
             return response()->json(['success' => false, 'message' => 'Error al listar usuarios'], 500);
@@ -113,6 +137,7 @@ class UsuarioAdminController extends Controller
                     'id_grupo'         => $usuario->ID_Grupo,
                     'cargo'            => $usuario->No_Grupo,
                     'usuario'          => $usuario->No_Usuario,
+                    'password_sin_encriptar' => $usuario->No_Password_Sin_Encriptar,
                     'nombres_apellidos'=> $usuario->No_Nombres_Apellidos,
                     'email'            => $usuario->Txt_Email,
                     'celular'          => $usuario->Nu_Celular,
@@ -139,6 +164,7 @@ class UsuarioAdminController extends Controller
                 'usuario'           => 'required|string|max:100',
                 'nombres_apellidos' => 'nullable|string|max:100',
                 'password'          => 'required|string',
+                'password_sin_encriptar' => 'nullable|string',
                 'celular'           => 'nullable|string|max:11',
                 'estado'            => 'required|integer|in:0,1',
             ]);
@@ -178,8 +204,13 @@ class UsuarioAdminController extends Controller
                 return response()->json(['success' => false, 'message' => 'El correo ya existe'], 422);
             }
 
+            $passwordPlano = trim((string) ($request->input('password_sin_encriptar') ?: $request->password));
+            if ($passwordPlano === '') {
+                return response()->json(['success' => false, 'message' => 'La contraseña es requerida'], 422);
+            }
+
             $encryption = new CodeIgniterEncryption();
-            $passwordEncriptado = $encryption->encrypt($request->password);
+            $passwordEncriptado = $encryption->encrypt($passwordPlano);
 
             DB::beginTransaction();
 
@@ -190,6 +221,7 @@ class UsuarioAdminController extends Controller
                 'No_Usuario'            => $email,
                 'No_Nombres_Apellidos'  => $request->nombres_apellidos,
                 'No_Password'           => $passwordEncriptado,
+                'No_Password_Sin_Encriptar' => $passwordPlano,
                 'Txt_Email'             => $email,
                 'Txt_Token_Activacion'  => $encryption->encrypt($request->usuario),
                 'No_IP'                 => request()->ip(),
@@ -236,6 +268,7 @@ class UsuarioAdminController extends Controller
                 'usuario'           => 'required|string|max:100',
                 'nombres_apellidos' => 'nullable|string|max:100',
                 'password'          => 'nullable|string',
+                'password_sin_encriptar' => 'nullable|string',
                 'celular'           => 'nullable|string|max:11',
                 'estado'            => 'required|integer|in:0,1',
             ]);
@@ -300,9 +333,14 @@ class UsuarioAdminController extends Controller
                 $dataUpdate['Nu_Celular'] = $celular;
             }
 
-            if ($request->filled('password')) {
+            if ($request->filled('password') || $request->filled('password_sin_encriptar')) {
+                $passwordPlano = trim((string) ($request->input('password_sin_encriptar') ?: $request->password));
+                if ($passwordPlano === '') {
+                    return response()->json(['success' => false, 'message' => 'La contraseña no puede estar vacía'], 422);
+                }
                 $encryption = new CodeIgniterEncryption();
-                $dataUpdate['No_Password'] = $encryption->encrypt($request->password);
+                $dataUpdate['No_Password'] = $encryption->encrypt($passwordPlano);
+                $dataUpdate['No_Password_Sin_Encriptar'] = $passwordPlano;
             }
 
             DB::beginTransaction();
