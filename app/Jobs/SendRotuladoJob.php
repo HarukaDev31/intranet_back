@@ -719,10 +719,10 @@ Ingresar aquí: " . $url."\n\n";
 
             Log::info("Procesando movilidad personal - qty_box: {$qtyBox}, cliente: {$cotizacionInfo->nombre}");
 
-            // Obtener la última fila con datos y el código de la columna F
-            $lastRowData = $this->getLastRowWithData();
-            if (!$lastRowData || !isset($lastRowData['code'])) {
-                Log::error('No se pudo obtener la última fila con datos');
+            // Última fila con código VIN en F (ignora filas solo con B/C por intentos a medias)
+            $lastRowData = $this->getLastRowWithVinCodeInColumnF();
+            if (!$lastRowData || empty($lastRowData['code'])) {
+                Log::error('No se pudo obtener la última fila con código VIN en columna F');
                 return;
             }
 
@@ -733,6 +733,15 @@ Ingresar aquí: " . $url."\n\n";
 
             // Generar códigos correlativos
             $codes = $this->generateCorrelativeCodes($lastCode, $qtyBox);
+            if ($codes === [] || count($codes) !== $qtyBox) {
+                Log::error('Movilidad personal: no se generaron códigos válidos; se omite Google Sheet y VIM', [
+                    'last_code' => $lastCode,
+                    'qty_box' => $qtyBox,
+                    'codes_count' => count($codes),
+                ]);
+
+                return;
+            }
 
             // Agregar filas al Google Sheet debajo de la última fila con dat
             $sheetName = $cotizacionInfo->nombre . ' CONS' . $carga;
@@ -772,52 +781,55 @@ Por lo tanto, dile a tu proveedor #{$supplierCode} que le ponga la etiqueta.
     }
 
     /**
-     * Obtener la última fila con datos y el código de la columna F
+     * Última fila donde la columna F tiene un código VIN con formato esperado.
+     * Evita tomar como referencia filas con solo B/C (p. ej. tras un error al escribir F).
      */
-    private function getLastRowWithData()
+    private function getLastRowWithVinCodeInColumnF()
     {
         try {
-            // Obtener valores de toda la hoja para encontrar la última fila con datos
-            $values = $this->getRangeValues('A1:Z1000');
+            $values = $this->getRangeValues('A1:Z2000');
 
             if (empty($values)) {
                 return null;
             }
 
-            // Buscar la última fila que tenga datos en cualquier columna
-            $lastRowIndex = 0;
+            $lastRowIndex = -1;
+            $lastCode = null;
             $lastRowData = null;
 
             foreach ($values as $rowIndex => $row) {
-                // Verificar si la fila tiene algún dato
-                $hasData = false;
-                foreach ($row as $cell) {
-                    if (!empty($cell)) {
-                        $hasData = true;
-                        break;
-                    }
+                if (!is_array($row)) {
+                    continue;
+                }
+                $codeF = isset($row[5]) ? trim((string) $row[5]) : '';
+                if ($codeF === '') {
+                    continue;
+                }
+                if (!preg_match('/^L7NES\d+[A-Z]{3}\d+$/i', $codeF)) {
+                    continue;
                 }
 
-                if ($hasData) {
-                    $lastRowIndex = $rowIndex;
-                    $lastRowData = $row;
-                }
+                $lastRowIndex = $rowIndex;
+                $lastCode = $codeF;
+                $lastRowData = $row;
             }
 
-            $lastRowNumber = $lastRowIndex + 1; // +1 porque Google Sheets usa índice base 1
+            if ($lastRowIndex < 0 || $lastCode === null) {
+                Log::warning('No hay filas con código VIN válido en columna F (formato L7NES…)');
+                return null;
+            }
 
-            // Obtener el código de la columna F de la última fila
-            $lastCode = isset($lastRowData[5]) ? $lastRowData[5] : null; // Columna F es índice 5
+            $lastRowNumber = $lastRowIndex + 1;
 
-            Log::info("Última fila con datos: {$lastRowNumber}, código en columna F: {$lastCode}");
+            Log::info("Última fila con VIN en columna F: {$lastRowNumber}, código: {$lastCode}");
 
             return [
                 'row' => $lastRowNumber,
                 'code' => $lastCode,
-                'rowData' => $lastRowData
+                'rowData' => $lastRowData,
             ];
         } catch (\Exception $e) {
-            Log::error('Error obteniendo última fila con datos: ' . $e->getMessage());
+            Log::error('Error obteniendo última fila con VIN en F: ' . $e->getMessage());
             return null;
         }
     }
@@ -828,12 +840,15 @@ Por lo tanto, dile a tu proveedor #{$supplierCode} que le ponga la etiqueta.
     private function generateCorrelativeCodes($baseCode, $qtyBox, $lastCodeRow = null)
     {
         try {
-            // Extraer el número del código base (ej: L7NES211MTG083495 -> 083495)
-            if (!preg_match('/^L7NES(\d+)MTG(\d+)$/', $baseCode, $matches)) {
+            $baseCode = trim((string) $baseCode);
+            // L7NES + lote numérico + trígrafo (MTG, MSG, etc.) + correlativo de 6 dígitos
+            if (!preg_match('/^L7NES(\d+)([A-Z]{3})(\d+)$/i', $baseCode, $matches)) {
                 throw new \Exception('Formato de código base inválido: ' . $baseCode);
             }
 
-            $baseNumber = (int) $matches[2];
+            $lote = $matches[1];
+            $trigrama = strtoupper($matches[2]);
+            $baseNumber = (int) $matches[3];
             $codes = [];
 
             // Siempre usar el número del código base + 1, no el número de fila
@@ -841,7 +856,7 @@ Por lo tanto, dile a tu proveedor #{$supplierCode} que le ponga la etiqueta.
 
             for ($i = 0; $i < $qtyBox; $i++) {
                 $newNumber = $startNumber + $i;
-                $newCode = sprintf('L7NES%sMTG%06d', $matches[1], $newNumber);
+                $newCode = sprintf('L7NES%s%s%06d', $lote, $trigrama, $newNumber);
                 $codes[] = $newCode;
             }
 
@@ -859,8 +874,18 @@ Por lo tanto, dile a tu proveedor #{$supplierCode} que le ponga la etiqueta.
     private function addRowsToGoogleSheet($clienteNombre, $codes, $qtyBox, $lastRowWithData)
     {
         try {
+            if ($qtyBox < 1 || count($codes) !== $qtyBox) {
+                throw new \InvalidArgumentException(
+                    'addRowsToGoogleSheet: se requiere un código por fila (qty=' . $qtyBox . ', códigos=' . count($codes) . ')'
+                );
+            }
+
             // Empezar desde la fila siguiente a la última fila con datos
             $startRow = $lastRowWithData + 1;
+            $endRow = $startRow + $qtyBox - 1;
+
+            // Ampliar la cuadrícula de la hoja si hace falta (evita "exceeds grid limits")
+            $this->ensureSheetRowCapacity($endRow);
 
             // Insertar nombre del cliente en la columna B
             $bData = [];

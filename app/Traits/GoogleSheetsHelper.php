@@ -412,6 +412,59 @@ trait GoogleSheetsHelper
     }
 
     /**
+     * Garantiza que la hoja tenga al menos $minimumRowCount filas en la cuadrícula.
+     * Sin esto, values.update falla con "exceeds grid limits" al escribir bajo la última fila existente.
+     */
+    public function ensureSheetRowCapacity(int $minimumRowCount): void
+    {
+        if ($minimumRowCount < 1) {
+            return;
+        }
+
+        if (!$this->initializeGoogleSheets()) {
+            throw new \Exception('No se pudo inicializar Google Sheets');
+        }
+
+        $spreadsheet = $this->googleService->spreadsheets->get($this->spreadsheetId);
+        $sheetId = null;
+        $currentRows = 0;
+
+        foreach ($spreadsheet->getSheets() as $sheet) {
+            if ($sheet->getProperties()->getTitle() == $this->sheetName) {
+                $sheetId = $sheet->getProperties()->getSheetId();
+                $grid = $sheet->getProperties()->getGridProperties();
+                $currentRows = $grid ? (int) $grid->getRowCount() : 0;
+                break;
+            }
+        }
+
+        if ($sheetId === null) {
+            throw new \Exception("No se encontró la hoja: {$this->sheetName}");
+        }
+
+        if ($currentRows >= $minimumRowCount) {
+            return;
+        }
+
+        $toAppend = $minimumRowCount - $currentRows;
+        Log::info("[Google Sheets] Ampliando filas del grid: hoja={$this->sheetName}, actuales={$currentRows}, requeridas={$minimumRowCount}, append={$toAppend}");
+
+        $request = new \Google\Service\Sheets\Request([
+            'appendDimension' => new \Google\Service\Sheets\AppendDimensionRequest([
+                'sheetId' => $sheetId,
+                'dimension' => 'ROWS',
+                'length' => $toAppend,
+            ]),
+        ]);
+
+        $batchRequest = new \Google\Service\Sheets\BatchUpdateSpreadsheetRequest([
+            'requests' => [$request],
+        ]);
+
+        $this->googleService->spreadsheets->batchUpdate($this->spreadsheetId, $batchRequest);
+    }
+
+    /**
      * Crear una nueva hoja en el spreadsheet
      * 
      * @param string $sheetName Nombre de la nueva hoja
