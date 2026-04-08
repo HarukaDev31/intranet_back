@@ -1672,6 +1672,19 @@ class CalculadoraImportacionService
             }
         }
 
+        // E11 del Excel = nombre del tipo de cliente (ej. ANTIGUO), no el monto numérico de la tarifa
+        $tarifaLabelParaExcel = (string) ($calculadora->tipo_cliente ?? 'NUEVO');
+        if (is_array($tarifaInput)) {
+            if (!empty($tarifaInput['label']) && is_string($tarifaInput['label'])) {
+                $tarifaLabelParaExcel = trim($tarifaInput['label']);
+            } elseif (isset($tarifaInput['value'])) {
+                $v = $tarifaInput['value'];
+                if (is_string($v) && trim($v) !== '' && !is_numeric($v)) {
+                    $tarifaLabelParaExcel = trim($v);
+                }
+            }
+        }
+
         $data = [
             'clienteInfo' => $clienteInfo,
             'proveedores' => $proveedores,
@@ -1685,7 +1698,7 @@ class CalculadoraImportacionService
             'tarifa' => [
                 'tarifa' => $tarifaVal,
                 'type' => $tarifaType,
-                'value' => $tarifaVal,
+                'value' => $tarifaLabelParaExcel,
             ],
             'tipo_cambio' => (float) ($calculadora->tc ?? 3.75),
             'id_carga_consolidada_contenedor' => $calculadora->id_carga_consolidada_contenedor,
