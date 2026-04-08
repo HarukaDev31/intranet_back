@@ -259,15 +259,33 @@ class CalculadoraImportacionController extends Controller
                     $query->whereDate('created_at', '<=', $request->fecha_fin);
                 }
 
+                // Filtro exacto por PK (listado calculadora / vuelta desde documentación o edición)
+                $idCalculadora = (int) $request->get('id_calculadora', 0);
+
                 // Ordenamiento
                 $sortBy = $request->get('sort_by', 'created_at');
                 $sortOrder = $request->get('sort_order', 'desc');
                 $query->orderBy($sortBy, $sortOrder);
 
-                $search = $request->get('search', '');
+                $search = trim((string) $request->get('search', ''));
                 $perPage = $request->get('per_page', 10);
                 $page = (int) $request->get('page', 1);
-                $calculos = $query->where('nombre_cliente', 'like', '%' . $search . '%')->paginate($perPage, ['*'], 'page', $page);
+
+                if ($idCalculadora > 0) {
+                    $query->where('id', $idCalculadora);
+                } elseif ($search !== '') {
+                    if (ctype_digit($search)) {
+                        $sid = (int) $search;
+                        $query->where(function ($q) use ($search, $sid) {
+                            $q->where('id', $sid)
+                                ->orWhere('nombre_cliente', 'like', '%' . $search . '%');
+                        });
+                    } else {
+                        $query->where('nombre_cliente', 'like', '%' . $search . '%');
+                    }
+                }
+
+                $calculos = $query->paginate($perPage, ['*'], 'page', $page);
 
                 // Calcular totales para cada cálculo
                 $data = $calculos->items();
@@ -393,13 +411,25 @@ class CalculadoraImportacionController extends Controller
                 $query->whereDate('created_at', '<=', $request->fecha_fin);
             }
 
+            $idCalculadoraExport = (int) $request->get('id_calculadora', 0);
+
             $sortBy = $request->get('sort_by', 'created_at');
             $sortOrder = $request->get('sort_order', 'desc');
             $query->orderBy($sortBy, $sortOrder);
 
-            $search = $request->get('search', '');
-            if ($search !== '') {
-                $query->where('nombre_cliente', 'like', '%' . $search . '%');
+            $search = trim((string) $request->get('search', ''));
+            if ($idCalculadoraExport > 0) {
+                $query->where('id', $idCalculadoraExport);
+            } elseif ($search !== '') {
+                if (ctype_digit($search)) {
+                    $sid = (int) $search;
+                    $query->where(function ($q) use ($search, $sid) {
+                        $q->where('id', $sid)
+                            ->orWhere('nombre_cliente', 'like', '%' . $search . '%');
+                    });
+                } else {
+                    $query->where('nombre_cliente', 'like', '%' . $search . '%');
+                }
             }
 
             $calculos = $query->limit(10000)->get();

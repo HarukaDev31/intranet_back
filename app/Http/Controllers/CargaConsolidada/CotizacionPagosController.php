@@ -78,6 +78,7 @@ class CotizacionPagosController extends Controller
                 FROM {$this->table_contenedor_cotizacion} CC
                 LEFT JOIN {$this->table_contenedor_tipo_cliente} TC ON TC.id = CC.id_tipo_cliente
                 WHERE CC.id_contenedor = ?
+                WHERE CC.deleted_at IS NULL
                 ORDER BY CC.id ASC
             ";
 
