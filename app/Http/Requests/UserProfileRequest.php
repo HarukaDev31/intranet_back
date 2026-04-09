@@ -37,7 +37,8 @@ class UserProfileRequest extends FormRequest
             'phone' => 'sometimes|string|max:20|unique:users,whatsapp,' . $userId,
             'photo' => 'sometimes|image|mimes:jpeg,png,jpg,gif|max:10240',
             'dni' => 'sometimes|string|max:20|unique:users,dni,' . $userId,
-            'goals' => 'sometimes|nullable|string'
+            'goals' => 'sometimes|nullable|string',
+            'domicilio_fiscal' => 'sometimes|nullable|string|max:2000',
         ];
     }
 
@@ -98,6 +99,7 @@ class UserProfileRequest extends FormRequest
                           $this->has('distrito') || 
                           $this->has('phone') || 
                           $this->has('dni') ||
+                          $this->has('domicilio_fiscal') ||
                           $this->hasFile('photo');
             
             if (!$hasAnyField) {

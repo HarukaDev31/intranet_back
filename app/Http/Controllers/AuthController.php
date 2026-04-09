@@ -1598,6 +1598,7 @@ class AuthController extends Controller
                         'importedAmount' => 0, // Campo no disponible en la estructura actual
                         'importedContainers' => 0, // Campo no disponible en la estructura actual
                         'goals' => $user->goals,
+                        'domicilio_fiscal' => $user->domicilio_fiscal,
                         'empresa' => $user->userBusiness,
                         'raw' => [
                             'grupo' => [
@@ -1691,6 +1692,7 @@ class AuthController extends Controller
                     'importedContainers' => $importedAmount['count'], // Campo no disponible en la estructura actual
                     'goals' => $user->goals,
                     'dni' => $user->dni,
+                    'domicilio_fiscal' => $user->domicilio_fiscal,
                     'raw' => [
                         'grupo' => [
                             'id' => 1,

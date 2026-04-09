@@ -32,6 +32,62 @@ class EntregaController extends Controller
     private $CONCEPT_PAGO_DELIVERY = 3;
 
     /**
+     * Condición: registro en consolidado_comprobante_forms con destino_entrega informado.
+     * Requiere alias CF en el query.
+     */
+    private function sqlComprobanteFormTieneDestino(): string
+    {
+        return '(CF.id IS NOT NULL AND CF.destino_entrega IS NOT NULL AND TRIM(CF.destino_entrega) <> \'\')';
+    }
+
+    /**
+     * type_form para el front: 0 = Provincia, 1 = Lima, NULL = sin determinar.
+     * Prioridad: consolidado_comprobante_forms.destino_entrega; si no aplica, formularios L/P del contenedor.
+     */
+    private function sqlCaseTypeFormNullable(): string
+    {
+        $cf = $this->sqlComprobanteFormTieneDestino();
+
+        // Solo aplica comprobante si destino_entrega se reconoce; si no, se usa L/P.
+        return 'CASE '
+            . 'WHEN ' . $cf . ' AND (UPPER(TRIM(CF.destino_entrega)) IN (\'PROVINCIA\',\'PROVINCE\') OR UPPER(TRIM(CF.destino_entrega)) LIKE \'%PROVIN%\') THEN 0 '
+            . 'WHEN ' . $cf . ' AND (UPPER(TRIM(CF.destino_entrega)) IN (\'LIMA\') OR UPPER(TRIM(CF.destino_entrega)) LIKE \'%LIMA%\') THEN 1 '
+            . 'WHEN P.id IS NOT NULL THEN 0 '
+            . 'WHEN L.id IS NOT NULL THEN 1 '
+            . 'ELSE NULL END';
+    }
+
+    /**
+     * Mismo criterio que type_form pero 2 = sin determinar (útil para ORDER BY).
+     */
+    private function sqlCaseTypeFormOrder(): string
+    {
+        $cf = $this->sqlComprobanteFormTieneDestino();
+
+        return 'CASE '
+            . 'WHEN ' . $cf . ' AND (UPPER(TRIM(CF.destino_entrega)) IN (\'PROVINCIA\',\'PROVINCE\') OR UPPER(TRIM(CF.destino_entrega)) LIKE \'%PROVIN%\') THEN 0 '
+            . 'WHEN ' . $cf . ' AND (UPPER(TRIM(CF.destino_entrega)) IN (\'LIMA\') OR UPPER(TRIM(CF.destino_entrega)) LIKE \'%LIMA%\') THEN 1 '
+            . 'WHEN P.id IS NOT NULL THEN 0 '
+            . 'WHEN L.id IS NOT NULL THEN 1 '
+            . 'ELSE 2 END';
+    }
+
+    /**
+     * Etiqueta LIMA / PROVINCIA / N/A para tab Delivery (prioridad comprobante reconocible).
+     */
+    private function sqlCaseEntregaLabel(): string
+    {
+        $cf = $this->sqlComprobanteFormTieneDestino();
+
+        return 'CASE '
+            . 'WHEN ' . $cf . ' AND (UPPER(TRIM(CF.destino_entrega)) IN (\'PROVINCIA\',\'PROVINCE\') OR UPPER(TRIM(CF.destino_entrega)) LIKE \'%PROVIN%\') THEN \'PROVINCIA\' '
+            . 'WHEN ' . $cf . ' AND (UPPER(TRIM(CF.destino_entrega)) IN (\'LIMA\') OR UPPER(TRIM(CF.destino_entrega)) LIKE \'%LIMA%\') THEN \'LIMA\' '
+            . 'WHEN L.id IS NOT NULL THEN \'LIMA\' '
+            . 'WHEN P.id IS NOT NULL THEN \'PROVINCIA\' '
+            . 'ELSE \'N/A\' END';
+    }
+
+    /**
      * @OA\Get(
      *     path="/carga-consolidada/contenedores/{idContenedor}/entregas/horarios",
      *     tags={"Entregas"},
@@ -606,6 +662,10 @@ class EntregaController extends Controller
         //left join users as U where U.id = CC.id_usuario and get 
         $query = DB::table('contenedor_consolidado_cotizacion as CC')
             ->join('contenedor_consolidado_tipo_cliente as TC', 'TC.id', '=', 'CC.id_tipo_cliente')
+            ->leftJoin('consolidado_comprobante_forms as CF', function ($join) use ($idContenedor) {
+                $join->on('CF.id_cotizacion', '=', 'CC.id')
+                    ->where('CF.id_contenedor', '=', $idContenedor);
+            })
             // Formularios (Lima y Provincia) asociados por id_cotizacion y mismo contenedor
             ->leftJoin('consolidado_delivery_form_lima as L', function ($join) use ($idContenedor) {
                 $join->on('L.id_cotizacion', '=', 'CC.id')
@@ -629,8 +689,8 @@ class EntregaController extends Controller
                 'CC.*',
                 'TC.name as name',
                 
-                // Tipo de formulario: 0 = Provincia, 1 = Lima (prioriza Provincia si existen ambos)
-                DB::raw('CASE WHEN P.id IS NOT NULL THEN 0 WHEN L.id IS NOT NULL THEN 1 ELSE NULL END as type_form'),
+                // Tipo de entrega: prioriza consolidado_comprobante_forms.destino_entrega; si no, L/P
+                DB::raw($this->sqlCaseTypeFormNullable() . ' as type_form'),
                 // voucher_doc normalizado según type_form (0 Provincia, 1 Lima)
                 DB::raw('CASE WHEN P.id IS NOT NULL THEN P.voucher_doc WHEN L.id IS NOT NULL THEN L.voucher_doc ELSE NULL END as voucher_doc'),
                 DB::raw('CASE WHEN P.id IS NOT NULL THEN P.isVerified WHEN L.id IS NOT NULL THEN L.isVerified ELSE NULL END as isVerified'),
@@ -816,6 +876,10 @@ class EntregaController extends Controller
     {
         $query = DB::table('contenedor_consolidado_cotizacion as CC')
             ->join('contenedor_consolidado_tipo_cliente as TC', 'TC.id', '=', 'CC.id_tipo_cliente')
+            ->leftJoin('consolidado_comprobante_forms as CF', function ($join) use ($idContenedor) {
+                $join->on('CF.id_cotizacion', '=', 'CC.id')
+                    ->where('CF.id_contenedor', '=', $idContenedor);
+            })
             ->leftJoin('consolidado_delivery_form_lima as L', function ($join) use ($idContenedor) {
                 $join->on('L.id_cotizacion', '=', 'CC.id')
                     ->where('L.id_contenedor', '=', $idContenedor);
@@ -843,7 +907,7 @@ class EntregaController extends Controller
                 'CC.correo',
                 'CC.id_contenedor',
                 'TC.name as name',
-                DB::raw('CASE WHEN P.id IS NOT NULL THEN 0 WHEN L.id IS NOT NULL THEN 1 ELSE NULL END as type_form'),
+                DB::raw($this->sqlCaseTypeFormNullable() . ' as type_form'),
                 DB::raw('CASE WHEN P.id IS NOT NULL THEN DPT.No_Departamento ELSE NULL END as nombre_provincia'),
             ]);
 
@@ -938,6 +1002,10 @@ class EntregaController extends Controller
 
         $query = DB::table('contenedor_consolidado_cotizacion as CC')
             ->join('carga_consolidada_contenedor as C', 'C.id', '=', 'CC.id_contenedor')
+            ->leftJoin('consolidado_comprobante_forms as CF', function ($join) use ($idContenedor) {
+                $join->on('CF.id_cotizacion', '=', 'CC.id')
+                    ->where('CF.id_contenedor', '=', $idContenedor);
+            })
             ->leftJoin('consolidado_delivery_form_lima as L', function ($join) use ($idContenedor) {
                 $join->on('L.id_cotizacion', '=', 'CC.id')
                     ->where('L.id_contenedor', '=', $idContenedor);
@@ -974,10 +1042,15 @@ class EntregaController extends Controller
                     ->from('contenedor_consolidado_cotizacion_proveedores')
                     ->whereColumn('contenedor_consolidado_cotizacion_proveedores.id_cotizacion', 'CC.id');
             })
-            // Solo filas que tengan algún formulario asociado
+            // Formulario de entrega (Lima/Provincia) o comprobante con destino informado
             ->where(function ($q) {
                 $q->whereNotNull('L.id')
-                    ->orWhereNotNull('P.id');
+                    ->orWhereNotNull('P.id')
+                    ->orWhere(function ($q2) {
+                        $q2->whereNotNull('CF.id')
+                            ->whereNotNull('CF.destino_entrega')
+                            ->whereRaw("TRIM(CF.destino_entrega) <> ''");
+                    });
             })
             ->select([
                 'C.*',
@@ -985,8 +1058,8 @@ class EntregaController extends Controller
                 // Agregados por cotización desde proveedores
                 DB::raw('COALESCE(CPA.sum_cbm_china, 0) as cbm_total_china'),
                 DB::raw('COALESCE(CPA.sum_qty_box, 0) as qty_box_china'),
-                // Tipo de formulario 0 provincia / 1 lima
-                DB::raw('CASE WHEN P.id IS NOT NULL THEN 0 WHEN L.id IS NOT NULL THEN 1 ELSE NULL END as type_form'),
+                // Tipo de entrega: prioriza consolidado_comprobante_forms; si no, L/P
+                DB::raw($this->sqlCaseTypeFormNullable() . ' as type_form'),
                 DB::raw('CASE WHEN P.id IS NOT NULL THEN P.voucher_doc WHEN L.id IS NOT NULL THEN L.voucher_doc ELSE NULL END as voucher_doc'),
                 DB::raw('CASE WHEN P.id IS NOT NULL THEN P.created_at WHEN L.id IS NOT NULL THEN L.created_at ELSE NULL END as fecha_creacion_formulario'),
                 DB::raw('CASE WHEN P.id IS NOT NULL THEN P.isVerified WHEN L.id IS NOT NULL THEN L.isVerified ELSE NULL END as isVerified'),
@@ -1049,9 +1122,21 @@ class EntregaController extends Controller
         if (!empty($filters['tipo_entrega'])) {
             $tipo = strtoupper(trim($filters['tipo_entrega']));
             if ($tipo === 'LIMA') {
-                $query->whereNotNull('L.id');
+                $query->where(function ($q) {
+                    $q->whereNotNull('L.id')
+                        ->orWhere(function ($q2) {
+                            $q2->whereRaw($this->sqlComprobanteFormTieneDestino())
+                                ->whereRaw("(UPPER(TRIM(CF.destino_entrega)) IN ('LIMA') OR UPPER(TRIM(CF.destino_entrega)) LIKE '%LIMA%')");
+                        });
+                });
             } elseif (in_array($tipo, ['PROVINCIA', 'PROVINCE'])) {
-                $query->whereNotNull('P.id');
+                $query->where(function ($q) {
+                    $q->whereNotNull('P.id')
+                        ->orWhere(function ($q2) {
+                            $q2->whereRaw($this->sqlComprobanteFormTieneDestino())
+                                ->whereRaw("(UPPER(TRIM(CF.destino_entrega)) IN ('PROVINCIA','PROVINCE') OR UPPER(TRIM(CF.destino_entrega)) LIKE '%PROVIN%')");
+                        });
+                });
             }
         }
 
@@ -1113,8 +1198,8 @@ class EntregaController extends Controller
         $perPage = (int) $request->input('itemsPerPage', 100);
 
         $query
-            // Provincia (P) primero, luego Lima (L). Si ninguno, al final.
-            ->orderByRaw("CASE WHEN P.id IS NOT NULL THEN 0 WHEN L.id IS NOT NULL THEN 1 ELSE 2 END ASC")
+            // Provincia primero, Lima, sin determinar al final (prioridad comprobante)
+            ->orderByRaw('(' . $this->sqlCaseTypeFormOrder() . ') ASC')
             // Con fecha asignada primero (no nulos), luego sin asignación
             ->orderByRaw("CASE WHEN UR2.id_date IS NULL THEN 1 ELSE 0 END ASC")
             // Por fecha concreta (año, mes, día)
@@ -1301,6 +1386,10 @@ class EntregaController extends Controller
 
         $query = DB::table('contenedor_consolidado_cotizacion as CC')
             ->join('carga_consolidada_contenedor as C', 'C.id', '=', 'CC.id_contenedor')
+            ->leftJoin('consolidado_comprobante_forms as CF', function ($join) use ($idContenedor) {
+                $join->on('CF.id_cotizacion', '=', 'CC.id')
+                    ->where('CF.id_contenedor', '=', $idContenedor);
+            })
             ->leftJoin('consolidado_delivery_form_lima as L', function ($join) use ($idContenedor) {
                 $join->on('L.id_cotizacion', '=', 'CC.id')
                     ->where('L.id_contenedor', '=', $idContenedor);
@@ -1344,8 +1433,8 @@ class EntregaController extends Controller
                 // Agregados por cotización desde proveedores
                 DB::raw('COALESCE(CPA.sum_cbm_china, 0) as cbm_total_china'),
                 DB::raw('COALESCE(CPA.sum_qty_box, 0) as qty_box_china'),
-                // Tipo de formulario 0 provincia / 1 lima
-                DB::raw('CASE WHEN P.id IS NOT NULL THEN 0 WHEN L.id IS NOT NULL THEN 1 ELSE NULL END as type_form'),
+                // Tipo de entrega: prioriza consolidado_comprobante_forms; si no, L/P
+                DB::raw($this->sqlCaseTypeFormNullable() . ' as type_form'),
                 DB::raw('CASE WHEN P.id IS NOT NULL THEN P.voucher_doc WHEN L.id IS NOT NULL THEN L.voucher_doc ELSE NULL END as voucher_doc'),
                 DB::raw('CASE WHEN P.id IS NOT NULL THEN P.created_at WHEN L.id IS NOT NULL THEN L.created_at ELSE NULL END as fecha_creacion_formulario'),
                 DB::raw('CASE WHEN P.id IS NOT NULL THEN P.isVerified WHEN L.id IS NOT NULL THEN L.isVerified ELSE NULL END as isVerified'),
@@ -1408,9 +1497,21 @@ class EntregaController extends Controller
         if (!empty($filters['tipo_entrega'])) {
             $tipo = strtoupper(trim($filters['tipo_entrega']));
             if ($tipo === 'LIMA') {
-                $query->whereNotNull('L.id');
+                $query->where(function ($q) {
+                    $q->whereNotNull('L.id')
+                        ->orWhere(function ($q2) {
+                            $q2->whereRaw($this->sqlComprobanteFormTieneDestino())
+                                ->whereRaw("(UPPER(TRIM(CF.destino_entrega)) IN ('LIMA') OR UPPER(TRIM(CF.destino_entrega)) LIKE '%LIMA%')");
+                        });
+                });
             } elseif (in_array($tipo, ['PROVINCIA', 'PROVINCE'])) {
-                $query->whereNotNull('P.id');
+                $query->where(function ($q) {
+                    $q->whereNotNull('P.id')
+                        ->orWhere(function ($q2) {
+                            $q2->whereRaw($this->sqlComprobanteFormTieneDestino())
+                                ->whereRaw("(UPPER(TRIM(CF.destino_entrega)) IN ('PROVINCIA','PROVINCE') OR UPPER(TRIM(CF.destino_entrega)) LIKE '%PROVIN%')");
+                        });
+                });
             }
         }
 
@@ -1472,8 +1573,8 @@ class EntregaController extends Controller
         $perPage = (int) $request->input('itemsPerPage', 100);
 
         $query
-            // Provincia (P) primero, luego Lima (L). Si ninguno, al final.
-            ->orderByRaw("CASE WHEN P.id IS NOT NULL THEN 0 WHEN L.id IS NOT NULL THEN 1 ELSE 2 END ASC")
+            // Provincia primero, Lima, sin determinar al final (prioridad comprobante)
+            ->orderByRaw('(' . $this->sqlCaseTypeFormOrder() . ') ASC')
             // Con fecha asignada primero (no nulos), luego sin asignación
             ->orderByRaw("CASE WHEN UR2.id_date IS NULL THEN 1 ELSE 0 END ASC")
             // Por fecha concreta (año, mes, día)
@@ -1878,17 +1979,17 @@ class EntregaController extends Controller
         // Lo obtiene de la tabla de clientes asociados al contenedor
         $query = DB::table('contenedor_consolidado_cotizacion as CC')
             ->join('carga_consolidada_contenedor as C', 'C.id', '=', 'CC.id_contenedor')
+            ->leftJoin('consolidado_comprobante_forms as CF', function ($join) {
+                $join->on('CF.id_cotizacion', '=', 'CC.id')
+                    ->on('CF.id_contenedor', '=', 'CC.id_contenedor');
+            })
             ->leftJoin('consolidado_delivery_form_lima as L', 'L.id_cotizacion', '=', 'CC.id')
             ->leftJoin('consolidado_delivery_form_province as P', 'P.id_cotizacion', '=', 'CC.id')
             ->leftJoin('distrito as DIST', 'DIST.ID_Distrito', '=', 'P.id_district')
             ->select(
                 'C.*',
                 'CC.*',
-                DB::raw("CASE 
-                    WHEN L.id IS NOT NULL THEN 'LIMA'
-                    WHEN P.id IS NOT NULL THEN 'PROVINCIA'
-                    ELSE 'N/A'
-                END as entrega"),
+                DB::raw($this->sqlCaseEntregaLabel() . ' as entrega'),
                 // Si L.id no es nulo, usar final_destination_district, si no, usar id_district con join a distrito
                 DB::raw("CASE WHEN L.id IS NOT NULL THEN L.final_destination_district ELSE DIST.No_Distrito END as ciudad"),
                 // Para documento: usar r_doc para provincia y driver_doc para lima
@@ -1996,13 +2097,25 @@ class EntregaController extends Controller
             }
         }
 
-        // Filtro por tipo de entrega (LIMA/PROVINCIA)
+        // Filtro por tipo de entrega (LIMA/PROVINCIA; prioridad comprobante)
         if ($request->has('entrega') && $request->entrega) {
             $entrega = $request->entrega;
             if ($entrega === 'LIMA') {
-                $query->whereNotNull('L.id');
+                $query->where(function ($q) {
+                    $q->whereNotNull('L.id')
+                        ->orWhere(function ($q2) {
+                            $q2->whereRaw($this->sqlComprobanteFormTieneDestino())
+                                ->whereRaw("(UPPER(TRIM(CF.destino_entrega)) IN ('LIMA') OR UPPER(TRIM(CF.destino_entrega)) LIKE '%LIMA%')");
+                        });
+                });
             } elseif ($entrega === 'PROVINCIA') {
-                $query->whereNotNull('P.id');
+                $query->where(function ($q) {
+                    $q->whereNotNull('P.id')
+                        ->orWhere(function ($q2) {
+                            $q2->whereRaw($this->sqlComprobanteFormTieneDestino())
+                                ->whereRaw("(UPPER(TRIM(CF.destino_entrega)) IN ('PROVINCIA','PROVINCE') OR UPPER(TRIM(CF.destino_entrega)) LIKE '%PROVIN%')");
+                        });
+                });
             }
         }
 
@@ -2135,6 +2248,10 @@ class EntregaController extends Controller
         // Lo obtiene de la tabla de clientes asociados al contenedor
         $query = DB::table('contenedor_consolidado_cotizacion as CC')
             ->join('carga_consolidada_contenedor as C', 'C.id', '=', 'CC.id_contenedor')
+            ->leftJoin('consolidado_comprobante_forms as CF', function ($join) use ($idContenedor) {
+                $join->on('CF.id_cotizacion', '=', 'CC.id')
+                    ->where('CF.id_contenedor', '=', $idContenedor);
+            })
             ->leftJoin('consolidado_delivery_form_lima as L', 'L.id_cotizacion', '=', 'CC.id')
             ->leftJoin('consolidado_delivery_form_province as P', 'P.id_cotizacion', '=', 'CC.id')
             ->leftJoin('distrito as DIST', 'DIST.ID_Distrito', '=', 'P.id_district')
@@ -2150,11 +2267,7 @@ class EntregaController extends Controller
             ->select(
                 'C.*',
                 'CC.*',
-                DB::raw("CASE 
-                    WHEN L.id IS NOT NULL THEN 'LIMA'
-                    WHEN P.id IS NOT NULL THEN 'PROVINCIA'
-                    ELSE 'N/A'
-                END as entrega"),
+                DB::raw($this->sqlCaseEntregaLabel() . ' as entrega'),
                 // Si L.id no es nulo, usar final_destination_district, si no, usar id_district con join a distrito
                 DB::raw("CASE WHEN L.id IS NOT NULL THEN L.final_destination_district ELSE DIST.No_Distrito END as ciudad"),
                 // Para documento: usar r_doc para provincia y driver_doc para lima
@@ -2239,9 +2352,21 @@ class EntregaController extends Controller
         if (!empty($filters['tipo_entrega'])) {
             $tipo = strtoupper(trim($filters['tipo_entrega']));
             if ($tipo === 'LIMA') {
-                $query->whereNotNull('L.id');
+                $query->where(function ($q) {
+                    $q->whereNotNull('L.id')
+                        ->orWhere(function ($q2) {
+                            $q2->whereRaw($this->sqlComprobanteFormTieneDestino())
+                                ->whereRaw("(UPPER(TRIM(CF.destino_entrega)) IN ('LIMA') OR UPPER(TRIM(CF.destino_entrega)) LIKE '%LIMA%')");
+                        });
+                });
             } elseif (in_array($tipo, ['PROVINCIA', 'PROVINCE'])) {
-                $query->whereNotNull('P.id');
+                $query->where(function ($q) {
+                    $q->whereNotNull('P.id')
+                        ->orWhere(function ($q2) {
+                            $q2->whereRaw($this->sqlComprobanteFormTieneDestino())
+                                ->whereRaw("(UPPER(TRIM(CF.destino_entrega)) IN ('PROVINCIA','PROVINCE') OR UPPER(TRIM(CF.destino_entrega)) LIKE '%PROVIN%')");
+                        });
+                });
             }
         }
 
@@ -2266,10 +2391,9 @@ class EntregaController extends Controller
         // Calcular total_importes antes de paginar (de los registros filtrados)
         $totalImportes = (clone $query)->sum('CC.total_pago_delivery');
 
-        // Ordenamiento: Primero por Lima (L), luego por fecha y hora de recojo
+        // Ordenamiento: primero Lima (prioridad comprobante), luego fecha/hora
         $query
-            // Lima primero (L.id no nulo primero)
-            ->orderByRaw("CASE WHEN L.id IS NOT NULL THEN 0 ELSE 1 END ASC")
+            ->orderByRaw('(CASE (' . $this->sqlCaseTypeFormOrder() . ') WHEN 1 THEN 0 WHEN 0 THEN 1 ELSE 2 END) ASC')
             // Con fecha asignada primero (no nulos), luego sin asignación
             ->orderByRaw("CASE WHEN UR2.id_date IS NULL THEN 1 ELSE 0 END ASC")
             // Por fecha concreta (año, mes, día)
@@ -2370,6 +2494,10 @@ class EntregaController extends Controller
             ->groupBy('UR.id_cotizacion');
 
         $row = DB::table('contenedor_consolidado_cotizacion as CC')
+            ->leftJoin('consolidado_comprobante_forms as CF', function ($join) {
+                $join->on('CF.id_cotizacion', '=', 'CC.id')
+                    ->on('CF.id_contenedor', '=', 'CC.id_contenedor');
+            })
             ->leftJoin('consolidado_delivery_form_lima as L', 'L.id_cotizacion', '=', 'CC.id')
             ->leftJoin('consolidado_delivery_form_province as P', 'P.id_cotizacion', '=', 'CC.id')
             // Usuarios
@@ -2401,8 +2529,8 @@ class EntregaController extends Controller
                 // IDs de los formularios
                 'L.id as lima_id',
                 'P.id as province_id',
-                // Determinación de tipo de formulario (0 Provincia / 1 Lima)
-                DB::raw('CASE WHEN P.id IS NOT NULL THEN 0 WHEN L.id IS NOT NULL THEN 1 ELSE NULL END as type_form'),
+                // Tipo de entrega: prioriza consolidado_comprobante_forms; si no, L/P
+                DB::raw($this->sqlCaseTypeFormNullable() . ' as type_form'),
                 // Usuario
                 DB::raw('CASE WHEN P.id IS NOT NULL THEN P.id_user WHEN L.id IS NOT NULL THEN L.id_user ELSE NULL END as form_user_id'),
                 DB::raw('CASE WHEN P.id IS NOT NULL THEN UP.name WHEN L.id IS NOT NULL THEN UL.name ELSE NULL END as form_user_name'),

@@ -67,6 +67,7 @@ class UserProfileController extends Controller
                     'distritoName' => $user->distrito ? $user->distrito->No_Distrito : null,
                     'goals' => $user->goals,
                     'dni' => $user->dni,
+                    'domicilio_fiscal' => $user->domicilio_fiscal,
                 ]
             ], 200);
 
@@ -171,6 +172,9 @@ class UserProfileController extends Controller
                 'distrito_id' => $validatedData['distrito'] ?? null,
                 'dni' => $validatedData['dni'] ?? null,
                 'goals' => $validatedData['goals'] ?? null,
+                'domicilio_fiscal' => array_key_exists('domicilio_fiscal', $validatedData)
+                    ? $validatedData['domicilio_fiscal']
+                    : $user->domicilio_fiscal,
             ]);
 
             DB::commit();
@@ -198,6 +202,7 @@ class UserProfileController extends Controller
                     'distritoName' => $user->distrito ? $user->distrito->No_Distrito : null, // Nombre para mostrar
                     'goals' => $user->goals,
                     'dni' => $user->dni,
+                    'domicilio_fiscal' => $user->domicilio_fiscal,
                 ]
             ], 200);
 

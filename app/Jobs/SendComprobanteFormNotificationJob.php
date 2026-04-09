@@ -6,6 +6,7 @@ use App\Models\CargaConsolidada\ComprobanteForm;
 use App\Models\CargaConsolidada\Cotizacion;
 use App\Models\CargaConsolidada\Contenedor;
 use App\Mail\ComprobanteFormConfirmationMail;
+use App\Traits\MailTrait;
 use App\Traits\WhatsappTrait;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -13,15 +14,13 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Mail;
-
 /**
  * 1. Notifica al área de administración (número por defecto) cuando el cliente envía el formulario.
  * 2. Envía confirmación al cliente por WhatsApp (desde la instancia 'administracion') y por email.
  */
 class SendComprobanteFormNotificationJob implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, WhatsappTrait;
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, MailTrait, WhatsappTrait;
 
     public int $comprobanteFormId;
 
@@ -54,7 +53,8 @@ class SendComprobanteFormNotificationJob implements ShouldQueue
 
             // ── Datos según tipo de comprobante ──────────────────────────────
             if ($tipoComprobante === 'FACTURA') {
-                $datosLineas = "-Razón social: {$form->razon_social}\n-Ruc: {$form->ruc}";
+                $dom = $form->domicilio_fiscal ? "\n-Domicilio fiscal: {$form->domicilio_fiscal}" : '';
+                $datosLineas = "-Razón social: {$form->razon_social}\n-Ruc: {$form->ruc}{$dom}";
             } else {
                 $datosLineas = "-Nombre: {$form->nombre_completo}\n-DNI/Carnet: {$form->dni_carnet}";
             }
@@ -85,10 +85,10 @@ class SendComprobanteFormNotificationJob implements ShouldQueue
             }
 
             // ── 3. Email de confirmación al cliente ──────────────────────────
-            $correo = $cotizacion->correo ?? null;
-            if ($correo) {
-                Mail::to($correo)->send(new ComprobanteFormConfirmationMail($form, $cotizacion, $carga));
-            }
+            $this->sendMailTo(
+                $cotizacion->correo ?? null,
+                new ComprobanteFormConfirmationMail($form, $cotizacion, $carga)
+            );
 
             Log::info('SendComprobanteFormNotificationJob: completado', [
                 'comprobante_form_id' => $this->comprobanteFormId,

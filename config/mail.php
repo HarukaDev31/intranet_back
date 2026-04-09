@@ -115,4 +115,17 @@ return [
         ],
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Redirección en entorno local
+    |--------------------------------------------------------------------------
+    |
+    | Si MAIL_LOCAL_REDIRECT_TO está definido y APP_ENV=local, los envíos que
+    | usen MailTrait (sendMailTo / localMailTo) pueden sustituir el destinatario real por
+    | esta dirección (p. ej. Mailhog o un buzón de desarrollo).
+    |
+    */
+
+    'local_redirect_to' => env('MAIL_LOCAL_REDIRECT_TO'),
+
 ];

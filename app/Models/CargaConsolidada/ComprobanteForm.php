@@ -16,6 +16,7 @@ class ComprobanteForm extends Model
         'destino_entrega',
         'razon_social',
         'ruc',
+        'domicilio_fiscal',
         'nombre_completo',
         'dni_carnet',
     ];

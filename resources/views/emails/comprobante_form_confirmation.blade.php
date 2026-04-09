@@ -127,6 +127,12 @@
                 <span class="field-label">Razón social</span>
                 <span class="field-value">{{ $form->razon_social }}</span>
             </div>
+            @if($form->domicilio_fiscal)
+            <div class="field-row">
+                <span class="field-label">Domicilio fiscal</span>
+                <span class="field-value">{{ $form->domicilio_fiscal }}</span>
+            </div>
+            @endif
             @else
             <div class="field-row">
                 <span class="field-label">Nombre completo</span>

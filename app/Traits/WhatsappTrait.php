@@ -292,6 +292,7 @@ trait WhatsappTrait
      *                      viáticos y comunicaciones administrativas.
      *   'ventas'         → Número del equipo de ventas.
      *                      Usado para cotizaciones proveedor / propuestas comerciales.
+     * '
      *   ─────────────────────────────────────────────────────────────────
      *   Nota: para rutas dedicadas sin fromNumber (inspecciones, bienvenida,
      *   cursos) usa sendMediaInspection(), sendWelcome() o sendMessageCurso().
