@@ -1437,6 +1437,7 @@ class CalculadoraImportacionService
 
             $sheetResumen->setCellValue('J36', $data['totalExtraProveedor'] + $data['totalExtraItem']);
             $sheetResumen->setCellValue('J37', $data['totalDescuento']);
+            $sheetResumen->setCellValue('J41','=J38');
 
 
             $timestamp = now()->format('Y_m_d_H_i_s');
@@ -1483,7 +1484,8 @@ class CalculadoraImportacionService
                 $j30 = $sheetResumen->getCell('J30')->getCalculatedValue();
                 $j31 = $sheetResumen->getCell('J31')->getCalculatedValue();
                 $j32 = $sheetResumen->getCell('J32')->getCalculatedValue();
-                $logistica = (is_numeric($j30) && is_numeric($j31) && is_numeric($j32)) ? ($j30 + $j31 - $j32) : 0;
+                $j41 = $sheetResumen->getCell('J41')->getCalculatedValue();
+                $logistica = $j41 > 0 ? $j41 : 0;
 
                 return [
                     'url' => $publicUrl,
