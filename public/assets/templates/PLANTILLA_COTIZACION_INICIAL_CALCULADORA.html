@@ -236,6 +236,14 @@
 
         <td class="center no-left-border">USD</td>
       </tr>
+      <tr>
+        <td colspan="3" class="no-right-border">COSTOS FOB</td>
+        <th class="no-horizontal-border"></th>
+
+        <td class="right no-left-border">$ {{costosfob}}</td>
+
+        <td class="center no-left-border">USD</td>
+      </tr>
       <tr class="bbottom">
         <td colspan="3">FLETE INTERNACIONAL + SEGURO</td>
         <td class="no-horizontal-border no-horizontal-border"></td>
@@ -263,6 +271,12 @@
         <td colspan="3">ADVALOREM</td>
         <td class="no-horizontal-border center">{{advalorempercent}}%</td>
         <td class="no-horizontal-border right">$ {{advalorem}}</td>
+        <td class="no-horizontal-border center">USD</td>
+      </tr>
+      <tr>
+        <td colspan="3">ISC</td>
+        <td class="no-horizontal-border center">{{iscpercent}}%</td>
+        <td class="no-horizontal-border right">$ {{isc}}</td>
         <td class="no-horizontal-border center">USD</td>
       </tr>
       <tr>
@@ -307,6 +321,60 @@
         <td colspan="12" class=""></td>
       </tr>
       <tr>
+        <th colspan="3" class="resumen-header">CALCULO DE SERVICIO DE IMPORTACIÓN</th>
+        <th class="no-horizontal-border resumen-header center">IGV</th>
+        <th class="resumen-header center">MONTO</th>
+        <th class="resumen-header center">MONEDA</th>
+      </tr>
+      <tr>
+        <td colspan="3">COSTOS FOB</td>
+        <td class="no-horizontal-border center">Gravado</td>
+        <td class="no-horizontal-border right">$ {{costosfob_svc}}</td>
+        <td class="no-horizontal-border center">USD</td>
+      </tr>
+      <tr>
+        <td colspan="3">FLETE INTERNACIONAL</td>
+        <td class="no-horizontal-border center">No gravado</td>
+        <td class="no-horizontal-border right">$ {{flete_svc}}</td>
+        <td class="no-horizontal-border center">USD</td>
+      </tr>
+      <tr>
+        <td colspan="3">COSTOS EN DESTINO</td>
+        <td class="no-horizontal-border center">Gravado</td>
+        <td class="no-horizontal-border right">$ {{costosendestino}}</td>
+        <td class="no-horizontal-border center">USD</td>
+      </tr>
+      <tr class="btop">
+        <td colspan="3"><strong>SUB TOTAL</strong></td>
+        <td class="no-horizontal-border"></td>
+        <td class="no-horizontal-border right"><strong>$ {{subtotal_svc}}</strong></td>
+        <td class="no-horizontal-border center">USD</td>
+      </tr>
+      <tr>
+        <td colspan="12" class="no-border" style="border: none!important;"></td>
+      </tr>
+      <tr>
+        <td colspan="3">RECARGOS OPERATIVOS</td>
+        <td class="no-horizontal-border"></td>
+        <td class="no-horizontal-border right">$ {{recargos}}</td>
+        <td class="no-horizontal-border center">USD</td>
+      </tr>
+      <tr>
+        <td colspan="3" style="color:red;">DESCUENTO APLICABLE</td>
+        <td class="no-horizontal-border"></td>
+        <td class="no-horizontal-border right" style="color:red;">$ {{descuento_svc}}</td>
+        <td class="no-horizontal-border center">USD</td>
+      </tr>
+      <tr class="btop">
+        <td colspan="3"><strong>TOTAL</strong></td>
+        <td class="no-horizontal-border"></td>
+        <td class="no-horizontal-border right"><strong>$ {{total_svc}}</strong></td>
+        <td class="no-horizontal-border center">USD</td>
+      </tr>
+      <tr>
+        <td colspan="12" class=""></td>
+      </tr>
+      <tr>
         <th colspan="3" class="resumen-header">RESUMEN DE COTIZACIÓN</th>
         <th class="no-horizontal-border resumen-header"></th>
 
@@ -314,26 +382,13 @@
         <th class="resumen-header center">MONEDA</th>
       </tr>
       <tr>
-        <td colspan="3">SERVICIO DE IMPORTACIÓN (ORIGEN - FLETE - DESTINO)</td>
+        <td colspan="3">SERVICIO DE IMPORTACIÓN</td>
         <th class="no-horizontal-border"></th>
 
         <td class="no-horizontal-border right">$ {{servicioimportacion}}</td>
         <td class="no-horizontal-border center">USD</td>
       </tr>
-      <tr>
-        <td colspan="3">CARGOS EXTRAS (QTY PROVEEDORES O QTY ITEMS)</td>
-        <th class="no-horizontal-border"></th>
-
-        <td class="no-horizontal-border right">$ {{cargosextras}}</td>
-        <td class="no-horizontal-border center">USD</td>
-      </tr>
-      <tr>
-        <td colspan="3" style="color:red; ">DESCUENTO APLICABLE</td>
-        <th class="no-horizontal-border"></th>
-
-        <td class="no-horizontal-border right" style="color:red;">$ {{descuento}}</td>
-        <td class="no-horizontal-border center">USD</td>
-      </tr>
+      
       <tr>  <td colspan="3">IMPUESTOS</td>
         <th class="no-horizontal-border"></th>
 
