@@ -493,6 +493,9 @@ class CalculadoraImportacionController extends Controller
                             if (!isset($prod['adValoremP']) || $prod['adValoremP'] === '') {
                                 $prod['adValoremP'] = null;
                             }
+                            if (!isset($prod['iscP']) || $prod['iscP'] === '') {
+                                $prod['iscP'] = null;
+                            }
                             if (!isset($prod['cantidad']) || $prod['cantidad'] === '' || $prod['cantidad'] === null || !is_numeric($prod['cantidad'])) {
                                 $prod['cantidad'] = 1;
                             }
@@ -526,6 +529,7 @@ class CalculadoraImportacionController extends Controller
                 'proveedores.*.productos.*.valoracion' => 'nullable|numeric|min:0',
                 'proveedores.*.productos.*.antidumpingCU' => 'nullable|numeric|min:0',
                 'proveedores.*.productos.*.adValoremP' => 'nullable|numeric|min:0',
+                'proveedores.*.productos.*.iscP' => 'nullable|numeric|min:0',
                 'tarifaTotalExtraProveedor' => 'nullable|numeric|min:0',
                 'tarifaTotalExtraItem' => 'nullable|numeric|min:0',
                 'es_imo' => 'nullable|boolean',
@@ -750,6 +754,7 @@ class CalculadoraImportacionController extends Controller
                 'proveedores.*.productos.*.cantidad' => 'required|integer|min:1',
                 'proveedores.*.productos.*.antidumpingCU' => 'nullable|numeric|min:0',
                 'proveedores.*.productos.*.adValoremP' => 'nullable|numeric|min:0',
+                'proveedores.*.productos.*.iscP' => 'nullable|numeric|min:0',
                 'tarifa' => 'nullable', // Opcional; si no se envía se calcula por tipo cliente + CBM
                 'tarifaTotalExtraProveedor' => 'nullable|numeric|min:0',
                 'tarifaTotalExtraItem' => 'nullable|numeric|min:0',

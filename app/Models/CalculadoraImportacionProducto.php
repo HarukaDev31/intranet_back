@@ -19,7 +19,8 @@ class CalculadoraImportacionProducto extends Model
         'valoracion',
         'cantidad',
         'antidumping_cu',
-        'ad_valorem_p'
+        'ad_valorem_p',
+        'isc_p'
     ];
 
     protected $casts = [
@@ -27,7 +28,8 @@ class CalculadoraImportacionProducto extends Model
         'valoracion' => 'integer',
         'cantidad' => 'float',
         'antidumping_cu' => 'decimal:10',
-        'ad_valorem_p' => 'decimal:10'
+        'ad_valorem_p' => 'decimal:10',
+        'isc_p' => 'decimal:10'
     ];
 
     /**

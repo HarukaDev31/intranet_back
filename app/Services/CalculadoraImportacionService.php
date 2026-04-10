@@ -106,7 +106,8 @@ class CalculadoraImportacionService
                         'valoracion' => $productoData['valoracion'] ?? 0,
                         'cantidad' => (float) ($productoData['cantidad'] ?? 0),
                         'antidumping_cu' => $productoData['antidumpingCU'] ?? 0,
-                        'ad_valorem_p' => $productoData['adValoremP'] ?? 0
+                        'ad_valorem_p' => $productoData['adValoremP'] ?? 0,
+                        'isc_p' => $productoData['iscP'] ?? 0,
                     ]);
                     $totalProductos += 1;
                 }
@@ -387,19 +388,20 @@ class CalculadoraImportacionService
                         'cantidad' => (float) ($productoData['cantidad'] ?? 0),
                         'antidumping_cu' => $productoData['antidumpingCU'] ?? 0,
                         'ad_valorem_p' => $productoData['adValoremP'] ?? 0,
+                        'isc_p' => $productoData['iscP'] ?? 0,
                     ]);
                 }
             }
             // Eliminar proveedores sobrantes si payload trae menos de los actuales
             $payloadIds = collect($payloadProviders)
                 ->pluck('id')
-                ->filter(fn ($v) => !is_null($v) && $v !== '')
-                ->map(fn ($v) => (int) $v)
+                ->filter(fn($v) => !is_null($v) && $v !== '')
+                ->map(fn($v) => (int) $v)
                 ->all();
 
             $providersToDelete = empty($payloadIds)
                 ? $existingCalcProviders->slice(count($payloadProviders))
-                : $existingCalcProviders->filter(fn ($p) => !in_array((int) $p->id, $payloadIds, true));
+                : $existingCalcProviders->filter(fn($p) => !in_array((int) $p->id, $payloadIds, true));
 
             foreach ($providersToDelete as $provToDelete) {
                 if ($provToDelete) {
@@ -867,7 +869,9 @@ class CalculadoraImportacionService
             $serviciosPorCliente[$c->id_cliente][] = ['servicio' => $c->servicio, 'fecha' => $c->fecha, 'monto' => $c->monto];
         }
         foreach ($serviciosPorCliente as &$s) {
-            usort($s, function ($a, $b) { return strtotime($a['fecha']) - strtotime($b['fecha']); });
+            usort($s, function ($a, $b) {
+                return strtotime($a['fecha']) - strtotime($b['fecha']);
+            });
         }
         return $serviciosPorCliente;
     }
@@ -1013,37 +1017,37 @@ class CalculadoraImportacionService
             // Obtener tipo_cambio del request, si es null o 0 usar 3.75 por defecto
             $tipoCambio = (!empty($data['tipo_cambio']) && $data['tipo_cambio'] > 0) ? $data['tipo_cambio'] : 3.75;
             $plantillaPath = public_path('assets/templates/PLANTILLA_COTIZACION_INICIAL_CALCULADORA.xlsx');
-    
+
             if (!file_exists($plantillaPath)) {
                 return 'Plantilla de cotización inicial no encontrada: ' . $plantillaPath;
             }
-    
+
             try {
                 $objPHPExcel = \PhpOffice\PhpSpreadsheet\IOFactory::load($plantillaPath);
-    
+
                 if (!$objPHPExcel) {
                     return 'Error: La plantilla Excel no se cargó correctamente';
                 }
-    
+
                 if ($objPHPExcel->getSheetCount() === 0) {
                     return 'Error: La plantilla Excel no tiene hojas';
                 }
             } catch (\Exception $e) {
                 return 'Error al cargar plantilla Excel: ' . $e->getMessage();
             }
-    
+
             if ($objPHPExcel->getSheetCount() < 2) {
                 return 'Error: La plantilla no tiene suficientes hojas';
             }
-    
+
             $sheetCalculos = $objPHPExcel->getSheet(1);
-    
+
             if (!$sheetCalculos) {
                 return 'Error: No se pudo obtener la hoja de cálculos';
             }
-    
+
             $totalProductos = $data['totalProductos'];
-            
+
             if ($totalProductos <= 0) {
                 return [
                     'url' => null,
@@ -1053,7 +1057,7 @@ class CalculadoraImportacionService
                     'boleta' => null
                 ];
             }
-            
+
             $rowCodeSupplier = 3;
             $rowNProveedor = 4;
             $rowNCaja = 5;
@@ -1068,44 +1072,50 @@ class CalculadoraImportacionService
             $rowValorFob = 18;
             $rowValorAjustado = 19;
             $rowDistribucion = 20;
-            $rowFlete = 21;
-            $rowValorCFR = 22;
-            $rowValorCFRAjustado = 23;
-            $rowSeguro = 24;
-            $rowValorCIF = 25;
-            $rowValorCIFAdjustado = 26;
-            $rowAntidumpingCU = 30;
-            $rowAntidumpingValor = 31;
-            $rowAdValoremP = 33;
-            $rowAdValoremValor = 34;
-            $rowIGV = 35;
-            $rowIPM = 36;
-            $rowPercepcion = 37;
-            $rowTotalTributos = 38;
-            $rowDistribucionItemDestino = 44;
-            $rowItemDestino = 45;
-            $rowItemCostos = 50;
-            $rowCostoTotal = 51;
-            $rowCostoCantidad = 52;
-            $rowCostoUnitarioUSD = 53;
-            $rowCostoUnitarioPEN = 54;
+            $rowCostosFob = 21;
+            $rowFlete = 22;
+            $rowValorCFR = 23;
+            $rowValorCFRAjustado = 24;
+            $rowSeguro = 25;
+            $rowValorCIF = 26;
+            $rowValorCIFAdjustado = 27;
+            $rowAntidumpingCU = 31;
+            $rowAntidumpingValor = 32;
+            $rowAdValoremP = 34;
+            $rowAdValoremValor = 35;
+            $rowIscP = 36;
+            $rowIscValor = 37;
+            $rowIGV = 38;
+            $rowIPM = 39;
+            $rowPercepcion = 40;
+            $rowTotalTributos = 41;
+            $rowDistribucionItemDestino = 47;
+            $rowItemDestino = 48;
+            $rowItemCostos = 53;
+            $rowCostoTotal = 54;
+            $rowCostoCantidad = 55;
+            $rowCostoUnitarioUSD = 56;
+            $rowCostoUnitarioPEN = 57;
             $initialColumnIndex = 3;
             $totalColumnas = 0;
+            $COSTOSFOB_PERCENTAGE = 0.2399;
+            $FLETE_PERCENTAGE = 0.3601;
+            $ITEM_DESTINO_PERCENTAGE = 0.4;
             $formatoTexto = 'General';
             $sheetResumen = $objPHPExcel->getSheet(0);
             Log::info('data: ' . json_encode($data));
             foreach ($data['proveedores'] as $proveedor) {
                 $totalColumnas += count($proveedor['productos']);
             }
-    
+
             if ($totalColumnas > 1) {
                 $columnasAInsertar = $totalColumnas - 1;
                 $sheetCalculos->insertNewColumnBefore('D', $columnasAInsertar);
             }
-    
+
             $columnIndex = 3;
             $indexProveedor = 1;
-    
+
             $getColumnLetter = function ($columnNumber) {
                 $letter = '';
                 while ($columnNumber > 0) {
@@ -1116,14 +1126,14 @@ class CalculadoraImportacionService
                 return $letter;
             };
             $initialColumn = $getColumnLetter($initialColumnIndex);
-            
+
             $totalColumn = $getColumnLetter($initialColumnIndex + $totalProductos);
             $sumColumn = $getColumnLetter($initialColumnIndex + $totalProductos - 1);
-    
+
             $indexProducto = 1;
-            $startRowProducto = 38;
+            $startRowProducto = 47;
             $currentRowProducto = $startRowProducto;
-            
+
             // ✅ SOLUCIÓN CRÍTICA: Eliminar TODOS los comentarios de AMBAS hojas
             foreach ([$sheetResumen, $sheetCalculos] as $sheet) {
                 $comments = $sheet->getComments();
@@ -1136,28 +1146,28 @@ class CalculadoraImportacionService
                     }
                 }
             }
-            
+
             // ✅ Función helper para merge seguro
-            $safeMergeCells = function($sheet, $range) {
+            $safeMergeCells = function ($sheet, $range) {
                 try {
                     $sheet->unmergeCells($range);
                 } catch (\Exception $e) {
                     // No importa
                 }
-                
+
                 try {
                     $sheet->mergeCells($range);
                 } catch (\Exception $e) {
                     // Ignorar
                 }
             };
-            
+
             foreach ($data['proveedores'] as $proveedor) {
                 $numProductos = count($proveedor['productos']);
-    
+
                 $startColumn = $getColumnLetter($columnIndex);
                 $endColumn = $getColumnLetter($columnIndex + $numProductos - 1);
-    
+
                 if ($numProductos > 1) {
                     $safeMergeCells($sheetCalculos, $startColumn . $rowCodeSupplier . ':' . $endColumn . $rowCodeSupplier);
                     $safeMergeCells($sheetCalculos, $startColumn . $rowNProveedor . ':' . $endColumn . $rowNProveedor);
@@ -1165,32 +1175,32 @@ class CalculadoraImportacionService
                     $safeMergeCells($sheetCalculos, $startColumn . $rowPeso . ':' . $endColumn . $rowPeso);
                     $safeMergeCells($sheetCalculos, $startColumn . $rowVolProveedor . ':' . $endColumn . $rowVolProveedor);
                     $safeMergeCells($sheetCalculos, $startColumn . $rowHeaderNProveedor . ':' . $endColumn . $rowHeaderNProveedor);
-    
+
                     if (isset($proveedor['medidas'])) {
                         $safeMergeCells($sheetCalculos, $startColumn . $rowMedida . ':' . $endColumn . $rowMedida);
                     }
                 }
-    
+
                 $codeSupplier = $proveedor['code_supplier'] ?? null;
                 if ($codeSupplier) {
                     $sheetCalculos->setCellValue($startColumn . $rowCodeSupplier, $codeSupplier);
                 }
-    
+
                 $sheetCalculos->setCellValue($startColumn . $rowNProveedor, $indexProveedor);
                 $sheetCalculos->setCellValue($startColumn . $rowNCaja, $proveedor['qtyCaja']);
                 $sheetCalculos->setCellValue($startColumn . $rowPeso, $proveedor['peso']);
                 $sheetCalculos->setCellValue($startColumn . $rowVolProveedor, $proveedor['cbm']);
                 $sheetCalculos->setCellValue($startColumn . $rowHeaderNProveedor, $indexProveedor);
-    
+
                 if (isset($proveedor['medidas'])) {
                     $sheetCalculos->setCellValue($startColumn . $rowMedida, $proveedor['medidas']);
                 }
-    
+
                 $productColumnIndex = $columnIndex;
-                $indexP=0;
+                $indexP = 0;
                 Log::info('currentRowProducto: ' . $currentRowProducto);
                 $sheetResumen->insertNewRowBefore($currentRowProducto, count($proveedor['productos']));
-                
+
                 foreach ($proveedor['productos'] as $productoIndex => $producto) {
                     $productColumn = $getColumnLetter($productColumnIndex);
                     Log::info('productColumn: ' . $productColumn);
@@ -1208,7 +1218,7 @@ class CalculadoraImportacionService
                             }
                         }
                     }
-    
+
                     $sheetCalculos->setCellValue($productColumn . $rowProducto, $producto['nombre']);
                     $sheetCalculos->setCellValue($productColumn . $rowValorUnitario, $producto['precio']);
                     $sheetCalculos->setCellValue($productColumn . $rowValoracion, $producto['valoracion']);
@@ -1216,8 +1226,9 @@ class CalculadoraImportacionService
                     $sheetCalculos->setCellValue($productColumn . $rowValorFob, '=' . $productColumn . $rowValorUnitario . '*' . $productColumn . $rowCantidad);
                     $sheetCalculos->setCellValue($productColumn . $rowValorAjustado, '=' . ($productColumn . $rowValoracion) . '*' . ($productColumn . $rowCantidad));
                     $sheetCalculos->setCellValue($productColumn . $rowDistribucion, '=ROUND(' . ($productColumn . $rowValorFob) . '/' . ($totalColumn . $rowValorFob) . ',10)');
+                    $sheetCalculos->setCellValue($productColumn . $rowCostosFob, '=ROUND(' . ($productColumn . $rowDistribucion) . '*' . ($totalColumn . $rowCostosFob) . ',10)');
                     $sheetCalculos->setCellValue($productColumn . $rowFlete, '=ROUND(' . ($productColumn . $rowDistribucion) . '*' . ($totalColumn . $rowFlete) . ',10)');
-                    $sheetCalculos->setCellValue($productColumn . $rowValorCFR, '=ROUND(' . ($productColumn . $rowValorFob) . '+' . ($productColumn . $rowFlete) . ',10)');
+                    $sheetCalculos->setCellValue($productColumn . $rowValorCFR, '=ROUND(' . ($productColumn . $rowValorFob) . '+' . ($productColumn . $rowFlete) . '+'.($productColumn.$rowCostosFob).',10)');
                     $sheetCalculos->setCellValue($productColumn . $rowValorCFRAjustado, '=ROUND(' . ($productColumn . $rowValorAjustado) . '+' . ($productColumn . $rowFlete) . ',10)');
                     $sheetCalculos->setCellValue($productColumn . $rowSeguro, '=ROUND(' . ($totalColumn . $rowSeguro) . '*' . ($productColumn . $rowDistribucion) . ',10)');
                     $sheetCalculos->setCellValue($productColumn . $rowValorCIF, '=ROUND(' . ($productColumn . $rowValorCFR) . '+' . ($productColumn . $rowSeguro) . ',10)');
@@ -1227,13 +1238,16 @@ class CalculadoraImportacionService
                     $sheetCalculos->setCellValue($productColumn . $rowAdValoremP, round(($producto['adValoremP'] ?? 0) / 100, 4));
                     $formADVALOREM = "=ROUND(MAX(" . $productColumn . $rowValorCIF . ":" . $productColumn . $rowValorCIFAdjustado . ")*" . $productColumn . $rowAdValoremP . ",10)";
                     $sheetCalculos->setCellValue($productColumn . $rowAdValoremValor, $formADVALOREM);
-                    $formIGV = "=ROUND((MAX(" . $productColumn . $rowValorCIF . ":" . $productColumn . $rowValorCIFAdjustado . ")+" . $productColumn . $rowAdValoremP . "+" . $productColumn . $rowAdValoremValor . ")*0.16,10)";
+                    $sheetCalculos->setCellValue($productColumn . $rowIscP, round(($producto['iscP'] ?? 0) / 100, 4));
+                    $formISC = "=ROUND((MAX(" . $productColumn . $rowValorCIF . ":" . $productColumn . $rowValorCIFAdjustado . ")+" .  $productColumn . $rowAdValoremValor . ")*" . $productColumn . $rowIscP . ",10)";
+                    $sheetCalculos->setCellValue($productColumn . $rowIscValor, $formISC);
+                    $formIGV = "=ROUND((MAX(" . $productColumn . $rowValorCIF . ":" . $productColumn . $rowValorCIFAdjustado . ")+" . $productColumn . $rowAdValoremP . "+" . $productColumn . $rowAdValoremValor . "+" . $productColumn . $rowIscValor . ")*0.16,10)";
                     $sheetCalculos->setCellValue($productColumn . $rowIGV, $formIGV);
-                    $formIPM = "=ROUND((MAX(" . $productColumn . $rowValorCIF . ":" . $productColumn . $rowValorCIFAdjustado . ")+" . $productColumn . $rowAdValoremP . "+" . $productColumn . $rowAdValoremValor . ")*0.02,10)";
+                    $formIPM = "=ROUND((MAX(" . $productColumn . $rowValorCIF . ":" . $productColumn . $rowValorCIFAdjustado . ")+" . $productColumn . $rowAdValoremP . "+" . $productColumn . $rowAdValoremValor . "+" . $productColumn . $rowIscValor . ")*0.02,10)";
                     $sheetCalculos->setCellValue($productColumn . $rowIPM, $formIPM);
-                    $formPercepcion = "=ROUND((MAX(" . $productColumn . $rowValorCIF . ":" . $productColumn . $rowValorCIFAdjustado . ")+" . $productColumn . $rowAdValoremP . "+" . $productColumn . $rowAdValoremValor . "+" . $productColumn . $rowIGV . "+" . $productColumn . $rowIPM . ")*0.035,10)";
+                    $formPercepcion = "=ROUND((MAX(" . $productColumn . $rowValorCIF . ":" . $productColumn . $rowValorCIFAdjustado . ")+" . $productColumn . $rowAdValoremP . "+" . $productColumn . $rowAdValoremValor . "+" . $productColumn . $rowIscValor . "+" . $productColumn . $rowIGV . "+" . $productColumn . $rowIPM . ")*0.035,10)";
                     $sheetCalculos->setCellValue($productColumn . $rowPercepcion, $formPercepcion);
-    
+
                     $formTotalTributos = "=ROUND(" . $productColumn . $rowAdValoremValor . "+" . $productColumn . $rowIGV . "+" . $productColumn . $rowIPM . "+" . $productColumn . $rowPercepcion . ",10)";
                     $sheetCalculos->setCellValue($productColumn . $rowTotalTributos, $formTotalTributos);
                     $sheetCalculos->setCellValue($productColumn . $rowDistribucionItemDestino, '=ROUND(' . $productColumn . $rowDistribucion . ',10)');
@@ -1243,23 +1257,23 @@ class CalculadoraImportacionService
                     $sheetCalculos->setCellValue($productColumn . $rowCostoCantidad, '=(' . $productColumn . $rowCantidad . ')');
                     $sheetCalculos->setCellValue($productColumn . $rowCostoUnitarioUSD, '=ROUND((' . $productColumn . $rowCostoTotal . ')/(' . $productColumn . $rowCostoCantidad . '),10)');
                     $sheetCalculos->setCellValue($productColumn . $rowCostoUnitarioPEN, '=ROUND((' . $productColumn . $rowCostoUnitarioUSD . ')*' . $tipoCambio . ',10)');
-                    
+
                     $sheetResumen->setCellValue('A' . $currentRowProducto, $indexProducto);
                     $sheetResumen->setCellValue('B' . $currentRowProducto, "='2'!" . $productColumn . $rowProducto);
-                    
+
                     $safeMergeCells($sheetResumen, 'B' . $currentRowProducto . ':D' . $currentRowProducto);
-                    
+
                     $sheetResumen->setCellValue('E' . $currentRowProducto, "='2'!" . $productColumn . $rowCantidad);
                     $sheetResumen->setCellValue('F' . $currentRowProducto, "='2'!" . $productColumn . $rowValorUnitario);
-                    
+
                     $safeMergeCells($sheetResumen, 'F' . $currentRowProducto . ':G' . $currentRowProducto);
-                    
+
                     $sheetResumen->setCellValue('H' . $currentRowProducto, "='2'!" . $productColumn . $rowCostoUnitarioUSD);
                     $sheetResumen->setCellValue('I' . $currentRowProducto, "=E" . $currentRowProducto . "*H" . $currentRowProducto);
                     $sheetResumen->setCellValue('J' . $currentRowProducto, '=H' . $currentRowProducto . '*' . $tipoCambio);
-    
+
                     $safeMergeCells($sheetResumen, 'J' . $currentRowProducto . ':K' . $currentRowProducto);
-                    
+
                     // ✅ CAMBIO CRÍTICO: Copiar estilos celda por celda en lugar de duplicateStyle
                     $templateRow = $startRowProducto;
                     $styleArray = [
@@ -1268,30 +1282,30 @@ class CalculadoraImportacionService
                         'alignment' => $sheetResumen->getStyle('A' . $templateRow)->getAlignment()->exportArray(),
                         'fill' => $sheetResumen->getStyle('A' . $templateRow)->getFill()->exportArray(),
                     ];
-                    
+
                     // Aplicar estilos individualmente a cada celda del rango
                     foreach (range('A', 'K') as $col) {
                         $cellCoord = $col . $currentRowProducto;
                         $sheetResumen->getStyle($cellCoord)->applyFromArray($styleArray);
                     }
-                    
+
                     $sheetResumen->getStyle('F' . $currentRowProducto)->getNumberFormat()->setFormatCode($this->formatoDollar);
                     $sheetResumen->getStyle('H' . $currentRowProducto)->getNumberFormat()->setFormatCode($this->formatoDollar);
                     $sheetResumen->getStyle('I' . $currentRowProducto)->getNumberFormat()->setFormatCode($this->formatoDollar);
                     $sheetResumen->getStyle('J' . $currentRowProducto)->getNumberFormat()->setFormatCode($this->formatoSoles);
-                    
+
                     $sheetResumen->setCellValue('M' . $currentRowProducto, "=A" . $currentRowProducto);
                     $sheetResumen->setCellValue('N' . $currentRowProducto, "=B" . $currentRowProducto);
                     $sheetResumen->setCellValue('O' . $currentRowProducto, "=F" . $currentRowProducto);
                     $sheetResumen->setCellValue('P' . $currentRowProducto, "=H" . $currentRowProducto);
                     $sheetResumen->setCellValue('Q' . $currentRowProducto, "=J" . $currentRowProducto);
-                    
+
                     $sheetResumen->getStyle('M' . $currentRowProducto)->getNumberFormat()->setFormatCode($this->formatoTexto);
                     $sheetResumen->getStyle('N' . $currentRowProducto)->getNumberFormat()->setFormatCode($this->formatoTexto);
                     $sheetResumen->getStyle('O' . $currentRowProducto)->getNumberFormat()->setFormatCode($this->formatoDollar);
                     $sheetResumen->getStyle('P' . $currentRowProducto)->getNumberFormat()->setFormatCode($this->formatoDollar);
                     $sheetResumen->getStyle('Q' . $currentRowProducto)->getNumberFormat()->setFormatCode($this->formatoSoles);
-                    
+
                     $rangeMQ = 'M' . $currentRowProducto . ':Q' . $currentRowProducto;
                     $styleMQ = $sheetResumen->getStyle($rangeMQ);
                     $styleMQ->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
@@ -1300,24 +1314,24 @@ class CalculadoraImportacionService
                     $styleMQ->getFill()->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID);
                     $styleMQ->getFill()->getStartColor()->setARGB('FFFFFF');
                     $styleMQ->getFont()->getColor()->setARGB('000000');
-    
+
                     $indexProducto++;
                     $currentRowProducto++;
                     $productColumnIndex++;
                     $indexP++;
                 }
-    
+
                 $columnIndex += $numProductos;
                 $indexProveedor++;
             }
-            
+
             $sheetResumen->setCellValue('A' . $currentRowProducto, 'TOTAL');
             $sheetResumen->setCellValue('E' . $currentRowProducto, '=SUM(E' . $startRowProducto . ':E' . ($currentRowProducto - 1) . ')');
             $sheetResumen->setCellValue('I' . $currentRowProducto, '=SUM(I' . $startRowProducto . ':I' . ($currentRowProducto - 1) . ')');
             $sheetResumen->getStyle('I' . $currentRowProducto)->getNumberFormat()->setFormatCode($this->formatoDollar);
-    
+
             $currentRowProducto++;
-            
+
             $sheetCalculos->setCellValue($totalColumn . $rowNProveedor, '=SUM(' . ($initialColumn . $rowNProveedor) . ':' . ($sumColumn . $rowNProveedor) . ')');
             $sheetCalculos->setCellValue($totalColumn . $rowNCaja, '=SUM(' . ($initialColumn . $rowNCaja) . ':' . ($sumColumn . $rowNCaja) . ')');
             $sheetCalculos->setCellValue($totalColumn . $rowPeso, '=SUM(' . ($initialColumn . $rowPeso) . ':' . ($sumColumn . $rowPeso) . ')');
@@ -1326,18 +1340,20 @@ class CalculadoraImportacionService
             $sheetCalculos->setCellValue($totalColumn . $rowValorFob, '=SUM(' . ($initialColumn . $rowValorFob) . ':' . ($sumColumn . $rowValorFob) . ')');
             $sheetCalculos->setCellValue($totalColumn . $rowValorAjustado, '=SUM(' . ($initialColumn . $rowValorAjustado) . ':' . ($sumColumn . $rowValorAjustado) . ')');
             $sheetCalculos->setCellValue($totalColumn . $rowDistribucion, '=SUM(' . ($initialColumn . $rowDistribucion) . ':' . ($sumColumn . $rowDistribucion) . ')');
-            
+
             $totalExtras = ($data['totalExtraProveedor'] ?? 0) + ($data['totalExtraItem'] ?? 0);
             $tarifaConExtras = $data['tarifa']['tarifa'];
-            
+
             if ($data['tarifa']['type'] == 'PLAIN') {
-                $sheetCalculos->setCellValue($totalColumn . $rowFlete, '=' . ($data['tarifa']['tarifa']) . '*0.6');
-                $sheetCalculos->setCellValue($totalColumn . $rowItemDestino, '=(' . ($data['tarifa']['tarifa']) . '*0.4)-(' . ($data['totalDescuento']??00) . ')+(' . ($totalExtras??00) . ')');
+                $sheetCalculos->setCellValue($totalColumn . $rowCostosFob, '=' . ($data['tarifa']['tarifa']) . '*' . $COSTOSFOB_PERCENTAGE);
+                $sheetCalculos->setCellValue($totalColumn . $rowFlete, '=' . ($data['tarifa']['tarifa']) . '*' . $FLETE_PERCENTAGE);
+                $sheetCalculos->setCellValue($totalColumn . $rowItemDestino, '=(' . ($data['tarifa']['tarifa']) . '*' . $ITEM_DESTINO_PERCENTAGE . ')-(' . ($data['totalDescuento'] ?? 00) . ')+(' . ($totalExtras ?? 00) . ')');
             } else {
-                $sheetCalculos->setCellValue($totalColumn . $rowFlete, '=' . ($data['tarifa']['tarifa']) . '*0.6*(' . ($totalColumn . $rowVolProveedor) . ')');
-                $sheetCalculos->setCellValue($totalColumn . $rowItemDestino, '=' . ($tarifaConExtras) . '*0.4*(' . ($totalColumn . $rowVolProveedor) . ')-(' . ($data['totalDescuento']??00) . ')+(' . ($totalExtras??00) . ')');
+                $sheetCalculos->setCellValue($totalColumn . $rowCostosFob, '=' . ($data['tarifa']['tarifa']) . '*' . $COSTOSFOB_PERCENTAGE .'*('. ($totalColumn. $rowVolProveedor).')');
+                $sheetCalculos->setCellValue($totalColumn . $rowFlete, '=' . ($data['tarifa']['tarifa']) . '*' . $FLETE_PERCENTAGE . '*(' . ($totalColumn . $rowVolProveedor) . ')');
+                $sheetCalculos->setCellValue($totalColumn . $rowItemDestino, '=' . ($tarifaConExtras) . '*' . $ITEM_DESTINO_PERCENTAGE . '*(' . ($totalColumn . $rowVolProveedor) . ')-(' . ($data['totalDescuento'] ?? 00) . ')+(' . ($totalExtras ?? 00) . ')');
             }
-    
+
             $sheetCalculos->setCellValue($totalColumn . $rowValorCFR, '=ROUND(SUM(' . $initialColumn . $rowValorCFR . ':' . $sumColumn . $rowValorCFR . '),10)');
             $sheetCalculos->setCellValue($totalColumn . $rowValorCFRAjustado, '=ROUND(SUM(' . $initialColumn . $rowValorCFRAjustado . ':' . $sumColumn . $rowValorCFRAjustado . '),2)');
             $sheetCalculos->setCellValue($totalColumn . $rowSeguro, '=IF(' . $totalColumn . $rowValorFob . '>=5000,100,50)');
@@ -1345,6 +1361,7 @@ class CalculadoraImportacionService
             $sheetCalculos->setCellValue($totalColumn . $rowValorCIFAdjustado, '=ROUND(SUM(' . $initialColumn . $rowValorCIFAdjustado . ':' . $sumColumn . $rowValorCIFAdjustado . '),10)');
             $sheetCalculos->setCellValue($totalColumn . $rowAntidumpingValor, '=ROUND(SUM(' . $initialColumn . $rowAntidumpingValor . ':' . $sumColumn . $rowAntidumpingValor . '),10)');
             $sheetCalculos->setCellValue($totalColumn . $rowAdValoremValor, '=ROUND(SUM(' . $initialColumn . $rowAdValoremValor . ':' . $sumColumn . $rowAdValoremValor . '),10)');
+            $sheetCalculos->setCellValue($totalColumn . $rowIscValor, '=ROUND(SUM(' . $initialColumn . $rowIscValor . ':' . $sumColumn . $rowIscValor . '),10)');
             $sheetCalculos->setCellValue($totalColumn . $rowIGV, '=ROUND(SUM(' . $initialColumn . $rowIGV . ':' . $sumColumn . $rowIGV . '),10)');
             $sheetCalculos->setCellValue($totalColumn . $rowIPM, '=ROUND(SUM(' . $initialColumn . $rowIPM . ':' . $sumColumn . $rowIPM . '),10)');
             $sheetCalculos->setCellValue($totalColumn . $rowPercepcion, '=ROUND(SUM(' . $initialColumn . $rowPercepcion . ':' . $sumColumn . $rowPercepcion . '),10)');
@@ -1353,10 +1370,10 @@ class CalculadoraImportacionService
             $sheetCalculos->setCellValue($totalColumn . $rowCostoCantidad, '=(' . $totalColumn . $rowCantidad . ')');
             $sheetCalculos->setCellValue($totalColumn . $rowCostoUnitarioUSD, '=ROUND(SUM(' . $initialColumn . $rowCostoUnitarioUSD . ':' . $sumColumn . $rowCostoUnitarioUSD . '),10)');
             $sheetCalculos->setCellValue($totalColumn . $rowCostoUnitarioPEN, '=ROUND(SUM(' . $initialColumn . $rowCostoUnitarioPEN . ':' . $sumColumn . $rowCostoUnitarioPEN . '),10)');
-            
+
             $sumColumnIndex = $initialColumnIndex + $totalProductos - 1;
             $totalColumnIndex = $initialColumnIndex + $totalProductos;
-            
+
             for ($colIdx = $sumColumnIndex + 1; $colIdx < $totalColumnIndex + 3; $colIdx++) {
                 $colLetter = $getColumnLetter($colIdx);
                 if ($colIdx == $totalColumnIndex) {
@@ -1379,13 +1396,13 @@ class CalculadoraImportacionService
                     // Ignorar
                 }
             }
-            
+
             $sheetResumen->setCellValue('E11', $data['tarifa']['value']);
             $tipoDocumento = $data['clienteInfo']['tipoDocumento'] ?? 'DNI';
             $nombreMostrar = $tipoDocumento === 'RUC' ? ($data['clienteInfo']['empresa'] ?? $data['clienteInfo']['razonSocial'] ?? '') : $data['clienteInfo']['nombre'];
             $documentoMostrar = $tipoDocumento === 'RUC' ? ($data['clienteInfo']['ruc'] ?? '') : $data['clienteInfo']['dni'];
             $whatsappValue = is_array($data['clienteInfo']['whatsapp']) ? ($data['clienteInfo']['whatsapp']['value'] ?? '') : ($data['clienteInfo']['whatsapp'] ?? '');
-            
+
             $sheetResumen->setCellValue('B8', $nombreMostrar);
             $sheetResumen->setCellValue('B9', $documentoMostrar);
             $sheetResumen->setCellValue('B10', $data['clienteInfo']['correo']);
@@ -1395,36 +1412,42 @@ class CalculadoraImportacionService
             $sheetResumen->setCellValue('I11', "='2'!" . ($totalColumn . $rowVolProveedor));
             $sheetResumen->setCellValue('J11', "='2'!" . ($totalColumn . $rowVolProveedor));
             $sheetResumen->setCellValue('J14', "='2'!" . ($totalColumn . $rowValorFob));
-            $sheetResumen->setCellValue('J15', "='2'!" . ($totalColumn . $rowFlete . "+('2'!" . $totalColumn . $rowSeguro . ")"));
-            
+            $sheetResumen->setCellValue('J15', "='2'!" . ($totalColumn . $rowCostosFob));
+            $sheetResumen->setCellValue('J16', "='2'!" . ($totalColumn . $rowFlete . "+('2'!" . $totalColumn . $rowSeguro . ")"));
+
             $finalColumnAdValorem = $getColumnLetter($initialColumnIndex + $totalColumnas - 1);
             $sheetResumen->setCellValue('I20', "=MAX('2'!C" . $rowAdValoremP . ":" . $finalColumnAdValorem . $rowAdValoremP . ")");
             $sheetResumen->setCellValue('J20', "='2'!" . ($totalColumn . $rowAdValoremValor));
-            $sheetResumen->setCellValue('J21', "='2'!" . ($totalColumn . $rowIGV));
-            $sheetResumen->setCellValue('J22', "='2'!" . ($totalColumn . $rowIPM));
-            $sheetResumen->setCellValue('I23', "=MAX('2'!C" . $rowAntidumpingCU . ":" . $finalColumnAdValorem . $rowAntidumpingCU . ")");
-            $sheetResumen->setCellValue('J23', "='2'!" . ($totalColumn . $rowAntidumpingValor));
-            $sheetResumen->setCellValue('J26', "='2'!" . ($totalColumn . $rowPercepcion));
-            
-            if ($data['tarifa']['type'] == 'PLAIN') {
+            $sheetResumen->setCellValue('I21', "=MAX('2'!C" . $rowIscP . ":" . $finalColumnAdValorem . $rowIscP . ")");
+            $sheetResumen->setCellValue('J21', "='2'!" . ($totalColumn . $rowIscValor));
+            $sheetResumen->setCellValue('J22', "='2'!" . ($totalColumn . $rowIGV));
+            $sheetResumen->setCellValue('J23', "='2'!" . ($totalColumn . $rowIPM));
+            $sheetResumen->setCellValue('I24', "=MAX('2'!C" . $rowAntidumpingCU . ":" . $finalColumnAdValorem . $rowAntidumpingCU . ")");
+            $sheetResumen->setCellValue('J24', "='2'!" . ($totalColumn . $rowAntidumpingValor));
+            $sheetResumen->setCellValue('J27', "='2'!" . ($totalColumn . $rowPercepcion));
+
+            /*if ($data['tarifa']['type'] == 'PLAIN') {
                 $sheetResumen->setCellValue('J30', '=' . $data['tarifa']['tarifa']);
             } else {
                 $sheetResumen->setCellValue('J30', '=I11*(' . $data['tarifa']['tarifa'] . ')');
-            }
-    
-            $sheetResumen->setCellValue('J31', $data['totalExtraProveedor']+$data['totalExtraItem']);
-            $sheetResumen->setCellValue('J32', $data['totalDescuento']);
-            $sheetResumen->setCellValue('J33', '=J27');
-            $sheetResumen->setCellValue('J34', '=J30+J31-J32+J33');
-            
+            }*/
+            $sheetResumen->setCellValue('J31', "='2'!" . ($totalColumn . $rowCostosFob));
+            $sheetResumen->setCellValue('J32', "='2'!" . ($totalColumn . $rowFlete));
+            $sheetResumen->setCellValue('J33', "='2'!" . ($totalColumn . $rowItemDestino));
+
+            $sheetResumen->setCellValue('J34', $data['totalExtraProveedor'] + $data['totalExtraItem']);
+            $sheetResumen->setCellValue('J35', $data['totalDescuento']);
+
+
             $timestamp = now()->format('Y_m_d_H_i_s');
             $fileName = "COTIZACION_INICIAL_{$data['clienteInfo']['nombre']}_{$timestamp}.xlsx";
             $filePath = storage_path('app/public/templates/' . $fileName);
-    
+
             try {
                 $writer = \PhpOffice\PhpSpreadsheet\IOFactory::createWriter($objPHPExcel, 'Xlsx');
+                $writer->setPreCalculateFormulas(false);
                 $writer->save($filePath);
-    
+
                 if (!file_exists($filePath)) {
                     return [
                         'url' => null,
@@ -1434,7 +1457,7 @@ class CalculadoraImportacionService
                         'boleta' => null
                     ];
                 }
-    
+
                 $fileSize = filesize($filePath);
                 if ($fileSize === 0) {
                     return [
@@ -1445,23 +1468,23 @@ class CalculadoraImportacionService
                         'boleta' => null
                     ];
                 }
-    
+
                 $boletaInfo = null;
                 try {
                     $boletaInfo = $this->generateBoleta($objPHPExcel, $data['clienteInfo']);
                 } catch (\Exception $e) {
                     // Continuar sin la boleta
                 }
-    
+
                 $publicUrl = Storage::url('templates/' . $fileName);
-                
+
                 $totalFob = $sheetCalculos->getCell($totalColumn . $rowValorFob)->getCalculatedValue();
                 $totalImpuestos = $sheetCalculos->getCell($totalColumn . $rowTotalTributos)->getCalculatedValue();
                 $j30 = $sheetResumen->getCell('J30')->getCalculatedValue();
                 $j31 = $sheetResumen->getCell('J31')->getCalculatedValue();
                 $j32 = $sheetResumen->getCell('J32')->getCalculatedValue();
                 $logistica = (is_numeric($j30) && is_numeric($j31) && is_numeric($j32)) ? ($j30 + $j31 - $j32) : 0;
-                
+
                 return [
                     'url' => $publicUrl,
                     'totalfob' => $totalFob,
@@ -1481,7 +1504,7 @@ class CalculadoraImportacionService
             }
         } catch (\Exception $e) {
             Log::error('Error al crear cotización inicial: ' . $e->getMessage());
-    
+
             return [
                 'url' => null,
                 'totalfob' => null,
@@ -1605,7 +1628,7 @@ class CalculadoraImportacionService
 
         $allCodeStrings = $proveedoresOrdenados
             ->pluck('code_supplier')
-            ->map(fn ($c) => trim((string) ($c ?? '')))
+            ->map(fn($c) => trim((string) ($c ?? '')))
             ->filter()
             ->values()
             ->all();
@@ -1646,6 +1669,7 @@ class CalculadoraImportacionService
                     'cantidad' => (float) $p->cantidad,
                     'antidumpingCU' => (float) ($p->antidumping_cu ?? 0),
                     'adValoremP' => (float) ($p->ad_valorem_p ?? 0),
+                    'iscP' => (float) ($p->isc_p ?? 0),
                 ];
             }
             $proveedores[] = [
@@ -1657,7 +1681,7 @@ class CalculadoraImportacionService
             ];
         }
 
-        $totalProductos = collect($proveedores)->sum(fn ($p) => count($p['productos']));
+        $totalProductos = collect($proveedores)->sum(fn($p) => count($p['productos']));
         $tarifaVal = (float) ($calculadora->tarifa ?? 0);
 
         $totalExtraProveedor = (float) ($calculadora->tarifa_total_extra_proveedor ?? 0);
@@ -1730,11 +1754,11 @@ class CalculadoraImportacionService
     {
         $all = $calculadora->proveedores;
         $vinculados = $all
-            ->filter(fn (CalculadoraImportacionProveedor $p) => (int) ($p->id_proveedor ?? 0) > 0)
-            ->sortBy(fn (CalculadoraImportacionProveedor $p) => [(string) ($p->code_supplier ?? ''), $p->id])
+            ->filter(fn(CalculadoraImportacionProveedor $p) => (int) ($p->id_proveedor ?? 0) > 0)
+            ->sortBy(fn(CalculadoraImportacionProveedor $p) => [(string) ($p->code_supplier ?? ''), $p->id])
             ->values();
         $sinVincular = $all
-            ->filter(fn (CalculadoraImportacionProveedor $p) => (int) ($p->id_proveedor ?? 0) <= 0)
+            ->filter(fn(CalculadoraImportacionProveedor $p) => (int) ($p->id_proveedor ?? 0) <= 0)
             ->sortBy('id')
             ->values();
 
@@ -1823,7 +1847,9 @@ class CalculadoraImportacionService
             $objPHPExcel->setActiveSheetIndex(0);
             $sheet = $objPHPExcel->getActiveSheet();
 
-            $antidumping = $sheet->getCell('A23')->getValue(); // B23 -> A23
+            // Antidumping: detectar por valor (J24) en lugar de label de celda
+            $antidumpingValor = round($this->getCellValueAsFloat($sheet, 'J24'), 2);
+            $antidumpingCU    = number_format($this->getCellValueAsFloat($sheet, 'I24'), 2, '.', ',');
 
             // Código de cotización (D7: "COTIZACION N° CO02260001") para la boleta PDF
             $codigoCotizacion = '';
@@ -1840,39 +1866,52 @@ class CalculadoraImportacionService
                 "cod_contract" => $codigoCotizacion,
                 "name" => $clienteInfo['nombre'] ?? $sheet->getCell('B8')->getValue(), // C8 -> B8
                 "lastname" => "", // No hay apellido separado en el nuevo formato
+
                 "ID" => $clienteInfo['dni'] ?? $sheet->getCell('B10')->getValue(), // C10 -> B10
                 "phone" => $clienteInfo['whatsapp']['value'] ?? $sheet->getCell('B11')->getValue(), // C11 -> B11
                 "date" => date('d/m/Y'),
                 "tipocliente" => $clienteInfo['tipoCliente'] ?? $sheet->getCell('E11')->getValue(), // F11 -> E11
                 "peso" => number_format($this->getCellValueAsFloat($sheet, 'I9'), 2, '.', ','), // Peso formateado (kg)
-                "qtysuppliers" => $clienteInfo['qtyProveedores'] ?? $sheet->getCell('E11')->getValue(), // Cantidad de proveedores
+                "qtysuppliers" => $clienteInfo['qtyProveedores'] ?? $sheet->getCell('E11')->getValue(), //
                 "qtycajas" => intval($this->getCellValueAsFloat($sheet, 'I10')), // Número de cajas total
                 "cbm" => number_format($this->getCellValueAsFloat($sheet, 'I11'), 2, '.', ','), // Volumen formateado (m³)
                 "valorcarga" => round($this->getCellValueAsFloat($sheet, 'J14'), 2), // K14 -> J14
-                "fleteseguro" => round($this->getCellValueAsFloat($sheet, 'J15'), 2), // K15 -> J15
-                "valorcif" => round($this->getCellValueAsFloat($sheet, 'J16'), 2), // K16 -> J16
-                "advalorempercent" => intval($this->getCellValueAsFloat($sheet, 'I20') * 100), // J20 -> I20
-                "advalorem" => round($this->getCellValueAsFloat($sheet, 'J20'), 2), // K20 -> J20
-                "antidumping" => $antidumping == "ANTIDUMPING" ? round($this->getCellValueAsFloat($sheet, 'J23'), 2) : 0.0, // K23 -> J23
-                "igv" => round($this->getCellValueAsFloat($sheet, 'J21'), 2), // K21 -> J21
-                "ipm" => round($this->getCellValueAsFloat($sheet, 'J22'), 2), // K22 -> J22
-                "subtotal" => $antidumping == "ANTIDUMPING" ? round($this->getCellValueAsFloat($sheet, 'J24'), 2) : round($this->getCellValueAsFloat($sheet, 'J23'), 2), // K24/K23 -> J24/J23
-                "percepcion" => $antidumping == "ANTIDUMPING" ? round($this->getCellValueAsFloat($sheet, 'J26'), 2) : round($this->getCellValueAsFloat($sheet, 'J25'), 2), // K26/K25 -> J26/J25
-                "total" => $antidumping == "ANTIDUMPING" ? round($this->getCellValueAsFloat($sheet, 'J27'), 2) : round($this->getCellValueAsFloat($sheet, 'J26'), 2), // K27/K26 -> J27/J26
-                // Resumen de cotización - ahora son 4 conceptos (filas 30-33) + total (fila 34)
-                // Fila 30: SERVICIO DE IMPORTACIÓN (ORIGEN -FLETE - DESTINO)
-                "servicioimportacion" => round($this->getCellValueAsFloat($sheet, 'J30'), 2),
-                // Fila 31: CARGOS EXTRAS (QTY PROVEEDORES O QTY ITEMS)
-                "cargosextras" => round($this->getCellValueAsFloat($sheet, 'J31'), 2),
-                // Fila 32: DESCUENTO APLICABLE
-                "descuento" => round($this->getCellValueAsFloat($sheet, 'J32'), 2),
-                // Fila 33: IMPUESTOS
-                "impuestos" => round($this->getCellValueAsFloat($sheet, 'J33'), 2),
-                // Fila 34: MONTO TOTAL
-                "montototal" => round($this->getCellValueAsFloat($sheet, 'J34'), 2),
+                "costosfob" => round($this->getCellValueAsFloat($sheet, 'J15'), 2), // K15 -> J15
+                "fleteseguro" => round($this->getCellValueAsFloat($sheet, 'J16'), 2), // K15 -> J15
+                "valorcif" => round($this->getCellValueAsFloat($sheet, 'J17'), 2), // K16 -> J16
+                "advalorempercent" => intval($this->getCellValueAsFloat($sheet, 'I20') * 100),
+                "advalorem"        => round($this->getCellValueAsFloat($sheet, 'J20'), 2),
+                "iscpercent"       => intval(round($this->getCellValueAsFloat($sheet, 'I21') * 100)),
+                "isc"              => round($this->getCellValueAsFloat($sheet, 'J21'), 2),
+                "igv"              => round($this->getCellValueAsFloat($sheet, 'J22'), 2),
+                "ipm"              => round($this->getCellValueAsFloat($sheet, 'J23'), 2),
+                "antidumping"      => $antidumpingValor,
+                "subtotal"         => round($this->getCellValueAsFloat($sheet, 'J25'), 2),
+                "percepcion"       => round($this->getCellValueAsFloat($sheet, 'J27'), 2),
+                "total"            => round($this->getCellValueAsFloat($sheet, 'J28'), 2),
+                // Bloque: Cálculo de Servicio de Importación
+                "costosfob_svc"   => round($this->getCellValueAsFloat($sheet, 'J31'), 2),
+                "flete_svc"       => round($this->getCellValueAsFloat($sheet, 'J32'), 2),
+                "costosendestino" => round($this->getCellValueAsFloat($sheet, 'J33'), 2),
+                "subtotal_svc"    => round($this->getCellValueAsFloat($sheet, 'J34'), 2),
+                "recargos"        => round($this->getCellValueAsFloat($sheet, 'J36'), 2),
+                "descuento_svc"   => round($this->getCellValueAsFloat($sheet, 'J37'), 2),
+                "total_svc"       => round($this->getCellValueAsFloat($sheet, 'J38'), 2),
+                // Resumen de cotización
+                "servicioimportacion" => round($this->getCellValueAsFloat($sheet, 'J41'), 2),
+                "cargosextras"        => round($this->getCellValueAsFloat($sheet, 'J34'), 2),
+                "descuento"           => round($this->getCellValueAsFloat($sheet, 'J35'), 2),
+                "impuestos"           => round($this->getCellValueAsFloat($sheet, 'J42'), 2),
+                // montototal calculado en PHP (J43 tiene #REF! en el template)
+                "montototal" => 0,
             ];
+            // Calcular montototal en PHP (J43 tiene #REF! en el template)
+            $data['montototal'] = round(
+                $data['servicioimportacion'] + $data['cargosextras'] - $data['descuento'] + $data['impuestos'],
+                2
+            );
             Log::info(json_encode($data));
-            $i = $antidumping == "ANTIDUMPING" ? 38 : 37;
+            $i = 47; // startRowProducto — los productos siempre se insertan en fila 46+
             $items = [];
 
             while ($sheet->getCell('A' . $i)->getValue() != 'TOTAL') {
@@ -1915,26 +1954,27 @@ class CalculadoraImportacionService
             $data["pagos"] = 'data:image/jpg;base64,' . $pagosData;
 
             // Reemplazar variables en el template
+            // Claves numéricas que NO deben formatearse con number_format (son enteros/porcentajes)
+            $noFormatKeys = ['ID', 'phone', 'qtysuppliers', 'advalorempercent', 'iscpercent'];
             foreach ($data as $key => $value) {
                 if (is_numeric($value)) {
                     if ($value == 0) {
                         $value = '-';
-                    } else if ($key != "ID" && $key != "phone" && $key != "qtysuppliers" && $key != "advalorempercent") {
+                    } else if (!in_array($key, $noFormatKeys)) {
                         $value = number_format($value, 2, '.', ',');
                     }
                 }
 
                 if ($key == "antidumping") {
-                    if ($antidumping == "ANTIDUMPING" && $data['antidumping'] > 0) {
+                    if ($antidumpingValor > 0) {
                         $antidumpingHtml = '<tr style="background:#FFFF33">
                         <td style="border-top:none!important;border-bottom:none!important" colspan="3">ANTIDUMPING</td>
-                        <td style="border-top:none!important;border-bottom:none!important" ></td>
-                        <td style="border-top:none!important;border-bottom:none!important" >$' . number_format($data['antidumping'], 2, '.', ',') . '</td>
-                        <td style="border-top:none!important;border-bottom:none!important" >USD</td>
+                        <td style="border-top:none!important;border-bottom:none!important">' . $antidumpingCU . ' x UC</td>
+                        <td style="border-top:none!important;border-bottom:none!important">$' . number_format($antidumpingValor, 2, '.', ',') . '</td>
+                        <td style="border-top:none!important;border-bottom:none!important">USD</td>
                         </tr>';
                         $htmlContent = str_replace('{{antidumping}}', $antidumpingHtml, $htmlContent);
                     } else {
-                        // Si no hay antidumping, reemplazar con string vacío
                         $htmlContent = str_replace('{{antidumping}}', '', $htmlContent);
                     }
                 } else if ($key == "items") {

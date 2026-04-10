@@ -86,9 +86,9 @@ class CalculadoraImportacionExcelService
                 $sheet->setCellValue('D7', 'COTIZACION N° ' . $calculadora->cod_cotizacion);
             }
             Log::info('totalItems: ' . $totalItems);
-            $filaServicioConsolidado = 37 + ($totalItems + 4);
+            $filaServicioConsolidado = 47 + ($totalItems + 4);
             Log::info('filaServicioConsolidado: ' . $filaServicioConsolidado);
-            $filaPagoImpuestos = 37 + ($totalItems + 5);
+            $filaPagoImpuestos = 47 + ($totalItems + 5);
             Log::info('filaPagoImpuestos: ' . $filaPagoImpuestos);
             $sheet->setCellValue('P' . $filaServicioConsolidado, 'Servicio de Consolidado antes de la Fecha de Corte ' . $fechaCorte);
             $sheet->setCellValue('P' . $filaPagoImpuestos, 'Pago de Impuestos antes del Arribo ' . $fechaArribo);
