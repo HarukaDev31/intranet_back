@@ -1435,8 +1435,8 @@ class CalculadoraImportacionService
             $sheetResumen->setCellValue('J32', "='2'!" . ($totalColumn . $rowFlete));
             $sheetResumen->setCellValue('J33', "='2'!" . ($totalColumn . $rowItemDestino));
 
-            $sheetResumen->setCellValue('J34', $data['totalExtraProveedor'] + $data['totalExtraItem']);
-            $sheetResumen->setCellValue('J35', $data['totalDescuento']);
+            $sheetResumen->setCellValue('J36', $data['totalExtraProveedor'] + $data['totalExtraItem']);
+            $sheetResumen->setCellValue('J37', $data['totalDescuento']);
 
 
             $timestamp = now()->format('Y_m_d_H_i_s');
@@ -1886,7 +1886,7 @@ class CalculadoraImportacionService
                 "igv"              => round($this->getCellValueAsFloat($sheet, 'J22'), 2),
                 "ipm"              => round($this->getCellValueAsFloat($sheet, 'J23'), 2),
                 "antidumping"      => $antidumpingValor,
-                "subtotal"         => round($this->getCellValueAsFloat($sheet, 'J25'), 2),
+                "subtotaltributos"         => round($this->getCellValueAsFloat($sheet, 'J25'), 2),
                 "percepcion"       => round($this->getCellValueAsFloat($sheet, 'J27'), 2),
                 "total"            => round($this->getCellValueAsFloat($sheet, 'J28'), 2),
                 // Bloque: Cálculo de Servicio de Importación
@@ -1903,13 +1903,10 @@ class CalculadoraImportacionService
                 "descuento"           => round($this->getCellValueAsFloat($sheet, 'J35'), 2),
                 "impuestos"           => round($this->getCellValueAsFloat($sheet, 'J42'), 2),
                 // montototal calculado en PHP (J43 tiene #REF! en el template)
-                "montototal" => 0,
+                "montototal" =>  round($this->getCellValueAsFloat($sheet, 'J43'), 2),
             ];
             // Calcular montototal en PHP (J43 tiene #REF! en el template)
-            $data['montototal'] = round(
-                $data['servicioimportacion'] + $data['cargosextras'] - $data['descuento'] + $data['impuestos'],
-                2
-            );
+            
             Log::info(json_encode($data));
             $i = 47; // startRowProducto — los productos siempre se insertan en fila 46+
             $items = [];
@@ -1965,7 +1962,33 @@ class CalculadoraImportacionService
                     }
                 }
 
-                if ($key == "antidumping") {
+                if ($key == "recargos") {
+                    $recargosVal = $this->getCellValueAsFloat($sheet, 'J36');
+                    if ($recargosVal != 0) {
+                        $recargosHtml = '<tr>
+                        <td colspan="3">RECARGOS OPERATIVOS</td>
+                        <td class="no-horizontal-border"></td>
+                        <td class="no-horizontal-border right">$ ' . number_format($recargosVal, 2, '.', ',') . '</td>
+                        <td class="no-horizontal-border center">USD</td>
+                        </tr>';
+                        $htmlContent = str_replace('{{row_recargos}}', $recargosHtml, $htmlContent);
+                    } else {
+                        $htmlContent = str_replace('{{row_recargos}}', '', $htmlContent);
+                    }
+                } else if ($key == "descuento_svc") {
+                    $descuentoVal = $this->getCellValueAsFloat($sheet, 'J37');
+                    if ($descuentoVal != 0) {
+                        $descuentoHtml = '<tr>
+                        <td colspan="3" style="color:red;">DESCUENTO APLICABLE</td>
+                        <td class="no-horizontal-border"></td>
+                        <td class="no-horizontal-border right" style="color:red;">$ ' . number_format($descuentoVal, 2, '.', ',') . '</td>
+                        <td class="no-horizontal-border center">USD</td>
+                        </tr>';
+                        $htmlContent = str_replace('{{row_descuento_svc}}', $descuentoHtml, $htmlContent);
+                    } else {
+                        $htmlContent = str_replace('{{row_descuento_svc}}', '', $htmlContent);
+                    }
+                } else if ($key == "antidumping") {
                     if ($antidumpingValor > 0) {
                         $antidumpingHtml = '<tr style="background:#FFFF33">
                         <td style="border-top:none!important;border-bottom:none!important" colspan="3">ANTIDUMPING</td>

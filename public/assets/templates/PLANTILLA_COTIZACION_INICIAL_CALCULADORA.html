@@ -298,7 +298,7 @@
           
         </td >
         <td style="border-top: 1px solid #000;" >
-          <strong>$ {{subtotal}}</strong></td>  
+          <strong>$ {{subtotaltributos}}</strong></td>  
         <td class="no-horizontal-border center">USD</td>
       </tr>
 
@@ -353,18 +353,8 @@
       <tr>
         <td colspan="12" class="no-border" style="border: none!important;"></td>
       </tr>
-      <tr>
-        <td colspan="3">RECARGOS OPERATIVOS</td>
-        <td class="no-horizontal-border"></td>
-        <td class="no-horizontal-border right">$ {{recargos}}</td>
-        <td class="no-horizontal-border center">USD</td>
-      </tr>
-      <tr>
-        <td colspan="3" style="color:red;">DESCUENTO APLICABLE</td>
-        <td class="no-horizontal-border"></td>
-        <td class="no-horizontal-border right" style="color:red;">$ {{descuento_svc}}</td>
-        <td class="no-horizontal-border center">USD</td>
-      </tr>
+      {{row_recargos}}
+      {{row_descuento_svc}}
       <tr class="btop">
         <td colspan="3"><strong>TOTAL</strong></td>
         <td class="no-horizontal-border"></td>
