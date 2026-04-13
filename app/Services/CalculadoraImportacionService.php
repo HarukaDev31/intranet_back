@@ -1156,7 +1156,7 @@ class CalculadoraImportacionService
             $sumColumn = $getColumnLetter($initialColumnIndex + $totalProductos - 1);
 
             $indexProducto = 1;
-            $startRowProducto = 47;
+            $startRowProducto = 38;
             $currentRowProducto = $startRowProducto;
 
             // ✅ SOLUCIÓN CRÍTICA: Eliminar TODOS los comentarios de AMBAS hojas
@@ -1947,7 +1947,7 @@ class CalculadoraImportacionService
             // Calcular montototal en PHP (J43 tiene #REF! en el template)
             
             Log::info(json_encode($data));
-            $i = 47; // Inicio de zona de productos (puede haber filas de aviso antes de la tabla)
+            $i = 38; // Inicio de filas de ítems en la plantilla Excel
             $items = [];
             // Incluir columnas A y B: en celdas fusionadas "TOTAL" puede quedar solo en A y B vacía;
             // además getHighestDataRow('B') puede quedar por debajo de la fila del total.
