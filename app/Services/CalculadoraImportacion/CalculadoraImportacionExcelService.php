@@ -86,7 +86,7 @@ class CalculadoraImportacionExcelService
                 $sheet->setCellValue('D7', 'COTIZACION N° ' . $calculadora->cod_cotizacion);
             }
             Log::info('totalItems: ' . $totalItems);
-            $filaInicioItems = 38;
+            $filaInicioItems = 47;
             $filaServicioConsolidado = $filaInicioItems + ($totalItems + 4);
             Log::info('filaServicioConsolidado: ' . $filaServicioConsolidado);
             $filaPagoImpuestos = $filaInicioItems + ($totalItems + 5);
