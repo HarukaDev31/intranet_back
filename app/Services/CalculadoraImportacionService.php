@@ -16,6 +16,7 @@ use App\Models\CargaConsolidada\CotizacionProveedorItem;
 use App\Models\CargaConsolidada\FacturaComercial;
 use App\Models\CalculadoraTipoCliente;
 use App\Models\CalculadoraTarifasConsolidado;
+use App\Services\CalculadoraImportacion\CalculadoraImportacionExcelService;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 
@@ -168,12 +169,8 @@ class CalculadoraImportacionService
             $calculadora->save();
             Log::info('[CREAR COTIZACIÓN] Calculadora guardada exitosamente. ID: ' . $calculadora->id . ', URL: ' . $calculadora->url_cotizacion);
 
-            // Guardar información de la boleta si se generó
-            if ($boletaInfo) {
-                // Aquí podrías guardar la información de la boleta en la base de datos
-                // Por ejemplo, crear un registro en una tabla de boletas
-                Log::info('Boleta PDF guardada en: ' . $boletaInfo['path']);
-            }
+            // Fechas/código en el xlsx (si aplica) y boleta alineada al Excel final — mismo criterio que en edición
+            $this->aplicarPostProcesoExcelCotizacion($calculadora);
 
             DB::commit();
             return $calculadora->load(['proveedores.productos']);
@@ -473,52 +470,36 @@ class CalculadoraImportacionService
 
             if (!$result || !isset($result['url'])) {
                 Log::error('[EDITAR COTIZACIÓN] ERROR: No se generó URL del Excel. Result: ' . json_encode($result));
-                Log::error('[EDITAR COTIZACIÓN] La calculadora mantendrá la URL anterior: ' . $calculadora->url_cotizacion);
-                // No lanzar excepción, solo loggear el error para no perder los datos
-            } else {
-                $urlAnterior = $calculadora->url_cotizacion;
-                $calculadora->url_cotizacion = $result['url'];
-                $calculadora->total_fob = $result['totalfob'] ?? $calculadora->total_fob;
-                $calculadora->total_impuestos = $result['totalimpuestos'] ?? $calculadora->total_impuestos;
-                $calculadora->logistica = $result['logistica'] ?? $calculadora->logistica;
-                $calculadora->cargos_extra = $this->valorCargosExtraDesdeCotizacionInicial($result) ?? $calculadora->cargos_extra;
-                $calculadora->url_cotizacion_pdf = $result['boleta']['url'] ?? null;
-                $calculadora->id_usuario = $data['id_usuario'];
-                Log::info('[EDITAR COTIZACIÓN] Excel regenerado exitosamente');
-                Log::info('[EDITAR COTIZACIÓN] URL Excel anterior: ' . $urlAnterior);
-                Log::info('[EDITAR COTIZACIÓN] URL Excel nueva: ' . $result['url']);
-                Log::info('[EDITAR COTIZACIÓN] Total FOB: ' . ($result['totalfob'] ?? 'N/A'));
-                Log::info('[EDITAR COTIZACIÓN] Total Impuestos: ' . ($result['totalimpuestos'] ?? 'N/A'));
-                Log::info('[EDITAR COTIZACIÓN] Logística: ' . ($result['logistica'] ?? 'N/A'));
-                Log::info('[EDITAR COTIZACIÓN] ID Usuario: ' . ($data['id_usuario'] ?? 'N/A'));
-
-                // Regenerar PDF con el Excel actualizado
-                if (isset($result['boleta'])) {
-                    $boletaInfo = $result['boleta'];
-                    Log::info('[EDITAR COTIZACIÓN] Boleta incluida en resultado: ' . json_encode($boletaInfo));
-                } else {
-                    Log::info('[EDITAR COTIZACIÓN] Generando boleta por separado...');
-                    $boletaInfo = $this->generateBoleta($calculadora->url_cotizacion, $data['clienteInfo']);
-                    Log::info('[EDITAR COTIZACIÓN] Resultado de generateBoleta: ' . json_encode($boletaInfo));
-                }
-
-                if ($boletaInfo && isset($boletaInfo['path'])) {
-                    $calculadora->url_cotizacion_pdf = $boletaInfo['url'];
-                    Log::info('[EDITAR COTIZACIÓN] Boleta PDF actualizada: ' . $boletaInfo['url']);
-                }
-
-                Log::info('[EDITAR COTIZACIÓN] Guardando calculadora con nueva URL: ' . $calculadora->url_cotizacion);
-                $calculadora->save();
-
-                Log::info('[EDITAR COTIZACIÓN] Calculadora guardada exitosamente. ID: ' . $calculadora->id . ', URL: ' . $calculadora->url_cotizacion);
+                throw new \Exception('No se pudo generar el archivo Excel de la cotización');
             }
+
+            $urlAnterior = $calculadora->url_cotizacion;
+            $calculadora->url_cotizacion = $result['url'];
+            $calculadora->total_fob = $result['totalfob'] ?? $calculadora->total_fob;
+            $calculadora->total_impuestos = $result['totalimpuestos'] ?? $calculadora->total_impuestos;
+            $calculadora->logistica = $result['logistica'] ?? $calculadora->logistica;
+            $calculadora->cargos_extra = $this->valorCargosExtraDesdeCotizacionInicial($result) ?? $calculadora->cargos_extra;
+            $calculadora->url_cotizacion_pdf = $result['boleta']['url'] ?? null;
+            $calculadora->id_usuario = $data['id_usuario'];
+            Log::info('[EDITAR COTIZACIÓN] Excel regenerado exitosamente');
+            Log::info('[EDITAR COTIZACIÓN] URL Excel anterior: ' . $urlAnterior);
+            Log::info('[EDITAR COTIZACIÓN] URL Excel nueva: ' . $result['url']);
+            Log::info('[EDITAR COTIZACIÓN] Total FOB: ' . ($result['totalfob'] ?? 'N/A'));
+            Log::info('[EDITAR COTIZACIÓN] Total Impuestos: ' . ($result['totalimpuestos'] ?? 'N/A'));
+            Log::info('[EDITAR COTIZACIÓN] Logística: ' . ($result['logistica'] ?? 'N/A'));
+            Log::info('[EDITAR COTIZACIÓN] ID Usuario: ' . ($data['id_usuario'] ?? 'N/A'));
+
+            $calculadora->save();
+
+            // Igual que en crear + paso a cotizado: fechas/código en el xlsx y PDF alineado al archivo final
+            $this->aplicarPostProcesoExcelCotizacion($calculadora);
 
             Log::info('[DEBUG CALCULADORA UPDATE] RESULTADO FINAL PRE-COMMIT', [
                 'calculadora_id' => $calculadora->id,
                 'estado_despues' => $this->buildDebugSnapshot($calculadora),
             ]);
 
-            // Sincronizar vendedor y URL en la cotización vinculada siempre (también si falló regenerar Excel)
+            // Sincronizar vendedor y URL en la cotización vinculada
             if ($calculadora->id_cotizacion) {
                 $cotHeader = [
                     'id_usuario' => $calculadora->id_usuario,
@@ -1156,7 +1137,7 @@ class CalculadoraImportacionService
             $sumColumn = $getColumnLetter($initialColumnIndex + $totalProductos - 1);
 
             $indexProducto = 1;
-            $startRowProducto = 38;
+            $startRowProducto = 46;
             $currentRowProducto = $startRowProducto;
 
             // ✅ SOLUCIÓN CRÍTICA: Eliminar TODOS los comentarios de AMBAS hojas
@@ -1553,6 +1534,47 @@ class CalculadoraImportacionService
     }
 
     /**
+     * Tras generar el Excel base: fechas de contenedor y código en D7 (si aplica) y regenerar boleta desde el xlsx final.
+     */
+    private function aplicarPostProcesoExcelCotizacion(CalculadoraImportacion $calculadora): void
+    {
+        $calculadora->refresh();
+        if ($calculadora->url_cotizacion && $calculadora->id_carga_consolidada_contenedor) {
+            app(CalculadoraImportacionExcelService::class)->modificarExcelConFechas($calculadora);
+        }
+        $calculadora->refresh();
+        if ($calculadora->url_cotizacion) {
+            $boletaInfo = $this->regenerarBoletaPdf($calculadora);
+            if ($boletaInfo && !empty($boletaInfo['url'])) {
+                $calculadora->url_cotizacion_pdf = $boletaInfo['url'];
+                $calculadora->save();
+            }
+        }
+    }
+
+    /**
+     * Asigna cod_cotizacion correlativo si está vacío (misma regla que CalculadoraImportacionController::changeEstado).
+     */
+    private function asignarCodCotizacionSiFalta(CalculadoraImportacion $calculadora): void
+    {
+        if (!empty($calculadora->cod_cotizacion)) {
+            return;
+        }
+        $lastCotizacion = CalculadoraImportacion::where('cod_cotizacion', 'like', 'CO%')
+            ->where('id', '!=', $calculadora->id)
+            ->orderBy('cod_cotizacion', 'desc')
+            ->first();
+
+        $lastSequentialNumber = 0;
+        if ($lastCotizacion && preg_match('/(\d{4})$/', $lastCotizacion->cod_cotizacion, $matches)) {
+            $lastSequentialNumber = (int) $matches[1];
+        }
+        $newSequentialNumber = $lastSequentialNumber ? $lastSequentialNumber + 1 : 1;
+        $calculadora->cod_cotizacion = 'CO' . date('m') . date('y') . str_pad((string) $newSequentialNumber, 4, '0', STR_PAD_LEFT);
+        $calculadora->save();
+    }
+
+    /**
      * Actualizar estado de una calculadora
      */
     public function actualizarEstado(int $id, string $estado): bool
@@ -1566,7 +1588,31 @@ class CalculadoraImportacionService
             throw new \Exception('Calculadora no encontrada');
         }
 
-        return $calculadora->update(['estado' => $estado]);
+        if ($estado === CalculadoraImportacion::ESTADO_COTIZADO && $calculadora->estado !== CalculadoraImportacion::ESTADO_COTIZADO) {
+            $this->asignarCodCotizacionSiFalta($calculadora);
+            $calculadora->estado = CalculadoraImportacion::ESTADO_COTIZADO;
+            $calculadora->save();
+
+            $result = $this->regenerarExcelDesdeCalculadora($calculadora->fresh());
+            if (!$result || empty($result['url'])) {
+                throw new \Exception('No se pudo regenerar el archivo Excel al pasar a cotizado');
+            }
+
+            $this->aplicarPostProcesoExcelCotizacion($calculadora->fresh());
+
+            $calc = $calculadora->fresh();
+            if ($calc->id_cotizacion && $calc->url_cotizacion) {
+                Cotizacion::where('id', $calc->id_cotizacion)->update([
+                    'cotizacion_file_url' => $calc->url_cotizacion,
+                    'id_usuario' => $calc->id_usuario,
+                    'from_calculator' => true,
+                ]);
+            }
+
+            return true;
+        }
+
+        return (bool) $calculadora->update(['estado' => $estado]);
     }
 
     /**
@@ -1947,7 +1993,7 @@ class CalculadoraImportacionService
             // Calcular montototal en PHP (J43 tiene #REF! en el template)
             
             Log::info(json_encode($data));
-            $i = 38; // Inicio de filas de ítems en la plantilla Excel
+            $i = 47; // Inicio de filas de ítems en la plantilla Excel
             $items = [];
             // Incluir columnas A y B: en celdas fusionadas "TOTAL" puede quedar solo en A y B vacía;
             // además getHighestDataRow('B') puede quedar por debajo de la fila del total.
