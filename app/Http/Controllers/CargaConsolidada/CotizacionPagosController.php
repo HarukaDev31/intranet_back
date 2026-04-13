@@ -10,8 +10,11 @@ use App\Models\Usuario;
 use Illuminate\Support\Facades\DB;
 use Tymon\JWTAuth\Facades\JWTAuth;
 use Illuminate\Support\Facades\Log;
+//USE FILE TRAIT
+use App\Traits\FileTrait;
 class CotizacionPagosController extends Controller
 {
+    use FileTrait;
     private $table_contenedor_cotizacion = "contenedor_consolidado_cotizacion";
     private $table_contenedor_tipo_cliente = "contenedor_consolidado_tipo_cliente";
     private $table_contenedor_consolidado_cotizacion_coordinacion_pagos = "contenedor_consolidado_cotizacion_coordinacion_pagos";
@@ -382,7 +385,7 @@ class CotizacionPagosController extends Controller
                     'status' => $pago->status ?? 'PENDIENTE',
                     'is_confirmed' => $pago->is_confirmed ?? false,
                     'banco' => $this->cleanText($pago->banco ?? ''),
-                    'voucher_url' => $pago->voucher_url ?? null
+                    'voucher_url' => $this->generateImageUrl($pago->voucher_url ?? null)
                 ];
             })->toArray();
 
