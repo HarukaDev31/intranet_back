@@ -1947,14 +1947,38 @@ class CalculadoraImportacionService
             // Calcular montototal en PHP (J43 tiene #REF! en el template)
             
             Log::info(json_encode($data));
-            $i = 47; // Inicio de productos
+            $i = 47; // Inicio de zona de productos (puede haber filas de aviso antes de la tabla)
             $items = [];
-            $highestRow = (int) $sheet->getHighestDataRow('B');
-            while ($i <= $highestRow) {
-                $currentCellB = strtoupper(trim((string) $sheet->getCell('B' . $i)->getCalculatedValue()));
-                if ($currentCellB === 'TOTAL') {
+            // Incluir columnas A y B: en celdas fusionadas "TOTAL" puede quedar solo en A y B vacía;
+            // además getHighestDataRow('B') puede quedar por debajo de la fila del total.
+            $maxRow = max(
+                (int) $sheet->getHighestDataRow('A'),
+                (int) $sheet->getHighestDataRow('B'),
+                (int) $sheet->getHighestDataRow()
+            );
+            while ($i <= $maxRow) {
+                $valA = $sheet->getCell('A' . $i)->getCalculatedValue();
+                $valB = $sheet->getCell('B' . $i)->getCalculatedValue();
+                $normA = strtoupper(trim(preg_replace('/\s+/u', ' ', (string) $valA)));
+                $normB = strtoupper(trim(preg_replace('/\s+/u', ' ', (string) $valB)));
+
+                // Fin de tabla: TOTAL en B (pedido) o en A (fusiones / plantillas antiguas)
+                if ($normB === 'TOTAL' || $normA === 'TOTAL') {
                     break;
                 }
+
+                // Filas vacías
+                if ($normA === '' && $normB === '') {
+                    $i++;
+                    continue;
+                }
+
+                // Aviso legal u otras filas que no son ítems (ej. "*No se emite comprobante...")
+                if (is_string($valA) && stripos($valA, 'No se emite comprobante') !== false) {
+                    $i++;
+                    continue;
+                }
+
                 //remove format to string
                 $item = [
                     "index" => $sheet->getCell('A' . $i)->getCalculatedValue(), // B -> A
