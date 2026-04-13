@@ -1966,7 +1966,6 @@ class CalculadoraImportacionService
                     "total" => round($this->getCellValueAsFloat($sheet, 'I' . $i), 2), // J -> I
                     "preciounitpen" => number_format(round($this->getCellValueAsFloat($sheet, 'J' . $i), 2), 2, '.', ','), // K -> J
                 ];
-                Log::info(json_encode($item));
                 $items[] = $item;
                 $i++;
             }
