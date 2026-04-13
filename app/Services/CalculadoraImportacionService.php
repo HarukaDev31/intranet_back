@@ -1949,8 +1949,13 @@ class CalculadoraImportacionService
             Log::info(json_encode($data));
             $i = 47; // startRowProducto — los productos siempre se insertan en fila 46+
             $items = [];
-
-            while ($sheet->getCell('A' . $i)->getValue() != 'TOTAL') {
+            $totalCellA = $sheet->getCell('A' . $i)->getValue();
+            $totalCellB = $sheet->getCell('B' . $i)->getValue();
+            $totalValue = $sheet->getCell('B' . $i)->getCalculatedValue();
+            Log::info('totalCellA: ' . $totalCellA);
+            Log::info('totalCellB: ' . $totalCellB);
+            Log::info('totalValue: ' . $totalValue);
+            while ($totalCellA != 'TOTAL' || $totalCellB != 'TOTAL') {
                 //remove format to string
                 $item = [
                     "index" => $sheet->getCell('A' . $i)->getCalculatedValue(), // B -> A
@@ -2182,6 +2187,7 @@ class CalculadoraImportacionService
         try {
             $cell = $sheet->getCell($cellReference);
             $value = $cell->getCalculatedValue();
+            Log::info("valor de la celda: " . $value);
 
             // Si la celda está vacía o es null
             if ($value === null || $value === '') {
