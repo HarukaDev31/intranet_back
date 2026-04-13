@@ -1546,18 +1546,19 @@ class CalculadoraImportacionService
         if ($calculadora->url_cotizacion) {
             $boletaInfo = $this->regenerarBoletaPdf($calculadora);
             if ($boletaInfo && !empty($boletaInfo['url'])) {
-                $calculadora->url_cotizacion_pdf = $boletaInfo['url'];
-                $calculadora->save();
+                $calculadora->update(['url_cotizacion_pdf' => $boletaInfo['url']]);
             }
         }
     }
 
     /**
-     * Asigna cod_cotizacion correlativo si está vacío (misma regla que CalculadoraImportacionController::changeEstado).
+     * Asigna cod_cotizacion correlativo solo si no existe en BD.
+     * Nunca sobrescribe un código ya guardado (regeneraciones COTIZADO → COTIZADO incluidas).
      */
     private function asignarCodCotizacionSiFalta(CalculadoraImportacion $calculadora): void
     {
-        if (!empty($calculadora->cod_cotizacion)) {
+        $calculadora->refresh();
+        if (trim((string) ($calculadora->cod_cotizacion ?? '')) !== '') {
             return;
         }
         $lastCotizacion = CalculadoraImportacion::where('cod_cotizacion', 'like', 'CO%')
@@ -1575,6 +1576,34 @@ class CalculadoraImportacionService
     }
 
     /**
+     * Regenera Excel + boleta desde la BD para una calculadora cotizada (fechas D7, PDF).
+     * Solo asigna cod_cotizacion si aún no existe; nunca lo cambia si ya hay uno.
+     *
+     * @throws \Exception si no se puede generar el Excel
+     */
+    public function regenerarArchivosCotizadoDesdeBd(CalculadoraImportacion $calculadora): void
+    {
+        $this->asignarCodCotizacionSiFalta($calculadora);
+        $calculadora->refresh();
+
+        $result = $this->regenerarExcelDesdeCalculadora($calculadora->fresh());
+        if (!$result || empty($result['url'])) {
+            throw new \Exception('No se pudo regenerar el archivo Excel al sincronizar cotizado');
+        }
+
+        $this->aplicarPostProcesoExcelCotizacion($calculadora->fresh());
+
+        $calc = $calculadora->fresh();
+        if ($calc->id_cotizacion && $calc->url_cotizacion) {
+            Cotizacion::where('id', $calc->id_cotizacion)->update([
+                'cotizacion_file_url' => $calc->url_cotizacion,
+                'id_usuario' => $calc->id_usuario,
+                'from_calculator' => true,
+            ]);
+        }
+    }
+
+    /**
      * Actualizar estado de una calculadora
      */
     public function actualizarEstado(int $id, string $estado): bool
@@ -1588,26 +1617,13 @@ class CalculadoraImportacionService
             throw new \Exception('Calculadora no encontrada');
         }
 
-        if ($estado === CalculadoraImportacion::ESTADO_COTIZADO && $calculadora->estado !== CalculadoraImportacion::ESTADO_COTIZADO) {
-            $this->asignarCodCotizacionSiFalta($calculadora);
-            $calculadora->estado = CalculadoraImportacion::ESTADO_COTIZADO;
-            $calculadora->save();
-
-            $result = $this->regenerarExcelDesdeCalculadora($calculadora->fresh());
-            if (!$result || empty($result['url'])) {
-                throw new \Exception('No se pudo regenerar el archivo Excel al pasar a cotizado');
+        if ($estado === CalculadoraImportacion::ESTADO_COTIZADO) {
+            if ($calculadora->estado !== CalculadoraImportacion::ESTADO_COTIZADO) {
+                $calculadora->estado = CalculadoraImportacion::ESTADO_COTIZADO;
+                $calculadora->save();
             }
 
-            $this->aplicarPostProcesoExcelCotizacion($calculadora->fresh());
-
-            $calc = $calculadora->fresh();
-            if ($calc->id_cotizacion && $calc->url_cotizacion) {
-                Cotizacion::where('id', $calc->id_cotizacion)->update([
-                    'cotizacion_file_url' => $calc->url_cotizacion,
-                    'id_usuario' => $calc->id_usuario,
-                    'from_calculator' => true,
-                ]);
-            }
+            $this->regenerarArchivosCotizadoDesdeBd($calculadora->fresh());
 
             return true;
         }
@@ -1818,15 +1834,18 @@ class CalculadoraImportacionService
             return null;
         }
 
-        $calculadora->url_cotizacion = $result['url'];
-        $calculadora->total_fob = $result['totalfob'] ?? $calculadora->total_fob;
-        $calculadora->total_impuestos = $result['totalimpuestos'] ?? $calculadora->total_impuestos;
-        $calculadora->logistica = $result['logistica'] ?? $calculadora->logistica;
-        $calculadora->cargos_extra = $this->valorCargosExtraDesdeCotizacionInicial($result) ?? $calculadora->cargos_extra;
+        // update() solo con columnas del archivo: no toca cod_cotizacion ni otros campos aunque el modelo esté sucio en memoria
+        $payload = [
+            'url_cotizacion' => $result['url'],
+            'total_fob' => $result['totalfob'] ?? $calculadora->total_fob,
+            'total_impuestos' => $result['totalimpuestos'] ?? $calculadora->total_impuestos,
+            'logistica' => $result['logistica'] ?? $calculadora->logistica,
+            'cargos_extra' => $this->valorCargosExtraDesdeCotizacionInicial($result) ?? $calculadora->cargos_extra,
+        ];
         if (!empty($result['boleta']['url'])) {
-            $calculadora->url_cotizacion_pdf = $result['boleta']['url'];
+            $payload['url_cotizacion_pdf'] = $result['boleta']['url'];
         }
-        $calculadora->save();
+        $calculadora->update($payload);
 
         Log::info('[REGENERAR EXCEL] Excel recreado exitosamente', ['calculadora_id' => $calculadora->id, 'url' => $result['url']]);
         return $result;
