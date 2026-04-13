@@ -319,6 +319,7 @@ class CotizacionController extends Controller
                     'from_calculator' => $cotizacion->from_calculator,
                     'cod_contract_calculator' => optional($cotizacion->calculadoraImportacion)->cod_cotizacion,
                     'tarifa_descuento' => optional($cotizacion->calculadoraImportacion)->tarifa_descuento,
+                    'cargos_extra' => optional($cotizacion->calculadoraImportacion)->cargos_extra,
                     'estado_permiso_por_tipo' => $estadoPermisoPorCotizacion[$cotizacion->id] ?? [],
                     'id_tramite' => $idTramitePorCotizacion[$cotizacion->id] ?? null,
                 ];
@@ -430,12 +431,12 @@ class CotizacionController extends Controller
                     AND deleted_at IS NULL
                 ) as cbm_total_peru'),
                 DB::raw('(
-                    SELECT COALESCE(SUM(volumen), 0)
-                    FROM contenedor_consolidado_cotizacion
-                    WHERE id_contenedor = ' . $idContenedor . '
-                    AND estado_cotizador = "CONFIRMADO"
-                    AND es_imo = 1
-                    AND deleted_at IS NULL
+                    SELECT COALESCE(SUM(cip.cbm), 0)
+                    FROM calculadora_importacion AS ci
+                    INNER JOIN calculadora_importacion_proveedores AS cip ON ci.id = cip.id_calculadora_importacion
+                    WHERE ci.id_carga_consolidada_contenedor = ' . (int) $idContenedor . '
+                    AND ci.es_imo = 1
+                    AND ci.estado = \'CONFIRMADO\'
                 ) as cbm_total_imo'),
                 DB::raw('(
                     SELECT COALESCE(SUM(volumen), 0)
