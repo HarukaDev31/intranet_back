@@ -1947,15 +1947,14 @@ class CalculadoraImportacionService
             // Calcular montototal en PHP (J43 tiene #REF! en el template)
             
             Log::info(json_encode($data));
-            $i = 47; // startRowProducto — los productos siempre se insertan en fila 46+
+            $i = 47; // Inicio de productos
             $items = [];
-            $totalCellA = $sheet->getCell('A' . $i)->getValue();
-            $totalCellB = $sheet->getCell('B' . $i)->getValue();
-            $totalValue = $sheet->getCell('B' . $i)->getCalculatedValue();
-            Log::info('totalCellA: ' . $totalCellA);
-            Log::info('totalCellB: ' . $totalCellB);
-            Log::info('totalValue: ' . $totalValue);
-            while ($totalCellA != 'TOTAL' || $totalCellB != 'TOTAL') {
+            $highestRow = (int) $sheet->getHighestDataRow('B');
+            while ($i <= $highestRow) {
+                $currentCellB = strtoupper(trim((string) $sheet->getCell('B' . $i)->getCalculatedValue()));
+                if ($currentCellB === 'TOTAL') {
+                    break;
+                }
                 //remove format to string
                 $item = [
                     "index" => $sheet->getCell('A' . $i)->getCalculatedValue(), // B -> A
