@@ -2187,7 +2187,6 @@ class CalculadoraImportacionService
         try {
             $cell = $sheet->getCell($cellReference);
             $value = $cell->getCalculatedValue();
-            Log::info("valor de la celda: " . $value);
 
             // Si la celda está vacía o es null
             if ($value === null || $value === '') {
