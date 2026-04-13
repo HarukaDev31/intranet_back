@@ -155,6 +155,7 @@ class CalculadoraImportacionService
             $calculadora->total_fob = $totalFob;
             $calculadora->total_impuestos = $totalImpuestos;
             $calculadora->logistica = $logistica;
+            $calculadora->cargos_extra = $this->valorCargosExtraDesdeCotizacionInicial($result);
 
             // Guardar URL del PDF si se generó la boleta
             if ($boletaInfo) {
@@ -429,12 +430,15 @@ class CalculadoraImportacionService
             // Recalcular totales
             $totales = $this->calcularTotales($calculadora);
 
-            // Actualizar totales en la calculadora
+            // Actualizar totales en la calculadora (cargos_extra = mismo criterio que J36 del Excel)
+            $cargosExtraAutocalc = (float) ($calculadora->tarifa_total_extra_proveedor ?? 0)
+                + (float) ($calculadora->tarifa_total_extra_item ?? 0);
             $calculadora->update([
                 'total_fob' => $totales['totalFOB'] ?? 0,
                 'total_impuestos' => $totales['totalImpuestos'] ?? 0,
                 //extra proveedor + extra item
                 'logistica' => $totales['logistica'] ?? 0,
+                'cargos_extra' => $cargosExtraAutocalc,
             ]);
 
             // Preparar datos para regenerar Excel y boleta
@@ -477,6 +481,7 @@ class CalculadoraImportacionService
                 $calculadora->total_fob = $result['totalfob'] ?? $calculadora->total_fob;
                 $calculadora->total_impuestos = $result['totalimpuestos'] ?? $calculadora->total_impuestos;
                 $calculadora->logistica = $result['logistica'] ?? $calculadora->logistica;
+                $calculadora->cargos_extra = $this->valorCargosExtraDesdeCotizacionInicial($result) ?? $calculadora->cargos_extra;
                 $calculadora->url_cotizacion_pdf = $result['boleta']['url'] ?? null;
                 $calculadora->id_usuario = $data['id_usuario'];
                 Log::info('[EDITAR COTIZACIÓN] Excel regenerado exitosamente');
@@ -1007,6 +1012,24 @@ class CalculadoraImportacionService
     }
 
     /**
+     * Valor J36 (cargos extra proveedor + ítem) desde el resultado de crearCotizacionInicial.
+     *
+     * @param  array<string, mixed>|null  $result
+     */
+    private function valorCargosExtraDesdeCotizacionInicial(?array $result): ?float
+    {
+        if (!is_array($result)) {
+            return null;
+        }
+        $v = $result['cargosExtra'] ?? $result['cargosExtras'] ?? null;
+        if ($v === null || $v === '') {
+            return null;
+        }
+
+        return is_numeric($v) ? (float) $v : null;
+    }
+
+    /**
      * Lee la plantilla de cotización inicial desde assets/templates
      * @param \Illuminate\Http\Request $request
      * @return array|string Datos de la plantilla o mensaje de error
@@ -1054,6 +1077,8 @@ class CalculadoraImportacionService
                     'totalfob' => null,
                     'totalimpuestos' => null,
                     'logistica' => null,
+                    'cargosExtra' => null,
+                    'cargosExtras' => null,
                     'boleta' => null
                 ];
             }
@@ -1455,6 +1480,8 @@ class CalculadoraImportacionService
                         'totalfob' => null,
                         'totalimpuestos' => null,
                         'logistica' => null,
+                        'cargosExtra' => null,
+                        'cargosExtras' => null,
                         'boleta' => null
                     ];
                 }
@@ -1466,6 +1493,8 @@ class CalculadoraImportacionService
                         'totalfob' => null,
                         'totalimpuestos' => null,
                         'logistica' => null,
+                        'cargosExtra' => null,
+                        'cargosExtras' => null,
                         'boleta' => null
                     ];
                 }
@@ -1484,6 +1513,7 @@ class CalculadoraImportacionService
                 $j30 = $sheetResumen->getCell('J30')->getCalculatedValue();
                 $j31 = $sheetResumen->getCell('J31')->getCalculatedValue();
                 $j32 = $sheetResumen->getCell('J32')->getCalculatedValue();
+                $j36 = $sheetResumen->getCell('J36')->getCalculatedValue();
                 $j41 = $sheetResumen->getCell('J41')->getCalculatedValue();
                 $logistica = $j41 > 0 ? $j41 : 0;
 
@@ -1492,6 +1522,8 @@ class CalculadoraImportacionService
                     'totalfob' => $totalFob,
                     'totalimpuestos' => $totalImpuestos,
                     'logistica' => $logistica,
+                    'cargosExtra' => $j36,
+                    'cargosExtras' => $j36,
                     'boleta' => $boletaInfo
                 ];
             } catch (\Exception $e) {
@@ -1501,6 +1533,8 @@ class CalculadoraImportacionService
                     'totalfob' => null,
                     'totalimpuestos' => null,
                     'logistica' => null,
+                    'cargosExtra' => null,
+                    'cargosExtras' => null,
                     'boleta' => null
                 ];
             }
@@ -1511,7 +1545,9 @@ class CalculadoraImportacionService
                 'url' => null,
                 'totalfob' => null,
                 'totalimpuestos' => null,
-                'logistica' => null
+                'logistica' => null,
+                'cargosExtra' => null,
+                'cargosExtras' => null,
             ];
         }
     }
@@ -1740,6 +1776,7 @@ class CalculadoraImportacionService
         $calculadora->total_fob = $result['totalfob'] ?? $calculadora->total_fob;
         $calculadora->total_impuestos = $result['totalimpuestos'] ?? $calculadora->total_impuestos;
         $calculadora->logistica = $result['logistica'] ?? $calculadora->logistica;
+        $calculadora->cargos_extra = $this->valorCargosExtraDesdeCotizacionInicial($result) ?? $calculadora->cargos_extra;
         if (!empty($result['boleta']['url'])) {
             $calculadora->url_cotizacion_pdf = $result['boleta']['url'];
         }
@@ -2145,7 +2182,6 @@ class CalculadoraImportacionService
         try {
             $cell = $sheet->getCell($cellReference);
             $value = $cell->getCalculatedValue();
-            Log::info("valor de la celda: " . $value);
 
             // Si la celda está vacía o es null
             if ($value === null || $value === '') {
