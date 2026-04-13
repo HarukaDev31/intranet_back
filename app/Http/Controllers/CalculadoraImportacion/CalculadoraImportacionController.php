@@ -1076,36 +1076,11 @@ class CalculadoraImportacionController extends Controller
             $calculadora->estado = $estado;
 
             if ($estado === 'COTIZADO') {
-                //validate if cod_cotizacion is not null
-                if (!$calculadora->cod_cotizacion) {
-                    $lastCotizacion = CalculadoraImportacion::where('cod_cotizacion', 'like', 'CO%')
-                        ->where('id', '!=', $id)
-                        ->orderBy('cod_cotizacion', 'desc')
-                        ->first();
+                $calculadora->save();
 
-                    $lastSequentialNumber = 0;
-                    if ($lastCotizacion && preg_match('/(\d{4})$/', $lastCotizacion->cod_cotizacion, $matches)) {
-                        $lastSequentialNumber = intval($matches[1]);
-                    }
-                    $newSequentialNumber = $lastSequentialNumber ? $lastSequentialNumber + 1 : 1;
-                    $calculadora->cod_cotizacion = 'CO' . date('m') . date('y') . str_pad($newSequentialNumber, 4, '0', STR_PAD_LEFT);
-
-                    $calculadora->save();
-                }
-
-                // Modificar el Excel para agregar fechas de pago y código de cotización (D7)
-                if ($calculadora->url_cotizacion && $calculadora->id_carga_consolidada_contenedor) {
-                    $this->modificarExcelConFechas($calculadora);
-                }
-
-                // Regenerar boleta PDF con el código de cotización actualizado en el Excel (PLANTILLA_COTIZACION_INICIAL_CALCULADORA.html)
-                if ($calculadora->url_cotizacion) {
-                    $boletaInfo = $this->calculadoraImportacionService->regenerarBoletaPdf($calculadora);
-                    if ($boletaInfo && !empty($boletaInfo['url'])) {
-                        $calculadora->url_cotizacion_pdf = $boletaInfo['url'];
-                        Log::info('Boleta PDF regenerada al pasar a COTIZADO', ['calculadora_id' => $calculadora->id]);
-                    }
-                }
+                // Regenerar siempre (primera vez o ya COTIZADO): Excel desde BD + fechas/código + boleta
+                $this->calculadoraImportacionService->regenerarArchivosCotizadoDesdeBd($calculadora->fresh());
+                $calculadora->refresh();
 
                 if (!$calculadora->id_cotizacion && $calculadora->id_carga_consolidada_contenedor && $calculadora->url_cotizacion) {
                     // Descargar el archivo Excel desde la URL
