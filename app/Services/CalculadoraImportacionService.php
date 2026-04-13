@@ -1137,9 +1137,8 @@ class CalculadoraImportacionService
             $sumColumn = $getColumnLetter($initialColumnIndex + $totalProductos - 1);
 
             $indexProducto = 1;
-            $startRowProducto = 46;
+            $startRowProducto = 47;
             $currentRowProducto = $startRowProducto;
-
             // ✅ SOLUCIÓN CRÍTICA: Eliminar TODOS los comentarios de AMBAS hojas
             foreach ([$sheetResumen, $sheetCalculos] as $sheet) {
                 $comments = $sheet->getComments();
