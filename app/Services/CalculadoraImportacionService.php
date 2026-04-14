@@ -2173,7 +2173,7 @@ class CalculadoraImportacionService
 
             // Guardar PDF en storage
             $timestamp = now()->format('Y_m_d_H_i_s');
-            $pdfFileName = "BOLETA_{$clienteInfo['nombre']}_{$timestamp}.pdf";
+            $pdfFileName = "COTIZACION_INICIAL_{$clienteInfo['nombre']}_{$timestamp}.pdf";
             $pdfPath = storage_path('app/public/boletas/' . $pdfFileName);
 
             // Crear directorio si no existe
