@@ -238,6 +238,15 @@ class Cotizacion extends Model
     {
         return $this->hasMany(Pago::class, 'id_cotizacion');
     }
+
+    /**
+     * Líneas de servicio delivery / montacarga (importes por concepto).
+     */
+    public function deliveryServicios()
+    {
+        return $this->hasMany(CotizacionDeliveryServicio::class, 'id_cotizacion', 'id');
+    }
+
     /**
      * Relación con CalculadoraImportacion (la calculadora tiene id_cotizacion -> esta cotización)
      */

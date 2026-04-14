@@ -160,23 +160,20 @@
   <body>
     <img class="water-mark" src="{{logo}}" />
 
-    <table class="table-header">
+    <table class="client-table">
       <tr>
-        <td  class="no-border"></td>
-        <td  class="no-border">
+        <td colspan="2" class="no-border" style="text-align: center; vertical-align: middle; padding: 8px 0;">
           <img src="{{logo}}" style="height: 100px;width: 100px;"/>
         </td>
-        <td class="no-border " style="padding: 0 50px;">
-          <h1  style="font-size:28px;margin:0;padding: 0;">PRO MUNDO COMEX S.A.C.</h1>
-          <h2   style="color:#e67e22;font-size: 25px;text-align: center;margin:0;padding: 0;"> RUC: 206124524321</h2>
+        <td class="no-border"></td>
+        <td colspan="2" class="no-border" style="text-align: center; vertical-align: middle; padding: 8px 0;">
+          <h1 style="font-size:20px;margin:0;padding: 0;">PRO MUNDO COMEX S.A.C.</h1>
+          <h2 style="color:#e67e22;font-size: 20px;text-align: center;margin:0;padding: 0;"> RUC: 206124524321</h2>
+          <h3 style="font-size:15px;padding: 0; text-align: center;">COTIZACION N° {{cod_contract}}</h3>
         </td>
         <td class="no-border"></td>
-        <td class="no-border"></td>
+        <td colspan="2" class="no-border"></td>
       </tr>
-    </table>
-        
-    </table>
-    <table class="client-table">
       <tr>
         <td class="no-border">NOMBRE:</td>
         <td class="highlight no-border">{{name}}</td>
@@ -186,7 +183,7 @@
         <td class="no-border"></td>
 
         <td class="no-border">N° CAJAS:</td>
-        <td class="highlight no-border">0</td>
+        <td class="highlight no-border">{{qtycajas}}</td>
       </tr>
       <tr>
         <td class="no-border">APELLIDO:</td>
@@ -227,32 +224,31 @@
           CALCULO DE BASE IMPONIBLE
         </th>
         <th class="no-horizontal-border header"></th>
-        <th class="header center no no-left-border">MONTO</th>
+        <th class="header center no-left-border">MONTO</th>
         <th class="header center no-left-border">MONEDA</th>
       </tr>
       <tr>
         <td colspan="3" class="no-right-border">VALOR DE CARGA</td>
         <th class="no-horizontal-border"></th>
-
         <td class="right no-left-border">$ {{valorcarga}}</td>
-
+        <td class="center no-left-border">USD</td>
+      </tr>
+      <tr>
+        <td colspan="3" class="no-right-border">COSTOS FOB</td>
+        <th class="no-horizontal-border"></th>
+        <td class="right no-left-border">$ {{costosfob}}</td>
         <td class="center no-left-border">USD</td>
       </tr>
       <tr class="bbottom">
         <td colspan="3">FLETE INTERNACIONAL + SEGURO</td>
         <td class="no-horizontal-border no-horizontal-border"></td>
-        <td class="no-horizontal-border right no-left-border">
-          $ {{fleteseguro}}
-        </td>
+        <td class="no-horizontal-border right no-left-border">$ {{fleteseguro}}</td>
         <td class="no-horizontal-border center no-left-border">USD</td>
       </tr>
-      <tr >
+      <tr>
         <td colspan="3"><strong>VALOR CIF</strong></td>
         <td class="no-horizontal-border no-horizontal-border"></td>
-
-        <td class="no-horizontal-border right">
-          <strong>$ {{valorcif}}</strong>
-        </td>
+        <td class="no-horizontal-border right"><strong>$ {{valorcif}}</strong></td>
         <td class="no-horizontal-border center">USD</td>
       </tr>
       <tr>
@@ -265,6 +261,12 @@
         <td colspan="3">ADVALOREM</td>
         <td class="no-horizontal-border center">{{advalorempercent}}%</td>
         <td class="no-horizontal-border right">$ {{advalorem}}</td>
+        <td class="no-horizontal-border center">USD</td>
+      </tr>
+      <tr>
+        <td colspan="3">ISC</td>
+        <td class="no-horizontal-border center">{{iscpercent}}%</td>
+        <td class="no-horizontal-border right">$ {{isc}}</td>
         <td class="no-horizontal-border center">USD</td>
       </tr>
       <tr>
@@ -283,13 +285,9 @@
       <tr class="btop">
         <td colspan="3" style="border-top: 1px solid #000;"><strong>SUB TOTAL</strong></td>
         <td class="no-border" style="border-top: 1px solid #000;"></td>
-          
-        </td >
-        <td style="border-top: 1px solid #000;" >
-          <strong>$ {{subtotal}}</strong></td>  
+        <td style="border-top: 1px solid #000;"><strong>$ {{subtotal}}</strong></td>
         <td class="no-horizontal-border center">USD</td>
       </tr>
-
       <tr>
         <td colspan="12" class="no-border" style="border: none!important;"></td>
       </tr>
@@ -309,40 +307,71 @@
         <td colspan="12" class=""></td>
       </tr>
       <tr>
-        <th colspan="3" class="resumen-header">RESUMEN DE COTIZACIÓN</th>
-        <th class="no-horizontal-border resumen-header"></th>
-
+        <th colspan="3" class="resumen-header">CALCULO DE SERVICIO DE IMPORTACIÓN</th>
+        <th class="no-horizontal-border resumen-header center">IGV</th>
         <th class="resumen-header center">MONTO</th>
         <th class="resumen-header center">MONEDA</th>
       </tr>
       <tr>
-        <td colspan="3">VALOR DE CARGA (PAGO AL PROVEEDOR)</td>
-        <th class="no-horizontal-border"></th>
-
-        <td class="no-horizontal-border right">$ {{valorcargaproveedor}}</td>
+        <td colspan="3">COSTOS FOB</td>
+        <td class="no-horizontal-border center">Gravado</td>
+        <td class="no-horizontal-border right">$ {{costosfob_svc}}</td>
         <td class="no-horizontal-border center">USD</td>
       </tr>
       <tr>
-        <td colspan="3">SERVICIO DE IMPORTACIÓN (ORIGEN - FLETE - DESTINO)</td>
+        <td colspan="3">FLETE INTERNACIONAL</td>
+        <td class="no-horizontal-border center">No gravado</td>
+        <td class="no-horizontal-border right">$ {{flete_svc}}</td>
+        <td class="no-horizontal-border center">USD</td>
+      </tr>
+      <tr>
+        <td colspan="3">COSTOS EN DESTINO</td>
+        <td class="no-horizontal-border center">Gravado</td>
+        <td class="no-horizontal-border right">$ {{costosendestino}}</td>
+        <td class="no-horizontal-border center">USD</td>
+      </tr>
+      <tr class="btop">
+        <td colspan="3"><strong>SUB TOTAL</strong></td>
+        <td class="no-horizontal-border"></td>
+        <td class="no-horizontal-border right"><strong>$ {{subtotal_svc}}</strong></td>
+        <td class="no-horizontal-border center">USD</td>
+      </tr>
+      <tr>
+        <td colspan="12" class="no-border" style="border: none!important;"></td>
+      </tr>
+      {{row_recargos}}
+      {{row_descuento_svc}}
+      <tr class="btop">
+        <td colspan="3"><strong>TOTAL</strong></td>
+        <td class="no-horizontal-border"></td>
+        <td class="no-horizontal-border right"><strong>$ {{total_svc}}</strong></td>
+        <td class="no-horizontal-border center">USD</td>
+      </tr>
+      <tr>
+        <td colspan="12" class=""></td>
+      </tr>
+      <tr>
+        <th colspan="3" class="resumen-header">RESUMEN DE COTIZACIÓN</th>
+        <th class="no-horizontal-border resumen-header"></th>
+        <th class="resumen-header center">MONTO</th>
+        <th class="resumen-header center">MONEDA</th>
+      </tr>
+      <tr>
+        <td colspan="3">SERVICIO DE IMPORTACIÓN</td>
         <th class="no-horizontal-border"></th>
-
         <td class="no-horizontal-border right">$ {{servicioimportacion}}</td>
         <td class="no-horizontal-border center">USD</td>
       </tr>
       <tr>
         <td colspan="3">IMPUESTOS</td>
         <th class="no-horizontal-border"></th>
-
         <td class="no-horizontal-border right">$ {{impuestos}}</td>
         <td class="no-horizontal-border center">USD</td>
       </tr>
       <tr class="btop">
         <td colspan="3"><strong>MONTO TOTAL</strong></td>
         <th class="no-horizontal-border"></th>
-
-        <td class="no-horizontal-border right">
-          <strong>$ {{montototal}}</strong>
-        </td>
+        <td class="no-horizontal-border right"><strong>$ {{montototal}}</strong></td>
         <td class="no-horizontal-border center">USD</td>
       </tr>
       <tr>

@@ -31,6 +31,35 @@ class EntregaController extends Controller
     private $CONCEPT_PAGO_IMPUESTOS = 2;
     private $CONCEPT_PAGO_DELIVERY = 3;
 
+    /** Líneas de servicio delivery / montacarga por cotización (1..N) */
+    private $table_delivery_servicio = 'contenedor_consolidado_cotizacion_delivery_servicio';
+
+    /**
+     * Sincroniza total_pago_delivery y tipo_servicio (primera línea) en contenedor_consolidado_cotizacion.
+     *
+     * @param int $idCotizacion
+     * @return void
+     */
+    private function syncParentFromDeliveryServicios($idCotizacion)
+    {
+        $idCotizacion = (int) $idCotizacion;
+        $sum = (float) DB::table($this->table_delivery_servicio)
+            ->where('id_cotizacion', $idCotizacion)
+            ->sum('importe');
+        $first = DB::table($this->table_delivery_servicio)
+            ->where('id_cotizacion', $idCotizacion)
+            ->orderBy('id')
+            ->first();
+        $update = ['total_pago_delivery' => $sum];
+        if ($first && in_array($first->tipo_servicio, ['DELIVERY', 'MONTACARGA'], true)) {
+            $update['tipo_servicio'] = $first->tipo_servicio;
+        }
+        DB::table('contenedor_consolidado_cotizacion')
+            ->where('id', $idCotizacion)
+            ->whereNull('deleted_at')
+            ->update($update);
+    }
+
     /**
      * Condición: registro en consolidado_comprobante_forms con destino_entrega informado.
      * Requiere alias CF en el query.
@@ -1185,11 +1214,18 @@ class EntregaController extends Controller
             }
         }
 
-        // Filtrar por tipo de servicio (DELIVERY o MONTACARGA)
+        // Filtrar por tipo de servicio (DELIVERY o MONTACARGA): legacy o líneas hijas
         if (!empty($filters['tipo_servicio'])) {
             $tipo = strtoupper(trim($filters['tipo_servicio']));
             if (in_array($tipo, ['DELIVERY', 'MONTACARGA'])) {
-                $query->where('CC.tipo_servicio', $tipo);
+                $t = $this->table_delivery_servicio;
+                $query->where(function ($q) use ($tipo, $t) {
+                    $q->where('CC.tipo_servicio', $tipo)
+                        ->orWhereRaw(
+                            "EXISTS (SELECT 1 FROM {$t} sds WHERE sds.id_cotizacion = CC.id AND sds.tipo_servicio = ?)",
+                            [$tipo]
+                        );
+                });
             }
         }
 
@@ -1560,11 +1596,18 @@ class EntregaController extends Controller
             }
         }
 
-        // Filtrar por tipo de servicio (DELIVERY o MONTACARGA)
+        // Filtrar por tipo de servicio (DELIVERY o MONTACARGA): legacy o líneas hijas
         if (!empty($filters['tipo_servicio'])) {
             $tipo = strtoupper(trim($filters['tipo_servicio']));
             if (in_array($tipo, ['DELIVERY', 'MONTACARGA'])) {
-                $query->where('CC.tipo_servicio', $tipo);
+                $t = $this->table_delivery_servicio;
+                $query->where(function ($q) use ($tipo, $t) {
+                    $q->where('CC.tipo_servicio', $tipo)
+                        ->orWhereRaw(
+                            "EXISTS (SELECT 1 FROM {$t} sds WHERE sds.id_cotizacion = CC.id AND sds.tipo_servicio = ?)",
+                            [$tipo]
+                        );
+                });
             }
         }
 
@@ -1996,8 +2039,25 @@ class EntregaController extends Controller
                 DB::raw("CASE WHEN P.id IS NOT NULL THEN P.r_doc WHEN L.id IS NOT NULL THEN L.driver_doc ELSE NULL END as documento"),
                 // Para razón social: usar r_name para provincia y driver_name para lima
                 DB::raw("CASE WHEN P.id IS NOT NULL THEN P.r_name WHEN L.id IS NOT NULL THEN L.drver_name ELSE NULL END as razon_social"),
-                // Subquery para obtener pagos de DELIVERY
-                DB::raw("CC.total_pago_delivery as importe"),
+                DB::raw("COALESCE((
+                    SELECT SUM(s3.importe) FROM {$this->table_delivery_servicio} s3
+                    WHERE s3.id_cotizacion = CC.id
+                ), CC.total_pago_delivery, 0) as importe"),
+                DB::raw("(
+                    SELECT IFNULL(JSON_ARRAYAGG(
+                        JSON_OBJECT(
+                            'id', j.id,
+                            'tipo_servicio', j.tipo_servicio,
+                            'importe', j.importe
+                        )
+                    ), JSON_ARRAY())
+                    FROM (
+                        SELECT s6.id, s6.tipo_servicio, s6.importe
+                        FROM {$this->table_delivery_servicio} s6
+                        WHERE s6.id_cotizacion = CC.id
+                        ORDER BY s6.id
+                    ) j
+                ) AS delivery_servicios_json"),
                 DB::raw("(
                     SELECT IFNULL(SUM(cccp.monto), 0)
                     FROM {$this->table_contenedor_consolidado_cotizacion_coordinacion_pagos} cccp
@@ -2174,6 +2234,27 @@ class EntregaController extends Controller
             $item->fecha = $item->last_delivery_payment_date ?? $item->fecha;
             $anio = !empty($item->f_inicio) ? date('Y', strtotime($item->f_inicio)) : date('Y');
             $item->carga_display = '#' . $item->carga . ' - ' . $anio;
+
+            $item->delivery_servicios = [];
+            if (isset($item->delivery_servicios_json) && $item->delivery_servicios_json !== null) {
+                try {
+                    $raw = $item->delivery_servicios_json;
+                    $decoded = is_string($raw) ? json_decode($raw, true) : (is_array($raw) ? $raw : []);
+                    if (is_array($decoded)) {
+                        foreach ($decoded as $idx => $svc) {
+                            if (is_array($svc)) {
+                                $decoded[$idx]['id'] = isset($svc['id']) ? (int) $svc['id'] : null;
+                                $decoded[$idx]['tipo_servicio'] = isset($svc['tipo_servicio']) ? $svc['tipo_servicio'] : 'DELIVERY';
+                                $decoded[$idx]['importe'] = isset($svc['importe']) ? (float) $svc['importe'] : 0;
+                            }
+                        }
+                        $item->delivery_servicios = $decoded;
+                    }
+                } catch (\Exception $e) {
+                    $item->delivery_servicios = [];
+                }
+            }
+            unset($item->delivery_servicios_json);
         }
         $pageSubtotalDelivery = array_sum(array_map(function ($item) { return (float) $item->total_pago_delivery; }, $data->items()));
         return response()->json([
@@ -2274,16 +2355,45 @@ class EntregaController extends Controller
                 DB::raw("CASE WHEN P.id IS NOT NULL THEN P.r_doc WHEN L.id IS NOT NULL THEN L.driver_doc ELSE NULL END as documento"),
                 // Para razón social: usar r_name para provincia y driver_name para lima
                 DB::raw("CASE WHEN P.id IS NOT NULL THEN P.r_name WHEN L.id IS NOT NULL THEN L.drver_name ELSE NULL END as razon_social"),
-                // Tipo de servicio (DELIVERY o MONTACARGA)
-                DB::raw("COALESCE(CC.tipo_servicio, 'DELIVERY') as tipo_servicio"),
+                // Tipo de servicio (primera línea de servicios o columna legacy)
+                DB::raw("COALESCE((
+                    SELECT s2.tipo_servicio FROM {$this->table_delivery_servicio} s2
+                    WHERE s2.id_cotizacion = CC.id ORDER BY s2.id ASC LIMIT 1
+                ), CC.tipo_servicio, 'DELIVERY') as tipo_servicio"),
                 // Datos de entrega desde la asignación (fecha y hora) - se traen para todos, el frontend decide mostrarlos
                 DB::raw("CASE WHEN UR2.id_date IS NOT NULL THEN CONCAT(D2.year, '-', LPAD(D2.month, 2, '0'), '-', LPAD(D2.day, 2, '0')) ELSE NULL END as delivery_date"),
                 DB::raw('R2.start_time as delivery_start_time'),
                 DB::raw('R2.end_time as delivery_end_time'),
                 DB::raw('UR2.id_date as delivery_date_id'),
                 DB::raw('UR2.id_range_date as delivery_range_id'),
-                // Subquery para obtener pagos de DELIVERY
-                DB::raw("CC.total_pago_delivery as importe"),
+                // Importe total delivery = suma de líneas de servicio o legacy
+                DB::raw("COALESCE((
+                    SELECT SUM(s3.importe) FROM {$this->table_delivery_servicio} s3
+                    WHERE s3.id_cotizacion = CC.id
+                ), CC.total_pago_delivery, 0) as importe"),
+                DB::raw("COALESCE((
+                    SELECT SUM(s4.importe) FROM {$this->table_delivery_servicio} s4
+                    WHERE s4.id_cotizacion = CC.id
+                ), CC.total_pago_delivery, 0) as total_importe_delivery"),
+                DB::raw("COALESCE((
+                    SELECT SUM(s5.importe) FROM {$this->table_delivery_servicio} s5
+                    WHERE s5.id_cotizacion = CC.id
+                ), CC.total_pago_delivery, 0) as total_importe_servicios"),
+                DB::raw("(
+                    SELECT IFNULL(JSON_ARRAYAGG(
+                        JSON_OBJECT(
+                            'id', j.id,
+                            'tipo_servicio', j.tipo_servicio,
+                            'importe', j.importe
+                        )
+                    ), JSON_ARRAY())
+                    FROM (
+                        SELECT s6.id, s6.tipo_servicio, s6.importe
+                        FROM {$this->table_delivery_servicio} s6
+                        WHERE s6.id_cotizacion = CC.id
+                        ORDER BY s6.id
+                    ) j
+                ) AS delivery_servicios_json"),
                 DB::raw("(
                     SELECT IFNULL(SUM(cccp.monto), 0)
                     FROM {$this->table_contenedor_consolidado_cotizacion_coordinacion_pagos} cccp
@@ -2370,11 +2480,18 @@ class EntregaController extends Controller
             }
         }
 
-        // Filtrar por tipo de servicio (DELIVERY o MONTACARGA)
+        // Filtrar por tipo de servicio (DELIVERY o MONTACARGA): columna legacy o alguna línea hija
         if (!empty($filters['tipo_servicio'])) {
             $tipo = strtoupper(trim($filters['tipo_servicio']));
             if (in_array($tipo, ['DELIVERY', 'MONTACARGA'])) {
-                $query->where('CC.tipo_servicio', $tipo);
+                $t = $this->table_delivery_servicio;
+                $query->where(function ($q) use ($tipo, $t) {
+                    $q->where('CC.tipo_servicio', $tipo)
+                        ->orWhereRaw(
+                            "EXISTS (SELECT 1 FROM {$t} sds WHERE sds.id_cotizacion = CC.id AND sds.tipo_servicio = ?)",
+                            [$tipo]
+                        );
+                });
             }
         }
 
@@ -2388,7 +2505,7 @@ class EntregaController extends Controller
             $query->whereRaw("CONCAT(D2.year,'-',LPAD(D2.month,2,'0'),'-',LPAD(D2.day,2,'0')) <= ?", [$fechaFin]);
         }
 
-        // Calcular total_importes antes de paginar (de los registros filtrados)
+        // total_pago_delivery se mantiene sincronizado con la suma de líneas de servicio
         $totalImportes = (clone $query)->sum('CC.total_pago_delivery');
 
         // Ordenamiento: primero Lima (prioridad comprobante), luego fecha/hora
@@ -2436,6 +2553,35 @@ class EntregaController extends Controller
                 // Si pagos_details es null o no existe, asignar array vacío
                 $item->pagos_details = [];
             }
+
+            // Líneas de servicio delivery / montacarga
+            $item->delivery_servicios = [];
+            if (isset($item->delivery_servicios_json) && $item->delivery_servicios_json !== null) {
+                try {
+                    $raw = $item->delivery_servicios_json;
+                    if (is_string($raw)) {
+                        $decoded = json_decode($raw, true);
+                    } elseif (is_array($raw)) {
+                        $decoded = $raw;
+                    } else {
+                        $decoded = [];
+                    }
+                    if (is_array($decoded)) {
+                        foreach ($decoded as $idx => $svc) {
+                            if (is_array($svc)) {
+                                $decoded[$idx]['id'] = isset($svc['id']) ? (int) $svc['id'] : null;
+                                $decoded[$idx]['tipo_servicio'] = isset($svc['tipo_servicio']) ? $svc['tipo_servicio'] : 'DELIVERY';
+                                $decoded[$idx]['importe'] = isset($svc['importe']) ? (float) $svc['importe'] : 0;
+                            }
+                        }
+                        $item->delivery_servicios = $decoded;
+                    }
+                } catch (\Exception $e) {
+                    Log::warning('Error al procesar delivery_servicios_json: ' . $e->getMessage());
+                    $item->delivery_servicios = [];
+                }
+            }
+            unset($item->delivery_servicios_json);
         }
 
         // Preparar headers
@@ -3174,8 +3320,28 @@ Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, 
             if (!$cotizacion) {
                 return response()->json(['message' => 'Cotización no encontrada', 'success' => false]);
             }
-            $cotizacion->total_pago_delivery = $importe;
-            $cotizacion->save();
+            $n = (int) DB::table($this->table_delivery_servicio)->where('id_cotizacion', $idCotizacion)->count();
+            if ($n > 1) {
+                return response()->json([
+                    'message' => 'Hay varios servicios: edita el importe en cada línea de la columna Servicio.',
+                    'success' => false,
+                ], 422);
+            }
+            if ($n === 0) {
+                $tipo = $cotizacion->tipo_servicio && in_array($cotizacion->tipo_servicio, ['DELIVERY', 'MONTACARGA'], true)
+                    ? $cotizacion->tipo_servicio
+                    : 'DELIVERY';
+                DB::table($this->table_delivery_servicio)->insert([
+                    'id_cotizacion' => (int) $idCotizacion,
+                    'tipo_servicio' => $tipo,
+                    'importe' => (float) $importe,
+                ]);
+            } else {
+                DB::table($this->table_delivery_servicio)
+                    ->where('id_cotizacion', $idCotizacion)
+                    ->update(['importe' => (float) $importe]);
+            }
+            $this->syncParentFromDeliveryServicios($idCotizacion);
             return response()->json(['message' => 'Importe guardado correctamente', 'success' => true]);
         } catch (\Exception $e) {
             return response()->json(['message' => $e->getMessage(), 'success' => false]);
@@ -3197,13 +3363,126 @@ Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, 
                 return response()->json(['message' => 'Cotización no encontrada', 'success' => false], 404);
             }
 
-            // Actualizar el campo tipo_servicio en la tabla
-            DB::table('contenedor_consolidado_cotizacion')
-                ->where('id', $idCotizacion)
-                ->whereNull('deleted_at')
-                ->update(['tipo_servicio' => $tipoServicio]);
+            $n = (int) DB::table($this->table_delivery_servicio)->where('id_cotizacion', $idCotizacion)->count();
+            if ($n === 0) {
+                $imp = $cotizacion->total_pago_delivery !== null ? (float) $cotizacion->total_pago_delivery : 0;
+                DB::table($this->table_delivery_servicio)->insert([
+                    'id_cotizacion' => (int) $idCotizacion,
+                    'tipo_servicio' => $tipoServicio,
+                    'importe' => $imp,
+                ]);
+            } elseif ($n === 1) {
+                DB::table($this->table_delivery_servicio)
+                    ->where('id_cotizacion', $idCotizacion)
+                    ->update(['tipo_servicio' => $tipoServicio]);
+            } else {
+                return response()->json([
+                    'message' => 'Hay varios servicios: edita el tipo en cada línea o elimina líneas desde la tabla.',
+                    'success' => false,
+                ], 422);
+            }
+
+            $this->syncParentFromDeliveryServicios($idCotizacion);
 
             return response()->json(['message' => 'Servicio guardado correctamente', 'success' => true]);
+        } catch (\Exception $e) {
+            return response()->json(['message' => $e->getMessage(), 'success' => false], 500);
+        }
+    }
+
+    /**
+     * Agregar una línea de servicio delivery/montacarga.
+     */
+    public function storeDeliveryServicioLine(Request $request)
+    {
+        try {
+            $idCotizacion = (int) $request->input('id_cotizacion');
+            $tipoServicio = $request->input('tipo_servicio');
+            $importe = $request->input('importe', 0);
+
+            if (!in_array($tipoServicio, ['DELIVERY', 'MONTACARGA'], true)) {
+                return response()->json(['message' => 'Tipo de servicio inválido', 'success' => false], 422);
+            }
+            $cotizacion = Cotizacion::find($idCotizacion);
+            if (!$cotizacion) {
+                return response()->json(['message' => 'Cotización no encontrada', 'success' => false], 404);
+            }
+
+            $countLines = (int) DB::table($this->table_delivery_servicio)->where('id_cotizacion', $idCotizacion)->count();
+            if ($countLines >= 2) {
+                return response()->json(['message' => 'Máximo 2 servicios por cotización', 'success' => false], 422);
+            }
+
+            $id = DB::table($this->table_delivery_servicio)->insertGetId([
+                'id_cotizacion' => $idCotizacion,
+                'tipo_servicio' => $tipoServicio,
+                'importe' => (float) $importe,
+            ]);
+            $this->syncParentFromDeliveryServicios($idCotizacion);
+
+            return response()->json([
+                'message' => 'Servicio agregado',
+                'success' => true,
+                'data' => ['id' => $id],
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['message' => $e->getMessage(), 'success' => false], 500);
+        }
+    }
+
+    /**
+     * Actualizar una línea de servicio (tipo e importe).
+     */
+    public function updateDeliveryServicioLine(Request $request, $idLinea)
+    {
+        try {
+            $idLinea = (int) $idLinea;
+            $row = DB::table($this->table_delivery_servicio)->where('id', $idLinea)->first();
+            if (!$row) {
+                return response()->json(['message' => 'Línea no encontrada', 'success' => false], 404);
+            }
+
+            $tipoServicio = $request->input('tipo_servicio');
+            if ($tipoServicio !== null && !in_array($tipoServicio, ['DELIVERY', 'MONTACARGA'], true)) {
+                return response()->json(['message' => 'Tipo de servicio inválido', 'success' => false], 422);
+            }
+
+            $upd = [];
+            if ($tipoServicio !== null) {
+                $upd['tipo_servicio'] = $tipoServicio;
+            }
+            if ($request->has('importe')) {
+                $upd['importe'] = (float) $request->input('importe');
+            }
+            if (count($upd) === 0) {
+                return response()->json(['message' => 'Nada que actualizar', 'success' => false], 422);
+            }
+
+            DB::table($this->table_delivery_servicio)->where('id', $idLinea)->update($upd);
+            $this->syncParentFromDeliveryServicios((int) $row->id_cotizacion);
+
+            return response()->json(['message' => 'Servicio actualizado', 'success' => true]);
+        } catch (\Exception $e) {
+            return response()->json(['message' => $e->getMessage(), 'success' => false], 500);
+        }
+    }
+
+    /**
+     * Eliminar una línea de servicio.
+     */
+    public function deleteDeliveryServicioLine($idLinea)
+    {
+        try {
+            $idLinea = (int) $idLinea;
+            $row = DB::table($this->table_delivery_servicio)->where('id', $idLinea)->first();
+            if (!$row) {
+                return response()->json(['message' => 'Línea no encontrada', 'success' => false], 404);
+            }
+            $idCot = (int) $row->id_cotizacion;
+            DB::table($this->table_delivery_servicio)->where('id', $idLinea)->delete();
+            $this->syncParentFromDeliveryServicios($idCot);
+
+            return response()->json(['message' => 'Servicio eliminado', 'success' => true]);
         } catch (\Exception $e) {
             return response()->json(['message' => $e->getMessage(), 'success' => false], 500);
         }
@@ -3342,42 +3621,67 @@ Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, 
     public function sendCobroDeliveryDelivery(Request $request, $idCotizacion)
     {
         try {
+            $idCotizacion = (int) $idCotizacion;
             $cotizacion = Cotizacion::find($idCotizacion);
-            $contenedor=Contenedor::find($cotizacion->id_contenedor);
-            $carga=$contenedor->carga ?? '';
             if (!$cotizacion) {
                 return response()->json(['message' => 'Cotización no encontrada', 'success' => false], 404);
             }
 
-            //fOR tipo_servicio DELIVERY
-            if ($cotizacion->tipo_servicio == 'DELIVERY') {
+            $contenedor = Contenedor::find($cotizacion->id_contenedor);
+            $carga = $contenedor && isset($contenedor->carga) ? $contenedor->carga : '';
 
-                /**
-                 * Consolidado #carga
-                 * Hola #nombrecliente, por favor proceder con el pago del #servicio  .
-                 *Se envía el costo del flete interno (Almacén-agencia)
-                 *Costo: S/ 
-
-                 *Por favor nos compartes el comprobante de pago para poder gestionar tu envío */
-                $message = "Consolidado #" . $carga . "\n" .
-                    "Hola " . $cotizacion->nombre . ", por favor proceder con el pago del " . $cotizacion->tipo_servicio . ".\n" .
-                    "Se envía el costo del flete interno (Almacén-agencia)\n" .
-                    "Costo: S/ " . $cotizacion->total_pago_delivery . "\n" .
-                    "Por favor nos compartes el comprobante de pago para poder gestionar tu envío";
-            } elseif ($cotizacion->tipo_servicio == 'MONTACARGA') {
-                /**
-                 * [2:44 PM, 12/17/2025] Dani Vega🐰: Hola XXXXX
-                 *Se envía el costo por el uso del montacarga (Descarga del contenedor)
-                 *Costo: S/
- 
-                 *NOTA: Para poder recoger tu carga debes contar con personal de estiba o indicarnos para poder compartirte el contacto de un montacargas.
-                 */
-                $message = "Consolidado #" . $cotizacion->carga . "\n" .
-                    "Hola " . $cotizacion->nombre . "\n" .
-                    "Se envía el costo por el uso del montacarga (Descarga del contenedor)\n" .
-                    "Costo: S/ " . $cotizacion->total_pago_delivery . "\n" .
-                    "NOTA: Para poder recoger tu carga debes contar con personal de estiba o indicarnos para poder compartirte el contacto de un montacargas.";
+            $servicioIds = $request->input('servicio_ids');
+            $linesQuery = DB::table($this->table_delivery_servicio)
+                ->where('id_cotizacion', $idCotizacion)
+                ->orderBy('id');
+            if (is_array($servicioIds) && count($servicioIds) > 0) {
+                $ids = array_map('intval', $servicioIds);
+                $linesQuery->whereIn('id', $ids);
             }
+            $lines = $linesQuery->get();
+
+            $bloques = [];
+            foreach ($lines as $line) {
+                $tipo = $line->tipo_servicio;
+                $imp = $line->importe;
+                if ($tipo === 'DELIVERY') {
+                    $bloques[] =
+                        "— " . $tipo . "\n" .
+                        "Se envía el costo del flete interno (Almacén-agencia)\n" .
+                        "Costo: S/ " . $imp . "\n" .
+                        "Por favor nos compartes el comprobante de pago para poder gestionar tu envío";
+                } elseif ($tipo === 'MONTACARGA') {
+                    $bloques[] =
+                        "— " . $tipo . "\n" .
+                        "Se envía el costo por el uso del montacarga (Descarga del contenedor)\n" .
+                        "Costo: S/ " . $imp . "\n" .
+                        "NOTA: Para poder recoger tu carga debes contar con personal de estiba o indicarnos para poder compartirte el contacto de un montacargas.";
+                }
+            }
+
+            if (count($bloques) === 0) {
+                // Legacy: sin líneas en tabla hija
+                if ($cotizacion->tipo_servicio == 'DELIVERY') {
+                    $bloques[] =
+                        "— DELIVERY\n" .
+                        "Se envía el costo del flete interno (Almacén-agencia)\n" .
+                        "Costo: S/ " . $cotizacion->total_pago_delivery . "\n" .
+                        "Por favor nos compartes el comprobante de pago para poder gestionar tu envío";
+                } elseif ($cotizacion->tipo_servicio == 'MONTACARGA') {
+                    $bloques[] =
+                        "— MONTACARGA\n" .
+                        "Se envía el costo por el uso del montacarga (Descarga del contenedor)\n" .
+                        "Costo: S/ " . $cotizacion->total_pago_delivery . "\n" .
+                        "NOTA: Para poder recoger tu carga debes contar con personal de estiba o indicarnos para poder compartirte el contacto de un montacargas.";
+                } else {
+                    return response()->json(['message' => 'No hay servicios para cobrar', 'success' => false], 422);
+                }
+            }
+
+            $message = "Consolidado #" . $carga . "\n" .
+                "Hola " . $cotizacion->nombre . ", por favor proceder con el pago de lo siguiente:\n\n" .
+                implode("\n\n", $bloques);
+
             $telefono = preg_replace('/\D+/', '', $cotizacion->telefono);
             if (strlen($telefono) < 9) {
                 $telefono = '51' . $telefono;
