@@ -29,7 +29,8 @@ use Tests\TestCase;
  * - No automático: getMassiveExcelData sigue mockeado; si el Excel masivo o su parseo exigen nuevos
  *   campos en el array de clientes/productos, actualiza sampleExcelPayloadFromLogs().
  *
- * Tres casos: (1) un ítem sin antidumping, (2) cinco ítems con antidumping en extremos, (3) cuatro ítems sin AD.
+ * Casos base: (1) un ítem sin antidumping, (2) cinco ítems con antidumping en extremos, (3) cuatro ítems sin AD.
+ * Delivery/montacargas: (4) 8 ítems + importes BD sin AD (K42/K43), (5) 6 ítems + AD (K43/K44), (6) 7 ítems HTML/PDF, (7) 10 ítems suma montacarga, (8) 6 ítems solo monta, (9) 5 ítems sin líneas BD (filas ocultas).
  * Hoja 1 (layout vigente):
  * - Sin AD: B20..B23 = AD/ISC/IGV/IPM, B24 SUB TOTAL, B25 vacío, B26 PERCEPCION, B27 TOTAL.
  * - Con AD: B24 = ANTIDUMPING, B25 SUB TOTAL, B26 vacío, B27 PERCEPCION, B28 TOTAL.
@@ -190,6 +191,356 @@ class GenerateMassiveExcelPayrollsIntegrationTest extends TestCase
         $this->assertArtefactosZipExcelBoleta($zipPath, $fullExcel, $boletaPdfPath, $publicBoletaPath);
         $this->assertCotizacionSembradaCoherente($row);
         $this->imprimirCasoYUrlsCodificadas($caso, $row, $publicBoletaPath);
+    }
+
+    /**
+     * Con líneas MONTACARGA + DELIVERY en BD: K42/K43 (sin AD) deben reflejar importes y filas visibles.
+     */
+    public function test_delivery_servicio_con_importes_sin_antidumping_filas_k(): void
+    {
+        $caso = 'Delivery servicio — sin AD: montacargas + delivery en K42/K43.';
+
+        $this->seedDeliveryServicioLines(100.25, 200.5);
+
+        $response = $this->invocarGenerateMassiveExcelPayrolls($this->sampleExcelPayloadServicioMultiplesItems(8), 'plantilla_delivery_sin_ad.xlsx');
+        $this->assertZipResponseValido($response);
+
+        $row = DB::table('contenedor_consolidado_cotizacion')->where('id', $this->idCotizacion)->first();
+        $this->assertNotNull($row);
+        $fullExcel = public_path('storage/' . $row->cotizacion_final_url);
+        $this->assertFileExists($fullExcel);
+
+        $spreadsheet = IOFactory::load($fullExcel);
+        $this->assertExcelMultiplesItemsYAntidumping($spreadsheet, 8, false, 'ITEM SERVICIO LOG');
+        $this->assertBoletaMontacargaDelivery(
+            $spreadsheet,
+            false,
+            100.25,
+            200.5,
+            'Sin antidumping: montacargas en fila 42, delivery en 43.'
+        );
+        $this->assertBoletaHtmlPdfIncluyeMontacargaDelivery($fullExcel, 100.25, 200.5);
+
+        $this->imprimirCasoYUrlsCodificadas($caso, $row, '');
+    }
+
+    /**
+     * Con líneas en BD y antidumping: K43/K44 deben reflejar importes (fila extra de recargos).
+     */
+    public function test_delivery_servicio_con_importes_con_antidumping_filas_k(): void
+    {
+        $caso = 'Delivery servicio — con AD: montacargas + delivery en K43/K44.';
+
+        $this->seedDeliveryServicioLines(88.88, 177.77);
+
+        $payload = $this->samplePayloadMultiplesProductosConAntidumpingEnIndices(6, [1, 6]);
+        $response = $this->invocarGenerateMassiveExcelPayrolls($payload, 'plantilla_delivery_con_ad.xlsx');
+        $this->assertZipResponseValido($response);
+
+        $row = DB::table('contenedor_consolidado_cotizacion')->where('id', $this->idCotizacion)->first();
+        $this->assertNotNull($row);
+        $fullExcel = public_path('storage/' . $row->cotizacion_final_url);
+        $this->assertFileExists($fullExcel);
+
+        $spreadsheet = IOFactory::load($fullExcel);
+        $this->assertExcelMultiplesItemsYAntidumping($spreadsheet, 6, true);
+        $this->assertBoletaMontacargaDelivery(
+            $spreadsheet,
+            true,
+            88.88,
+            177.77,
+            'Con antidumping: montacargas en fila 43, delivery en 44.'
+        );
+        $this->assertBoletaHtmlPdfIncluyeMontacargaDelivery($fullExcel, 88.88, 177.77);
+
+        $this->imprimirCasoYUrlsCodificadas($caso, $row, '');
+    }
+
+    /**
+     * HTML de boleta (mismo que alimenta al PDF) incluye filas RECARGO con montos cuando hay importes en Excel.
+     */
+    public function test_delivery_servicio_html_boleta_coincide_con_excel_sin_ad(): void
+    {
+        $this->seedDeliveryServicioLines(301.12, 402.34);
+
+        $response = $this->invocarGenerateMassiveExcelPayrolls($this->sampleExcelPayloadServicioMultiplesItems(7), 'plantilla_delivery_html_sin_ad.xlsx');
+        $this->assertZipResponseValido($response);
+
+        $row = DB::table('contenedor_consolidado_cotizacion')->where('id', $this->idCotizacion)->first();
+        $fullExcel = public_path('storage/' . $row->cotizacion_final_url);
+        $this->assertExcelMultiplesItemsYAntidumping(IOFactory::load($fullExcel), 7, false, 'ITEM SERVICIO LOG');
+        $this->assertBoletaHtmlPdfIncluyeMontacargaDelivery($fullExcel, 301.12, 402.34);
+
+        [$pdfPath] = $this->generarBoletaYPublicarEnStorage($fullExcel, 'delivery_html_sin_ad');
+        $this->tempOutputFiles[] = $pdfPath;
+        $this->assertPdfBoletaGeneradoDesdeHtml($pdfPath);
+    }
+
+    /**
+     * Caso integral: antidumping + ad valorem + isc% + servicios.
+     * Verifica que ISC% del payload alimente el cálculo de ISC valor en Excel.
+     */
+    public function test_flujo_integral_tributos_y_servicios_incluye_isc_percent(): void
+    {
+        $caso = 'Caso integral ISC% — antidumping + ad valorem + isc + servicios + boleta.';
+        $this->seedDeliveryServicioLines(55.50, 66.60);
+
+        $payload = [[
+            'cliente' => [
+                'nombre' => 'PETER TAYPE TACAS',
+                'tipo' => 'NATURAL',
+                'dni' => '12345678',
+                'telefono' => '51900000000',
+                'productos' => [
+                    [
+                        'nombre' => 'ITEM FULL 1',
+                        'cantidad' => '2',
+                        'precio_unitario' => '18.90',
+                        'antidumping' => 2.4,
+                        'valoracion' => 14.5,
+                        'ad_valorem' => 0.06,
+                        'isc_percent' => 0.11,
+                        'percepcion' => 0.035,
+                        'peso' => '12',
+                        'cbm' => '0.07',
+                    ],
+                    [
+                        'nombre' => 'ITEM FULL 2',
+                        'cantidad' => '3',
+                        'precio_unitario' => '9.30',
+                        'antidumping' => 0,
+                        'valoracion' => 10.2,
+                        'ad_valorem' => 0.06,
+                        'isc_percent' => 0.11,
+                        'percepcion' => 0.035,
+                        'peso' => '8',
+                        'cbm' => '0.05',
+                    ],
+                ],
+            ],
+        ]];
+
+        $response = $this->invocarGenerateMassiveExcelPayrolls($payload, 'plantilla_integral_isc_ad_servicios.xlsx');
+        $this->assertZipResponseValido($response);
+
+        $row = DB::table('contenedor_consolidado_cotizacion')->where('id', $this->idCotizacion)->first();
+        $this->assertNotNull($row);
+        $fullExcel = public_path('storage/' . $row->cotizacion_final_url);
+        $this->assertFileExists($fullExcel);
+
+        $spreadsheet = IOFactory::load($fullExcel);
+        $this->assertExcelMultiplesItemsYAntidumping($spreadsheet, 2, true, 'ITEM FULL');
+        $this->assertBoletaMontacargaDelivery($spreadsheet, true, 55.50, 66.60, 'Con AD: servicios en filas 43/44');
+        $this->assertBoletaHtmlPdfIncluyeMontacargaDelivery($fullExcel, 55.50, 66.60);
+
+        $main = $spreadsheet->getSheet(0);
+        $this->assertGreaterThan(0, (float) $main->getCell('K20')->getCalculatedValue(), 'AD VALOREM (valor) debe ser > 0');
+        $this->assertGreaterThan(0, (float) $main->getCell('K21')->getCalculatedValue(), 'ISC (valor) debe ser > 0');
+        $this->assertGreaterThan(0, (float) $main->getCell('K24')->getCalculatedValue(), 'ANTIDUMPING (valor) debe ser > 0');
+
+        $tributos = $this->findTributosSheet($spreadsheet);
+        $this->assertStringContainsStringIgnoringCase('ISC', (string) $tributos->getCell('B30')->getValue());
+        $this->assertEqualsWithDelta(0.11, (float) $tributos->getCell('C29')->getCalculatedValue(), 0.0001, 'ISC% debe provenir del archivo/payload');
+        $this->assertGreaterThan(0, (float) $tributos->getCell('C30')->getCalculatedValue(), 'ISC valor debe calcularse > 0');
+
+        [$boletaPdfPath, $publicBoletaPath] = $this->generarBoletaYPublicarEnStorage($fullExcel, 'integral_isc_ad_servicios');
+        $this->assertFileExists($boletaPdfPath);
+        $this->assertFileExists($publicBoletaPath);
+        $this->imprimirCasoYUrlsCodificadas($caso, $row, $publicBoletaPath);
+    }
+
+    /**
+     * Varias líneas MONTACARGA en BD se suman en K (sin AD).
+     */
+    public function test_delivery_servicio_suma_multiples_lineas_montacarga_en_excel(): void
+    {
+        foreach ([40.0, 35.5, 24.5] as $imp) {
+            DB::table('contenedor_consolidado_cotizacion_delivery_servicio')->insert([
+                'id_cotizacion' => $this->idCotizacion,
+                'tipo_servicio' => 'MONTACARGA',
+                'importe' => $imp,
+            ]);
+        }
+        DB::table('contenedor_consolidado_cotizacion_delivery_servicio')->insert([
+            'id_cotizacion' => $this->idCotizacion,
+            'tipo_servicio' => 'DELIVERY',
+            'importe' => 15.0,
+        ]);
+
+        $response = $this->invocarGenerateMassiveExcelPayrolls(
+            $this->samplePayloadMultiplesProductosConAntidumpingEnIndices(10, []),
+            'plantilla_delivery_suma.xlsx'
+        );
+        $this->assertZipResponseValido($response);
+
+        $row = DB::table('contenedor_consolidado_cotizacion')->where('id', $this->idCotizacion)->first();
+        $fullExcel = public_path('storage/' . $row->cotizacion_final_url);
+        $spreadsheet = IOFactory::load($fullExcel);
+        $this->assertExcelMultiplesItemsYAntidumping($spreadsheet, 10, false);
+        $this->assertBoletaMontacargaDelivery($spreadsheet, false, 100.0, 15.0, 'Suma 40+35.5+24.5=100');
+        $this->assertBoletaHtmlPdfIncluyeMontacargaDelivery($fullExcel, 100.0, 15.0);
+    }
+
+    /**
+     * Solo MONTACARGA en BD: fila delivery oculta; HTML/PDF no deben mostrar segundo monto delivery.
+     */
+    public function test_delivery_servicio_solo_montacarga_sin_fila_delivery_visible(): void
+    {
+        DB::table('contenedor_consolidado_cotizacion_delivery_servicio')->insert([
+            'id_cotizacion' => $this->idCotizacion,
+            'tipo_servicio' => 'MONTACARGA',
+            'importe' => 77.77,
+        ]);
+
+        $response = $this->invocarGenerateMassiveExcelPayrolls($this->sampleExcelPayloadServicioMultiplesItems(6), 'plantilla_solo_monta.xlsx');
+        $this->assertZipResponseValido($response);
+
+        $row = DB::table('contenedor_consolidado_cotizacion')->where('id', $this->idCotizacion)->first();
+        $fullExcel = public_path('storage/' . $row->cotizacion_final_url);
+        $spreadsheet = IOFactory::load($fullExcel);
+        $this->assertExcelMultiplesItemsYAntidumping($spreadsheet, 6, false, 'ITEM SERVICIO LOG');
+        $main = $spreadsheet->getSheet(0);
+        $this->assertSame(false, $main->getRowDimension(43)->getVisible());
+
+        $html = $this->getBoletaHtmlDesdeExcel($fullExcel);
+        $this->assertStringContainsString('77.77', $html);
+        $this->assertStringNotContainsString('177.77', $html);
+
+        [$pdfPath] = $this->generarBoletaYPublicarEnStorage($fullExcel, 'solo_monta_sin_delivery');
+        $this->tempOutputFiles[] = $pdfPath;
+        $this->assertPdfBoletaGeneradoDesdeHtml($pdfPath);
+    }
+
+    /**
+     * Sin filas en contenedor_consolidado_cotizacion_delivery_servicio: importes 0 → filas ocultas (concepto no visible).
+     */
+    public function test_delivery_servicio_sin_lineas_filas_ocultas_en_boleta(): void
+    {
+        $caso = 'Delivery servicio — sin líneas en BD: filas montacargas/delivery ocultas.';
+
+        $response = $this->invocarGenerateMassiveExcelPayrolls($this->sampleExcelPayloadServicioMultiplesItems(5), 'plantilla_delivery_vacio.xlsx');
+        $this->assertZipResponseValido($response);
+
+        $row = DB::table('contenedor_consolidado_cotizacion')->where('id', $this->idCotizacion)->first();
+        $this->assertNotNull($row);
+        $fullExcel = public_path('storage/' . $row->cotizacion_final_url);
+        $this->assertFileExists($fullExcel);
+
+        $spreadsheet = IOFactory::load($fullExcel);
+        $this->assertExcelMultiplesItemsYAntidumping($spreadsheet, 5, false, 'ITEM SERVICIO LOG');
+        $main = $spreadsheet->getSheet(0);
+        // Sin AD: filas 42 y 43
+        $this->assertSame(false, $main->getRowDimension(42)->getVisible(), 'Sin montacargas la fila 42 debe ocultarse');
+        $this->assertSame(false, $main->getRowDimension(43)->getVisible(), 'Sin delivery la fila 43 debe ocultarse');
+
+        $html = $this->getBoletaHtmlDesdeExcel($fullExcel);
+        $this->assertStringNotContainsString('{{row_montacargas}}', $html, 'Placeholders deben sustituirse en HTML');
+        $this->assertStringNotContainsString('{{row_delivery}}', $html);
+        $this->assertStringNotContainsString('100.25', $html, 'Sin líneas BD no debe aparecer un monto típico de otros tests en filas recargo');
+
+        $this->imprimirCasoYUrlsCodificadas($caso, $row, '');
+    }
+
+    private function seedDeliveryServicioLines(float $importeMontacargas, float $importeDelivery): void
+    {
+        DB::table('contenedor_consolidado_cotizacion_delivery_servicio')->insert([
+            [
+                'id_cotizacion' => $this->idCotizacion,
+                'tipo_servicio' => 'MONTACARGA',
+                'importe' => $importeMontacargas,
+            ],
+            [
+                'id_cotizacion' => $this->idCotizacion,
+                'tipo_servicio' => 'DELIVERY',
+                'importe' => $importeDelivery,
+            ],
+        ]);
+    }
+
+    /**
+     * @param  float  $esperadoMonta  Importe esperado en K (fila según layout).
+     * @param  float  $esperadoDeliv
+     */
+    private function assertBoletaMontacargaDelivery(
+        \PhpOffice\PhpSpreadsheet\Spreadsheet $spreadsheet,
+        bool $conAntidumping,
+        float $esperadoMonta,
+        float $esperadoDeliv,
+        string $mensajeContexto
+    ): void {
+        $main = $spreadsheet->getSheet(0);
+        $rowM = $conAntidumping ? 43 : 42;
+        $rowD = $conAntidumping ? 44 : 43;
+
+        $kM = $main->getCell('K' . $rowM)->getCalculatedValue();
+        $kD = $main->getCell('K' . $rowD)->getCalculatedValue();
+
+        $this->assertEqualsWithDelta(
+            $esperadoMonta,
+            is_numeric($kM) ? (float) $kM : 0.0,
+            0.08,
+            'Montacargas K' . $rowM . ' — ' . $mensajeContexto
+        );
+        $this->assertEqualsWithDelta(
+            $esperadoDeliv,
+            is_numeric($kD) ? (float) $kD : 0.0,
+            0.08,
+            'Delivery K' . $rowD . ' — ' . $mensajeContexto
+        );
+
+        $this->assertNotSame(false, $main->getRowDimension($rowM)->getVisible(), 'Fila montacargas visible con importe > 0');
+        $this->assertNotSame(false, $main->getRowDimension($rowD)->getVisible(), 'Fila delivery visible con importe > 0');
+    }
+
+    private function findTributosSheet(\PhpOffice\PhpSpreadsheet\Spreadsheet $spreadsheet): \PhpOffice\PhpSpreadsheet\Worksheet\Worksheet
+    {
+        for ($i = 0; $i < $spreadsheet->getSheetCount(); $i++) {
+            $sheet = $spreadsheet->getSheet($i);
+            $label = strtoupper(trim((string) $sheet->getCell('B30')->getValue()));
+            if (str_contains($label, 'ISC')) {
+                return $sheet;
+            }
+        }
+
+        return $spreadsheet->getSheet(1);
+    }
+
+    private function getBoletaHtmlDesdeExcel(string $fullExcelPath): string
+    {
+        $spreadsheet = IOFactory::load($fullExcelPath);
+        $method = new ReflectionMethod(CotizacionFinalController::class, 'buildCotizacionFinalBoletaFilledHtml');
+        $method->setAccessible(true);
+
+        return $method->invoke(new CotizacionFinalController(), $spreadsheet);
+    }
+
+    /**
+     * Comprueba que el HTML de boleta (DomPDF) incluye montos formateados en el bloque resumen (mismas celdas K que Excel).
+     */
+    private function assertBoletaHtmlPdfIncluyeMontacargaDelivery(
+        string $fullExcelPath,
+        float $esperadoMonta,
+        float $esperadoDeliv
+    ): void {
+        $html = $this->getBoletaHtmlDesdeExcel($fullExcelPath);
+        $fmtM = number_format($esperadoMonta, 2, '.', ',');
+        $fmtD = number_format($esperadoDeliv, 2, '.', ',');
+        $this->assertStringContainsString($fmtM, $html, 'HTML boleta debe incluir monto montacargas');
+        $this->assertStringContainsString($fmtD, $html, 'HTML boleta debe incluir monto delivery');
+        $this->assertStringContainsString('RECARGO', $html, 'Etiqueta de fila recargo (desde celda B de la plantilla)');
+        $this->assertStringNotContainsString('{{row_montacargas}}', $html);
+        $this->assertStringNotContainsString('{{row_delivery}}', $html);
+    }
+
+    /**
+     * DomPDF suele comprimir streams: no buscar texto en bruto. El HTML ya valida montos/RECARGO.
+     */
+    private function assertPdfBoletaGeneradoDesdeHtml(string $pdfPath): void
+    {
+        $this->assertFileExists($pdfPath);
+        $raw = (string) file_get_contents($pdfPath);
+        $this->assertGreaterThan(4000, strlen($raw), 'PDF debe tener cuerpo no trivial');
+        $this->assertStringStartsWith('%PDF-', $raw, 'Cabecera PDF válida (DomPDF)');
     }
 
     /**
@@ -531,6 +882,13 @@ class GenerateMassiveExcelPayrollsIntegrationTest extends TestCase
             $table->unsignedBigInteger('id_cotizacion');
         });
 
+        Schema::create('contenedor_consolidado_cotizacion_delivery_servicio', function (Blueprint $table) {
+            $table->bigIncrements('id');
+            $table->unsignedBigInteger('id_cotizacion');
+            $table->string('tipo_servicio', 32);
+            $table->decimal('importe', 12, 2)->default(0);
+        });
+
         DB::table('contenedor_consolidado_tipo_cliente')->insert([
             'id' => 2,
             'name' => 'ANTIGUO',
@@ -594,6 +952,43 @@ class GenerateMassiveExcelPayrollsIntegrationTest extends TestCase
                             'cbm' => '0.05',
                         ],
                     ],
+                ],
+            ],
+        ];
+    }
+
+    /**
+     * Misma forma que sampleExcelPayloadFromLogs pero con varios ítems (tests delivery/montacargas).
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function sampleExcelPayloadServicioMultiplesItems(int $cantidadProductos): array
+    {
+        $this->assertGreaterThanOrEqual(1, $cantidadProductos);
+        $productos = [];
+        for ($i = 1; $i <= $cantidadProductos; $i++) {
+            $productos[] = [
+                'nombre' => 'ITEM SERVICIO LOG ' . $i,
+                'cantidad' => (string) (1 + $i),
+                'precio_unitario' => (string) round(12.5 + $i * 1.75, 2),
+                'antidumping' => 0,
+                'valoracion' => 0,
+                'ad_valorem' => 0,
+                'isc_percent' => 0,
+                'percepcion' => 0.035,
+                'peso' => (string) (8 + $i * 2),
+                'cbm' => (string) round(0.04 + $i * 0.015, 4),
+            ];
+        }
+
+        return [
+            [
+                'cliente' => [
+                    'nombre' => 'PETER TAYPE TACAS',
+                    'tipo' => 'NATURAL',
+                    'dni' => '12345678',
+                    'telefono' => '51900000000',
+                    'productos' => $productos,
                 ],
             ],
         ];

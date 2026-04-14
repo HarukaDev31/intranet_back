@@ -870,8 +870,9 @@ class DocumentacionController extends Controller
         }
 
         $sheet->setCellValue('R25', 'ADVALOREM');
-        $sheet->setCellValue('S25', 'ANTIDUMPING');
-        $sheet->setCellValue('T25', 'VOL. SISTEMA');
+        $sheet->setCellValue('S25', 'ISC');
+        $sheet->setCellValue('T25', 'ANTIDUMPING');
+        $sheet->setCellValue('U25', 'VOL. SISTEMA');
 
         // Aplicar estilos de encabezado
         $this->applyHeaderStyles($sheet);
@@ -897,7 +898,7 @@ class DocumentacionController extends Controller
 
         $sheet->getStyle('A25:Z25')->getFont()->setBold(true);
         $sheet->getStyle('A25:Z25')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-        $sheet->getStyle('R25:V25')->applyFromArray($styleArray);
+        $sheet->getStyle('R25:U25')->applyFromArray($styleArray);
     }
 
     /**
@@ -1015,9 +1016,11 @@ class DocumentacionController extends Controller
                             $adValorem = $sheetListaPartidas->getCell('H' . $r)->getCalculatedValue();
                         }
 
-                        $antiDumping = $sheetListaPartidas->getCell('I' . $r)->getValue();
+                        $isc = $sheetListaPartidas->getCell('I' . $r)->getValue();
+                        $antiDumping = $sheetListaPartidas->getCell('J' . $r)->getValue();
                         $sheet->setCellValue('R' . $row, $adValorem);
-                        $sheet->setCellValue('S' . $row, $antiDumping == 0 ? "-" : $antiDumping);
+                        $sheet->setCellValue('S' . $row, $isc == 0 ? "-" : $isc);
+                        $sheet->setCellValue('T' . $row, $antiDumping == 0 ? "-" : $antiDumping);
                         break;
                     }
                     break;
@@ -1058,7 +1061,7 @@ class DocumentacionController extends Controller
             $volumen_cotizacion = $volumen_china;
         }
 
-        $sheet->setCellValue('T' . $row, $volumen_cotizacion);
+        $sheet->setCellValue('U' . $row, $volumen_cotizacion);
         $sheet->setCellValue('C' . $row, $tipoCliente);
     }
 
@@ -1075,10 +1078,11 @@ class DocumentacionController extends Controller
             ]
         ];
 
-        $sheet->getStyle('R' . $row . ':T' . $row)->applyFromArray($styleArray);
-        $sheet->getStyle('R' . $row . ':T' . $row)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-        $sheet->getStyle('R' . $row . ':T' . $row)->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
+        $sheet->getStyle('R' . $row . ':U' . $row)->applyFromArray($styleArray);
+        $sheet->getStyle('R' . $row . ':U' . $row)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        $sheet->getStyle('R' . $row . ':U' . $row)->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
         $sheet->getStyle('R' . $row)->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_PERCENTAGE_00);
+        $sheet->getStyle('S' . $row)->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_PERCENTAGE_00);
     }
 
     /**
@@ -1160,17 +1164,17 @@ class DocumentacionController extends Controller
                     for ($row = $merge['start']; $row <= $merge['end']; $row++) {
                         $this->safeUnmergeCells($sheet, 'C' . $row);
                         $this->safeUnmergeCells($sheet, 'D' . $row);
-                        $this->safeUnmergeCells($sheet, 'T' . $row);
+                        $this->safeUnmergeCells($sheet, 'U' . $row);
                     }
 
                     // Ahora aplicar los nuevos merges
                     $sheet->mergeCells('C' . $merge['start'] . ':C' . $merge['end']);
                     $sheet->mergeCells('D' . $merge['start'] . ':D' . $merge['end']);
-                    $sheet->mergeCells('T' . $merge['start'] . ':T' . $merge['end']);
+                    $sheet->mergeCells('U' . $merge['start'] . ':U' . $merge['end']);
 
                     // Re-aplicar formatos numéricos al rango extendido COMPLETO
-                    // IMPORTANTE: Para columnas mergeadas (T), aplicar formato solo a la primera celda
-                    // Para columnas NO mergeadas (R, O, Q), aplicar formato a todas las filas
+                    // IMPORTANTE: Para columnas mergeadas (U), aplicar formato solo a la primera celda
+                    // Para columnas NO mergeadas (R, S, O, Q), aplicar formato a todas las filas
                     
                     // Aplicar formatos a TODAS las filas para columnas no mergeadas
                     for ($row = $merge['start']; $row <= $merge['end']; $row++) {
@@ -1182,12 +1186,13 @@ class DocumentacionController extends Controller
                             $sheet->getStyle('O' . $row)->getNumberFormat()->setFormatCode('_("$"* #,##0.00_);_("$"* (#,##0.00);_("$"* "-"??_);_(@_)');
                             $sheet->getStyle('Q' . $row)->getNumberFormat()->setFormatCode('_("$"* #,##0.00_);_("$"* (#,##0.00);_("$"* "-"??_);_(@_)');
                         }
-                        // Aplicar formato a columna R (no mergeada) en todas las filas
+                        // Aplicar formato a columnas R y S (no mergeadas) en todas las filas
                         $sheet->getStyle('R' . $row)->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_PERCENTAGE_00);
+                        $sheet->getStyle('S' . $row)->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_PERCENTAGE_00);
                     }
                     
-                    // Aplicar formato a columna T (mergeada) solo a la primera celda del merge (la visible)
-                    $sheet->getStyle('T' . $merge['start'])->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_NUMBER_00);
+                    // Aplicar formato a columna U (mergeada) solo a la primera celda del merge (la visible)
+                    $sheet->getStyle('U' . $merge['start'])->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_NUMBER_00);
 
                     Log::info('✅ Merge aplicado exitosamente para cliente: ' . $merge['client'] . ' con formatos reaplicados');
                 } catch (\Exception $e) {
@@ -1230,7 +1235,7 @@ class DocumentacionController extends Controller
                     for ($r = $clientStartRow; $r <= $clientEndRow; $r++) {
                         $this->safeUnmergeCells($sheet, 'C' . $r);
                         $this->safeUnmergeCells($sheet, 'D' . $r);
-                        $this->safeUnmergeCells($sheet, 'T' . $r);
+                        $this->safeUnmergeCells($sheet, 'U' . $r);
                         
                         // Formato de contabilidad USD con 2 decimales (igual que la primera hoja)
                         $sheet->getStyle('O' . $r)->getNumberFormat()->setFormatCode('_("$"* #,##0.00_);_("$"* (#,##0.00);_("$"* "-"??_);_(@_)');
@@ -1415,15 +1420,16 @@ class DocumentacionController extends Controller
             ]
         ];
 
-        $sheet->getStyle('R' . $row . ':T' . $row)->applyFromArray($styleArray);
-        $sheet->getStyle('R' . $row . ':T' . $row)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-        $sheet->getStyle('R' . $row . ':T' . $row)->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
+        $sheet->getStyle('R' . $row . ':U' . $row)->applyFromArray($styleArray);
+        $sheet->getStyle('R' . $row . ':U' . $row)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        $sheet->getStyle('R' . $row . ':U' . $row)->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
         // Formato de contabilidad USD con 2 decimales (igual que la primera hoja)
         $sheet->getStyle('O' . $row)->getNumberFormat()->setFormatCode('_("$"* #,##0.00_);_("$"* (#,##0.00);_("$"* "-"??_);_(@_)');
         $sheet->getStyle('Q' . $row)->getNumberFormat()->setFormatCode('_("$"* #,##0.00_);_("$"* (#,##0.00);_("$"* "-"??_);_(@_)');
         $sheet->getStyle('R' . $row)->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_PERCENTAGE_00);
-        // Aplicar formato numérico con 2 decimales para columna T (volumen)
-        $sheet->getStyle('T' . $row)->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_NUMBER_00);
+        $sheet->getStyle('S' . $row)->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_PERCENTAGE_00);
+        // Aplicar formato numérico con 2 decimales para columna U (volumen)
+        $sheet->getStyle('U' . $row)->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_NUMBER_00);
     }
 
     /**
@@ -1438,7 +1444,8 @@ class DocumentacionController extends Controller
         $sheet->getColumnDimension('D')->setWidth(60);
         $sheet->getColumnDimension('R')->setWidth(20);
         $sheet->getColumnDimension('S')->setWidth(25);
-        $sheet->getColumnDimension('T')->setWidth(15);
+        $sheet->getColumnDimension('T')->setWidth(25);
+        $sheet->getColumnDimension('U')->setWidth(15);
 
         // Aplicar colores de fondo
         $this->applyBackgroundColors($sheet, $highestRow);
@@ -1465,13 +1472,13 @@ class DocumentacionController extends Controller
                 ->setFillType(Fill::FILL_SOLID)
                 ->getStartColor()->setRGB('dcdde1');
 
-            // Columnas R y S - Azul cielo
-            $sheet->getStyle('R' . $startColumn . ':S' . ($highestRow - 1))->getFill()
+            // Columnas R, S y T - Azul cielo
+            $sheet->getStyle('R' . $startColumn . ':T' . ($highestRow - 1))->getFill()
                 ->setFillType(Fill::FILL_SOLID)
                 ->getStartColor()->setRGB('85c1e9');
 
-            // Columna T - Rosa
-            $sheet->getStyle('T' . $startColumn . ':T' . ($highestRow - 1))->getFill()
+            // Columna U - Rosa
+            $sheet->getStyle('U' . $startColumn . ':U' . ($highestRow - 1))->getFill()
                 ->setFillType(Fill::FILL_SOLID)
                 ->getStartColor()->setRGB('f5b7b1');
         }
@@ -1486,7 +1493,7 @@ class DocumentacionController extends Controller
 
         if ($highestRow > 0 && ($highestRow - 1) > 0) {
             $sheet->setCellValue('Q' . $highestRow, '=SUM(Q' . $startColumn . ':Q' . ($highestRow - 1) . ')');
-            $sheet->setCellValue('T' . $highestRow, '=SUM(T' . $startColumn . ':T' . ($highestRow - 1) . ')');
+            $sheet->setCellValue('U' . $highestRow, '=SUM(U' . $startColumn . ':U' . ($highestRow - 1) . ')');
         }
     }
 

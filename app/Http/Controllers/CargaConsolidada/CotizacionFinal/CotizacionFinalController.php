@@ -10,6 +10,7 @@ use App\Models\CargaConsolidada\Contenedor;
 use App\Models\Usuario;
 use App\Models\Notificacion;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use App\Traits\WhatsappTrait;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -669,9 +670,10 @@ class CotizacionFinalController extends Controller
                 'P' => 'ANTIDUMPING',
                 'Q' => 'VALORACION',
                 'R' => 'AD VALOREM',
-                'S' => 'PERCEPCION',
-                'T' => 'PESO',
-                'U' => 'VOLUMEN SISTEMA'
+                'S' => 'ISC',
+                'T' => 'PERCEPCION',
+                'U' => 'PESO',
+                'V' => 'VOLUMEN SISTEMA'
             ];
 
             foreach ($headers as $column => $value) {
@@ -799,7 +801,7 @@ class CotizacionFinalController extends Controller
         ];
 
         // Aplicar estilo base a toda la fila
-        $sheet->getStyle('A' . $row . ':U' . $row)->applyFromArray($rowStyle);
+        $sheet->getStyle('A' . $row . ':V' . $row)->applyFromArray($rowStyle);
 
         // Formato de moneda
         $currencyStyle = [
@@ -808,7 +810,7 @@ class CotizacionFinalController extends Controller
             ]
         ];
 
-        $currencyColumns = ['O', 'P', 'Q', 'R'];
+        $currencyColumns = ['O', 'P', 'Q'];
         foreach ($currencyColumns as $column) {
             $sheet->getStyle($column . $row)->applyFromArray($currencyStyle);
         }
@@ -819,10 +821,12 @@ class CotizacionFinalController extends Controller
                 'formatCode' => \PhpOffice\PhpSpreadsheet\Style\NumberFormat::FORMAT_PERCENTAGE_00
             ]
         ];
+        $sheet->getStyle('R' . $row)->applyFromArray($percentageStyle);
         $sheet->getStyle('S' . $row)->applyFromArray($percentageStyle);
+        $sheet->getStyle('T' . $row)->applyFromArray($percentageStyle);
 
         // Ajustar texto y ajuste automático
-        $sheet->getStyle('A' . $row . ':U' . $row)
+        $sheet->getStyle('A' . $row . ':V' . $row)
             ->getAlignment()
             ->setWrapText(true)
             ->setShrinkToFit(true);
@@ -833,7 +837,7 @@ class CotizacionFinalController extends Controller
      */
     private function applyClientMerges($sheet, $startRow, $endRow)
     {
-        $columnsToMerge = ['A', 'B', 'C', 'D', 'T', 'U'];
+        $columnsToMerge = ['A', 'B', 'C', 'D', 'U', 'V'];
 
         foreach ($columnsToMerge as $column) {
             $sheet->mergeCells($column . $startRow . ':' . $column . $endRow);
@@ -873,7 +877,7 @@ class CotizacionFinalController extends Controller
         ];
 
         // Aplicar estilos al encabezado
-        $sheet->getStyle('A1:U1')->applyFromArray($headerStyle);
+        $sheet->getStyle('A1:V1')->applyFromArray($headerStyle);
         $sheet->mergeCells('F1:M1');
 
         // Establecer ancho de columnas
@@ -889,9 +893,10 @@ class CotizacionFinalController extends Controller
             'P' => 15, // ANTIDUMPING
             'Q' => 15, // VALORACION
             'R' => 15, // AD VALOREM
-            'S' => 15, // PERCEPCION
-            'T' => 12, // PESO
-            'U' => 15  // VOLUMEN SISTEMA
+            'S' => 12, // ISC
+            'T' => 15, // PERCEPCION
+            'U' => 12, // PESO
+            'V' => 15  // VOLUMEN SISTEMA
         ];
 
         foreach ($columnWidths as $column => $width) {
@@ -911,10 +916,16 @@ class CotizacionFinalController extends Controller
                 ]
             ]
         ];
-        $sheet->getStyle('A1:U' . ($lastRow))->applyFromArray($tableStyle);
+        $sheet->getStyle('A1:V' . ($lastRow))->applyFromArray($tableStyle);
 
         // Formato de porcentaje para columna R
         $sheet->getStyle('R2:R' . ($lastRow - 1))
+            ->getNumberFormat()
+            ->setFormatCode(\PhpOffice\PhpSpreadsheet\Style\NumberFormat::FORMAT_PERCENTAGE_00);
+        $sheet->getStyle('S2:S' . ($lastRow - 1))
+            ->getNumberFormat()
+            ->setFormatCode(\PhpOffice\PhpSpreadsheet\Style\NumberFormat::FORMAT_PERCENTAGE_00);
+        $sheet->getStyle('T2:T' . ($lastRow - 1))
             ->getNumberFormat()
             ->setFormatCode(\PhpOffice\PhpSpreadsheet\Style\NumberFormat::FORMAT_PERCENTAGE_00);
 
@@ -2288,16 +2299,36 @@ class CotizacionFinalController extends Controller
 
                     // Solo agregar productos con datos esenciales
                     if (!empty($cantidad) && !empty($precioUnitario)) {
+                        $rawIscPercent = $getCellValue('S', $productRow);
+                        $rawPercepcion = $getCellValue('T', $productRow);
+                        $rawPeso = $getCellValue('U', $productRow);
+                        $rawCbm = $getCellValue('V', $productRow);
+
+                        // Compatibilidad de layout:
+                        // - Nuevo: P=ANTIDUMPING, Q=VALORACION, R=AD VALOREM, S=ISC%, T=PERCEPCION, U=PESO, V=VOLUMEN
+                        // - Antiguo: P=ANTIDUMPING, Q=VALORACION, R=AD VALOREM, S=PERCEPCION, T=PESO, U=VOLUMEN
+                        $hasNewLayout = trim((string) $rawCbm) !== '';
+
+                        $iscPercent = $hasNewLayout
+                            ? $this->normalizePercentInput($rawIscPercent, 0)
+                            : 0.0;
+                        $percepcion = $hasNewLayout
+                            ? $this->normalizePercentInput($rawPercepcion, 0.035)
+                            : $this->normalizePercentInput($rawIscPercent, 0.035);
+                        $peso = $hasNewLayout ? $rawPeso : $rawPercepcion;
+                        $cbm = $hasNewLayout ? $rawCbm : $rawPeso;
+
                         $productoData = [
                             'nombre' => $producto,
                             'cantidad' => $cantidad,
                             'precio_unitario' => $precioUnitario,
                             'antidumping' => $getCellValue('P', $productRow) ?: 0,
                             'valoracion' => $getCellValue('Q', $productRow) ?: 0,
-                            'ad_valorem' => $getCellValue('R', $productRow) ?: 0,
-                            'percepcion' => $getCellValue('S', $productRow) ?: 0.035,
-                            'peso' => $getCellValue('T', $productRow) ?: 0,
-                            'cbm' => $getCellValue('U', $productRow) ?: '',
+                            'ad_valorem' => $this->normalizePercentInput($getCellValue('R', $productRow), 0),
+                            'isc_percent' => $iscPercent,
+                            'percepcion' => $percepcion,
+                            'peso' => $peso ?: 0,
+                            'cbm' => $cbm ?: '',
                         ];
 
                         $client['productos'][] = $productoData;
@@ -2322,6 +2353,30 @@ class CotizacionFinalController extends Controller
         $columnIndex = Coordinate::columnIndexFromString($column);
         $newIndex = $columnIndex + $increment;
         return Coordinate::stringFromColumnIndex($newIndex);
+    }
+
+    /**
+     * Normaliza valores porcentuales provenientes de Excel.
+     * Acepta formatos: 0.07, 7, "7%", "0.07".
+     */
+    private function normalizePercentInput($value, float $default): float
+    {
+        if ($value === null || $value === '') {
+            return $default;
+        }
+
+        $raw = is_string($value) ? trim($value) : $value;
+        if (is_string($raw) && str_ends_with($raw, '%')) {
+            $raw = rtrim($raw, '%');
+        }
+
+        if (!is_numeric($raw)) {
+            return $default;
+        }
+
+        $numeric = (float) $raw;
+
+        return $numeric > 1 ? $numeric / 100 : $numeric;
     }
 
     /**
@@ -3252,6 +3307,77 @@ class CotizacionFinalController extends Controller
     }
 
     /**
+     * Filas RECARGO MONTACARGAS / DELIVERY en el PDF: mismas filas K y visibilidad que la boleta Excel (layout K + AD).
+     */
+    private function injectBoletaPdfDeliveryServicioRowsHtml(string $html, $sheet, bool $legacyK): string
+    {
+        if (!$legacyK) {
+            return str_replace(['{{row_montacargas}}', '{{row_delivery}}'], '', $html);
+        }
+
+        try {
+            $hasAd = str_contains(
+                strtoupper(trim((string) $sheet->getCell('B24')->getValue())),
+                'ANTIDUMPING'
+            );
+        } catch (\Throwable $e) {
+            $hasAd = false;
+        }
+
+        $rowMonta = $hasAd ? 43 : 42;
+        $rowDeliv = $hasAd ? 44 : 43;
+
+        $html = str_replace(
+            '{{row_montacargas}}',
+            $this->buildBoletaPdfDeliveryServicioRowHtml($sheet, $rowMonta),
+            $html
+        );
+
+        return str_replace(
+            '{{row_delivery}}',
+            $this->buildBoletaPdfDeliveryServicioRowHtml($sheet, $rowDeliv),
+            $html
+        );
+    }
+
+    private function buildBoletaPdfDeliveryServicioRowHtml($sheet, int $row): string
+    {
+        try {
+            $dim = $sheet->getRowDimension($row);
+            if ($dim->getVisible() === false) {
+                return '';
+            }
+        } catch (\Throwable $e) {
+            // continuar
+        }
+
+        $monto = $this->boletaFinalGetCellFloat($sheet, 'K' . $row);
+        if ($monto <= 0.00001) {
+            return '';
+        }
+
+        $label = '';
+        try {
+            $label = trim((string) $sheet->getCell('B' . $row)->getCalculatedValue());
+        } catch (\Throwable $e) {
+            $label = '';
+        }
+        if ($label === '') {
+            $label = 'RECARGO LOGÍSTICO / DELIVERY';
+        }
+
+        $labelEsc = htmlspecialchars($label, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $fmt = number_format($monto, 2, '.', ',');
+
+        return '<tr>
+        <td colspan="3">' . $labelEsc . '</td>
+        <th class="no-horizontal-border"></th>
+        <td class="no-horizontal-border right">$ ' . $fmt . '</td>
+        <td class="no-horizontal-border center">USD</td>
+        </tr>';
+    }
+
+    /**
      * HTML listo para DomPDF: PLANTILLA_COTIZACION_FINAL.html.
      * Soporta hoja 1 tipo calculadora (J14–J43, B8, ítems fila 38) y legacy v2 (K14–K33, C8, ítems fila 48).
      */
@@ -3489,6 +3615,7 @@ class CotizacionFinalController extends Controller
             throw new \Exception('Template HTML no encontrado: ' . $htmlFilePath);
         }
         $htmlContent = file_get_contents($htmlFilePath);
+        $htmlContent = $this->injectBoletaPdfDeliveryServicioRowsHtml($htmlContent, $sheet, $legacyK);
 
         $pagosPath = public_path('assets/images/pagos-full.jpg');
         $pagosContent = file_exists($pagosPath) ? file_get_contents($pagosPath) : '';
@@ -3659,11 +3786,13 @@ class CotizacionFinalController extends Controller
             'F' => $sheet->getCell('E' . $currentRow)->getValue(),
             'N' => $sheet->getCell('M' . $currentRow)->getValue(),
             'O' => $sheet->getCell('O' . $currentRow)->getValue(),
-            'P' => $sheet->getCell('S' . $currentRow)->getValue(),
+            // Plantilla generada actual: R=AD VALOREM, S=ISC, T=ANTIDUMPING, U=VOL. SISTEMA
+            'P' => $sheet->getCell('T' . $currentRow)->getValue(),
             'Q' => 0,
             'R' => $sheet->getCell('R' . $currentRow)->getValue(),
-            'S' => 0.035,
-            'U' => $sheet->getCell('T' . $currentRow)->getValue()
+            'S' => $sheet->getCell('S' . $currentRow)->getValue(),
+            'T' => 0.035,
+            'V' => $sheet->getCell('U' . $currentRow)->getValue()
         ];
 
         Log::info('Row data: ' . json_encode($rowData));
@@ -3677,7 +3806,7 @@ class CotizacionFinalController extends Controller
             if ($this->isNameMatch(trim($clientName), trim($data->nombre))) {
                 $newSheet->setCellValue('C' . $newRow, $data->documento);
                 $newSheet->setCellValue('D' . $newRow, $data->telefono);
-                $newSheet->setCellValue('T' . $newRow, $data->peso);
+                $newSheet->setCellValue('U' . $newRow, $data->peso);
                 break;
             }
         }
@@ -3925,6 +4054,58 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
         } catch (\Exception $e) {
             Log::error('Error actualizando campos en Excel: ' . $e->getMessage());
         }
+    }
+
+    /**
+     * Suma montacargas / delivery desde contenedor_consolidado_cotizacion_delivery_servicio y escribe en la boleta.
+     * Con antidumping (fila extra de recargos): K43 montacargas, K44 delivery. Sin AD: K42, K43.
+     * Si el importe es 0, se oculta la fila para que no aparezca el concepto.
+     */
+    private function applyBoletaDeliveryServicioRows(
+        \PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $sheet,
+        int $idCotizacion,
+        bool $hasAntidumpingMain
+    ): void {
+        if ($idCotizacion <= 0 || !Schema::hasTable('contenedor_consolidado_cotizacion_delivery_servicio')) {
+            return;
+        }
+
+        $table = 'contenedor_consolidado_cotizacion_delivery_servicio';
+        $monta = (float) DB::table($table)
+            ->where('id_cotizacion', $idCotizacion)
+            ->whereRaw("UPPER(TRIM(tipo_servicio)) = 'MONTACARGA'")
+            ->sum('importe');
+        $deliv = (float) DB::table($table)
+            ->where('id_cotizacion', $idCotizacion)
+            ->whereRaw("UPPER(TRIM(tipo_servicio)) = 'DELIVERY'")
+            ->sum('importe');
+
+        $rowMonta = $hasAntidumpingMain ? 43 : 42;
+        $rowDeliv = $hasAntidumpingMain ? 44 : 43;
+
+        $usdFmt = '_-[$$-en-US]* #,##0.00_-;[Red]-[$$-en-US]* #,##0.00_-;_-[$$-en-US]* "-"??_-;_-@_-';
+
+        $this->applyBoletaDeliveryServicioOneRow($sheet, $rowMonta, $monta, $usdFmt);
+        $this->applyBoletaDeliveryServicioOneRow($sheet, $rowDeliv, $deliv, $usdFmt);
+    }
+
+    private function applyBoletaDeliveryServicioOneRow(
+        \PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $sheet,
+        int $row,
+        float $amount,
+        string $usdNumberFormat
+    ): void {
+        if ($amount > 0.00001) {
+            $sheet->setCellValue('K' . $row, round($amount, 2));
+            $sheet->getStyle('K' . $row)->getNumberFormat()->setFormatCode($usdNumberFormat);
+            $sheet->setCellValue('L' . $row, 'USD');
+            $sheet->getRowDimension($row)->setVisible(true);
+            return;
+        }
+
+        $sheet->setCellValue('K' . $row, 0);
+        $sheet->setCellValue('L' . $row, '');
+        $sheet->getRowDimension($row)->setVisible(false);
     }
 
     /**
@@ -4956,13 +5137,18 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
             $objPHPExcel->getActiveSheet()->setTitle('2');
             $this->normalizeMainSheetFormulasCalcSheetName($objPHPExcel, '3', '2');
 
+            $mainFinal = $objPHPExcel->getSheet(0);
             // Con antidumping, tras renombrar hojas la hoja 0 puede seguir con K42 =K27 desde plantilla; reforzar enlace al TOTAL tributos (K$28).
             if (!empty($hasAntidumpingMain)) {
-                $mainFinal = $objPHPExcel->getSheet(0);
                 $mainFinal->setCellValue('K42', '=K$' . (int) $rowMainTotalTributosSheet0);
                 $mainFinal->getStyle('K42')->getNumberFormat()->setFormatCode(
                     '_-[$$-en-US]* #,##0.00_-;[Red]-[$$-en-US]* #,##0.00_-;_-[$$-en-US]* "-"??_-;_-@_-'
                 );
+            }
+
+            $idCotizacionBoleta = isset($data['id']) ? (int) $data['id'] : 0;
+            if ($idCotizacionBoleta > 0) {
+                $this->applyBoletaDeliveryServicioRows($mainFinal, $idCotizacionBoleta, (bool) $hasAntidumpingMain);
             }
 
             $objWriter = IOFactory::createWriter($objPHPExcel, 'Xlsx');
@@ -5683,6 +5869,7 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
             $producto['cantidad'] = is_numeric($producto['cantidad'] ?? 0) ? (float)$producto['cantidad'] : 0;
             $producto['antidumping'] = is_numeric($producto['antidumping'] ?? 0) ? (float)$producto['antidumping'] : 0;
             $producto['ad_valorem'] = is_numeric($producto['ad_valorem'] ?? 0) ? (float)$producto['ad_valorem'] : 0;
+            $producto['isc_percent'] = is_numeric($producto['isc_percent'] ?? 0) ? (float)$producto['isc_percent'] : 0;
             $producto['percepcion'] = is_numeric($producto['percepcion'] ?? 0.035) ? (float)$producto['percepcion'] : 0.035;
             $producto['peso'] = is_numeric($producto['peso'] ?? 0) ? (float)$producto['peso'] : 0;
             $producto['cbm'] = is_numeric($producto['cbm'] ?? 0) ? (float)$producto['cbm'] : 0;

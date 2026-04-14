@@ -6,6 +6,8 @@ use App\Http\Controllers\CargaConsolidada\CotizacionFinal\CotizacionFinalControl
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Tests\TestCase;
 
@@ -185,5 +187,53 @@ class GenerateMassiveExcelPayrollsTest extends TestCase
             (string) $response->headers->get('Content-Disposition')
         );
         $this->assertGreaterThan(0, $response->getFile()->getSize());
+    }
+
+    public function test_get_massive_excel_data_mapea_isc_percent_desde_layout_nuevo(): void
+    {
+        $spreadsheet = new Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+
+        // Fila cliente/producto (layout nuevo de plantilla general re-subida)
+        $sheet->setCellValue('A2', 'PETER TAYPE TACAS');
+        $sheet->setCellValue('B2', 'NATURAL');
+        $sheet->setCellValue('C2', '12345678');
+        $sheet->setCellValue('D2', '51900000000');
+        $sheet->setCellValue('F2', 'ITEM ISC TEST');
+        $sheet->setCellValue('N2', 3);
+        $sheet->setCellValue('O2', 15.5);
+        $sheet->setCellValue('P2', 2.25);     // antidumping unitario
+        $sheet->setCellValue('Q2', 12.75);    // valoracion
+        $sheet->setCellValue('R2', '6%');     // ad valorem
+        $sheet->setCellValue('S2', '11%');    // isc percent (nuevo)
+        $sheet->setCellValue('T2', 0.035);    // percepcion
+        $sheet->setCellValue('U2', 28);       // peso
+        $sheet->setCellValue('V2', 0.42);     // volumen
+
+        $tmpPath = storage_path('app/temp/test_masiva_isc_layout_nuevo.xlsx');
+        if (!is_dir(dirname($tmpPath))) {
+            mkdir(dirname($tmpPath), 0777, true);
+        }
+        (new Xlsx($spreadsheet))->save($tmpPath);
+
+        try {
+            $controller = new CotizacionFinalController();
+            $data = $controller->getMassiveExcelData(new \SplFileInfo($tmpPath));
+
+            $this->assertCount(1, $data);
+            $this->assertSame('PETER TAYPE TACAS', $data[0]['cliente']['nombre']);
+            $this->assertCount(1, $data[0]['cliente']['productos']);
+
+            $producto = $data[0]['cliente']['productos'][0];
+            $this->assertEqualsWithDelta(0.11, (float) $producto['isc_percent'], 0.0001, 'Debe mapear ISC% desde columna S');
+            $this->assertEqualsWithDelta(0.06, (float) $producto['ad_valorem'], 0.0001, 'AD VALOREM debe conservarse como porcentaje');
+            $this->assertEqualsWithDelta(0.035, (float) $producto['percepcion'], 0.0001);
+            $this->assertEqualsWithDelta(28.0, (float) $producto['peso'], 0.0001);
+            $this->assertEqualsWithDelta(0.42, (float) $producto['cbm'], 0.0001);
+        } finally {
+            if (is_file($tmpPath)) {
+                @unlink($tmpPath);
+            }
+        }
     }
 }
