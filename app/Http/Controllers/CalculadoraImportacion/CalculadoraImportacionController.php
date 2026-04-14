@@ -1134,7 +1134,7 @@ class CalculadoraImportacionController extends Controller
                                 'id_usuario' => $calculadora->id_usuario ?? $currentUserId,
                                 'from_calculator' => true,
                                 'cotizacion_file_url' => $calculadora->url_cotizacion,
-                                'es_imo' => (bool) ($data['es_imo'] ?? $calculadora->es_imo ?? false),
+                                'es_imo' => (bool) ($calculadora->es_imo ?? false),
                             ]);
 
                             $calculadora->id_cotizacion = $cotizacionId;
@@ -1167,6 +1167,11 @@ class CalculadoraImportacionController extends Controller
                         'from_calculator' => true,
                     ]);
                     Log::info('cotizacion_file_url e id_usuario actualizados al pasar a COTIZADO', ['cotizacion_id' => $calculadora->id_cotizacion]);
+
+                    // IMPORTANTE: cuando vuelve a COTIZADO, también hay que recalcular
+                    // monto/impuestos/tarifa/logística en la cotización vinculada.
+                    $calculadora->load(['proveedores', 'contenedor']);
+                    $this->cotizacionSyncService->actualizarCotizacionDesdeCalculadora($calculadora);
                 }
 
                 // Si ya tenía cotización vinculada: asegurar que los proveedores de la calculadora

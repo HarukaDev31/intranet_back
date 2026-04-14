@@ -915,6 +915,47 @@ class CalculadoraImportacionService
         return $tarifa ? (float) $tarifa->value : 375.0;
     }
 
+    /**
+     * Resuelve el tipo de tarifa por:
+     * 1) Tabla calculadora_tarifas_consolidado (tipo cliente + rango CBM)
+     * 2) Payload (type/tariftype)
+     * 3) Fallback final: PLAIN
+     */
+    private function resolveTarifaTypeByClienteYCbm(string $tipoClienteNombre, float $cbmTotal, ?array $tarifaInput = null): string
+    {
+        $tipoCliente = CalculadoraTipoCliente::where('nombre', trim($tipoClienteNombre))->first();
+        if (!$tipoCliente) {
+            $tipoCliente = CalculadoraTipoCliente::where('nombre', 'NUEVO')->first();
+        }
+
+        if ($tipoCliente) {
+            $tarifaConsolidado = CalculadoraTarifasConsolidado::where('calculadora_tipo_cliente_id', $tipoCliente->id)
+                ->where('limit_inf', '<=', $cbmTotal)
+                ->where('limit_sup', '>=', $cbmTotal)
+                ->first();
+
+            if (!$tarifaConsolidado) {
+                $tarifaConsolidado = CalculadoraTarifasConsolidado::where('calculadora_tipo_cliente_id', $tipoCliente->id)
+                    ->orderBy('limit_sup', 'desc')
+                    ->first();
+            }
+
+            $typeFromDb = strtoupper(trim((string) ($tarifaConsolidado->type ?? '')));
+            if ($typeFromDb !== '') {
+                return $typeFromDb;
+            }
+        }
+
+        if (is_array($tarifaInput)) {
+            $incomingType = strtoupper(trim((string) (($tarifaInput['type'] ?? $tarifaInput['tariftype'] ?? ''))));
+            if ($incomingType !== '') {
+                return $incomingType;
+            }
+        }
+
+        return 'PLAIN';
+    }
+
     /** Extra USD por proveedores que excedan MAX_PROVEEDORES (50 USD c/u). */
     public function getExtraProveedor(int $cantidadProveedores): float
     {
@@ -961,7 +1002,8 @@ class CalculadoraImportacionService
             $tipoCliente = !empty($whatsapp) ? $this->getTipoClientePorWhatsapp($whatsapp) : ($data['clienteInfo']['tipoCliente'] ?? 'NUEVO');
             $data['clienteInfo']['tipoCliente'] = $tipoCliente;
             $tarifaVal = $this->getTarifaPrincipalPorTipoYCbm($tipoCliente, $totalCbm);
-            $data['tarifa'] = ['tarifa' => $tarifaVal, 'type' => 'CBM', 'value' => $tarifaVal];
+            $tarifaType = $this->resolveTarifaTypeByClienteYCbm($tipoCliente, $totalCbm, is_array($data['tarifa'] ?? null) ? $data['tarifa'] : null);
+            $data['tarifa'] = ['tarifa' => $tarifaVal, 'type' => $tarifaType, 'value' => $tarifaVal];
             $data['tarifaTotalExtraProveedor'] = $this->getExtraProveedor(count($data['proveedores']));
             $data['tarifaTotalExtraItem'] = $this->getExtraItemPorCbm($totalCbm, $totalProductos);
             $data['tarifaDescuento'] = 0;
@@ -972,7 +1014,9 @@ class CalculadoraImportacionService
         $data['totalDescuento'] = $data['tarifaDescuento'] ?? 0;
         if (empty($data['tarifa']) || !is_array($data['tarifa'])) {
             $tarifaVal = is_array($data['tarifa']) ? (float) ($data['tarifa']['tarifa'] ?? 0) : (float) ($data['tarifa'] ?? 0);
-            $data['tarifa'] = ['tarifa' => $tarifaVal, 'type' => 'CBM', 'value' => $tarifaVal];
+            $tipoCliente = (string) ($data['clienteInfo']['tipoCliente'] ?? 'NUEVO');
+            $tarifaType = $this->resolveTarifaTypeByClienteYCbm($tipoCliente, $totalCbm, is_array($data['tarifa'] ?? null) ? $data['tarifa'] : null);
+            $data['tarifa'] = ['tarifa' => $tarifaVal, 'type' => $tarifaType, 'value' => $tarifaVal];
         }
         if (empty($data['tipo_cambio']) || $data['tipo_cambio'] <= 0) {
             $data['tipo_cambio'] = 3.75;
@@ -1348,7 +1392,8 @@ class CalculadoraImportacionService
 
             $totalExtras = ($data['totalExtraProveedor'] ?? 0) + ($data['totalExtraItem'] ?? 0);
             $tarifaConExtras = $data['tarifa']['tarifa'];
-
+            //log tipo tarifa
+            Log::info('tipo tarifa: ' . $data['tarifa']['type']);
             if ($data['tarifa']['type'] == 'PLAIN') {
                 $sheetCalculos->setCellValue($totalColumn . $rowCostosFob, '=' . ($data['tarifa']['tarifa']) . '*' . $COSTOSFOB_PERCENTAGE);
                 $sheetCalculos->setCellValue($totalColumn . $rowFlete, '=' . ($data['tarifa']['tarifa']) . '*' . $FLETE_PERCENTAGE);
@@ -1786,14 +1831,11 @@ class CalculadoraImportacionService
         $totalExtraProveedor = (float) ($calculadora->tarifa_total_extra_proveedor ?? 0);
         $totalExtraItem = (float) ($calculadora->tarifa_total_extra_item ?? 0);
         $totalDescuento = (float) ($calculadora->tarifa_descuento ?? 0);
-
-        $tarifaType = 'CBM';
-        if (is_array($tarifaInput)) {
-            $incomingType = strtoupper(trim((string) (($tarifaInput['type'] ?? $tarifaInput['tariftype'] ?? ''))));
-            if ($incomingType !== '') {
-                $tarifaType = $incomingType;
-            }
-        }
+        Log::info('tarifaInput: ' . json_encode($tarifaInput));
+        $cbmTotal = (float) collect($proveedores)->sum(fn($p) => (float) ($p['cbm'] ?? 0));
+        $tipoClienteNombre = trim((string) ($calculadora->tipo_cliente ?? 'NUEVO'));
+        $tarifaType = $this->resolveTarifaTypeByClienteYCbm($tipoClienteNombre, $cbmTotal, $tarifaInput);
+        Log::info('tarifaType: ' . $tarifaType);
 
         // E11 del Excel = nombre del tipo de cliente (ej. ANTIGUO), no el monto numérico de la tarifa
         $tarifaLabelParaExcel = (string) ($calculadora->tipo_cliente ?? 'NUEVO');

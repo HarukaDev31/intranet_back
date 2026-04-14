@@ -1589,38 +1589,55 @@ class CotizacionController extends Controller
             }
             $idTipoCliente = $tipoClienteModel->id;
 
-            // Para calculadora: FOB siempre es de J14
-            $fob = $sheet->getCell('J14')->getOldCalculatedValue();
-            
-            // Lógica diferente para calculadora según ANTIDUMPING
-            $antidumping = trim($sheet->getCell('A23')->getValue()) == "ANTIDUMPING";
-            Log::info('ANTIDUMPING: ' . $antidumping);
-            if (!$antidumping) {
-                // Si hay ANTIDUMPING: monto de J30, impuestos de J32
-                $monto = $sheet->getCell('J29')->getOldCalculatedValue();
-                $impuestos = $sheet->getCell('J32')->getOldCalculatedValue();
-                $extra = $sheet->getCell('J30')->getOldCalculatedValue() ?? 0;
-                $descuento = $sheet->getCell('J31')->getOldCalculatedValue() ?? 0;
-            } else {
-                // Si NO hay ANTIDUMPING: monto de J30 (servicio + cargos - descuento + impuestos), impuestos de J33
-                $monto = $sheet->getCell('J30')->getOldCalculatedValue();
-                $impuestos = $sheet->getCell('J33')->getOldCalculatedValue();
-                $extra = $sheet->getCell('J31')->getOldCalculatedValue() ?? 0;
-                $descuento = $sheet->getCell('J32')->getOldCalculatedValue() ?? 0;
-                if ($extra == 0) {
-                    $extra = $sheet->getCell('J31')->getCalculatedValue();
-                    
+            $readFloat = function (string $cell) use ($sheet): float {
+                $value = $sheet->getCell($cell)->getCalculatedValue();
+                if (!is_numeric($value)) {
+                    $value = $sheet->getCell($cell)->getOldCalculatedValue();
                 }
-                if ($descuento == 0) {
-                    $descuento = $sheet->getCell('J32')->getCalculatedValue();
+                if (is_string($value)) {
+                    $value = str_replace([',', ' '], ['', ''], trim($value));
                 }
-               
+                return is_numeric($value) ? (float) $value : 0.0;
+            };
+
+            // Para calculadora: FOB de J14
+            $fob = $readFloat('J14');
+
+            // Detectar antidumping por valor (layout actual) con fallback a label legacy
+            $antidumpingValor = $readFloat('J24');
+            $antidumping = $antidumpingValor > 0.00001 || trim((string) $sheet->getCell('A23')->getValue()) == "ANTIDUMPING";
+            Log::info('ANTIDUMPING: ' . ($antidumping ? '1' : '0'));
+
+            // Layout actual (calculadora regenerada):
+            // - Servicio importación (logística): J41
+            // - Impuestos: J42
+            // - Monto total: J43 (solo referencial)
+            $logistica = $readFloat('J41');
+            $impuestos = $readFloat('J42');
+            $montoTotal = $readFloat('J43');
+
+            // Fallback para layouts previos (si viniera un archivo antiguo)
+            if ($impuestos <= 0) {
+                $impuestos = $readFloat($antidumping ? 'J33' : 'J32');
+            }
+            if ($logistica <= 0) {
+                // Legacy: servicio + extras - descuento
+                $servicio = $readFloat('J30');
+                $extra = $readFloat('J31');
+                $descuento = $readFloat('J32');
+                $logistica = $servicio + $extra - $descuento;
+            }
+            if ($montoTotal <= 0) {
+                $montoTotal = $logistica + $impuestos;
             }
 
-            
-            $tarifa = $monto / (($volumen <= 0 ? 1 : $volumen) < 1.00 ? 1 : ($volumen <= 0 ? 1 : $volumen));
-            $monto = $monto + $extra - $descuento;
-            $peso = $sheet->getCell('I9')->getOldCalculatedValue();
+            // Regla de negocio: en la cotización vinculada, "monto" representa
+            // servicio de importación/logística (sin impuestos).
+            $monto = $logistica;
+
+            $divisorTarifa = (($volumen <= 0 ? 1 : $volumen) < 1.00 ? 1 : ($volumen <= 0 ? 1 : $volumen));
+            $tarifa = $logistica / $divisorTarifa;
+            $peso = $readFloat('I9');
             $highestRow = $sheet->getHighestRow();
             $qtyItem = 0;
             for ($row = 36; $row <= $highestRow; $row++) {
@@ -1679,12 +1696,26 @@ class CotizacionController extends Controller
             try {
                 $objPHPExcel = IOFactory::load($file['tmp_name']);
                 $sheet = $objPHPExcel->getSheet(0);
-                $servicio = $sheet->getCell('J30')->getOldCalculatedValue() ?? 0;
-                $cargosExtras = $sheet->getCell('J31')->getOldCalculatedValue() ?? 0;
-                $descuento = $sheet->getCell('J32')->getOldCalculatedValue() ?? 0;
-                $logistica = (is_numeric($servicio) ? $servicio : 0) + 
-                            (is_numeric($cargosExtras) ? $cargosExtras : 0) - 
-                            (is_numeric($descuento) ? $descuento : 0);
+                $readFloat = function (string $cell) use ($sheet): float {
+                    $value = $sheet->getCell($cell)->getCalculatedValue();
+                    if (!is_numeric($value)) {
+                        $value = $sheet->getCell($cell)->getOldCalculatedValue();
+                    }
+                    if (is_string($value)) {
+                        $value = str_replace([',', ' '], ['', ''], trim($value));
+                    }
+                    return is_numeric($value) ? (float) $value : 0.0;
+                };
+
+                // Layout actual: J41 ya contiene servicio de importación total.
+                $logistica = $readFloat('J41');
+                if ($logistica <= 0) {
+                    // Fallback legacy: servicio + cargos - descuento (J30..J32).
+                    $servicio = $readFloat('J30');
+                    $cargosExtras = $readFloat('J31');
+                    $descuento = $readFloat('J32');
+                    $logistica = $servicio + $cargosExtras - $descuento;
+                }
                 $dataToInsert['logistica_final'] = $logistica;
             } catch (\Exception $e) {
                 Log::warning('Error al calcular logística desde Excel: ' . $e->getMessage());
