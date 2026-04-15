@@ -20,6 +20,7 @@ use App\Models\CargaConsolidada\ComprobanteForm;
 use App\Models\CargaConsolidada\ConsolidadoDeliveryFormLima;
 use App\Models\CargaConsolidada\ConsolidadoDeliveryFormProvince;
 use App\Models\CargaConsolidada\GuiaRemision;
+use App\Models\UsuarioDatosFacturacion;
 
 class FacturaGuiaController extends Controller
 {
@@ -36,6 +37,90 @@ class FacturaGuiaController extends Controller
             $url = rtrim(config('app.url'), '/') . '/' . ltrim($url, '/');
         }
         return $url;
+    }
+
+    /**
+     * Busca datos de facturación previos para decidir el mensaje de WhatsApp.
+     * 1) Prioriza formulario actual por cotización.
+     * 2) Si no existe, intenta por historial usando documento (dni/ruc) del cliente.
+     */
+    private function getDatosFacturacionParaMensaje(Cotizacion $cotizacion)
+    {
+        $formActual = ComprobanteForm::where('id_cotizacion', $cotizacion->id)->first();
+        if ($formActual) {
+            return [
+                'es_antiguo' => true,
+                'destino' => $formActual->destino_entrega ?: null,
+                'nombre_completo' => $formActual->nombre_completo ?: null,
+                'dni' => $formActual->dni_carnet ?: null,
+                'ruc' => $formActual->ruc ?: null,
+                'razon_social' => $formActual->razon_social ?: null,
+                'domicilio_fiscal' => $formActual->domicilio_fiscal ?: null,
+            ];
+        }
+
+        $documento = trim((string) ($cotizacion->documento ?? ''));
+        if ($documento === '') {
+            return null;
+        }
+
+        $historico = UsuarioDatosFacturacion::where('ruc', $documento)
+            ->orWhere('dni', $documento)
+            ->orderBy('id', 'desc')
+            ->first();
+
+        if (!$historico) {
+            return null;
+        }
+
+        return [
+            'es_antiguo' => true,
+            'destino' => $historico->destino ?: null,
+            'nombre_completo' => $historico->nombre_completo ?: null,
+            'dni' => $historico->dni ?: null,
+            'ruc' => $historico->ruc ?: null,
+            'razon_social' => $historico->razon_social ?: null,
+            'domicilio_fiscal' => $historico->domicilio_fiscal ?: null,
+        ];
+    }
+
+    private function buildMensajeFormularioNuevo(Cotizacion $cotizacion, $idContenedor, $clientesUrlBase)
+    {
+        $carga = $cotizacion->contenedor ? $cotizacion->contenedor->carga : 'N/A';
+        $link = rtrim($clientesUrlBase, '/') . '/formulario-comprobante/' . $idContenedor;
+
+        return "Hola {$cotizacion->nombre} 🙋🏻‍♀️,\n\n" .
+            "Somos del área contable de Pro Business.\n" .
+            "Tu carga del consolidado #{$carga} ya está rumbo a Perú 🚢.\n\n" .
+            "✅ Por favor completa el formulario para enviarte tu comprobante cuando recibas tus productos:\n" .
+            "{$link}\n\n" .
+            "Crearse una cuenta si en caso es su primera vez.";
+    }
+
+    private function buildMensajeFormularioAntiguo(Cotizacion $cotizacion, array $datosFacturacion)
+    {
+        $carga = $cotizacion->contenedor ? $cotizacion->contenedor->carga : 'N/A';
+        $tipoComprobante = !empty($datosFacturacion['ruc'])
+            ? 'FACTURA'
+            : (!empty($datosFacturacion['dni']) ? 'BOLETA' : '-');
+
+        $ruc = $datosFacturacion['ruc'] ?? '-';
+        $razonSocial = $datosFacturacion['razon_social'] ?? '-';
+        $domicilio = $datosFacturacion['domicilio_fiscal'] ?? '-';
+        $destino = $datosFacturacion['destino'] ?? '-';
+
+        return "Hola {$cotizacion->nombre} 🙋🏻‍♀️,\n\n" .
+            "Somos del área contable de Pro Business.\n" .
+            "Tu carga del consolidado #{$carga} ya está rumbo a Perú 🚢.\n\n" .
+            "✅ Para enviarte tu comprobante al momento de la entrega, confirma tus datos:\n\n" .
+            "Datos de facturación:\n" .
+            "- Tipo de comprobante: {$tipoComprobante}\n" .
+            "- RUC: {$ruc}\n" .
+            "- Razón social: {$razonSocial}\n" .
+            "- Domicilio fiscal: {$domicilio}\n\n" .
+            "Datos logísticos:\n" .
+            "- Entrega: {$destino}\n\n" .
+            "Quedamos atentos a tu confirmación. 🙌🏼";
     }
 
     /**
@@ -1785,14 +1870,11 @@ Cualquier duda nos escribe.  ¡Gracias! */
                 }
                 $numeroWhatsapp = $telefono . '@c.us';
 
-                $link    = $clientesUrlBase . '/formulario-comprobante/' . $idContenedor;
-                $message = "Hola " . $cotizacion->nombre . " 👋,\n\n" .
-                           "Somos del área contable de Pro Business.\n" .
-                           "Tu carga del consolidado #" . $cotizacion->contenedor->carga . " ya está rumbo a Perú.\n\n" .
-                           "Por favor completa el formulario para enviarte tu comprobante cuando recibas tus productos:\n\n" .
-                           $link . "\n\n" .
-                           "*Crearse una cuenta si en caso es su primera vez.*"
-                           ;
+                $cotizacion->loadMissing('contenedor');
+                $datosFacturacion = $this->getDatosFacturacionParaMensaje($cotizacion);
+                $message = $datosFacturacion
+                    ? $this->buildMensajeFormularioAntiguo($cotizacion, $datosFacturacion)
+                    : $this->buildMensajeFormularioNuevo($cotizacion, $idContenedor, $clientesUrlBase);
 
                 $result = $this->sendMessage($message, $numeroWhatsapp, 0, 'administracion');
 
@@ -2092,15 +2174,10 @@ Cualquier duda nos escribe.  ¡Gracias! */
 
             $idContenedor = $cotizacion->id_contenedor;
             $clientesUrlBase = env('APP_URL_CLIENTES', 'http://localhost:3001');
-            $link = $clientesUrlBase . '/formulario-comprobante/' . $idContenedor;
-            $carga = $cotizacion->contenedor ? $cotizacion->contenedor->carga : 'N/A';
-
-            $message = "Hola " . $cotizacion->nombre . " 👋,\n\n" .
-                "Somos del área contable de Pro Business.\n" .
-                "Tu carga del consolidado #" . $carga . " ya está rumbo a Perú.\n\n" .
-                "Por favor completa el formulario para enviarte tu comprobante cuando recibas tus productos:\n\n" .
-                $link . "\n\n" .
-                "*Crearse una cuenta si en caso es su primera vez.*";
+            $datosFacturacion = $this->getDatosFacturacionParaMensaje($cotizacion);
+            $message = $datosFacturacion
+                ? $this->buildMensajeFormularioAntiguo($cotizacion, $datosFacturacion)
+                : $this->buildMensajeFormularioNuevo($cotizacion, $idContenedor, $clientesUrlBase);
 
             $result = $this->sendMessage($message, $numeroWhatsapp, 0, 'administracion');
 

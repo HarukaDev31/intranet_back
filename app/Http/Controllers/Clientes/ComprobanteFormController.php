@@ -8,6 +8,7 @@ use App\Models\CargaConsolidada\Cotizacion;
 use App\Models\CargaConsolidada\Contenedor;
 use App\Models\CargaConsolidada\ComprobanteForm;
 use App\Models\User;
+use App\Models\UsuarioDatosFacturacion;
 use App\Jobs\SendComprobanteFormNotificationJob;
 use Tymon\JWTAuth\Facades\JWTAuth;
 use Illuminate\Support\Facades\Log;
@@ -215,6 +216,20 @@ class ComprobanteFormController extends Controller
                 ['id_cotizacion' => $cotizacion->id],
                 $base
             );
+
+            // Historial de datos de facturación por usuario:
+            // cada envío del formulario registra una nueva fila.
+            UsuarioDatosFacturacion::create([
+                'id_user' => (int) $user->id,
+                'destino' => in_array(($base['destino_entrega'] ?? null), ['Lima', 'Provincia'])
+                    ? $base['destino_entrega']
+                    : null,
+                'nombre_completo' => $base['nombre_completo'] ?? null,
+                'dni' => $base['dni_carnet'] ?? null,
+                'ruc' => $base['ruc'] ?? null,
+                'razon_social' => $base['razon_social'] ?? null,
+                'domicilio_fiscal' => $base['domicilio_fiscal'] ?? null,
+            ]);
 
             if ($form->wasRecentlyCreated) {
                 SendComprobanteFormNotificationJob::dispatch($form->id);

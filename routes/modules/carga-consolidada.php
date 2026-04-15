@@ -159,6 +159,7 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
             Route::post('/general/process-excel-data', [CotizacionFinalController::class, 'processExcelData']);
             Route::get('/general/download-plantilla-general/{idContenedor}', [CotizacionFinalController::class, 'downloadPlantillaGeneral']);
             Route::get('/general/download-cotizacion-excel/{idCotizacion}', [CotizacionFinalController::class, 'downloadCotizacionFinalExcel']);
+            Route::get('/cargos-extra/{idContenedor}', [CotizacionFinalController::class, 'getCotizacionFinalCargosExtra']);
             Route::get('/pagos/{idCotizacion}', [CotizacionFinalController::class, 'getCotizacionFinalDocumentacionPagos']);
             Route::get('/general/{idContenedor}', [CotizacionFinalController::class, 'getContenedorCotizacionesFinales']);
             Route::get('/general/{idContenedor}/headers', [CotizacionFinalController::class, 'getCotizacionFinalHeaders']);
@@ -262,6 +263,7 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
             Route::delete('/delivery/servicio-line/{idLinea}', [EntregaController::class, 'deleteDeliveryServicioLine']);
             Route::post('/delivery/pagos', [EntregaController::class, 'savePagosDelivery']);
             Route::post('/delivery/send-message/{idCotizacion}', [EntregaController::class, 'sendMessageDelivery']);
+            Route::post('/delivery/send-message-bulk', [EntregaController::class, 'sendMessageDeliveryBulk']);
             Route::post('/delivery/recordatorio-formulario/{idCotizacion}', [EntregaController::class, 'sendRecordatorioFormularioDelivery']);
             Route::post('/delivery/cobro-cotizacion-final/{idCotizacion}', [EntregaController::class, 'sendCobroCotizacionFinalDelivery']);
             Route::post('/delivery/cobro-delivery/{idCotizacion}', [EntregaController::class, 'sendCobroDeliveryDelivery']);

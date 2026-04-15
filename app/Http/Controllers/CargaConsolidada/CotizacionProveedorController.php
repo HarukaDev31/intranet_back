@@ -227,7 +227,9 @@ class CotizacionProveedorController extends Controller
                     ->select([
                         'id',
                         'qty_box',
+                        'qty_pallet_china',
                         'peso',
+                        'peso_china',
                         'id_cotizacion',
                         'cbm_total',
                         'supplier',
@@ -351,7 +353,9 @@ class CotizacionProveedorController extends Controller
                 ->select([
                     'id',
                     'qty_box',
+                    'qty_pallet_china',
                     'peso',
+                    'peso_china',
                     'id_cotizacion',
                     'cbm_total',
                     'supplier',
@@ -3470,7 +3474,9 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                     ->select([
                         'id',
                         'qty_box',
+                        'qty_pallet_china',
                         'peso',
+                        'peso_china',
                         'id_cotizacion',
                         'cbm_total',
                         'supplier',

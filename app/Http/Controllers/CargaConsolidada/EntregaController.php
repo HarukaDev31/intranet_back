@@ -17,6 +17,7 @@ use Maatwebsite\Excel\Facades\Excel;
 use App\Exports\RotuladoParedExport;
 use App\Exports\FormatoResumenExport;
 use App\Exports\ClientesEntregaExport;
+use App\Jobs\SendDeliveryFormBulkJob;
 use Dompdf\Dompdf;
 use Dompdf\Options;
 use ZipArchive;
@@ -33,6 +34,8 @@ class EntregaController extends Controller
 
     /** Líneas de servicio delivery / montacarga por cotización (1..N) */
     private $table_delivery_servicio = 'contenedor_consolidado_cotizacion_delivery_servicio';
+    private $tipos_servicio_delivery = ['DELIVERY', 'MONTACARGA'];
+    private $tipos_servicio_cargos_extra = ['DELIVERY', 'MONTACARGA', 'SANCIONES', 'BQ'];
 
     /**
      * Sincroniza total_pago_delivery y tipo_servicio (primera línea) en contenedor_consolidado_cotizacion.
@@ -45,13 +48,15 @@ class EntregaController extends Controller
         $idCotizacion = (int) $idCotizacion;
         $sum = (float) DB::table($this->table_delivery_servicio)
             ->where('id_cotizacion', $idCotizacion)
+            ->whereIn('tipo_servicio', $this->tipos_servicio_delivery)
             ->sum('importe');
         $first = DB::table($this->table_delivery_servicio)
             ->where('id_cotizacion', $idCotizacion)
+            ->whereIn('tipo_servicio', $this->tipos_servicio_delivery)
             ->orderBy('id')
             ->first();
         $update = ['total_pago_delivery' => $sum];
-        if ($first && in_array($first->tipo_servicio, ['DELIVERY', 'MONTACARGA'], true)) {
+        if ($first && in_array($first->tipo_servicio, $this->tipos_servicio_delivery, true)) {
             $update['tipo_servicio'] = $first->tipo_servicio;
         }
         DB::table('contenedor_consolidado_cotizacion')
@@ -2042,6 +2047,7 @@ class EntregaController extends Controller
                 DB::raw("COALESCE((
                     SELECT SUM(s3.importe) FROM {$this->table_delivery_servicio} s3
                     WHERE s3.id_cotizacion = CC.id
+                    AND UPPER(TRIM(s3.tipo_servicio)) IN ('DELIVERY', 'MONTACARGA')
                 ), CC.total_pago_delivery, 0) as importe"),
                 DB::raw("(
                     SELECT IFNULL(JSON_ARRAYAGG(
@@ -2055,6 +2061,7 @@ class EntregaController extends Controller
                         SELECT s6.id, s6.tipo_servicio, s6.importe
                         FROM {$this->table_delivery_servicio} s6
                         WHERE s6.id_cotizacion = CC.id
+                        AND UPPER(TRIM(s6.tipo_servicio)) IN ('DELIVERY', 'MONTACARGA')
                         ORDER BY s6.id
                     ) j
                 ) AS delivery_servicios_json"),
@@ -2358,7 +2365,9 @@ class EntregaController extends Controller
                 // Tipo de servicio (primera línea de servicios o columna legacy)
                 DB::raw("COALESCE((
                     SELECT s2.tipo_servicio FROM {$this->table_delivery_servicio} s2
-                    WHERE s2.id_cotizacion = CC.id ORDER BY s2.id ASC LIMIT 1
+                    WHERE s2.id_cotizacion = CC.id
+                    AND UPPER(TRIM(s2.tipo_servicio)) IN ('DELIVERY', 'MONTACARGA')
+                    ORDER BY s2.id ASC LIMIT 1
                 ), CC.tipo_servicio, 'DELIVERY') as tipo_servicio"),
                 // Datos de entrega desde la asignación (fecha y hora) - se traen para todos, el frontend decide mostrarlos
                 DB::raw("CASE WHEN UR2.id_date IS NOT NULL THEN CONCAT(D2.year, '-', LPAD(D2.month, 2, '0'), '-', LPAD(D2.day, 2, '0')) ELSE NULL END as delivery_date"),
@@ -2370,14 +2379,17 @@ class EntregaController extends Controller
                 DB::raw("COALESCE((
                     SELECT SUM(s3.importe) FROM {$this->table_delivery_servicio} s3
                     WHERE s3.id_cotizacion = CC.id
+                    AND UPPER(TRIM(s3.tipo_servicio)) IN ('DELIVERY', 'MONTACARGA')
                 ), CC.total_pago_delivery, 0) as importe"),
                 DB::raw("COALESCE((
                     SELECT SUM(s4.importe) FROM {$this->table_delivery_servicio} s4
                     WHERE s4.id_cotizacion = CC.id
+                    AND UPPER(TRIM(s4.tipo_servicio)) IN ('DELIVERY', 'MONTACARGA')
                 ), CC.total_pago_delivery, 0) as total_importe_delivery"),
                 DB::raw("COALESCE((
                     SELECT SUM(s5.importe) FROM {$this->table_delivery_servicio} s5
                     WHERE s5.id_cotizacion = CC.id
+                    AND UPPER(TRIM(s5.tipo_servicio)) IN ('DELIVERY', 'MONTACARGA')
                 ), CC.total_pago_delivery, 0) as total_importe_servicios"),
                 DB::raw("(
                     SELECT IFNULL(JSON_ARRAYAGG(
@@ -2391,6 +2403,7 @@ class EntregaController extends Controller
                         SELECT s6.id, s6.tipo_servicio, s6.importe
                         FROM {$this->table_delivery_servicio} s6
                         WHERE s6.id_cotizacion = CC.id
+                        AND UPPER(TRIM(s6.tipo_servicio)) IN ('DELIVERY', 'MONTACARGA')
                         ORDER BY s6.id
                     ) j
                 ) AS delivery_servicios_json"),
@@ -3354,7 +3367,7 @@ Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, 
             $tipoServicio = $request->tipo_servicio;
 
             // Validar que el tipo de servicio sea válido
-            if (!in_array($tipoServicio, ['DELIVERY', 'MONTACARGA'])) {
+            if (!in_array($tipoServicio, $this->tipos_servicio_delivery, true)) {
                 return response()->json(['message' => 'Tipo de servicio inválido. Debe ser DELIVERY o MONTACARGA', 'success' => false], 422);
             }
 
@@ -3400,7 +3413,7 @@ Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, 
             $tipoServicio = $request->input('tipo_servicio');
             $importe = $request->input('importe', 0);
 
-            if (!in_array($tipoServicio, ['DELIVERY', 'MONTACARGA'], true)) {
+            if (!in_array($tipoServicio, $this->tipos_servicio_cargos_extra, true)) {
                 return response()->json(['message' => 'Tipo de servicio inválido', 'success' => false], 422);
             }
             $cotizacion = Cotizacion::find($idCotizacion);
@@ -3408,9 +3421,13 @@ Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, 
                 return response()->json(['message' => 'Cotización no encontrada', 'success' => false], 404);
             }
 
-            $countLines = (int) DB::table($this->table_delivery_servicio)->where('id_cotizacion', $idCotizacion)->count();
-            if ($countLines >= 2) {
-                return response()->json(['message' => 'Máximo 2 servicios por cotización', 'success' => false], 422);
+            $tipoServicioNorm = strtoupper(trim((string) $tipoServicio));
+            $exists = DB::table($this->table_delivery_servicio)
+                ->where('id_cotizacion', $idCotizacion)
+                ->whereRaw('UPPER(TRIM(tipo_servicio)) = ?', [$tipoServicioNorm])
+                ->exists();
+            if ($exists) {
+                return response()->json(['message' => 'El concepto ya existe para esta cotización', 'success' => false], 422);
             }
 
             $id = DB::table($this->table_delivery_servicio)->insertGetId([
@@ -3443,12 +3460,21 @@ Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, 
             }
 
             $tipoServicio = $request->input('tipo_servicio');
-            if ($tipoServicio !== null && !in_array($tipoServicio, ['DELIVERY', 'MONTACARGA'], true)) {
+            if ($tipoServicio !== null && !in_array($tipoServicio, $this->tipos_servicio_cargos_extra, true)) {
                 return response()->json(['message' => 'Tipo de servicio inválido', 'success' => false], 422);
             }
 
             $upd = [];
             if ($tipoServicio !== null) {
+                $tipoServicioNorm = strtoupper(trim((string) $tipoServicio));
+                $exists = DB::table($this->table_delivery_servicio)
+                    ->where('id_cotizacion', (int) $row->id_cotizacion)
+                    ->where('id', '!=', $idLinea)
+                    ->whereRaw('UPPER(TRIM(tipo_servicio)) = ?', [$tipoServicioNorm])
+                    ->exists();
+                if ($exists) {
+                    return response()->json(['message' => 'El concepto ya existe para esta cotización', 'success' => false], 422);
+                }
                 $upd['tipo_servicio'] = $tipoServicio;
             }
             if ($request->has('importe')) {
@@ -3523,8 +3549,34 @@ Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, 
     public function sendMessageDelivery(Request $request, $idCotizacion)
     {
         try {
-            $cotizacion = Cotizacion::find($idCotizacion);
-            if (!$cotizacion) {
+            $idCotizacion = (int) $idCotizacion;
+            $cotizacion = DB::table('contenedor_consolidado_cotizacion as C')
+                ->leftJoin('consolidado_delivery_form_lima as L', function ($join) {
+                    $join->on('L.id_contenedor', '=', 'C.id_contenedor')
+                        ->on('L.id_cotizacion', '=', 'C.id')
+                        ->whereNull('L.deleted_at');
+                })
+                ->leftJoin('consolidado_delivery_form_province as P', function ($join) {
+                    $join->on('P.id_contenedor', '=', 'C.id_contenedor')
+                        ->on('P.id_cotizacion', '=', 'C.id')
+                        ->whereNull('P.deleted_at');
+                })
+                ->leftJoin('consolidado_comprobante_forms as CF', function ($join) {
+                    $join->on('CF.id_contenedor', '=', 'C.id_contenedor')
+                        ->on('CF.id_cotizacion', '=', 'C.id');
+                })
+                ->select([
+                    'C.id',
+                    'C.id_contenedor',
+                    'C.telefono',
+                    'C.nombre as nombre_cliente',
+                    DB::raw($this->sqlCaseTypeFormNullable() . ' as type_form'),
+                ])
+                ->where('C.id', $idCotizacion)
+                ->whereNull('C.deleted_at')
+                ->first();
+
+            if (!$cotizacion || !$cotizacion->id_contenedor) {
                 return response()->json(['message' => 'Cotización no encontrada', 'success' => false]);
             }
 
@@ -3536,16 +3588,87 @@ Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, 
             $urlClientes = env('APP_URL_CLIENTES');
             $urlProvincia = $urlClientes . '/formulario-entrega/provincia/' . $idContenedor;
             $urlLima = $urlClientes . '/formulario-entrega/lima/' . $idContenedor;
-            $message = "Hola " . $cotizacion->nombre_cliente . ", somos de Pro Business y este mensaje es para informarte que estamos esperando a que llene el formulario para entregar tu pedido\n\n" .
-                "del consolidado #" . $contenedor->carga . "\n\n" .
-                "Link Provincia: " . $urlProvincia . "\n\n Link Lima: " . $urlLima;
-            $telefono = preg_replace('/\s+/', '', $cotizacion->telefono);
-            $this->phoneNumberId = $telefono ? $telefono . '@c.us' : '';
-            $this->sendMessage($message);
+
+            $typeForm = isset($cotizacion->type_form) ? (int) $cotizacion->type_form : null;
+            $message = $this->buildDeliveryFormsMessage(
+                (string) $contenedor->carga,
+                $typeForm,
+                $urlLima,
+                $urlProvincia
+            );
+
+            $telefono = preg_replace('/\D+/', '', (string) $cotizacion->telefono);
+            if (!$telefono) {
+                return response()->json(['message' => 'La cotización no tiene teléfono registrado', 'success' => false], 422);
+            }
+            if (strlen($telefono) < 9) {
+                $telefono = '51' . $telefono;
+            }
+            $numeroWhatsapp = $telefono . '@c.us';
+
+            $result = $this->sendMessage($message, $numeroWhatsapp);
+            if (!$result['status']) {
+                return response()->json([
+                    'message' => 'Error al enviar mensaje: ' . (isset($result['response']['error']) ? $result['response']['error'] : 'Error desconocido'),
+                    'success' => false
+                ], 500);
+            }
+
             return response()->json(['message' => 'Mensaje enviado correctamente', 'success' => true]);
         } catch (\Exception $e) {
             return response()->json(['message' => $e->getMessage(), 'success' => false]);
         }
+    }
+
+    public function sendMessageDeliveryBulk(Request $request)
+    {
+        try {
+            $this->validate($request, [
+                'cotizacion_ids' => 'required|array|min:1',
+                'cotizacion_ids.*' => 'integer|min:1',
+            ]);
+
+            $ids = array_values(array_unique(array_map('intval', $request->input('cotizacion_ids', []))));
+            if (empty($ids)) {
+                return response()->json(['message' => 'Debe enviar al menos una cotización válida', 'success' => false], 422);
+            }
+
+            SendDeliveryFormBulkJob::dispatch($ids)->onQueue('notificaciones');
+
+            return response()->json([
+                'message' => 'Envío en cola correctamente',
+                'success' => true,
+                'queued' => count($ids),
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['message' => $e->getMessage(), 'success' => false], 500);
+        }
+    }
+
+    private function buildDeliveryFormsMessage(string $carga, ?int $typeForm, string $urlLima, string $urlProvincia): string
+    {
+        $isLima = ($typeForm === 1);
+        $titulo = $isLima ? 'MENSAJE CLIENTES LIMA:' : 'MENSAJE CLIENTES PROVINCIA:';
+        $logistica = $isLima ? 'Cliente Lima' : 'Cliente Provincia';
+        $forms = $isLima ? $urlLima : $urlProvincia;
+
+        return $titulo . "\n\n"
+            . "# Consolidado " . $carga . "\n"
+            . "Logística: " . $logistica . " \n\n"
+            . "✅ *Registrarse*, en el siguiente link.\n"
+            . "✅ *Plazo máximo* para el registro: 48 horas\n"
+            . "✅ *Organizaremos los envíos* una vez liberado el contenedor.\n"
+            . "✅ *FORMS:* " . $forms . "\n \n"
+            . "⚠  De no llenar el formulario no se programará el envío de sus productos.\n\n"
+            . "-------------------------\n"
+            . "msj2:\n"
+            . "Importante:\n\n"
+            . "➡ La información registrada será utilizada para la *emisión de guías de remisión*.\n"
+            . "➡ *Validar* que sus datos estén correctos y completos.\n"
+            . "➡ El *costo de flete* Almacén – Agencia detalla en su cotización final.\n"
+            . "➡ Los envíos se realizan con *Marvisur*.\n"
+            . "➡ Si desea trabajar con otra agencia de transporte, se aplicará un *costo adicional* y previa coordinación.\n"
+            . "➡ En ese caso, no asumimos responsabilidad por incidencias en la entrega con la agencia elegida.";
     }
 
     public function sendRecordatorioFormularioDelivery(Request $request, $idCotizacion)

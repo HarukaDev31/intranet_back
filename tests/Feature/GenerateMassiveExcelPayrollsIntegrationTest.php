@@ -253,7 +253,10 @@ class GenerateMassiveExcelPayrollsIntegrationTest extends TestCase
         );
         $this->assertBoletaHtmlPdfIncluyeMontacargaDelivery($fullExcel, 88.88, 177.77);
 
-        $this->imprimirCasoYUrlsCodificadas($caso, $row, '');
+        [$boletaPdfPath, $publicBoletaPath] = $this->generarBoletaYPublicarEnStorage($fullExcel, 'delivery_con_ad');
+        $this->assertFileExists($boletaPdfPath);
+        $this->assertFileExists($publicBoletaPath);
+        $this->imprimirCasoYUrlsCodificadas($caso, $row, $publicBoletaPath);
     }
 
     /**
@@ -527,7 +530,7 @@ class GenerateMassiveExcelPayrollsIntegrationTest extends TestCase
         $fmtD = number_format($esperadoDeliv, 2, '.', ',');
         $this->assertStringContainsString($fmtM, $html, 'HTML boleta debe incluir monto montacargas');
         $this->assertStringContainsString($fmtD, $html, 'HTML boleta debe incluir monto delivery');
-        $this->assertStringContainsString('RECARGO', $html, 'Etiqueta de fila recargo (desde celda B de la plantilla)');
+        $this->assertStringContainsString('SERVICIO DE ', $html, 'Etiqueta de fila recargo (desde celda B de la plantilla)');
         $this->assertStringNotContainsString('{{row_montacargas}}', $html);
         $this->assertStringNotContainsString('{{row_delivery}}', $html);
     }

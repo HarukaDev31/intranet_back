@@ -75,6 +75,7 @@ class CotizacionFinalController extends Controller
     private $table_contenedor_cotizacion_final = "contenedor_consolidado_cotizacion_final";
     private $table_contenedor_consolidado_cotizacion_coordinacion_pagos = "contenedor_consolidado_cotizacion_coordinacion_pagos";
     private $table_pagos_concept = "cotizacion_coordinacion_pagos_concept";
+    private $table_delivery_servicio = "contenedor_consolidado_cotizacion_delivery_servicio";
     private $CONCEPT_PAGO_IMPUESTOS = 2;
     private $CONCEPT_PAGO_LOGISTICA = 1;
     /**
@@ -1321,6 +1322,145 @@ class CotizacionFinalController extends Controller
             throw $e;
         }
     }
+    public function getCotizacionFinalCargosExtra(Request $request, $idContenedor)
+    {
+        try {
+            $proveedoresLoaded = DB::table($this->table_contenedor_cotizacion_proveedores . ' as CP')
+                ->select(
+                    'CP.id_cotizacion',
+                    DB::raw('SUM(COALESCE(CP.qty_box_china, CP.qty_box, 0)) as qty_box_china'),
+                    DB::raw('SUM(COALESCE(CP.qty_pallet_china, 0)) as qty_pallet_china'),
+                    DB::raw('SUM(COALESCE(CP.cbm_total_china, CP.cbm_total, 0)) as cbm_total_china'),
+                    DB::raw('SUM(COALESCE(CP.peso, 0)) as peso_total')
+                )
+                ->whereRaw("UPPER(TRIM(COALESCE(CP.estados_proveedor, ''))) = 'LOADED'")
+                ->groupBy('CP.id_cotizacion');
+
+            $query = Cotizacion::query()
+                ->select([
+                    'contenedor_consolidado_cotizacion.id as id_cotizacion',
+                    'contenedor_consolidado_cotizacion.id_contenedor',
+                    'contenedor_consolidado_cotizacion.id_contenedor_pago',
+                    'contenedor_consolidado_cotizacion.id_contenedor_destino',
+                    'contenedor_consolidado_cotizacion.nombre',
+                    'contenedor_consolidado_cotizacion.documento',
+                    'contenedor_consolidado_cotizacion.telefono',
+                    'contenedor_consolidado_cotizacion.correo',
+                    DB::raw("COALESCE(CPL.qty_box_china, 0) as qty_box_china"),
+                    DB::raw("COALESCE(CPL.qty_pallet_china, 0) as qty_pallet_china"),
+                    DB::raw("COALESCE(CPL.qty_box_china, 0) + COALESCE(CPL.qty_pallet_china, 0) as qty_total"),
+                    DB::raw("COALESCE(CPL.cbm_total_china, 0) as cbm_total_china"),
+                    DB::raw("COALESCE(CPL.peso_total, 0) as peso_total"),
+                    DB::raw("UPPER(TRIM(COALESCE(CF.destino_entrega, ''))) as entrega"),
+                    DB::raw("COALESCE((
+                        SELECT IFNULL(JSON_ARRAYAGG(
+                            JSON_OBJECT(
+                                'id', j.id,
+                                'tipo_servicio', j.tipo_servicio,
+                                'importe', j.importe
+                            )
+                        ), JSON_ARRAY())
+                        FROM (
+                            SELECT s.id, s.tipo_servicio, s.importe
+                            FROM {$this->table_delivery_servicio} s
+                            WHERE s.id_cotizacion = contenedor_consolidado_cotizacion.id
+                            AND UPPER(TRIM(s.tipo_servicio)) IN ('DELIVERY', 'MONTACARGA', 'SANCIONES', 'BQ')
+                            ORDER BY s.id
+                        ) j
+                    ), JSON_ARRAY()) as delivery_servicios_json"),
+                    DB::raw("COALESCE((
+                        SELECT SUM(s2.importe)
+                        FROM {$this->table_delivery_servicio} s2
+                        WHERE s2.id_cotizacion = contenedor_consolidado_cotizacion.id
+                        AND UPPER(TRIM(s2.tipo_servicio)) IN ('DELIVERY', 'MONTACARGA', 'SANCIONES', 'BQ')
+                    ), 0) as total_importe_servicios"),
+                ])
+                ->leftJoin('consolidado_comprobante_forms as CF', function ($join) use ($idContenedor) {
+                    $join->on('CF.id_cotizacion', '=', 'contenedor_consolidado_cotizacion.id')
+                        ->where('CF.id_contenedor', '=', $idContenedor);
+                })
+                ->leftJoinSub($proveedoresLoaded, 'CPL', function ($join) {
+                    $join->on('CPL.id_cotizacion', '=', 'contenedor_consolidado_cotizacion.id');
+                })
+                ->where('contenedor_consolidado_cotizacion.id_contenedor', $idContenedor)
+                ->whereNotNull('contenedor_consolidado_cotizacion.estado_cliente')
+                ->whereNull('contenedor_consolidado_cotizacion.id_cliente_importacion')
+                ->where('contenedor_consolidado_cotizacion.estado_cotizador', 'CONFIRMADO')
+                ->whereExists(function ($q) {
+                    $q->select(DB::raw(1))
+                        ->from($this->table_contenedor_cotizacion_proveedores . ' as CP2')
+                        ->whereColumn('CP2.id_cotizacion', 'contenedor_consolidado_cotizacion.id')
+                        ->whereRaw("UPPER(TRIM(COALESCE(CP2.estados_proveedor, ''))) = 'LOADED'");
+                });
+
+            if ($request->has('search') && trim((string) $request->search) !== '') {
+                $search = trim((string) $request->search);
+                $query->where(function ($q) use ($search) {
+                    $q->where('contenedor_consolidado_cotizacion.nombre', 'LIKE', "%{$search}%")
+                        ->orWhere('contenedor_consolidado_cotizacion.documento', 'LIKE', "%{$search}%")
+                        ->orWhere('contenedor_consolidado_cotizacion.telefono', 'LIKE', "%{$search}%")
+                        ->orWhere('contenedor_consolidado_cotizacion.correo', 'LIKE', "%{$search}%");
+                });
+            }
+
+            $sortField = $request->input('sort_by', 'contenedor_consolidado_cotizacion.id');
+            $sortOrder = strtolower((string) $request->input('sort_order', 'asc')) === 'desc' ? 'desc' : 'asc';
+            $query->orderBy($sortField, $sortOrder);
+
+            $perPage = (int) $request->input('per_page', 100);
+            $data = $query->paginate($perPage);
+
+            $index = 1;
+            $transformedData = [];
+            foreach ($data->items() as $row) {
+                $servicios = json_decode($row->delivery_servicios_json ?? '[]', true);
+                if (!is_array($servicios)) {
+                    $servicios = [];
+                }
+
+                $transformedData[] = [
+                    'index' => $index,
+                    'id_cotizacion' => (int) $row->id_cotizacion,
+                    'id_contenedor' => (int) $row->id_contenedor,
+                    'id_contenedor_pago' => $row->id_contenedor_pago,
+                    'id_contenedor_destino' => $row->id_contenedor_destino,
+                    'nombre' => $this->cleanUtf8String($row->nombre),
+                    'documento' => $this->cleanUtf8String($row->documento),
+                    'telefono' => $this->cleanUtf8String($row->telefono),
+                    'correo' => $this->cleanUtf8String($row->correo),
+                    'entrega' => $this->cleanUtf8String($row->entrega),
+                    'qty_box_china' => (float) $row->qty_box_china,
+                    'qty_pallet_china' => (float) $row->qty_pallet_china,
+                    'qty_total' => (float) $row->qty_total,
+                    'cbm_total_china' => (float) $row->cbm_total_china,
+                    'peso_total' => (float) $row->peso_total,
+                    'delivery_servicios' => $servicios,
+                    'total_importe_servicios' => (float) $row->total_importe_servicios,
+                ];
+                $index++;
+            }
+
+            return response()->json([
+                'success' => true,
+                'data' => $transformedData,
+                'pagination' => [
+                    'current_page' => $data->currentPage(),
+                    'per_page' => $data->perPage(),
+                    'total' => $data->total(),
+                    'last_page' => $data->lastPage(),
+                    'from' => $data->firstItem(),
+                    'to' => $data->lastItem(),
+                ],
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error al obtener cargos extra de cotización final: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al obtener cargos extra: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
     /**
      * @OA\Post(
      *     path="/carga-consolidada/contenedor/cotizacion-final/pagos",
@@ -3363,7 +3503,7 @@ class CotizacionFinalController extends Controller
             $label = '';
         }
         if ($label === '') {
-            $label = 'RECARGO LOGÍSTICO / DELIVERY';
+            $label = 'SERVICIO DE ENVIO ( ALMACEN - AGENCIA)';
         }
 
         $labelEsc = htmlspecialchars($label, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
