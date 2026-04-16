@@ -70,6 +70,7 @@ class SendDeliveryFormBulkJob implements ShouldQueue
                 $typeForm = isset($row->type_form) ? (int) $row->type_form : null;
                 [$messagePrincipal, $messageSecundario] = $this->buildDeliveryFormsMessages(
                     (string) $contenedor->carga,
+                    (string) ($row->nombre_cliente ?? ''),
                     $typeForm,
                     $urlLima,
                     $urlProvincia
@@ -95,7 +96,7 @@ class SendDeliveryFormBulkJob implements ShouldQueue
                     continue;
                 }
 
-                $resultSecundario = $this->sendMessage($messageSecundario, $numeroWhatsapp);
+                $resultSecundario = $this->sendMessage($messageSecundario, $numeroWhatsapp,5);
                 if (!$resultSecundario['status']) {
                     Log::warning('SendDeliveryFormBulkJob: error enviando WhatsApp', [
                         'id_cotizacion' => $idCotizacion,
@@ -128,13 +129,18 @@ class SendDeliveryFormBulkJob implements ShouldQueue
             . 'ELSE NULL END';
     }
 
-    private function buildDeliveryFormsMessages(string $carga, ?int $typeForm, string $urlLima, string $urlProvincia): array
+    private function buildDeliveryFormsMessages(string $carga, string $nombreCliente, ?int $typeForm, string $urlLima, string $urlProvincia): array
     {
         $isLima = ($typeForm === 1);
         $forms = $isLima ? $urlLima : $urlProvincia;
+        $destinoCliente = $isLima ? 'Lima' : 'Provincia';
+        $nombreCliente = trim($nombreCliente) !== '' ? trim($nombreCliente) : 'cliente';
+        $saludoInicial = "🙋🏻‍♀️Hola {$nombreCliente} te saluda área de Coordinación.\n\n"
+            . "Cliente: {$destinoCliente}\n\n";
 
         $messagePrincipal = $isLima
             ? "# Consolidado " . $carga . "\n\n"
+                . $saludoInicial
                 . "✅ *Registrarse*, en el siguiente link.\n"
                 . "✅ *Reservar su horario* de recojo lo antes posible.\n"
                 . "✅ *Plazo máximo* para el registro: 48 horas\n"
@@ -142,6 +148,7 @@ class SendDeliveryFormBulkJob implements ShouldQueue
                 . "✅ *FORMS:* " . $forms . "\n\n"
                 . "⚠ Enviar movilidad acorde al volumen de su carga (auto, camioneta, furgón o camión)."
             : "# Consolidado " . $carga . "\n"
+                . $saludoInicial
                 . "✅ *Registrarse*, en el siguiente link.\n"
                 . "✅ *Plazo máximo* para el registro: 48 horas\n"
                 . "✅ *Organizaremos los envíos* una vez liberado el contenedor.\n"

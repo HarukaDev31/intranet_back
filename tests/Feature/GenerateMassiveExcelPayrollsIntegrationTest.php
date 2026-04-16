@@ -260,6 +260,111 @@ class GenerateMassiveExcelPayrollsIntegrationTest extends TestCase
     }
 
     /**
+     * Con líneas MONTACARGA + DELIVERY + (SANCIONES/BQ) en BD y antidumping:
+     * K43/K44/K45 deben reflejar importes y la etiqueta de aduaneros debe estar visible.
+     */
+    public function test_delivery_servicio_con_montacarga_delivery_y_aduaneros_con_antidumping(): void
+    {
+        $caso = 'Delivery servicio — con AD: montacargas + delivery + aduaneros en K43/K44/K45.';
+        $this->seedDeliveryServicioLines(111.10, 222.20, 333.30);
+
+        $payload = $this->samplePayloadMultiplesProductosConAntidumpingEnIndices(6, [1, 6]);
+        $response = $this->invocarGenerateMassiveExcelPayrolls($payload, 'plantilla_delivery_monta_aduaneros_con_ad.xlsx');
+        $this->assertZipResponseValido($response);
+
+        $row = DB::table('contenedor_consolidado_cotizacion')->where('id', $this->idCotizacion)->first();
+        $this->assertNotNull($row);
+        $fullExcel = public_path('storage/' . $row->cotizacion_final_url);
+        $this->assertFileExists($fullExcel);
+
+        $spreadsheet = IOFactory::load($fullExcel);
+        $this->assertExcelMultiplesItemsYAntidumping($spreadsheet, 6, true, 'ITEM TEST');
+        $this->assertBoletaMontacargaDeliveryAduaneros(
+            $spreadsheet,
+            true,
+            111.10,
+            222.20,
+            333.30,
+            'Con antidumping: montacargas K43, delivery K44, aduaneros K45.'
+        );
+
+        $this->imprimirCasoYUrlsCodificadas($caso, $row, '');
+    }
+
+    /**
+     * Caso solicitado: tres tipos de recargo/servicio (MONTACARGA, DELIVERY y SANCIONES/BQ)
+     * con antidumping. Además, imprime URL codificada de Excel y boleta PDF.
+     */
+    public function test_delivery_servicio_tres_tipos_con_rutas_excel_y_pdf(): void
+    {
+        $caso = 'Tres tipos de recargo/servicio + rutas Excel/PDF (con AD).';
+        $this->seedDeliveryServicioLines(123.45, 234.56, 345.67);
+
+        $payload = $this->samplePayloadMultiplesProductosConAntidumpingEnIndices(6, [1, 6]);
+        $response = $this->invocarGenerateMassiveExcelPayrolls($payload, 'plantilla_tres_tipos_con_rutas.xlsx');
+        $this->assertZipResponseValido($response);
+
+        $row = DB::table('contenedor_consolidado_cotizacion')->where('id', $this->idCotizacion)->first();
+        $this->assertNotNull($row);
+        $fullExcel = public_path('storage/' . $row->cotizacion_final_url);
+        $this->assertFileExists($fullExcel);
+
+        $spreadsheet = IOFactory::load($fullExcel);
+        $this->assertExcelMultiplesItemsYAntidumping($spreadsheet, 6, true, 'ITEM TEST');
+        $this->assertBoletaMontacargaDeliveryAduaneros(
+            $spreadsheet,
+            true,
+            123.45,
+            234.56,
+            345.67,
+            'Con antidumping: montacargas K43, delivery K44, aduaneros K45.'
+        );
+        $this->assertBoletaHtmlMontoTotalIncluyeServiciosAdicionales($fullExcel, true);
+        $this->assertBoletaHtmlNoDuplicaEncabezadoItems($fullExcel);
+
+        [$boletaPdfPath, $publicBoletaPath] = $this->generarBoletaYPublicarEnStorage($fullExcel, 'tres_tipos_rutas_con_ad');
+        $this->assertFileExists($boletaPdfPath);
+        $this->assertFileExists($publicBoletaPath);
+
+        // Muestra en stderr ambas rutas codificadas (Excel y PDF) para abrir en navegador.
+        $this->imprimirCasoYUrlsCodificadas($caso, $row, $publicBoletaPath);
+    }
+
+    /**
+     * Con líneas MONTACARGA + DELIVERY + (SANCIONES/BQ) en BD y sin antidumping:
+     * K42/K43/K44 deben reflejar importes y la etiqueta de aduaneros debe estar visible.
+     */
+    public function test_delivery_servicio_con_montacarga_delivery_y_aduaneros_sin_antidumping(): void
+    {
+        $caso = 'Delivery servicio — sin AD: montacargas + delivery + aduaneros en K42/K43/K44.';
+        $this->seedDeliveryServicioLines(101.10, 202.20, 303.30);
+
+        $response = $this->invocarGenerateMassiveExcelPayrolls(
+            $this->sampleExcelPayloadServicioMultiplesItems(5),
+            'plantilla_delivery_monta_aduaneros_sin_ad.xlsx'
+        );
+        $this->assertZipResponseValido($response);
+
+        $row = DB::table('contenedor_consolidado_cotizacion')->where('id', $this->idCotizacion)->first();
+        $this->assertNotNull($row);
+        $fullExcel = public_path('storage/' . $row->cotizacion_final_url);
+        $this->assertFileExists($fullExcel);
+
+        $spreadsheet = IOFactory::load($fullExcel);
+        $this->assertExcelMultiplesItemsYAntidumping($spreadsheet, 5, false, 'ITEM SERVICIO LOG');
+        $this->assertBoletaMontacargaDeliveryAduaneros(
+            $spreadsheet,
+            false,
+            101.10,
+            202.20,
+            303.30,
+            'Sin antidumping: montacargas K42, delivery K43, aduaneros K44.'
+        );
+
+        $this->imprimirCasoYUrlsCodificadas($caso, $row, '');
+    }
+
+    /**
      * HTML de boleta (mismo que alimenta al PDF) incluye filas RECARGO con montos cuando hay importes en Excel.
      */
     public function test_delivery_servicio_html_boleta_coincide_con_excel_sin_ad(): void
@@ -277,6 +382,106 @@ class GenerateMassiveExcelPayrollsIntegrationTest extends TestCase
         [$pdfPath] = $this->generarBoletaYPublicarEnStorage($fullExcel, 'delivery_html_sin_ad');
         $this->tempOutputFiles[] = $pdfPath;
         $this->assertPdfBoletaGeneradoDesdeHtml($pdfPath);
+    }
+
+    /**
+     * HTML/PDF incluye explícitamente la fila de recargos aduaneros cuando su importe es > 0.
+     */
+    public function test_delivery_servicio_html_boleta_incluye_aduaneros_con_ad(): void
+    {
+        $this->seedDeliveryServicioLines(90.10, 120.20, 130.30);
+
+        $payload = $this->samplePayloadMultiplesProductosConAntidumpingEnIndices(6, [1, 6]);
+        $response = $this->invocarGenerateMassiveExcelPayrolls($payload, 'plantilla_delivery_html_aduaneros_con_ad.xlsx');
+        $this->assertZipResponseValido($response);
+
+        $row = DB::table('contenedor_consolidado_cotizacion')->where('id', $this->idCotizacion)->first();
+        $fullExcel = public_path('storage/' . $row->cotizacion_final_url);
+        $this->assertExcelMultiplesItemsYAntidumping(IOFactory::load($fullExcel), 6, true, 'ITEM TEST');
+        $this->assertBoletaHtmlPdfIncluyeMontacargaDeliveryAduaneros($fullExcel, 90.10, 120.20, 130.30);
+        $this->assertBoletaHtmlMontoTotalIncluyeServiciosAdicionales($fullExcel, true);
+        $this->assertBoletaHtmlNoDuplicaEncabezadoItems($fullExcel);
+
+        [$pdfPath] = $this->generarBoletaYPublicarEnStorage($fullExcel, 'delivery_html_aduaneros_con_ad');
+        $this->tempOutputFiles[] = $pdfPath;
+        $this->assertPdfBoletaGeneradoDesdeHtml($pdfPath);
+    }
+
+    /**
+     * Si recargos aduaneros es 0, la fila no debe aparecer en HTML/PDF.
+     */
+    public function test_delivery_servicio_html_boleta_oculta_aduaneros_cuando_cero(): void
+    {
+        $this->seedDeliveryServicioLines(77.77, 88.88, 0.00);
+
+        $response = $this->invocarGenerateMassiveExcelPayrolls($this->sampleExcelPayloadServicioMultiplesItems(6), 'plantilla_delivery_html_aduaneros_cero.xlsx');
+        $this->assertZipResponseValido($response);
+
+        $row = DB::table('contenedor_consolidado_cotizacion')->where('id', $this->idCotizacion)->first();
+        $fullExcel = public_path('storage/' . $row->cotizacion_final_url);
+        $this->assertExcelMultiplesItemsYAntidumping(IOFactory::load($fullExcel), 6, false, 'ITEM SERVICIO LOG');
+
+        $html = $this->getBoletaHtmlDesdeExcel($fullExcel);
+        $this->assertStringContainsString('77.77', $html);
+        $this->assertStringContainsString('88.88', $html);
+        $this->assertStringNotContainsString('RECARGOS ADUANEROS', strtoupper($html));
+        $this->assertStringNotContainsString('{{row_aduaneros}}', $html);
+    }
+
+    public function test_recargos_y_descuento_desde_calculadora_importacion_sin_ad_en_k35_k36(): void
+    {
+        $this->seedCalculadoraImportacionExtras(40.25, 9.75, 15.00); // recargos=50.00, descuento=15.00
+        $response = $this->invocarGenerateMassiveExcelPayrolls(
+            $this->sampleExcelPayloadServicioMultiplesItems(5),
+            'plantilla_recargos_calc_sin_ad.xlsx'
+        );
+        $this->assertZipResponseValido($response);
+
+        $row = DB::table('contenedor_consolidado_cotizacion')->where('id', $this->idCotizacion)->first();
+        $fullExcel = public_path('storage/' . $row->cotizacion_final_url);
+        $spreadsheet = IOFactory::load($fullExcel);
+        $main = $spreadsheet->getSheet(0);
+
+        $this->assertEqualsWithDelta(50.00, (float) $main->getCell('K35')->getCalculatedValue(), 0.01);
+        $this->assertEqualsWithDelta(15.00, (float) $main->getCell('K36')->getCalculatedValue(), 0.01);
+        $this->assertEqualsWithDelta(
+            (float) $main->getCell('K33')->getCalculatedValue() + 50.00 - 15.00,
+            (float) $main->getCell('K37')->getCalculatedValue(),
+            0.02
+        );
+
+        $html = $this->getBoletaHtmlDesdeExcel($fullExcel);
+        $this->assertStringContainsString('RECARGOS OPERATIVOS', strtoupper($html));
+        $this->assertStringContainsString('DESCUENTO APLICABLE', strtoupper($html));
+        $this->assertStringContainsString('50.00', $html);
+        $this->assertStringContainsString('15.00', $html);
+    }
+
+    public function test_recargos_y_descuento_desde_calculadora_importacion_con_ad_en_k36_k37(): void
+    {
+        $this->seedCalculadoraImportacionExtras(25.00, 5.00, 8.00); // recargos=30.00, descuento=8.00
+        $payload = $this->samplePayloadMultiplesProductosConAntidumpingEnIndices(6, [1, 6]);
+        $response = $this->invocarGenerateMassiveExcelPayrolls($payload, 'plantilla_recargos_calc_con_ad.xlsx');
+        $this->assertZipResponseValido($response);
+
+        $row = DB::table('contenedor_consolidado_cotizacion')->where('id', $this->idCotizacion)->first();
+        $fullExcel = public_path('storage/' . $row->cotizacion_final_url);
+        $spreadsheet = IOFactory::load($fullExcel);
+        $main = $spreadsheet->getSheet(0);
+
+        $this->assertEqualsWithDelta(30.00, (float) $main->getCell('K36')->getCalculatedValue(), 0.01);
+        $this->assertEqualsWithDelta(8.00, (float) $main->getCell('K37')->getCalculatedValue(), 0.01);
+        $this->assertEqualsWithDelta(
+            (float) $main->getCell('K34')->getCalculatedValue() + 30.00 - 8.00,
+            (float) $main->getCell('K38')->getCalculatedValue(),
+            0.02
+        );
+
+        $html = $this->getBoletaHtmlDesdeExcel($fullExcel);
+        $this->assertStringContainsString('RECARGOS OPERATIVOS', strtoupper($html));
+        $this->assertStringContainsString('DESCUENTO APLICABLE', strtoupper($html));
+        $this->assertStringContainsString('30.00', $html);
+        $this->assertStringContainsString('8.00', $html);
     }
 
     /**
@@ -444,9 +649,9 @@ class GenerateMassiveExcelPayrollsIntegrationTest extends TestCase
         $this->imprimirCasoYUrlsCodificadas($caso, $row, '');
     }
 
-    private function seedDeliveryServicioLines(float $importeMontacargas, float $importeDelivery): void
+    private function seedDeliveryServicioLines(float $importeMontacargas, float $importeDelivery, ?float $importeAduaneros = null): void
     {
-        DB::table('contenedor_consolidado_cotizacion_delivery_servicio')->insert([
+        $rows = [
             [
                 'id_cotizacion' => $this->idCotizacion,
                 'tipo_servicio' => 'MONTACARGA',
@@ -457,6 +662,34 @@ class GenerateMassiveExcelPayrollsIntegrationTest extends TestCase
                 'tipo_servicio' => 'DELIVERY',
                 'importe' => $importeDelivery,
             ],
+        ];
+
+        if ($importeAduaneros !== null) {
+            $rows[] = [
+                'id_cotizacion' => $this->idCotizacion,
+                'tipo_servicio' => 'SANCIONES',
+                'importe' => $importeAduaneros,
+            ];
+            $rows[] = [
+                'id_cotizacion' => $this->idCotizacion,
+                'tipo_servicio' => 'BQ',
+                'importe' => 0,
+            ];
+        }
+
+        DB::table('contenedor_consolidado_cotizacion_delivery_servicio')->insert($rows);
+    }
+
+    private function seedCalculadoraImportacionExtras(
+        float $tarifaTotalExtraProveedor,
+        float $tarifaTotalExtraItem,
+        float $tarifaDescuento
+    ): void {
+        DB::table('calculadora_importacion')->insert([
+            'id_cotizacion' => $this->idCotizacion,
+            'tarifa_total_extra_proveedor' => $tarifaTotalExtraProveedor,
+            'tarifa_total_extra_item' => $tarifaTotalExtraItem,
+            'tarifa_descuento' => $tarifaDescuento,
         ]);
     }
 
@@ -493,6 +726,35 @@ class GenerateMassiveExcelPayrollsIntegrationTest extends TestCase
 
         $this->assertNotSame(false, $main->getRowDimension($rowM)->getVisible(), 'Fila montacargas visible con importe > 0');
         $this->assertNotSame(false, $main->getRowDimension($rowD)->getVisible(), 'Fila delivery visible con importe > 0');
+    }
+
+    /**
+     * Valida filas dinámicas de montacarga + delivery + recargos aduaneros (SANCIONES/BQ) en hoja 1.
+     */
+    private function assertBoletaMontacargaDeliveryAduaneros(
+        \PhpOffice\PhpSpreadsheet\Spreadsheet $spreadsheet,
+        bool $conAntidumping,
+        float $esperadoMonta,
+        float $esperadoDeliv,
+        float $esperadoAduaneros,
+        string $mensajeContexto
+    ): void {
+        $this->assertBoletaMontacargaDelivery($spreadsheet, $conAntidumping, $esperadoMonta, $esperadoDeliv, $mensajeContexto);
+
+        $main = $spreadsheet->getSheet(0);
+        $rowA = $conAntidumping ? 45 : 44;
+        $kA = $main->getCell('K' . $rowA)->getCalculatedValue();
+        $label = (string) $main->getCell('B' . $rowA)->getValue();
+
+        $this->assertEqualsWithDelta(
+            $esperadoAduaneros,
+            is_numeric($kA) ? (float) $kA : 0.0,
+            0.08,
+            'Aduaneros K' . $rowA . ' — ' . $mensajeContexto
+        );
+        $this->assertStringContainsStringIgnoringCase('RECARGOS ADUANEROS', $label);
+        $this->assertNotSame(false, $main->getRowDimension($rowA)->getVisible(), 'Fila aduaneros visible con importe > 0');
+        $this->assertSame('USD', (string) $main->getCell('L' . $rowA)->getValue(), 'Moneda USD en fila aduaneros');
     }
 
     private function findTributosSheet(\PhpOffice\PhpSpreadsheet\Spreadsheet $spreadsheet): \PhpOffice\PhpSpreadsheet\Worksheet\Worksheet
@@ -533,6 +795,64 @@ class GenerateMassiveExcelPayrollsIntegrationTest extends TestCase
         $this->assertStringContainsString('SERVICIO DE ', $html, 'Etiqueta de fila recargo (desde celda B de la plantilla)');
         $this->assertStringNotContainsString('{{row_montacargas}}', $html);
         $this->assertStringNotContainsString('{{row_delivery}}', $html);
+        $this->assertStringNotContainsString('{{row_aduaneros}}', $html);
+    }
+
+    /**
+     * Variante de HTML boleta que además valida recargos aduaneros.
+     */
+    private function assertBoletaHtmlPdfIncluyeMontacargaDeliveryAduaneros(
+        string $fullExcelPath,
+        float $esperadoMonta,
+        float $esperadoDeliv,
+        float $esperadoAduaneros
+    ): void {
+        $html = $this->getBoletaHtmlDesdeExcel($fullExcelPath);
+        $fmtM = number_format($esperadoMonta, 2, '.', ',');
+        $fmtD = number_format($esperadoDeliv, 2, '.', ',');
+        $fmtA = number_format($esperadoAduaneros, 2, '.', ',');
+
+        $this->assertStringContainsString($fmtM, $html, 'HTML boleta debe incluir monto montacargas');
+        $this->assertStringContainsString($fmtD, $html, 'HTML boleta debe incluir monto delivery');
+        $this->assertStringContainsString($fmtA, $html, 'HTML boleta debe incluir monto recargos aduaneros');
+        $this->assertStringContainsString('RECARGOS ADUANEROS', strtoupper($html));
+        $this->assertStringNotContainsString('{{row_montacargas}}', $html);
+        $this->assertStringNotContainsString('{{row_delivery}}', $html);
+        $this->assertStringNotContainsString('{{row_aduaneros}}', $html);
+    }
+
+    private function assertBoletaHtmlMontoTotalIncluyeServiciosAdicionales(string $fullExcelPath, bool $conAntidumping): void
+    {
+        $spreadsheet = IOFactory::load($fullExcelPath);
+        $main = $spreadsheet->getSheet(0);
+
+        $rowSubtotalTrib = $conAntidumping ? 25 : 24;
+        $rowPercepcion = $conAntidumping ? 27 : 26;
+        $rowSvcSubtotal = $conAntidumping ? 34 : 33;
+        $rowM = $conAntidumping ? 43 : 42;
+        $rowD = $conAntidumping ? 44 : 43;
+        $rowA = $conAntidumping ? 45 : 44;
+
+        $svcImport = (float) $main->getCell('K' . $rowSvcSubtotal)->getCalculatedValue();
+        $impuestos = (float) $main->getCell('K' . $rowSubtotalTrib)->getCalculatedValue() + (float) $main->getCell('K' . $rowPercepcion)->getCalculatedValue();
+        $m = (float) $main->getCell('K' . $rowM)->getCalculatedValue();
+        $d = (float) $main->getCell('K' . $rowD)->getCalculatedValue();
+        $a = (float) $main->getCell('K' . $rowA)->getCalculatedValue();
+        $expectedTotal = round($svcImport + $impuestos + max(0.0, $m) + max(0.0, $d) + max(0.0, $a), 2);
+
+        $html = $this->getBoletaHtmlDesdeExcel($fullExcelPath);
+        $this->assertStringContainsString(
+            number_format($expectedTotal, 2, '.', ','),
+            $html,
+            'MONTO TOTAL en boleta debe incluir servicios adicionales del resumen.'
+        );
+    }
+
+    private function assertBoletaHtmlNoDuplicaEncabezadoItems(string $fullExcelPath): void
+    {
+        $html = $this->getBoletaHtmlDesdeExcel($fullExcelPath);
+        $this->assertStringNotContainsString('<td colspan="1"># ITEM</td>', $html);
+        $this->assertStringNotContainsString('<td colspan="5">NOMBRE PRODUCTO</td>', $html);
     }
 
     /**
@@ -890,6 +1210,14 @@ class GenerateMassiveExcelPayrollsIntegrationTest extends TestCase
             $table->unsignedBigInteger('id_cotizacion');
             $table->string('tipo_servicio', 32);
             $table->decimal('importe', 12, 2)->default(0);
+        });
+
+        Schema::create('calculadora_importacion', function (Blueprint $table) {
+            $table->bigIncrements('id');
+            $table->unsignedBigInteger('id_cotizacion')->nullable();
+            $table->decimal('tarifa_total_extra_proveedor', 20, 10)->default(0);
+            $table->decimal('tarifa_total_extra_item', 20, 10)->default(0);
+            $table->decimal('tarifa_descuento', 20, 10)->default(0);
         });
 
         DB::table('contenedor_consolidado_tipo_cliente')->insert([

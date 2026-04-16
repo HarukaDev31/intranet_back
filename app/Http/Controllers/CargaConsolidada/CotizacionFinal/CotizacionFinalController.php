@@ -3446,13 +3446,70 @@ class CotizacionFinalController extends Controller
         }
     }
 
+    private function boletaFinalGetVisiblePositiveAmount(
+        \PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $sheet,
+        string $column,
+        int $row
+    ): float {
+        try {
+            if ($sheet->getRowDimension($row)->getVisible() === false) {
+                return 0.0;
+            }
+        } catch (\Throwable $e) {
+            // continuar
+        }
+
+        $amount = $this->boletaFinalGetCellFloat($sheet, $column . $row);
+        return $amount > 0.00001 ? $amount : 0.0;
+    }
+
+    /**
+     * Lee cargos extra y descuento desde calculadora_importacion por id_cotizacion.
+     */
+    private function getCalculadoraImportacionExtrasByCotizacion(int $idCotizacion): array
+    {
+        if ($idCotizacion <= 0 || !Schema::hasTable('calculadora_importacion')) {
+            return ['recargos' => 0.0, 'descuento' => 0.0];
+        }
+
+        $row = DB::table('calculadora_importacion')
+            ->where('id_cotizacion', $idCotizacion)
+            ->orderByDesc('id')
+            ->first(['tarifa_total_extra_proveedor', 'tarifa_total_extra_item', 'tarifa_descuento']);
+
+        if (!$row) {
+            return ['recargos' => 0.0, 'descuento' => 0.0];
+        }
+
+        $recargos = (float) ($row->tarifa_total_extra_proveedor ?? 0) + (float) ($row->tarifa_total_extra_item ?? 0);
+        $descuento = (float) ($row->tarifa_descuento ?? 0);
+
+        return ['recargos' => round($recargos, 2), 'descuento' => round($descuento, 2)];
+    }
+
+    private function isBoletaItemsHeaderRow(string $normA, string $normB): bool
+    {
+        $a = trim($normA);
+        $b = trim($normB);
+        if ($a === '' && $b === '') {
+            return false;
+        }
+
+        return str_contains($a, '#') && str_contains($a, 'ITEM')
+            || str_contains($b, '#') && str_contains($b, 'ITEM')
+            || str_contains($a, 'NOMBRE PRODUCTO')
+            || str_contains($b, 'NOMBRE PRODUCTO')
+            || str_contains($a, 'CANTIDAD')
+            || str_contains($b, 'CANTIDAD');
+    }
+
     /**
      * Filas RECARGO MONTACARGAS / DELIVERY en el PDF: mismas filas K y visibilidad que la boleta Excel (layout K + AD).
      */
     private function injectBoletaPdfDeliveryServicioRowsHtml(string $html, $sheet, bool $legacyK): string
     {
         if (!$legacyK) {
-            return str_replace(['{{row_montacargas}}', '{{row_delivery}}'], '', $html);
+            return str_replace(['{{row_montacargas}}', '{{row_delivery}}', '{{row_aduaneros}}'], '', $html);
         }
 
         try {
@@ -3466,6 +3523,7 @@ class CotizacionFinalController extends Controller
 
         $rowMonta = $hasAd ? 43 : 42;
         $rowDeliv = $hasAd ? 44 : 43;
+        $rowAduaneros = $hasAd ? 45 : 44;
 
         $html = str_replace(
             '{{row_montacargas}}',
@@ -3473,14 +3531,20 @@ class CotizacionFinalController extends Controller
             $html
         );
 
-        return str_replace(
+        $html = str_replace(
             '{{row_delivery}}',
             $this->buildBoletaPdfDeliveryServicioRowHtml($sheet, $rowDeliv),
             $html
         );
+
+        return str_replace(
+            '{{row_aduaneros}}',
+            $this->buildBoletaPdfDeliveryServicioRowHtml($sheet, $rowAduaneros, 'RECARGOS ADUANEROS (BQ O SANCIONES)'),
+            $html
+        );
     }
 
-    private function buildBoletaPdfDeliveryServicioRowHtml($sheet, int $row): string
+    private function buildBoletaPdfDeliveryServicioRowHtml($sheet, int $row, string $defaultLabel = 'SERVICIO DE ENVIO ( ALMACEN - AGENCIA)'): string
     {
         try {
             $dim = $sheet->getRowDimension($row);
@@ -3503,7 +3567,7 @@ class CotizacionFinalController extends Controller
             $label = '';
         }
         if ($label === '') {
-            $label = 'SERVICIO DE ENVIO ( ALMACEN - AGENCIA)';
+            $label = $defaultLabel;
         }
 
         $labelEsc = htmlspecialchars($label, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
@@ -3525,6 +3589,8 @@ class CotizacionFinalController extends Controller
     {
         $spreadsheet->setActiveSheetIndex(0);
         $sheet = $spreadsheet->getActiveSheet();
+        $recargosCellRef = 'J36';
+        $descuentoCellRef = 'J37';
 
         $codigoCotizacion = '';
         try {
@@ -3566,6 +3632,11 @@ class CotizacionFinalController extends Controller
             $rowSvcFlete = $hasAntidumpingRow ? 32 : 31;
             $rowSvcDestino = $hasAntidumpingRow ? 33 : 32;
             $rowSvcSubtotal = $hasAntidumpingRow ? 34 : 33;
+            $rowSvcRecargos = $hasAntidumpingRow ? 36 : 35;
+            $rowSvcDescuento = $hasAntidumpingRow ? 37 : 36;
+            $rowSvcTotal = $hasAntidumpingRow ? 38 : 37;
+            $recargosCellRef = 'K' . $rowSvcRecargos;
+            $descuentoCellRef = 'K' . $rowSvcDescuento;
 
             $antidumpingValor = $rowAntidumping !== null
                 ? round($this->boletaFinalGetCellFloat($sheet, 'K' . $rowAntidumping), 2)
@@ -3595,6 +3666,21 @@ class CotizacionFinalController extends Controller
             if ($subtotalSvcLegacy <= 0) {
                 $subtotalSvcLegacy = round($kCostosFobSvc + $kFleteSvc + $kCostosDestino, 2);
             }
+            $recargosSvcLegacy = round($this->boletaFinalGetCellFloat($sheet, 'K' . $rowSvcRecargos), 2);
+            $descuentoSvcLegacy = round($this->boletaFinalGetCellFloat($sheet, 'K' . $rowSvcDescuento), 2);
+            $totalSvcLegacy = round($this->boletaFinalGetCellFloat($sheet, 'K' . $rowSvcTotal), 2);
+            if ($totalSvcLegacy <= 0) {
+                $totalSvcLegacy = round($subtotalSvcLegacy + $recargosSvcLegacy - $descuentoSvcLegacy, 2);
+            }
+            $rowMontaResumen = $hasAntidumpingRow ? 43 : 42;
+            $rowDeliveryResumen = $hasAntidumpingRow ? 44 : 43;
+            $rowAduanerosResumen = $hasAntidumpingRow ? 45 : 44;
+            $extraServiciosResumen = round(
+                $this->boletaFinalGetVisiblePositiveAmount($sheet, 'K', $rowMontaResumen)
+                + $this->boletaFinalGetVisiblePositiveAmount($sheet, 'K', $rowDeliveryResumen)
+                + $this->boletaFinalGetVisiblePositiveAmount($sheet, 'K', $rowAduanerosResumen),
+                2
+            );
 
             $data = [
                 'cod_contract' => $codigoCotizacion,
@@ -3626,12 +3712,12 @@ class CotizacionFinalController extends Controller
                 'flete_svc' => $kFleteSvc,
                 'costosendestino' => $kCostosDestino,
                 'subtotal_svc' => $subtotalSvcLegacy,
-                'recargos' => 0.0,
-                'descuento_svc' => 0.0,
-                'total_svc' => $subtotalSvcLegacy,
-                'servicioimportacion' => $subtotalSvcLegacy,
+                'recargos' => $recargosSvcLegacy,
+                'descuento_svc' => $descuentoSvcLegacy,
+                'total_svc' => $totalSvcLegacy,
+                'servicioimportacion' => $totalSvcLegacy,
                 'impuestos' => round($impuestosSum, 2),
-                'montototal' => round($subtotalSvcLegacy + $impuestosSum, 2),
+                'montototal' => round($totalSvcLegacy + $impuestosSum + $extraServiciosResumen, 2),
             ];
 
             // Sin AD: ítems desde 48. Con AD: se inserta fila recargos antes de 36 → primera fila de ítems 49 (plantilla: 48=ítem, 49=TOTAL).
@@ -3646,6 +3732,10 @@ class CotizacionFinalController extends Controller
                     break;
                 }
                 if ($normB === '') {
+                    $i++;
+                    continue;
+                }
+                if ($this->isBoletaItemsHeaderRow($normB, strtoupper(trim((string) $sheet->getCell('C' . $i)->getCalculatedValue())))) {
                     $i++;
                     continue;
                 }
@@ -3724,6 +3814,10 @@ class CotizacionFinalController extends Controller
                     $i++;
                     continue;
                 }
+                if ($this->isBoletaItemsHeaderRow($normA, $normB)) {
+                    $i++;
+                    continue;
+                }
                 if (is_string($valA) && stripos($valA, 'No se emite comprobante') !== false) {
                     $i++;
                     continue;
@@ -3772,7 +3866,7 @@ class CotizacionFinalController extends Controller
             }
 
             if ($key === 'recargos') {
-                $recargosVal = $this->boletaFinalGetCellFloat($sheet, $legacyK ? 'K36' : 'J36');
+                $recargosVal = $this->boletaFinalGetCellFloat($sheet, $recargosCellRef);
                 if ($recargosVal != 0.0) {
                     $recargosHtml = '<tr>
                         <td colspan="3">RECARGOS OPERATIVOS</td>
@@ -3785,7 +3879,7 @@ class CotizacionFinalController extends Controller
                     $htmlContent = str_replace('{{row_recargos}}', '', $htmlContent);
                 }
             } elseif ($key === 'descuento_svc') {
-                $descuentoVal = $this->boletaFinalGetCellFloat($sheet, $legacyK ? 'K37' : 'J37');
+                $descuentoVal = $this->boletaFinalGetCellFloat($sheet, $descuentoCellRef);
                 if ($descuentoVal != 0.0) {
                     $descuentoHtml = '<tr>
                         <td colspan="3" style="color:red;">DESCUENTO APLICABLE</td>
@@ -4197,9 +4291,10 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
     }
 
     /**
-     * Suma montacargas / delivery desde contenedor_consolidado_cotizacion_delivery_servicio y escribe en la boleta.
-     * Con antidumping (fila extra de recargos): K43 montacargas, K44 delivery. Sin AD: K42, K43.
-     * Si el importe es 0, se oculta la fila para que no aparezca el concepto.
+     * Suma montacargas / delivery / recargos aduaneros y escribe en la hoja 1 de boleta.
+     * Con AD: K43 montacargas, K44 delivery, K45 recargos aduaneros.
+     * Sin AD: K42 montacargas, K43 delivery, K44 recargos aduaneros.
+     * Si el importe es 0, la fila se oculta (incluye recargos aduaneros).
      */
     private function applyBoletaDeliveryServicioRows(
         \PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $sheet,
@@ -4219,23 +4314,42 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
             ->where('id_cotizacion', $idCotizacion)
             ->whereRaw("UPPER(TRIM(tipo_servicio)) = 'DELIVERY'")
             ->sum('importe');
+        $aduaneros = (float) DB::table($table)
+            ->where('id_cotizacion', $idCotizacion)
+            ->whereRaw("UPPER(TRIM(tipo_servicio)) = 'SANCIONES' OR UPPER(TRIM(tipo_servicio)) = 'BQ'")
+            ->sum('importe');
 
         $rowMonta = $hasAntidumpingMain ? 43 : 42;
         $rowDeliv = $hasAntidumpingMain ? 44 : 43;
+        $rowAduaneros = $hasAntidumpingMain ? 45 : 44;
 
         $usdFmt = '_-[$$-en-US]* #,##0.00_-;[Red]-[$$-en-US]* #,##0.00_-;_-[$$-en-US]* "-"??_-;_-@_-';
 
+        // Reservar la nueva fila de recargos y correr todo lo inferior una posición.
+
         $this->applyBoletaDeliveryServicioOneRow($sheet, $rowMonta, $monta, $usdFmt);
         $this->applyBoletaDeliveryServicioOneRow($sheet, $rowDeliv, $deliv, $usdFmt);
+        $this->applyBoletaDeliveryServicioOneRow(
+            $sheet,
+            $rowAduaneros,
+            $aduaneros,
+            $usdFmt
+        );
     }
 
     private function applyBoletaDeliveryServicioOneRow(
         \PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $sheet,
         int $row,
         float $amount,
-        string $usdNumberFormat
+        string $usdNumberFormat,
+        bool $alwaysVisible = false,
+        string $label = ''
     ): void {
-        if ($amount > 0.00001) {
+        if ($label !== '') {
+            $sheet->setCellValue('B' . $row, $label);
+        }
+
+        if ($amount > 0.00001 || $alwaysVisible) {
             $sheet->setCellValue('K' . $row, round($amount, 2));
             $sheet->getStyle('K' . $row)->getNumberFormat()->setFormatCode($usdNumberFormat);
             $sheet->setCellValue('L' . $row, 'USD');
@@ -4351,7 +4465,7 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
             $rowMainLogistica = 30;
             $rowMainImpuestos = 31;
             $rowMainTotalConAntidumping = 32;
-
+            $rowMainRecargosAduaneros=45;
             /**Apply Tributes Calc Zones Rows Title */
             $objPHPExcel->setActiveSheetIndex(2)->mergeCells("B{$rowTributosTitle}:G{$rowTributosTitle}");
             $objPHPExcel->setActiveSheetIndex(2)->setCellValue("B{$rowTributosTitle}", 'Calculo de Tributos');
@@ -5028,9 +5142,35 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
                     '_-[$$-en-US]* #,##0.00_-;[Red]-[$$-en-US]* #,##0.00_-;_-[$$-en-US]* "-"??_-;_-@_-'
                 );
                 $sheet0->setCellValue('L42', 'USD');
-                $rowProductosStart++;
-                $rowProductosTemplateEnd++;
             }
+
+            $idCotizacionBoleta = isset($data['id']) ? (int) $data['id'] : 0;
+            $extrasCalc = $this->getCalculadoraImportacionExtrasByCotizacion($idCotizacionBoleta);
+            $rowRecargosOperativos = $hasAntidumpingMain ? 36 : 35;
+            $rowDescuentoAplicable = $hasAntidumpingMain ? 37 : 36;
+            $rowTotalServicio = $hasAntidumpingMain ? 38 : 37;
+            $usdFmt = '_-[$$-en-US]* #,##0.00_-;[Red]-[$$-en-US]* #,##0.00_-;_-[$$-en-US]* "-"??_-;_-@_-';
+
+            $sheet0->setCellValue('K' . $rowRecargosOperativos, $extrasCalc['recargos']);
+            $sheet0->setCellValue('L' . $rowRecargosOperativos, 'USD');
+            $sheet0->getStyle('K' . $rowRecargosOperativos)->getNumberFormat()->setFormatCode($usdFmt);
+
+            $sheet0->setCellValue('K' . $rowDescuentoAplicable, $extrasCalc['descuento']);
+            $sheet0->setCellValue('L' . $rowDescuentoAplicable, 'USD');
+            $sheet0->getStyle('K' . $rowDescuentoAplicable)->getNumberFormat()->setFormatCode($usdFmt);
+
+            $sheet0->setCellValue(
+                'K' . $rowTotalServicio,
+                '=K' . $rowMainTotalAntidumpingS0 . '+K' . $rowRecargosOperativos . '-K' . $rowDescuentoAplicable
+            );
+            $sheet0->setCellValue('L' . $rowTotalServicio, 'USD');
+            $sheet0->getStyle('K' . $rowTotalServicio)->getNumberFormat()->setFormatCode($usdFmt);
+
+            // Detectar de forma dinámica la cabecera "SIMULACIÓN DEL PRECIO PUESTO..." y anclar ahí las filas de ítems.
+            // Evita que los ítems se monten sobre el título cuando cambian inserts previos.
+            $rowProductosStart = $this->detectMainSheetProductsStartRow($sheet0, $rowProductosStartBase + $rowBumpSheet0);
+            $this->ensureMainSheetProductsTitleRow($sheet0, $rowProductosStart);
+            $rowProductosTemplateEnd = $rowProductosStart + $rowProductosTemplateSpan;
 
             $LogisticaValue = $objPHPExcel->getActiveSheet()->getCell('K' . $rowMainLogisticaS0)->getCalculatedValue();
             $CobroCellValue = $objPHPExcel->getActiveSheet()->getCell('K' . $rowMainLogisticaS0)->getCalculatedValue();
@@ -5286,7 +5426,6 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
                 );
             }
 
-            $idCotizacionBoleta = isset($data['id']) ? (int) $data['id'] : 0;
             if ($idCotizacionBoleta > 0) {
                 $this->applyBoletaDeliveryServicioRows($mainFinal, $idCotizacionBoleta, (bool) $hasAntidumpingMain);
             }
@@ -5863,7 +6002,8 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
     {
         $productos = $data['cliente']['productos'];
         $productsCount = count($productos);
-        $rowProductosStart = 48;
+        $rowProductosStart = $this->detectMainSheetProductsStartRow($sheet, 49);
+        $this->ensureMainSheetProductsTitleRow($sheet, $rowProductosStart);
 
         // Colores y estilos
         $greenColor = "009999";
@@ -5981,6 +6121,69 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
             "Último día de pago:";
 
         $sheet->setCellValue('N20', $message);
+    }
+
+    /**
+     * Ubica la fila de inicio de ítems en hoja principal a partir del título de la tabla.
+     */
+    private function detectMainSheetProductsStartRow(
+        \PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $sheet,
+        int $fallbackStartRow
+    ): int {
+        $needle = 'SIMULACIÓN DEL PRECIO PUESTO EN PERÚ POR PIEZA';
+        for ($row = 40; $row <= 70; $row++) {
+            foreach (range('B', 'L') as $col) {
+                $value = trim((string) $sheet->getCell($col . $row)->getValue());
+                if ($value !== '' && str_contains($value, $needle)) {
+                    // Plantilla esperada: [titulo] + [encabezados] + [items...]
+                    $headerRow = $row + 1;
+                    $headerB = strtoupper(trim((string) $sheet->getCell('B' . $headerRow)->getValue()));
+                    $headerC = strtoupper(trim((string) $sheet->getCell('C' . $headerRow)->getValue()));
+                    $headerF = strtoupper(trim((string) $sheet->getCell('F' . $headerRow)->getValue()));
+
+                    $hasHeaderRow = str_contains($headerB, '#')
+                        || str_contains($headerB, 'ITEM')
+                        || str_contains($headerC, 'NOMBRE')
+                        || str_contains($headerF, 'CANTIDAD');
+
+                    return $hasHeaderRow ? $row + 2 : $row + 1;
+                }
+            }
+        }
+
+        return $fallbackStartRow;
+    }
+
+    /**
+     * Garantiza que el título de la tabla de ítems exista en la fila inmediatamente superior al inicio.
+     */
+    private function ensureMainSheetProductsTitleRow(
+        \PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $sheet,
+        int $productsStartRow
+    ): void {
+        $headerRow = max(1, $productsStartRow - 1);
+        $headerB = strtoupper(trim((string) $sheet->getCell('B' . $headerRow)->getValue()));
+        $headerC = strtoupper(trim((string) $sheet->getCell('C' . $headerRow)->getValue()));
+        $headerF = strtoupper(trim((string) $sheet->getCell('F' . $headerRow)->getValue()));
+        $hasHeaderRow = str_contains($headerB, '#')
+            || str_contains($headerB, 'ITEM')
+            || str_contains($headerC, 'NOMBRE')
+            || str_contains($headerF, 'CANTIDAD');
+
+        $titleRow = max(1, $hasHeaderRow ? $productsStartRow - 2 : $productsStartRow - 1);
+        $titleCell = $sheet->getCell('B' . $titleRow);
+        if (!$titleCell->isInMergeRange()) {
+            $sheet->mergeCells('B' . $titleRow . ':L' . $titleRow);
+        }
+
+        $sheet->setCellValue('B' . $titleRow, 'SIMULACIÓN DEL PRECIO PUESTO EN PERÚ POR PIEZA');
+        $sheet->getRowDimension($titleRow)->setVisible(true);
+        $sheet->getStyle('B' . $titleRow . ':L' . $titleRow)->getFill()->setFillType(Fill::FILL_SOLID);
+        $sheet->getStyle('B' . $titleRow . ':L' . $titleRow)->getFill()->getStartColor()->setARGB('009999');
+        $sheet->getStyle('B' . $titleRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        $sheet->getStyle('B' . $titleRow)->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
+        $sheet->getStyle('B' . $titleRow)->getFont()->getColor()->setARGB(Color::COLOR_WHITE);
+        $sheet->getStyle('B' . $titleRow)->getFont()->setBold(true);
     }
 
     /**

@@ -4,12 +4,11 @@ namespace App\Traits;
 
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 
 trait WhatsappTrait
 {
     private $phoneNumberId = null;
-
+    
     /**
      * Mapeo inverso de conexión de BD a dominio del frontend
      * Múltiples dominios pueden usar la misma conexión (mysql)
