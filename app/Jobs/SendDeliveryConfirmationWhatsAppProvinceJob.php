@@ -15,6 +15,7 @@ use App\Models\CargaConsolidada\Cotizacion;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use App\Models\User;
+use App\Services\Delivery\ProvinciaEntregaNotificacionService;
 
 class SendDeliveryConfirmationWhatsAppProvinceJob implements ShouldQueue
 {
@@ -54,14 +55,14 @@ class SendDeliveryConfirmationWhatsAppProvinceJob implements ShouldQueue
                 'distrito',
                 'agency'
             ])->find($this->deliveryFormId);
-            
-            $idUser = $deliveryForm->id_user;
-            $user = User::find($idUser);
-            
+
             if (!$deliveryForm) {
                 Log::error('Formulario de delivery de provincia no encontrado', ['id' => $this->deliveryFormId]);
                 return;
             }
+
+            $idUser = $deliveryForm->id_user;
+            $user = User::find($idUser);
 
             // Obtener la cotización
             $cotizacion = $deliveryForm->cotizacion;
@@ -70,13 +71,13 @@ class SendDeliveryConfirmationWhatsAppProvinceJob implements ShouldQueue
                 return;
             }
 
-            //Obtener la carga del contenedor
+            // Obtener la carga del contenedor
             $contenedor = Contenedor::find($cotizacion->id_contenedor);
-            $carga = $contenedor->carga;
             if (!$contenedor) {
                 Log::error('Contenedor no encontrado para la cotización', ['cotizacion_id' => $cotizacion->id]);
                 return;
             }
+            $carga = $contenedor->carga;
 
             // Verificar que la cotización tenga teléfono
             if (empty($cotizacion->telefono)) {
@@ -90,61 +91,22 @@ class SendDeliveryConfirmationWhatsAppProvinceJob implements ShouldQueue
             // Formatear el teléfono (agregar código de país si es necesario)
             $telefono = $this->formatPhoneNumber($cotizacion->telefono);
 
-            // Determinar el tipo de documento y nombre/razón social
-            $tipoDocumento = $deliveryForm->r_type === 'PERSONA NATURAL' ? 'DNI' : 'RUC';
-            $nombreRazonSocial = $deliveryForm->r_name;
+            $notificacion = ProvinciaEntregaNotificacionService::datosVistaCorreo($deliveryForm, $carga, $user);
+            $mensaje = $notificacion['whatsapp'];
 
-            // Obtener información de ubicación
-            $departamento = $deliveryForm->departamento ? $deliveryForm->departamento->No_Departamento : 'N/A';
-            $provincia = $deliveryForm->provincia ? $deliveryForm->provincia->No_Provincia : 'N/A';
-            $distrito = $deliveryForm->distrito ? $deliveryForm->distrito->No_Distrito : 'N/A';
-
-            //Obtener información del tipo de agencia
-            if ($deliveryForm->id_agency) {
-                $agencyModel = \App\Models\DeliveryAgency::find($deliveryForm->id_agency);
-                if ($agencyModel && $agencyModel->name) {
-                    $tipoAgencia = $agencyModel->name;
-                }
-            } else {
-                $tipoAgencia = 'N/A';
-            }
-            
-
-            // Construir el mensaje
-            $mensaje = "Consolidado #{$carga}\n\n";
-            $mensaje .= "Tu reserva se realizó exitosamente.\n\n";
-            $mensaje .= "El cosignatario a quien se enviará la carga es:\n";
-            $mensaje .= "{$tipoDocumento}: {$deliveryForm->r_doc}\n";
-            $mensaje .= "Nombre: {$nombreRazonSocial}\n\n";
-            $mensaje .= "📍 *Ubicación:*\n";
-            $mensaje .= "Departamento: {$departamento}\n";
-            $mensaje .= "Provincia: {$provincia}\n";
-            $mensaje .= "Distrito: {$distrito}\n\n";
-            $mensaje .= "Tipo de agencia: {$tipoAgencia}\n\n";
-            if ($deliveryForm->id_agency == 3) {
-                $agencyName = $deliveryForm->agency_name ?? '';
-                $agencyRuc = $deliveryForm->agency_ruc ?? '';
-                $mensaje .= "Agencia: {$agencyName}\n";
-                $mensaje .= "RUC Agencia: {$agencyRuc}\n\n";
-            }
             // Enviar el mensaje de WhatsApp
             $resultado = $this->sendMessage($mensaje, $telefono);
             
             // Enviar email de confirmación si el usuario tiene email
             if ($user && $user->email) {
                 Mail::to($user->email)->send(new \App\Mail\DeliveryConfirmationProvinceMail(
-                    $mensaje,
                     $deliveryForm,
                     $cotizacion,
                     $user,
-                    $tipoDocumento,
-                    $nombreRazonSocial,
                     $carga,
-                    $departamento,
-                    $provincia,
-                    $distrito,
                     public_path('storage/logo_icons/logo_header_white.png'),
-                    public_path('storage/logo_icons/logo_footer.png')
+                    public_path('storage/logo_icons/logo_footer.png'),
+                    $notificacion
                 ));
             }
 

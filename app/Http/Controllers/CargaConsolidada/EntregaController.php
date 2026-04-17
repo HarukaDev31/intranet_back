@@ -18,6 +18,7 @@ use App\Exports\RotuladoParedExport;
 use App\Exports\FormatoResumenExport;
 use App\Exports\ClientesEntregaExport;
 use App\Jobs\SendDeliveryFormBulkJob;
+use App\Helpers\UsuarioDatosFacturacionHelper;
 use Dompdf\Dompdf;
 use Dompdf\Options;
 use ZipArchive;
@@ -692,8 +693,8 @@ class EntregaController extends Controller
      */
     public function getClientesEntrega(Request $request, $idContenedor)
     {
-        // Lo obtiene de la tabla de clientes asociados al contenedor
-        //left join users as U where U.id = CC.id_usuario and get 
+        // Lo obtiene de la tabla de clientes asociados al contenedor.
+        // CC.id_usuario es el usuario interno que creó/gestionó la fila, no el cliente externo (portal users).
         $query = DB::table('contenedor_consolidado_cotizacion as CC')
             ->join('contenedor_consolidado_tipo_cliente as TC', 'TC.id', '=', 'CC.id_tipo_cliente')
             ->leftJoin('consolidado_comprobante_forms as CF', function ($join) use ($idContenedor) {
@@ -819,9 +820,10 @@ class EntregaController extends Controller
             $row->conformidad = [];
             $row->conformidad_count = 0;
 
-            // Vincular con users por documento, correo o teléfono (igual que ClienteService)
+            // Resolver users (cliente externo): solo por contacto de la fila, nunca por CC.id_usuario (interno).
             $noComoEntero = null;
             $noOtrosComoEnteroEmpresa = null;
+            $user = null;
             try {
                 $user = \App\Helpers\UserLookupHelper::findUserByContact(
                     $row->correo ?? null,
@@ -834,6 +836,16 @@ class EntregaController extends Controller
                 }
             } catch (\Exception $e) {
                 Log::warning('getClientesEntrega: error vinculando user por documento/correo/telefono para cotización ' . $row->id . ' - ' . $e->getMessage());
+            }
+
+            // T. Entrega: si el SQL no definió type_form, último destino en usuario_datos_facturacion por id del users resuelto
+            $tfRaw = $row->type_form;
+            $hasTf = ($tfRaw === 0 || $tfRaw === 1 || $tfRaw === '0' || $tfRaw === '1');
+            if (!$hasTf) {
+                $fromUdf = UsuarioDatosFacturacionHelper::getLatestTypeFormForUser($user);
+                if ($fromUdf !== null) {
+                    $row->type_form = $fromUdf;
+                }
             }
 
             // Calcular origen según lógica de ClienteService
@@ -976,6 +988,7 @@ class EntregaController extends Controller
         foreach ($items as $row) {
             $noComoEntero = null;
             $noOtrosComoEnteroEmpresa = null;
+            $user = null;
             try {
                 $user = \App\Helpers\UserLookupHelper::findUserByContact(
                     $row->correo ?? null,
@@ -989,6 +1002,16 @@ class EntregaController extends Controller
             } catch (\Exception $e) {
                 Log::warning('exportClientesEntregaExcel: error vinculando user para cotización ' . $row->id . ' - ' . $e->getMessage());
             }
+
+            $tfRaw = $row->type_form;
+            $hasTf = ($tfRaw === 0 || $tfRaw === 1 || $tfRaw === '0' || $tfRaw === '1');
+            if (!$hasTf) {
+                $fromUdf = UsuarioDatosFacturacionHelper::getLatestTypeFormForUser($user);
+                if ($fromUdf !== null) {
+                    $row->type_form = $fromUdf;
+                }
+            }
+
             $primaryCode = $noComoEntero ?? null;
             $noOtrosVal = $noOtrosComoEnteroEmpresa ?? null;
             $origen = null;

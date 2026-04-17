@@ -6,6 +6,7 @@ use App\Http\Controllers\CargaConsolidada\EntregaController;
 
 // Rutas protegidas para usuarios externos de importaciones
 Route::group(['prefix' => 'clientes/delivery', 'middleware' => 'jwt.external'], function () {
+    Route::get('/usuario-datos-facturacion', [DeliveryController::class, 'getUsuarioDatosFacturacion']);
     Route::get('/agencies', [DeliveryController::class, 'getAgencies']);
     Route::post('/provincia', [DeliveryController::class, 'storeProvinciaForm']);
     Route::post('/lima', [DeliveryController::class, 'storeLimaForm']);

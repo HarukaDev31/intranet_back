@@ -56,18 +56,31 @@
 
         .access-section {
             background: #fff;
-            padding: 30px;
+            padding: 0;
             border-radius: 8px;
-            margin-bottom: 30px;
+            margin-bottom: 20px;
             box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            overflow: hidden;
+            border: 1px solid #e8e8e8;
         }
 
         .access-title {
-            font-size: 16px;
+            font-size: 14px;
             font-weight: 600;
-            color: #333;
-            margin-bottom: 25px;
-            text-align: center;
+            color: #fff;
+            margin: 0;
+            text-align: left;
+            letter-spacing: 0.02em;
+        }
+
+        .card-header-orange {
+            background: #f97316;
+            padding: 12px 20px;
+        }
+
+        .card-body {
+            padding: 20px 24px 22px;
+            background: #fff;
         }
 
         .info-table {
@@ -187,32 +200,65 @@
             
             <div class="subtitle">
                 Gracias por confiar en Probusiness, tu aliado en formación y gestión logística.<br><br>
-                Hemos recibido tu solicitud de envío a provincia. Tu carga será enviada al consignatario especificado. 
-                Te mantendremos informado sobre el estado de tu envío.
+                @if(!empty($primerNombre))
+                    Hola, <strong>{{ $primerNombre }}</strong>.<br><br>
+                @endif
+                Hemos recibido tu solicitud de envío a provincia para el <strong>Consolidado #{{ $carga }}</strong>.
+                Los datos registrados son los siguientes (coinciden con la notificación enviada por WhatsApp):
             </div>
 
+            <div class="access-section">
+                <div class="card-header-orange">
+                    <div class="access-title">Destinatario confirmado</div>
+                </div>
+                <div class="card-body">
+                    <table class="info-table">
+                        <tr>
+                            <td class="info-label">Nombre:</td>
+                            <td class="info-value">{{ $nombreDestinatario }}</td>
+                        </tr>
+                        <tr>
+                            <td class="info-label">{{ $tipoDocumento }}:</td>
+                            <td class="info-value">{{ $numeroDocumento }}</td>
+                        </tr>
+                        <tr>
+                            <td class="info-label">Celular:</td>
+                            <td class="info-value">{{ $celularDestinatario }}</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
 
             <div class="access-section">
-                <div class="access-title">Información del Consignatario</div>
-                
-                <table class="info-table">
-                    <tr>
-                        <td class="info-label">Tipo de Documento:</td>
-                        <td class="info-value">{{ $tipoDocumento }}</td>
-                    </tr>
-                    <tr>
-                        <td class="info-label">Número:</td>
-                        <td class="info-value">{{ $deliveryForm->r_doc }}</td>
-                    </tr>
-                    <tr>
-                        <td class="info-label">Nombre/Razón Social:</td>
-                        <td class="info-value">{{ $nombreRazonSocial }}</td>
-                    </tr>
-                    <tr>
-                        <td class="info-label">Destino:</td>
-                        <td class="info-value">{{ $departamento }} - {{ $provincia }} - {{ $distrito }}</td>
-                    </tr>
-                </table>
+                <div class="card-header-orange">
+                    <div class="access-title">Agencia de transporte</div>
+                </div>
+                <div class="card-body">
+                    <table class="info-table">
+                        <tr>
+                            <td class="info-label">Agencia:</td>
+                            <td class="info-value">{{ $nombreAgenciaTransporte }}</td>
+                        </tr>
+                        <tr>
+                            <td class="info-label">RUC:</td>
+                            <td class="info-value">{{ $rucAgenciaTransporte }}</td>
+                        </tr>
+                        <tr>
+                            <td class="info-label">Destino:</td>
+                            <td class="info-value">{{ $destinoLinea }}</td>
+                        </tr>
+                        <tr>
+                            <td class="info-label">Entrega en:</td>
+                            <td class="info-value">{{ $entregaEn }}</td>
+                        </tr>
+                        @if(!empty($direccionEntrega))
+                        <tr>
+                            <td class="info-label">Dirección:</td>
+                            <td class="info-value">{{ $direccionEntrega }}</td>
+                        </tr>
+                        @endif
+                    </table>
+                </div>
             </div>
         </div>
 

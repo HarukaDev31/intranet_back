@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Clientes;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\CargaConsolidada\Contenedor;
+use App\Helpers\UsuarioDatosFacturacionHelper;
 use Tymon\JWTAuth\Facades\JWTAuth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
@@ -86,14 +87,9 @@ class ContainersController extends Controller
                 }
                 
                 // Verificar si el usuario tiene cotizaciones en cada contenedor usando teléfono normalizado
-                // Normalizar el teléfono del usuario (remover espacios, guiones, paréntesis, puntos y +)
+                // (misma lógica que PhoneHelper::normalizePhone)
                 $telefonoUsuario = $user->telefono ?? $user->celular ?? '';
-                $telefonoNormalizado = preg_replace('/[\s\-\(\)\.\+]/', '', $telefonoUsuario);
-                
-                // Si empieza con 51 y tiene más de 9 dígitos, remover prefijo
-                if (preg_match('/^51(\d{9})$/', $telefonoNormalizado, $matches)) {
-                    $telefonoNormalizado = $matches[1];
-                }
+                $telefonoNormalizado = normalizePhone($telefonoUsuario);
                 
                 if (!empty($telefonoNormalizado)) {
                     $cotizaciones = DB::table('contenedor_consolidado_cotizacion')
@@ -152,6 +148,8 @@ class ContainersController extends Controller
             return response()->json([
                 'success' => true,
                 'data' => $data,
+                /** 1 = Lima, 0 = Provincia; desde último usuario_datos_facturacion.destino del usuario JWT */
+                'type_form' => UsuarioDatosFacturacionHelper::getLatestTypeFormForUserId((int) $user->id),
                 'message' => 'Contenedores obtenidos exitosamente'
             ], 200);
 

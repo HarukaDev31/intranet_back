@@ -15,6 +15,9 @@ use App\Jobs\SendDeliveryConfirmationWhatsAppProvinceJob;
 use Tymon\JWTAuth\Facades\JWTAuth;
 use App\Models\User;
 use App\Models\UserBusiness;
+use App\Models\UsuarioDatosFacturacion;
+use App\Helpers\UsuarioDatosFacturacionHelper;
+use App\Helpers\UserLookupHelper;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -58,7 +61,7 @@ class DeliveryController extends Controller
             // Obtener cotizaciones que:
             // 1. No tienen formulario registrado, O
             // 2. Tienen formulario de Lima pero sin horario asignado (id_range_date es null)
-            $cotizaciones = Cotizacion::where('id_contenedor', $idConsolidado)
+            $cotizacionesModels = Cotizacion::where('id_contenedor', $idConsolidado)
                 ->whereNull('id_cliente_importacion')
                 ->where('estado_cotizador', 'CONFIRMADO')
                 ->whereNotNull('estado_cliente')
@@ -81,12 +84,48 @@ class DeliveryController extends Controller
                 return response()->json(['error' => 'Carga no encontrada'], 404);
             }
             $carga = $contenedor->carga;
-            $cotizaciones = $cotizaciones->map(function ($cotizacion) {
-                return [
-                    'value' => $cotizacion->uuid,
-                    'label' => $cotizacion->nombre,
+
+            // Proveedores embarcados (LOADED), agrupados por UUID de cotización para anidar en cada fila de data
+            $mercanciasPorCotizacion = [];
+            $filasProveedor = DB::table('contenedor_consolidado_cotizacion_proveedores as CP')
+                ->join('contenedor_consolidado_cotizacion as CC', 'CC.id', '=', 'CP.id_cotizacion')
+                ->where('CC.id_contenedor', $idConsolidado)
+                ->whereNull('CC.deleted_at')
+                ->whereNotNull('CC.estado_cliente')
+                ->whereNull('CC.id_cliente_importacion')
+                ->where('CC.estado_cotizador', 'CONFIRMADO')
+                ->whereRaw("UPPER(TRIM(COALESCE(CP.estados_proveedor, ''))) = 'LOADED'")
+                ->orderBy('CP.id')
+                ->select([
+                    'CC.uuid as cotizacion_uuid',
+                    'CP.supplier',
+                    DB::raw('(COALESCE(CP.qty_box_china, 0) + COALESCE(CP.qty_pallet_china, 0)) as bultos'),
+                    'CP.products',
+                ])
+                ->get();
+
+            foreach ($filasProveedor as $row) {
+                $uuid = (string) ($row->cotizacion_uuid ?? '');
+                if (!isset($mercanciasPorCotizacion[$uuid])) {
+                    $mercanciasPorCotizacion[$uuid] = [];
+                }
+                $mercanciasPorCotizacion[$uuid][] = [
+                    'proveedor' => (string) ($row->supplier ?? ''),
+                    'bultos' => (float) ($row->bultos ?? 0),
+                    'producto' => (string) ($row->products ?? ''),
                 ];
-            });
+            }
+
+            $cotizaciones = $cotizacionesModels->map(function ($cotizacion) use ($mercanciasPorCotizacion) {
+                $uuid = (string) $cotizacion->uuid;
+
+                return [
+                    'value' => $uuid,
+                    'label' => $cotizacion->nombre,
+                    'mercancias' => $mercanciasPorCotizacion[$uuid] ?? [],
+                ];
+            })->values()->all();
+
             $response = [
                 'data' => $cotizaciones,
                 'carga' => $carga,
@@ -96,6 +135,114 @@ class DeliveryController extends Controller
             return response()->json($response);
         } catch (\Exception $e) {
             return response()->json(['message' => $e->getMessage(), 'success' => false], 500);
+        }
+    }
+
+    /**
+     * Último registro de datos de facturación (tabla usuario_datos_facturacion).
+     * El usuario externo (portal) se resuelve solo por contacto en la cotización (correo, teléfono, documento).
+     * id_usuario en la cotización es el usuario interno que gestionó la fila, no el cliente.
+     * Query requerido: id_cotizacion o uuid (cotización).
+     * Query opcional: destino=Lima|Provincia (si no hay coincidencia, se devuelve el último sin filtrar).
+     */
+    public function getUsuarioDatosFacturacion(Request $request)
+    {
+        try {
+            $idCotizacion = $request->query('id_cotizacion');
+            $uuid = $request->query('uuid');
+
+            if (($idCotizacion === null || $idCotizacion === '') && ($uuid === null || $uuid === '')) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Indique id_cotizacion o uuid de la cotización.',
+                ], 422);
+            }
+
+            $cotizacionQuery = Cotizacion::query();
+            if ($idCotizacion !== null && $idCotizacion !== '') {
+                $cotizacionQuery->where('id', (int) $idCotizacion);
+            } else {
+                $cotizacionQuery->where('uuid', (string) $uuid);
+            }
+
+            $cotizacion = $cotizacionQuery->first();
+
+            if (!$cotizacion) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Cotización no encontrada.',
+                ], 404);
+            }
+
+            $correo = ($cotizacion->correo !== null && trim((string) $cotizacion->correo) !== '')
+                ? trim((string) $cotizacion->correo)
+                : null;
+            $telefono = ($cotizacion->telefono !== null && trim((string) $cotizacion->telefono) !== '')
+                ? trim((string) $cotizacion->telefono)
+                : null;
+            $documento = ($cotizacion->documento !== null && trim((string) $cotizacion->documento) !== '')
+                ? trim((string) $cotizacion->documento)
+                : null;
+
+            if ($correo === null && $telefono === null && $documento === null) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'La cotización no tiene datos de contacto para vincular al cliente.',
+                ], 422);
+            }
+
+            $user = UserLookupHelper::findUserByContact($correo, $telefono, $documento);
+            if (!$user || empty($user->id)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No se encontró un usuario vinculado a los datos de la cotización.',
+                ], 404);
+            }
+
+            $idUser = (int) $user->id;
+            $destino = $request->query('destino');
+
+            $query = UsuarioDatosFacturacion::query()->where('id_user', $idUser);
+
+            if ($destino && in_array($destino, ['Lima', 'Provincia'], true)) {
+                $query->where('destino', $destino);
+            }
+
+            $row = $query->orderByDesc('id')->first();
+
+            if (!$row && $destino && in_array($destino, ['Lima', 'Provincia'], true)) {
+                $row = UsuarioDatosFacturacion::where('id_user', $idUser)
+                    ->orderByDesc('id')
+                    ->first();
+            }
+
+            $typeForm = UsuarioDatosFacturacionHelper::getLatestTypeFormForUserId($idUser);
+
+            if (!$row) {
+                return response()->json([
+                    'success' => true,
+                    'data' => null,
+                    'type_form' => $typeForm,
+                    'message' => 'Sin datos de facturación previos',
+                ]);
+            }
+
+            return response()->json([
+                'success' => true,
+                'type_form' => $typeForm,
+                'data' => [
+                    'nombre_completo' => $row->nombre_completo,
+                    'dni' => $row->dni,
+                    'ruc' => $row->ruc,
+                    'razon_social' => $row->razon_social,
+                    'domicilio_fiscal' => $row->domicilio_fiscal,
+                    'destino' => $row->destino,
+                ],
+            ]);
+        } catch (\Exception $e) {
+            Log::error('getUsuarioDatosFacturacion', ['error' => $e->getMessage()]);
+
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
         }
     }
 
@@ -265,19 +412,19 @@ class DeliveryController extends Controller
                         'id_cotizacion' => $cotizacion->id,
                         'id_user' => $idUser,
                         'id_contenedor' => $cotizacion->id_contenedor,
-                        'importer_nmae' => $request->clienteNombre ?? $request->clienteRazonSocial,
+                        'importer_nmae' => $this->requestFirstNonEmptyTrimmed($request, ['clienteNombre', 'clienteRazonSocial']) ?? '',
                         'productos' => is_array($request->tiposProductos) ? implode(', ', $request->tiposProductos) : $request->tiposProductos,
-                        'voucher_doc' => $request->clienteDni ?? $request->clienteRuc,
+                        'voucher_doc' => $this->requestFirstNonEmptyTrimmed($request, ['clienteDni', 'clienteRuc']) ?? '',
                         'voucher_doc_type' => $request->tipoComprobante,
-                        'voucher_name' => $request->clienteNombre ?? $request->clienteRazonSocial,
+                        'voucher_name' => $this->requestFirstNonEmptyTrimmed($request, ['clienteNombre', 'clienteRazonSocial']) ?? '',
                         'voucher_email' => $request->clienteCorreo,
                         'id_agency' => $request->agenciaEnvio,
                         'agency_ruc' => $request->rucAgencia,
                         'agency_name' => $request->nombreAgencia,
                         'r_type' => $request->tipoDestinatario,
-                        'r_doc' => $request->destinatarioDni ?? $request->destinatarioRuc,
-                        'r_name' => $request->destinatarioNombre ?? $request->destinatarioRazonSocial,
-                        'r_phone' => $request->destinatarioCelular,
+                        'r_doc' => $this->requestFirstNonEmptyTrimmed($request, ['destinatarioDni', 'destinatarioRuc']) ?? '',
+                        'r_name' => $this->requestFirstNonEmptyTrimmed($request, ['destinatarioNombre', 'destinatarioRazonSocial']) ?? '',
+                        'r_phone' => $this->requestFirstNonEmptyTrimmed($request, ['destinatarioCelular']) ?? '',
                         'id_department' => is_array($request->destinatarioDepartamento) ? $request->destinatarioDepartamento['value'] : $request->destinatarioDepartamento,
                         'id_province' => is_array($request->destinatarioProvincia) ? $request->destinatarioProvincia['value'] : $request->destinatarioProvincia,
                         'id_district' => is_array($request->destinatarioDistrito) ? $request->destinatarioDistrito['value'] : $request->destinatarioDistrito,
@@ -298,19 +445,19 @@ class DeliveryController extends Controller
                 'id_cotizacion' => $cotizacion->id,
                 'id_user' => $idUser,
                 'id_contenedor' => $cotizacion->id_contenedor,
-                'importer_nmae' => $request->clienteNombre ?? $request->clienteRazonSocial,
+                'importer_nmae' => $this->requestFirstNonEmptyTrimmed($request, ['clienteNombre', 'clienteRazonSocial']) ?? '',
                 'productos' => is_array($request->tiposProductos) ? implode(', ', $request->tiposProductos) : $request->tiposProductos,
-                'voucher_doc' => $request->clienteDni ?? $request->clienteRuc,
+                'voucher_doc' => $this->requestFirstNonEmptyTrimmed($request, ['clienteDni', 'clienteRuc']) ?? '',
                 'voucher_doc_type' => $request->tipoComprobante,
-                'voucher_name' => $request->clienteNombre ?? $request->clienteRazonSocial,
+                'voucher_name' => $this->requestFirstNonEmptyTrimmed($request, ['clienteNombre', 'clienteRazonSocial']) ?? '',
                 'voucher_email' => $request->clienteCorreo,
                 'id_agency' => $request->agenciaEnvio,
                 'agency_ruc' => $request->rucAgencia,
                 'agency_name' => $request->nombreAgencia,
                 'r_type' => $request->tipoDestinatario,
-                'r_doc' => $request->destinatarioDni ?? $request->destinatarioRuc,
-                'r_name' => $request->destinatarioNombre ?? $request->destinatarioRazonSocial,
-                'r_phone' => $request->destinatarioCelular,
+                'r_doc' => $this->requestFirstNonEmptyTrimmed($request, ['destinatarioDni', 'destinatarioRuc']) ?? '',
+                'r_name' => $this->requestFirstNonEmptyTrimmed($request, ['destinatarioNombre', 'destinatarioRazonSocial']) ?? '',
+                'r_phone' => $this->requestFirstNonEmptyTrimmed($request, ['destinatarioCelular']) ?? '',
                 'id_department' => is_array($request->destinatarioDepartamento) ? $request->destinatarioDepartamento['value'] : $request->destinatarioDepartamento,
                 'id_province' => is_array($request->destinatarioProvincia) ? $request->destinatarioProvincia['value'] : $request->destinatarioProvincia,
                 'id_district' => is_array($request->destinatarioDistrito) ? $request->destinatarioDistrito['value'] : $request->destinatarioDistrito,
@@ -536,6 +683,35 @@ class DeliveryController extends Controller
                 'error' => $e->getMessage()
             ], 500);
         }
+    }
+
+    /**
+     * Primer valor no vacío (tras trim) entre varias claves del request.
+     * Evita el fallo de `??` en PHP cuando el front envía "" en el primer campo y el dato real en el segundo.
+     *
+     * @param string[] $keys
+     */
+    private function requestFirstNonEmptyTrimmed(Request $request, array $keys): ?string
+    {
+        foreach ($keys as $key) {
+            $v = $request->input($key);
+            if ($v === null) {
+                continue;
+            }
+            if (is_string($v)) {
+                $t = trim($v);
+                if ($t !== '') {
+                    return $t;
+                }
+            } elseif (is_numeric($v)) {
+                $t = trim((string) $v);
+                if ($t !== '') {
+                    return $t;
+                }
+            }
+        }
+
+        return null;
     }
 
     private function sendInitialDeliveryFormMessage(Cotizacion $cotizacion): void
