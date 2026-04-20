@@ -1483,7 +1483,8 @@ class CalculadoraImportacionService
             }*/
             $sheetResumen->setCellValue('J31', "='2'!" . ($totalColumn . $rowCostosFob));
             $sheetResumen->setCellValue('J32', "='2'!" . ($totalColumn . $rowFlete));
-            $sheetResumen->setCellValue('J33', "='2'!" . ($totalColumn . $rowItemDestino));
+            //- $totalExtras    
+            $sheetResumen->setCellValue('J33', "='2'!" . ($totalColumn . $rowItemDestino . '-(' . ($totalExtras ?? 00) . ')'));
 
             $sheetResumen->setCellValue('J36', $data['totalExtraProveedor'] + $data['totalExtraItem']);
             $sheetResumen->setCellValue('J37', $data['totalDescuento']);
