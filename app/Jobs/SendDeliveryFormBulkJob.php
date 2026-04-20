@@ -154,7 +154,7 @@ class SendDeliveryFormBulkJob implements ShouldQueue
                 . "✅ *Organizaremos los envíos* una vez liberado el contenedor.\n"
                 . "✅ *FORMS:* " . $forms . "\n \n"
                 . "⚠  De no llenar el formulario no se programará el envío de sus productos.";
-
+        // intval of carga <5 use El *costo de flete* Almacén – Agencia se cotizará y será informado por interno. instead ➡ El *costo de flete* Almacén – Agencia detalla en su cotización final.
         $messageSecundario = $isLima
             ? "❌ Tiempo máximo de recojo: *30 minutos* según horario reservado\n"
                 . "❌ La movilidad debe retirar toda la mercadería en un solo viaje.\n"
@@ -165,7 +165,7 @@ class SendDeliveryFormBulkJob implements ShouldQueue
             : "Importante:\n\n"
                 . "➡ La información registrada será utilizada para la *emisión de guías de remisión*.\n"
                 . "➡ *Validar* que sus datos estén correctos y completos.\n"
-                . "➡ El *costo de flete* Almacén – Agencia detalla en su cotización final.\n"
+                . intval($carga) < 5 ? "➡ El *costo de flete* Almacén – Agencia se cotizará y será informado por interno.\n" : "➡ El *costo de flete* Almacén – Agencia detalla en su cotización final.\n"
                 . "➡ Los envíos se realizan con *Marvisur*.\n"
                 . "➡ Si desea trabajar con otra agencia de transporte, se aplicará un *costo adicional* y previa coordinación.\n"
                 . "➡ En ese caso, no asumimos responsabilidad por incidencias en la entrega con la agencia elegida.";
