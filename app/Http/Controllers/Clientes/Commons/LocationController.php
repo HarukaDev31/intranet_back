@@ -199,6 +199,73 @@ class LocationController extends Controller
         });
         return response()->json(['data' => $distritos, 'success' => true]);
     }
+
+    /**
+     * Búsqueda paginada de distritos (autocomplete).
+     * GET .../distritos/search?q=lima&page=1&per_page=20
+     *
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function searchDistritos(Request $request)
+    {
+        try {
+            $q = trim((string) $request->query('q', ''));
+            $perPage = (int) $request->query('per_page', 20);
+            $perPage = max(1, min($perPage, 100));
+            $page = max(1, (int) $request->query('page', 1));
+
+            $query = Distrito::query()
+                ->select(['ID_Distrito', 'No_Distrito', 'ID_Provincia'])
+                ->with([
+                    'provincia' => function ($rel) {
+                        $rel->select('ID_Provincia', 'No_Provincia', 'ID_Departamento');
+                    },
+                    'provincia.departamento' => function ($rel) {
+                        $rel->select('ID_Departamento', 'No_Departamento');
+                    },
+                ])
+                ->orderBy('No_Distrito');
+
+            if ($q !== '') {
+                $like = '%' . addcslashes($q, '%_\\') . '%';
+                $query->where('No_Distrito', 'LIKE', $like);
+            }
+
+            /** @var \Illuminate\Contracts\Pagination\LengthAwarePaginator $paginator */
+            $paginator = $query->paginate($perPage, ['*'], 'page', $page);
+
+            $data = $paginator->getCollection()->map(function (Distrito $d) {
+                $depto = optional(optional($d->provincia)->departamento)->No_Departamento ?? '';
+                $prov = optional($d->provincia)->No_Provincia ?? '';
+                $ruta = trim(implode(' › ', array_filter([$depto, $prov, $d->No_Distrito])));
+
+                return [
+                    'value' => (int) $d->ID_Distrito,
+                    'label' => $ruta !== '' ? $ruta : $d->No_Distrito,
+                    'nombre_distrito' => $d->No_Distrito,
+                    'id_provincia' => $d->ID_Provincia !== null ? (int) $d->ID_Provincia : null,
+                ];
+            })->values();
+
+            return response()->json([
+                'success' => true,
+                'data' => $data,
+                'meta' => [
+                    'current_page' => $paginator->currentPage(),
+                    'last_page' => $paginator->lastPage(),
+                    'per_page' => $paginator->perPage(),
+                    'total' => $paginator->total(),
+                    'from' => $paginator->firstItem(),
+                    'to' => $paginator->lastItem(),
+                ],
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
     /**
      * Obtiene la estructura completa de ubicaciones (departamento -> provincia -> distrito)
      */

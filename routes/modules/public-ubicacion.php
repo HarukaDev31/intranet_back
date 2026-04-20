@@ -11,5 +11,7 @@ Route::prefix('public/ubicacion')->group(function () {
     Route::get('/paises', [LocationController::class, 'getPaises']);
     Route::get('/departamentos', [LocationController::class, 'getDepartamentos']);
     Route::get('/provincias/{idDepartamento}', [LocationController::class, 'getProvincias']);
-    Route::get('/distritos/{idProvincia}', [LocationController::class, 'getDistritos']);
+    Route::get('/distritos/search', [LocationController::class, 'searchDistritos']);
+    Route::get('/distritos/{idProvincia}', [LocationController::class, 'getDistritos'])
+        ->where('idProvincia', '[0-9]+');
 });
