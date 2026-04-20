@@ -59,9 +59,14 @@ class ComprobanteFormController extends Controller
                 ]);
 
             $misRegistros = ComprobanteForm::query()
-                ->with(['cotizacion' => function ($q) {
-                    $q->select('id', 'uuid', 'nombre');
-                }])
+                ->with([
+                    'cotizacion' => function ($q) {
+                        $q->select('id', 'uuid', 'nombre');
+                    },
+                    'distrito' => function ($q) {
+                        $q->select('ID_Distrito', 'No_Distrito');
+                    },
+                ])
                 ->where('id_contenedor', (int) $idContenedor)
                 ->whereIn('id_cotizacion', $cotizacionIds)
                 ->where('id_user', $userId)
@@ -69,6 +74,7 @@ class ComprobanteFormController extends Controller
                 ->map(function (ComprobanteForm $form) {
                     $cot = $form->cotizacion;
                     $uuid = $cot ? $cot->uuid : null;
+                    $dist = $form->distrito;
 
                     return [
                         'id'                 => $form->id,
@@ -79,6 +85,8 @@ class ComprobanteFormController extends Controller
                         'razon_social'       => $form->razon_social,
                         'ruc'                => $form->ruc,
                         'domicilio_fiscal'   => $form->domicilio_fiscal,
+                        'distrito_id'        => $form->distrito_id,
+                        'distrito_nombre'    => $dist ? $dist->No_Distrito : null,
                         'nombre_completo'    => $form->nombre_completo,
                         'dni_carnet'         => $form->dni_carnet,
                     ];
@@ -140,6 +148,12 @@ class ComprobanteFormController extends Controller
                     'min:10',
                     'max:2000',
                 ],
+                'distrito_id'      => [
+                    'exclude_if:tipo_comprobante,BOLETA',
+                    'required_if:tipo_comprobante,FACTURA',
+                    'integer',
+                    'exists:distrito,ID_Distrito',
+                ],
                 'nombre_completo'  => [
                     'exclude_if:tipo_comprobante,FACTURA',
                     'required_if:tipo_comprobante,BOLETA',
@@ -165,6 +179,8 @@ class ComprobanteFormController extends Controller
                 'razon_social.min'             => 'La razón social debe tener al menos 3 caracteres.',
                 'domicilio_fiscal.required_if' => 'El domicilio fiscal es obligatorio para factura.',
                 'domicilio_fiscal.min'         => 'El domicilio fiscal debe tener al menos 10 caracteres.',
+                'distrito_id.required_if'      => 'El distrito es obligatorio para factura.',
+                'distrito_id.exists'          => 'El distrito seleccionado no es válido.',
                 'nombre_completo.required_if'  => 'El nombre completo es obligatorio para boleta.',
                 'nombre_completo.min'          => 'El nombre completo debe tener al menos 3 caracteres.',
                 'dni_carnet.required_if'       => 'El DNI o carné de extranjería es obligatorio para boleta.',
@@ -201,6 +217,7 @@ class ComprobanteFormController extends Controller
                 $base['razon_social']     = $validated['razon_social'] ?? null;
                 $base['ruc']            = $validated['ruc'] ?? null;
                 $base['domicilio_fiscal'] = $validated['domicilio_fiscal'] ?? null;
+                $base['distrito_id']      = isset($validated['distrito_id']) ? (int) $validated['distrito_id'] : null;
                 $base['nombre_completo']  = null;
                 $base['dni_carnet']       = null;
             } else {
@@ -209,6 +226,7 @@ class ComprobanteFormController extends Controller
                 $base['razon_social']     = null;
                 $base['ruc']              = null;
                 $base['domicilio_fiscal'] = null;
+                $base['distrito_id']      = null;
             }
 
             // Crear o actualizar el formulario para esta cotización
@@ -316,6 +334,11 @@ class ComprobanteFormController extends Controller
             $form->razon_social     = $request->input('razon_social', $form->razon_social);
             $form->ruc              = $request->input('ruc', $form->ruc);
             $form->domicilio_fiscal = $request->input('domicilio_fiscal', $form->domicilio_fiscal);
+            if ($request->has('distrito_id')) {
+                $form->distrito_id = $request->input('distrito_id') !== null && $request->input('distrito_id') !== ''
+                    ? (int) $request->input('distrito_id')
+                    : null;
+            }
             $form->nombre_completo  = $request->input('nombre_completo', $form->nombre_completo);
             $form->dni_carnet       = $request->input('dni_carnet', $form->dni_carnet);
             $form->save();
