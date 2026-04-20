@@ -9,6 +9,7 @@ use App\Http\Controllers\BaseDatos\Regulaciones\PermisoController;
 use App\Http\Controllers\BaseDatos\Regulaciones\EtiquetadoController;
 use App\Http\Controllers\BaseDatos\Regulaciones\DocumentosEspecialesController;
 use App\Http\Controllers\BaseDatos\ClientesController;
+use App\Http\Controllers\BaseDatos\UsuarioDatosFacturacionImportController;
 use App\Http\Controllers\BaseDatos\ConsolidadoCotizacionAduanaTramitesController;
 use App\Http\Controllers\BaseDatos\TramiteAduanaDocumentosController;
 use App\Http\Controllers\BaseDatos\TramiteAduanaCatalogosController;
@@ -140,6 +141,9 @@ Route::group(['prefix' => 'base-datos', 'middleware' => 'jwt.auth'], function ()
     Route::group(['prefix' => 'clientes'], function () {
         Route::get('export', [ClientesController::class, 'export']);
         Route::post('import-excel', [ClientesController::class, 'importExcel']);
+        Route::post('facturacion/import-excel', [UsuarioDatosFacturacionImportController::class, 'importExcel']);
+        Route::get('facturacion/imports', [UsuarioDatosFacturacionImportController::class, 'listImports']);
+        Route::post('facturacion/imports/{idImport}/rollback', [UsuarioDatosFacturacionImportController::class, 'rollbackImport']);
         Route::post('descargar-plantilla', [ClientesController::class, 'descargarPlantilla']);
         Route::get('list-excels', [ClientesController::class, 'obtenerListExcel']);
         Route::delete('delete-excel/{id}', [ClientesController::class, 'deleteExcel']);

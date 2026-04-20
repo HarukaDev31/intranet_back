@@ -31,7 +31,8 @@ Broadcast::channel('ContenedorConsolidado-notifications', function ($user) {
         Usuario::ROL_COORDINACION,
         Usuario::ROL_ADMINISTRACION,
         Usuario::ROL_COTIZADOR,
-        Usuario::ROL_DOCUMENTACION
+        Usuario::ROL_DOCUMENTACION,
+        Usuario::ROL_JEFE_IMPORTACION
     ];
     
     return $user->grupo && in_array($user->grupo->No_Grupo, $allowedRoles);
@@ -49,6 +50,12 @@ Broadcast::channel('Administracion-notifications', function ($user) {
 });
 Broadcast::channel('Cotizador-notifications', function ($user) {
     return $user->grupo && $user->grupo->No_Grupo === Usuario::ROL_COTIZADOR;
+}); 
+Broadcast::channel('JefeImportacion-notifications', function ($user) {
+    return $user->grupo && $user->grupo->No_Grupo === Usuario::ROL_JEFE_IMPORTACION;
+});
+Broadcast::channel('Contabilidad-notifications', function ($user) {
+    return $user->grupo && $user->grupo->No_Grupo === Usuario::ROL_CONTABILIDAD;
 });
 
 // Canal privado para todos los usuarios autenticados

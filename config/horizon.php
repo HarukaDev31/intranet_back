@@ -241,6 +241,9 @@ return [
             'supervisor-importaciones' => [
                 'maxProcesses' => 2,
             ],
+            'supervisor-importaciones-facturacion' => [
+                'maxProcesses' => 1,
+            ],
             'supervisor-emails' => [
                 'maxProcesses' => 1,
             ],

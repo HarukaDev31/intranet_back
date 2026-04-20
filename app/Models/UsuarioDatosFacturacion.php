@@ -10,6 +10,7 @@ class UsuarioDatosFacturacion extends Model
 
     protected $fillable = [
         'id_user',
+        'id_import',
         'destino',
         'nombre_completo',
         'dni',
@@ -17,4 +18,9 @@ class UsuarioDatosFacturacion extends Model
         'razon_social',
         'domicilio_fiscal',
     ];
+
+    public function importacion()
+    {
+        return $this->belongsTo(ImportUsuarioDatosFacturacion::class, 'id_import');
+    }
 }
