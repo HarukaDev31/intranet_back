@@ -235,6 +235,19 @@ return [
                 'balanceMaxShift' => 1,
                 'balanceCooldown' => 3,
             ],
+            'supervisor-importaciones-facturacion' => [
+                'connection' => 'redis',
+                'queue' => ['importaciones_facturacion'],
+                'balance' => 'auto',
+                'maxProcesses' => 2,
+                'maxTime' => 0,
+                'maxJobs' => 0,
+                'memory' => 128,
+                'tries' => 1,
+                'timeout' => 180,
+                'balanceMaxShift' => 1,
+                'balanceCooldown' => 3,
+            ],
         ],
         'local' => [
 
