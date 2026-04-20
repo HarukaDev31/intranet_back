@@ -192,6 +192,15 @@ return [
             'nice' => 0,
             'timeout' => 180,
         ],
+        'supervisor-importaciones-facturacion' => [
+        'connection' => 'redis',
+        'queue' => ['importaciones_facturacion'],
+        'balance' => 'auto',
+        'maxProcesses' => 1,
+        'tries' => 1,
+        'nice' => 0,
+        'timeout' => 180,
+    ],
     ],
 
     'environments' => [
