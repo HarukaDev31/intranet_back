@@ -3799,9 +3799,9 @@ Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, 
                 } elseif ($tipo === 'MONTACARGA') {
                     $bloques[] =
                         "— " . $tipo . "\n" .
-                        "Se envía el costo por el uso del montacarga (Descarga del contenedor)\n" .
+                        "Se envía el costo por el uso del montacarga\n" .
                         "Costo: S/ " . $imp . "\n" .
-                        "NOTA: Para poder recoger tu carga debes contar con personal de estiba o indicarnos para poder compartirte el contacto de un montacargas.";
+                        "Nota: Incluye descarga del contenedor al Almacen y entrega a su movilidad";
                 }
             }
 
