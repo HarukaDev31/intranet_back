@@ -165,7 +165,11 @@ class SendDeliveryFormBulkJob implements ShouldQueue
             : "Importante:\n\n"
                 . "➡ La información registrada será utilizada para la *emisión de guías de remisión*.\n"
                 . "➡ *Validar* que sus datos estén correctos y completos.\n"
-                . intval($carga) < 5 ? "➡ El *costo de flete* Almacén – Agencia se cotizará y será informado por interno.\n" : "➡ El *costo de flete* Almacén – Agencia detalla en su cotización final.\n"
+                . (
+                    intval($carga) < 5
+                        ? "➡ El *costo de flete* Almacén – Agencia se cotizará y será informado por interno.\n"
+                        : "➡ El *costo de flete* Almacén – Agencia detalla en su cotización final.\n"
+                )
                 . "➡ Los envíos se realizan con *Marvisur*.\n"
                 . "➡ Si desea trabajar con otra agencia de transporte, se aplicará un *costo adicional* y previa coordinación.\n"
                 . "➡ En ese caso, no asumimos responsabilidad por incidencias en la entrega con la agencia elegida.";
