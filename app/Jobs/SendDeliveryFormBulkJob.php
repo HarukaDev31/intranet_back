@@ -16,18 +16,57 @@ class SendDeliveryFormBulkJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, WhatsappTrait;
 
-    public $cotizacionIds = [];
+    public $cotizaciones = [];
 
-    public function __construct(array $cotizacionIds)
+    public function __construct(array $cotizaciones)
     {
-        $this->cotizacionIds = array_values(array_unique(array_map('intval', $cotizacionIds)));
+        $indexed = [];
+        foreach ($cotizaciones as $item) {
+            $idCotizacion = 0;
+            $typeForm = null;
+
+            if (is_array($item)) {
+                $idCotizacion = isset($item['id_cotizacion']) ? (int) $item['id_cotizacion'] : 0;
+                if (array_key_exists('type_form', $item) && $item['type_form'] !== null && $item['type_form'] !== '') {
+                    $typeForm = ((int) $item['type_form'] === 1) ? 1 : 0;
+                }
+            } else {
+                $idCotizacion = (int) $item;
+            }
+
+            if ($idCotizacion <= 0) {
+                continue;
+            }
+
+            if (!isset($indexed[$idCotizacion])) {
+                $indexed[$idCotizacion] = [
+                    'id_cotizacion' => $idCotizacion,
+                    'type_form' => $typeForm,
+                ];
+                continue;
+            }
+
+            // Si ya existía y ahora llega type_form explícito, priorizarlo.
+            if ($indexed[$idCotizacion]['type_form'] === null && $typeForm !== null) {
+                $indexed[$idCotizacion]['type_form'] = $typeForm;
+            }
+        }
+
+        $this->cotizaciones = array_values($indexed);
         $this->onQueue('notificaciones');
     }
 
     public function handle(): void
     {
-        foreach ($this->cotizacionIds as $idCotizacion) {
+        foreach ($this->cotizaciones as $cotizacionData) {
             try {
+                $numeroWhatsapp = null;
+                $resultPrincipal = null;
+                $resultSecundario = null;
+                $idCotizacion = isset($cotizacionData['id_cotizacion']) ? (int) $cotizacionData['id_cotizacion'] : 0;
+                if ($idCotizacion <= 0) {
+                    continue;
+                }
                 $row = DB::table('contenedor_consolidado_cotizacion as C')
                     ->leftJoin('consolidado_delivery_form_lima as L', function ($join) {
                         $join->on('L.id_contenedor', '=', 'C.id_contenedor')
@@ -67,7 +106,11 @@ class SendDeliveryFormBulkJob implements ShouldQueue
                 $urlProvincia = $urlClientes . '/formulario-entrega/provincia/' . $row->id_contenedor;
                 $urlLima = $urlClientes . '/formulario-entrega/lima/' . $row->id_contenedor;
 
-                $typeForm = isset($row->type_form) ? (int) $row->type_form : null;
+                $typeFormPayload = isset($cotizacionData['type_form']) && $cotizacionData['type_form'] !== null
+                    ? (int) $cotizacionData['type_form']
+                    : null;
+                $typeFormDb = isset($row->type_form) ? (int) $row->type_form : null;
+                $typeForm = ($typeFormPayload === 0 || $typeFormPayload === 1) ? $typeFormPayload : $typeFormDb;
                 [$messagePrincipal, $messageSecundario] = $this->buildDeliveryFormsMessages(
                     (string) $contenedor->carga,
                     (string) ($row->nombre_cliente ?? ''),

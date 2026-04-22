@@ -3647,21 +3647,53 @@ Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, 
     {
         try {
             $this->validate($request, [
-                'cotizacion_ids' => 'required|array|min:1',
+                'cotizaciones' => 'required_without:cotizacion_ids|array|min:1',
+                'cotizaciones.*.id_cotizacion' => 'required_with:cotizaciones|integer|min:1',
+                'cotizaciones.*.type_form' => 'nullable|in:0,1',
+                'cotizacion_ids' => 'required_without:cotizaciones|array|min:1',
                 'cotizacion_ids.*' => 'integer|min:1',
             ]);
 
-            $ids = array_values(array_unique(array_map('intval', $request->input('cotizacion_ids', []))));
-            if (empty($ids)) {
+            $cotizacionesPayload = [];
+            $cotizacionesInput = $request->input('cotizaciones', []);
+            if (is_array($cotizacionesInput) && !empty($cotizacionesInput)) {
+                foreach ($cotizacionesInput as $item) {
+                    $idCotizacion = isset($item['id_cotizacion']) ? (int) $item['id_cotizacion'] : 0;
+                    if ($idCotizacion <= 0) {
+                        continue;
+                    }
+                    $typeForm = null;
+                    if (array_key_exists('type_form', $item) && $item['type_form'] !== null && $item['type_form'] !== '') {
+                        $typeForm = ((int) $item['type_form'] === 1) ? 1 : 0;
+                    }
+                    $cotizacionesPayload[] = [
+                        'id_cotizacion' => $idCotizacion,
+                        'type_form' => $typeForm,
+                    ];
+                }
+            } else {
+                $ids = array_values(array_unique(array_map('intval', $request->input('cotizacion_ids', []))));
+                foreach ($ids as $idCotizacion) {
+                    if ($idCotizacion <= 0) {
+                        continue;
+                    }
+                    $cotizacionesPayload[] = [
+                        'id_cotizacion' => (int) $idCotizacion,
+                        'type_form' => null,
+                    ];
+                }
+            }
+
+            if (empty($cotizacionesPayload)) {
                 return response()->json(['message' => 'Debe enviar al menos una cotización válida', 'success' => false], 422);
             }
 
-            SendDeliveryFormBulkJob::dispatch($ids)->onQueue('notificaciones');
+            SendDeliveryFormBulkJob::dispatch($cotizacionesPayload)->onQueue('notificaciones');
 
             return response()->json([
                 'message' => 'Envío en cola correctamente',
                 'success' => true,
-                'queued' => count($ids),
+                'queued' => count($cotizacionesPayload),
             ]);
         } catch (\Exception $e) {
             return response()->json(['message' => $e->getMessage(), 'success' => false], 500);
