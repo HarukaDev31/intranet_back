@@ -502,6 +502,15 @@ class AuthController extends Controller
                 $updateData['Txt_Email'] = $request->input('email');
             }
 
+            // Nombre completo (acepta full_name y fullName por compatibilidad)
+            if ($request->has('full_name') || $request->has('fullName')) {
+                $fullNameInput = $request->has('full_name')
+                    ? $request->input('full_name')
+                    : $request->input('fullName');
+                $fullNameInput = is_string($fullNameInput) ? trim($fullNameInput) : '';
+                $updateData['No_Nombres_Apellidos'] = $fullNameInput !== '' ? $fullNameInput : null;
+            }
+
             // Phone
             if ($request->has('phone')) {
                 $updateData['Nu_Celular'] = $request->input('phone');
