@@ -148,58 +148,22 @@ class DeliveryController extends Controller
     public function getUsuarioDatosFacturacion(Request $request)
     {
         try {
-            $idCotizacion = $request->query('id_cotizacion');
-            $uuid = $request->query('uuid');
-
-            if (($idCotizacion === null || $idCotizacion === '') && ($uuid === null || $uuid === '')) {
+          
+            $idUser = JWTAuth::user()->id;
+            if (!$idUser) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Indique id_cotizacion o uuid de la cotización.',
-                ], 422);
+                    'message' => 'No se encontró el usuario.',
+                ], 404);
             }
-
-            $cotizacionQuery = Cotizacion::query();
-            if ($idCotizacion !== null && $idCotizacion !== '') {
-                $cotizacionQuery->where('id', (int) $idCotizacion);
-            } else {
-                $cotizacionQuery->where('uuid', (string) $uuid);
-            }
-
-            $cotizacion = $cotizacionQuery->first();
-
-            if (!$cotizacion) {
+            $user = User::find($idUser);
+            if (!$user) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Cotización no encontrada.',
+                    'message' => 'No se encontró el usuario.',
                 ], 404);
             }
 
-            $correo = ($cotizacion->correo !== null && trim((string) $cotizacion->correo) !== '')
-                ? trim((string) $cotizacion->correo)
-                : null;
-            $telefono = ($cotizacion->telefono !== null && trim((string) $cotizacion->telefono) !== '')
-                ? trim((string) $cotizacion->telefono)
-                : null;
-            $documento = ($cotizacion->documento !== null && trim((string) $cotizacion->documento) !== '')
-                ? trim((string) $cotizacion->documento)
-                : null;
-
-            if ($correo === null && $telefono === null && $documento === null) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'La cotización no tiene datos de contacto para vincular al cliente.',
-                ], 422);
-            }
-
-            $user = UserLookupHelper::findUserByContact($correo, $telefono, $documento);
-            if (!$user || empty($user->id)) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'No se encontró un usuario vinculado a los datos de la cotización.',
-                ], 404);
-            }
-
-            $idUser = (int) $user->id;
             $destino = $request->query('destino');
 
             $query = UsuarioDatosFacturacion::query()->where('id_user', $idUser);
