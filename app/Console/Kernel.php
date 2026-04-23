@@ -28,6 +28,10 @@ class Kernel extends ConsoleKernel
 
                 return !empty($url) && is_string($url);
             });
+        // Sincroniza calculadoras COTIZADO -> CONFIRMADO segun estado de cotizacion vinculada
+        $schedule->command('calculadora:sync-cotizado-a-confirmado')
+            ->everyFiveMinutes()
+            ->withoutOverlapping();
     }
 
     /**
