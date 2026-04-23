@@ -4,6 +4,7 @@ namespace App\Http\Controllers\CargaConsolidada;
 
 use App\Http\Controllers\Controller;
 use App\Traits\UserGroupsTrait;
+use App\Traits\FileTrait;
 use Illuminate\Http\Request;
 use App\Models\CargaConsolidada\Cotizacion;
 use App\Models\CargaConsolidada\TipoCliente;
@@ -41,7 +42,8 @@ class CotizacionController extends Controller
         $this->cotizacionExportService = $cotizacionExportService;
     }
 
-    use UserGroupsTrait, WhatsappTrait;
+    use UserGroupsTrait, WhatsappTrait, FileTrait;
+
     /**
      * Format a numeric value as currency string, e.g., $1,234.56
      */
@@ -1377,8 +1379,8 @@ class CotizacionController extends Controller
                 'correo' => $cotizacion->correo,
                 'telefono' => $cotizacion->telefono,
                 'volumen' => $cotizacion->volumen,
-                'cotizacion_file_url' => $cotizacion->cotizacion_file_url,
-                'cotizacion_final_file_url' => $cotizacion->cotizacion_final_file_url,
+                'cotizacion_file_url' =>$this->generateImageUrl($cotizacion->cotizacion_file_url),
+                'cotizacion_final_file_url' => $this->generateImageUrl($cotizacion->cotizacion_final_file_url),
                 'estado' => $cotizacion->estado,
                 'volumen_doc' => $cotizacion->volumen_doc,
                 'valor_doc' => $cotizacion->valor_doc,
