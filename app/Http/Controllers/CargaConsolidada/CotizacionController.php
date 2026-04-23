@@ -1402,7 +1402,7 @@ class CotizacionController extends Controller
                 'volumen_final' => $cotizacion->volumen_final,
                 'guia_remision_url' => $cotizacion->guia_remision_url,
                 'factura_general_url' => $cotizacion->factura_general_url,
-                'cotizacion_final_url' => $cotizacion->cotizacion_final_url,
+                'cotizacion_final_url' => $this->generateImageUrl($cotizacion->cotizacion_final_url),
                 'estado_cotizador' => $cotizacion->estado_cotizador,
                 'fecha_confirmacion' => $cotizacion->fecha_confirmacion,
                 'estado_pagos_coordinacion' => $cotizacion->estado_pagos_coordinacion,
