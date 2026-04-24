@@ -159,6 +159,7 @@ class FacturaGuiaController extends Controller
             'contenedor_consolidado_cotizacion.cotizacion_final_url',
             'contenedor_consolidado_cotizacion.guia_remision_url',
             'contenedor_consolidado_cotizacion.monto',
+            'contenedor_consolidado_cotizacion.registrado_comprobante_form',
             'contenedor_consolidado_tipo_cliente.name as tipo_cliente_nombre',
         )
             ->withSum('pagos as total_pagos_monto', 'monto')
@@ -193,16 +194,11 @@ class FacturaGuiaController extends Controller
 
         $registrado = $filters['registrado'] ?? null;
         if ($registrado === '1') {
-            $query->whereExists(function ($q) {
-                $q->select(DB::raw(1))
-                    ->from('consolidado_comprobante_forms')
-                    ->whereColumn('consolidado_comprobante_forms.id_cotizacion', 'contenedor_consolidado_cotizacion.id');
-            });
+            $query->where('contenedor_consolidado_cotizacion.registrado_comprobante_form', 1);
         } elseif ($registrado === '0') {
-            $query->whereNotExists(function ($q) {
-                $q->select(DB::raw(1))
-                    ->from('consolidado_comprobante_forms')
-                    ->whereColumn('consolidado_comprobante_forms.id_cotizacion', 'contenedor_consolidado_cotizacion.id');
+            $query->where(function ($q) {
+                $q->whereNull('contenedor_consolidado_cotizacion.registrado_comprobante_form')
+                    ->orWhere('contenedor_consolidado_cotizacion.registrado_comprobante_form', 0);
             });
         }
 
@@ -278,7 +274,7 @@ class FacturaGuiaController extends Controller
             }
 
             $comprobanteForm = ComprobanteForm::where('id_cotizacion', $item->id)->first();
-            $registrado = $comprobanteForm !== null;
+            $registrado = (bool) ($item->registrado_comprobante_form ?? false);
             $tipoEntrega = $comprobanteForm ? $comprobanteForm->destino_entrega : null;
             $formTipoComprobante = $comprobanteForm ? $comprobanteForm->tipo_comprobante : null;
 
@@ -1916,6 +1912,7 @@ Cualquier duda nos escribe.  ¡Gracias! */
                 'contenedor_consolidado_cotizacion.correo',
                 'contenedor_consolidado_cotizacion.documento',
                 'contenedor_consolidado_cotizacion.delivery_form_registered_at',
+                'contenedor_consolidado_cotizacion.registrado_comprobante_form',
                 'contenedor_consolidado_cotizacion.id_contenedor_pago'
             )
                 ->where('id_contenedor', $idContenedor)
@@ -1925,7 +1922,7 @@ Cualquier duda nos escribe.  ¡Gracias! */
                 ->orderBy('nombre', 'asc')
                 ->get()
                 ->map(function ($item) {
-                    $item->registrado = ComprobanteForm::where('id_cotizacion', $item->id)->exists();
+                    $item->registrado = (bool) ($item->registrado_comprobante_form ?? false);
                     return $item;
                 });
 
@@ -1939,6 +1936,44 @@ Cualquier duda nos escribe.  ¡Gracias! */
                 'error'         => $e->getMessage(),
             ]);
             return response()->json(['success' => false, 'message' => 'Error: ' . $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Actualiza manualmente el estado "Registrado" de una cotización para contabilidad.
+     * PUT /carga-consolidada/contenedor/factura-guia/contabilidad/registrado/{idCotizacion}
+     */
+    public function updateRegistradoComprobanteForm(Request $request, $idCotizacion)
+    {
+        try {
+            $validated = $request->validate([
+                'registrado' => 'required|boolean',
+            ]);
+
+            $cotizacion = Cotizacion::find($idCotizacion);
+            if (!$cotizacion) {
+                return response()->json(['success' => false, 'message' => 'Cotización no encontrada'], 404);
+            }
+
+            $cotizacion->registrado_comprobante_form = (bool) $validated['registrado'];
+            $cotizacion->save();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Estado registrado actualizado correctamente',
+                'data' => [
+                    'id_cotizacion' => (int) $cotizacion->id,
+                    'registrado' => (bool) $cotizacion->registrado_comprobante_form,
+                ],
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json(['success' => false, 'message' => 'Datos inválidos', 'errors' => $e->errors()], 422);
+        } catch (\Exception $e) {
+            Log::error('FacturaGuiaController@updateRegistradoComprobanteForm', [
+                'id_cotizacion' => $idCotizacion,
+                'error' => $e->getMessage(),
+            ]);
+            return response()->json(['success' => false, 'message' => 'Error al actualizar estado registrado'], 500);
         }
     }
 
