@@ -58,7 +58,7 @@ class ComprobanteFormController extends Controller
                     'label' => $c->nombre,
                 ]);
 
-            $misRegistros = ComprobanteForm::query()
+            $misRegistrosDb = ComprobanteForm::query()
                 ->with([
                     'cotizacion' => function ($q) {
                         $q->select('id', 'uuid', 'nombre');
@@ -89,9 +89,61 @@ class ComprobanteFormController extends Controller
                         'distrito_nombre'    => $dist ? $dist->No_Distrito : null,
                         'nombre_completo'    => $form->nombre_completo,
                         'dni_carnet'         => $form->dni_carnet,
+                        'prefill_historial'  => false,
                     ];
                 })
                 ->values();
+
+            /** Si la cotización aún no tiene fila en consolidado_comprobante_forms, sugerir datos del último registro en usuario_datos_facturacion del mismo usuario. */
+            $misRegistrosPrefill = collect();
+            $latestUdf = UsuarioDatosFacturacion::query()
+                ->where('id_user', $userId)
+                ->orderByDesc('id')
+                ->first();
+
+            if ($latestUdf) {
+                $tipoHistorial = $this->inferirTipoComprobanteDesdeUsuarioDatosFacturacion($latestUdf);
+                $cotizacionesSinForm = $tipoHistorial === null ? collect() : Cotizacion::query()
+                    ->whereIn('id', $eligibleIds)
+                    ->whereNotIn('id', $formsByCotizacion->keys())
+                    ->orderBy('nombre')
+                    ->get(['id', 'uuid', 'nombre']);
+
+                foreach ($cotizacionesSinForm as $cot) {
+                    $row = [
+                        'id'                 => null,
+                        'importador_uuid'    => $cot->uuid,
+                        'importador_label'   => $cot->nombre,
+                        'tipo_comprobante'   => $tipoHistorial,
+                        'destino_entrega'    => in_array($latestUdf->destino, ['Lima', 'Provincia'], true)
+                            ? $latestUdf->destino
+                            : null,
+                        'razon_social'       => null,
+                        'ruc'                => null,
+                        'domicilio_fiscal'   => null,
+                        'distrito_id'        => null,
+                        'distrito_nombre'    => null,
+                        'nombre_completo'    => null,
+                        'dni_carnet'         => null,
+                        'prefill_historial'  => true,
+                    ];
+
+                    if ($tipoHistorial === 'FACTURA') {
+                        $row['razon_social'] = $latestUdf->razon_social;
+                        $row['ruc'] = $latestUdf->ruc !== null && $latestUdf->ruc !== ''
+                            ? preg_replace('/\D/', '', (string) $latestUdf->ruc)
+                            : null;
+                        $row['domicilio_fiscal'] = $latestUdf->domicilio_fiscal;
+                    } elseif ($tipoHistorial === 'BOLETA') {
+                        $row['nombre_completo'] = $latestUdf->nombre_completo;
+                        $row['dni_carnet'] = $latestUdf->dni;
+                    }
+
+                    $misRegistrosPrefill->push($row);
+                }
+            }
+
+            $misRegistros = $misRegistrosDb->concat($misRegistrosPrefill)->values();
 
             return response()->json([
                 'success'       => true,
@@ -282,7 +334,40 @@ class ComprobanteFormController extends Controller
         try {
             $form = ComprobanteForm::where('id_cotizacion', $idCotizacion)->first();
 
-            if (!$form) {
+            if ($form) {
+                // Incluir datos del usuario que registró el formulario (para UI interna).
+                $registeredBy = null;
+                if (!empty($form->id_user)) {
+                    $u = User::find($form->id_user);
+                    if ($u) {
+                        $registeredBy = [
+                            'id' => (int) $u->id,
+                            'name' => $u->name,
+                            'lastname' => $u->lastname,
+                            'email' => $u->email,
+                            'photo_url' => $u->photo_url,
+                        ];
+                    }
+                }
+                $form->registered_by = $registeredBy;
+
+                return response()->json([
+                    'success' => true,
+                    'data'    => $form,
+                ]);
+            }
+
+            $cotizacion = Cotizacion::find($idCotizacion);
+            if (!$cotizacion) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Cotización no encontrada',
+                    'data'    => null,
+                ], 404);
+            }
+
+            $udf = $this->findUsuarioDatosFacturacionForCotizacion($cotizacion);
+            if (!$udf) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Formulario no encontrado',
@@ -290,30 +375,123 @@ class ComprobanteFormController extends Controller
                 ], 404);
             }
 
-            // Incluir datos del usuario que registró el formulario (para UI interna).
-            $registeredBy = null;
-            if (!empty($form->id_user)) {
-                $u = User::find($form->id_user);
-                if ($u) {
-                    $registeredBy = [
-                        'id' => (int) $u->id,
-                        'name' => $u->name,
-                        'lastname' => $u->lastname,
-                        'email' => $u->email,
-                        'photo_url' => $u->photo_url,
-                    ];
-                }
+            $synthetic = $this->buildSyntheticComprobanteFormFromUsuarioDatosFacturacion($udf, $cotizacion);
+            if (!$synthetic) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Formulario no encontrado',
+                    'data'    => null,
+                ], 404);
             }
-            $form->registered_by = $registeredBy;
 
             return response()->json([
                 'success' => true,
-                'data'    => $form,
+                'data'    => $synthetic,
+                'message' => 'Datos mostrados desde el historial de facturación del usuario (sin formulario consolidado).',
             ]);
         } catch (\Exception $e) {
             Log::error('ComprobanteFormController@getFormByCotizacion', ['error' => $e->getMessage()]);
             return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
         }
+    }
+
+    /**
+     * Historial usuario_datos_facturacion vinculado a la cotización:
+     * 1) Coincidencia por documento (DNI/RUC) con columnas ruc o dni.
+     * 2) Si no hay, último registro del usuario cuyo email coincide con el correo de la cotización.
+     */
+    private function findUsuarioDatosFacturacionForCotizacion(Cotizacion $cotizacion)
+    {
+        $documento = trim((string) ($cotizacion->documento ?? ''));
+        $docDigits = preg_replace('/\D+/', '', $documento);
+
+        if ($docDigits !== '' || $documento !== '') {
+            $row = UsuarioDatosFacturacion::query()
+                ->where(function ($q) use ($documento, $docDigits) {
+                    if ($documento !== '') {
+                        $q->where('ruc', $documento)
+                            ->orWhere('dni', $documento);
+                    }
+                    if ($docDigits !== '') {
+                        $q->orWhereRaw(
+                            'REPLACE(REPLACE(REPLACE(TRIM(COALESCE(ruc, "")), "-", ""), " ", ""), ".", "") = ?',
+                            [$docDigits]
+                        )->orWhereRaw(
+                            'REPLACE(REPLACE(REPLACE(TRIM(COALESCE(dni, "")), "-", ""), " ", ""), ".", "") = ?',
+                            [$docDigits]
+                        );
+                    }
+                })
+                ->orderBy('id', 'desc')
+                ->first();
+            if ($row) {
+                return $row;
+            }
+        }
+
+        $correo = trim((string) ($cotizacion->correo ?? ''));
+        if ($correo !== '') {
+            $correoNorm = strtolower($correo);
+            $userId = User::query()
+                ->whereRaw('LOWER(TRIM(email)) = ?', [$correoNorm])
+                ->value('id');
+            if ($userId) {
+                $row = UsuarioDatosFacturacion::query()
+                    ->where('id_user', (int) $userId)
+                    ->orderBy('id', 'desc')
+                    ->first();
+                if ($row) {
+                    return $row;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Arma un objeto con la misma forma que consolidado_comprobante_forms para la vista interna de contabilidad.
+     */
+    private function buildSyntheticComprobanteFormFromUsuarioDatosFacturacion(UsuarioDatosFacturacion $udf, Cotizacion $cotizacion)
+    {
+        $tipo = $this->inferirTipoComprobanteDesdeUsuarioDatosFacturacion($udf);
+        if ($tipo === null) {
+            return null;
+        }
+
+        $destino = in_array($udf->destino, ['Lima', 'Provincia'], true) ? $udf->destino : null;
+
+        $base = [
+            'id' => null,
+            'id_cotizacion' => (int) $cotizacion->id,
+            'id_contenedor' => $cotizacion->id_contenedor !== null ? (int) $cotizacion->id_contenedor : null,
+            'id_user' => $udf->id_user !== null ? (int) $udf->id_user : null,
+            'tipo_comprobante' => $tipo,
+            'destino_entrega' => $destino,
+            'domicilio_fiscal' => null,
+            'razon_social' => null,
+            'ruc' => null,
+            'nombre_completo' => null,
+            'dni_carnet' => null,
+            'distrito_id' => null,
+            'created_at' => $udf->created_at ? $udf->created_at->toIso8601String() : null,
+            'updated_at' => null,
+            'registered_by' => null,
+            'prefill_from_usuario_datos_facturacion' => true,
+        ];
+
+        if ($tipo === 'FACTURA') {
+            $base['razon_social'] = $udf->razon_social;
+            $base['ruc'] = $udf->ruc !== null && $udf->ruc !== ''
+                ? preg_replace('/\D+/', '', (string) $udf->ruc)
+                : null;
+            $base['domicilio_fiscal'] = $udf->domicilio_fiscal;
+        } else {
+            $base['nombre_completo'] = $udf->nombre_completo;
+            $base['dni_carnet'] = $udf->dni;
+        }
+
+        return $base;
     }
 
     /**
@@ -348,5 +526,36 @@ class ComprobanteFormController extends Controller
             Log::error('ComprobanteFormController@updateForm', ['error' => $e->getMessage()]);
             return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
         }
+    }
+
+    /**
+     * El historial en usuario_datos_facturacion no guarda tipo explícito; se infiere por campos típicos de FACTURA vs BOLETA.
+     */
+    private function inferirTipoComprobanteDesdeUsuarioDatosFacturacion(UsuarioDatosFacturacion $udf): ?string
+    {
+        $rucDigits = $udf->ruc !== null && $udf->ruc !== ''
+            ? preg_replace('/\D/', '', (string) $udf->ruc)
+            : '';
+        $tieneFactura = ($rucDigits !== '' && strlen($rucDigits) === 11)
+            || (is_string($udf->razon_social) && trim($udf->razon_social) !== '')
+            || (is_string($udf->domicilio_fiscal) && trim($udf->domicilio_fiscal) !== '');
+
+        $tieneBoleta = (is_string($udf->nombre_completo) && trim($udf->nombre_completo) !== '')
+            || (is_string($udf->dni) && trim($udf->dni) !== '');
+
+        if ($tieneFactura && ! $tieneBoleta) {
+            return 'FACTURA';
+        }
+        if ($tieneBoleta && ! $tieneFactura) {
+            return 'BOLETA';
+        }
+        if ($tieneFactura) {
+            return 'FACTURA';
+        }
+        if ($tieneBoleta) {
+            return 'BOLETA';
+        }
+
+        return null;
     }
 }
