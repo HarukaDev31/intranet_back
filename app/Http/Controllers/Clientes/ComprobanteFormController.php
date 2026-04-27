@@ -504,7 +504,16 @@ class ComprobanteFormController extends Controller
             $form = ComprobanteForm::where('id_cotizacion', $idCotizacion)->first();
 
             if (!$form) {
-                return response()->json(['success' => false, 'message' => 'Formulario no encontrado'], 404);
+                $cotizacion = Cotizacion::find($idCotizacion);
+                if (!$cotizacion) {
+                    return response()->json(['success' => false, 'message' => 'Cotización no encontrada'], 404);
+                }
+
+                $udf = $this->findUsuarioDatosFacturacionForCotizacion($cotizacion);
+                $form = new ComprobanteForm();
+                $form->id_cotizacion = (int) $idCotizacion;
+                $form->id_contenedor = $cotizacion->id_contenedor !== null ? (int) $cotizacion->id_contenedor : null;
+                $form->id_user = $udf && $udf->id_user ? (int) $udf->id_user : null;
             }
 
             $form->tipo_comprobante = $request->input('tipo_comprobante', $form->tipo_comprobante);
@@ -520,12 +529,51 @@ class ComprobanteFormController extends Controller
             $form->nombre_completo  = $request->input('nombre_completo', $form->nombre_completo);
             $form->dni_carnet       = $request->input('dni_carnet', $form->dni_carnet);
             $form->save();
+            $this->syncLatestUsuarioDatosFacturacion($form);
 
             return response()->json(['success' => true, 'message' => 'Formulario actualizado correctamente', 'data' => $form]);
         } catch (\Exception $e) {
             Log::error('ComprobanteFormController@updateForm', ['error' => $e->getMessage()]);
             return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
         }
+    }
+
+    private function syncLatestUsuarioDatosFacturacion(ComprobanteForm $form): void
+    {
+        if (empty($form->id_user)) {
+            return;
+        }
+
+        $latest = UsuarioDatosFacturacion::query()
+            ->where('id_user', (int) $form->id_user)
+            ->orderByDesc('id')
+            ->first();
+
+        if (!$latest) {
+            return;
+        }
+
+        $latest->destino = in_array($form->destino_entrega, ['Lima', 'Provincia'], true)
+            ? $form->destino_entrega
+            : null;
+
+        if ($form->tipo_comprobante === 'FACTURA') {
+            $latest->ruc = $form->ruc !== null && $form->ruc !== ''
+                ? preg_replace('/\D/', '', (string) $form->ruc)
+                : null;
+            $latest->razon_social = $form->razon_social;
+            $latest->domicilio_fiscal = $form->domicilio_fiscal;
+            $latest->nombre_completo = null;
+            $latest->dni = null;
+        } else {
+            $latest->nombre_completo = $form->nombre_completo;
+            $latest->dni = $form->dni_carnet;
+            $latest->ruc = null;
+            $latest->razon_social = null;
+            $latest->domicilio_fiscal = null;
+        }
+
+        $latest->save();
     }
 
     /**
