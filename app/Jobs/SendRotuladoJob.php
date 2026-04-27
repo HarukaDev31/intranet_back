@@ -303,7 +303,7 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
             }
 
             // PASO 3: Enviar imagen de dirección (después de todos los proveedores)
-            $direccionUrl = public_path('assets/images/Direccion.jpg');
+            $direccionUrl = public_path('assets/images/Direccion_27_04_26.jpeg');
             $sleepSendMedia += 3;
             $this->sendMedia($direccionUrl, 'image/jpg', '🏽Dile a tu proveedor que envíe la carga a nuestro almacén en China', null, $sleepSendMedia);
 

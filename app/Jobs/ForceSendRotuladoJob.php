@@ -279,7 +279,7 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
             Log::info('ZIP cerrado correctamente');
 
             // Enviar imagen de dirección
-            $direccionUrl = public_path('assets/images/Direccion.jpg');
+            $direccionUrl = public_path('assets/images/Direccion_27_04_26.jpeg');
             $sleepSendMedia += 3;
             $this->sendMedia($direccionUrl, 'image/jpg', '🏽Dile a tu proveedor que envíe la carga a nuestro almacén en China', null, $sleepSendMedia);
 
