@@ -1102,6 +1102,7 @@ class CotizacionFinalController extends Controller
                         'CC.tarifa_final',
                         'CC.nombre',
                         'CC.logistica_final',
+                        'CC.servicios_extra_final',
                         DB::raw('(
                             SELECT IFNULL(SUM(cccp.monto), 0)
                             FROM contenedor_consolidado_cotizacion_coordinacion_pagos cccp
@@ -1123,7 +1124,8 @@ class CotizacionFinalController extends Controller
                 $nombre = $cotizacion->nombre;
                 $logisticaFinal = $cotizacion->logistica_final;
                 $impuestosFinal = $cotizacion->impuestos_final;
-                $total = $logisticaFinal + $impuestosFinal;
+                $serviciosExtraFinal = (float) ($cotizacion->servicios_extra_final ?? 0);
+                $total = $logisticaFinal + $impuestosFinal + $serviciosExtraFinal;
                 $totalAPagar = $total - $totalPagos;
                 $idContenedor = $cotizacion->id_contenedor;
                 $contenedor = Contenedor::select('fecha_arribo', 'carga')
@@ -1144,6 +1146,7 @@ class CotizacionFinalController extends Controller
                     "🙋‍♂️PAGO PENDIENTE: \n" .
                     "☑️Costo CBM: $" . number_format($logisticaFinal, 2) . "\n" .
                     "☑️Impuestos: $" . number_format($impuestosFinal, 2) . "\n" .
+                    ($serviciosExtraFinal > 0 ? "☑️ Servicios extras: $" . number_format($serviciosExtraFinal, 2) . "\n" : "") .
                     "☑️Total: $" . number_format($total, 2) . "\n" .
                     "Pronto le aviso nuevos avances, que tengan buen dia \n" .
                     "Último día de pago: " . date('d/m/Y', strtotime($fechaArribo)) . "\n";
@@ -1151,7 +1154,7 @@ class CotizacionFinalController extends Controller
                 $pathCotizacionFinalPDF = $this->getBoletaForSend($request->idCotizacion);
                 Log::info('pathCotizacionFinalPDF: ' . $pathCotizacionFinalPDF);
                 $this->sendMedia($pathCotizacionFinalPDF, null, null, null, 3);
-                $message = "Resumen de Pago\n" .
+                $message = "*Resumen de Pago*\n" .
                     "✅Cotización final: $" . number_format($total, 2) . "\n" .
                     "✅Adelanto: $" . number_format($totalPagos, 2) . "\n" .
                     "✅ *Pendiente de pago: $" . number_format($totalAPagar, 2) . "*\n";
@@ -2180,6 +2183,7 @@ class CotizacionFinalController extends Controller
                         'tarifa_final' => $result['tarifa_final'],
                         'impuestos_final' => $result['impuestos_final'],
                         'logistica_final' => $result['logistica_final'],
+                        'servicios_extra_final' => $result['servicios_extra_final'] ?? 0,
                         'fob_final' => $result['fob_final'],
                         'peso_final' => $result['peso_final'],
                     ];
@@ -2826,6 +2830,7 @@ class CotizacionFinalController extends Controller
                     'tarifa_final' => $result['tarifa_final'],
                     'impuestos_final' => $result['impuestos_final'],
                     'logistica_final' => $result['logistica_final'],
+                    'servicios_extra_final' => $result['servicios_extra_final'] ?? 0,
                     'fob_final' => $result['fob_final'],
                     'peso_final' => $result['peso_final'],
                     'estado_cotizacion_final' => 'COTIZADO'
@@ -5597,6 +5602,7 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
                 'tarifa_final' => is_numeric($tarifaValue) ? $tarifaValue : 0,
                 'impuestos_final' => is_numeric($impuestos) ? $impuestos : 0,
                 'logistica_final' => is_numeric($logistica) ? $logistica : 0,
+                'servicios_extra_final' => $deliveryServiciosExtras,
                 'fob_final' => is_numeric($fob) ? $fob : 0,
                 'peso_final' => is_numeric($pesoTotal) ? $pesoTotal : 0,
                 'estado' => 'PENDIENTE',

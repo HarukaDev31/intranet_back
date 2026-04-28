@@ -76,6 +76,7 @@ class Cotizacion extends Model
         'note_administracion',
         'status_cliente_doc',
         'logistica_final',
+        'servicios_extra_final',
         'qty_item',
         'id_cliente_importacion',
         'delivery_form_registered_at',
@@ -116,6 +117,7 @@ class Cotizacion extends Model
         'impuestos_final' => 'decimal:2',
         'fob_final' => 'decimal:2',
         'logistica_final' => 'decimal:2',
+        'servicios_extra_final' => 'decimal:2',
         'qty_item' => 'integer',
         'delivery_form_registered_at' => 'date',
         'total_pago_delivery' => 'decimal:2',
@@ -391,7 +393,7 @@ class Cotizacion extends Model
      */
     public function getValorTotalFinalAttribute()
     {
-        return ($this->fob_final ?? 0) + ($this->impuestos_final ?? 0) + ($this->logistica_final ?? 0);
+        return ($this->fob_final ?? 0) + ($this->impuestos_final ?? 0) + ($this->logistica_final ?? 0) + ($this->servicios_extra_final ?? 0);
     }
 
     /**
