@@ -311,6 +311,13 @@ class ViaticoService
             $query->where('requesting_area', $filtros['requesting_area']);
         }
 
+        if (isset($filtros['solicitante']) && trim($filtros['solicitante']) !== '') {
+            $solicitante = trim($filtros['solicitante']);
+            $query->whereHas('usuario', function ($q) use ($solicitante) {
+                $q->where('No_Nombres_Apellidos', 'like', "%{$solicitante}%");
+            });
+        }
+
         // Búsqueda por asunto, descripción, código o monto
         if (isset($filtros['search']) && trim($filtros['search']) !== '') {
             $search = trim($filtros['search']);
