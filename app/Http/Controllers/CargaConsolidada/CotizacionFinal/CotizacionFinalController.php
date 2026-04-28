@@ -1146,15 +1146,15 @@ class CotizacionFinalController extends Controller
                     "🙋‍♂️PAGO PENDIENTE: \n" .
                     "☑️Costo CBM: $" . number_format($logisticaFinal, 2) . "\n" .
                     "☑️Impuestos: $" . number_format($impuestosFinal, 2) . "\n" .
-                    ($serviciosExtraFinal > 0 ? "☑️ Servicios extras: $" . number_format($serviciosExtraFinal, 2) . "\n" : "") .
-                    "☑️Total: $" . number_format($total, 2) . "\n" .
+                    ($serviciosExtraFinal > 0 ? "☑️Servicios extras: $" . number_format($serviciosExtraFinal, 2) . "\n" : "") .
+                    "✅Total: $" . number_format($total, 2) . "\n" .
                     "Pronto le aviso nuevos avances, que tengan buen dia \n" .
                     "Último día de pago: " . date('d/m/Y', strtotime($fechaArribo)) . "\n";
                 $this->sendMessage($message);
                 $pathCotizacionFinalPDF = $this->getBoletaForSend($request->idCotizacion);
                 Log::info('pathCotizacionFinalPDF: ' . $pathCotizacionFinalPDF);
                 $this->sendMedia($pathCotizacionFinalPDF, null, null, null, 3);
-                $message = "*Resumen de Pago*\n" .
+                $message = "💰*Resumen de Pago*\n" .
                     "✅Cotización final: $" . number_format($total, 2) . "\n" .
                     "✅Adelanto: $" . number_format($totalPagos, 2) . "\n" .
                     "✅ *Pendiente de pago: $" . number_format($totalAPagar, 2) . "*\n";
