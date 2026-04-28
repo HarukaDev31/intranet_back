@@ -37,6 +37,7 @@ class ViaticoController extends Controller
                 'fecha_inicio' => $request->get('fecha_inicio'),
                 'fecha_fin' => $request->get('fecha_fin'),
                 'search' => $request->get('search'),
+                'solicitante' => $request->get('solicitante'),
                 'sort_by' => $request->get('sort_by', 'created_at'),
                 'sort_order' => $request->get('sort_order', 'desc'),
                 'requesting_area' => $request->get('requesting_area'),
@@ -50,6 +51,26 @@ class ViaticoController extends Controller
             }
 
             $query = $this->viaticoService->obtenerViaticos($filtros);
+
+            $filtrosSolicitantes = $filtros;
+            unset($filtrosSolicitantes['solicitante']);
+            $querySolicitantes = $this->viaticoService->obtenerViaticos($filtrosSolicitantes);
+
+            $solicitantes = (clone $querySolicitantes)->get()
+                ->map(function ($viatico) {
+                    return optional($viatico->usuario)->No_Nombres_Apellidos;
+                })
+                ->filter()
+                ->unique()
+                ->sort()
+                ->values()
+                ->map(function ($nombre) {
+                    return [
+                        'label' => $nombre,
+                        'value' => $nombre,
+                    ];
+                })
+                ->values();
 
             // Total general (sin paginacion)
             $grandTotal = (clone $query)->sum('total_amount');
@@ -103,6 +124,9 @@ class ViaticoController extends Controller
                 'headers' => [
                     ['label' => 'Subtotal pagina', 'value' => 'S/ ' . number_format($pageTotal, 2, '.', ','), 'icon' => 'i-heroicons-banknotes'],
                     ['label' => 'Total general', 'value' => 'S/ ' . number_format((float) $grandTotal, 2, '.', ','), 'icon' => 'i-heroicons-calculator'],
+                ],
+                'filter_options' => [
+                    'solicitantes' => $solicitantes,
                 ],
             ]);
         } catch (\Exception $e) {
@@ -159,6 +183,7 @@ class ViaticoController extends Controller
                 'fecha_inicio' => $request->get('fecha_inicio'),
                 'fecha_fin' => $request->get('fecha_fin'),
                 'search' => $request->get('search'),
+                'solicitante' => $request->get('solicitante'),
                 'sort_by' => 'codigo_confirmado',
                 'sort_order' => 'desc',
                 'requesting_area' => $request->get('requesting_area'),
