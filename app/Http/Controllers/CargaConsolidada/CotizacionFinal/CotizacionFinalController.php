@@ -4594,6 +4594,8 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
             $sheet1 = $objPHPExcel->getSheet(0);
             $idCotizacionBoleta = isset($data['id']) ? (int) $data['id'] : 0;
             $deliveryServiciosExtras = $this->getDeliveryServiciosExtrasByCotizacion($idCotizacionBoleta);
+            $extrasCalc = $this->getCalculadoraImportacionExtrasByCotizacion($idCotizacionBoleta);
+            Log::info('Extras Calc: ' . json_encode($extrasCalc));
             $COSTOSFOBMULTIPLIER = 0.2399;
             $FLETEMULTIPLIER = 0.3601;
             $COSTOSDESTINOMULTIPLIER = 0.4000;
@@ -4792,8 +4794,11 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
                 $InitialColumn . $rowCostosDestinoItem,
                 "=IF($CBMTotal<1, $tarifaCellValue*$COSTOSDESTINOMULTIPLIER, $tarifaCellValue*$COSTOSDESTINOMULTIPLIER*$CBMTotal)"
                 . ($deliveryServiciosExtras > 0 ? '+' . $deliveryServiciosExtras : '')
+                . (($extrasCalc['recargos'] ?? 0) > 0 ? '+' . $extrasCalc['recargos'] : '')
+                . (($extrasCalc['descuento'] ?? 0) > 0 ? '-' . $extrasCalc['descuento'] : '')
             );
-
+            Log::info("descuento" . $extrasCalc['descuento']);
+       
             $antidumpingSum = 0;
             $InitialColumn = 'C';
 
@@ -5185,6 +5190,8 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
                 'K' . $rowMainImpuestosS0,
                 "='3'!" . $columnaIndex . $rowCostosDestinoItem
                 . ($deliveryServiciosExtras > 0 ? '-' . $deliveryServiciosExtras : '')
+                . (($extrasCalc['descuento'] ?? 0) > 0 ? '+' . $extrasCalc['descuento'] : '')
+                . (($extrasCalc['recargos'] ?? 0) > 0 ? '-' . $extrasCalc['recargos'] : '')
             );
             $objPHPExcel->getActiveSheet()->setCellValue('K' . $rowMainTotalAntidumpingS0, '=K' . $rowMainFobS0 . '+K' . $rowMainLogisticaS0 . '+K' . $rowMainImpuestosS0);
             $objPHPExcel->getActiveSheet()->setCellValue('B' . $rowMainSpacerAfterServicio, '');
@@ -5228,7 +5235,6 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
                 $sheet0->setCellValue('L42', 'USD');
             }
 
-            $extrasCalc = $this->getCalculadoraImportacionExtrasByCotizacion($idCotizacionBoleta);
             $rowRecargosOperativos = $hasAntidumpingMain ? 36 : 35;
             $rowDescuentoAplicable = $hasAntidumpingMain ? 37 : 36;
             $rowTotalServicio = $hasAntidumpingMain ? 38 : 37;
