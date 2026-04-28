@@ -558,7 +558,9 @@ class CalculadoraImportacionController extends Controller
                     $nuevoCbm = 0.0;
                     if (!empty($data['proveedores']) && is_array($data['proveedores'])) {
                         foreach ($data['proveedores'] as $proveedor) {
-                            $nuevoCbm += (float) ($proveedor['cbm'] ?? 0);
+                            $cbm = (float) ($proveedor['cbm'] ?? 0);
+                            $peso = (float) ($proveedor['peso'] ?? 0);
+                            $nuevoCbm += max($cbm, $peso / 1000);
                         }
                     }
 
@@ -573,7 +575,7 @@ class CalculadoraImportacionController extends Controller
                         $query->where('calculadora_importacion.id', '!=', (int) $data['id']);
                     }
 
-                    $cbmExistente = (float) $query->sum('cip.cbm');
+                    $cbmExistente = (float) $query->sum(DB::raw('GREATEST(cip.cbm, cip.peso / 1000)'));
                     $cbmTotal = $cbmExistente + $nuevoCbm;
 
                     if ($cbmTotal > (float) $contenedor->limite_cbm_imo) {

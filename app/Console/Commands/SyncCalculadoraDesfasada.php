@@ -113,6 +113,7 @@ class SyncCalculadoraDesfasada extends Command
                         'id_calculadora_importacion' => $calculadora->id,
                         'id_proveedor' => $provCot->id,
                         'cbm' => (float) $cbm,
+                        'maxcbm' => max((float) $cbm, ((float) ($provCot->peso ?: 0) / 1000)),
                         'peso' => (float) ($provCot->peso ?: 0),
                         'qty_caja' => (int) $qty,
                         'code_supplier' => $provCot->code_supplier ?: null,
@@ -181,6 +182,7 @@ class SyncCalculadoraDesfasada extends Command
                 $cbmActual = round((float) ($provCalc->cbm ?: 0), 10);
                 if ($cbmActual !== $cbmProductos) {
                     $provCalc->cbm = $cbmProductos;
+                    $provCalc->maxcbm = max((float) $cbmProductos, ((float) ($provCot->peso ?: 0) / 1000));
                     $provCalc->save();
                     $actualizadosCbm++;
                 }

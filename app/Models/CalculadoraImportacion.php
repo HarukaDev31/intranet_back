@@ -27,6 +27,7 @@ class CalculadoraImportacion extends Model
         'correo_cliente',
         'whatsapp_cliente',
         'tipo_cliente',
+        'tipo_cotizacion',
         'qty_proveedores',
         'tarifa_total_extra_proveedor',
         'tarifa_total_extra_item',
@@ -58,6 +59,7 @@ class CalculadoraImportacion extends Model
         'logistica' => 'decimal:10',
         'cargos_extra' => 'decimal:10',
         'estado' => 'string',
+        'tipo_cotizacion' => 'string',
         'id_carga_consolidada_contenedor' => 'integer',
         'es_imo' => 'boolean',
         'usa_yuan' => 'boolean',
@@ -68,6 +70,8 @@ class CalculadoraImportacion extends Model
     const ESTADO_PENDIENTE = 'PENDIENTE';
     const ESTADO_COTIZADO = 'COTIZADO';
     const ESTADO_CONFIRMADO = 'CONFIRMADO';
+    const TIPO_COTIZACION_PESO = 'PESO';
+    const TIPO_COTIZACION_VOLUMEN = 'VOLUMEN';
 
     /**
      * Obtener todos los estados posibles

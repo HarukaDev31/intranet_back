@@ -307,7 +307,8 @@ class CotizacionController extends Controller
                     'cod_contract' => $cotizacion->cod_contract,
                     'monto' => $cotizacion->monto,
                     'monto_final' => $cotizacion->monto_final,
-                    'volumen' => $cotizacion->volumen,
+                    'volumen' => $cotizacion->volumen_neto ?? $cotizacion->volumen,
+                    'volumen_neto' => $cotizacion->volumen_neto,
                     'volumen_final' => $cotizacion->volumen_final,
                     'tarifa' => $cotizacion->tarifa,
                     'qty_item' => $cotizacion->qty_item,
@@ -1521,6 +1522,7 @@ class CotizacionController extends Controller
                 'correo' => $correo,
                 'telefono' => $telefono,
                 'volumen' => $volumen,
+                'volumen_neto' => $volumen,
                 'id_tipo_cliente' => $idTipoCliente,
                 'fecha' => $fecha,
                 'valor_cot' => $valorCot,
@@ -1655,6 +1657,7 @@ class CotizacionController extends Controller
                 'correo' => $correo,
                 'telefono' => $telefono,
                 'volumen' => $volumen,
+                'volumen_neto' => $volumen,
                 'id_tipo_cliente' => $idTipoCliente,
                 'fecha' => $fecha,
                 'valor_cot' => $valorCot,
@@ -3179,11 +3182,13 @@ class CotizacionController extends Controller
 
                     // Solo agregar proveedor si tiene datos válidos
                     if ($qtyBox > 0 || $peso > 0 || $cbmTotal > 0) {
+                        $maxcbm = max((float) ($cbmTotal ?? 0), ((float) ($peso ?? 0) / 1000));
                         // Agrega los datos del proveedor con items
                         $proveedores[] = [
                             'qty_box' => $qtyBox ?? 0,
                             'peso' => $peso ?? 0,
                             'cbm_total' => $cbmTotal ?? 0,
+                            'maxcbm' => $maxcbm,
                             'id_cotizacion' => $data->id_cotizacion,
                             'code_supplier' => $codeSupplier,
                             'id_contenedor' => $data->id_contenedor,
@@ -3395,10 +3400,12 @@ class CotizacionController extends Controller
 
                     // Solo agregar proveedor si tiene datos válidos
                     if ($qtyBox > 0 || $peso > 0 || $cbmTotal > 0) {
+                        $maxcbm = max((float) ($cbmTotal ?? 0), ((float) ($peso ?? 0) / 1000));
                         $proveedores[] = [
                             'qty_box' => $qtyBox,
                             'peso' => $peso,
                             'cbm_total' => $cbmTotal,
+                            'maxcbm' => $maxcbm,
                             'id_cotizacion' => $data->id_cotizacion,
                             'id_contenedor' => $data->id_contenedor,
                             'code_supplier' => $codeSupplier,

@@ -19,6 +19,18 @@ class CalculadoraImportacionCotizacionSyncService
         $this->excelService = $excelService;
     }
 
+    private function volumenNetoDesdeCalculadora(CalculadoraImportacion $calculadora): float
+    {
+        $calculadora->loadMissing('proveedores');
+
+        return (float) $calculadora->proveedores->sum(function ($proveedor) {
+            $cbm = (float) ($proveedor->cbm ?? 0);
+            $peso = (float) ($proveedor->peso ?? 0);
+            $maxcbm = $proveedor->maxcbm ?? max($cbm, $peso / 1000);
+            return (float) $maxcbm;
+        });
+    }
+
     public function actualizarCotizacionDesdeCalculadora(CalculadoraImportacion $calculadora): bool
     {
         try {
@@ -63,6 +75,8 @@ class CalculadoraImportacionCotizacionSyncService
                 $updateData = [
                     'id_usuario' => $calculadora->id_usuario,
                     'from_calculator' => true,
+                    'tipo_cotizacion' => $calculadora->tipo_cotizacion ?? \App\Models\CalculadoraImportacion::TIPO_COTIZACION_VOLUMEN,
+                    'volumen_neto' => $this->volumenNetoDesdeCalculadora($calculadora),
                 ];
                 if ($calculadora->url_cotizacion) {
                     $updateData['cotizacion_file_url'] = $calculadora->url_cotizacion;
@@ -108,6 +122,8 @@ class CalculadoraImportacionCotizacionSyncService
         $updateData = [
             'id_usuario' => $calculadora->id_usuario,
             'from_calculator' => true,
+            'tipo_cotizacion' => $calculadora->tipo_cotizacion ?? \App\Models\CalculadoraImportacion::TIPO_COTIZACION_VOLUMEN,
+            'volumen_neto' => $this->volumenNetoDesdeCalculadora($calculadora),
         ];
         if ($calculadora->url_cotizacion) {
             $updateData['cotizacion_file_url'] = $calculadora->url_cotizacion;
@@ -172,6 +188,8 @@ class CalculadoraImportacionCotizacionSyncService
                 'from_calculator' => true,
                 'cotizacion_file_url' => $calculadora->url_cotizacion,
                 'es_imo' => (bool) ($calculadora->es_imo ?? false),
+                'tipo_cotizacion' => $calculadora->tipo_cotizacion ?? \App\Models\CalculadoraImportacion::TIPO_COTIZACION_VOLUMEN,
+                'volumen_neto' => $this->volumenNetoDesdeCalculadora($calculadora),
             ]);
 
             $calculadora->id_cotizacion = $cotizacionId;
