@@ -3487,6 +3487,24 @@ class CotizacionFinalController extends Controller
         return ['recargos' => round($recargos, 2), 'descuento' => round($descuento, 2)];
     }
 
+    /**
+     * Suma de servicios extra de la cotización:
+     * MONTACARGA + DELIVERY + (BQ + SANCIONES)
+     */
+    private function getDeliveryServiciosExtrasByCotizacion(int $idCotizacion): float
+    {
+        if ($idCotizacion <= 0 || !Schema::hasTable('contenedor_consolidado_cotizacion_delivery_servicio')) {
+            return 0.0;
+        }
+
+        $total = (float) DB::table('contenedor_consolidado_cotizacion_delivery_servicio')
+            ->where('id_cotizacion', $idCotizacion)
+            ->whereRaw("UPPER(TRIM(tipo_servicio)) IN ('MONTACARGA', 'DELIVERY', 'SANCIONES', 'BQ')")
+            ->sum('importe');
+
+        return round($total, 2);
+    }
+
     private function isBoletaItemsHeaderRow(string $normA, string $normB): bool
     {
         $a = trim($normA);
@@ -3606,7 +3624,11 @@ class CotizacionFinalController extends Controller
         $legacyK = $this->boletaFinalIsLegacyMainSheetKLayout($sheet);
 
         if ($legacyK) {
-            $qtyCajas = intval($this->boletaFinalGetCellFloat($sheet, 'J10'));
+            // Hoja principal final (layout K):
+            // J8 = N° cajas (qty_box_china + qty_pallet_china)
+            // J10 = QTY proveedores LOADED
+            $qtyCajas = intval($this->boletaFinalGetCellFloat($sheet, 'J8'));
+            $qtySuppliers = intval($this->boletaFinalGetCellFloat($sheet, 'J10'));
 
             $pesoRaw = $sheet->getCell('J9')->getCalculatedValue();
             $pesoDisplay = is_numeric($pesoRaw)
@@ -3691,7 +3713,7 @@ class CotizacionFinalController extends Controller
                 'date' => date('d/m/Y'),
                 'tipocliente' => $sheet->getCell('F11')->getCalculatedValue(),
                 'peso' => $pesoDisplay !== '' ? $pesoDisplay : '-',
-                'qtysuppliers' => $sheet->getCell('F11')->getCalculatedValue(),
+                'qtysuppliers' => $qtySuppliers,
                 'qtycajas' => $qtyCajas,
                 'cbm' => number_format($this->boletaFinalGetCellFloat($sheet, 'J11'), 2, '.', ',') . ' m³',
                 'valorcarga' => round($this->boletaFinalGetCellFloat($sheet, 'K14'), 2),
@@ -3851,6 +3873,25 @@ class CotizacionFinalController extends Controller
         $htmlContent = file_get_contents($htmlFilePath);
         $htmlContent = $this->injectBoletaPdfDeliveryServicioRowsHtml($htmlContent, $sheet, $legacyK);
 
+        $recargosVal = $this->boletaFinalGetCellFloat($sheet, $recargosCellRef);
+        $descuentoVal = $this->boletaFinalGetCellFloat($sheet, $descuentoCellRef);
+        $showSubtotalSvcRow = abs($recargosVal) > 0.00001 || abs($descuentoVal) > 0.00001;
+
+        if ($showSubtotalSvcRow) {
+            $htmlContent = str_replace(
+                '{{row_subtotal_svc}}',
+                '<tr class="btop">
+        <td colspan="3"><strong>SUB TOTAL</strong></td>
+        <td class="no-horizontal-border"></td>
+        <td class="no-horizontal-border right"><strong>$ {{subtotal_svc}}</strong></td>
+        <td class="no-horizontal-border center">USD</td>
+      </tr>',
+                $htmlContent
+            );
+        } else {
+            $htmlContent = str_replace('{{row_subtotal_svc}}', '', $htmlContent);
+        }
+
         $pagosPath = public_path('assets/images/pagos-full.jpg');
         $pagosContent = file_exists($pagosPath) ? file_get_contents($pagosPath) : '';
         $data['pagos'] = 'data:image/png;base64,' . base64_encode($pagosContent);
@@ -3866,7 +3907,6 @@ class CotizacionFinalController extends Controller
             }
 
             if ($key === 'recargos') {
-                $recargosVal = $this->boletaFinalGetCellFloat($sheet, $recargosCellRef);
                 if ($recargosVal != 0.0) {
                     $recargosHtml = '<tr>
                         <td colspan="3">RECARGOS OPERATIVOS</td>
@@ -3879,7 +3919,6 @@ class CotizacionFinalController extends Controller
                     $htmlContent = str_replace('{{row_recargos}}', '', $htmlContent);
                 }
             } elseif ($key === 'descuento_svc') {
-                $descuentoVal = $this->boletaFinalGetCellFloat($sheet, $descuentoCellRef);
                 if ($descuentoVal != 0.0) {
                     $descuentoHtml = '<tr>
                         <td colspan="3" style="color:red;">DESCUENTO APLICABLE</td>
@@ -4337,6 +4376,39 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
         );
     }
 
+    /**
+     * Obtiene agregados de proveedores LOADED para la cotización:
+     * - total_qty_bultos_china: SUM(qty_box_china + qty_pallet_china)
+     * - total_peso_china: SUM(peso_china)
+     * - total_proveedores_loaded: COUNT(*)
+     */
+    private function getLoadedProvidersExcelMetrics(int $idCotizacion): array
+    {
+        if ($idCotizacion <= 0) {
+            return [
+                'total_qty_bultos_china' => 0.0,
+                'total_peso_china' => 0.0,
+                'total_proveedores_loaded' => 0,
+            ];
+        }
+
+        $metrics = DB::table($this->table_contenedor_cotizacion_proveedores . ' as cp')
+            ->where('cp.id_cotizacion', $idCotizacion)
+            ->whereRaw("UPPER(TRIM(COALESCE(cp.estados_proveedor, ''))) = 'LOADED'")
+            ->selectRaw(
+                'COALESCE(SUM(COALESCE(cp.qty_box_china, 0) + COALESCE(cp.qty_pallet_china, 0)), 0) as total_qty_bultos_china,
+                 COALESCE(SUM(COALESCE(cp.peso_china, 0)), 0) as total_peso_china,
+                 COUNT(*) as total_proveedores_loaded'
+            )
+            ->first();
+
+        return [
+            'total_qty_bultos_china' => (float) ($metrics->total_qty_bultos_china ?? 0),
+            'total_peso_china' => (float) ($metrics->total_peso_china ?? 0),
+            'total_proveedores_loaded' => (int) ($metrics->total_proveedores_loaded ?? 0),
+        ];
+    }
+
     private function applyBoletaDeliveryServicioOneRow(
         \PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $sheet,
         int $row,
@@ -4515,6 +4587,8 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
             $fob = 0;
             $tarifa = $data['cliente']['tarifa'];
             $sheet1 = $objPHPExcel->getSheet(0);
+            $idCotizacionBoleta = isset($data['id']) ? (int) $data['id'] : 0;
+            $deliveryServiciosExtras = $this->getDeliveryServiciosExtrasByCotizacion($idCotizacionBoleta);
             $COSTOSFOBMULTIPLIER = 0.2399;
             $FLETEMULTIPLIER = 0.3601;
             $COSTOSDESTINOMULTIPLIER = 0.4000;
@@ -4712,6 +4786,7 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
             $objPHPExcel->setActiveSheetIndex(2)->setCellValue(
                 $InitialColumn . $rowCostosDestinoItem,
                 "=IF($CBMTotal<1, $tarifaCellValue*$COSTOSDESTINOMULTIPLIER, $tarifaCellValue*$COSTOSDESTINOMULTIPLIER*$CBMTotal)"
+                . ($deliveryServiciosExtras > 0 ? '+' . $deliveryServiciosExtras : '')
             );
 
             $antidumpingSum = 0;
@@ -5101,7 +5176,11 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
 
             $objPHPExcel->getActiveSheet()->setCellValue('K' . $rowMainFobS0, "='3'!" . $columnaIndex . $rowCostosFob);
             $objPHPExcel->getActiveSheet()->setCellValue('K' . $rowMainLogisticaS0, "='3'!" . $columnaIndex . $rowFlete);
-            $objPHPExcel->getActiveSheet()->setCellValue('K' . $rowMainImpuestosS0, "='3'!" . $columnaIndex . $rowCostosDestinoItem);
+            $objPHPExcel->getActiveSheet()->setCellValue(
+                'K' . $rowMainImpuestosS0,
+                "='3'!" . $columnaIndex . $rowCostosDestinoItem
+                . ($deliveryServiciosExtras > 0 ? '-' . $deliveryServiciosExtras : '')
+            );
             $objPHPExcel->getActiveSheet()->setCellValue('K' . $rowMainTotalAntidumpingS0, '=K' . $rowMainFobS0 . '+K' . $rowMainLogisticaS0 . '+K' . $rowMainImpuestosS0);
             $objPHPExcel->getActiveSheet()->setCellValue('B' . $rowMainSpacerAfterServicio, '');
             $objPHPExcel->getActiveSheet()->setCellValue('J' . $rowMainSpacerAfterServicio, '');
@@ -5144,7 +5223,6 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
                 $sheet0->setCellValue('L42', 'USD');
             }
 
-            $idCotizacionBoleta = isset($data['id']) ? (int) $data['id'] : 0;
             $extrasCalc = $this->getCalculadoraImportacionExtrasByCotizacion($idCotizacionBoleta);
             $rowRecargosOperativos = $hasAntidumpingMain ? 36 : 35;
             $rowDescuentoAplicable = $hasAntidumpingMain ? 37 : 36;
@@ -5373,6 +5451,9 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
                 }
             }
 
+            $idCotizacion = (int) ($data['id'] ?? $data['id_cotizacion'] ?? $data['cliente']['id_cotizacion'] ?? 0);
+            $providersMetrics = $this->getLoadedProvidersExcelMetrics($idCotizacion);
+
             // Configurar hoja principal (Sheet 0)
             $objPHPExcel->getActiveSheet()->mergeCells("C{$rowMainNombre}:C{$rowMainNombreSecundario}");
             $objPHPExcel->getActiveSheet()->getStyle('C' . $rowMainNombre)->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
@@ -5380,7 +5461,10 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
             $objPHPExcel->getActiveSheet()->setCellValue('C' . $rowMainNombre, $data['cliente']['nombre']);
             $objPHPExcel->getActiveSheet()->setCellValue('C' . $rowMainDocumento, $data['cliente']['dni']);
             $objPHPExcel->getActiveSheet()->setCellValue('C' . $rowMainTelefono, $data['cliente']['telefono']);
-            $objPHPExcel->getActiveSheet()->setCellValue('J' . $rowMainNombreSecundario, $pesoTotal >= 1000 ? $pesoTotal / 1000 . " Tn" : $pesoTotal . " Kg");
+            $pesoChinaLoaded = $providersMetrics['total_peso_china'];
+            $objPHPExcel->getActiveSheet()->setCellValue('J' . $rowMainNombre, $providersMetrics['total_qty_bultos_china']);
+            $objPHPExcel->getActiveSheet()->setCellValue('J' . $rowMainNombreSecundario, $pesoChinaLoaded >= 1000 ? ($pesoChinaLoaded / 1000) . " Tn" : $pesoChinaLoaded . " Kg");
+            $objPHPExcel->getActiveSheet()->setCellValue('J' . $rowMainDocumento, $providersMetrics['total_proveedores_loaded']);
 
             $objPHPExcel->getActiveSheet()->getStyle('J' . $rowMainTelefono)->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_NUMBER . ' "m3"');
             $objPHPExcel->getActiveSheet()->getStyle('J' . $rowMainTelefono)->getNumberFormat()->setFormatCode('#,##0.00');
@@ -5389,7 +5473,6 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
             $objPHPExcel->getActiveSheet()->getStyle('J' . $rowMainNombreSecundario)->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_NUMBER);
             $objPHPExcel->getActiveSheet()->getColumnDimension("I")->setAutoSize(true);
 
-            $objPHPExcel->getActiveSheet()->setCellValue('J' . $rowMainDocumento, "");
             $objPHPExcel->getActiveSheet()->getStyle('K' . $rowMainDocumento)->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_NUMBER);
             $objPHPExcel->getActiveSheet()->setCellValue('L' . $rowMainDocumento, "");
 
@@ -5917,10 +6000,13 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
         $sheet->setCellValue('C11', $data['cliente']['telefono']);
         $sheet->setCellValue('F11', $data['cliente']['tipo_cliente']);
 
-        // Configurar peso y volumen (validar que sea numérico)
-        $pesoTotal = isset($data['cliente']['productos'][0]['peso']) && is_numeric($data['cliente']['productos'][0]['peso'])
-            ? (float)$data['cliente']['productos'][0]['peso'] : 0;
-        $sheet->setCellValue('J9', $pesoTotal >= 1000 ? ($pesoTotal / 1000) . " Tn" : $pesoTotal . " Kg");
+        $idCotizacion = (int) ($data['id'] ?? $data['id_cotizacion'] ?? $data['cliente']['id_cotizacion'] ?? 0);
+        $providersMetrics = $this->getLoadedProvidersExcelMetrics($idCotizacion);
+        $pesoChinaLoaded = $providersMetrics['total_peso_china'];
+
+        $sheet->setCellValue('J8', $providersMetrics['total_qty_bultos_china']);
+        $sheet->setCellValue('J9', $pesoChinaLoaded >= 1000 ? ($pesoChinaLoaded / 1000) . " Tn" : $pesoChinaLoaded . " Kg");
+        $sheet->setCellValue('J10', $providersMetrics['total_proveedores_loaded']);
         $sheet->setCellValue('I11', "CBM");
         $sheet->getStyle('J11')->getNumberFormat()->setFormatCode('#,##0.00');
 
