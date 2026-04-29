@@ -37,6 +37,7 @@ class ContenedorController extends Controller
     private $defaultDocumentacion = [];
     private $defaultJefeImportacion = [];
     private $defaultAdministracion = [];
+    private $defaultJefeMarketing = [];
     public function __construct()
     {
         $host = rtrim(config('app.url') ?? env('APP_URL'), '/');
@@ -85,6 +86,10 @@ class ContenedorController extends Controller
             ["name" => "COTIZACION FINAL", "iconURL" => $host . '/assets/icons/cotizacion_final.png'],
             ["name" => "ENTREGA", "iconURL" => $host . '/assets/icons/entrega.png'],
             ["name" => "FACTURA Y GUIA", "iconURL" => $host . '/assets/icons/factura.png']
+        );
+        $this->defaultJefeMarketing = array(
+            ["name" => "COTIZACION", "iconURL" => $host . '/assets/icons/cotizacion.png'],
+            ["name" => "CLIENTES", "iconURL" => $host . '/assets/icons/clientes.png'],
         );
     }
 
@@ -140,7 +145,9 @@ class ContenedorController extends Controller
                 } else {
                     $query->where('estado_documentacion', '!=', Contenedor::CONTEDOR_CERRADO);
                 }
-            } else {
+            } 
+            
+            else {
                 if ($completado) {
                     $query->where('estado_china', '=', Contenedor::CONTEDOR_CERRADO);
                 } else {
@@ -399,7 +406,8 @@ class ContenedorController extends Controller
         $documentacionSteps = $this->getDocumentacionSteps($idContenedor);
         $administracionSteps = $this->getAdministracionSteps($idContenedor);
         $jefeImportacionSteps = $this->getJefeImportacionSteps($idContenedor);
-        $this->insertSteps($cotizadorSteps, $documentacionSteps, $administracionSteps, $jefeImportacionSteps);
+        $jefeMarketingSteps = $this->getJefeMarketingSteps($idContenedor);
+        $this->insertSteps($cotizadorSteps, $documentacionSteps, $administracionSteps, $jefeImportacionSteps, $jefeMarketingSteps);
     }
     public function getCotizacionSteps($idContenedor)
     {
@@ -473,13 +481,14 @@ class ContenedorController extends Controller
         }
         return $stepsJefeImportacion;
     }
-    public function insertSteps($steps, $stepsDocumentacion, $stepsAdministracion, $stepsJefeImportacion)
+    public function insertSteps($steps, $stepsDocumentacion, $stepsAdministracion, $stepsJefeImportacion, $stepsJefeMarketing)
     {
         try {
             ContenedorPasos::insert($steps);
             ContenedorPasos::insert($stepsDocumentacion);
             ContenedorPasos::insert($stepsAdministracion);
             ContenedorPasos::insert($stepsJefeImportacion);
+            ContenedorPasos::insert($stepsJefeMarketing);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -627,6 +636,7 @@ class ContenedorController extends Controller
                     Usuario::ROL_COORDINACION,
                     Usuario::ROL_DOCUMENTACION,
                     Usuario::ROL_ADMINISTRACION,
+                    Usuario::JEFE_MARKETING,
                 ];
                 $rolesParts = array_map('trim', explode(',', (string) $request->input('role')));
                 foreach ($rolesParts as $part) {
@@ -661,6 +671,9 @@ class ContenedorController extends Controller
                     break;
                 case Usuario::ROL_COORDINACION:
                     $query->where('tipo', 'COTIZADOR');
+                    break;
+                case Usuario::JEFE_MARKETING:
+                    $query->where('tipo', 'JEFE MARKETING');
                     break;
                 default:
                     $query->where('tipo', 'COTIZADOR');
