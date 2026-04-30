@@ -111,7 +111,7 @@ class SendReminderPagoWhatsAppJob implements ShouldQueue
 
             $result = $this->sendMessage($message, $this->phoneNumberId, $this->sleep, 'administracion');
             $pagosUrl = public_path('assets/images/pagos-full.jpg');
-            $this->sendMedia($pagosUrl, 'image/jpg', null, null, 0, 'administracion');
+            $this->sendMedia($pagosUrl, 'image/jpg', null, null, 10, 'administracion');
 
             Log::info('SendReminderPagoWhatsAppJob resultado', [
                 'cotizacion_id' => $this->idCotizacion,
