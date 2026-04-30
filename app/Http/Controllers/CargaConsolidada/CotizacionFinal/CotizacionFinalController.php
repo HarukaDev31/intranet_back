@@ -251,7 +251,6 @@ class CotizacionFinalController extends Controller
                     'contenedor_consolidado_cotizacion.*',
                     'contenedor_consolidado_cotizacion.id as id_cotizacion',
                     'TC.name',
-
                     DB::raw("(
                         SELECT JSON_ARRAYAGG(
                             JSON_OBJECT(
@@ -334,7 +333,7 @@ class CotizacionFinalController extends Controller
                     'documento' => $this->cleanUtf8String($row->documento),
                     'telefono' => $this->cleanUtf8String($row->telefono),
                     'tipo_cliente' => $this->cleanUtf8String($row->name),
-                    'total_logistica_impuestos' => $row->total_logistica_impuestos,
+                    'total_logistica_impuestos' => $row->total_logistica_impuestos+$row->servicios_extra_final,
                     'total_pagos' => $row->total_pagos == 0 ? "0.00" : $row->total_pagos,
                     'pagos_count' => $row->pagos_count,
                     'id_cotizacion' => $row->id_cotizacion,
@@ -2189,6 +2188,7 @@ class CotizacionFinalController extends Controller
                         'servicios_extra_final' => $result['servicios_extra_final'] ?? 0,
                         'fob_final' => $result['fob_final'],
                         'peso_final' => $result['peso_final'],
+                        'recargos_descuentos_final' => $result['recargos_descuentos_final'],
                     ];
                     if (!$estadoCotizacionFinal) {
                         $updateData['estado_cotizacion_final'] = 'COTIZADO';
@@ -2836,6 +2836,7 @@ class CotizacionFinalController extends Controller
                     'servicios_extra_final' => $result['servicios_extra_final'] ?? 0,
                     'fob_final' => $result['fob_final'],
                     'peso_final' => $result['peso_final'],
+                    'recargos_descuentos_final' => $result['recargos_descuentos_final'],
                     'estado_cotizacion_final' => 'COTIZADO'
                 ]);
 
@@ -5597,8 +5598,8 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
             $logistica = is_numeric($logisticaCalculada) ? $logisticaCalculada : $logistica;
 
             $objWriter->save($fullPath);
-
-            return [
+            $recargosDescuentosFinal = $extrasCalc['descuento'] ?? 0+$extrasCalc['recargos'] ?? 0;
+            return [    
                 'id' => $data['id'] ?? null,
                 'id_contenedor' => $idContenedor,
                 'id_tipo_cliente' => $data['cliente']['id_tipo_cliente'] ?? null,
@@ -5612,6 +5613,7 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
                 'impuestos_final' => is_numeric($impuestos) ? $impuestos : 0,
                 'logistica_final' => is_numeric($logistica) ? $logistica : 0,
                 'servicios_extra_final' => $deliveryServiciosExtras,
+                'recargos_descuentos_final' => $recargosDescuentosFinal,
                 'fob_final' => is_numeric($fob) ? $fob : 0,
                 'peso_final' => is_numeric($pesoTotal) ? $pesoTotal : 0,
                 'estado' => 'PENDIENTE',
