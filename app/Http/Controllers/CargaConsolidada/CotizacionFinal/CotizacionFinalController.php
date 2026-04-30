@@ -323,6 +323,8 @@ class CotizacionFinalController extends Controller
                     return $pago;
                 }, $pagos);
                 $totalLi = (float)($row->total_logistica_impuestos ?? 0);
+                $recargosDescuentosFinal = (float)($row->recargos_descuentos_final ?? 0);
+                $serviciosExtraFinal = (float)($row->servicios_extra_final ?? 0);
                 $totalPag = (float)($row->total_pagos ?? 0);
                 $subdata = [
                     'index' => $index,
@@ -333,13 +335,13 @@ class CotizacionFinalController extends Controller
                     'documento' => $this->cleanUtf8String($row->documento),
                     'telefono' => $this->cleanUtf8String($row->telefono),
                     'tipo_cliente' => $this->cleanUtf8String($row->name),
-                    'total_logistica_impuestos' => $row->total_logistica_impuestos+$row->servicios_extra_final,
+                    'total_logistica_impuestos' => $totalLi+$serviciosExtraFinal+$recargosDescuentosFinal,
                     'total_pagos' => $row->total_pagos == 0 ? "0.00" : $row->total_pagos,
                     'pagos_count' => $row->pagos_count,
                     'id_cotizacion' => $row->id_cotizacion,
                     'pagos' => json_encode($pagos),
                     'estado_cotizacion_final' => $row->estado_cotizacion_final ?? null,
-                    'diferencia' => round($totalLi - $totalPag, 2),
+                    'diferencia' => round($totalLi + $serviciosExtraFinal + $recargosDescuentosFinal - $totalPag, 2),
                 ];
 
                 $transformedData[] = $subdata;
