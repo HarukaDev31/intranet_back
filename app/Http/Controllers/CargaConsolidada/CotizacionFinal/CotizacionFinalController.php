@@ -29,6 +29,7 @@ use Dompdf\Dompdf;
 use Dompdf\Options;
 use Tymon\JWTAuth\Facades\JWTAuth;
 use App\Traits\FileTrait;
+use App\Jobs\SendReminderPagoWhatsAppJob;
 
 class CotizacionFinalController extends Controller
 {
@@ -1185,87 +1186,20 @@ class CotizacionFinalController extends Controller
     public function sendReminderPago(Request $request, $idCotizacion)
     {
         try {
-            // Recuperar datos principales de la cotización (incluye subconsulta para totales pagados)
-            $cotizacion = DB::table($this->table_contenedor_cotizacion . ' as CC')
-                ->select([
-                    'CC.telefono',
-                    'CC.id_contenedor',
-                    'CC.impuestos_final',
-                    'CC.volumen_final',
-                    'CC.monto_final',
-                    'CC.tarifa_final',
-                    'CC.nombre',
-                    'CC.logistica_final',
-                    DB::raw('(
-                        SELECT IFNULL(SUM(cccp.monto), 0)
-                        FROM contenedor_consolidado_cotizacion_coordinacion_pagos cccp
-                        JOIN cotizacion_coordinacion_pagos_concept ccp ON cccp.id_concept = ccp.id
-                        WHERE cccp.id_cotizacion = CC.id
-                        AND (ccp.name = "LOGISTICA" OR ccp.name = "IMPUESTOS")
-                    ) as total_pagos')
-                ])
-                ->where('CC.id', $idCotizacion)
-                ->first();
-
-            if (! $cotizacion) {
+            $exists = DB::table($this->table_contenedor_cotizacion)
+                ->where('id', (int) $idCotizacion)
+                ->exists();
+            if (!$exists) {
                 return response()->json(['message' => 'Cotización no encontrada', 'success' => false], 404);
             }
 
-            // Obtener contenedor para número de consolidado y fecha de arribo
-            $contenedor = Contenedor::select('carga', 'fecha_arribo')->where('id', $cotizacion->id_contenedor)->first();
-            $carga = $contenedor ? $contenedor->carga : 'N/A';
-            $fechaArribo = $contenedor ? $contenedor->fecha_arribo : null;
-
-            // Calculos de montos
-            $logisticaFinal = $cotizacion->logistica_final ?? 0;
-            $impuestosFinal = $cotizacion->impuestos_final ?? 0;
-            $totalCotizacion = $logisticaFinal + $impuestosFinal;
-            $totalPagos = $cotizacion->total_pagos ?? 0;
-            $pendiente = $totalCotizacion - $totalPagos;
-
-            // Preparar mensaje según plantilla solicitada
-            $message = "🙋🏽‍♀ RECORDATORÍO DE PAGO\n\n" .
-                "📦 Consolidado #" . $carga . "\n" .
-                "Usted cuenta con un pago pendiente, es necesario realizar el pago para continuar con el proceso de nacionalización.\n\n" .
-                "Resumen de Pago\n" .
-                "✅ Cotización final: $" . number_format($totalCotizacion, 2, '.', '') . "\n" .
-                "✅ Adelanto: $" . number_format($totalPagos, 2, '.', '') . "\n" .
-                "✅ *Pendiente de pago: $" . number_format($pendiente, 2, '.', '') . "*\n" .
-                ($fechaArribo ? "Último día de pago: " . date('d/m/Y', strtotime($fechaArribo)) . "\n" : "") .
-                "\nPor favor debe enviar el comprobante de pago a la brevedad.";
-            // Preparar número y enviar (normalizar como en otros lugares del proyecto)
-            $rawTelefono = $cotizacion->telefono ?? '';
-            // Remover todo lo que no sea dígito
-            $telefonoDigits = preg_replace('/\D/', '', $rawTelefono);
-
-            // Si no tiene código de país, asumir Perú (+51) para números locales de 9 dígitos
-            if (strlen($telefonoDigits) === 9) {
-                $telefonoDigits = '51' . $telefonoDigits;
-            } elseif (strlen($telefonoDigits) === 10 && substr($telefonoDigits, 0, 1) === '0') {
-                $telefonoDigits = '51' . substr($telefonoDigits, 1);
-            }
-
-            if (empty($telefonoDigits)) {
-                Log::warning('sendReminderPago: teléfono inválido o vacío', ['cotizacion_id' => $idCotizacion, 'telefono_raw' => $rawTelefono]);
-                return response()->json(['message' => 'Teléfono del cliente inválido o vacío', 'success' => false], 400);
-            }
-
-            $this->phoneNumberId = $telefonoDigits . '@c.us';
-
-            // Log previo al envío para diagnóstico
-            Log::info('sendReminderPago enviando', [
-                'cotizacion_id' => $idCotizacion,
-                'telefono_raw' => $rawTelefono,
-                'telefono_normalized' => $telefonoDigits,
-                'phoneNumberId' => $this->phoneNumberId
-            ]);
-
             $sleep = $request->input('sleep', 0);
-            $result = $this->sendMessage($message, $this->phoneNumberId, $sleep);
+            SendReminderPagoWhatsAppJob::dispatch((int) $idCotizacion, (int) $sleep);
 
-            Log::info('sendReminderPago resultado', ['cotizacion_id' => $idCotizacion, 'result' => $result]);
-
-            return response()->json(['message' => 'Recordatorio enviado', 'success' => true, 'result' => $result]);
+            return response()->json([
+                'message' => 'Recordatorio encolado correctamente',
+                'success' => true,
+            ]);
         } catch (\Exception $e) {
             Log::error('Error en sendReminderPago: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
             return response()->json(['message' => 'Error al enviar recordatorio: ' . $e->getMessage(), 'success' => false], 500);
@@ -5600,7 +5534,7 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
             $logistica = is_numeric($logisticaCalculada) ? $logisticaCalculada : $logistica;
 
             $objWriter->save($fullPath);
-            $recargosDescuentosFinal = $extrasCalc['descuento'] ?? 0+$extrasCalc['recargos'] ?? 0;
+            $recargosDescuentosFinal = ($extrasCalc['recargos'] ?? 0)-($extrasCalc['descuento'] ?? 0);
             return [    
                 'id' => $data['id'] ?? null,
                 'id_contenedor' => $idContenedor,
