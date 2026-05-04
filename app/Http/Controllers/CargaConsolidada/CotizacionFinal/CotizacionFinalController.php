@@ -29,6 +29,7 @@ use Dompdf\Dompdf;
 use Dompdf\Options;
 use Tymon\JWTAuth\Facades\JWTAuth;
 use App\Traits\FileTrait;
+use App\Jobs\SendReminderPagoWhatsAppJob;
 
 class CotizacionFinalController extends Controller
 {
@@ -251,7 +252,6 @@ class CotizacionFinalController extends Controller
                     'contenedor_consolidado_cotizacion.*',
                     'contenedor_consolidado_cotizacion.id as id_cotizacion',
                     'TC.name',
-
                     DB::raw("(
                         SELECT JSON_ARRAYAGG(
                             JSON_OBJECT(
@@ -324,6 +324,8 @@ class CotizacionFinalController extends Controller
                     return $pago;
                 }, $pagos);
                 $totalLi = (float)($row->total_logistica_impuestos ?? 0);
+                $recargosDescuentosFinal = (float)($row->recargos_descuentos_final ?? 0);
+                $serviciosExtraFinal = (float)($row->servicios_extra_final ?? 0);
                 $totalPag = (float)($row->total_pagos ?? 0);
                 $subdata = [
                     'index' => $index,
@@ -334,13 +336,13 @@ class CotizacionFinalController extends Controller
                     'documento' => $this->cleanUtf8String($row->documento),
                     'telefono' => $this->cleanUtf8String($row->telefono),
                     'tipo_cliente' => $this->cleanUtf8String($row->name),
-                    'total_logistica_impuestos' => $row->total_logistica_impuestos,
+                    'total_logistica_impuestos' => $totalLi+$serviciosExtraFinal+$recargosDescuentosFinal,
                     'total_pagos' => $row->total_pagos == 0 ? "0.00" : $row->total_pagos,
                     'pagos_count' => $row->pagos_count,
                     'id_cotizacion' => $row->id_cotizacion,
                     'pagos' => json_encode($pagos),
                     'estado_cotizacion_final' => $row->estado_cotizacion_final ?? null,
-                    'diferencia' => round($totalLi - $totalPag, 2),
+                    'diferencia' => round($totalLi + $serviciosExtraFinal + $recargosDescuentosFinal - $totalPag, 2),
                 ];
 
                 $transformedData[] = $subdata;
@@ -1184,87 +1186,20 @@ class CotizacionFinalController extends Controller
     public function sendReminderPago(Request $request, $idCotizacion)
     {
         try {
-            // Recuperar datos principales de la cotización (incluye subconsulta para totales pagados)
-            $cotizacion = DB::table($this->table_contenedor_cotizacion . ' as CC')
-                ->select([
-                    'CC.telefono',
-                    'CC.id_contenedor',
-                    'CC.impuestos_final',
-                    'CC.volumen_final',
-                    'CC.monto_final',
-                    'CC.tarifa_final',
-                    'CC.nombre',
-                    'CC.logistica_final',
-                    DB::raw('(
-                        SELECT IFNULL(SUM(cccp.monto), 0)
-                        FROM contenedor_consolidado_cotizacion_coordinacion_pagos cccp
-                        JOIN cotizacion_coordinacion_pagos_concept ccp ON cccp.id_concept = ccp.id
-                        WHERE cccp.id_cotizacion = CC.id
-                        AND (ccp.name = "LOGISTICA" OR ccp.name = "IMPUESTOS")
-                    ) as total_pagos')
-                ])
-                ->where('CC.id', $idCotizacion)
-                ->first();
-
-            if (! $cotizacion) {
+            $exists = DB::table($this->table_contenedor_cotizacion)
+                ->where('id', (int) $idCotizacion)
+                ->exists();
+            if (!$exists) {
                 return response()->json(['message' => 'Cotización no encontrada', 'success' => false], 404);
             }
 
-            // Obtener contenedor para número de consolidado y fecha de arribo
-            $contenedor = Contenedor::select('carga', 'fecha_arribo')->where('id', $cotizacion->id_contenedor)->first();
-            $carga = $contenedor ? $contenedor->carga : 'N/A';
-            $fechaArribo = $contenedor ? $contenedor->fecha_arribo : null;
-
-            // Calculos de montos
-            $logisticaFinal = $cotizacion->logistica_final ?? 0;
-            $impuestosFinal = $cotizacion->impuestos_final ?? 0;
-            $totalCotizacion = $logisticaFinal + $impuestosFinal;
-            $totalPagos = $cotizacion->total_pagos ?? 0;
-            $pendiente = $totalCotizacion - $totalPagos;
-
-            // Preparar mensaje según plantilla solicitada
-            $message = "🙋🏽‍♀ RECORDATORÍO DE PAGO\n\n" .
-                "📦 Consolidado #" . $carga . "\n" .
-                "Usted cuenta con un pago pendiente, es necesario realizar el pago para continuar con el proceso de nacionalización.\n\n" .
-                "Resumen de Pago\n" .
-                "✅ Cotización final: $" . number_format($totalCotizacion, 2, '.', '') . "\n" .
-                "✅ Adelanto: $" . number_format($totalPagos, 2, '.', '') . "\n" .
-                "✅ *Pendiente de pago: $" . number_format($pendiente, 2, '.', '') . "*\n" .
-                ($fechaArribo ? "Último día de pago: " . date('d/m/Y', strtotime($fechaArribo)) . "\n" : "") .
-                "\nPor favor debe enviar el comprobante de pago a la brevedad.";
-            // Preparar número y enviar (normalizar como en otros lugares del proyecto)
-            $rawTelefono = $cotizacion->telefono ?? '';
-            // Remover todo lo que no sea dígito
-            $telefonoDigits = preg_replace('/\D/', '', $rawTelefono);
-
-            // Si no tiene código de país, asumir Perú (+51) para números locales de 9 dígitos
-            if (strlen($telefonoDigits) === 9) {
-                $telefonoDigits = '51' . $telefonoDigits;
-            } elseif (strlen($telefonoDigits) === 10 && substr($telefonoDigits, 0, 1) === '0') {
-                $telefonoDigits = '51' . substr($telefonoDigits, 1);
-            }
-
-            if (empty($telefonoDigits)) {
-                Log::warning('sendReminderPago: teléfono inválido o vacío', ['cotizacion_id' => $idCotizacion, 'telefono_raw' => $rawTelefono]);
-                return response()->json(['message' => 'Teléfono del cliente inválido o vacío', 'success' => false], 400);
-            }
-
-            $this->phoneNumberId = $telefonoDigits . '@c.us';
-
-            // Log previo al envío para diagnóstico
-            Log::info('sendReminderPago enviando', [
-                'cotizacion_id' => $idCotizacion,
-                'telefono_raw' => $rawTelefono,
-                'telefono_normalized' => $telefonoDigits,
-                'phoneNumberId' => $this->phoneNumberId
-            ]);
-
             $sleep = $request->input('sleep', 0);
-            $result = $this->sendMessage($message, $this->phoneNumberId, $sleep);
+            SendReminderPagoWhatsAppJob::dispatch((int) $idCotizacion, (int) $sleep);
 
-            Log::info('sendReminderPago resultado', ['cotizacion_id' => $idCotizacion, 'result' => $result]);
-
-            return response()->json(['message' => 'Recordatorio enviado', 'success' => true, 'result' => $result]);
+            return response()->json([
+                'message' => 'Recordatorio encolado correctamente',
+                'success' => true,
+            ]);
         } catch (\Exception $e) {
             Log::error('Error en sendReminderPago: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
             return response()->json(['message' => 'Error al enviar recordatorio: ' . $e->getMessage(), 'success' => false], 500);
@@ -2189,6 +2124,7 @@ class CotizacionFinalController extends Controller
                         'servicios_extra_final' => $result['servicios_extra_final'] ?? 0,
                         'fob_final' => $result['fob_final'],
                         'peso_final' => $result['peso_final'],
+                        'recargos_descuentos_final' => $result['recargos_descuentos_final'],
                     ];
                     if (!$estadoCotizacionFinal) {
                         $updateData['estado_cotizacion_final'] = 'COTIZADO';
@@ -2836,6 +2772,7 @@ class CotizacionFinalController extends Controller
                     'servicios_extra_final' => $result['servicios_extra_final'] ?? 0,
                     'fob_final' => $result['fob_final'],
                     'peso_final' => $result['peso_final'],
+                    'recargos_descuentos_final' => $result['recargos_descuentos_final'],
                     'estado_cotizacion_final' => 'COTIZADO'
                 ]);
 
@@ -5597,8 +5534,8 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
             $logistica = is_numeric($logisticaCalculada) ? $logisticaCalculada : $logistica;
 
             $objWriter->save($fullPath);
-
-            return [
+            $recargosDescuentosFinal = ($extrasCalc['recargos'] ?? 0)-($extrasCalc['descuento'] ?? 0);
+            return [    
                 'id' => $data['id'] ?? null,
                 'id_contenedor' => $idContenedor,
                 'id_tipo_cliente' => $data['cliente']['id_tipo_cliente'] ?? null,
@@ -5612,6 +5549,7 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
                 'impuestos_final' => is_numeric($impuestos) ? $impuestos : 0,
                 'logistica_final' => is_numeric($logistica) ? $logistica : 0,
                 'servicios_extra_final' => $deliveryServiciosExtras,
+                'recargos_descuentos_final' => $recargosDescuentosFinal,
                 'fob_final' => is_numeric($fob) ? $fob : 0,
                 'peso_final' => is_numeric($pesoTotal) ? $pesoTotal : 0,
                 'estado' => 'PENDIENTE',
