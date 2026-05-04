@@ -32,6 +32,7 @@ class CotizacionProveedor extends Model
         'peso_china',
         'qty_box',
         'cbm_total',
+        'maxcbm',
         'supplier',
         'supplier_phone',
         'id_proveedor',
@@ -48,6 +49,7 @@ class CotizacionProveedor extends Model
 
     // Agregar nuevos campos de estado de documentos
     protected $casts = [
+        'maxcbm' => 'decimal:10',
         'invoice_status' => 'string',
         'packing_status' => 'string',
         'excel_conf_status' => 'string'

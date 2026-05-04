@@ -31,18 +31,65 @@ class CalculadoraImportacionService
 
     /** Tarifas extra por ítem según rango de CBM (reglas de negocio calculadora) */
     const TARIFAS_EXTRA_ITEM_PER_CBM = [
-        ['limit_inf' => 0.1,   'limit_sup' => 1.0,   'item_base' => 6,  'item_extra' => 4,  'tarifa' => 20],
+        ['limit_inf' => 0.01,   'limit_sup' => 1.0,   'item_base' => 6,  'item_extra' => 4,  'tarifa' => 20],
         ['limit_inf' => 1.01,  'limit_sup' => 2.0,   'item_base' => 8,  'item_extra' => 7,  'tarifa' => 10],
         ['limit_inf' => 2.1,   'limit_sup' => 3.0,   'item_base' => 10, 'item_extra' => 5,  'tarifa' => 10],
         ['limit_inf' => 3.1,   'limit_sup' => 6.0,   'item_base' => 13, 'item_extra' => 7,  'tarifa' => 10],
         ['limit_inf' => 6.1,   'limit_sup' => 9.0,   'item_base' => 15, 'item_extra' => 5,  'tarifa' => 10],
         ['limit_inf' => 9.1,   'limit_sup' => 12.0,  'item_base' => 17, 'item_extra' => 8,  'tarifa' => 10],
         ['limit_inf' => 12.1,  'limit_sup' => 15.0,  'item_base' => 19, 'item_extra' => 6,  'tarifa' => 10],
-        ['limit_inf' => 15.1,  'limit_sup' => 9999,  'item_base' => 20, 'item_extra' => 10, 'tarifa' => 10],
+        ['limit_inf' => 15.1,  'limit_sup' => 9999,  'item_base' => 20, 'item_extra' => 20, 'tarifa' => 10],
     ];
     public $formatoDollar = '"$"#,##0.00_-';
     public $formatoSoles = '"S/." #,##0.00_-';
     public $formatoTexto = 'General';
+
+    private function calcularMaxCbmPorProveedor(float $cbm, float $peso): float
+    {
+        return max($cbm, $peso / 1000);
+    }
+
+    private function resolverTipoCotizacionProveedor(float $cbm, float $peso): string
+    {
+        return ($peso / 1000) > $cbm
+            ? CalculadoraImportacion::TIPO_COTIZACION_PESO
+            : CalculadoraImportacion::TIPO_COTIZACION_VOLUMEN;
+    }
+
+    private function resolveTipoCotizacionDesdePayloadProveedores(array $proveedores): string
+    {
+        foreach ($proveedores as $proveedor) {
+            $cbm = (float) ($proveedor['cbm'] ?? 0);
+            $peso = (float) ($proveedor['peso'] ?? 0);
+            if ($this->resolverTipoCotizacionProveedor($cbm, $peso) === CalculadoraImportacion::TIPO_COTIZACION_PESO) {
+                return CalculadoraImportacion::TIPO_COTIZACION_PESO;
+            }
+        }
+
+        return CalculadoraImportacion::TIPO_COTIZACION_VOLUMEN;
+    }
+
+    private function resolveTipoCotizacionDesdeProveedoresCalculadora(Collection $proveedores): string
+    {
+        foreach ($proveedores as $proveedor) {
+            $cbm = (float) ($proveedor->cbm ?? 0);
+            $peso = (float) ($proveedor->peso ?? 0);
+            if ($this->resolverTipoCotizacionProveedor($cbm, $peso) === CalculadoraImportacion::TIPO_COTIZACION_PESO) {
+                return CalculadoraImportacion::TIPO_COTIZACION_PESO;
+            }
+        }
+
+        return CalculadoraImportacion::TIPO_COTIZACION_VOLUMEN;
+    }
+
+    private function volumenNetoDesdeCalculadora(CalculadoraImportacion $calculadora): float
+    {
+        $calculadora->loadMissing('proveedores');
+
+        return (float) $calculadora->proveedores->sum(function ($proveedor) {
+            return (float) ($proveedor->maxcbm ?? $this->calcularMaxCbmPorProveedor((float) ($proveedor->cbm ?? 0), (float) ($proveedor->peso ?? 0)));
+        });
+    }
     /**
      * Guardar cálculo de importación completo
      */
@@ -63,6 +110,8 @@ class CalculadoraImportacionService
             // Obtener tipo_cambio del request, si es null o 0 usar 3.75 por defecto
             $tipoCambio = (!empty($data['tipo_cambio']) && $data['tipo_cambio'] > 0) ? $data['tipo_cambio'] : 3.75;
 
+            $tipoCotizacion = $this->resolveTipoCotizacionDesdePayloadProveedores($data['proveedores'] ?? []);
+
             // Crear registro principal
             $calculadora = CalculadoraImportacion::create([
                 'id_cliente' => $cliente ? $cliente->id : null,
@@ -77,6 +126,7 @@ class CalculadoraImportacionService
                 'correo_cliente' => $data['clienteInfo']['correo'] ?: null,
                 'whatsapp_cliente' => is_array($data['clienteInfo']['whatsapp']) ? ($data['clienteInfo']['whatsapp']['value'] ?? null) : ($data['clienteInfo']['whatsapp'] ?? null),
                 'tipo_cliente' => $data['clienteInfo']['tipoCliente'],
+                'tipo_cotizacion' => $tipoCotizacion,
                 'qty_proveedores' => $data['clienteInfo']['qtyProveedores'],
                 'tarifa_total_extra_proveedor' => $data['tarifaTotalExtraProveedor'] ?? 0,
                 'tarifa_total_extra_item' => $data['tarifaTotalExtraItem'] ?? 0,
@@ -94,6 +144,7 @@ class CalculadoraImportacionService
             foreach ($data['proveedores'] as $index => $proveedorData) {
                 $proveedor = $calculadora->proveedores()->create([
                     'cbm' => $proveedorData['cbm'],
+                    'maxcbm' => $this->calcularMaxCbmPorProveedor((float) ($proveedorData['cbm'] ?? 0), (float) ($proveedorData['peso'] ?? 0)),
                     'peso' => $proveedorData['peso'],
                     'qty_caja' => $proveedorData['qtyCaja'],
                     'code_supplier' => null // Los códigos se generan solo al pasar a COTIZADO
@@ -117,6 +168,7 @@ class CalculadoraImportacionService
             $data['totalExtraProveedor'] = $data['tarifaTotalExtraProveedor'];
             $data['totalExtraItem'] = $data['tarifaTotalExtraItem'];
             $data['totalDescuento'] = $data['tarifaDescuento'];
+            $data['tipo_cotizacion'] = $tipoCotizacion;
 
             Log::info('[CREAR COTIZACIÓN] Iniciando creación de Excel para calculadora ID: ' . $calculadora->id);
             Log::info('[CREAR COTIZACIÓN] Total productos: ' . $totalProductos);
@@ -220,6 +272,8 @@ class CalculadoraImportacionService
             // Obtener tipo_cambio del request, si es null o 0 usar el valor existente o 3.75 por defecto
             $tipoCambio = (!empty($data['tipo_cambio']) && $data['tipo_cambio'] > 0) ? $data['tipo_cambio'] : ($calculadora->tc ?? 3.75);
 
+            $tipoCotizacion = $this->resolveTipoCotizacionDesdePayloadProveedores($data['proveedores'] ?? []);
+
             // Actualizar registro principal (id_usuario aquí para que persista aunque falle la regeneración del Excel)
             $calculadora->update([
                 'id_cliente' => $cliente ? $cliente->id : $calculadora->id_cliente,
@@ -233,6 +287,7 @@ class CalculadoraImportacionService
                 'correo_cliente' => $data['clienteInfo']['correo'] ?: null,
                 'whatsapp_cliente' => is_array($data['clienteInfo']['whatsapp']) ? ($data['clienteInfo']['whatsapp']['value'] ?? null) : ($data['clienteInfo']['whatsapp'] ?? null),
                 'tipo_cliente' => $data['clienteInfo']['tipoCliente'],
+                'tipo_cotizacion' => $tipoCotizacion,
                 'qty_proveedores' => $data['clienteInfo']['qtyProveedores'],
                 'tarifa_total_extra_proveedor' => $data['tarifaTotalExtraProveedor'] ?? 0,
                 'tarifa_total_extra_item' => $data['tarifaTotalExtraItem'] ?? 0,
@@ -354,6 +409,7 @@ class CalculadoraImportacionService
                 if ($existingProvider) {
                     $existingProvider->update([
                         'cbm' => $proveedorData['cbm'] ?? 0,
+                        'maxcbm' => $this->calcularMaxCbmPorProveedor((float) ($proveedorData['cbm'] ?? 0), (float) ($proveedorData['peso'] ?? 0)),
                         'peso' => $proveedorData['peso'] ?? 0,
                         'qty_caja' => $proveedorData['qtyCaja'] ?? 0,
                         'code_supplier' => $codeSupplier,
@@ -364,6 +420,7 @@ class CalculadoraImportacionService
                     // Permitir alta de nuevos proveedores en update
                     $proveedor = $calculadora->proveedores()->create([
                         'cbm' => $proveedorData['cbm'] ?? 0,
+                        'maxcbm' => $this->calcularMaxCbmPorProveedor((float) ($proveedorData['cbm'] ?? 0), (float) ($proveedorData['peso'] ?? 0)),
                         'peso' => $proveedorData['peso'] ?? 0,
                         'qty_caja' => $proveedorData['qtyCaja'] ?? 0,
                         'code_supplier' => $codeSupplier,
@@ -450,6 +507,7 @@ class CalculadoraImportacionService
             $data['totalDescuento'] = $data['tarifaDescuento'];
             $data['id_usuario'] = $data['id_usuario'];
             $data['id_carga_consolidada_contenedor'] = $calculadora->id_carga_consolidada_contenedor;
+            $data['tipo_cotizacion'] = $tipoCotizacion;
 
             Log::info('[EDITAR COTIZACIÓN] Iniciando edición de Excel para calculadora ID: ' . $calculadora->id);
             Log::info('[EDITAR COTIZACIÓN] URL Excel anterior: ' . $calculadora->url_cotizacion);
@@ -504,6 +562,8 @@ class CalculadoraImportacionService
                 $cotHeader = [
                     'id_usuario' => $calculadora->id_usuario,
                     'from_calculator' => true,
+                    'tipo_cotizacion' => $calculadora->tipo_cotizacion ?? CalculadoraImportacion::TIPO_COTIZACION_VOLUMEN,
+                    'volumen_neto' => $this->volumenNetoDesdeCalculadora($calculadora),
                 ];
                 if ($calculadora->url_cotizacion) {
                     $cotHeader['cotizacion_file_url'] = $calculadora->url_cotizacion;
@@ -576,7 +636,7 @@ class CalculadoraImportacionService
 
         $calcProveedores = CalculadoraImportacionProveedor::where('id_calculadora_importacion', $calculadora->id)
             ->orderBy('id')
-            ->get(['id', 'id_calculadora_importacion', 'id_proveedor', 'cbm', 'peso', 'qty_caja', 'code_supplier']);
+            ->get(['id', 'id_calculadora_importacion', 'id_proveedor', 'cbm', 'maxcbm', 'peso', 'qty_caja', 'code_supplier']);
 
         $calcProveedoresIds = $calcProveedores->pluck('id')->all();
         $calcItems = CalculadoraImportacionProducto::whereIn('id_proveedor', $calcProveedoresIds)
@@ -589,7 +649,7 @@ class CalculadoraImportacionService
             if ($cotizacion) {
                 $cotProv = CotizacionProveedor::where('id_cotizacion', $cotizacion->id)
                     ->orderBy('id')
-                    ->get(['id', 'id_cotizacion', 'id_contenedor', 'code_supplier', 'qty_box', 'cbm_total', 'peso']);
+                    ->get(['id', 'id_cotizacion', 'id_contenedor', 'code_supplier', 'qty_box', 'cbm_total', 'maxcbm', 'peso']);
                 $cotProvIds = $cotProv->pluck('id')->all();
                 $cotItems = CotizacionProveedorItem::whereIn('id_proveedor', $cotProvIds)
                     ->orderBy('id')
@@ -715,7 +775,10 @@ class CalculadoraImportacionService
         ];
 
         foreach ($calculadora->proveedores as $proveedor) {
-            $totales['total_cbm'] += round($proveedor->cbm, 2);
+            $totales['total_cbm'] += round(
+                $this->calcularMaxCbmPorProveedor((float) $proveedor->cbm, (float) $proveedor->peso),
+                2
+            );
             $totales['total_peso'] += $proveedor->peso;
 
             foreach ($proveedor->productos as $producto) {
@@ -990,9 +1053,13 @@ class CalculadoraImportacionService
         $totalCbm = 0;
         foreach ($data['proveedores'] as $proveedor) {
             $totalProductos += isset($proveedor['productos']) ? count($proveedor['productos']) : 0;
-            $totalCbm += (float) ($proveedor['cbm'] ?? 0);
+            $totalCbm += $this->calcularMaxCbmPorProveedor(
+                (float) ($proveedor['cbm'] ?? 0),
+                (float) ($proveedor['peso'] ?? 0)
+            );
         }
         $data['totalProductos'] = $totalProductos;
+        $data['tipo_cotizacion'] = $this->resolveTipoCotizacionDesdePayloadProveedores($data['proveedores'] ?? []);
 
         $calcularEnBackend = !isset($data['tarifa']) || empty($data['tarifa']) || !isset($data['tarifaTotalExtraProveedor']) || !isset($data['tarifaTotalExtraItem']);
         if ($calcularEnBackend) {
@@ -1114,6 +1181,7 @@ class CalculadoraImportacionService
             $rowPeso = 6;
             $rowMedida = 7;
             $rowVolProveedor = 8;
+            $rowMaxCbm = 9;
             $rowHeaderNProveedor = 10;
             $rowProducto = 11;
             $rowValorUnitario = 15;
@@ -1223,6 +1291,7 @@ class CalculadoraImportacionService
                     $safeMergeCells($sheetCalculos, $startColumn . $rowNCaja . ':' . $endColumn . $rowNCaja);
                     $safeMergeCells($sheetCalculos, $startColumn . $rowPeso . ':' . $endColumn . $rowPeso);
                     $safeMergeCells($sheetCalculos, $startColumn . $rowVolProveedor . ':' . $endColumn . $rowVolProveedor);
+                    $safeMergeCells($sheetCalculos, $startColumn . $rowMaxCbm . ':' . $endColumn . $rowMaxCbm);
                     $safeMergeCells($sheetCalculos, $startColumn . $rowHeaderNProveedor . ':' . $endColumn . $rowHeaderNProveedor);
 
                     if (isset($proveedor['medidas'])) {
@@ -1238,7 +1307,44 @@ class CalculadoraImportacionService
                 $sheetCalculos->setCellValue($startColumn . $rowNProveedor, $indexProveedor);
                 $sheetCalculos->setCellValue($startColumn . $rowNCaja, $proveedor['qtyCaja']);
                 $sheetCalculos->setCellValue($startColumn . $rowPeso, $proveedor['peso']);
-                $sheetCalculos->setCellValue($startColumn . $rowVolProveedor, $proveedor['cbm']);
+                $cbmProveedor = (float) ($proveedor['cbm'] ?? 0);
+                $pesoM3 = ((float) ($proveedor['peso'] ?? 0)) / 1000;
+                $maxCbmProveedor = isset($proveedor['maxcbm'])
+                    ? (float) $proveedor['maxcbm']
+                    : $this->calcularMaxCbmPorProveedor($cbmProveedor, (float) ($proveedor['peso'] ?? 0));
+                $sheetCalculos->setCellValue($startColumn . $rowVolProveedor, $cbmProveedor);
+                // Limpiar resaltado previo en ambas celdas (PESO y VOL) y luego pintar la ganadora.
+                $neutralFill = [
+                    'fill' => [
+                        'fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
+                        'startColor' => ['argb' => 'FFFFFFFF'],
+                    ],
+                ];
+                $highlightFill = [
+                    'fill' => [
+                        'fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
+                        'startColor' => ['argb' => 'FFBBF7D0'],
+                    ],
+                ];
+                $sheetCalculos->getStyle($startColumn . $rowPeso)->applyFromArray($neutralFill);
+                $sheetCalculos->getStyle($startColumn . $rowVolProveedor)->applyFromArray($neutralFill);
+                if ($pesoM3 > $cbmProveedor) {
+                    $sheetCalculos->getStyle($startColumn . $rowPeso)->applyFromArray($highlightFill);
+                } else {
+                    $sheetCalculos->getStyle($startColumn . $rowVolProveedor)->applyFromArray($highlightFill);
+                }
+                // Fila explícita para visualizar el MAX(CBM, PESO/1000) por proveedor
+                $sheetCalculos->setCellValue(
+                    $startColumn . $rowMaxCbm,
+                    '=MAX(' . $startColumn . $rowVolProveedor . ',' . $startColumn . $rowPeso . '/1000)'
+                );
+                // Fila 9 (debajo): mantener fórmula explícita de máximo por proveedor
+                $sheetCalculos->getStyle($startColumn . $rowMaxCbm)->applyFromArray([
+                    'fill' => [
+                        'fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
+                        'startColor' => ['argb' => 'FFFDE68A'],
+                    ],
+                ]);
                 $sheetCalculos->setCellValue($startColumn . $rowHeaderNProveedor, $indexProveedor);
 
                 if (isset($proveedor['medidas'])) {
@@ -1385,6 +1491,14 @@ class CalculadoraImportacionService
             $sheetCalculos->setCellValue($totalColumn . $rowNCaja, '=SUM(' . ($initialColumn . $rowNCaja) . ':' . ($sumColumn . $rowNCaja) . ')');
             $sheetCalculos->setCellValue($totalColumn . $rowPeso, '=SUM(' . ($initialColumn . $rowPeso) . ':' . ($sumColumn . $rowPeso) . ')');
             $sheetCalculos->setCellValue($totalColumn . $rowVolProveedor, '=SUM(' . ($initialColumn . $rowVolProveedor) . ':' . ($sumColumn . $rowVolProveedor) . ')');
+            $sheetCalculos->setCellValue($totalColumn . $rowMaxCbm, '=SUM(' . ($initialColumn . $rowMaxCbm) . ':' . ($sumColumn . $rowMaxCbm) . ')');
+            // Resaltar el total de máximos por proveedor en fila 9
+            $sheetCalculos->getStyle($totalColumn . $rowMaxCbm)->applyFromArray([
+                'fill' => [
+                    'fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
+                    'startColor' => ['argb' => 'FFFDE68A'],
+                ],
+            ]);
             $sheetCalculos->setCellValue($totalColumn . $rowCantidad, '=SUM(' . ($initialColumn . $rowCantidad) . ':' . ($sumColumn . $rowCantidad) . ')');
             $sheetCalculos->setCellValue($totalColumn . $rowValorFob, '=SUM(' . ($initialColumn . $rowValorFob) . ':' . ($sumColumn . $rowValorFob) . ')');
             $sheetCalculos->setCellValue($totalColumn . $rowValorAjustado, '=SUM(' . ($initialColumn . $rowValorAjustado) . ':' . ($sumColumn . $rowValorAjustado) . ')');
@@ -1399,9 +1513,9 @@ class CalculadoraImportacionService
                 $sheetCalculos->setCellValue($totalColumn . $rowFlete, '=' . ($data['tarifa']['tarifa']) . '*' . $FLETE_PERCENTAGE);
                 $sheetCalculos->setCellValue($totalColumn . $rowItemDestino, '=(' . ($data['tarifa']['tarifa']) . '*' . $ITEM_DESTINO_PERCENTAGE . ')-(' . ($data['totalDescuento'] ?? 00) . ')+(' . ($totalExtras ?? 00) . ')');
             } else {
-                $sheetCalculos->setCellValue($totalColumn . $rowCostosFob, '=' . ($data['tarifa']['tarifa']) . '*' . $COSTOSFOB_PERCENTAGE .'*('. ($totalColumn. $rowVolProveedor).')');
-                $sheetCalculos->setCellValue($totalColumn . $rowFlete, '=' . ($data['tarifa']['tarifa']) . '*' . $FLETE_PERCENTAGE . '*(' . ($totalColumn . $rowVolProveedor) . ')');
-                $sheetCalculos->setCellValue($totalColumn . $rowItemDestino, '=' . ($tarifaConExtras) . '*' . $ITEM_DESTINO_PERCENTAGE . '*(' . ($totalColumn . $rowVolProveedor) . ')-(' . ($data['totalDescuento'] ?? 00) . ')+(' . ($totalExtras ?? 00) . ')');
+                $sheetCalculos->setCellValue($totalColumn . $rowCostosFob, '=' . ($data['tarifa']['tarifa']) . '*' . $COSTOSFOB_PERCENTAGE .'*('. ($totalColumn. $rowMaxCbm).')');
+                $sheetCalculos->setCellValue($totalColumn . $rowFlete, '=' . ($data['tarifa']['tarifa']) . '*' . $FLETE_PERCENTAGE . '*(' . ($totalColumn . $rowMaxCbm) . ')');
+                $sheetCalculos->setCellValue($totalColumn . $rowItemDestino, '=' . ($tarifaConExtras) . '*' . $ITEM_DESTINO_PERCENTAGE . '*(' . ($totalColumn . $rowMaxCbm) . ')-(' . ($data['totalDescuento'] ?? 00) . ')+(' . ($totalExtras ?? 00) . ')');
             }
 
             $sheetCalculos->setCellValue($totalColumn . $rowValorCFR, '=ROUND(SUM(' . $initialColumn . $rowValorCFR . ':' . $sumColumn . $rowValorCFR . '),10)');
@@ -1459,8 +1573,8 @@ class CalculadoraImportacionService
             $sheetResumen->setCellValue('B11', $whatsappValue);
             $sheetResumen->setCellValue('I9', "='2'!" . ($totalColumn . $rowPeso));
             $sheetResumen->setCellValue('I10', "='2'!" . ($totalColumn . $rowNCaja));
-            $sheetResumen->setCellValue('I11', "='2'!" . ($totalColumn . $rowVolProveedor));
-            $sheetResumen->setCellValue('J11', "='2'!" . ($totalColumn . $rowVolProveedor));
+            $sheetResumen->setCellValue('I11', "='2'!" . ($totalColumn . $rowMaxCbm));
+            $sheetResumen->setCellValue('J11', "='2'!" . ($totalColumn . $rowMaxCbm));
             $sheetResumen->setCellValue('J14', "='2'!" . ($totalColumn . $rowValorFob));
             $sheetResumen->setCellValue('J15', "='2'!" . ($totalColumn . $rowCostosFob));
             $sheetResumen->setCellValue('J16', "='2'!" . ($totalColumn . $rowFlete . "+('2'!" . $totalColumn . $rowSeguro . ")"));
@@ -1527,6 +1641,7 @@ class CalculadoraImportacionService
 
                 $boletaInfo = null;
                 try {
+                    $data['clienteInfo']['tipoCotizacion'] = $data['tipo_cotizacion'] ?? ($data['clienteInfo']['tipoCotizacion'] ?? CalculadoraImportacion::TIPO_COTIZACION_VOLUMEN);
                     $boletaInfo = $this->generateBoleta($objPHPExcel, $data['clienteInfo']);
                 } catch (\Exception $e) {
                     // Continuar sin la boleta
@@ -1644,6 +1759,8 @@ class CalculadoraImportacionService
                 'cotizacion_file_url' => $calc->url_cotizacion,
                 'id_usuario' => $calc->id_usuario,
                 'from_calculator' => true,
+                'tipo_cotizacion' => $calc->tipo_cotizacion ?? CalculadoraImportacion::TIPO_COTIZACION_VOLUMEN,
+                'volumen_neto' => $this->volumenNetoDesdeCalculadora($calc),
             ]);
         }
     }
@@ -1762,6 +1879,7 @@ class CalculadoraImportacionService
 
         $proveedoresOrdenados = $this->ordenarProveedoresParaRegenerarExcel($calculadora);
         $totalProv = $proveedoresOrdenados->count();
+        $tipoCotizacion = $this->resolveTipoCotizacionDesdeProveedoresCalculadora($proveedoresOrdenados);
 
         $cargaSegmento = null;
         if ($calculadora->id_carga_consolidada_contenedor && $calculadora->contenedor) {
@@ -1820,6 +1938,7 @@ class CalculadoraImportacionService
             $proveedores[] = [
                 'cbm' => (float) $prov->cbm,
                 'peso' => (float) $prov->peso,
+                'maxcbm' => (float) ($prov->maxcbm ?? $this->calcularMaxCbmPorProveedor((float) $prov->cbm, (float) $prov->peso)),
                 'qtyCaja' => (int) $prov->qty_caja,
                 'code_supplier' => $code,
                 'productos' => $productos,
@@ -1833,7 +1952,7 @@ class CalculadoraImportacionService
         $totalExtraItem = (float) ($calculadora->tarifa_total_extra_item ?? 0);
         $totalDescuento = (float) ($calculadora->tarifa_descuento ?? 0);
         Log::info('tarifaInput: ' . json_encode($tarifaInput));
-        $cbmTotal = (float) collect($proveedores)->sum(fn($p) => (float) ($p['cbm'] ?? 0));
+        $cbmTotal = (float) collect($proveedores)->sum(fn($p) => (float) ($p['maxcbm'] ?? 0));
         $tipoClienteNombre = trim((string) ($calculadora->tipo_cliente ?? 'NUEVO'));
         $tarifaType = $this->resolveTarifaTypeByClienteYCbm($tipoClienteNombre, $cbmTotal, $tarifaInput);
         Log::info('tarifaType: ' . $tarifaType);
@@ -1868,6 +1987,7 @@ class CalculadoraImportacionService
             ],
             'tipo_cambio' => (float) ($calculadora->tc ?? 3.75),
             'id_carga_consolidada_contenedor' => $calculadora->id_carga_consolidada_contenedor,
+            'tipo_cotizacion' => $tipoCotizacion,
         ];
 
         $result = $this->crearCotizacionInicial($data);
@@ -1883,6 +2003,7 @@ class CalculadoraImportacionService
             'total_impuestos' => $result['totalimpuestos'] ?? $calculadora->total_impuestos,
             'logistica' => $result['logistica'] ?? $calculadora->logistica,
             'cargos_extra' => $this->valorCargosExtraDesdeCotizacionInicial($result) ?? $calculadora->cargos_extra,
+            'tipo_cotizacion' => $tipoCotizacion,
         ];
         if (!empty($result['boleta']['url'])) {
             $payload['url_cotizacion_pdf'] = $result['boleta']['url'];
@@ -1933,6 +2054,7 @@ class CalculadoraImportacionService
                 ? $calculadora->whatsapp_cliente
                 : ['value' => $calculadora->whatsapp_cliente ?? ''],
             'tipoCliente' => $calculadora->tipo_cliente ?? 'NUEVO',
+            'tipoCotizacion' => $calculadora->tipo_cotizacion ?? CalculadoraImportacion::TIPO_COTIZACION_VOLUMEN,
             'qtyProveedores' => $calculadora->qty_proveedores ?? 1,
         ];
 
@@ -2017,6 +2139,7 @@ class CalculadoraImportacionService
                 "phone" => $clienteInfo['whatsapp']['value'] ?? $sheet->getCell('B11')->getValue(), // C11 -> B11
                 "date" => date('d/m/Y'),
                 "tipocliente" => $clienteInfo['tipoCliente'] ?? $sheet->getCell('E11')->getValue(), // F11 -> E11
+                "tipocotizacion" => (string) ($clienteInfo['tipoCotizacion'] ?? ''),
                 "peso" => number_format($this->getCellValueAsFloat($sheet, 'I9'), 2, '.', ','), // Peso formateado (kg)
                 "qtysuppliers" => $clienteInfo['qtyProveedores'] ?? $sheet->getCell('E11')->getValue(), //
                 "qtycajas" => intval($this->getCellValueAsFloat($sheet, 'I10')), // Número de cajas total

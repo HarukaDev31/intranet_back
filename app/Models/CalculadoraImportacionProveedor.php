@@ -18,6 +18,7 @@ class CalculadoraImportacionProveedor extends Model
         // Referencia al proveedor real creado en `contenedor_consolidado_cotizacion_proveedores`
         'id_proveedor',
         'cbm',
+        'maxcbm',
         'peso',
         'qty_caja',
         'code_supplier'
@@ -25,6 +26,7 @@ class CalculadoraImportacionProveedor extends Model
 
     protected $casts = [
         'cbm' => 'decimal:10',
+        'maxcbm' => 'decimal:10',
         'peso' => 'decimal:10',
         'qty_caja' => 'integer'
     ];
