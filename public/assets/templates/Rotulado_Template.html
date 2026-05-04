@@ -5,7 +5,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <meta http-equiv="Content-Type" content="charset=utf-8" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; font-src 'self' https://fonts.gstatic.com; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline';">
+    <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; font-src 'self' https://fonts.gstatic.com; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline';">
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC&display=swap" rel="stylesheet">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
@@ -120,13 +121,18 @@
     <div class="container">
         <div class="section">
             <img src="{{base_url}}/assets/templates/ROTULADO_HEADER.png" alt="Rotulado Header" style="width: 100%;">
-            <span
-                style="text-align: center;display: flex;align-items: center;justify-content: center;font-size:18px;">CONSOLIDADO
-                #{{carga}}</span>
-            </span>
+            <div style="width:100%; text-align:center; white-space:nowrap; line-height:0; margin:8px 0;">
+                <span style="display:inline-block; vertical-align:middle; font-size:18px; line-height:1.2; margin-right:12px;">CONSOLIDADO #{{carga}}</span>
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 3 2" width="48" height="32" style="display:inline-block; vertical-align:middle;" aria-hidden="true">
+                    <rect width="1" height="2" x="0" y="0" fill="#D91023" />
+                    <rect width="1" height="2" x="1" y="0" fill="#FFFFFF" />
+                    <rect width="1" height="2" x="2" y="0" fill="#D91023" />
+                </svg>
+            </div>
             <ul style="list-style: none;padding: 0;font-size: 14px;gap:1em;">
                 <li>COMPANY: PRO MUNDO COMEX S.A.C</li>
                 <li>CONTACT: {{cliente}}</li>
+                <li>TO: PERU</li>
                 <li>ITEM NRO:这里写产品货号
                     （ 如果很多款式在箱子里要写每一款的货号和数量。如果你们货没有货号随便给一个 ）
                 </li>
@@ -136,10 +142,9 @@
                 <li>MEASURE： 箱子规格 CM</li>
                 <li>SUPPLIER CODE: {{supplier_code}}</li>
             </ul>
-            <span style="text-align: center;display: flex;align-items: center;justify-content: center;font-size:18px;">
+            <div style="text-align:center; font-size:18px; margin-top:8px;">
                 <strong>HECHO EN CHINA</strong>
-
-            </span>
+            </div>
         </div>
     </div>
 </body>
