@@ -1506,6 +1506,7 @@ class CalculadoraImportacionService
 
             $totalExtras = ($data['totalExtraProveedor'] ?? 0) + ($data['totalExtraItem'] ?? 0);
             $tarifaConExtras = $data['tarifa']['tarifa'];
+            $totalDescuento = $data['totalDescuento'] ?? 00;
             //log tipo tarifa
             Log::info('tipo tarifa: ' . $data['tarifa']['type']);
             if ($data['tarifa']['type'] == 'PLAIN') {
@@ -1598,7 +1599,7 @@ class CalculadoraImportacionService
             $sheetResumen->setCellValue('J31', "='2'!" . ($totalColumn . $rowCostosFob));
             $sheetResumen->setCellValue('J32', "='2'!" . ($totalColumn . $rowFlete));
             //- $totalExtras    
-            $sheetResumen->setCellValue('J33', "='2'!" . ($totalColumn . $rowItemDestino . '-(' . ($totalExtras ?? 00) . ')'));
+            $sheetResumen->setCellValue('J33', "='2'!" . ($totalColumn . $rowItemDestino . '-(' . ($totalExtras ?? 00) . ')+(' . ($totalDescuento ?? 00) . ')'));
 
             $sheetResumen->setCellValue('J36', $data['totalExtraProveedor'] + $data['totalExtraItem']);
             $sheetResumen->setCellValue('J37', $data['totalDescuento']);
