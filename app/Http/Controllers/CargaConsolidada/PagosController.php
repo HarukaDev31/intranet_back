@@ -61,6 +61,12 @@ class PagosController extends Controller
             $filters = is_array($filters) ? $filters : [];
             $estadoPagoFiltro = $filters['estado_pago'] ?? $request->get('estado_pago');
             $estadoInspeccionFiltro = $filters['estado_inspeccion'] ?? null;
+            $extrasServiciosSubquery = '(
+                SELECT IFNULL(SUM(s.importe), 0)
+                FROM contenedor_consolidado_cotizacion_delivery_servicio s
+                WHERE s.id_cotizacion = contenedor_consolidado_cotizacion.id
+                AND UPPER(TRIM(s.tipo_servicio)) IN (\'MONTACARGA\', \'DELIVERY\', \'SANCIONES\', \'BQ\')
+            )';
 
             $query = Cotizacion::with(['contenedor', 'pagos.concepto'])
                 ->select([
@@ -98,7 +104,8 @@ class PagosController extends Controller
                         WHERE ccp2.id_cotizacion = contenedor_consolidado_cotizacion.id
                         AND (ccp2.id_concept = ' . PagoConcept::CONCEPT_PAGO_LOGISTICA . '
                         OR ccp2.id_concept = ' . PagoConcept::CONCEPT_PAGO_IMPUESTOS . ')
-                    ) as pagos_details')
+                    ) as pagos_details'),
+                    DB::raw($extrasServiciosSubquery . ' as servicios_extras_monto')
                 ])
                 ->join('carga_consolidada_contenedor', 'carga_consolidada_contenedor.id', '=', 'contenedor_consolidado_cotizacion.id_contenedor')
                 ->whereNull('contenedor_consolidado_cotizacion.id_cliente_importacion')
@@ -201,8 +208,8 @@ class PagosController extends Controller
                         AND (ccpc.name = "LOGISTICA" OR ccpc.name = "IMPUESTOS")
                     ) = CASE 
                         WHEN (contenedor_consolidado_cotizacion.logistica_final + contenedor_consolidado_cotizacion.impuestos_final) = 0 
-                        THEN contenedor_consolidado_cotizacion.monto 
-                        ELSE (contenedor_consolidado_cotizacion.logistica_final + contenedor_consolidado_cotizacion.impuestos_final) 
+                        THEN contenedor_consolidado_cotizacion.monto + ' . $extrasServiciosSubquery . '
+                        ELSE (contenedor_consolidado_cotizacion.logistica_final + contenedor_consolidado_cotizacion.impuestos_final + ' . $extrasServiciosSubquery . ') 
                     END');
                 } elseif ($estadoPagoFiltro === 'ADELANTO') {
                     // Para ADELANTO: tiene pagos pero monto pagado < monto a pagar
@@ -222,8 +229,8 @@ class PagosController extends Controller
                         AND (ccpc.name = "LOGISTICA" OR ccpc.name = "IMPUESTOS")
                     ) < CASE 
                         WHEN (contenedor_consolidado_cotizacion.logistica_final + contenedor_consolidado_cotizacion.impuestos_final) = 0 
-                        THEN contenedor_consolidado_cotizacion.monto 
-                        ELSE (contenedor_consolidado_cotizacion.logistica_final + contenedor_consolidado_cotizacion.impuestos_final) 
+                        THEN contenedor_consolidado_cotizacion.monto + ' . $extrasServiciosSubquery . '
+                        ELSE (contenedor_consolidado_cotizacion.logistica_final + contenedor_consolidado_cotizacion.impuestos_final + ' . $extrasServiciosSubquery . ') 
                     END');
                 } elseif ($estadoPagoFiltro === 'SOBREPAGO') {
                     // Para SOBREPAGO: tiene pagos y monto pagado > monto a pagar
@@ -243,14 +250,14 @@ class PagosController extends Controller
                         AND (ccpc.name = "LOGISTICA" OR ccpc.name = "IMPUESTOS")
                     ) > CASE 
                         WHEN (contenedor_consolidado_cotizacion.logistica_final + contenedor_consolidado_cotizacion.impuestos_final) = 0 
-                        THEN contenedor_consolidado_cotizacion.monto 
-                        ELSE (contenedor_consolidado_cotizacion.logistica_final + contenedor_consolidado_cotizacion.impuestos_final) 
+                        THEN contenedor_consolidado_cotizacion.monto + ' . $extrasServiciosSubquery . '
+                        ELSE (contenedor_consolidado_cotizacion.logistica_final + contenedor_consolidado_cotizacion.impuestos_final + ' . $extrasServiciosSubquery . ') 
                     END');
                 }
             }
 
             // Total general de todos los registros que coinciden con los filtros
-            $totalGeneral = (clone $query)->sum(DB::raw('CASE WHEN (contenedor_consolidado_cotizacion.logistica_final + contenedor_consolidado_cotizacion.impuestos_final) = 0 THEN contenedor_consolidado_cotizacion.monto ELSE (contenedor_consolidado_cotizacion.logistica_final + contenedor_consolidado_cotizacion.impuestos_final) END'));
+            $totalGeneral = (clone $query)->sum(DB::raw('CASE WHEN (contenedor_consolidado_cotizacion.logistica_final + contenedor_consolidado_cotizacion.impuestos_final) = 0 THEN contenedor_consolidado_cotizacion.monto + ' . $extrasServiciosSubquery . ' ELSE (contenedor_consolidado_cotizacion.logistica_final + contenedor_consolidado_cotizacion.impuestos_final + ' . $extrasServiciosSubquery . ') END'));
 
             // Obtener datos paginados
             $cotizaciones = $query->paginate($perPage, ['*'], 'page', $page);
@@ -261,8 +268,11 @@ class PagosController extends Controller
             $index = ($page - 1) * $perPage + 1;
 
             foreach ($cotizaciones->items() as $cotizacion) {
-                $aPagar = ($cotizacion->logistica_final + $cotizacion->impuestos_final) == 0 ?
-                    $cotizacion->monto : ($cotizacion->logistica_final + $cotizacion->impuestos_final);
+                $baseAPagar = ($cotizacion->logistica_final + $cotizacion->impuestos_final) == 0
+                    ? (float) $cotizacion->monto
+                    : (float) ($cotizacion->logistica_final + $cotizacion->impuestos_final);
+                $extrasServicios = (float) ($cotizacion->servicios_extras_monto ?? $cotizacion->servicios_extra_final ?? 0);
+                $aPagar = $baseAPagar + $extrasServicios;
 
                 // Determinar estado de pago
                 $estadoPago = $this->determinarEstadoPago($cotizacion->total_pagos, $cotizacion->total_pagos_monto, $aPagar);
@@ -282,8 +292,8 @@ class PagosController extends Controller
                     'carga' => $cotizacion->carga,
                     'carga_display' => '#' . $cotizacion->carga . ' - ' . $anio,
                     'estado_pago' => $estadoPago,
-                    'monto_a_pagar' => (($aPagar) == 0 ? $cotizacion->monto : $aPagar),
-                    'monto_a_pagar_formateado' => number_format((($aPagar) == 0 ? $cotizacion->monto : $aPagar), 2, '.', ''),
+                    'monto_a_pagar' => $aPagar,
+                    'monto_a_pagar_formateado' => number_format($aPagar, 2, '.', ''),
                     'total_pagado' => $cotizacion->total_pagos_monto,
                     'total_pagado_formateado' => number_format($cotizacion->total_pagos_monto, 2, '.', ''),
                     'pagos_detalle' => $pagosDetalle,
