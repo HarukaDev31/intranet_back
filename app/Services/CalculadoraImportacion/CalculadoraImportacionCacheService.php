@@ -20,20 +20,20 @@ class CalculadoraImportacionCacheService
 
     public function rememberIndex(array $params, callable $resolver): array
     {
-        $key = $this->key('index:' . md5(json_encode($this->stableParams($params))));
+        $key = $this->key('index:' . $this->cacheEpoch() . ':' . md5(json_encode($this->stableParams($params))));
         return $this->rememberTagged($key, now()->addMinutes(3), $resolver);
     }
 
     public function rememberShow(int $id, callable $resolver): array
     {
-        $key = $this->key("show:{$id}");
+        $key = $this->key('show:' . $this->cacheEpoch() . ":{$id}");
         return $this->rememberTagged($key, now()->addMinutes(5), $resolver);
     }
 
     public function rememberCalculosPorCliente(string $dni, callable $resolver): array
     {
         $dni = trim($dni);
-        $key = $this->key('por-cliente:' . $dni);
+        $key = $this->key('por-cliente:' . $this->cacheEpoch() . ':' . $dni);
         return $this->rememberTagged($key, now()->addMinutes(5), $resolver);
     }
 
@@ -74,6 +74,7 @@ class CalculadoraImportacionCacheService
 
         // El listado depende de múltiples filtros → invalidar por tag (si aplica)
         $this->flushTag();
+        $this->bumpCacheEpoch();
 
         // Tarifas pueden cambiar raramente; se invalidan si el store soporta tags en write-flows.
         // No las flush aquí por defecto.
@@ -135,6 +136,20 @@ class CalculadoraImportacionCacheService
             }
         }
         return $params;
+    }
+
+    private function cacheEpoch(): string
+    {
+        $epoch = Cache::get($this->key('epoch'));
+        if (!is_string($epoch) || $epoch === '') {
+            $epoch = '0';
+        }
+        return $epoch;
+    }
+
+    private function bumpCacheEpoch(): void
+    {
+        Cache::forever($this->key('epoch'), (string) microtime(true));
     }
 }
 

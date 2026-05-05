@@ -20,6 +20,7 @@ class CalculadoraImportacionExcelService
     public function modificarExcelConFechas(CalculadoraImportacion $calculadora): void
     {
         try {
+            Log::info('modificarExcelConFechas');
             $calculadora->load(['contenedor', 'proveedores.productos']);
 
             $contenedor = $calculadora->contenedor;
@@ -80,7 +81,8 @@ class CalculadoraImportacionExcelService
             file_put_contents($tempFilePath, $fileContents);
 
             $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($tempFilePath);
-            $sheet = $spreadsheet->getActiveSheet();
+            // Escribir fechas en la hoja principal (índice 0).
+            $sheet = $spreadsheet->getSheet(0);
 
             if (!empty($calculadora->cod_cotizacion)) {
                 $sheet1=$spreadsheet->getSheet(0);
@@ -103,6 +105,7 @@ class CalculadoraImportacionExcelService
                 copy($tempFilePath, $destinoPath);
                 Log::info('Excel modificado exitosamente', [
                     'calculadora_id' => $calculadora->id,
+                    'hoja_objetivo' => $sheet->getTitle(),
                     'fila_servicio' => $filaServicioConsolidado,
                     'fila_impuestos' => $filaPagoImpuestos,
                     'total_items' => $totalItems,
