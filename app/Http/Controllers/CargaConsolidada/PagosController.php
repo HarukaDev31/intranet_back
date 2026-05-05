@@ -374,11 +374,12 @@ class PagosController extends Controller
                 return ['success' => false, 'message' => 'Cotizacion no encontrada'];
             }
 
-            // monto a pagar: preferir logistica_final + impuestos_final, si 0 usar monto
-            $montoAart = (float) (($cot->logistica_final ?? 0) + ($cot->impuestos_final ?? 0));
-            if (round($montoAart, 2) == 0.0) {
-                $montoAart = (float) ($cot->monto ?? 0);
+            // monto a pagar: preferir logistica_final + impuestos_final, si 0 usar monto, y sumar servicios extra.
+            $montoAartBase = (float) (($cot->logistica_final ?? 0) + ($cot->impuestos_final ?? 0));
+            if (round($montoAartBase, 2) == 0.0) {
+                $montoAartBase = (float) ($cot->monto ?? 0);
             }
+            $montoAart = $montoAartBase + (float) ($cot->servicios_extra_final ?? 0);
 
             // Sumar pagos (todos los registros, independientemente de su status) para conceptos LOGISTICA / IMPUESTOS
             $pagosQuery = Pago::where('id_cotizacion', $idCotizacion)
@@ -867,13 +868,15 @@ class PagosController extends Controller
         try {
             $details = $this->getPagosCoordination($idCotizacion);
 
-            $cotizacion = Cotizacion::select('note_administracion', 'nombre', 'cotizacion_file_url', 'cotizacion_final_url', 'monto', 'logistica_final', 'impuestos_final')
+            $cotizacion = Cotizacion::select('note_administracion', 'nombre', 'cotizacion_file_url', 'cotizacion_final_url', 'monto', 'logistica_final', 'impuestos_final', 'servicios_extra_final')
                 ->where('id', $idCotizacion)
                 ->first();
 
             // Calcular monto a pagar usando la misma lógica del método principal
-            $aPagar = ($cotizacion->logistica_final + $cotizacion->impuestos_final) == 0 ?
-                $cotizacion->monto : ($cotizacion->logistica_final + $cotizacion->impuestos_final);
+            $baseAPagar = ($cotizacion->logistica_final + $cotizacion->impuestos_final) == 0
+                ? (float) $cotizacion->monto
+                : (float) ($cotizacion->logistica_final + $cotizacion->impuestos_final);
+            $aPagar = $baseAPagar + (float) ($cotizacion->servicios_extra_final ?? 0);
 
             // Calcular total pagado sumando todos los pagos
             $totalPagado = $details->sum('monto');
