@@ -602,6 +602,10 @@ class CalculadoraImportacionController extends Controller
                     ], 404);
                 }
 
+                // Guardar valores previos para invalidar claves de cache antiguas si cambiaron en update.
+                $previousDniCliente = $calculadora->dni_cliente;
+                $previousWhatsappCliente = $calculadora->whatsapp_cliente;
+
                 // Actualizar usando el servicio
                 $calculadora = $this->calculadoraImportacionService->actualizarCalculo($calculadora, $data);
 
@@ -641,8 +645,8 @@ class CalculadoraImportacionController extends Controller
 
                 // Invalidate caches relacionados a esta calculadora
                 $this->cacheService->invalidateAfterWrite($calculadora, [
-                    'dni_cliente' => $calculadora->dni_cliente ?? null,
-                    'whatsapp' => $calculadora->whatsapp_cliente ?? null,
+                    'dni_cliente' => $previousDniCliente ?? $calculadora->dni_cliente ?? null,
+                    'whatsapp' => $previousWhatsappCliente ?? $calculadora->whatsapp_cliente ?? null,
                 ]);
 
                 return response()->json([

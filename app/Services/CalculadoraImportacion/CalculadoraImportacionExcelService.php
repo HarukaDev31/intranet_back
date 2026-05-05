@@ -83,7 +83,8 @@ class CalculadoraImportacionExcelService
             $sheet = $spreadsheet->getActiveSheet();
 
             if (!empty($calculadora->cod_cotizacion)) {
-                $sheet->setCellValue('D7', 'COTIZACION N° ' . $calculadora->cod_cotizacion);
+                $sheet1=$spreadsheet->getSheet(0);
+                $sheet1->setCellValue('D7', 'COTIZACION N° ' . $calculadora->cod_cotizacion);
             }
             Log::info('totalItems: ' . $totalItems);
             $filaInicioItems = 47;

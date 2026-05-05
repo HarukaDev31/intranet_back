@@ -2122,7 +2122,8 @@ class CalculadoraImportacionService
             // Código de cotización (D7: "COTIZACION N° CO02260001") para la boleta PDF
             $codigoCotizacion = '';
             try {
-                $d7 = $sheet->getCell('D7')->getValue();
+                $sheet1=$objPHPExcel->getSheet(0);
+                $d7 = $sheet1->getCell('D7')->getValue();
                 if (is_string($d7) && preg_match('/COTIZACION\s+N[°º]?\s*(.+)/u', trim($d7), $m)) {
                     $codigoCotizacion = trim($m[1]);
                 }
