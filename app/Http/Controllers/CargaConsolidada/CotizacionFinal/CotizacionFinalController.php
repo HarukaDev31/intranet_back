@@ -1167,6 +1167,11 @@ class CotizacionFinalController extends Controller
                 $pagosUrl = public_path('assets/images/pagos-full.jpg');
                 $this->sendMedia($pagosUrl, 'image/jpg', null, null, 10);
             }
+            if ($request->estado == 'AJUSTADO') {
+                $cotizacion = Cotizacion::find($request->idCotizacion);
+                $cotizacion->estado_cotizacion_final = 'AJUSTADO';
+                $cotizacion->save();
+            }
             return response()->json([
                 'success' => true,
                 'message' => 'Estado de cotización final actualizado correctamente'

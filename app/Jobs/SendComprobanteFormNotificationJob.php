@@ -47,6 +47,11 @@ class SendComprobanteFormNotificationJob implements ShouldQueue
 
             $contenedor = Contenedor::find($form->id_contenedor);
             $carga = $contenedor ? $contenedor->carga : 'N/A';
+            $anioCarga = $contenedor && !empty($contenedor->f_inicio)
+                ? date('Y', strtotime((string) $contenedor->f_inicio))
+                : date('Y');
+            $cargaTexto = is_numeric($carga) ? str_pad((string) $carga, 2, '0', STR_PAD_LEFT) : (string) $carga;
+            $consolidadoLabel = '#' . $cargaTexto . '-' . $anioCarga;
 
             $clienteNombre   = $cotizacion->nombre ?? 'Cliente';
             $tipoComprobante = $form->tipo_comprobante;
@@ -68,7 +73,7 @@ class SendComprobanteFormNotificationJob implements ShouldQueue
                 ($form->destino_entrega ? "\nDestino de entrega: {$form->destino_entrega}" : '');
 
             // phone = null → usa DEFAULT_WHATSAPP_NUMBER del .env
-            $this->sendMessage($msgAdmin, null, 0, 'administracion');
+            //$this->sendMessage($msgAdmin, null, 0, 'administracion');
 
             // ── 2. WhatsApp de confirmación al cliente ───────────────────────
             $telefono = preg_replace('/\D+/', '', $cotizacion->telefono ?? '');
@@ -78,8 +83,27 @@ class SendComprobanteFormNotificationJob implements ShouldQueue
                 }
                 $numeroCliente = $telefono . '@c.us';
 
-                $msgCliente = "Tu formulario se realizó exitosamente, los datos de facturación son:\n" .
-                    $datosLineas;
+                if ($tipoComprobante === 'FACTURA') {
+                    $msgCliente = "Hola 👋\n" .
+                        "Consolidado {$consolidadoLabel}\n" .
+                        "Tu formulario fue completado correctamente ✅\n\n" .
+                        "Datos de Facturación:\n" .
+                        "• Tipo de comprobante: Factura\n" .
+                        "• RUC: " . ($form->ruc ?? '-') . "\n" .
+                        "• Razón social: " . ($form->razon_social ?? '-') . "\n\n" .
+                        "🤝 Con esta información se emitirá tu comprobante una vez realizada la entrega de tu carga.\n" .
+                        "📌 Si necesitas corregir algún dato, responde este mensaje. 😊";
+                } else {
+                    $msgCliente = "Hola 👋\n" .
+                        "Consolidado {$consolidadoLabel}\n" .
+                        "Tu formulario fue completado correctamente ✅\n\n" .
+                        "Datos de Facturación:\n" .
+                        "• Tipo de comprobante: Boleta\n" .
+                        "• DNI: " . ($form->dni_carnet ?? '-') . "\n" .
+                        "• Nombre completo: " . ($form->nombre_completo ?? '-') . "\n\n" .
+                        "🤝 Con esta información se emitirá tu comprobante una vez realizada la entrega de tu carga.\n" .
+                        "📌 Si necesitas corregir algún dato, responde este mensaje. 😊";
+                }
 
                 $this->sendMessage($msgCliente, $numeroCliente, 0, 'administracion');
             }
