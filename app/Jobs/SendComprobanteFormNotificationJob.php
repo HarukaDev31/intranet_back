@@ -85,23 +85,25 @@ class SendComprobanteFormNotificationJob implements ShouldQueue
 
                 if ($tipoComprobante === 'FACTURA') {
                     $msgCliente = "Hola 👋\n" .
-                        "Consolidado {$consolidadoLabel}\n" .
+                        "*Consolidado {$consolidadoLabel}*\n" .
+                   
                         "Tu formulario fue completado correctamente ✅\n\n" .
                         "Datos de Facturación:\n" .
-                        "• Tipo de comprobante: Factura\n" .
+                        "• *Tipo de comprobante: Factura* \n" .
                         "• RUC: " . ($form->ruc ?? '-') . "\n" .
                         "• Razón social: " . ($form->razon_social ?? '-') . "\n\n" .
-                        "🤝 Con esta información se emitirá tu comprobante una vez realizada la entrega de tu carga.\n" .
+                        "📦 Con esta información se emitirá tu comprobante una vez realizada la entrega de tu carga.\n" .
                         "📌 Si necesitas corregir algún dato, responde este mensaje. 😊";
                 } else {
                     $msgCliente = "Hola 👋\n" .
-                        "Consolidado {$consolidadoLabel}\n" .
+                        "*Consolidado {$consolidadoLabel}*\n" .
                         "Tu formulario fue completado correctamente ✅\n\n" .
                         "Datos de Facturación:\n" .
-                        "• Tipo de comprobante: Boleta\n" .
+                        "• *Tipo de comprobante: Boleta* \n" .
                         "• DNI: " . ($form->dni_carnet ?? '-') . "\n" .
                         "• Nombre completo: " . ($form->nombre_completo ?? '-') . "\n\n" .
-                        "🤝 Con esta información se emitirá tu comprobante una vez realizada la entrega de tu carga.\n" .
+                        "📦 Con esta información se emitirá tu comprobante una vez realizada la entrega de tu carga.\n" .
+                   
                         "📌 Si necesitas corregir algún dato, responde este mensaje. 😊";
                 }
 

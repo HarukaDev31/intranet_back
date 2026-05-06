@@ -33,6 +33,7 @@ class SendReminderPagoWhatsAppJob implements ShouldQueue
                 ->select([
                     'CC.telefono',
                     'CC.id_contenedor',
+                    'CC.estado_cotizacion_final',
                     'CC.impuestos_final',
                     'CC.volumen_final',
                     'CC.monto_final',
@@ -73,11 +74,16 @@ class SendReminderPagoWhatsAppJob implements ShouldQueue
             $totalCotizacion = $logisticaFinal + $impuestosFinal + $serviciosExtraFinal + $recargosDescuentosFinal;
             $totalPagos = (float) ($cotizacion->total_pagos ?? 0);
             $pendiente = $totalCotizacion - $totalPagos;
+            $isAjustado = $cotizacion->estado_cotizacion_final == 'AJUSTADO';
+            $descripcionPendiente = $isAjustado
+                ? 'Usted cuenta con un pago pendiente por concepto de Ajuste de Valor, es necesario realizar el pago para continuar con el proceso de nacionalización.'
+                : 'Usted cuenta con un pago pendiente, es necesario realizar el pago para continuar con el proceso de nacionalización.';
 
-            $message = "🙋🏽‍♀ RECORDATORÍO DE PAGO\n\n"
-                . "📦 Consolidado #{$carga}\n"
-                . "Usted cuenta con un pago pendiente, es necesario realizar el pago para continuar con el proceso de nacionalización.\n\n"
-                . "Resumen de Pago\n"
+            $message = "🙋🏽‍♀ *RECORDATORÍO DE PAGO*\n\n"
+                . "📦 *Consolidado #{$carga}*\n"
+                . $descripcionPendiente . "\n\n"
+                
+                . "*Resumen de Pago*\n"
                 . "✅ Cotización final: $" . number_format($totalCotizacion, 2, '.', '') . "\n"
                 . "✅ Adelanto: $" . number_format($totalPagos, 2, '.', '') . "\n"
                 . "✅ *Pendiente de pago: $" . number_format($pendiente, 2, '.', '') . "*\n"
