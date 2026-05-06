@@ -1272,6 +1272,58 @@ class CalculadoraImportacionController extends Controller
                 $calculadora->refresh();
             }
 
+            // Fallback: si aún no se vinculó, intentar recrear usando el flujo storeFromCalculadora.
+            if (!$calculadora->id_cotizacion && $calculadora->url_cotizacion && $calculadora->id_carga_consolidada_contenedor) {
+                $fileContents = $this->downloadFileFromUrl($calculadora->url_cotizacion);
+                if ($fileContents) {
+                    $tempPath = storage_path('app/temp');
+                    if (!file_exists($tempPath)) {
+                        mkdir($tempPath, 0755, true);
+                    }
+
+                    $extension = pathinfo($calculadora->url_cotizacion, PATHINFO_EXTENSION) ?: 'xlsx';
+                    $tempFileName = uniqid('calculadora_vincular_') . '.' . $extension;
+                    $tempFilePath = $tempPath . '/' . $tempFileName;
+                    file_put_contents($tempFilePath, $fileContents);
+
+                    try {
+                        $uploadedFile = new \Illuminate\Http\UploadedFile(
+                            $tempFilePath,
+                            basename($calculadora->url_cotizacion),
+                            mime_content_type($tempFilePath),
+                            null,
+                            true
+                        );
+
+                        $storeRequest = new Request();
+                        $storeRequest->merge(['id_contenedor' => $calculadora->id_carga_consolidada_contenedor]);
+                        $storeRequest->files->set('cotizacion', $uploadedFile);
+
+                        $cotizacionController = app(CotizacionController::class);
+                        $response = $cotizacionController->storeFromCalculadora($storeRequest);
+                        $responseData = json_decode($response->getContent(), true);
+
+                        if (isset($responseData['id']) && ($responseData['status'] ?? null) === 'success') {
+                            $calculadora->id_cotizacion = (int) $responseData['id'];
+                            $calculadora->save();
+                            $calculadora->refresh();
+                        }
+                    } finally {
+                        if (file_exists($tempFilePath)) {
+                            unlink($tempFilePath);
+                        }
+                    }
+                }
+            }
+
+            // Nunca responder éxito si no se logró vincular.
+            if (!$calculadora->id_cotizacion) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No se pudo vincular la cotización, se intentó recrear y no se obtuvo id_cotizacion',
+                ], 500);
+            }
+
             // Actualizar cotización relacionada con el nuevo Excel (archivo + vendedor)
             if ($calculadora->id_cotizacion && $calculadora->url_cotizacion) {
                 Cotizacion::where('id', $calculadora->id_cotizacion)->update([
