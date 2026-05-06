@@ -1194,7 +1194,17 @@ class CalculadoraImportacionController extends Controller
             ]);
             return response()->json(['success' => true, 'message' => 'Estado cambiado exitosamente']);
         } catch (\Exception $e) {
-            return response()->json(['success' => false, 'message' => 'Error al cambiar el estado: ' . $e->getMessage()], 500);
+            Log::error('Error al cambiar estado de calculadora', [
+                'calculadora_id' => $id,
+                'estado' => $request->estado ?? null,
+                'error' => $e->getMessage(),
+            ]);
+
+            // Evita romper JsonResponse cuando el mensaje de excepción contiene bytes inválidos UTF-8.
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al cambiar el estado',
+            ], 500);
         }
     }
 
