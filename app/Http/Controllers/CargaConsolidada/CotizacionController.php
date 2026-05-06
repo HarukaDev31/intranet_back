@@ -3128,7 +3128,9 @@ class CotizacionController extends Controller
                     }
 
                     // Genera el código del proveedor usando tu función
-                    $codeSupplier = $this->generateCodeSupplier($nameCliente, $carga, $count, $provider);
+                    $codeSupplier = $this->sanitizeCodeSupplier(
+                        $this->generateCodeSupplier($nameCliente, $carga, $count, $provider)
+                    );
                     // Obtener valores de las celdas
                     $qtyBox = $sheet2->getCell($columnStart . $rowCajasProveedor)->getValue();
                     $peso = $sheet2->getCell($columnStart . $rowPesoProveedor)->getValue();
@@ -3191,7 +3193,7 @@ class CotizacionController extends Controller
                             'cbm_total' => $cbmTotal ?? 0,
                             'maxcbm' => $maxcbm,
                             'id_cotizacion' => $data->id_cotizacion,
-                            'code_supplier' => $codeSupplier,
+                            'code_supplier' => $this->sanitizeCodeSupplier($codeSupplier),
                             'id_contenedor' => $data->id_contenedor,
                             'supplier' => '', // Campo adicional si es necesario
                             'products' => '', // Campo adicional si es necesario
@@ -3342,13 +3344,15 @@ class CotizacionController extends Controller
                         $processedRanges[] = $currentRange;
                     }
 
-                    $codeSupplier = $this->getDataCell($sheet2, $columnStart . $rowCodeSupplier);
+                    $codeSupplier = $this->sanitizeCodeSupplier((string) $this->getDataCell($sheet2, $columnStart . $rowCodeSupplier));
                     $qtyBox = $this->getDataCell($sheet2, $columnStart . $rowCajasProveedor);
                     $peso = $this->getDataCell($sheet2, $columnStart . $rowPesoProveedor);
                     $cbmTotal = $this->getDataCell($sheet2, $columnStart . $rowVolProveedor);
-                    if ($codeSupplier == null || trim($codeSupplier) === '') {
+                    if ($codeSupplier === null || trim((string) $codeSupplier) === '') {
                         // Usar el siguiente índice disponible en lugar del índice del bucle
-                        $codeSupplier = $this->generateCodeSupplier($nameCliente, $carga, $count, $nextAvailableIndex);
+                        $codeSupplier = $this->sanitizeCodeSupplier(
+                            $this->generateCodeSupplier($nameCliente, $carga, $count, $nextAvailableIndex)
+                        );
                         $nextAvailableIndex++;
                     }
 
@@ -3409,7 +3413,7 @@ class CotizacionController extends Controller
                             'maxcbm' => $maxcbm,
                             'id_cotizacion' => $data->id_cotizacion,
                             'id_contenedor' => $data->id_contenedor,
-                            'code_supplier' => $codeSupplier,
+                            'code_supplier' => $this->sanitizeCodeSupplier($codeSupplier),
                             'volumen_doc' => 0,
                             'send_rotulado_status' => 'PENDING',
                             'items' => $items,
@@ -3440,6 +3444,8 @@ class CotizacionController extends Controller
         } else {
             $carga = '';
         }
+        $carga = preg_replace('/[^A-Za-z0-9]/', '', (string) $carga);
+        $carga = strtoupper((string) $carga);
 
         $words = explode(" ", trim($string));
         $code = "";
@@ -3447,12 +3453,35 @@ class CotizacionController extends Controller
         // Primeras 2 letras de las primeras 2 palabras (protegido)
         foreach ($words as $word) {
             if (strlen($code) >= 4) break; // Ya tenemos 4 caracteres (2 palabras)
-            if (strlen($word) >= 2) { // Solo si la palabra tiene 2+ caracteres
-                $code .= strtoupper(substr($word, 0, 2));
+            $token = $this->sanitizeCodeSupplier((string) $word);
+            if ($token !== null && strlen($token) >= 2) { // Solo si la palabra tiene 2+ caracteres
+                $code .= substr($token, 0, 2);
             }
         }
 
-        return $code . $carga . "-" . $index;
+        return $this->sanitizeCodeSupplier($code . $carga . "-" . $index) ?? ('SUP-' . (int) $index);
+    }
+
+    private function sanitizeCodeSupplier(?string $code): ?string
+    {
+        if ($code === null) {
+            return null;
+        }
+
+        $code = trim($code);
+        if ($code === '') {
+            return null;
+        }
+
+        $ascii = @iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $code);
+        if ($ascii !== false && $ascii !== null) {
+            $code = $ascii;
+        }
+
+        $code = strtoupper((string) $code);
+        $code = preg_replace('/[^A-Z0-9-]/', '', $code);
+
+        return $code !== '' ? $code : null;
     }
     /**
      * Obtiene el valor de una celda, manejando diferentes tipos de datos
