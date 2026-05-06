@@ -396,7 +396,7 @@ class CalculadoraImportacionService
                         $index + 1
                     );
                 } elseif (isset($proveedorData['code_supplier']) && !empty($proveedorData['code_supplier'])) {
-                    $codeSupplier = $proveedorData['code_supplier'];
+                    $codeSupplier = $this->sanitizeCodeSupplier((string) $proveedorData['code_supplier']);
                 }
 
                 $existingProvider = null;
@@ -2400,26 +2400,50 @@ class CalculadoraImportacionService
             return (string) (int) $carga;
         }
         if ($carga !== null && $carga !== '') {
-            return substr((string) $carga, -2);
+            $seg = substr((string) $carga, -2);
+            $seg = preg_replace('/[^A-Za-z0-9]/', '', (string) $seg);
+            return strtoupper((string) $seg);
         }
 
         return '';
     }
 
+    private function sanitizeCodeSupplier(?string $code): ?string
+    {
+        if ($code === null) {
+            return null;
+        }
+        $code = trim($code);
+        if ($code === '') {
+            return null;
+        }
+
+        $ascii = @iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $code);
+        if ($ascii !== false && $ascii !== null) {
+            $code = $ascii;
+        }
+
+        $code = strtoupper((string) $code);
+        $code = preg_replace('/[^A-Z0-9-]/', '', $code);
+
+        return $code !== '' ? $code : null;
+    }
+
     private function initialsFromClienteNombre(string $nombre): string
     {
-        $words = explode(' ', trim($nombre));
+        $words = preg_split('/\s+/', trim($nombre)) ?: [];
         $code = '';
         foreach ($words as $word) {
             if (strlen($code) >= 4) {
                 break;
             }
-            if (strlen($word) >= 2) {
-                $code .= strtoupper(substr($word, 0, 2));
+            $token = $this->sanitizeCodeSupplier((string) $word);
+            if ($token !== null && strlen($token) >= 2) {
+                $code .= substr($token, 0, 2);
             }
         }
 
-        return $code;
+        return $this->sanitizeCodeSupplier($code) ?? '';
     }
 
     /**
@@ -2430,7 +2454,7 @@ class CalculadoraImportacionService
     {
         $cargaSeg = $this->normalizeCargaSegmentForCodeSupplier($carga);
 
-        return $this->initialsFromClienteNombre((string) $string) . $cargaSeg . '-' . $index;
+        return $this->sanitizeCodeSupplier($this->initialsFromClienteNombre((string) $string) . $cargaSeg . '-' . $index) ?? ('SUP-' . (int) $index);
     }
 
     /**

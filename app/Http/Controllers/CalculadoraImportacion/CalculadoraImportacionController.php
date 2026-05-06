@@ -1330,7 +1330,7 @@ class CalculadoraImportacionController extends Controller
         }
 
         foreach ($proveedoresCotizacion as $index => $provCotizacion) {
-            $codeSupplier = $provCotizacion->code_supplier;
+            $codeSupplier = $this->sanitizeCodeSupplier($provCotizacion->code_supplier);
             if (isset($proveedoresCalculadora[$index])) {
                 $updateData = [
                     'id_proveedor' => $provCotizacion->id,
@@ -1349,6 +1349,27 @@ class CalculadoraImportacionController extends Controller
                 ]);
             }
         }
+    }
+
+    private function sanitizeCodeSupplier(?string $code): ?string
+    {
+        if ($code === null) {
+            return null;
+        }
+        $code = trim($code);
+        if ($code === '') {
+            return null;
+        }
+
+        $ascii = @iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $code);
+        if ($ascii !== false && $ascii !== null) {
+            $code = $ascii;
+        }
+
+        $code = strtoupper((string) $code);
+        $code = preg_replace('/[^A-Z0-9-]/', '', $code);
+
+        return $code !== '' ? $code : null;
     }
 
     /**
