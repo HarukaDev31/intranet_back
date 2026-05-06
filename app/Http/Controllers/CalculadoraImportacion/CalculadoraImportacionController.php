@@ -1272,6 +1272,7 @@ class CalculadoraImportacionController extends Controller
                 $calculadora->refresh();
             }
 
+            $fallbackError = null;
             // Fallback: si aún no se vinculó, intentar recrear usando el flujo storeFromCalculadora.
             if (!$calculadora->id_cotizacion && $calculadora->url_cotizacion && $calculadora->id_carga_consolidada_contenedor) {
                 $fileContents = $this->downloadFileFromUrl($calculadora->url_cotizacion);
@@ -1307,12 +1308,33 @@ class CalculadoraImportacionController extends Controller
                             $calculadora->id_cotizacion = (int) $responseData['id'];
                             $calculadora->save();
                             $calculadora->refresh();
+                        } else {
+                            $fallbackError = $responseData['message'] ?? 'storeFromCalculadora no devolvió id de cotización';
+                            Log::warning('Fallback storeFromCalculadora sin id_cotizacion', [
+                                'calculadora_id' => $calculadora->id,
+                                'response' => $responseData,
+                            ]);
                         }
                     } finally {
                         if (file_exists($tempFilePath)) {
                             unlink($tempFilePath);
                         }
                     }
+                } else {
+                    $fallbackError = 'No se pudo descargar Excel de calculadora para recrear';
+                }
+            }
+
+            // Segundo fallback: intentar vincular por cotización ya creada con mismo archivo/contenedor.
+            if (!$calculadora->id_cotizacion && $calculadora->url_cotizacion && $calculadora->id_carga_consolidada_contenedor) {
+                $cotizacionExistente = Cotizacion::where('id_contenedor', $calculadora->id_carga_consolidada_contenedor)
+                    ->where('cotizacion_file_url', $calculadora->url_cotizacion)
+                    ->orderByDesc('id')
+                    ->first();
+                if ($cotizacionExistente) {
+                    $calculadora->id_cotizacion = (int) $cotizacionExistente->id;
+                    $calculadora->save();
+                    $calculadora->refresh();
                 }
             }
 
@@ -1321,6 +1343,7 @@ class CalculadoraImportacionController extends Controller
                 return response()->json([
                     'success' => false,
                     'message' => 'No se pudo vincular la cotización, se intentó recrear y no se obtuvo id_cotizacion',
+                    'error' => $fallbackError,
                 ], 500);
             }
 
