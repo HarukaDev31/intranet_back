@@ -2,10 +2,13 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\NormalizesMontosDosDecimales;
 use Illuminate\Database\Eloquent\Model;
 
 class ViaticoRetribucion extends Model
 {
+    use NormalizesMontosDosDecimales;
+
     protected $table = 'viaticos_retribuciones';
 
     protected $fillable = [
@@ -20,7 +23,6 @@ class ViaticoRetribucion extends Model
     ];
 
     protected $casts = [
-        'monto' => 'decimal:2',
         'fecha_cierre' => 'date',
         'sended_at' => 'datetime',
     ];

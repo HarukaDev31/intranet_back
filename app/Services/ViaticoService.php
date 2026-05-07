@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Http\UploadedFile;
-USE App\Events\ViaticoCreado;
+use App\Events\ViaticoCreado;
 
 class ViaticoService
 {
@@ -89,10 +89,13 @@ class ViaticoService
                 // Actualizar payment_receipt_file legacy con la siguiente retribución o null
                 $siguiente = ViaticoRetribucion::where('viatico_id', $viatico->id)->orderBy('orden')->orderBy('id')->first();
                 $data['payment_receipt_file'] = $siguiente ? $siguiente->file_path : null;
-                // Recalcular estado según la suma restante
-                $sumaRetribuciones = (float) ViaticoRetribucion::where('viatico_id', $viatico->id)->sum('monto');
-                $totalAmount = (float) $viatico->total_amount;
-                if ($sumaRetribuciones >= $totalAmount - 0.02) {
+                // Recalcular estado según la suma restante (sum por filas + BCMath; evitar float del aggregate SUM)
+                $sumaRetribuciones = $this->sumaMontosRetribucionesViatico($viatico->id);
+                $totalAmount = $viatico->total_amount;
+                Log::info('sumaRetribuciones: ' . $sumaRetribuciones);
+                Log::info('totalAmount: ' . $totalAmount);
+                Log::info('diferencia (saldo pendiente sobre total): ' . $this->diferenciaMontoMoneda($totalAmount, $sumaRetribuciones));
+                if ($this->retribucionesCubrenTotalViatico($sumaRetribuciones, $totalAmount)) {
                     $data['status'] = Viatico::STATUS_CONFIRMED;
                 } else {
                     $data['status'] = Viatico::STATUS_PENDING;
@@ -112,15 +115,18 @@ class ViaticoService
                     'file_path' => $rutaNuevaGuardada,
                     'file_original_name' => $archivo->getClientOriginalName(),
                     'banco' => $data['payment_receipt_banco'] ?? null,
-                    'monto' => isset($data['payment_receipt_monto']) ? (float) $data['payment_receipt_monto'] : null,
+                    'monto' => isset($data['payment_receipt_monto']) ? $data['payment_receipt_monto'] : null,
                     'fecha_cierre' => $fechaCierre,
                     'orden' => $maxOrden + 1,
                 ]);
                 $data['payment_receipt_file'] = $rutaNuevaGuardada;
                 // Pasar a CONFIRMED si la suma de todas las retribuciones >= total del viático
-                $sumaRetribuciones = ViaticoRetribucion::where('viatico_id', $viatico->id)->sum('monto');
-                $totalAmount = (float) $viatico->total_amount;
-                if ($sumaRetribuciones >= $totalAmount - 0.02) {
+                $sumaRetribuciones = $this->sumaMontosRetribucionesViatico($viatico->id);
+                $totalAmount = $viatico->total_amount;
+                Log::info('sumaRetribuciones: ' . $sumaRetribuciones);
+                Log::info('totalAmount: ' . $totalAmount);
+                Log::info('diferencia (saldo pendiente sobre total): ' . $this->diferenciaMontoMoneda($totalAmount, $sumaRetribuciones));
+                if ($this->retribucionesCubrenTotalViatico($sumaRetribuciones, $totalAmount)) {
                     $data['status'] = Viatico::STATUS_CONFIRMED;
                 } else {
                     $data['status'] = Viatico::STATUS_PENDING;
@@ -419,6 +425,96 @@ class ViaticoService
             'file_mime_type' => $archivo->getMimeType(),
             'file_extension' => $archivo->getClientOriginalExtension(),
         ];
+    }
+
+    /**
+     * Suma montos por filas con BCMath. El SUM() SQL vía PDO/Laravel suele llegar como float en PHP y pierde céntimos.
+     *
+     * @return string Ej. "328.40"
+     */
+    private function sumaMontosRetribucionesViatico(int $viaticoId): string
+    {
+        $montos = DB::table('viaticos_retribuciones')
+            ->where('viatico_id', $viaticoId)
+            ->orderBy('orden')
+            ->orderBy('id')
+            ->pluck('monto');
+
+        if ($montos->isEmpty()) {
+            return '0.00';
+        }
+
+        if (!function_exists('bcadd')) {
+            $acc = '0';
+            foreach ($montos as $monto) {
+                if ($monto === null || $monto === '') {
+                    continue;
+                }
+                $acc += (float) str_replace(',', '.', trim((string) $monto));
+            }
+
+            return sprintf('%.2F', round($acc, 2));
+        }
+
+        $sum = '0.00';
+        foreach ($montos as $monto) {
+            if ($monto === null || $monto === '') {
+                continue;
+            }
+            $piece = str_replace(',', '.', preg_replace('#\s+#', '', (string) $monto));
+            if ($piece === '' || !is_numeric($piece)) {
+                continue;
+            }
+            $piece2 = bcadd($piece, '0', 2);
+            $sum = bcadd($sum, $piece2, 2);
+        }
+
+        return bcadd($sum, '0', 2);
+    }
+
+    /**
+     * True si la suma cubre o iguala el total usando 2 decimales (sin depender de errores IEEE 754).
+     */
+    private function retribucionesCubrenTotalViatico($sumaRetribuciones, $totalAmount): bool
+    {
+        $sumStr = $this->montoDosDecimalesString($sumaRetribuciones);
+        $totStr = $this->montoDosDecimalesString($totalAmount);
+        if (function_exists('bccomp')) {
+            return bccomp($sumStr, $totStr, 2) >= 0;
+        }
+
+        return (float) $sumStr >= (float) $totStr;
+    }
+
+    /**
+     * Saldo pendiente: total menos suma retribuciones (2 decimales), usando BCMath cuando exista.
+     */
+    private function diferenciaMontoMoneda($totalAmount, $sumaRetribuciones): string
+    {
+        $totStr = $this->montoDosDecimalesString($totalAmount);
+        $sumStr = $this->montoDosDecimalesString($sumaRetribuciones);
+
+        return function_exists('bcsub')
+            ? bcsub($totStr, $sumStr, 2)
+            : sprintf('%.2F', round((float) $totStr - (float) $sumStr, 2));
+    }
+
+    private function montoDosDecimalesString($valor): string
+    {
+        if ($valor === null || $valor === '') {
+            return '0.00';
+        }
+
+        $s = preg_replace('#\s+#', '', str_replace(',', '.', (string) $valor));
+        if ($s === '' || !is_numeric($s)) {
+            return '0.00';
+        }
+
+        if (function_exists('bcadd')) {
+            return bcadd($s, '0', 2);
+        }
+
+        return sprintf('%.2F', round((float) $s, 2));
     }
 
     /**

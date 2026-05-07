@@ -379,7 +379,7 @@ class ViaticoController extends Controller
             // Verificar permisos: solo administración puede editar
             $user = auth()->user();
             $grupo = $user->grupo ?? null;
-            $isAdmin = $grupo && $grupo->No_Grupo === 'Administración';
+            $isAdmin = $grupo && $grupo->No_Grupo === Usuario::ROL_ADMINISTRACION;
             $idUsuario = $viatico->user_id;
             $usuarioCreador = Usuario::find($idUsuario);
             $userPhone = $usuarioCreador ? normalizePhone($usuarioCreador->Nu_Celular) : null;

@@ -2,10 +2,13 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\NormalizesMontosDosDecimales;
 use Illuminate\Database\Eloquent\Model;
 
 class ViaticoPago extends Model
 {
+    use NormalizesMontosDosDecimales;
+
     protected $table = 'viaticos_pagos';
 
     protected $fillable = [
@@ -21,7 +24,6 @@ class ViaticoPago extends Model
     ];
 
     protected $casts = [
-        'monto' => 'decimal:2',
         'file_size' => 'integer',
     ];
 
