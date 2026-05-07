@@ -1238,14 +1238,24 @@ class CotizacionController extends Controller
      *     @OA\Response(response=500, description="Error al eliminar")
      * )
      */
-    public function destroy($id)
+    public function destroy(Request $request, $id)
     {
         try {
+            $validated = $request->validate([
+                'deleted_reason_id' => 'nullable|integer|exists:reason_delete_cotizacion,id',
+            ]);
+
             DB::statement('SET FOREIGN_KEY_CHECKS = 0');
             $cotizacionProveedor = CotizacionProveedor::where('id_cotizacion', $id);
             $cotizacionProveedor->delete();
             //delete cotizacion
             $cotizacion = Cotizacion::find($id);
+            if (!$cotizacion) {
+                DB::statement('SET FOREIGN_KEY_CHECKS = 1');
+                return response()->json(['message' => 'Cotización no encontrada', 'success' => false], 404);
+            }
+            $cotizacion->deleted_reason_id = $validated['deleted_reason_id'] ?? null;
+            $cotizacion->save();
             $cotizacion->delete();
             DB::statement('SET FOREIGN_KEY_CHECKS = 1');
             return response()->json(['message' => 'Cotizacion borrada correctamente', 'success' => true]);

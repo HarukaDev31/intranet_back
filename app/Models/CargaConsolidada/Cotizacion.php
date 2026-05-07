@@ -9,6 +9,7 @@ use App\Models\Usuario;
 use App\Models\CalculadoraImportacion;
 use App\Models\CargaConsolidada\Comprobante;
 use App\Models\CargaConsolidada\Detraccion;
+use App\Models\CargaConsolidada\ReasonDeleteCotizacion;
 
 class Cotizacion extends Model
 {
@@ -92,6 +93,8 @@ class Cotizacion extends Model
         'es_imo',
         'id_contenedor_destino',
         'nota_contabilidad',
+        'deleted_reason_id',
+        'deleted_at',
     ];
 
     /**
@@ -127,6 +130,7 @@ class Cotizacion extends Model
         'total_pago_delivery' => 'decimal:2',
         'from_calculator' => 'boolean',
         'es_imo' => 'boolean',
+        'deleted_reason_id' => 'integer',
     ];
 
     /**
@@ -282,6 +286,14 @@ class Cotizacion extends Model
     public function detracciones()
     {
         return $this->hasMany(Detraccion::class, 'quotation_id', 'id');
+    }
+
+    /**
+     * Motivo de eliminación de la cotización.
+     */
+    public function deletedReason()
+    {
+        return $this->belongsTo(ReasonDeleteCotizacion::class, 'deleted_reason_id');
     }
 
     /**

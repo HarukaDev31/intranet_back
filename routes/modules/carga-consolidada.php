@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\CargaConsolidada\ContenedorController;
 use App\Http\Controllers\CargaConsolidada\TipoClienteController;
 use App\Http\Controllers\CargaConsolidada\CotizacionController;
+use App\Http\Controllers\CargaConsolidada\ReasonDeleteCotizacionController;
 use App\Http\Controllers\CargaConsolidada\PagosController;
 use App\Http\Controllers\CargaConsolidada\ImportController;
 use App\Http\Controllers\CargaConsolidada\CotizacionProveedorController;
@@ -76,6 +77,10 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
 
         // Cotizaciones
         Route::group(['prefix' => 'cotizaciones'], function () {
+            Route::get('delete-reasons', [ReasonDeleteCotizacionController::class, 'index']);
+            Route::post('delete-reasons', [ReasonDeleteCotizacionController::class, 'store']);
+            Route::put('delete-reasons/{id}', [ReasonDeleteCotizacionController::class, 'update']);
+            Route::delete('delete-reasons/{id}', [ReasonDeleteCotizacionController::class, 'destroy']);
             Route::get('{id}/exportar', [CotizacionController::class, 'exportarCotizacion']);
             Route::post('/{id}/refresh', [CotizacionController::class, 'refreshCotizacionFile']);
             Route::get('/{idContenedor}/headers', [CotizacionController::class, 'getHeadersData']);
