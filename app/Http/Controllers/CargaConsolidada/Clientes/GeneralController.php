@@ -15,12 +15,10 @@ use Tymon\JWTAuth\Facades\JWTAuth;
 use App\Services\CargaConsolidada\Clientes\GeneralService;
 use App\Services\CargaConsolidada\Clientes\GeneralExportService;
 use App\Models\CargaConsolidada\CotizacionProveedor;
-use PhpOffice\PhpSpreadsheet\IOFactory;
-use PhpOffice\PhpSpreadsheet\Spreadsheet;
-use Exception;
 use App\Traits\WhatsappTrait;
 use App\Models\CargaConsolidada\Contenedor;
 use App\Models\CargaConsolidada\ConsolidadoCotizacionAduanaTramite;
+use App\Jobs\SolicitarDocumentosWhatsAppJob;
 
 class GeneralController extends Controller
 {
@@ -819,8 +817,15 @@ class GeneralController extends Controller
                     'message' => 'Payload inválido: se requiere id_cotizacion y proveedores'
                 ], 422);
             }
-            $idContenedor = Cotizacion::find($idCotizacion)->id_contenedor;
-            $container = Contenedor::find($idContenedor);
+            $cotizacion = Cotizacion::find($idCotizacion);
+            if (!$cotizacion) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Cotización no encontrada'
+                ], 404);
+            }
+
+            $container = Contenedor::find($cotizacion->id_contenedor);
             if (!$container) {
                 return response()->json([
                     'success' => false,
@@ -846,307 +851,21 @@ class GeneralController extends Controller
                 }
             }
 
-            // Obtener carga a partir de la cotización
-            $cot = DB::table('contenedor_consolidado_cotizacion')
-                ->select('id_contenedor', 'telefono')
-                ->where('id', $idCotizacion)
-                ->whereNull('deleted_at')
-                ->first();
-
-            if (!$cot) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Cotización no encontrada'
-                ], 404);
-            }
-            $telefono = $cot->telefono;
-            $telefono = preg_replace('/\s+/', '', $telefono);
-            $telefono = $telefono ? $telefono . '@c.us' : '';
-            //if tel length is 9, add 51 to the beginning
-
-            $cont = DB::table('carga_consolidada_contenedor')
+            $cargoRow = DB::table('carga_consolidada_contenedor')
                 ->select('carga')
-                ->where('id', $cot->id_contenedor)
+                ->where('id', $cotizacion->id_contenedor)
                 ->first();
+            $cargoVal = $cargoRow->carga ?? '';
+            $cargaCode = is_numeric($cargoVal) ? str_pad((string) $cargoVal, 2, '0', STR_PAD_LEFT) : $cargoVal;
 
-            $carga = $cont->carga ?? '';
-            $cargaCode = is_numeric($carga) ? str_pad($carga, 2, '0', STR_PAD_LEFT) : $carga;
-
-            $message = "⚠️IMPORTANTE⚠️\n\nEl siguiente paso es la recopilación de tus documentos para la declaración en Aduanas. Para ello, te solicitaré los siguientes documento.\n\nDocumentación: CONSOLIDADO #{$cargaCode}\n\n☑ PASO 1: Llenar el Excel de confirmación con las características de los productos que estás importando para poder declarar correctamente tus productos 📄 y evitar multas o pérdidas en aduanas.\n\n📢 IMPORTANTE:  Ver el video sobre el Excel de confirmación. 📋\n\nVideo:  https://youtu.be/rvhwblBEbXQ";
-
-            $response = $this->sendMessage($message, $telefono, 5);
-            Log::info('Respuesta de WhatsApp: ' . json_encode($response));
-
-            // Generar Excel de confirmación por proveedor
-            $templatePath = storage_path('app/public/templates/excel-confirmacion/EXCEL_DE_CONFIRMACION_GENERAL.xlsx');
-            $outputDir = storage_path('app/public/excel-confirmacion');
-            if (!is_dir($outputDir)) {
-                @mkdir($outputDir, 0775, true);
-            }
-
-            // Mapa de etiquetas por tipo de producto
-            $labelsMap = [
-                'GENERAL' => [
-                    'Material:',
-                    'Marca:',
-                    'Modelo:',
-                    'Tamaño:',
-                    'Capacidad (ml o kg):',
-                    'Peso Neto:',
-                    'Incluye:',
-                    'Pares o Piezas:',
-                    'Funcion:',
-                    'Presentacion (botella, caja, etc.)::',
-                    ''
-                ],
-                'CALZADO' => [
-                    'Marca:',
-                    'Modelo:',
-                    'Material de Capellada (%): ',
-                    'Material de Forro (%):',
-                    'Material de Plantilla (%):',
-                    'Material de Suela (%):',
-                    'Talla:',
-                    'Colores:',
-                    'Incluye:',
-                    'Empaque (Granel o Cajas):',
-                    ''
-                ],
-                'ROPA' => [
-                    'Marca:',
-                    'Modelo:',
-                    'Material Exterior (%):',
-                    'Material del Forro (%):',
-                    'Material del Relleno (%):',
-                    'Material del Cierre (%):',
-                    'Material del Puños (%):',
-                    'Talla:',
-                    'Colores:',
-                    'Incluye:',
-                    ''
-                ],
-                'TECNOLOGIA' => [
-                    'Material:',
-                    'Marca:',
-                    'Modelo:',
-                    'Tamaño del producto:',
-                    'Potencia:',
-                    'Voltaje:',
-                    'Amperaje:',
-                    'Bateria',
-                    'Peso Neto:',
-                    'Incluye:',
-                    'Pares o Piezas:',
-                    'Función:',
-                    ''
-                ],
-                'TELA' => [
-                    'Material (%):',
-                    'Marca:',
-                    'Modelo:',
-                    'Tamaño (Metros):',
-                    'Gramaje (g/m²):',
-                    'Tipo de Tela:',
-                    'Cantidad de Rollos:',
-                    'Uso:',
-                    ''
-                ],
-                'AUTOMOTRIZ' => [
-                    'Material:',
-                    'Marca:',
-                    'Modelo:',
-                    'Tamaño:',
-                    'Compatibilidad (vehiculo/moto):',
-                    'Voltaje:',
-                    'Potencia:',
-                    'Peso Neto:',
-                    'Incluye:',
-                    'Pares o Piezas:',
-                    'Función:',
-                    ''
-                ],
-                'MOVILIDAD PERSONAL' => [
-                    'Material:',
-                    'Marca:',
-                    'Modelo:',
-                    'Tamaño del producto:',
-                    'Tamaño de ruedas:',
-                    'Distancia entre ruedas:',
-                    'Voltaje:',
-                    'Potencia:',
-                    'Amperaje:',
-                    'Autonomia:',
-                    'Velocidad maxima:',
-                    'Peso Neto:',
-                    'Capacidad de Carga:',
-                    'Tipo de Bateria:',
-                    'Incluye:',
-                ],
-                'MAQUINARIA' => [
-                    'Material:',
-                    'Marca:',
-                    'Modelo:',
-                    'Tamaño:',
-                    'Potencia:',
-                    'Voltaje:',
-                    'Amperaje:',
-                    'Peso',
-                    'Incluye:',
-                    'Funcion:',
-                    '',
-                    '',
-                ],
-            ];
-
-            $generated = [];
-            foreach ($proveedores as $prov) {
-                $items = $prov['items'] ?? [];
-                if (!file_exists($templatePath)) {
-                    Log::error('Plantilla de Excel de confirmación no encontrada: ' . $templatePath);
-                    continue;
-                }
-                $spreadsheet = IOFactory::load($templatePath);
-                $sheet = $spreadsheet->getActiveSheet();
-
-                $baseStartRow = 14; // B14:L25
-                $baseBlockRows = 12;    // 12 filas base
-
-                $currentRow = $baseStartRow;
-                foreach ($items as $idx => $item) {
-                    $tipo = strtoupper($item['tipo_producto'] ?? 'GENERAL');
-                    $labels = $labelsMap[$tipo] ?? $labelsMap['GENERAL'];
-                    $rowsNeeded = max($baseBlockRows, count($labels));
-
-                    if ($idx === 0) {
-                        // Primer bloque: expandir si se requieren más de 12 filas
-                        if ($rowsNeeded > $baseBlockRows) {
-                            // Para MOVILIDAD PERSONAL, primero desmergear columnas B,C,D,F,G,H,I,J,K,L del bloque base
-                            if ($tipo === 'MOVILIDAD PERSONAL') {
-                                foreach (['B', 'C', 'D', 'F', 'G', 'H', 'I', 'J', 'K', 'L'] as $colToUnmerge) {
-                                    $sheet->unmergeCells("{$colToUnmerge}{$baseStartRow}:{$colToUnmerge}" . ($baseStartRow + $baseBlockRows - 1));
-                                }
-                            }
-                            $sheet->insertNewRowBefore($baseStartRow + $baseBlockRows, $rowsNeeded - $baseBlockRows);
-                            // Duplicar estilos para filas nuevas, tomando la última fila base como referencia
-                            for ($r = 0; $r < ($rowsNeeded - $baseBlockRows); $r++) {
-                                $srcRow = $baseStartRow + $baseBlockRows - 1;
-                                $dstRow = $baseStartRow + $baseBlockRows + $r;
-                                $sheet->duplicateStyle($sheet->getStyle("B{$srcRow}:L{$srcRow}"), "B{$dstRow}:L{$dstRow}");
-                            }
-                        }
-                        $startRow = $baseStartRow;
-                    } else {
-                        // Bloques subsecuentes: insertar bloque completo con el tamaño requerido
-                        $sheet->insertNewRowBefore($currentRow, $rowsNeeded);
-                        // Copiar estilos del bloque base fila por fila (hasta 12) y extender con la última fila base
-                        for ($r = 0; $r < $rowsNeeded; $r++) {
-                            $srcRow = $baseStartRow + min($r, $baseBlockRows - 1);
-                            $dstRow = $currentRow + $r;
-                            $sheet->duplicateStyle($sheet->getStyle("B{$srcRow}:L{$srcRow}"), "B{$dstRow}:L{$dstRow}");
-                        }
-                        $startRow = $currentRow;
-                    }
-
-
-                    foreach (range('B', 'L') as $colRef) {
-                        for ($rowApply = $startRow; $rowApply <= ($startRow + $rowsNeeded - 1); $rowApply++) {
-                            $sheet->duplicateStyle($sheet->getStyle("{$colRef}14"), "{$colRef}{$rowApply}");
-                        }
-                    }
-
-                    // A nunca debe tener bordes: limpiar bordes en el rango afectado
-                    for ($rowApply = $startRow; $rowApply <= ($startRow + $rowsNeeded - 1); $rowApply++) {
-                        $borders = $sheet->getStyle('A' . $rowApply)->getBorders();
-                        $borders->getTop()->setBorderStyle(\PhpOffice\PhpSpreadsheet\Style\Border::BORDER_NONE);
-                        $borders->getBottom()->setBorderStyle(\PhpOffice\PhpSpreadsheet\Style\Border::BORDER_NONE);
-                        $borders->getLeft()->setBorderStyle(\PhpOffice\PhpSpreadsheet\Style\Border::BORDER_NONE);
-                        $borders->getRight()->setBorderStyle(\PhpOffice\PhpSpreadsheet\Style\Border::BORDER_NONE);
-                    }
-
-                    // Merge vertical por columna para preservar forma del bloque completo (excepto E)
-                    foreach (range('B', 'L') as $col) {
-                        if ($col === 'E') {
-                            continue; // no mergear la columna E (labels)
-                        }
-                        $sheet->mergeCells("{$col}{$startRow}:{$col}" . ($startRow + $rowsNeeded - 1));
-                    }
-
-                    // Formateo especial posterior a merges
-                    $endRow = $startRow + $rowsNeeded - 1;
-                    // Columna H: aplicar formateo del primer rango (H14) al rango mergeado actual
-                    $sheet->duplicateStyle($sheet->getStyle('H14'), "H{$startRow}:H{$endRow}");
-
-                    // Columna I: fórmula explícita G{row}*H{row}
-                    $sheet->setCellValue('I' . $startRow, '=G' . $startRow . '*H' . $startRow);
-
-                    // Columna C: initial_name (en la primera fila del bloque)
-                    $initialName = $item['initial_name'] ?? '';
-                    $sheet->setCellValueExplicit('C' . $startRow, $initialName, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
-                    // Ajustar estilo/texto de la columna C (usar estilo base C14 y centrar)
-                    $sheet->duplicateStyle($sheet->getStyle('C14'), 'C' . $startRow . ':C' . $endRow);
-                    $sheet->getStyle('C' . $startRow . ':C' . $endRow)
-                        ->getAlignment()
-                        ->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER)
-                        ->setVertical(\PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER)
-                        ->setWrapText(true);
-
-                    // Columna E: labels por tipo de producto
-                    for ($i = 0; $i < $rowsNeeded; $i++) {
-                        $sheet->setCellValueExplicit('E' . ($startRow + $i), $labels[$i] ?? '', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
-                    }
-                    // Columna F: tipo de producto para todas las filas del bloque
-                    for ($i = 0; $i < $rowsNeeded; $i++) {
-                        $sheet->setCellValueExplicit('F' . ($startRow + $i), $tipo, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
-                    }
-
-                    // Avanzar currentRow al final de este bloque
-                    $currentRow = $startRow + $rowsNeeded;
-                }
-                // Agregar fila de totales debajo del último bloque
-                $lastEndRow = $currentRow - 1;
-                $totalRow = $currentRow;
-                if ($lastEndRow >= $baseStartRow) {
-                    // SUM para G y I desde la fila 14 hasta la última fila del bloque
-                    $sheet->setCellValue('G' . $totalRow, '=SUM(G' . $baseStartRow . ':G' . $lastEndRow . ')');
-                    $sheet->setCellValue('I' . $totalRow, '=SUM(I' . $baseStartRow . ':I' . $lastEndRow . ')');
-                }
-                $codeSupplier = CotizacionProveedor::where('id', $prov['id'])->first()->code_supplier;
-                $fileName = 'excel_confirmacion' . '_' . $codeSupplier . '.xlsx';
-                $fullPath = $outputDir . DIRECTORY_SEPARATOR . $fileName;
-                $writer = IOFactory::createWriter($spreadsheet, 'Xlsx');
-                $writer->save($fullPath);
-                $response = $this->sendMedia($fullPath, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'Documento de confirmación', $telefono, 5);
-                Log::info('Respuesta de WhatsApp: ' . json_encode($response));
-            }
-            $contenedor = Contenedor::where('id', $cot->id_contenedor)->first();
-            $fecha_documentacion_max = $contenedor->fecha_documentacion_max;
-            $fecha_documentacion_max_formatted = $fecha_documentacion_max ? date('d/m/Y', strtotime($fecha_documentacion_max)) : null;
-            $message = "☑ PASO 2: Solicita a tu proveedor los documentos finales:
-•⁠  ⁠Commercial Invoice 📄.
-•⁠  ⁠Packing List 📦.
-
-📋 Adjuntamos un Word con indicaciones para un correcto llenado.
-📩 El documento está en idioma chino, solo enviarlo a su proveedor.
-🚫 Indicar a tu proveedor, que no se rellena encima del World . ESTE WORD ES SOLO UNA GUIA.
-
-";
-            if ($validateMaxDate && $fecha_documentacion_max_formatted) {
-                $message .= "Fecha maxima de entrega: {$fecha_documentacion_max_formatted}";
-            }
-            $response = $this->sendMessage($message, $telefono, 8);
-            //send CONSIDERATIONS.docx on public storage templates
-            $considerationsPath = public_path('storage/templates/CONSIDERATIONS.docx');
-            $response = $this->sendMedia($considerationsPath, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'Consideraciones', $telefono, 10);
-
+            SolicitarDocumentosWhatsAppJob::dispatch((int) $idCotizacion, $proveedores, (bool) $validateMaxDate);
 
             return response()->json([
                 'success' => true,
-                'message' => 'Items actualizados, mensaje enviado y archivos generados',
+                'message' => 'Items actualizados; envío por WhatsApp y generación de Excel encolados',
                 'payload' => [
-                    'id_cotizacion' => $idCotizacion,
+                    'id_cotizacion' => (int) $idCotizacion,
                     'carga' => $cargaCode,
-                    'text' => $message,
-                    'files' => $generated
                 ]
             ]);
         } catch (\Exception $e) {
