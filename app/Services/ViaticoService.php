@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Viatico;
 use App\Models\ViaticoPago;
 use App\Models\ViaticoRetribucion;
+use App\Support\MonetarioDosDecimales;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
@@ -25,12 +26,13 @@ class ViaticoService
             $data['status'] = Viatico::STATUS_PENDING;
             $items = $data['items'] ?? [];
             unset($data['items']);
+            unset($data['total_amount']);
 
             if ($archivo) {
                 $data['receipt_file'] = $this->guardarArchivo($archivo);
             }
 
-            $viatico = Viatico::create($data);
+            $viatico = Viatico::create(array_merge($data, ['total_amount' => '0.00']));
 
             foreach ($items as $index => $item) {
                 $pagoData = [
@@ -50,6 +52,8 @@ class ViaticoService
                 }
                 ViaticoPago::create($pagoData);
             }
+
+            $this->sincronizarTotalAmountViaticoDesdePagos($viatico);
 
             $user = $viatico->usuario;
             ViaticoCreado::dispatch($viatico, $user, 'Viático creado exitosamente');
@@ -150,6 +154,7 @@ class ViaticoService
 
             $items = $data['items'] ?? null;
             unset($data['items']);
+            unset($data['total_amount']);
 
             DB::beginTransaction();
             if (isset($data['status']) && $data['status'] === Viatico::STATUS_CONFIRMED && empty($viatico->codigo_confirmado)) {
@@ -206,6 +211,10 @@ class ViaticoService
                 }
             }
 
+            $this->sincronizarTotalAmountViaticoDesdePagos($viatico);
+            $viatico->refresh();
+            $this->reconciliarEstadoConfirmacionSegunRetribuciones($viatico);
+
             DB::commit();
 
             foreach ($archivosAEliminar as $ruta) {
@@ -238,6 +247,7 @@ class ViaticoService
             }
             $items = $data['items'] ?? null;
             unset($data['items']);
+            unset($data['total_amount']);
             $viatico->update($data);
 
             if ($items !== null) {
@@ -278,6 +288,9 @@ class ViaticoService
                     $p->delete();
                 }
             }
+
+            $this->sincronizarTotalAmountViaticoDesdePagos($viatico);
+
             DB::commit();
             return $viatico->load(['usuario', 'pagos']);
         } catch (\Exception $e) {
@@ -428,10 +441,54 @@ class ViaticoService
     }
 
     /**
-     * Suma montos por filas con BCMath. El SUM() SQL vía PDO/Laravel suele llegar como float en PHP y pierde céntimos.
-     *
-     * @return string Ej. "328.40"
+     * Suma montos de ítems (viaticos_pagos) leyendo por filas (evitar SUM agregado como float en PDO).
      */
+    private function sumaMontosPagosViatico(int $viaticoId): string
+    {
+        $montos = DB::table('viaticos_pagos')
+            ->where('viatico_id', $viaticoId)
+            ->orderBy('id')
+            ->pluck('monto');
+
+        return MonetarioDosDecimales::sumarMontosColumnaBd($montos);
+    }
+
+    private function sincronizarTotalAmountViaticoDesdePagos(Viatico $viatico): void
+    {
+        $sum = $this->sumaMontosPagosViatico($viatico->id);
+
+        $viatico->total_amount = $sum;
+        Viatico::withoutEvents(function () use ($viatico) {
+            $viatico->save();
+        });
+    }
+
+    /**
+     * Si hay retribuciones con monto, el total del viático debe alinearse después de editar ítems.
+     */
+    private function reconciliarEstadoConfirmacionSegunRetribuciones(Viatico $viatico): void
+    {
+        if ($viatico->status === Viatico::STATUS_REJECTED) {
+            return;
+        }
+
+        if (!ViaticoRetribucion::where('viatico_id', $viatico->id)->exists()) {
+            return;
+        }
+
+        $sumaRetribuciones = $this->sumaMontosRetribucionesViatico($viatico->id);
+        $nuevo = $this->retribucionesCubrenTotalViatico($sumaRetribuciones, $viatico->total_amount)
+            ? Viatico::STATUS_CONFIRMED
+            : Viatico::STATUS_PENDING;
+
+        if ($viatico->status === $nuevo) {
+            return;
+        }
+
+        $viatico->status = $nuevo;
+        $viatico->save();
+    }
+
     private function sumaMontosRetribucionesViatico(int $viaticoId): string
     {
         $montos = DB::table('viaticos_retribuciones')
@@ -440,36 +497,7 @@ class ViaticoService
             ->orderBy('id')
             ->pluck('monto');
 
-        if ($montos->isEmpty()) {
-            return '0.00';
-        }
-
-        if (!function_exists('bcadd')) {
-            $acc = '0';
-            foreach ($montos as $monto) {
-                if ($monto === null || $monto === '') {
-                    continue;
-                }
-                $acc += (float) str_replace(',', '.', trim((string) $monto));
-            }
-
-            return sprintf('%.2F', round($acc, 2));
-        }
-
-        $sum = '0.00';
-        foreach ($montos as $monto) {
-            if ($monto === null || $monto === '') {
-                continue;
-            }
-            $piece = str_replace(',', '.', preg_replace('#\s+#', '', (string) $monto));
-            if ($piece === '' || !is_numeric($piece)) {
-                continue;
-            }
-            $piece2 = bcadd($piece, '0', 2);
-            $sum = bcadd($sum, $piece2, 2);
-        }
-
-        return bcadd($sum, '0', 2);
+        return MonetarioDosDecimales::sumarMontosColumnaBd($montos);
     }
 
     /**

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\MonetarioDosDecimales;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
@@ -28,11 +29,18 @@ class Viatico extends Model
     protected $casts = [
         'reimbursement_date' => 'date',
         'return_date' => 'date',
-        'total_amount' => 'decimal:2',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
         'deleted_at' => 'datetime'
     ];
+
+    /**
+     * Misma lógica que viaticos_pagos.monto (evitar cast decimal:2 + float IEEE).
+     */
+    public function setTotalAmountAttribute($value): void
+    {
+        $this->attributes['total_amount'] = MonetarioDosDecimales::paraBd($value);
+    }
 
     // Estados disponibles
     const STATUS_PENDING = 'PENDING';
