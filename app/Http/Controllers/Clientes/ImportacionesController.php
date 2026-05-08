@@ -537,6 +537,14 @@ class ImportacionesController extends Controller
 
             $cotizacion->providers = json_decode($cotizacion->providers, true) ?? [];
             $cotizacion->files_almacen_inspection = json_decode($cotizacion->files_almacen_inspection, true) ?? [];
+            foreach ($cotizacion->files_almacen_inspection as &$fileInspection) {
+                $rawUrl = $this->generateImageUrl($fileInspection['file_url'] ?? null);
+                if (!empty($rawUrl) && !filter_var($rawUrl, FILTER_VALIDATE_URL)) {
+                    $rawUrl = url($rawUrl);
+                }
+                $fileInspection['file_url'] = $rawUrl;
+            }
+            unset($fileInspection);
 
             return response()->json([
                 'success' => true,
