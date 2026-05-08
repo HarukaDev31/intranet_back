@@ -1032,6 +1032,10 @@ class CalculadoraImportacionController extends Controller
 
                 $newProveedor = $proveedor->replicate();
                 $newProveedor->id_calculadora_importacion = $newCalculadora->id;
+                // Al duplicar NO debe quedar vinculado a proveedores de carga consolidada.
+                // La vinculación (id_proveedor/code_supplier) se define recién cuando pasa a COTIZADO.
+                $newProveedor->id_proveedor = null;
+                $newProveedor->code_supplier = null;
                 $newProveedor->save();
 
                 Log::info("Nuevo proveedor creado con ID: {$newProveedor->id}");
