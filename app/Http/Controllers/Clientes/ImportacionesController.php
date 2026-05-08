@@ -8,6 +8,7 @@ use App\Models\CargaConsolidada\Cotizacion;
 use Tymon\JWTAuth\Facades\JWTAuth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
+use App\Traits\FileTrait;
 use App\Models\CargaConsolidada\Contenedor;
 use App\Models\CargaConsolidada\CotizacionProveedor;
 use App\Models\CargaConsolidada\AlmacenInspection;
@@ -15,6 +16,8 @@ use App\Models\CargaConsolidada\Pago;
 
 class ImportacionesController extends Controller
 {
+    use FileTrait;
+
     private $pasoCompleted = 'COMPLETADO';
     private $pasoPending = 'PENDIENTE';
     private $pasosSeguimiento;
@@ -455,6 +458,10 @@ class ImportacionesController extends Controller
             $cotizacion->files_almacen_documentacion = json_decode($cotizacion->files_almacen_documentacion, true) ?? [];
             $cotizacion->providers = json_decode($cotizacion->providers, true) ?? [];
             $cotizacion->files_almacen_inspection = json_decode($cotizacion->files_almacen_inspection, true) ?? [];
+            foreach ($cotizacion->files_almacen_inspection as &$fileInspection) {
+                $fileInspection['file_url'] = $this->generateImageUrl($fileInspection['file_url'] ?? null);
+            }
+            unset($fileInspection);
 
             return response()->json([
                 'success' => true,
