@@ -2,24 +2,26 @@
 
 namespace App\Console\Commands;
 
+use App\Models\CargaConsolidada\Contenedor;
 use App\Services\CargaConsolidada\PromoteInspeccionadoToReservadoService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * Solo flujo calculadora + cotización inicial: pagos LOGÍSTICA vs {@see \App\Models\CalculadoraImportacion::logistica} (no logistica_final).
+ * Solo flujo calculadora + cotización inicial; excluye contenedor con estado_china = {@see Contenedor::CONTEDOR_CERRADO} (COMPLETADO).
  */
 class PromoteInspeccionadoToReservadoCommand extends Command
 {
     protected $signature = 'carga-consolidada:promote-inspeccionados-reservados-pagos';
 
-    protected $description = 'Calculadora/cotiz. inicial: INSPECCIONADO→RESERVADO si pagos LOGÍSTICA cubren calculadora.logistica (o monto si no hay calculadora)';
+    protected $description = 'Calculadora/cotiz. inicial: INSPECCIONADO→RESERVADO si pagos LOGÍSTICA alcanzan meta y contenedor.estado_china ≠ COMPLETADO';
 
     public function handle(PromoteInspeccionadoToReservadoService $service): int
     {
         $query = DB::table('contenedor_consolidado_cotizacion_proveedores as cp')
             ->join('contenedor_consolidado_cotizacion as cc', 'cc.id', '=', 'cp.id_cotizacion')
+            ->leftJoin('carga_consolidada_contenedor as ctn', 'ctn.id', '=', 'cc.id_contenedor')
             ->where('cc.from_calculator', 1)
             ->where(function ($q) {
                 $q->whereNull('cc.cotizacion_final_url')
@@ -27,7 +29,12 @@ class PromoteInspeccionadoToReservadoCommand extends Command
             })
             ->whereNotNull('cc.cotizacion_file_url')
             ->where('cc.cotizacion_file_url', '!=', '')
-            ->whereRaw("UPPER(TRIM(COALESCE(cp.estados, ''))) = 'INSPECCIONADO'");
+            ->whereRaw("UPPER(TRIM(COALESCE(cp.estados, ''))) = 'INSPECCIONADO'")
+            ->where(function ($q) {
+                $cerrado = strtoupper(Contenedor::CONTEDOR_CERRADO);
+                $q->whereNull('cc.id_contenedor')
+                    ->orWhereRaw("UPPER(TRIM(COALESCE(ctn.estado_china, ''))) <> ?", [$cerrado]);
+            });
 
         if (Schema::hasColumn('contenedor_consolidado_cotizacion', 'deleted_at')) {
             $query->whereNull('cc.deleted_at');

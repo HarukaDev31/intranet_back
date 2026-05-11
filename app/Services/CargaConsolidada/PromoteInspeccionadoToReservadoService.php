@@ -2,6 +2,7 @@
 
 namespace App\Services\CargaConsolidada;
 
+use App\Models\CargaConsolidada\Contenedor;
 use App\Models\CargaConsolidada\Cotizacion;
 use App\Models\CargaConsolidada\Pago;
 use App\Models\CargaConsolidada\PagoConcept;
@@ -13,6 +14,7 @@ use Illuminate\Support\Facades\Log;
  * no en cotización final (cotizacion_final_url / módulo Cotización Final).
  *
  * Estado proveedor vs estado cliente (`estado_cliente`) son independientes: la promoción no usa estado_cliente.
+ * No promueve si el contenedor asociado (`id_contenedor`) tiene `estado_china` = COMPLETADO (ya embarcado / cerrado).
  *
  * @see \App\Http\Controllers\CargaConsolidada\PagosController::syncEstadoCotizacionFromPayments (allí sigue LOGISTICA+IMPUESTOS; aquí solo logística)
  */
@@ -78,16 +80,48 @@ class PromoteInspeccionadoToReservadoService
     }
 
     /**
+     * Solo si hay contenedor asociado: bloquear cuando `carga_consolidada_contenedor.estado_china` es COMPLETADO (ya embarcado).
+     * Sin `id_contenedor` o sin fila contenedor no se bloquea por este criterio.
+     */
+    public function contenedorAsociadoPermitePromoverAReservado(?Cotizacion $cot): bool
+    {
+        if (!$cot || !$cot->id_contenedor) {
+            return true;
+        }
+
+        $contenedor = $cot->relationLoaded('contenedor')
+            ? $cot->getRelation('contenedor')
+            : $cot->contenedor()->first();
+
+        if (!$contenedor) {
+            return true;
+        }
+
+        $estado = strtoupper(trim((string) ($contenedor->estado_china ?? '')));
+
+        return $estado !== strtoupper(Contenedor::CONTEDOR_CERRADO);
+    }
+
+    /**
      * @return int Cantidad de filas de proveedor actualizadas
      */
     public function promoteIfEligible(int $idCotizacion): int
     {
-        $cot = Cotizacion::query()->find($idCotizacion);
+        $cot = Cotizacion::query()->with('contenedor')->find($idCotizacion);
         if (!$this->isCalculatorInitialCotizacion($cot)) {
             return 0;
         }
 
         if (!$this->isCoordinationPaymentComplete($idCotizacion)) {
+            return 0;
+        }
+
+        if (!$this->contenedorAsociadoPermitePromoverAReservado($cot)) {
+            Log::info('[Pagos][Calculadora inicial] INSPECCIONADO→RESERVADO omitido: contenedor.estado_china=COMPLETADO (ya embarcado)', [
+                'id_cotizacion' => $idCotizacion,
+                'id_contenedor' => $cot->id_contenedor,
+            ]);
+
             return 0;
         }
 
