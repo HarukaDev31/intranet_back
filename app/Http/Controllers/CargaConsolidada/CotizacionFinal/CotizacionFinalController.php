@@ -3396,6 +3396,48 @@ class CotizacionFinalController extends Controller
         }
     }
 
+    /**
+     * Calcula el MAX del % AD VALOREM leyendo directamente la fila 26 de la hoja de cálculos ('2').
+     * Es la fuente de la verdad cuando J20 (=MAX('2'!C26:X26)) trae un valor en caché stale o
+     * cuando alguien sobrescribió manualmente J20/I20 en la hoja 1.
+     */
+    private function boletaFinalGetAdValoremMaxPercentFromCalcSheet(
+        \PhpOffice\PhpSpreadsheet\Spreadsheet $spreadsheet
+    ): float {
+        try {
+            $calcSheet = $spreadsheet->getSheetByName('2');
+            if ($calcSheet === null) {
+                $calcSheet = $spreadsheet->getSheetCount() > 1 ? $spreadsheet->getSheet(1) : null;
+            }
+            if ($calcSheet === null) {
+                return 0.0;
+            }
+
+            $rowAdValoremPercent = 26;
+            $maxCol = (int) Coordinate::columnIndexFromString($calcSheet->getHighestDataColumn($rowAdValoremPercent));
+            $maxPct = 0.0;
+            for ($c = 3; $c <= $maxCol; $c++) {
+                $coord = Coordinate::stringFromColumnIndex($c) . $rowAdValoremPercent;
+                $val = $calcSheet->getCell($coord)->getCalculatedValue();
+                Log::info('val: ' . $val);
+                Log::info('coord: ' . $coord);
+                if (!is_numeric($val)) {
+                    continue;
+                }
+                $num = (float) $val;
+                if ($num > $maxPct) {
+                    $maxPct = $num;
+                }
+            }
+
+            return $maxPct;
+        } catch (\Throwable $e) {
+            Log::warning('boletaFinalGetAdValoremMaxPercentFromCalcSheet: ' . $e->getMessage());
+
+            return 0.0;
+        }
+    }
+
     private function boletaFinalGetVisiblePositiveAmount(
         \PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $sheet,
         string $column,
@@ -3572,7 +3614,7 @@ class CotizacionFinalController extends Controller
         }
 
         $legacyK = $this->boletaFinalIsLegacyMainSheetKLayout($sheet);
-
+        Log::info('legacyK: ' . $legacyK);
         if ($legacyK) {
             // Hoja principal final (layout K):
             // J8 = N° cajas (qty_box_china + qty_pallet_china)
@@ -3622,13 +3664,23 @@ class CotizacionFinalController extends Controller
                 $legacyTotalTributos = round($subtotalTrib + $percepcionTrib, 2);
             }
 
-            $adPct = intval(round($this->boletaFinalGetCellFloat($sheet, 'I20') * 100));
+            // En el flujo de cotización final (Excel masivo) el % AD VALOREM está en J20
+            // (=MAX('2'!C26:X26)). I20 está vacío en este flujo. Para que el PDF cuadre
+            // con el Excel:
+            //   1) Calculamos el MAX directo desde la hoja '2' (fuente de la verdad: no
+            //      depende del caché de la fórmula de J20 ni de que J20 haya sido
+            //      sobrescrito manualmente).
+            //   2) Si por algún motivo la hoja '2' no existe / está vacía, caemos a J20.
+            //   3) Si J20 también es 0, caemos a I20 (templates antiguos).
+            //   4) Como último respaldo, 6%.
+            $adPct = intval(round(
+                $this->boletaFinalGetAdValoremMaxPercentFromCalcSheet($spreadsheet) * 100
+            ));
+            Log::info('adPct: ' . $adPct);
             if ($adPct === 0) {
                 $adPct = intval(round($this->boletaFinalGetCellFloat($sheet, 'J20') * 100));
             }
-            if ($adPct === 0) {
-                $adPct = 6;
-            }
+           
 
             $kCostosFob = round($this->boletaFinalGetCellFloat($sheet, 'K15'), 2);
             $kCostosFobSvc = round($this->boletaFinalGetCellFloat($sheet, 'K' . $rowSvcFob), 2);
