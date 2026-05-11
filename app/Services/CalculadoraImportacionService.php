@@ -17,6 +17,8 @@ use App\Models\CargaConsolidada\FacturaComercial;
 use App\Models\CalculadoraTipoCliente;
 use App\Models\CalculadoraTarifasConsolidado;
 use App\Services\CalculadoraImportacion\CalculadoraImportacionExcelService;
+use App\Services\CalculadoraImportacion\CalculadoraImportacionCotizacionSyncService;
+use App\Services\CalculadoraImportacion\CodeSupplierHelper;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 
@@ -495,69 +497,13 @@ class CalculadoraImportacionService
                 'cargos_extra' => $cargosExtraAutocalc,
             ]);
 
-            // Preparar datos para regenerar Excel y boleta
-            // Calcular totalProductos desde los datos recibidos, no desde la BD (porque puede no estar recargada)
-            $totalProductos = 0;
-            foreach ($data['proveedores'] as $proveedorData) {
-                $totalProductos += count($proveedorData['productos'] ?? []);
-            }
-            $data['totalProductos'] = $totalProductos;
-            $data['totalExtraProveedor'] = $data['tarifaTotalExtraProveedor'];
-            $data['totalExtraItem'] = $data['tarifaTotalExtraItem'];
-            $data['totalDescuento'] = $data['tarifaDescuento'];
-            $data['id_usuario'] = $data['id_usuario'];
-            $data['id_carga_consolidada_contenedor'] = $calculadora->id_carga_consolidada_contenedor;
-            $data['tipo_cotizacion'] = $tipoCotizacion;
-
-            Log::info('[EDITAR COTIZACIÓN] Iniciando edición de Excel para calculadora ID: ' . $calculadora->id);
-            Log::info('[EDITAR COTIZACIÓN] URL Excel anterior: ' . $calculadora->url_cotizacion);
-            Log::info('[EDITAR COTIZACIÓN] Total productos: ' . $data['totalProductos']);
-            Log::info('[EDITAR COTIZACIÓN] Datos preparados: ' . json_encode([
-                'totalProductos' => $data['totalProductos'],
-                'totalExtraProveedor' => $data['totalExtraProveedor'],
-                'totalExtraItem' => $data['totalExtraItem'],
-                'totalDescuento' => $data['totalDescuento'],
-                'id_usuario' => $data['id_usuario'],
-                'id_carga_consolidada_contenedor' => $data['id_carga_consolidada_contenedor']
-            ]));
-
-            // Regenerar Excel completo con las nuevas filas del resumen
-            $result = $this->crearCotizacionInicial($data);
-
-            Log::info('[EDITAR COTIZACIÓN] Resultado de crearCotizacionInicial: ' . json_encode($result));
-
-            if (!$result || !isset($result['url'])) {
-                Log::error('[EDITAR COTIZACIÓN] ERROR: No se generó URL del Excel. Result: ' . json_encode($result));
-                throw new \Exception('No se pudo generar el archivo Excel de la cotización');
+            // Persistir vendedor explícito si vino en payload (queda dentro de la transacción)
+            if (array_key_exists('id_usuario', $data)) {
+                $calculadora->id_usuario = $data['id_usuario'];
+                $calculadora->save();
             }
 
-            $urlAnterior = $calculadora->url_cotizacion;
-            $calculadora->url_cotizacion = $result['url'];
-            $calculadora->total_fob = $result['totalfob'] ?? $calculadora->total_fob;
-            $calculadora->total_impuestos = $result['totalimpuestos'] ?? $calculadora->total_impuestos;
-            $calculadora->logistica = $result['logistica'] ?? $calculadora->logistica;
-            $calculadora->cargos_extra = $this->valorCargosExtraDesdeCotizacionInicial($result) ?? $calculadora->cargos_extra;
-            $calculadora->url_cotizacion_pdf = $result['boleta']['url'] ?? null;
-            $calculadora->id_usuario = $data['id_usuario'];
-            Log::info('[EDITAR COTIZACIÓN] Excel regenerado exitosamente');
-            Log::info('[EDITAR COTIZACIÓN] URL Excel anterior: ' . $urlAnterior);
-            Log::info('[EDITAR COTIZACIÓN] URL Excel nueva: ' . $result['url']);
-            Log::info('[EDITAR COTIZACIÓN] Total FOB: ' . ($result['totalfob'] ?? 'N/A'));
-            Log::info('[EDITAR COTIZACIÓN] Total Impuestos: ' . ($result['totalimpuestos'] ?? 'N/A'));
-            Log::info('[EDITAR COTIZACIÓN] Logística: ' . ($result['logistica'] ?? 'N/A'));
-            Log::info('[EDITAR COTIZACIÓN] ID Usuario: ' . ($data['id_usuario'] ?? 'N/A'));
-
-            $calculadora->save();
-
-            // Igual que en crear + paso a cotizado: fechas/código en el xlsx y PDF alineado al archivo final
-            $this->aplicarPostProcesoExcelCotizacion($calculadora);
-
-            Log::info('[DEBUG CALCULADORA UPDATE] RESULTADO FINAL PRE-COMMIT', [
-                'calculadora_id' => $calculadora->id,
-                'estado_despues' => $this->buildDebugSnapshot($calculadora),
-            ]);
-
-            // Sincronizar vendedor y URL en la cotización vinculada
+            // Sincronizar cabecera de la cotización vinculada (si existe)
             if ($calculadora->id_cotizacion) {
                 $cotHeader = [
                     'id_usuario' => $calculadora->id_usuario,
@@ -571,6 +517,11 @@ class CalculadoraImportacionService
                 Cotizacion::where('id', $calculadora->id_cotizacion)->update($cotHeader);
             }
 
+            Log::info('[DEBUG CALCULADORA UPDATE] RESULTADO FINAL PRE-COMMIT', [
+                'calculadora_id' => $calculadora->id,
+                'estado_despues' => $this->buildDebugSnapshot($calculadora),
+            ]);
+
             DB::commit();
             return $calculadora->load(['proveedores.productos']);
         } catch (\Exception $e) {
@@ -578,6 +529,47 @@ class CalculadoraImportacionService
             Log::error('Error al actualizar cálculo de importación: ' . $e->getMessage());
             throw $e;
         }
+    }
+
+    /**
+     * Orquestador completo de update: persiste datos y regenera todos los archivos derivados
+     * desde la BD (Excel, fechas en Excel, boleta PDF, sincronización con cotización vinculada).
+     *
+     * Reemplaza la cadena que antes vivía dispersa en el controlador:
+     *   actualizarCalculo + regenerarExcelDesdeCalculadora + modificarExcelConFechas
+     *   + regenerarBoletaPdf + actualizarCotizacionDesdeCalculadora
+     *
+     * Beneficio principal: el Excel se genera UNA sola vez por guardado.
+     *
+     * @param  array<string, mixed>  $data
+     * @param  array<string, mixed>|null $tarifaInput
+     */
+    public function actualizarYRegenerar(
+        CalculadoraImportacion $calculadora,
+        array $data,
+        ?array $tarifaInput = null
+    ): CalculadoraImportacion {
+        // (1) Persistir datos. NO genera Excel (esa responsabilidad pasó a este orquestador).
+        $this->actualizarCalculo($calculadora, $data);
+        $calculadora = $calculadora->fresh();
+
+        // (2) Regenerar Excel desde BD (fuente de verdad, UNA sola vez).
+        //     regenerarExcelDesdeCalculadora ya hace early-return si no hay datos suficientes.
+        $this->regenerarExcelDesdeCalculadora($calculadora, $tarifaInput);
+        $calculadora = $calculadora->fresh();
+
+        // (3) Aplicar fechas al xlsx (D7/columna P) y regenerar boleta PDF alineada al Excel final.
+        $this->aplicarPostProcesoExcelCotizacion($calculadora);
+        $calculadora = $calculadora->fresh();
+
+        // (4) Sincronizar la cotización vinculada con el Excel recién generado (PDF + fechas).
+        if ($calculadora && $calculadora->id_cotizacion && $calculadora->url_cotizacion) {
+            app(CalculadoraImportacionCotizacionSyncService::class)
+                ->actualizarCotizacionDesdeCalculadora($calculadora);
+            $calculadora = $calculadora->fresh();
+        }
+
+        return $calculadora->load(['proveedores.productos', 'contenedor']);
     }
 
     /**
@@ -1122,6 +1114,58 @@ class CalculadoraImportacionService
     }
 
     /**
+     * Forma estándar del resultado vacío de crearCotizacionInicial (cuando no hay datos
+     * suficientes para generar Excel o algo falla). Acepta sobrescribir campos puntuales.
+     *
+     * @param  array<string, mixed>  $overrides
+     * @return array<string, mixed>
+     */
+    private function respuestaCotizacionInicialVacia(array $overrides = []): array
+    {
+        return array_replace([
+            'url' => null,
+            'totalfob' => null,
+            'totalimpuestos' => null,
+            'logistica' => null,
+            'cargosExtra' => null,
+            'cargosExtras' => null,
+            'boleta' => null,
+        ], $overrides);
+    }
+
+    /**
+     * Carga la plantilla Excel de cotización inicial y verifica que tenga las hojas esperadas.
+     *
+     * @return \PhpOffice\PhpSpreadsheet\Spreadsheet|string Spreadsheet listo, o un string con el motivo de error.
+     */
+    private function cargarPlantillaCotizacionInicial()
+    {
+        $plantillaPath = public_path('assets/templates/PLANTILLA_COTIZACION_INICIAL_CALCULADORA.xlsx');
+
+        if (!file_exists($plantillaPath)) {
+            return 'Plantilla de cotización inicial no encontrada: ' . $plantillaPath;
+        }
+
+        try {
+            $objPHPExcel = \PhpOffice\PhpSpreadsheet\IOFactory::load($plantillaPath);
+        } catch (\Exception $e) {
+            return 'Error al cargar plantilla Excel: ' . $e->getMessage();
+        }
+
+        if (!$objPHPExcel) {
+            return 'Error: La plantilla Excel no se cargó correctamente';
+        }
+        if ($objPHPExcel->getSheetCount() === 0) {
+            return 'Error: La plantilla Excel no tiene hojas';
+        }
+        if ($objPHPExcel->getSheetCount() < 2) {
+            return 'Error: La plantilla no tiene suficientes hojas';
+        }
+
+        return $objPHPExcel;
+    }
+
+    /**
      * Lee la plantilla de cotización inicial desde assets/templates
      * @param \Illuminate\Http\Request $request
      * @return array|string Datos de la plantilla o mensaje de error
@@ -1131,32 +1175,13 @@ class CalculadoraImportacionService
         try {
             // Obtener tipo_cambio del request, si es null o 0 usar 3.75 por defecto
             $tipoCambio = (!empty($data['tipo_cambio']) && $data['tipo_cambio'] > 0) ? $data['tipo_cambio'] : 3.75;
-            $plantillaPath = public_path('assets/templates/PLANTILLA_COTIZACION_INICIAL_CALCULADORA.xlsx');
 
-            if (!file_exists($plantillaPath)) {
-                return 'Plantilla de cotización inicial no encontrada: ' . $plantillaPath;
-            }
-
-            try {
-                $objPHPExcel = \PhpOffice\PhpSpreadsheet\IOFactory::load($plantillaPath);
-
-                if (!$objPHPExcel) {
-                    return 'Error: La plantilla Excel no se cargó correctamente';
-                }
-
-                if ($objPHPExcel->getSheetCount() === 0) {
-                    return 'Error: La plantilla Excel no tiene hojas';
-                }
-            } catch (\Exception $e) {
-                return 'Error al cargar plantilla Excel: ' . $e->getMessage();
-            }
-
-            if ($objPHPExcel->getSheetCount() < 2) {
-                return 'Error: La plantilla no tiene suficientes hojas';
+            $objPHPExcel = $this->cargarPlantillaCotizacionInicial();
+            if (is_string($objPHPExcel)) {
+                return $objPHPExcel; // mensaje de error
             }
 
             $sheetCalculos = $objPHPExcel->getSheet(1);
-
             if (!$sheetCalculos) {
                 return 'Error: No se pudo obtener la hoja de cálculos';
             }
@@ -1164,15 +1189,7 @@ class CalculadoraImportacionService
             $totalProductos = $data['totalProductos'];
 
             if ($totalProductos <= 0) {
-                return [
-                    'url' => null,
-                    'totalfob' => null,
-                    'totalimpuestos' => null,
-                    'logistica' => null,
-                    'cargosExtra' => null,
-                    'cargosExtras' => null,
-                    'boleta' => null
-                ];
+                return $this->respuestaCotizacionInicialVacia();
             }
 
             $rowCodeSupplier = 3;
@@ -1616,28 +1633,12 @@ class CalculadoraImportacionService
                 $writer->save($filePath);
 
                 if (!file_exists($filePath)) {
-                    return [
-                        'url' => null,
-                        'totalfob' => null,
-                        'totalimpuestos' => null,
-                        'logistica' => null,
-                        'cargosExtra' => null,
-                        'cargosExtras' => null,
-                        'boleta' => null
-                    ];
+                    return $this->respuestaCotizacionInicialVacia();
                 }
 
                 $fileSize = filesize($filePath);
                 if ($fileSize === 0) {
-                    return [
-                        'url' => null,
-                        'totalfob' => null,
-                        'totalimpuestos' => null,
-                        'logistica' => null,
-                        'cargosExtra' => null,
-                        'cargosExtras' => null,
-                        'boleta' => null
-                    ];
+                    return $this->respuestaCotizacionInicialVacia();
                 }
 
                 $boletaInfo = null;
@@ -1670,27 +1671,13 @@ class CalculadoraImportacionService
                 ];
             } catch (\Exception $e) {
                 Log::error('Error al guardar Excel: ' . $e->getMessage());
-                return [
-                    'url' => null,
-                    'totalfob' => null,
-                    'totalimpuestos' => null,
-                    'logistica' => null,
-                    'cargosExtra' => null,
-                    'cargosExtras' => null,
-                    'boleta' => null
-                ];
+                return $this->respuestaCotizacionInicialVacia();
             }
         } catch (\Exception $e) {
             Log::error('Error al crear cotización inicial: ' . $e->getMessage());
 
-            return [
-                'url' => null,
-                'totalfob' => null,
-                'totalimpuestos' => null,
-                'logistica' => null,
-                'cargosExtra' => null,
-                'cargosExtras' => null,
-            ];
+            // Nota: la respuesta histórica omitía 'boleta' en este caso; usamos overrides para no añadirla.
+            return $this->respuestaCotizacionInicialVacia(['boleta' => null]);
         }
     }
 
@@ -2374,98 +2361,73 @@ class CalculadoraImportacionService
         }
     }
 
-    /**
-     * Prefijo del code_supplier antes de -N (p. ej. JUPE5). Alineado con generateCodeSupplier.
-     */
+    // ------------------------------------------------------------------
+    // Code Supplier
+    // Wrappers públicos hacia CodeSupplierHelper. La lógica vive ahí ahora;
+    // estos métodos se conservan para no romper otros consumidores
+    // (CotizacionController, CalculadoraImportacionExcelService, etc.).
+    // ------------------------------------------------------------------
+
     public function codeSupplierBasePrefix(string $nombreCliente, $carga): string
     {
-        return $this->initialsFromClienteNombre($nombreCliente) . $this->normalizeCargaSegmentForCodeSupplier($carga);
+        return CodeSupplierHelper::basePrefix($nombreCliente, $carga);
     }
 
-    /**
-     * Mayor sufijo N entre códigos que coinciden exactamente con {base}-N.
-     */
     public function maxCodeSupplierSuffixForBase(string $base, iterable $codeSuppliers): int
     {
-        if ($base === '') {
-            return 0;
-        }
-        $max = 0;
-        $pattern = '/^' . preg_quote($base, '/') . '-(\d+)$/';
-        foreach ($codeSuppliers as $cs) {
-            $t = trim((string) $cs);
-            if ($t === '') {
-                continue;
-            }
-            if (preg_match($pattern, $t, $m)) {
-                $max = max($max, (int) $m[1]);
-            }
-        }
-
-        return $max;
-    }
-
-    private function normalizeCargaSegmentForCodeSupplier($carga): string
-    {
-        if (is_numeric($carga)) {
-            return (string) (int) $carga;
-        }
-        if ($carga !== null && $carga !== '') {
-            $seg = substr((string) $carga, -2);
-            $seg = preg_replace('/[^A-Za-z0-9]/', '', (string) $seg);
-            return strtoupper((string) $seg);
-        }
-
-        return '';
+        return CodeSupplierHelper::maxSuffixForBase($base, $codeSuppliers);
     }
 
     private function sanitizeCodeSupplier(?string $code): ?string
     {
-        if ($code === null) {
-            return null;
-        }
-        $code = trim($code);
-        if ($code === '') {
-            return null;
-        }
-
-        $ascii = @iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $code);
-        if ($ascii !== false && $ascii !== null) {
-            $code = $ascii;
-        }
-
-        $code = strtoupper((string) $code);
-        $code = preg_replace('/[^A-Z0-9-]/', '', $code);
-
-        return $code !== '' ? $code : null;
-    }
-
-    private function initialsFromClienteNombre(string $nombre): string
-    {
-        $words = preg_split('/\s+/', trim($nombre)) ?: [];
-        $code = '';
-        foreach ($words as $word) {
-            if (strlen($code) >= 4) {
-                break;
-            }
-            $token = $this->sanitizeCodeSupplier((string) $word);
-            if ($token !== null && strlen($token) >= 2) {
-                $code .= substr($token, 0, 2);
-            }
-        }
-
-        return $this->sanitizeCodeSupplier($code) ?? '';
+        return CodeSupplierHelper::sanitize($code);
     }
 
     /**
-     * Genera código de proveedor basado en nombre del cliente y índice
-     * Misma estructura que CotizacionController.generateCodeSupplier
+     * Genera código de proveedor. La firma conserva $rowCount para compat con callers existentes
+     * (nunca se usó internamente).
+     *
+     * @param mixed $string nombre del cliente
+     * @param mixed $carga
+     * @param mixed $rowCount no usado, se conserva por compatibilidad
+     * @param int   $index
      */
     private function generateCodeSupplier($string, $carga, $rowCount, $index)
     {
-        $cargaSeg = $this->normalizeCargaSegmentForCodeSupplier($carga);
+        return CodeSupplierHelper::generate((string) $string, $carga, (int) $index);
+    }
 
-        return $this->sanitizeCodeSupplier($this->initialsFromClienteNombre((string) $string) . $cargaSeg . '-' . $index) ?? ('SUP-' . (int) $index);
+    /**
+     * Ordena proveedores por code_supplier (y por id como desempate) y productos por id ASC.
+     * Reorganiza las relaciones cargadas in-memory de la calculadora.
+     *
+     * Antes vivía como método privado en CalculadoraImportacionController; se movió aquí para
+     * poder reutilizarlo desde el flujo de regeneración del Excel.
+     *
+     * @param  CalculadoraImportacion|mixed  $calculadora
+     */
+    public function ordenarProveedoresPorIdYCode($calculadora): void
+    {
+        if (!$calculadora || !$calculadora->relationLoaded('proveedores')) {
+            return;
+        }
+
+        $proveedoresOrdenados = $calculadora->proveedores
+            ->sortBy(function ($p) {
+                return [(string) ($p->code_supplier ?? ''), $p->id];
+            })
+            ->values();
+
+        $proveedoresOrdenados->each(function ($proveedor) {
+            if ($proveedor && $proveedor->relationLoaded('productos')) {
+                $proveedor->setRelation(
+                    'productos',
+                    $proveedor->productos->sortBy('id')->values()
+                );
+            }
+        });
+
+        $calculadora->setRelation('proveedores', $proveedoresOrdenados);
     }
 
     /**

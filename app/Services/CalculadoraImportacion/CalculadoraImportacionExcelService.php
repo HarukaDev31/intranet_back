@@ -406,27 +406,16 @@ class CalculadoraImportacionExcelService
         }
     }
 
+    /**
+     * Genera código de proveedor para escribirlo en el Excel.
+     * Delegado a CodeSupplierHelper para mantener una sola fuente de verdad.
+     *
+     * @param mixed $carga
+     * @param mixed $rowCount  No se usa, se conserva por compatibilidad con la firma anterior.
+     */
     public function generateCodeSupplier(string $string, $carga, $rowCount, int $index): string
     {
-        if (is_numeric($carga)) {
-            $carga = (string) (int) $carga;
-        } elseif ($carga !== null && $carga !== '') {
-            $carga = substr((string) $carga, -2);
-        } else {
-            $carga = '';
-        }
-
-        $words = explode(" ", trim($string));
-        $code = "";
-
-        foreach ($words as $word) {
-            if (strlen($code) >= 4) break;
-            if (strlen($word) >= 2) {
-                $code .= strtoupper(substr($word, 0, 2));
-            }
-        }
-
-        return $code . $carga . "-" . $index;
+        return CodeSupplierHelper::generate($string, $carga, $index);
     }
 
     public function incrementColumn(string $column, int $increment = 1): string
