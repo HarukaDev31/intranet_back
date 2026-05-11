@@ -5,7 +5,9 @@ namespace App\Console\Commands;
 use App\Jobs\Crm\SyncLandingLeadToCrmJob;
 use App\Models\LandingConsolidadoLead;
 use App\Models\LandingCursoLead;
+use App\Support\Phone\PeruPhoneFormatter;
 use Illuminate\Console\Command;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -30,34 +32,45 @@ class EnqueueUnsyncedLandingLeadsToBitrixCommand extends Command
             return 0;
         }
 
-        $consolidadoIds = LandingConsolidadoLead::query()
+        $pendingConsolidado = LandingConsolidadoLead::query()
             ->whereNull('bitrix_synced_at')
-            ->orderBy('id')
-            ->pluck('id');
+            ->count();
 
         $dispatchedConsolidado = 0;
-        foreach ($consolidadoIds as $id) {
-            SyncLandingLeadToCrmJob::dispatch('consolidado', (int) $id);
+        foreach (
+            LandingConsolidadoLead::query()
+                ->whereNull('bitrix_synced_at')
+                ->orderBy('id')
+                ->cursor() as $lead
+        ) {
+            $this->normalizeWhatsappForBitrix($lead, 'consolidado');
+            SyncLandingLeadToCrmJob::dispatch('consolidado', (int) $lead->id);
             $dispatchedConsolidado++;
         }
 
         $cursoEnabled = (bool) (config('landing_curso.bitrix.enabled') ?? true);
         $dispatchedCurso = 0;
+        $pendingCurso = 0;
         if ($cursoEnabled) {
-            $cursoIds = LandingCursoLead::query()
+            $pendingCurso = LandingCursoLead::query()
                 ->whereNull('bitrix_synced_at')
-                ->orderBy('id')
-                ->pluck('id');
+                ->count();
 
-            foreach ($cursoIds as $id) {
-                SyncLandingLeadToCrmJob::dispatch('curso', (int) $id);
+            foreach (
+                LandingCursoLead::query()
+                    ->whereNull('bitrix_synced_at')
+                    ->orderBy('id')
+                    ->cursor() as $lead
+            ) {
+                $this->normalizeWhatsappForBitrix($lead, 'curso');
+                SyncLandingLeadToCrmJob::dispatch('curso', (int) $lead->id);
                 $dispatchedCurso++;
             }
         }
 
         Log::info('[CRM][Cron] Resultado de barrido', [
-            'pending_consolidado' => $consolidadoIds->count(),
-            'pending_curso' => isset($cursoIds) ? $cursoIds->count() : 0,
+            'pending_consolidado' => $pendingConsolidado,
+            'pending_curso' => $pendingCurso,
             'curso_enabled' => $cursoEnabled,
             'dispatched_consolidado' => $dispatchedConsolidado,
             'dispatched_curso' => $dispatchedCurso,
@@ -70,5 +83,43 @@ class EnqueueUnsyncedLandingLeadsToBitrixCommand extends Command
         }
 
         return 0;
+    }
+
+    /**
+     * Normaliza el WhatsApp a E.164 (Perú) y lo guarda antes de encolar el job,
+     * para que Bitrix reciba el mismo formato que usa duplicate.findbycomm.
+     *
+     * @param  LandingConsolidadoLead|LandingCursoLead  $lead
+     */
+    private function normalizeWhatsappForBitrix(Model $lead, string $funnel): void
+    {
+        $raw = trim((string) ($lead->whatsapp ?? ''));
+        if ($raw === '') {
+            return;
+        }
+
+        $canonical = PeruPhoneFormatter::toE164($raw);
+        if ($canonical === '') {
+            Log::warning('[CRM][Cron] WhatsApp no normalizable; se deja valor original.', [
+                'funnel' => $funnel,
+                'lead_id' => $lead->id,
+                'whatsapp_raw' => mb_substr($raw, 0, 32),
+            ]);
+
+            return;
+        }
+
+        if ($lead->whatsapp === $canonical) {
+            return;
+        }
+
+        $lead->forceFill(['whatsapp' => $canonical])->saveQuietly();
+
+        Log::info('[CRM][Cron] WhatsApp normalizado antes de encolar Bitrix.', [
+            'funnel' => $funnel,
+            'lead_id' => $lead->id,
+            'antes' => mb_substr($raw, 0, 32),
+            'despues' => $canonical,
+        ]);
     }
 }

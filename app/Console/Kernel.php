@@ -32,6 +32,10 @@ class Kernel extends ConsoleKernel
         $schedule->command('calculadora:sync-cotizado-a-confirmado')
             ->everyFiveMinutes()
             ->withoutOverlapping();
+        // INSPECCIONADO→RESERVADO cuando pagos LOGÍSTICA cubren calculadora.logistica (reintenta tras cambios de monto)
+        $schedule->command('carga-consolidada:promote-inspeccionados-reservados-pagos')
+            ->everyFiveMinutes()
+            ->withoutOverlapping();
     }
 
     /**

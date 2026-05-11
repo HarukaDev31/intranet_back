@@ -305,21 +305,20 @@ class PagosController extends Controller
                         ]
                     ]);
                 }
-                // Si estado_cliente es null, actualizar estados de proveedores a RESERVADO.
-                if ($cotizacion && $cotizacion->estado_cliente === null) {
-                    try {
-                        $this->updateProveedoresEstadoReservado($request->idCotizacion);
-                    } catch (\Exception $e) {
-                        Log::error('Error actualizando estado de proveedores a RESERVADO: ' . $e->getMessage());
-                    }
-                }
-
                 // Sincronizar estado de la cotización a partir de los pagos (LOGISTICA / IMPUESTOS)
                 try {
                     app()->make(\App\Http\Controllers\CargaConsolidada\PagosController::class)
                         ->syncEstadoCotizacionFromPayments($request->idCotizacion, false);
                 } catch (\Exception $e) {
                     Log::error('Error sincronizando estado de cotizacion tras store pago: ' . $e->getMessage());
+                }
+
+                // Calculadora / cotización inicial: si pagos LOGÍSTICA cubren calculadora.logistica (no logistica_final), INSPECCIONADO→RESERVADO.
+                try {
+                    app(\App\Services\CargaConsolidada\PromoteInspeccionadoToReservadoService::class)
+                        ->promoteIfEligible((int) $request->idCotizacion);
+                } catch (\Exception $e) {
+                    Log::error('Error promoviendo INSPECCIONADO→RESERVADO tras store pago: ' . $e->getMessage());
                 }
 
                 return response()->json([
@@ -399,6 +398,13 @@ class PagosController extends Controller
                 } catch (\Exception $e) {
                     Log::error('Error sincronizando estado de cotizacion tras delete pago: ' . $e->getMessage());
                 }
+
+                try {
+                    app(\App\Services\CargaConsolidada\PromoteInspeccionadoToReservadoService::class)
+                        ->promoteIfEligible((int) $pago->id_cotizacion);
+                } catch (\Exception $e) {
+                    Log::error('Error promoviendo INSPECCIONADO→RESERVADO tras delete pago: ' . $e->getMessage());
+                }
             }
 
             return response()->json(['success' => true, 'message' => 'Pago eliminado exitosamente']);
@@ -420,36 +426,6 @@ class PagosController extends Controller
         Log::info('Ruta: ' . $ruta);
         // Generar URL completa desde storage
         return Storage::disk('public')->url($ruta);
-    }
-
-    /**
-     * Actualizar estado de proveedores a RESERVADO cuando se registra un pago
-     */
-    private function updateProveedoresEstadoReservado($idCotizacion)
-    {
-        DB::beginTransaction();
-        try {
-            // Obtener todos los proveedores de esta cotización
-            $proveedores = DB::table('contenedor_consolidado_cotizacion_proveedores')
-                ->where('id_cotizacion', $idCotizacion)
-                ->where('estados', 'INSPECCIONADO')
-                ->get();
-
-            foreach ($proveedores as $proveedor) {
-                // Actualizar el campo estados en la tabla de proveedores.
-                // El tracking se gestiona por trigger en la tabla de proveedores.
-                DB::table('contenedor_consolidado_cotizacion_proveedores')
-                    ->where('id', $proveedor->id)
-                    ->update(['estados' => 'RESERVADO']);
-            }
-
-            DB::commit();
-            Log::info("Estados de proveedores actualizados a RESERVADO para cotización {$idCotizacion}");
-        } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error('Error en updateProveedoresEstadoReservado: ' . $e->getMessage());
-            throw $e;
-        }
     }
 
     /**

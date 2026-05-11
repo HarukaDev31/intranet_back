@@ -760,6 +760,13 @@ class PagosController extends Controller
                 Log::error('Error sincronizando estado cotizacion tras actualizar pago: ' . $e->getMessage());
             }
 
+            try {
+                app(\App\Services\CargaConsolidada\PromoteInspeccionadoToReservadoService::class)
+                    ->promoteIfEligible((int) $cotizacionId);
+            } catch (\Exception $e) {
+                Log::error('Error promoviendo INSPECCIONADO→RESERVADO (calculadora inicial) tras actualizar pago coordinación: ' . $e->getMessage());
+            }
+
             // Enviar WhatsApp al cliente si el pago fue CONFIRMADO
             if ($request->input('status') === 'CONFIRMADO') {
                 try {
