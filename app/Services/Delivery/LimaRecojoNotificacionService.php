@@ -16,7 +16,7 @@ class LimaRecojoNotificacionService
     /**
      * URL pública de Google Maps del almacén Lima.
      */
-    const MAPS_URL = 'https://maps.app.goo.gl/5raLmkvX65nNHB2Fr9';
+    const MAPS_URL = 'https://maps.app.goo.gl/5raLmkX65nNHB2Fr9';
 
     /**
      * Dirección del almacén Lima (línea principal).
@@ -99,14 +99,14 @@ class LimaRecojoNotificacionService
     {
         $primer = $d['primerNombre'];
         $consolidado = 'Consolidado #' . $d['carga'];
-        $fechaHora = trim($d['fechaTextual'] . ' - ' . $d['horaRecojo'] . ' hrs', ' -');
+        $fechaHora = trim($d['fechaTextual'] . ' · ' . $d['horaRecojo'] . ' hrs', ' ·');
 
         $lines = [
             'Hola, *' . $primer . '* 👋',
             '',
             'Tu recojo del "*' . $consolidado . '*" ha sido registrado. Aquí el resumen:',
             '',
-            '👤 *DESTINATARIO*',
+            '👤 *PERSONA QUE RECOGE*',
             $d['pickName'],
             '*DNI:* ' . $d['pickDoc'],
             '*Cel.:* ' . $d['pickPhone'],
@@ -117,11 +117,10 @@ class LimaRecojoNotificacionService
             '📍 *DIRECCIÓN DE RECOJO*',
             $d['direccion'],
             $d['referencia'],
-            '',
-            '🔗 *Ver en Google Maps*',
             $d['mapsUrl'],
             '',
-            'Gracias por confiar en *Pro Business* 🤝',
+            'Gracias por confiar en *Pro Business* 🙌',
+            'Donde conectamos tu negocio con los mejores productos y servicios.',
         ];
 
         return implode("\n", $lines);

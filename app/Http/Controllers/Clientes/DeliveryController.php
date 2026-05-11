@@ -279,6 +279,9 @@ class DeliveryController extends Controller
                 'clienteCorreo' => $deliveryForm->voucher_email ?? '',
                 'clienteRuc' => $deliveryForm->voucher_doc_type === 'FACTURA' ? $deliveryForm->voucher_doc : '',
                 'clienteRazonSocial' => $deliveryForm->voucher_doc_type === 'FACTURA' ? $deliveryForm->voucher_name : '',
+                'celularPersonaRecoge' => $deliveryForm->pick_phone ?? '',
+                'facturacionDistrito' => $this->splitDomicilioFiscal($deliveryForm->domicilio_fiscal)['distrito'],
+                'facturacionDireccionFiscal' => $this->splitDomicilioFiscal($deliveryForm->domicilio_fiscal)['direccion'],
                 'choferNombre' => $deliveryForm->drver_name ?? '',
                 'choferDni' => $deliveryForm->driver_doc ?? '',
                 'choferLicencia' => $deliveryForm->driver_license ?? '',
@@ -578,12 +581,14 @@ class DeliveryController extends Controller
                 'id_range_date' => $rangeId, // Puede ser null si no se proporciona
                 'pick_name' => $request->nombreCompleto,
                 'pick_doc' => $request->dni,
+                'pick_phone' => $request->celularPersonaRecoge ?? null,
                 'import_name' => $request->importador,
                 'productos' => is_array($request->tiposProductos) ? implode(', ', $request->tiposProductos) : $request->tiposProductos,
-                'voucher_doc' => $request->clienteDni ?? $request->clienteRuc,
+                'voucher_doc' => $this->requestFirstNonEmptyTrimmed($request, ['clienteDni', 'clienteRuc']) ?? '',
                 'voucher_doc_type' => strtoupper($request->tipoComprobante),
-                'voucher_name' => $request->clienteNombre ?? $request->clienteRazonSocial,
+                'voucher_name' => $this->requestFirstNonEmptyTrimmed($request, ['clienteNombre', 'clienteRazonSocial']) ?? '',
                 'voucher_email' => $request->clienteCorreo,
+                'domicilio_fiscal' => $this->buildDomicilioFiscal($request->facturacionDistrito, $request->facturacionDireccionFiscal),
                 'drver_name' => $request->choferNombre,
                 'driver_doc_type' => 'DNI', // Por defecto DNI
                 'driver_doc' => $request->choferDni,
@@ -698,6 +703,26 @@ class DeliveryController extends Controller
                 'error' => $th->getMessage()
             ]);
         }
+    }
+
+    private function splitDomicilioFiscal(?string $raw): array
+    {
+        if (!$raw || !trim($raw)) {
+            return ['distrito' => '', 'direccion' => ''];
+        }
+        $parts = array_map('trim', explode('|', $raw, 2));
+        return [
+            'distrito'  => $parts[0] ?? '',
+            'direccion' => $parts[1] ?? '',
+        ];
+    }
+
+    private function buildDomicilioFiscal(?string $distrito, ?string $direccion): ?string
+    {
+        $d = trim($distrito ?? '');
+        $dir = trim($direccion ?? '');
+        if (!$d && !$dir) return null;
+        return $d . ' | ' . $dir;
     }
 
     private function formatWhatsappNumber(?string $telefono): ?string

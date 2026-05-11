@@ -197,11 +197,11 @@
             </div>
 
             <div class="access-section">
-                <div class="access-title">Destinatario</div>
+                <div class="access-title">👤 Persona que recoge</div>
 
                 <table class="info-table">
                     <tr>
-                        <td class="info-label">Persona que recoge:</td>
+                        <td class="info-label">Nombre:</td>
                         <td class="info-value">{{ $pickName }}</td>
                     </tr>
                     <tr>
