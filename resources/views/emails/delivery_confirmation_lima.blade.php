@@ -183,40 +183,66 @@
         </div>
         
         <div class="content">
-            <div class="title">¡Confirmación de Recojo del Consolidado #{{ $carga }} - Lima!</div>
-            
+            <div class="title">¡Formulario completado!</div>
+
             <div class="subtitle">
-                Gracias por confiar en Probusiness, tu aliado en formación y gestión logística.<br><br>
-                Hemos recibido tu solicitud de recojo para Lima. Por favor asegúrate de estar disponible en la fecha y hora programada para el recojo de tu pedido.
+                Tu recojo ha sido agendado.<br>
+                Te esperamos en nuestro almacén.
             </div>
 
+            <div style="text-align:center; margin-bottom: 25px;">
+                <span style="display:inline-block; background:#333; color:#fff; padding:8px 18px; border-radius:999px; font-size:13px; font-weight:600; letter-spacing:0.3px;">
+                    Consolidado #{{ $carga }}
+                </span>
+            </div>
 
             <div class="access-section">
-                <div class="access-title">Información de Recojo</div>
-                
+                <div class="access-title">Destinatario</div>
+
                 <table class="info-table">
                     <tr>
-                        <td class="info-label">Fecha de Recojo:</td>
-                        <td class="info-value">{{ $fechaRecojo }}</td>
-                    </tr>
-                    <tr>
-                        <td class="info-label">Horario:</td>
-                        <td class="info-value">{{ $horaRecojo }}</td>
-                    </tr>
-                    <tr>
-                        <td class="info-label">Persona de Recojo:</td>
-                        <td class="info-value">{{ $deliveryForm->pick_name }}</td>
+                        <td class="info-label">Persona que recoge:</td>
+                        <td class="info-value">{{ $pickName }}</td>
                     </tr>
                     <tr>
                         <td class="info-label">DNI:</td>
-                        <td class="info-value">{{ $deliveryForm->pick_doc }}</td>
+                        <td class="info-value">{{ $pickDoc }}</td>
+                    </tr>
+                    <tr>
+                        <td class="info-label">Celular:</td>
+                        <td class="info-value">{{ $pickPhone }}</td>
                     </tr>
                 </table>
             </div>
 
             <div class="access-section">
+                <div class="access-title">📅 Fecha y hora de recojo</div>
+
+                <div class="support-text" style="text-align:left; font-size:14px; color:#333;">
+                    <strong>{{ $fechaTextual }}</strong> &nbsp;·&nbsp; {{ $horaRecojo }} hrs<br>
+                    <span style="color:#666; font-size:13px;">Recojo agendado en nuestro almacén.</span>
+                </div>
+            </div>
+
+            <div class="access-section">
+                <div class="access-title">📍 Dirección de recojo</div>
+
+                <div class="support-text" style="text-align:left; font-size:14px; color:#333;">
+                    <strong>{{ $direccion }}</strong><br>
+                    <span style="color:#666; font-size:13px;">{{ $referencia }}</span>
+                </div>
+
+                <div style="text-align:center; margin-top:20px;">
+                    <a href="{{ $mapsUrl }}" target="_blank"
+                       style="display:inline-block; background:#fff; color:#333; border:1px solid #333; padding:10px 22px; border-radius:6px; text-decoration:none; font-size:13px; font-weight:600;">
+                        Ver en Google Maps
+                    </a>
+                </div>
+            </div>
+
+            <div class="access-section">
                 <div class="access-title">¡Importante!</div>
-                
+
                 <div class="support-text">
                     Por favor asegúrate de estar disponible en la fecha y hora programada para el recojo de tu pedido.<br><br>
                     Si tienes alguna consulta o necesitas modificar tu reserva, no dudes en contactarnos.<br><br>
