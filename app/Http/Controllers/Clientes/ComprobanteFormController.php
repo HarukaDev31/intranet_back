@@ -10,6 +10,7 @@ use App\Models\CargaConsolidada\ComprobanteForm;
 use App\Models\User;
 use App\Models\UsuarioDatosFacturacion;
 use App\Jobs\SendComprobanteFormNotificationJob;
+use App\Helpers\UserLookupHelper;
 use Tymon\JWTAuth\Facades\JWTAuth;
 use Illuminate\Support\Facades\Log;
 
@@ -98,6 +99,7 @@ class ComprobanteFormController extends Controller
             $misRegistrosPrefill = collect();
             $latestUdf = UsuarioDatosFacturacion::query()
                 ->where('id_user', $userId)
+                ->orderByDesc('created_at')
                 ->orderByDesc('id')
                 ->first();
 
@@ -327,36 +329,19 @@ class ComprobanteFormController extends Controller
 
     /**
      * Devuelve el formulario de comprobante de una cotización (para vista interna).
-     * GET /clientes/comprobante-form/cotizacion/{idCotizacion}
+     * GET /carga-consolidada/contenedor/factura-guia/contabilidad/comprobante-form/{idCotizacion}
+     *
+     * Prioridad de la fuente de datos:
+     *   1) Última fila en usuario_datos_facturacion vinculada al cliente (historial más reciente).
+     *   2) Fila en consolidado_comprobante_forms (si no hay historial).
+     *
+     * Cuando existen ambas, se usa el historial como fuente de los campos pero se preserva
+     * id / created_at / updated_at / registered_by del ComprobanteForm para que la UI siga
+     * pudiendo abrir el formulario asociado.
      */
     public function getFormByCotizacion($idCotizacion)
     {
         try {
-            $form = ComprobanteForm::where('id_cotizacion', $idCotizacion)->first();
-
-            if ($form) {
-                // Incluir datos del usuario que registró el formulario (para UI interna).
-                $registeredBy = null;
-                if (!empty($form->id_user)) {
-                    $u = User::find($form->id_user);
-                    if ($u) {
-                        $registeredBy = [
-                            'id' => (int) $u->id,
-                            'name' => $u->name,
-                            'lastname' => $u->lastname,
-                            'email' => $u->email,
-                            'photo_url' => $u->photo_url,
-                        ];
-                    }
-                }
-                $form->registered_by = $registeredBy;
-
-                return response()->json([
-                    'success' => true,
-                    'data'    => $form,
-                ]);
-            }
-
             $cotizacion = Cotizacion::find($idCotizacion);
             if (!$cotizacion) {
                 return response()->json([
@@ -366,29 +351,48 @@ class ComprobanteFormController extends Controller
                 ], 404);
             }
 
+            $form = ComprobanteForm::where('id_cotizacion', $idCotizacion)->first();
             $udf = $this->findUsuarioDatosFacturacionForCotizacion($cotizacion);
-            if (!$udf) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Formulario no encontrado',
-                    'data'    => null,
-                ], 404);
+
+            // Prioridad 1: último registro en usuario_datos_facturacion.
+            if ($udf) {
+                $synthetic = $this->buildSyntheticComprobanteFormFromUsuarioDatosFacturacion($udf, $cotizacion);
+                if ($synthetic) {
+                    if ($form) {
+                        $synthetic['id'] = (int) $form->id;
+                        $synthetic['created_at'] = $form->created_at ? $form->created_at->toIso8601String() : $synthetic['created_at'];
+                        $synthetic['updated_at'] = $form->updated_at ? $form->updated_at->toIso8601String() : null;
+                        $synthetic['id_user'] = $form->id_user !== null ? (int) $form->id_user : $synthetic['id_user'];
+                        $synthetic['distrito_id'] = $form->distrito_id !== null ? (int) $form->distrito_id : $synthetic['distrito_id'];
+                        $synthetic['registered_by'] = $this->buildRegisteredByPayload($form->id_user);
+                        $synthetic['prefill_from_usuario_datos_facturacion'] = false;
+                    }
+
+                    return response()->json([
+                        'success' => true,
+                        'data'    => $synthetic,
+                        'message' => $form
+                            ? 'Datos sincronizados desde el último registro del historial de facturación.'
+                            : 'Datos mostrados desde el historial de facturación del usuario (sin formulario consolidado).',
+                    ]);
+                }
             }
 
-            $synthetic = $this->buildSyntheticComprobanteFormFromUsuarioDatosFacturacion($udf, $cotizacion);
-            if (!$synthetic) {
+            // Prioridad 2: ComprobanteForm directo (no hay historial usable).
+            if ($form) {
+                $form->registered_by = $this->buildRegisteredByPayload($form->id_user);
+
                 return response()->json([
-                    'success' => false,
-                    'message' => 'Formulario no encontrado',
-                    'data'    => null,
-                ], 404);
+                    'success' => true,
+                    'data'    => $form,
+                ]);
             }
 
             return response()->json([
-                'success' => true,
-                'data'    => $synthetic,
-                'message' => 'Datos mostrados desde el historial de facturación del usuario (sin formulario consolidado).',
-            ]);
+                'success' => false,
+                'message' => 'Formulario no encontrado',
+                'data'    => null,
+            ], 404);
         } catch (\Exception $e) {
             Log::error('ComprobanteFormController@getFormByCotizacion', ['error' => $e->getMessage()]);
             return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
@@ -396,57 +400,64 @@ class ComprobanteFormController extends Controller
     }
 
     /**
-     * Historial usuario_datos_facturacion vinculado a la cotización:
-     * 1) Coincidencia por documento (DNI/RUC) con columnas ruc o dni.
-     * 2) Si no hay, último registro del usuario cuyo email coincide con el correo de la cotización.
+     * Arma el payload "registered_by" usado por la UI a partir de un id_user.
+     */
+    private function buildRegisteredByPayload($idUser): ?array
+    {
+        if (empty($idUser)) {
+            return null;
+        }
+
+        $u = User::find($idUser);
+        if (!$u) {
+            return null;
+        }
+
+        return [
+            'id'        => (int) $u->id,
+            'name'      => $u->name,
+            'lastname'  => $u->lastname,
+            'email'     => $u->email,
+            'photo_url' => $u->photo_url,
+        ];
+    }
+
+    /**
+     * Historial usuario_datos_facturacion vinculado a la cotización.
+     *
+     * Flujo:
+     *   1) Resuelve el id_user del cliente con UserLookupHelper a partir del correo,
+     *      teléfono y documento de la cotización.
+     *   2) Con ese id_user, busca el último registro de usuario_datos_facturacion
+     *      (ordenado por created_at desc; id desc como tiebreaker).
+     *
+     * @return UsuarioDatosFacturacion|null
      */
     private function findUsuarioDatosFacturacionForCotizacion(Cotizacion $cotizacion)
     {
-        $documento = trim((string) ($cotizacion->documento ?? ''));
-        $docDigits = preg_replace('/\D+/', '', $documento);
-
-        if ($docDigits !== '' || $documento !== '') {
-            $row = UsuarioDatosFacturacion::query()
-                ->where(function ($q) use ($documento, $docDigits) {
-                    if ($documento !== '') {
-                        $q->where('ruc', $documento)
-                            ->orWhere('dni', $documento);
-                    }
-                    if ($docDigits !== '') {
-                        $q->orWhereRaw(
-                            'REPLACE(REPLACE(REPLACE(TRIM(COALESCE(ruc, "")), "-", ""), " ", ""), ".", "") = ?',
-                            [$docDigits]
-                        )->orWhereRaw(
-                            'REPLACE(REPLACE(REPLACE(TRIM(COALESCE(dni, "")), "-", ""), " ", ""), ".", "") = ?',
-                            [$docDigits]
-                        );
-                    }
-                })
-                ->orderBy('id', 'desc')
-                ->first();
-            if ($row) {
-                return $row;
-            }
+        try {
+            $user = UserLookupHelper::findUserByContact(
+                $cotizacion->correo ?? null,
+                $cotizacion->telefono ?? null,
+                $cotizacion->documento ?? null
+            );
+        } catch (\Exception $e) {
+            Log::warning('findUsuarioDatosFacturacionForCotizacion: error en UserLookupHelper', [
+                'id_cotizacion' => $cotizacion->id ?? null,
+                'error' => $e->getMessage(),
+            ]);
+            return null;
         }
 
-        $correo = trim((string) ($cotizacion->correo ?? ''));
-        if ($correo !== '') {
-            $correoNorm = strtolower($correo);
-            $userId = User::query()
-                ->whereRaw('LOWER(TRIM(email)) = ?', [$correoNorm])
-                ->value('id');
-            if ($userId) {
-                $row = UsuarioDatosFacturacion::query()
-                    ->where('id_user', (int) $userId)
-                    ->orderBy('id', 'desc')
-                    ->first();
-                if ($row) {
-                    return $row;
-                }
-            }
+        if (!$user || empty($user->id)) {
+            return null;
         }
 
-        return null;
+        return UsuarioDatosFacturacion::query()
+            ->where('id_user', (int) $user->id)
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->first();
     }
 
     /**
@@ -529,7 +540,7 @@ class ComprobanteFormController extends Controller
             $form->nombre_completo  = $request->input('nombre_completo', $form->nombre_completo);
             $form->dni_carnet       = $request->input('dni_carnet', $form->dni_carnet);
             $form->save();
-            $this->syncLatestUsuarioDatosFacturacion($form);
+            $this->appendUsuarioDatosFacturacion($form);
 
             return response()->json(['success' => true, 'message' => 'Formulario actualizado correctamente', 'data' => $form]);
         } catch (\Exception $e) {
@@ -538,42 +549,97 @@ class ComprobanteFormController extends Controller
         }
     }
 
-    private function syncLatestUsuarioDatosFacturacion(ComprobanteForm $form): void
+    /**
+     * Cada edición del comprobante agrega una nueva fila al historial usuario_datos_facturacion.
+     * Si el ComprobanteForm no tiene id_user, intenta resolverlo desde la cotización con UserLookupHelper.
+     */
+    private function appendUsuarioDatosFacturacion(ComprobanteForm $form): void
     {
-        if (empty($form->id_user)) {
+        $idUser = $this->resolveIdUserParaHistorial($form);
+        if ($idUser <= 0) {
+            Log::info('appendUsuarioDatosFacturacion: no se pudo resolver id_user para historial de facturacion', [
+                'form_id' => $form->id,
+                'id_cotizacion' => $form->id_cotizacion,
+            ]);
             return;
         }
 
-        $latest = UsuarioDatosFacturacion::query()
-            ->where('id_user', (int) $form->id_user)
-            ->orderByDesc('id')
-            ->first();
-
-        if (!$latest) {
-            return;
-        }
-
-        $latest->destino = in_array($form->destino_entrega, ['Lima', 'Provincia'], true)
+        $destino = in_array($form->destino_entrega, ['Lima', 'Provincia'], true)
             ? $form->destino_entrega
             : null;
 
+        $payload = [
+            'id_user' => $idUser,
+            'destino' => $destino,
+            'nombre_completo' => null,
+            'dni' => null,
+            'ruc' => null,
+            'razon_social' => null,
+            'domicilio_fiscal' => null,
+        ];
+
         if ($form->tipo_comprobante === 'FACTURA') {
-            $latest->ruc = $form->ruc !== null && $form->ruc !== ''
+            $payload['ruc'] = $form->ruc !== null && $form->ruc !== ''
                 ? preg_replace('/\D/', '', (string) $form->ruc)
                 : null;
-            $latest->razon_social = $form->razon_social;
-            $latest->domicilio_fiscal = $form->domicilio_fiscal;
-            $latest->nombre_completo = null;
-            $latest->dni = null;
+            $payload['razon_social'] = $form->razon_social;
+            $payload['domicilio_fiscal'] = $form->domicilio_fiscal;
         } else {
-            $latest->nombre_completo = $form->nombre_completo;
-            $latest->dni = $form->dni_carnet;
-            $latest->ruc = null;
-            $latest->razon_social = null;
-            $latest->domicilio_fiscal = null;
+            $payload['nombre_completo'] = $form->nombre_completo;
+            $payload['dni'] = $form->dni_carnet;
         }
 
-        $latest->save();
+        UsuarioDatosFacturacion::create($payload);
+    }
+
+    /**
+     * Devuelve el id_user del cliente para registrar el historial. Si el form ya lo trae, lo usa.
+     * Si no, intenta resolverlo desde los datos de contacto de la cotización via UserLookupHelper.
+     * Persiste el id_user resuelto en el ComprobanteForm para que ediciones futuras lo reutilicen.
+     *
+     * @return int 0 si no se pudo resolver.
+     */
+    private function resolveIdUserParaHistorial(ComprobanteForm $form): int
+    {
+        $idUser = (int) ($form->id_user ?? 0);
+        if ($idUser > 0) {
+            return $idUser;
+        }
+
+        if (empty($form->id_cotizacion)) {
+            return 0;
+        }
+
+        $cotizacion = Cotizacion::find($form->id_cotizacion);
+        if (!$cotizacion) {
+            return 0;
+        }
+
+        try {
+            $user = UserLookupHelper::findUserByContact(
+                $cotizacion->correo ?? null,
+                $cotizacion->telefono ?? null,
+                $cotizacion->documento ?? null
+            );
+        } catch (\Exception $e) {
+            Log::warning('resolveIdUserParaHistorial: error en UserLookupHelper', [
+                'form_id' => $form->id,
+                'id_cotizacion' => $form->id_cotizacion,
+                'error' => $e->getMessage(),
+            ]);
+            return 0;
+        }
+
+        if (!$user || empty($user->id)) {
+            return 0;
+        }
+
+        $idUser = (int) $user->id;
+
+        $form->id_user = $idUser;
+        $form->save();
+
+        return $idUser;
     }
 
     /**
