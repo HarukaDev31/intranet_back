@@ -1861,7 +1861,18 @@ class CalculadoraImportacionService
      */
     public function regenerarExcelDesdeCalculadora(CalculadoraImportacion $calculadora, ?array $tarifaInput = null): ?array
     {
-        $calculadora->load(['proveedores.productos', 'contenedor']);
+        // Forzar orden explícito por id ASC en proveedores y productos.
+        // Mantiene el orden de creación tras un update (los ítems se recrean
+        // siguiendo el orden del payload, así que sus IDs son consecutivos).
+        $calculadora->load([
+            'proveedores' => function ($query) {
+                $query->orderBy('id');
+            },
+            'proveedores.productos' => function ($query) {
+                $query->orderBy('id');
+            },
+            'contenedor',
+        ]);
 
         $clienteInfo = [
             'nombre' => $calculadora->nombre_cliente,

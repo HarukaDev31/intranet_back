@@ -40,11 +40,21 @@ class CalculadoraImportacionProveedor extends Model
     }
 
     /**
-     * Relación con los productos
+     * Relación con los productos.
+     *
+     * IMPORTANTE: orden por `id` ASC para preservar el orden de creación.
+     * En `CalculadoraImportacionService::actualizarCalculo` los productos se
+     * eliminan y recrean siguiendo el orden del payload del frontend, por lo
+     * que los nuevos IDs auto-increment quedan consecutivos en ese orden. Sin
+     * este orderBy, MySQL no garantiza el orden al recargar la relación
+     * (especialmente con `WHERE id_proveedor IN (...)`), lo que provoca que
+     * al regenerar el Excel desde la BD los ítems —sobre todo los recién
+     * agregados— aparezcan mezclados en lugar de al final del proveedor.
      */
     public function productos(): HasMany
     {
-        return $this->hasMany(CalculadoraImportacionProducto::class, 'id_proveedor');
+        return $this->hasMany(CalculadoraImportacionProducto::class, 'id_proveedor')
+            ->orderBy('id');
     }
 
     /**
