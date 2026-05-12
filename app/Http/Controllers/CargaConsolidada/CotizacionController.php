@@ -439,7 +439,7 @@ class CotizacionController extends Controller
                     INNER JOIN calculadora_importacion_proveedores AS cip ON ci.id = cip.id_calculadora_importacion
                     WHERE ci.id_carga_consolidada_contenedor = ' . (int) $idContenedor . '
                     AND ci.es_imo = 1
-                    AND ci.estado != \'PENDIENTE\'
+                    AND ci.estado_cotizador = "CONFIRMADO"
                 ) as cbm_total_imo'),
                 DB::raw('(
                     SELECT COALESCE(SUM(volumen), 0)
