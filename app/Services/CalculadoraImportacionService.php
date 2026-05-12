@@ -957,9 +957,10 @@ class CalculadoraImportacionService
         if (!$tipo) {
             return 375.0;
         }
+        $cbmCents = $this->cbmToCents($cbmTotal);
         $tarifa = CalculadoraTarifasConsolidado::where('calculadora_tipo_cliente_id', $tipo->id)
-            ->where('limit_inf', '<=', $cbmTotal)
-            ->where('limit_sup', '>=', $cbmTotal)
+            ->whereRaw('ROUND(limit_inf * 100) <= ?', [$cbmCents])
+            ->whereRaw('ROUND(limit_sup * 100) >= ?', [$cbmCents])
             ->first();
         if ($tarifa) {
             return (float) $tarifa->value;
@@ -984,9 +985,10 @@ class CalculadoraImportacionService
         }
 
         if ($tipoCliente) {
+            $cbmCents = $this->cbmToCents($cbmTotal);
             $tarifaConsolidado = CalculadoraTarifasConsolidado::where('calculadora_tipo_cliente_id', $tipoCliente->id)
-                ->where('limit_inf', '<=', $cbmTotal)
-                ->where('limit_sup', '>=', $cbmTotal)
+                ->whereRaw('ROUND(limit_inf * 100) <= ?', [$cbmCents])
+                ->whereRaw('ROUND(limit_sup * 100) >= ?', [$cbmCents])
                 ->first();
 
             if (!$tarifaConsolidado) {
@@ -1021,13 +1023,26 @@ class CalculadoraImportacionService
     /** Extra USD por ítems según CBM total y tabla TARIFAS_EXTRA_ITEM_PER_CBM. */
     public function getExtraItemPorCbm(float $cbmTotal, int $totalItems): float
     {
+        $cbmCents = $this->cbmToCents($cbmTotal);
         foreach (self::TARIFAS_EXTRA_ITEM_PER_CBM as $row) {
-            if ($cbmTotal >= $row['limit_inf'] && $cbmTotal <= $row['limit_sup']) {
+            $infCents = $this->cbmToCents((float) $row['limit_inf']);
+            $supCents = $this->cbmToCents((float) $row['limit_sup']);
+            if ($cbmCents >= $infCents && $cbmCents <= $supCents) {
                 $itemsExtraCobrar = min(max(0, $totalItems - $row['item_base']), $row['item_extra']);
                 return $itemsExtraCobrar * $row['tarifa'];
             }
         }
         return 0;
+    }
+
+    /**
+     * Convierte un CBM (float) a "céntimos" enteros (CBM * 100, redondeado a 2 decimales).
+     * Evita errores de punto flotante al comparar contra los rangos de tarifa
+     * (ej.: 0.598 -> 60 céntimos, coincide con un rango cuyo limit_inf = 0.60).
+     */
+    private function cbmToCents(float $value): int
+    {
+        return (int) round($value * 100);
     }
 
     /**
