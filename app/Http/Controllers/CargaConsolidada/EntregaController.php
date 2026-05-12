@@ -2462,8 +2462,13 @@ class EntregaController extends Controller
             ->whereNull('CC.deleted_at')
             ->whereNotNull('CC.estado_cliente')
             ->whereNull('CC.id_cliente_importacion')
-            ->where('CC.estado_cotizador', 'CONFIRMADO');
-        // Solo filas que tengan algún formulario asociado
+            ->where('CC.estado_cotizador', 'CONFIRMADO')
+            // Solo clientes con un formulario de delivery Lima o Provincia registrado.
+            // Sin formulario no hay datos de envío (ciudad/documento/razón social/fecha) que mostrar.
+            ->where(function ($q) {
+                $q->whereNotNull('L.id')
+                    ->orWhereNotNull('P.id');
+            });
 
         // Aplicar filtros adicionales si se proporcionan
         if ($request->has('search')) {
