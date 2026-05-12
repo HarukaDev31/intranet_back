@@ -1423,6 +1423,12 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                         $proveedor->cbm_total_china = $data['cbm_total_china'];
                         $proveedor->estados_proveedor = $this->STATUS_RECIVED;
                     }
+                    if (isset($data['peso_china']) && is_numeric($data['peso_china'])) {
+                        $proveedor->peso_china = $data['peso_china'];
+                    }
+                    if (isset($data['qty_pallet_china']) && is_numeric($data['qty_pallet_china'])) {
+                        $proveedor->qty_pallet_china = $data['qty_pallet_china'];
+                    }
                     Log::info('proveedor->arrive_date_china: ' . $proveedor->arrive_date_china);
                     ///validate if proveedor has arrive_date_china and is valid date if not update
                     if (
