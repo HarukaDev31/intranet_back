@@ -437,9 +437,10 @@ class CotizacionController extends Controller
                     SELECT ROUND(COALESCE(SUM(cip.cbm), 0), 2)
                     FROM calculadora_importacion AS ci
                     INNER JOIN calculadora_importacion_proveedores AS cip ON ci.id = cip.id_calculadora_importacion
+                    INNER JOIN contenedor_consolidado_cotizacion AS cci ON cci.id = ci.id_cotizacion AND cci.deleted_at IS NULL
                     WHERE ci.id_carga_consolidada_contenedor = ' . (int) $idContenedor . '
                     AND ci.es_imo = 1
-                    AND cc.estado_cotizador = "CONFIRMADO"
+                    AND cci.estado_cotizador = "CONFIRMADO"
                 ) as cbm_total_imo'),
                 DB::raw('(
                     SELECT COALESCE(SUM(volumen), 0)
