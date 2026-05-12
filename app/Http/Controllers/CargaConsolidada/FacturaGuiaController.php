@@ -21,6 +21,7 @@ use App\Models\CargaConsolidada\ConsolidadoDeliveryFormLima;
 use App\Models\CargaConsolidada\ConsolidadoDeliveryFormProvince;
 use App\Models\CargaConsolidada\GuiaRemision;
 use App\Models\UsuarioDatosFacturacion;
+use App\Helpers\ComprobanteFormResolverHelper;
 
 class FacturaGuiaController extends Controller
 {
@@ -209,7 +210,15 @@ class FacturaGuiaController extends Controller
 
         $query = $query->paginate($perPage);
 
-        $items = collect($query->items())->map(function ($item) {
+        // Pre-cargar todos los ComprobanteForm de las cotizaciones de la página en una sola query
+        // (evita N+1; el fallback a usuario_datos_facturacion se hace solo si no hay form).
+        $itemsRaw = collect($query->items());
+        $cotizacionIds = $itemsRaw->pluck('id')->all();
+        $comprobanteFormsByCotizacion = !empty($cotizacionIds)
+            ? ComprobanteForm::whereIn('id_cotizacion', $cotizacionIds)->get()->keyBy('id_cotizacion')
+            : collect();
+
+        $items = $itemsRaw->map(function ($item) use ($comprobanteFormsByCotizacion) {
             $facturasComerciales = collect($item->facturasComerciales ?? []);
             $facturasComercialesMapped = $facturasComerciales->map(function ($f) {
                 $signedUrl = !empty($f->file_path)
@@ -273,10 +282,12 @@ class FacturaGuiaController extends Controller
                 $guiasRemision = [['id' => 0, 'file_name' => 'Guía', 'file_url' => $guiaUrlLegacy]];
             }
 
-            $comprobanteForm = ComprobanteForm::where('id_cotizacion', $item->id)->first();
             $registrado = (bool) ($item->registrado_comprobante_form ?? false);
-            $tipoEntrega = $comprobanteForm ? $comprobanteForm->destino_entrega : null;
-            $formTipoComprobante = $comprobanteForm ? $comprobanteForm->tipo_comprobante : null;
+
+            // Prioridad 1: ComprobanteForm persistente (pre-cargado en batch).
+            // Prioridad 2: último usuario_datos_facturacion del cliente, vinculado vía UserLookupHelper.
+            $comprobanteFormPersisted = $comprobanteFormsByCotizacion->get($item->id);
+            $resuelto = ComprobanteFormResolverHelper::resolveForListing($item, $comprobanteFormPersisted);
 
             return [
                 'id_cotizacion' => $item->id,
@@ -294,9 +305,10 @@ class FacturaGuiaController extends Controller
                 'guia_remision_url' => $guiaUrlLegacy,
                 'guias_remision' => $guiasRemision,
                 'registrado' => $registrado,
-                'comprobante_form' => $comprobanteForm,
-                'tipo_entrega' => $tipoEntrega,
-                'form_tipo_comprobante' => $formTipoComprobante,
+                'comprobante_form' => $resuelto['comprobante_form'],
+                'tipo_entrega' => $resuelto['tipo_entrega'],
+                'form_tipo_comprobante' => $resuelto['form_tipo_comprobante'],
+                'prefill_from_usuario_datos_facturacion' => $resuelto['prefill_from_usuario_datos_facturacion'],
                 'comprobantes' => $mappedComprobantes,
                 'total_pagado' => (float) ($item->total_pagos_monto ?? 0),
                 'total_pagado_confirmado' => (float) ($item->total_pagos_monto ?? 0),

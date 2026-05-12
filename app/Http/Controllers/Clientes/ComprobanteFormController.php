@@ -11,6 +11,7 @@ use App\Models\User;
 use App\Models\UsuarioDatosFacturacion;
 use App\Jobs\SendComprobanteFormNotificationJob;
 use App\Helpers\UserLookupHelper;
+use App\Helpers\ComprobanteFormResolverHelper;
 use Tymon\JWTAuth\Facades\JWTAuth;
 use Illuminate\Support\Facades\Log;
 
@@ -423,85 +424,26 @@ class ComprobanteFormController extends Controller
     }
 
     /**
-     * Historial usuario_datos_facturacion vinculado a la cotización.
-     *
-     * Flujo:
-     *   1) Resuelve el id_user del cliente con UserLookupHelper a partir del correo,
-     *      teléfono y documento de la cotización.
-     *   2) Con ese id_user, busca el último registro de usuario_datos_facturacion
-     *      (ordenado por created_at desc; id desc como tiebreaker).
+     * Delegado a ComprobanteFormResolverHelper para mantener una sola fuente de verdad.
      *
      * @return UsuarioDatosFacturacion|null
      */
     private function findUsuarioDatosFacturacionForCotizacion(Cotizacion $cotizacion)
     {
-        try {
-            $user = UserLookupHelper::findUserByContact(
-                $cotizacion->correo ?? null,
-                $cotizacion->telefono ?? null,
-                $cotizacion->documento ?? null
-            );
-        } catch (\Exception $e) {
-            Log::warning('findUsuarioDatosFacturacionForCotizacion: error en UserLookupHelper', [
-                'id_cotizacion' => $cotizacion->id ?? null,
-                'error' => $e->getMessage(),
-            ]);
-            return null;
-        }
-
-        if (!$user || empty($user->id)) {
-            return null;
-        }
-
-        return UsuarioDatosFacturacion::query()
-            ->where('id_user', (int) $user->id)
-            ->orderByDesc('created_at')
-            ->orderByDesc('id')
-            ->first();
+        return ComprobanteFormResolverHelper::findLatestUsuarioDatosFacturacion($cotizacion);
     }
 
     /**
-     * Arma un objeto con la misma forma que consolidado_comprobante_forms para la vista interna de contabilidad.
+     * Delegado a ComprobanteFormResolverHelper. Añade 'registered_by' = null por compatibilidad
+     * con la respuesta histórica de este endpoint.
      */
     private function buildSyntheticComprobanteFormFromUsuarioDatosFacturacion(UsuarioDatosFacturacion $udf, Cotizacion $cotizacion)
     {
-        $tipo = $this->inferirTipoComprobanteDesdeUsuarioDatosFacturacion($udf);
-        if ($tipo === null) {
+        $base = ComprobanteFormResolverHelper::buildSyntheticFromUdf($udf, $cotizacion);
+        if ($base === null) {
             return null;
         }
-
-        $destino = in_array($udf->destino, ['Lima', 'Provincia'], true) ? $udf->destino : null;
-
-        $base = [
-            'id' => null,
-            'id_cotizacion' => (int) $cotizacion->id,
-            'id_contenedor' => $cotizacion->id_contenedor !== null ? (int) $cotizacion->id_contenedor : null,
-            'id_user' => $udf->id_user !== null ? (int) $udf->id_user : null,
-            'tipo_comprobante' => $tipo,
-            'destino_entrega' => $destino,
-            'domicilio_fiscal' => null,
-            'razon_social' => null,
-            'ruc' => null,
-            'nombre_completo' => null,
-            'dni_carnet' => null,
-            'distrito_id' => null,
-            'created_at' => $udf->created_at ? $udf->created_at->toIso8601String() : null,
-            'updated_at' => null,
-            'registered_by' => null,
-            'prefill_from_usuario_datos_facturacion' => true,
-        ];
-
-        if ($tipo === 'FACTURA') {
-            $base['razon_social'] = $udf->razon_social;
-            $base['ruc'] = $udf->ruc !== null && $udf->ruc !== ''
-                ? preg_replace('/\D+/', '', (string) $udf->ruc)
-                : null;
-            $base['domicilio_fiscal'] = $udf->domicilio_fiscal;
-        } else {
-            $base['nombre_completo'] = $udf->nombre_completo;
-            $base['dni_carnet'] = $udf->dni;
-        }
-
+        $base['registered_by'] = null;
         return $base;
     }
 
@@ -643,33 +585,10 @@ class ComprobanteFormController extends Controller
     }
 
     /**
-     * El historial en usuario_datos_facturacion no guarda tipo explícito; se infiere por campos típicos de FACTURA vs BOLETA.
+     * Delegado a ComprobanteFormResolverHelper.
      */
     private function inferirTipoComprobanteDesdeUsuarioDatosFacturacion(UsuarioDatosFacturacion $udf): ?string
     {
-        $rucDigits = $udf->ruc !== null && $udf->ruc !== ''
-            ? preg_replace('/\D/', '', (string) $udf->ruc)
-            : '';
-        $tieneFactura = ($rucDigits !== '' && strlen($rucDigits) === 11)
-            || (is_string($udf->razon_social) && trim($udf->razon_social) !== '')
-            || (is_string($udf->domicilio_fiscal) && trim($udf->domicilio_fiscal) !== '');
-
-        $tieneBoleta = (is_string($udf->nombre_completo) && trim($udf->nombre_completo) !== '')
-            || (is_string($udf->dni) && trim($udf->dni) !== '');
-
-        if ($tieneFactura && ! $tieneBoleta) {
-            return 'FACTURA';
-        }
-        if ($tieneBoleta && ! $tieneFactura) {
-            return 'BOLETA';
-        }
-        if ($tieneFactura) {
-            return 'FACTURA';
-        }
-        if ($tieneBoleta) {
-            return 'BOLETA';
-        }
-
-        return null;
+        return ComprobanteFormResolverHelper::inferirTipoComprobante($udf);
     }
 }
