@@ -1099,15 +1099,10 @@ class EntregaController extends Controller
                     ->from('contenedor_consolidado_cotizacion_proveedores')
                     ->whereColumn('contenedor_consolidado_cotizacion_proveedores.id_cotizacion', 'CC.id');
             })
-            // Formulario de entrega (Lima/Provincia) o comprobante con destino informado
+            // Solo clientes con un formulario de delivery Lima o Provincia registrado.
             ->where(function ($q) {
                 $q->whereNotNull('L.id')
-                    ->orWhereNotNull('P.id')
-                    ->orWhere(function ($q2) {
-                        $q2->whereNotNull('CF.id')
-                            ->whereNotNull('CF.destino_entrega')
-                            ->whereRaw("TRIM(CF.destino_entrega) <> ''");
-                    });
+                    ->orWhereNotNull('P.id');
             })
             ->select([
                 'C.*',
