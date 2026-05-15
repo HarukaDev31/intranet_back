@@ -60,4 +60,9 @@ class SoporteTiSolicitud extends Model
     {
         return $this->hasOne(SoporteTiMaqueta::class, 'solicitud_id');
     }
+
+    public function evidencias()
+    {
+        return $this->hasMany(SoporteTiSolicitudEvidencia::class, 'solicitud_id')->orderBy('orden')->orderBy('id');
+    }
 }

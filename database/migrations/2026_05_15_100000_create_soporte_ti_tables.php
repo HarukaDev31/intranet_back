@@ -9,10 +9,6 @@ class CreateSoporteTiTables extends Migration
 {
     public function up()
     {
-        if (Schema::hasTable('soporte_ti_estados')) {
-            return;
-        }
-
         Schema::create('soporte_ti_estados', function (Blueprint $table) {
             $table->unsignedTinyInteger('id')->primary();
             $table->string('codigo', 40)->unique();
@@ -31,11 +27,11 @@ class CreateSoporteTiTables extends Migration
             $table->string('titulo', 255);
             $table->string('area', 80);
             $table->string('solicitante', 120);
-            $table->unsignedInteger('solicitante_user_id')->nullable();
+            $table->unsignedBigInteger('solicitante_user_id')->nullable();
             $table->string('pm', 120)->nullable();
-            $table->unsignedInteger('pm_user_id')->nullable();
+            $table->unsignedBigInteger('pm_user_id')->nullable();
             $table->string('analista', 120)->nullable()->default('Por asignar');
-            $table->unsignedInteger('analista_user_id')->nullable();
+            $table->unsignedBigInteger('analista_user_id')->nullable();
             $table->string('criticidad', 40)->default('Por definir');
             $table->unsignedTinyInteger('estado_actual_id')->default(1);
             $table->unsignedTinyInteger('fase_index')->default(0);
@@ -58,12 +54,11 @@ class CreateSoporteTiTables extends Migration
             $table->unsignedBigInteger('solicitud_id');
             $table->unsignedTinyInteger('estado_id');
             $table->unsignedTinyInteger('estado_anterior_id')->nullable();
-            $table->unsignedInteger('usuario_id')->nullable();
+            $table->unsignedBigInteger('usuario_id')->nullable();
             $table->text('comentario')->nullable();
             $table->timestamp('created_at')->useCurrent();
 
             $table->foreign('solicitud_id')->references('id')->on('soporte_ti_solicitudes')->onDelete('cascade');
-            $table->foreign('usuario_id')->references('ID_Usuario')->on('usuario')->onDelete('set null');
             $table->foreign('estado_id')->references('id')->on('soporte_ti_estados');
             $table->foreign('estado_anterior_id')->references('id')->on('soporte_ti_estados');
             $table->index('solicitud_id');
@@ -95,19 +90,18 @@ class CreateSoporteTiTables extends Migration
         Schema::create('soporte_ti_chat_miembros', function (Blueprint $table) {
             $table->bigIncrements('id');
             $table->unsignedBigInteger('sala_id');
-            $table->unsignedInteger('usuario_id');
+            $table->unsignedBigInteger('usuario_id');
             $table->string('rol_en_ticket', 30)->nullable();
             $table->timestamp('joined_at')->nullable();
             $table->unique(['sala_id', 'usuario_id']);
 
             $table->foreign('sala_id')->references('id')->on('soporte_ti_chat_salas')->onDelete('cascade');
-            $table->foreign('usuario_id')->references('ID_Usuario')->on('usuario')->onDelete('cascade');
         });
 
         Schema::create('soporte_ti_mensajes', function (Blueprint $table) {
             $table->bigIncrements('id');
             $table->unsignedBigInteger('sala_id');
-            $table->unsignedInteger('usuario_id')->nullable();
+            $table->unsignedBigInteger('usuario_id')->nullable();
             $table->string('remitente', 120);
             $table->string('iniciales', 8);
             $table->string('color', 16)->default('#64748b');
@@ -142,11 +136,10 @@ class CreateSoporteTiTables extends Migration
             $table->string('url_preview', 500)->nullable();
             $table->date('fecha_entrega')->nullable();
             $table->boolean('aprobada')->default(false);
-            $table->unsignedInteger('subida_por_user_id')->nullable();
+            $table->unsignedBigInteger('subida_por_user_id')->nullable();
             $table->timestamps();
 
             $table->foreign('solicitud_id')->references('id')->on('soporte_ti_solicitudes')->onDelete('cascade');
-            $table->foreign('subida_por_user_id')->references('ID_Usuario')->on('usuario')->onDelete('set null');
             $table->unique('solicitud_id');
         });
 

@@ -4,6 +4,8 @@ namespace App\Http\Controllers\SoporteTi;
 
 use App\Http\Controllers\Controller;
 use App\Services\SoporteTi\SoporteTiService;
+use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -20,8 +22,12 @@ class SoporteTiSolicitudController extends Controller
     public function index(Request $request)
     {
         try {
-            $data = $this->service->listarSolicitudes($request->all());
-            return response()->json(array('success' => true, 'data' => $data));
+            $payload = $this->service->listarSolicitudes($request->all(), Auth::user());
+            return response()->json(array(
+                'success' => true,
+                'data' => $payload['solicitudes'],
+                'resumen' => $payload['resumen'],
+            ));
         } catch (\Exception $e) {
             return response()->json(array('success' => false, 'message' => $e->getMessage()), 500);
         }
@@ -30,10 +36,17 @@ class SoporteTiSolicitudController extends Controller
     public function show($id)
     {
         try {
-            $data = $this->service->obtenerSolicitud($id);
+            $data = $this->service->obtenerSolicitud($id, Auth::user());
             return response()->json(array('success' => true, 'data' => $data));
+        } catch (ModelNotFoundException $e) {
+            return response()->json(array('success' => false, 'message' => 'No encontrado'), 404);
+        } catch (AuthorizationException $e) {
+            return response()->json(
+                array('success' => false, 'message' => $e->getMessage() ?: 'No autorizado'),
+                403
+            );
         } catch (\Exception $e) {
-            return response()->json(array('success' => false, 'message' => $e->getMessage()), 404);
+            return response()->json(array('success' => false, 'message' => $e->getMessage()), 500);
         }
     }
 
@@ -46,11 +59,26 @@ class SoporteTiSolicitudController extends Controller
             'area' => 'required|string|max:80',
             'seccion_ruta' => 'nullable|string|max:255',
             'descripcion' => 'nullable|string',
-            'solicitante' => 'nullable|string|max:120',
+            'imagenes' => 'nullable|array',
+            'imagenes.*' => 'file|max:10240',
         ));
 
+        $imagenes = array();
+        if ($request->hasFile('imagenes')) {
+            $files = $request->file('imagenes');
+            if (is_array($files)) {
+                foreach ($files as $f) {
+                    if ($f) {
+                        $imagenes[] = $f;
+                    }
+                }
+            } else {
+                $imagenes[] = $files;
+            }
+        }
+
         try {
-            $data = $this->service->crearSolicitud($request->all(), Auth::user());
+            $data = $this->service->crearSolicitud($request->except('imagenes'), Auth::user(), $imagenes);
             return response()->json(array('success' => true, 'data' => $data), 201);
         } catch (\Exception $e) {
             return response()->json(array('success' => false, 'message' => $e->getMessage()), 500);
@@ -154,7 +182,7 @@ class SoporteTiSolicitudController extends Controller
     public function historialEstados($id)
     {
         try {
-            $data = $this->service->historialEstados($id);
+            $data = $this->service->historialEstados($id, Auth::user());
             return response()->json(array('success' => true, 'data' => $data));
         } catch (\Exception $e) {
             return response()->json(array('success' => false, 'message' => $e->getMessage()), 500);

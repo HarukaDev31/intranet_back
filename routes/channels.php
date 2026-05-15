@@ -68,11 +68,3 @@ Broadcast::channel('User-notifications', function ($user) {
 Broadcast::channel('cotizacion.{id}', function ($user, $cotizacion) {
     return $user->ID_Usuario === $cotizacion->id_usuario;
 });
-
-// Chat Soporte TI — sala por UUID (intranet v3)
-Broadcast::channel('soporte-ti.chat.{chatUuid}', function ($user, $chatUuid) {
-    if (!$user) {
-        return false;
-    }
-    return \App\Models\SoporteTi\SoporteTiChatSala::where('chat_uuid', $chatUuid)->exists();
-});

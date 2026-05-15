@@ -218,6 +218,7 @@ class UsuarioAdminController extends Controller
                 'ID_Empresa'            => $request->id_empresa,
                 'ID_Organizacion'       => $request->id_org,
                 'ID_Grupo'              => $request->id_grupo,
+                'Nu_Codigo_Pais'        => 1,
                 'No_Usuario'            => $email,
                 'No_Nombres_Apellidos'  => $request->nombres_apellidos,
                 'No_Password'           => $passwordEncriptado,

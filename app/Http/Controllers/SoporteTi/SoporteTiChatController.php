@@ -4,6 +4,7 @@ namespace App\Http\Controllers\SoporteTi;
 
 use App\Http\Controllers\Controller;
 use App\Services\SoporteTi\SoporteTiService;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -34,6 +35,11 @@ class SoporteTiChatController extends Controller
                 'data' => $result['data'],
                 'pagination' => $result['pagination'],
             ));
+        } catch (AuthorizationException $e) {
+            return response()->json(
+                array('success' => false, 'message' => $e->getMessage() ?: 'No autorizado'),
+                403
+            );
         } catch (\Exception $e) {
             return response()->json(array('success' => false, 'message' => $e->getMessage()), 404);
         }

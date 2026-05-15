@@ -4,6 +4,8 @@ namespace App\Services\SoporteTi;
 
 use App\Events\SoporteTi\SoporteTiEstadoActualizado;
 use App\Events\SoporteTi\SoporteTiMensajeCreado;
+use App\Jobs\SoporteTi\ProcessSoporteTiChatAdjuntosJob;
+use App\Jobs\SoporteTi\ProcessSoporteTiMaquetaUploadJob;
 use App\Models\SoporteTi\SoporteTiChatMiembro;
 use App\Models\SoporteTi\SoporteTiChatSala;
 use App\Models\SoporteTi\SoporteTiEstado;
@@ -12,12 +14,14 @@ use App\Models\SoporteTi\SoporteTiMensaje;
 use App\Models\SoporteTi\SoporteTiMensajeImagen;
 use App\Models\SoporteTi\SoporteTiSolicitud;
 use App\Models\SoporteTi\SoporteTiSolicitudEstado;
+use App\Models\SoporteTi\SoporteTiSolicitudEvidencia;
 use App\Models\Usuario;
 use Carbon\Carbon;
+use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class SoporteTiService
@@ -25,12 +29,117 @@ class SoporteTiService
     const CHAT_PAGE_SIZE = 25;
 
     /**
+     * ID del usuario intranet (tabla `usuario`, PK `ID_Usuario`) o del modelo User si aplica.
+     *
+     * @return int|null
+     */
+    protected function authUserId(?Authenticatable $user = null)
+    {
+        return $user ? (int) $user->getKey() : null;
+    }
+
+    /**
+     * PM y Soporte ven todas las solicitudes; el resto solo las propias (solicitante_user_id).
+     *
+     * @return bool
+     */
+    protected function usuarioEsStaffSoporteTi(?Authenticatable $user)
+    {
+        if (!$user instanceof Usuario) {
+            return false;
+        }
+        $user->loadMissing('grupo');
+        $nombre = $user->grupo ? strtolower(trim((string) $user->grupo->No_Grupo)) : '';
+        return $nombre === strtolower(Usuario::ROL_PM) || $nombre === strtolower(Usuario::ROL_SOPORTE);
+    }
+
+    /**
+     * @param int|string $id
+     * @param array $with relaciones Eloquent para eager load
+     * @return SoporteTiSolicitud
+     */
+    protected function asegurarAccesoSolicitud($id, ?Authenticatable $authUser, array $with = array())
+    {
+        $authUser = $authUser ?: Auth::user();
+        $s = SoporteTiSolicitud::with($with)->findOrFail($id);
+        if (!$authUser) {
+            throw new AuthorizationException('No autenticado');
+        }
+        if (!$this->usuarioEsStaffSoporteTi($authUser)) {
+            $uid = (int) $authUser->getKey();
+            if ($s->solicitante_user_id === null || (int) $s->solicitante_user_id !== $uid) {
+                throw new AuthorizationException('No autorizado para acceder a esta solicitud');
+            }
+        }
+        return $s;
+    }
+
+    /**
+     * @param SoporteTiSolicitud $s
+     * @return void
+     */
+    protected function asegurarAccesoSolicitudModel(SoporteTiSolicitud $s, ?Authenticatable $authUser)
+    {
+        $authUser = $authUser ?: Auth::user();
+        if (!$authUser) {
+            throw new AuthorizationException('No autenticado');
+        }
+        if ($this->usuarioEsStaffSoporteTi($authUser)) {
+            return;
+        }
+        $uid = (int) $authUser->getKey();
+        if ($s->solicitante_user_id === null || (int) $s->solicitante_user_id !== $uid) {
+            throw new AuthorizationException('No autorizado para acceder a esta solicitud');
+        }
+    }
+
+    /**
+     * Contadores para cards del listado (alineado al front: pendiente; en_progreso + en_maqueta + hecho; operativo).
+     *
+     * @param \Illuminate\Support\Collection $solicitudes Colección de SoporteTiSolicitud con estadoActual cargado
      * @return array
      */
-    public function listarSolicitudes(array $filters = array())
+    protected function resumenListadoSolicitudes($solicitudes)
     {
-        $query = SoporteTiSolicitud::with(array('estadoActual', 'salaChat', 'maqueta'))
+        $pendientes = 0;
+        $enProgreso = 0;
+        $operativas = 0;
+        $enProgresoCodigos = array('en_progreso', 'en_maqueta', 'hecho');
+        foreach ($solicitudes as $s) {
+            /** @var SoporteTiSolicitud $s */
+            $cod = $s->estadoActual ? $s->estadoActual->codigo : null;
+            if ($cod === 'pendiente') {
+                ++$pendientes;
+            }
+            if ($cod !== null && in_array($cod, $enProgresoCodigos, true)) {
+                ++$enProgreso;
+            }
+            if ($cod === 'operativo') {
+                ++$operativas;
+            }
+        }
+
+        return array(
+            'total' => (int) $solicitudes->count(),
+            'pendientes' => $pendientes,
+            'en_progreso' => $enProgreso,
+            'operativas' => $operativas,
+        );
+    }
+
+    /**
+     * @return array Con claves `solicitudes` (listado mapeado) y `resumen` (totales para cards del índice).
+     */
+    public function listarSolicitudes(array $filters = array(), ?Authenticatable $authUser = null)
+    {
+        $authUser = $authUser ?: Auth::user();
+
+        $query = SoporteTiSolicitud::with(array('estadoActual', 'salaChat', 'maqueta', 'evidencias'))
             ->orderBy('id', 'desc');
+
+        if ($authUser && !$this->usuarioEsStaffSoporteTi($authUser)) {
+            $query->where('solicitante_user_id', (int) $authUser->getKey());
+        }
 
         if (!empty($filters['q'])) {
             $q = $filters['q'];
@@ -45,42 +154,56 @@ class SoporteTiService
             $query->where('tipo_solicitud', $filters['tipo_solicitud']);
         }
 
-        return $query->get()->map(function (SoporteTiSolicitud $s) {
+        $rows = $query->get();
+        $resumen = $this->resumenListadoSolicitudes($rows);
+        $solicitudes = $rows->map(function (SoporteTiSolicitud $s) {
             return $this->mapSolicitud($s);
         })->values()->all();
+
+        return array(
+            'solicitudes' => $solicitudes,
+            'resumen' => $resumen,
+        );
     }
 
     /**
      * @return array
      */
-    public function obtenerSolicitud($id)
+    public function obtenerSolicitud($id, ?Authenticatable $authUser = null)
     {
-        $s = SoporteTiSolicitud::with(array('estadoActual', 'salaChat', 'maqueta'))
-            ->findOrFail($id);
+        $s = $this->asegurarAccesoSolicitud(
+            $id,
+            $authUser,
+            array('estadoActual', 'salaChat', 'maqueta', 'evidencias')
+        );
 
         return $this->mapSolicitud($s);
     }
 
     /**
-     * @param array $data
+     * Crea solicitud. El usuario debe ser el modelo intranet (p. ej. App\Models\Usuario).
+     * Opcional: $imagenesIniciales — cada archivo genera mensaje de chat propio y registro en solicitud_evidencias.
+     *
+     * @param array                                  $data
+     * @param \Illuminate\Http\UploadedFile[]|array  $imagenesIniciales
      * @return array
      */
-    public function crearSolicitud(array $data, Usuario $user = null)
+    public function crearSolicitud(array $data, ?Authenticatable $user = null, array $imagenesIniciales = array())
     {
         $user = $user ?: Auth::user();
         $tipo = isset($data['tipo_solicitud']) ? $data['tipo_solicitud'] : 'B';
         $sla = $tipo === 'A' ? 72 : 8;
         $now = Carbon::now();
 
-        return DB::transaction(function () use ($data, $user, $tipo, $sla, $now) {
+        return DB::transaction(function () use ($data, $user, $tipo, $sla, $now, $imagenesIniciales) {
             $solicitud = SoporteTiSolicitud::create(array(
                 'codigo' => $this->generarCodigo($tipo),
                 'tipo_solicitud' => $tipo,
                 'subtipo_b' => $tipo === 'B' ? (isset($data['subtipo_b']) ? $data['subtipo_b'] : null) : null,
                 'titulo' => isset($data['titulo']) ? $data['titulo'] : 'Nueva solicitud',
                 'area' => isset($data['area']) ? $data['area'] : 'Ventas',
-                'solicitante' => isset($data['solicitante']) ? $data['solicitante'] : $this->nombreUsuario($user),
-                'solicitante_user_id' => $user ? $user->ID_Usuario : null,
+                'solicitante' => $this->nombreUsuario($user),
+                'solicitante_user_id' => $this->authUserId($user),
                 'pm' => $tipo === 'A' ? 'Por asignar' : null,
                 'analista' => 'Por asignar',
                 'criticidad' => 'Por definir',
@@ -100,7 +223,7 @@ class SoporteTiService
             ));
 
             if ($user) {
-                $this->agregarMiembroSala($sala->id, $user->ID_Usuario, 'solicitante');
+                $this->agregarMiembroSala($sala->id, $this->authUserId($user), 'solicitante');
             }
 
             $this->registrarHistorialEstado($solicitud, 1, null, $user, 'Solicitud creada');
@@ -111,21 +234,55 @@ class SoporteTiService
                 'Ticket ' . $solicitud->codigo . ' creado. SLA: ' . $sla . 'h.'
             );
 
-            $solicitud->load(array('estadoActual', 'salaChat', 'maqueta'));
+            $meta = $this->metaRemitente($user);
+            $ordenEvid = $this->maxOrdenEvidencia($solicitud->id) + 1;
+
+            $filesInicial = array();
+            foreach ($imagenesIniciales as $f) {
+                if ($f instanceof UploadedFile) {
+                    $filesInicial[] = $f;
+                }
+            }
+
+            if (count($filesInicial) > 0) {
+                $txtCabecera = trim((string) $solicitud->titulo) . ' — Evidencia';
+                $msgCab = $this->crearMensajeUsuarioSimple($sala, $solicitud, $txtCabecera, null, $user, $meta);
+                $this->registrarEvidenciaTexto($solicitud->id, $msgCab->id, $txtCabecera, $ordenEvid);
+                ++$ordenEvid;
+                $msgCab->load(array('imagenes', 'replyTo'));
+                event(new SoporteTiMensajeCreado($solicitud, $this->mapMensaje($msgCab, $user)));
+
+                foreach ($filesInicial as $file) {
+                    $this->encolarMensajeChatUnArchivo($sala, $solicitud, $user, $meta, '', null, $file, $ordenEvid);
+                    ++$ordenEvid;
+                }
+            }
+
+            $solicitud->load(array('estadoActual', 'salaChat', 'maqueta', 'evidencias'));
 
             return $this->mapSolicitud($solicitud);
         });
     }
 
     /**
-     * @param array $data
-     * @return array
+     * @param string|null $c
+     * @return bool
      */
-    public function actualizarSolicitud($id, array $data, Usuario $user = null)
+    protected function criticidadSinDefinir($c)
+    {
+        $s = strtolower(trim((string) $c));
+
+        return $s === '' || strpos($s, 'definir') !== false;
+    }
+
+    public function actualizarSolicitud($id, array $data, ?Authenticatable $user = null)
     {
         $user = $user ?: Auth::user();
-        $solicitud = SoporteTiSolicitud::with(array('estadoActual', 'salaChat', 'maqueta'))
-            ->findOrFail($id);
+        $solicitud = $this->asegurarAccesoSolicitud(
+            $id,
+            $user,
+            array('estadoActual', 'salaChat', 'maqueta', 'evidencias')
+        );
 
         $estadoAnteriorId = $solicitud->estado_actual_id;
         $patch = array();
@@ -139,8 +296,33 @@ class SoporteTiService
         if (isset($data['progreso'])) {
             $patch['progreso'] = (int) $data['progreso'];
         }
+        if (isset($data['criticidad'])) {
+            $c = trim((string) $data['criticidad']);
+            $validas = array('Baja', 'Media', 'Alta', 'Máxima');
+            if (!in_array($c, $validas, true)) {
+                throw new \InvalidArgumentException('Complejidad no válida. Use Baja, Media, Alta o Máxima.');
+            }
+            $patch['criticidad'] = $c;
+        }
         if (array_key_exists('maqueta', $data)) {
             $this->syncMaqueta($solicitud, $data['maqueta'], $user);
+        }
+
+        if (isset($patch['estado_actual_id'])) {
+            $nuevoEstado = SoporteTiEstado::find($patch['estado_actual_id']);
+            if ($nuevoEstado && $nuevoEstado->codigo === 'en_progreso') {
+                $crit = isset($patch['criticidad']) ? $patch['criticidad'] : $solicitud->criticidad;
+                if ($this->criticidadSinDefinir($crit)) {
+                    throw new \InvalidArgumentException('Defina la complejidad antes de pasar a En progreso.');
+                }
+                $prevCodigo = $solicitud->estadoActual ? $solicitud->estadoActual->codigo : null;
+                if ($solicitud->tipo_solicitud === 'A' && $prevCodigo === 'en_maqueta') {
+                    $m = $solicitud->maqueta;
+                    if (!$m || !$m->aprobada) {
+                        throw new \InvalidArgumentException('La maqueta debe estar aprobada antes de pasar a En progreso.');
+                    }
+                }
+            }
         }
 
         $patch['ultima_actualizacion'] = Carbon::now();
@@ -167,7 +349,7 @@ class SoporteTiService
             }
         }
 
-        $solicitud->load(array('estadoActual', 'salaChat', 'maqueta'));
+        $solicitud->load(array('estadoActual', 'salaChat', 'maqueta', 'evidencias'));
 
         return $this->mapSolicitud($solicitud);
     }
@@ -175,7 +357,7 @@ class SoporteTiService
     /**
      * @return array
      */
-    public function cambiarEstado($id, $estadoId, $comentario = null, Usuario $user = null)
+    public function cambiarEstado($id, $estadoId, $comentario = null, ?Authenticatable $user = null)
     {
         return $this->actualizarSolicitud($id, array(
             'estado_id' => $estadoId,
@@ -201,8 +383,9 @@ class SoporteTiService
     /**
      * @return array
      */
-    public function historialEstados($solicitudId)
+    public function historialEstados($solicitudId, ?Authenticatable $authUser = null)
     {
+        $this->asegurarAccesoSolicitud($solicitudId, $authUser, array());
         return SoporteTiSolicitudEstado::with(array('estado', 'estadoAnterior', 'usuario'))
             ->where('solicitud_id', $solicitudId)
             ->orderBy('id', 'desc')
@@ -217,7 +400,7 @@ class SoporteTiService
     /**
      * @return array
      */
-    public function mensajesPaginados($chatUuid, $limit = null, $beforeId = null, Usuario $user = null)
+    public function mensajesPaginados($chatUuid, $limit = null, $beforeId = null, ?Authenticatable $user = null)
     {
         $user = $user ?: Auth::user();
         $limit = $limit ? (int) $limit : self::CHAT_PAGE_SIZE;
@@ -228,7 +411,11 @@ class SoporteTiService
             $limit = 100;
         }
 
-        $sala = SoporteTiChatSala::where('chat_uuid', $chatUuid)->firstOrFail();
+        $sala = SoporteTiChatSala::where('chat_uuid', $chatUuid)->with('solicitud')->firstOrFail();
+        if (!$sala->solicitud) {
+            throw new \RuntimeException('Solicitud no encontrada para esta sala');
+        }
+        $this->asegurarAccesoSolicitudModel($sala->solicitud, $user);
 
         $query = SoporteTiMensaje::with(array('imagenes', 'replyTo'))
             ->where('sala_id', $sala->id)
@@ -272,63 +459,66 @@ class SoporteTiService
     }
 
     /**
+     * Envía mensaje al chat. Texto y cada archivo generan burbuja separada; cada parte registra una fila en solicitud_evidencias.
+     *
      * @param string $texto
      * @param int|null $replyToId
      * @param UploadedFile[] $imagenes
-     * @return array
+     * @return array Último mensaje mapeado (el de la última parte enviada)
      */
-    public function enviarMensaje($solicitudId, $texto, $replyToId = null, array $imagenes = array(), Usuario $user = null)
+    public function enviarMensaje($solicitudId, $texto, $replyToId = null, array $imagenes = array(), ?Authenticatable $user = null)
     {
         $user = $user ?: Auth::user();
-        $solicitud = SoporteTiSolicitud::with('salaChat')->findOrFail($solicitudId);
+        $solicitud = $this->asegurarAccesoSolicitud($solicitudId, $user, array('salaChat'));
         $sala = $solicitud->salaChat;
         if (!$sala) {
             throw new \RuntimeException('Sala de chat no encontrada');
         }
 
         $meta = $this->metaRemitente($user);
+        $texto = $texto !== null ? (string) $texto : '';
+        $files = array();
+        foreach ($imagenes as $file) {
+            if ($file instanceof UploadedFile) {
+                $files[] = $file;
+            }
+        }
 
-        return DB::transaction(function () use ($sala, $solicitud, $texto, $replyToId, $imagenes, $user, $meta) {
-            $mensaje = SoporteTiMensaje::create(array(
-                'sala_id' => $sala->id,
-                'usuario_id' => $user ? $user->ID_Usuario : null,
-                'remitente' => $meta['nombre'],
-                'iniciales' => $meta['iniciales'],
-                'color' => $meta['color'],
-                'texto' => $texto,
-                'es_sistema' => false,
-                'reply_to_id' => $replyToId,
-            ));
+        return DB::transaction(function () use ($sala, $solicitud, $texto, $replyToId, $files, $user, $meta) {
+            $lastPayload = null;
+            $ordenEvid = $this->maxOrdenEvidencia($solicitud->id) + 1;
+            $replyUsar = $replyToId;
 
-            $orden = 0;
-            foreach ($imagenes as $file) {
-                if (!$file instanceof UploadedFile) {
-                    continue;
-                }
-                $path = $file->store('soporte-ti/' . $solicitud->id . '/chat', 'public');
-                $url = Storage::disk('public')->url($path);
-                $tamano = $file->getSize() > 1048576
-                    ? round($file->getSize() / 1048576, 1) . ' MB'
-                    : round($file->getSize() / 1024) . ' KB';
-
-                SoporteTiMensajeImagen::create(array(
-                    'mensaje_id' => $mensaje->id,
-                    'url' => $url,
-                    'nombre' => $file->getClientOriginalName(),
-                    'tamano' => $tamano,
-                    'orden' => $orden++,
-                ));
+            if (trim($texto) !== '') {
+                $msg = $this->crearMensajeUsuarioSimple($sala, $solicitud, $texto, $replyUsar, $user, $meta);
+                $this->registrarEvidenciaTexto($solicitud->id, $msg->id, $texto, $ordenEvid);
+                ++$ordenEvid;
+                $msg->load(array('imagenes', 'replyTo'));
+                $lastPayload = $this->mapMensaje($msg, $user);
+                event(new SoporteTiMensajeCreado($solicitud, $lastPayload));
+                $replyUsar = null;
             }
 
-            $solicitud->ultima_actualizacion = Carbon::now();
-            $solicitud->save();
+            foreach ($files as $file) {
+                $lastPayload = $this->encolarMensajeChatUnArchivo(
+                    $sala,
+                    $solicitud,
+                    $user,
+                    $meta,
+                    '',
+                    $replyUsar,
+                    $file,
+                    $ordenEvid
+                );
+                ++$ordenEvid;
+                $replyUsar = null;
+            }
 
-            $mensaje->load(array('imagenes', 'replyTo'));
-            $payload = $this->mapMensaje($mensaje, $user);
+            if ($lastPayload === null) {
+                throw new \InvalidArgumentException('Mensaje vacío: indique texto o al menos un archivo.');
+            }
 
-            event(new SoporteTiMensajeCreado($solicitud, $payload));
-
-            return $payload;
+            return $lastPayload;
         });
     }
 
@@ -336,68 +526,63 @@ class SoporteTiService
      * @param UploadedFile $archivo
      * @return array
      */
-    public function subirMaqueta($solicitudId, UploadedFile $archivo, $mensajePm = null, Usuario $user = null)
+    public function subirMaqueta($solicitudId, UploadedFile $archivo, $mensajePm = null, ?Authenticatable $user = null)
     {
         $user = $user ?: Auth::user();
-        $solicitud = SoporteTiSolicitud::with(array('salaChat', 'maqueta'))->findOrFail($solicitudId);
-        $path = $archivo->store('soporte-ti/' . $solicitud->id . '/maqueta', 'public');
-        $url = Storage::disk('public')->url($path);
+        $solicitud = $this->asegurarAccesoSolicitud($solicitudId, $user, array('salaChat', 'maqueta'));
         $tamano = $archivo->getSize() > 1048576
             ? round($archivo->getSize() / 1048576, 1) . ' MB'
             : round($archivo->getSize() / 1024) . ' KB';
 
-        $maqueta = SoporteTiMaqueta::updateOrCreate(
-            array('solicitud_id' => $solicitud->id),
-            array(
-                'nombre' => $archivo->getClientOriginalName(),
-                'tamano' => $tamano,
-                'ruta_archivo' => $path,
-                'url_preview' => $url,
-                'fecha_entrega' => Carbon::now()->toDateString(),
-                'aprobada' => false,
-                'subida_por_user_id' => $user ? $user->ID_Usuario : null,
-            )
-        );
-
-        $solicitud->ultima_actualizacion = Carbon::now();
-        $solicitud->save();
-
-        $texto = $mensajePm ? $mensajePm : 'He subido la maqueta para revisión.';
-        $meta = $this->metaRemitente($user, 'PM');
-
-        if ($solicitud->salaChat) {
-            $mensaje = SoporteTiMensaje::create(array(
-                'sala_id' => $solicitud->salaChat->id,
-                'usuario_id' => $user ? $user->ID_Usuario : null,
-                'remitente' => $meta['nombre'],
-                'iniciales' => $meta['iniciales'],
-                'color' => $meta['color'],
-                'texto' => $texto,
-                'es_sistema' => false,
-                'archivo_nombre' => $maqueta->nombre,
-            ));
-
-            SoporteTiMensajeImagen::create(array(
-                'mensaje_id' => $mensaje->id,
-                'url' => $url,
-                'nombre' => $maqueta->nombre,
-                'tamano' => $tamano,
-                'orden' => 0,
-            ));
-
-            $mensaje->load(array('imagenes', 'replyTo'));
-            event(new SoporteTiMensajeCreado($solicitud, $this->mapMensaje($mensaje, $user)));
-
-            $this->crearMensajeSistema(
-                $solicitud->salaChat,
-                $solicitud,
-                'Maqueta "' . $maqueta->nombre . '" subida. Pendiente de aprobación del solicitante.'
+        return DB::transaction(function () use ($archivo, $solicitud, $tamano, $mensajePm, $user) {
+            $maqueta = SoporteTiMaqueta::updateOrCreate(
+                array('solicitud_id' => $solicitud->id),
+                array(
+                    'nombre' => $archivo->getClientOriginalName(),
+                    'tamano' => $tamano,
+                    'ruta_archivo' => null,
+                    'url_preview' => null,
+                    'fecha_entrega' => Carbon::now()->toDateString(),
+                    'aprobada' => false,
+                    'subida_por_user_id' => $this->authUserId($user),
+                )
             );
-        }
 
-        $solicitud->load(array('estadoActual', 'salaChat', 'maqueta'));
+            $solicitud->ultima_actualizacion = Carbon::now();
+            $solicitud->save();
 
-        return $this->mapSolicitud($solicitud);
+            $texto = $mensajePm ? $mensajePm : 'He subido la maqueta para revisión.';
+            $meta = $this->metaRemitente($user, 'PM');
+            $mensajeId = 0;
+
+            if ($solicitud->salaChat) {
+                $mensaje = SoporteTiMensaje::create(array(
+                    'sala_id' => $solicitud->salaChat->id,
+                    'usuario_id' => $this->authUserId($user),
+                    'remitente' => $meta['nombre'],
+                    'iniciales' => $meta['iniciales'],  
+                    'color' => $meta['color'],
+                    'texto' => $texto,
+                    'es_sistema' => false,
+                    'archivo_nombre' => $maqueta->nombre,
+                ));
+                $mensajeId = (int) $mensaje->id;
+            }
+
+            $batch = (string) Str::uuid();
+            $pendingRel = $archivo->store('soporte-ti/pending-maqueta/' . $batch, 'local');
+
+            ProcessSoporteTiMaquetaUploadJob::dispatch(
+                (int) $solicitud->id,
+                $mensajeId,
+                (int) $maqueta->id,
+                $pendingRel
+            )->afterCommit()->afterResponse();
+
+            $solicitud->load(array('estadoActual', 'salaChat', 'maqueta', 'evidencias'));
+
+            return $this->mapSolicitud($solicitud);
+        });
     }
 
     /**
@@ -407,20 +592,20 @@ class SoporteTiService
         SoporteTiSolicitud $solicitud,
         $estadoId,
         $estadoAnteriorId,
-        Usuario $user = null,
+        ?Authenticatable $user = null,
         $comentario = null
     ) {
         return SoporteTiSolicitudEstado::create(array(
             'solicitud_id' => $solicitud->id,
             'estado_id' => $estadoId,
             'estado_anterior_id' => $estadoAnteriorId,
-            'usuario_id' => $user ? $user->ID_Usuario : null,
+            'usuario_id' => $this->authUserId($user),
             'comentario' => $comentario,
             'created_at' => Carbon::now(),
         ));
     }
 
-    protected function crearMensajeSistema(SoporteTiChatSala $sala, SoporteTiSolicitud $solicitud, $texto)
+    public function crearMensajeSistema(SoporteTiChatSala $sala, SoporteTiSolicitud $solicitud, $texto)
     {
         $mensaje = SoporteTiMensaje::create(array(
             'sala_id' => $sala->id,
@@ -446,7 +631,7 @@ class SoporteTiService
         );
     }
 
-    protected function syncMaqueta(SoporteTiSolicitud $solicitud, $data, Usuario $user = null)
+    protected function syncMaqueta(SoporteTiSolicitud $solicitud, $data, ?Authenticatable $user = null)
     {
         if ($data === null) {
             SoporteTiMaqueta::where('solicitud_id', $solicitud->id)->delete();
@@ -463,7 +648,7 @@ class SoporteTiService
                 'url_preview' => isset($data['url_preview']) ? $data['url_preview'] : null,
                 'fecha_entrega' => isset($data['fecha_entrega']) ? $data['fecha_entrega'] : Carbon::now()->toDateString(),
                 'aprobada' => !empty($data['aprobada']),
-                'subida_por_user_id' => $user ? $user->ID_Usuario : null,
+                'subida_por_user_id' => $this->authUserId($user),
             )
         );
     }
@@ -478,25 +663,36 @@ class SoporteTiService
         return $codigo;
     }
 
-    protected function nombreUsuario(Usuario $user = null)
+    protected function nombreUsuario(?Authenticatable $user = null)
     {
         if (!$user) {
             return 'Usuario';
         }
-        if (!empty($user->No_Nombres_Apellidos)) {
-            return $user->No_Nombres_Apellidos;
+        if ($user instanceof Usuario) {
+            $n = trim((string) $user->No_Nombres_Apellidos);
+            if ($n !== '') {
+                return $n;
+            }
+            $e = trim((string) $user->Txt_Email);
+            if ($e !== '') {
+                return $e;
+            }
         }
-        if (!empty($user->No_Usuario)) {
-            return $user->No_Usuario;
+        if (!empty($user->name)) {
+            $ln = !empty($user->lastname) ? ' ' . $user->lastname : '';
+            return trim($user->name . $ln);
         }
-        return 'Usuario #' . $user->ID_Usuario;
+        if (!empty($user->nombre)) {
+            return $user->nombre;
+        }
+        return 'Usuario #' . $user->getKey();
     }
 
     /**
      * @param string|null $rolDemo PM|Solicitante|Analista
      * @return array
      */
-    protected function metaRemitente(Usuario $user = null, $rolDemo = null)
+    protected function metaRemitente(?Authenticatable $user = null, $rolDemo = null)
     {
         $colores = array(
             'Solicitante' => '#6d28d9',
@@ -536,6 +732,103 @@ class SoporteTiService
     {
         $meses = array('ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic');
         return $dt->format('j') . ' ' . $meses[(int) $dt->format('n') - 1] . ' ' . $dt->format('H:i');
+    }
+
+    protected function maxOrdenEvidencia($solicitudId)
+    {
+        $m = SoporteTiSolicitudEvidencia::where('solicitud_id', (int) $solicitudId)->max('orden');
+
+        return $m !== null ? (int) $m : -1;
+    }
+
+    protected function registrarEvidenciaTexto($solicitudId, $mensajeId, $texto, $orden)
+    {
+        SoporteTiSolicitudEvidencia::create(array(
+            'solicitud_id' => (int) $solicitudId,
+            'mensaje_id' => $mensajeId !== null ? (int) $mensajeId : null,
+            'tipo' => 'texto',
+            'texto' => $texto,
+            'orden' => (int) $orden,
+        ));
+    }
+
+    /**
+     * @return SoporteTiMensaje
+     */
+    protected function crearMensajeUsuarioSimple(
+        SoporteTiChatSala $sala,
+        SoporteTiSolicitud $solicitud,
+        $texto,
+        $replyToId,
+        ?Authenticatable $user,
+        array $meta
+    ) {
+        $mensaje = SoporteTiMensaje::create(array(
+            'sala_id' => $sala->id,
+            'usuario_id' => $this->authUserId($user),
+            'remitente' => $meta['nombre'],
+            'iniciales' => $meta['iniciales'],
+            'color' => $meta['color'],
+            'texto' => $texto !== null ? $texto : '',
+            'es_sistema' => false,
+            'reply_to_id' => $replyToId,
+        ));
+        $solicitud->ultima_actualizacion = Carbon::now();
+        $solicitud->save();
+
+        return $mensaje;
+    }
+
+    /**
+     * Un mensaje de chat con un solo adjunto en cola asíncrona + registro imagen en evidencias (orden fijado).
+     *
+     * @return array
+     */
+    protected function encolarMensajeChatUnArchivo(
+        SoporteTiChatSala $sala,
+        SoporteTiSolicitud $solicitud,
+        ?Authenticatable $user,
+        array $meta,
+        $texto,
+        $replyToId,
+        UploadedFile $file,
+        $ordenEvidencia
+    ) {
+        $mensaje = SoporteTiMensaje::create(array(
+            'sala_id' => $sala->id,
+            'usuario_id' => $this->authUserId($user),
+            'remitente' => $meta['nombre'],
+            'iniciales' => $meta['iniciales'],
+            'color' => $meta['color'],
+            'texto' => $texto !== null ? $texto : '',
+            'es_sistema' => false,
+            'reply_to_id' => $replyToId,
+        ));
+
+        $batch = (string) Str::uuid();
+        $rel = $file->store('soporte-ti/pending-chat/' . $batch, 'local');
+        $mime = $file->getClientMimeType();
+        $archivosPendientes = array(array(
+            'local_path' => $rel,
+            'nombre_original' => $file->getClientOriginalName(),
+            'tamano_bytes' => $file->getSize(),
+            'mime' => $mime ? $mime : null,
+        ));
+
+        $solicitud->ultima_actualizacion = Carbon::now();
+        $solicitud->save();
+
+        $mensaje->load(array('imagenes', 'replyTo'));
+        $payload = $this->mapMensaje($mensaje, $user);
+
+        ProcessSoporteTiChatAdjuntosJob::dispatch(
+            (int) $solicitud->id,
+            (int) $mensaje->id,
+            $archivosPendientes,
+            (int) $ordenEvidencia
+        )->afterCommit()->afterResponse();
+
+        return $payload;
     }
 
     public function mapEstado(SoporteTiEstado $e)
@@ -586,6 +879,7 @@ class SoporteTiService
             'titulo' => $s->titulo,
             'area' => $s->area,
             'solicitante' => $s->solicitante,
+            'solicitante_user_id' => $s->solicitante_user_id !== null ? (int) $s->solicitante_user_id : null,
             'pm' => $s->pm,
             'analista' => $s->analista,
             'criticidad' => $s->criticidad,
@@ -606,6 +900,7 @@ class SoporteTiService
 
         if ($estado) {
             $out['estado'] = $this->mapEstado($estado);
+            $out['estado_codigo'] = $estado->codigo;
         }
 
         if ($s->maqueta) {
@@ -621,10 +916,25 @@ class SoporteTiService
             );
         }
 
+        if ($s->relationLoaded('evidencias') && $s->evidencias) {
+            $out['evidencias'] = $s->evidencias->map(function (SoporteTiSolicitudEvidencia $ev) {
+                return array(
+                    'id' => (int) $ev->id,
+                    'tipo' => $ev->tipo,
+                    'texto' => $ev->texto,
+                    'url' => $ev->url,
+                    'nombre' => $ev->nombre,
+                    'tamano' => $ev->tamano,
+                    'mime' => $ev->mime,
+                    'orden' => (int) $ev->orden,
+                );
+            })->values()->all();
+        }
+
         return $out;
     }
 
-    public function mapMensaje(SoporteTiMensaje $m, Usuario $viewer = null)
+    public function mapMensaje(SoporteTiMensaje $m, ?Authenticatable $viewer = null)
     {
         $reply = null;
         if ($m->replyTo) {
@@ -653,7 +963,7 @@ class SoporteTiService
         }
 
         $esPropio = false;
-        if ($viewer && $m->usuario_id && (int) $m->usuario_id === (int) $viewer->ID_Usuario) {
+        if ($viewer && $m->usuario_id && (int) $m->usuario_id === $this->authUserId($viewer)) {
             $esPropio = true;
         }
 

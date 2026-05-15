@@ -88,9 +88,6 @@ require __DIR__.'/modules/dashboard-usuario.php';
 // Módulo de Calculadora de Importación
 require __DIR__.'/modules/calculadora-importacion.php';
 
-// Módulo Soporte TI (intranet v3)
-require __DIR__.'/modules/soporte-ti.php';
-
 // Módulo de Campañas
 require __DIR__.'/modules/campaigns.php';
 
@@ -105,6 +102,9 @@ require __DIR__.'/modules/panel-acceso.php';
 
 // Módulo de Calendario
 require __DIR__.'/modules/calendar.php';
+
+// Módulo Soporte TI (tickets, chat, estados)
+require __DIR__.'/modules/soporte-ti.php';
 
 // Módulo de Noticias del Sistema
 require __DIR__.'/modules/news.php';
