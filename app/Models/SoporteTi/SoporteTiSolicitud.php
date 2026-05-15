@@ -1,0 +1,63 @@
+<?php
+
+namespace App\Models\SoporteTi;
+
+use Illuminate\Database\Eloquent\Model;
+
+class SoporteTiSolicitud extends Model
+{
+    protected $table = 'soporte_ti_solicitudes';
+
+    protected $fillable = [
+        'codigo',
+        'tipo_solicitud',
+        'subtipo_b',
+        'titulo',
+        'area',
+        'solicitante',
+        'solicitante_user_id',
+        'pm',
+        'pm_user_id',
+        'analista',
+        'analista_user_id',
+        'criticidad',
+        'estado_actual_id',
+        'fase_index',
+        'progreso',
+        'sla_horas',
+        'horas_transcurridas',
+        'fecha_fin_estimado',
+        'seccion_ruta',
+        'descripcion',
+        'ultima_actualizacion',
+    ];
+
+    protected $casts = [
+        'fase_index' => 'integer',
+        'progreso' => 'integer',
+        'sla_horas' => 'integer',
+        'horas_transcurridas' => 'float',
+        'fecha_fin_estimado' => 'date',
+        'ultima_actualizacion' => 'datetime',
+    ];
+
+    public function estadoActual()
+    {
+        return $this->belongsTo(SoporteTiEstado::class, 'estado_actual_id');
+    }
+
+    public function historialEstados()
+    {
+        return $this->hasMany(SoporteTiSolicitudEstado::class, 'solicitud_id')->orderBy('id', 'desc');
+    }
+
+    public function salaChat()
+    {
+        return $this->hasOne(SoporteTiChatSala::class, 'solicitud_id');
+    }
+
+    public function maqueta()
+    {
+        return $this->hasOne(SoporteTiMaqueta::class, 'solicitud_id');
+    }
+}

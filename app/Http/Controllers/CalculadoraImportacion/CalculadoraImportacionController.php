@@ -14,7 +14,6 @@ use App\Services\CalculadoraImportacion\CalculadoraImportacionExcelService;
 use App\Services\CalculadoraImportacion\CalculadoraImportacionWhatsappService;
 use App\Services\CalculadoraImportacion\CalculadoraImportacionCotizacionSyncService;
 use App\Services\CalculadoraImportacion\CalculadoraImportacionCacheService;
-use App\Services\CalculadoraImportacion\CodeSupplierHelper;
 use App\Models\CalculadoraTarifasConsolidado;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -291,7 +290,7 @@ class CalculadoraImportacionController extends Controller
                 // Calcular totales para cada cálculo
                 $data = $calculos->items();
                 foreach ($data as $calculadora) {
-                    $this->calculadoraImportacionService->ordenarProveedoresPorIdYCode($calculadora);
+                    $this->ordenarProveedoresPorId($calculadora);
                     $totales = $this->calculadoraImportacionService->calcularTotales($calculadora);
                     $calculadora->totales = $totales;
                     $calculadora->url_cotizacion = $this->generateUrl($calculadora->url_cotizacion);
@@ -549,49 +548,6 @@ class CalculadoraImportacionController extends Controller
             }
             $data['created_by'] = auth()->id();
 
-            // Validar límite de CBM IMO por contenedor (si aplica)
-            if (!empty($data['es_imo']) && !empty($data['id_carga_consolidada_contenedor'])) {
-                $contenedorId = (int) $data['id_carga_consolidada_contenedor'];
-                $contenedor = Contenedor::find($contenedorId);
-
-                if ($contenedor && $contenedor->limite_cbm_imo !== null) {
-                    // CBM total del payload actual
-                    $nuevoCbm = 0.0;
-                    if (!empty($data['proveedores']) && is_array($data['proveedores'])) {
-                        foreach ($data['proveedores'] as $proveedor) {
-                            $cbm = (float) ($proveedor['cbm'] ?? 0);
-                            $peso = (float) ($proveedor['peso'] ?? 0);
-                            $nuevoCbm += max($cbm, $peso / 1000);
-                        }
-                    }
-
-                    // CBM IMO ya registrado en otras calculadoras para este contenedor
-                    $query = CalculadoraImportacion::query()
-                        ->join('calculadora_importacion_proveedores as cip', 'calculadora_importacion.id', '=', 'cip.id_calculadora_importacion')
-                        ->where('calculadora_importacion.id_carga_consolidada_contenedor', $contenedorId)
-                        ->where('calculadora_importacion.es_imo', true);
-
-                    // En edición, excluir la propia calculadora de la suma
-                    if (!empty($data['id'])) {
-                        $query->where('calculadora_importacion.id', '!=', (int) $data['id']);
-                    }
-
-                    $cbmExistente = (float) $query->sum(DB::raw('GREATEST(cip.cbm, cip.peso / 1000)'));
-                    $cbmTotal = $cbmExistente + $nuevoCbm;
-
-                    if ($cbmTotal > (float) $contenedor->limite_cbm_imo) {
-                        return response()->json([
-                            'success' => false,
-                            'message' => sprintf(
-                                'No se puede guardar la cotización IMO: el volumen total IMO (%.2f CBM) supera el límite del consolidado (%.2f CBM).',
-                                $cbmTotal,
-                                (float) $contenedor->limite_cbm_imo
-                            ),
-                        ], 422);
-                    }
-                }
-            }
-
             // Si viene ID, es una actualización
             if ($request->has('id') && $request->id) {
                 $calculadora = CalculadoraImportacion::find($request->id);
@@ -607,18 +563,44 @@ class CalculadoraImportacionController extends Controller
                 $previousDniCliente = $calculadora->dni_cliente;
                 $previousWhatsappCliente = $calculadora->whatsapp_cliente;
 
-                // Orquestador único: persiste datos + regenera Excel/PDF + sincroniza cotización
-                // (antes esto vivía partido en 5 pasos manuales aquí).
-                $tarifaInput = isset($data['tarifa']) && is_array($data['tarifa']) ? $data['tarifa'] : null;
-                $calculadora = $this->calculadoraImportacionService->actualizarYRegenerar(
-                    $calculadora,
-                    $data,
-                    $tarifaInput
-                );
+                // Actualizar usando el servicio
+                $calculadora = $this->calculadoraImportacionService->actualizarCalculo($calculadora, $data);
+
+                // Si tiene cotización asignada, actualizar también la cotización usando los códigos
+                if ($calculadora->id_cotizacion && $calculadora->url_cotizacion) {
+                    $calculadora->load(['proveedores', 'contenedor']);
+
+                    // Regenerar Excel completo desde BD (payload incluye code_supplier); incluye proveedores nuevos y orden por código.
+                    if ($calculadora->id_carga_consolidada_contenedor) {
+                        $this->calculadoraImportacionService->regenerarExcelDesdeCalculadora(
+                            $calculadora,
+                            isset($data['tarifa']) && is_array($data['tarifa']) ? $data['tarifa'] : null
+                        );
+                        $calculadora->refresh();
+                        $calculadora->load(['proveedores', 'contenedor']);
+                    }
+
+                    $this->cotizacionSyncService->actualizarCotizacionDesdeCalculadora($calculadora);
+                }
+
+                // Modificar el Excel para agregar fechas de pago (también al actualizar)
+                if ($calculadora->url_cotizacion && $calculadora->id_carga_consolidada_contenedor) {
+                    $this->excelService->modificarExcelConFechas($calculadora);
+                }
+
+                // Regenerar PDF de la cotización para que refleje el Excel actual (con cod, fechas, etc.)
+                if ($calculadora->url_cotizacion) {
+                    $boletaInfo = $this->calculadoraImportacionService->regenerarBoletaPdf($calculadora);
+                    if ($boletaInfo && !empty($boletaInfo['url'])) {
+                        $calculadora->url_cotizacion_pdf = $boletaInfo['url'];
+                        $calculadora->save();
+                    }
+                }
 
                 $totales = $this->calculadoraImportacionService->calcularTotales($calculadora);
-                $this->calculadoraImportacionService->ordenarProveedoresPorIdYCode($calculadora);
+                $this->ordenarProveedoresPorId($calculadora);
 
+                // Invalidate caches relacionados a esta calculadora
                 $this->cacheService->invalidateAfterWrite($calculadora, [
                     'dni_cliente' => $previousDniCliente ?? $calculadora->dni_cliente ?? null,
                     'whatsapp' => $previousWhatsappCliente ?? $calculadora->whatsapp_cliente ?? null,
@@ -643,7 +625,7 @@ class CalculadoraImportacionController extends Controller
             }
 
             $totales = $this->calculadoraImportacionService->calcularTotales($calculadora);
-            $this->calculadoraImportacionService->ordenarProveedoresPorIdYCode($calculadora);
+            $this->ordenarProveedoresPorId($calculadora);
 
             // Invalidate caches globales/listado y caches por cliente/whatsapp
             $this->cacheService->invalidateAfterWrite($calculadora, [
@@ -871,7 +853,7 @@ class CalculadoraImportacionController extends Controller
                     ];
                 }
                 Log::info('calculadora: ' . json_encode($calculadora));
-                $this->calculadoraImportacionService->ordenarProveedoresPorIdYCode($calculadora);
+                $this->ordenarProveedoresPorId($calculadora);
                 $totales = $this->calculadoraImportacionService->calcularTotales($calculadora);
 
                 $tcYuanActual = null;
@@ -901,7 +883,7 @@ class CalculadoraImportacionController extends Controller
                 $payload['success'] === true &&
                 is_object($payload['data']['calculadora'])
             ) {
-                $this->calculadoraImportacionService->ordenarProveedoresPorIdYCode($payload['data']['calculadora']);
+                $this->ordenarProveedoresPorId($payload['data']['calculadora']);
             }
 
             return response()->json($payload);
@@ -1007,10 +989,6 @@ class CalculadoraImportacionController extends Controller
 
                 $newProveedor = $proveedor->replicate();
                 $newProveedor->id_calculadora_importacion = $newCalculadora->id;
-                // Al duplicar NO debe quedar vinculado a proveedores de carga consolidada.
-                // La vinculación (id_proveedor/code_supplier) se define recién cuando pasa a COTIZADO.
-                $newProveedor->id_proveedor = null;
-                $newProveedor->code_supplier = null;
                 $newProveedor->save();
 
                 Log::info("Nuevo proveedor creado con ID: {$newProveedor->id}");
@@ -1384,7 +1362,7 @@ class CalculadoraImportacionController extends Controller
         }
 
         foreach ($proveedoresCotizacion as $index => $provCotizacion) {
-            $codeSupplier = CodeSupplierHelper::sanitize($provCotizacion->code_supplier);
+            $codeSupplier = $this->sanitizeCodeSupplier($provCotizacion->code_supplier);
             if (isset($proveedoresCalculadora[$index])) {
                 $updateData = [
                     'id_proveedor' => $provCotizacion->id,
@@ -1403,6 +1381,52 @@ class CalculadoraImportacionController extends Controller
                 ]);
             }
         }
+    }
+
+    private function sanitizeCodeSupplier(?string $code): ?string
+    {
+        if ($code === null) {
+            return null;
+        }
+        $code = trim($code);
+        if ($code === '') {
+            return null;
+        }
+
+        $ascii = @iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $code);
+        if ($ascii !== false && $ascii !== null) {
+            $code = $ascii;
+        }
+
+        $code = strtoupper((string) $code);
+        $code = preg_replace('/[^A-Z0-9-]/', '', $code);
+
+        return $code !== '' ? $code : null;
+    }
+
+    /**
+     * Ordena proveedores por code_supplier (y por id como desempate); productos por id.
+     */
+    private function ordenarProveedoresPorId($calculadora): void
+    {
+        if (!$calculadora || !$calculadora->relationLoaded('proveedores')) {
+            return;
+        }
+
+        $proveedoresOrdenados = $calculadora->proveedores
+            ->sortBy(fn ($p) => [(string) ($p->code_supplier ?? ''), $p->id])
+            ->values();
+
+        $proveedoresOrdenados->each(function ($proveedor) {
+            if ($proveedor && $proveedor->relationLoaded('productos')) {
+                $proveedor->setRelation(
+                    'productos',
+                    $proveedor->productos->sortBy('id')->values()
+                );
+            }
+        });
+
+        $calculadora->setRelation('proveedores', $proveedoresOrdenados);
     }
 
     /**
@@ -1444,6 +1468,14 @@ class CalculadoraImportacionController extends Controller
     private function generarCodigosProveedorEnExcel($calculadora)
     {
         $this->excelService->generarCodigosProveedorEnExcel($calculadora);
+    }
+
+    /**
+     * Generar código de proveedor usando la misma estructura que CotizacionController
+     */
+    private function generateCodeSupplier($string, $carga, $rowCount, $index)
+    {
+        return $this->excelService->generateCodeSupplier($string, $carga, $rowCount, $index);
     }
 
     /**

@@ -88,6 +88,9 @@ require __DIR__.'/modules/dashboard-usuario.php';
 // Módulo de Calculadora de Importación
 require __DIR__.'/modules/calculadora-importacion.php';
 
+// Módulo Soporte TI (intranet v3)
+require __DIR__.'/modules/soporte-ti.php';
+
 // Módulo de Campañas
 require __DIR__.'/modules/campaigns.php';
 
