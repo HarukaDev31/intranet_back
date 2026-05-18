@@ -394,7 +394,6 @@ class ContenedorController extends Controller
     }
     public function generateSteps($idContenedor)
     {
-        // Administración consume pasos tipo COTIZADOR (id_order > 1); no existe valor ADMINISTRACION en el enum de `tipo`.
         $this->insertSteps(
             $this->getCotizacionSteps($idContenedor),
             $this->getDocumentacionSteps($idContenedor),
