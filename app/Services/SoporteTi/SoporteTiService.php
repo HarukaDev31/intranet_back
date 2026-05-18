@@ -26,9 +26,11 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use App\Traits\FileTrait;
 
 class SoporteTiService
 {
+    use FileTrait;
     const CHAT_PAGE_SIZE = 25;
 
     /** Zona horaria de visualización (Perú). */
@@ -1490,7 +1492,7 @@ class SoporteTiService
                 }
                 $this->asegurarAccesoSolicitudModel($sala->solicitud, $user);
 
-                $query = SoporteTiMensaje::with(array('imagenes', 'replyTo'))
+                $query = SoporteTiMensaje::with(array('imagenes', 'replyTo', 'usuario'))
                     ->where('sala_id', $sala->id)
                     ->orderBy('id', 'desc');
 
@@ -1805,7 +1807,7 @@ class SoporteTiService
         }
         $this->asegurarAccesoSolicitudModel($sala->solicitud, $user);
 
-        $mensaje = SoporteTiMensaje::with(array('imagenes', 'replyTo'))
+        $mensaje = SoporteTiMensaje::with(array('imagenes', 'replyTo', 'usuario'))
             ->where('sala_id', $sala->id)
             ->where('id', (int) $mensajeId)
             ->firstOrFail();
@@ -1829,6 +1831,7 @@ class SoporteTiService
                 'usuario_id' => (int) $lec->usuario_id,
                 'nombre' => $nombre,
                 'iniciales' => $this->inicialesDesdeNombre($nombre),
+                'avatar_url' => $this->avatarUrlUsuario($u),
                 'telefono' => $u && $u->Nu_Celular ? (string) $u->Nu_Celular : null,
                 'email' => $u && $u->Txt_Email ? (string) $u->Txt_Email : null,
                 'leido_en' => $lec->leido_en ? $lec->leido_en->toIso8601String() : null,
@@ -2109,11 +2112,37 @@ class SoporteTiService
             $color = $colores[$rolDemo];
         }
 
+        $avatarUrl = null;
+        if ($user instanceof Usuario) {
+            $avatarUrl = $this->avatarUrlUsuario($user);
+        } elseif ($user) {
+            $uid = $this->authUserId($user);
+            if ($uid) {
+                $avatarUrl = $this->avatarUrlUsuario(Usuario::find($uid));
+            }
+        }
+
         return array(
             'nombre' => $nombre,
             'iniciales' => $iniciales,
             'color' => $color,
+            'avatar_url' => $avatarUrl,
         );
+    }
+
+    /**
+     * URL pública de la foto de perfil (`usuario.Txt_Foto`).
+     *
+     * @param Usuario|null $usuario
+     * @return string|null
+     */
+    protected function avatarUrlUsuario($usuario)
+    {
+        if (!$usuario || empty($usuario->Txt_Foto)) {
+            return null;
+        }
+
+        return $this->generateImageUrl($usuario->Txt_Foto);
     }
 
     protected function formatearFechaCorta(Carbon $dt)
@@ -2384,6 +2413,10 @@ class SoporteTiService
 
     public function mapMensaje(SoporteTiMensaje $m, ?Authenticatable $viewer = null, $lecturasCtx = null)
     {
+        if ($m->usuario_id && !$m->relationLoaded('usuario')) {
+            $m->load('usuario');
+        }
+
         $reply = null;
         if ($m->replyTo) {
             $origen = $m->replyTo;
@@ -2441,12 +2474,15 @@ class SoporteTiService
             }
         }
 
+        $avatarUrl = $m->es_sistema ? null : $this->avatarUrlUsuario($m->usuario);
+
         return array(
             'id' => (int) $m->id,
             'usuario_id' => $m->usuario_id !== null ? (int) $m->usuario_id : null,
             'remitente' => $m->remitente,
             'iniciales' => $m->iniciales,
             'color' => $m->color,
+            'avatar_url' => $avatarUrl,
             'texto' => $m->texto ? $m->texto : '',
             'es_sistema' => (bool) $m->es_sistema,
             'marca_tiempo' => $this->formatearMarcaTiempo(Carbon::parse($m->created_at)),
