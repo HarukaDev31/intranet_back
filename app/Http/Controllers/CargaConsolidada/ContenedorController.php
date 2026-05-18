@@ -36,7 +36,6 @@ class ContenedorController extends Controller
     private $defaultCotizador = [];
     private $defaultDocumentacion = [];
     private $defaultJefeImportacion = [];
-    private $defaultAdministracion = [];
     private $defaultJefeMarketing = [];
     public function __construct()
     {
@@ -79,13 +78,6 @@ class ContenedorController extends Controller
             ["name" => "CLIENTES", "iconURL" => $host . '/assets/icons/clientes.png'],
             ["name" => "DOCUMENTACION", "iconURL" => $host . '/assets/icons/cdocumentacion.png'],
             ["name" => "ADUANA", "iconURL" => $host . '/assets/icons/aduana.png'],
-        );
-        $this->defaultAdministracion = array(
-            ["name" => "CLIENTES", "iconURL" => $host . '/assets/icons/clientes.png'],
-            ["name" => "DOCUMENTACION", "iconURL" => $host . '/assets/icons/cdocumentacion.png'],
-            ["name" => "COTIZACION FINAL", "iconURL" => $host . '/assets/icons/cotizacion_final.png'],
-            ["name" => "ENTREGA", "iconURL" => $host . '/assets/icons/entrega.png'],
-            ["name" => "FACTURA Y GUIA", "iconURL" => $host . '/assets/icons/factura.png']
         );
         $this->defaultJefeMarketing = array(
             ["name" => "COTIZACION", "iconURL" => $host . '/assets/icons/cotizacion.png'],
@@ -402,12 +394,13 @@ class ContenedorController extends Controller
     }
     public function generateSteps($idContenedor)
     {
-        $cotizadorSteps = $this->getCotizacionSteps($idContenedor);
-        $documentacionSteps = $this->getDocumentacionSteps($idContenedor);
-        $administracionSteps = $this->getAdministracionSteps($idContenedor);
-        $jefeImportacionSteps = $this->getJefeImportacionSteps($idContenedor);
-        $jefeMarketingSteps = $this->getJefeMarketingSteps($idContenedor);
-        $this->insertSteps($cotizadorSteps, $documentacionSteps, $administracionSteps, $jefeImportacionSteps, $jefeMarketingSteps);
+        // Administración consume pasos tipo COTIZADOR (id_order > 1); no existe valor ADMINISTRACION en el enum de `tipo`.
+        $this->insertSteps(
+            $this->getCotizacionSteps($idContenedor),
+            $this->getDocumentacionSteps($idContenedor),
+            $this->getJefeImportacionSteps($idContenedor),
+            $this->getJefeMarketingSteps($idContenedor)
+        );
     }
     public function getCotizacionSteps($idContenedor)
     {
@@ -444,24 +437,6 @@ class ContenedorController extends Controller
             $index++;
         }
         return $stepDocumentacion;
-    }
-    public function getAdministracionSteps($idContenedor)
-    {
-        $stepsAdministracion = [];
-        $idContenedor = intval($idContenedor);
-        $index = 1;
-        foreach ($this->defaultAdministracion as $step) {
-            $stepsAdministracion[] = [
-                "id_pedido" => $idContenedor,
-                'id_order' => $index,
-                'tipo' => 'ADMINISTRACION',
-                'name' => $step['name'],
-                'iconURL' => $step['iconURL'],
-                'status' => 'PENDING'
-            ];
-            $index++;
-        }
-        return $stepsAdministracion;
     }
     public function getJefeImportacionSteps($idContenedor)
     {
@@ -502,11 +477,10 @@ class ContenedorController extends Controller
         return $stepsJefeMarketing;
     }
 
-    public function insertSteps($steps, $stepsDocumentacion, $stepsAdministracion, $stepsJefeImportacion, $stepsJefeMarketing)
+    public function insertSteps($stepsCotizador, $stepsDocumentacion, $stepsJefeImportacion, $stepsJefeMarketing)
     {
-        ContenedorPasos::insert($steps);
+        ContenedorPasos::insert($stepsCotizador);
         ContenedorPasos::insert($stepsDocumentacion);
-        ContenedorPasos::insert($stepsAdministracion);
         ContenedorPasos::insert($stepsJefeImportacion);
         ContenedorPasos::insert($stepsJefeMarketing);
     }
