@@ -707,6 +707,109 @@ class SoporteTiService
     }
 
     /**
+     * Suma segundos en los que el ticket estuvo en estados donde el SLA corre (historial).
+     *
+     * @param SoporteTiSolicitud $solicitud
+     * @return int
+     */
+    protected function calcularSegundosSlaActivosDesdeHistorial(SoporteTiSolicitud $solicitud)
+    {
+        $historial = SoporteTiSolicitudEstado::where('solicitud_id', (int) $solicitud->id)
+            ->with('estado')
+            ->orderBy('created_at', 'asc')
+            ->get();
+
+        if ($historial->isEmpty()) {
+            return 0;
+        }
+
+        $totalSeg = 0;
+        $now = Carbon::now();
+        $count = $historial->count();
+
+        for ($i = 0; $i < $count; $i++) {
+            $entrada = $historial[$i];
+            $codigo = $entrada->estado ? $entrada->estado->codigo : null;
+            if (!in_array($codigo, self::ESTADOS_SLA_CORRE, true) || !$entrada->created_at) {
+                continue;
+            }
+            $inicio = Carbon::parse($entrada->created_at);
+            if ($i + 1 < $count) {
+                $fin = Carbon::parse($historial[$i + 1]->created_at);
+            } else {
+                $fin = $now;
+            }
+            $totalSeg += max(0, $fin->getTimestamp() - $inicio->getTimestamp());
+        }
+
+        return $totalSeg;
+    }
+
+    /**
+     * Inicio del tramo SLA actual (última entrada al estado vigente).
+     *
+     * @param SoporteTiSolicitud $solicitud
+     * @return Carbon|null
+     */
+    protected function obtenerInicioSegmentoSlaActual(SoporteTiSolicitud $solicitud)
+    {
+        $codigo = $solicitud->estadoActual ? $solicitud->estadoActual->codigo : null;
+        if (!in_array($codigo, self::ESTADOS_SLA_CORRE, true)) {
+            return null;
+        }
+
+        $ultimo = SoporteTiSolicitudEstado::where('solicitud_id', (int) $solicitud->id)
+            ->orderBy('created_at', 'desc')
+            ->first();
+
+        if (!$ultimo || !$ultimo->created_at) {
+            return null;
+        }
+
+        return Carbon::parse($ultimo->created_at);
+    }
+
+    /**
+     * Tickets previos a sla_reanudado_en: reconstruye acumulado desde el historial (En progreso / Hecho).
+     *
+     * @param SoporteTiSolicitud $solicitud
+     */
+    protected function asegurarSlaContadorSincronizado(SoporteTiSolicitud $solicitud)
+    {
+        if (!$this->slaConfigurado($solicitud) || !$this->obtenerInicioEnProgreso($solicitud)) {
+            return;
+        }
+
+        $activosTotal = $this->calcularSegundosSlaActivosDesdeHistorial($solicitud);
+        $necesitaSync = (int) $solicitud->sla_segundos_acumulados === 0
+            && $solicitud->sla_reanudado_en === null
+            && $activosTotal > 0;
+
+        if (!$necesitaSync) {
+            return;
+        }
+
+        $codigo = $solicitud->estadoActual ? $solicitud->estadoActual->codigo : null;
+
+        if (in_array($codigo, self::ESTADOS_SLA_CORRE, true)) {
+            $inicioSegmento = $this->obtenerInicioSegmentoSlaActual($solicitud);
+            if ($inicioSegmento) {
+                $enSegmento = max(0, Carbon::now()->getTimestamp() - $inicioSegmento->getTimestamp());
+                $solicitud->sla_segundos_acumulados = max(0, $activosTotal - $enSegmento);
+                $solicitud->sla_reanudado_en = $inicioSegmento;
+            } else {
+                $solicitud->sla_segundos_acumulados = $activosTotal;
+            }
+        } else {
+            $solicitud->sla_segundos_acumulados = $activosTotal;
+            $solicitud->sla_reanudado_en = null;
+        }
+
+        $this->persistirHorasTranscurridasSla($solicitud);
+        $solicitud->save();
+    }
+
+    /**
      * @param SoporteTiSolicitud $solicitud
      */
     protected function iniciarSegmentoSla(SoporteTiSolicitud $solicitud)
@@ -723,6 +826,8 @@ class SoporteTiService
      */
     protected function segundosSlaTranscurridos(SoporteTiSolicitud $solicitud)
     {
+        $this->asegurarSlaContadorSincronizado($solicitud);
+
         $seg = (int) $solicitud->sla_segundos_acumulados;
         $codigo = $solicitud->estadoActual ? $solicitud->estadoActual->codigo : null;
         if (
@@ -924,14 +1029,46 @@ class SoporteTiService
         $restanteSeg = max(0, $totalSeg - $transcurridos);
         $pausado = !in_array($estadoCodigo, self::ESTADOS_SLA_CORRE, true);
         $vencido = $restanteSeg <= 0;
+        $finIso = $this->calcularIsoFinContadorSla($solicitud, $totalSeg, $pausado, $restanteSeg);
 
         return array(
             'activo' => true,
             'pausado' => $pausado,
-            'fin' => Carbon::now()->addSeconds($restanteSeg)->toIso8601String(),
+            'fin' => $finIso,
             'restante_segundos' => $restanteSeg,
             'vencido' => $vencido,
         );
+    }
+
+    /**
+     * Fecha límite fija del contador: inicio del tramo + SLA restante (no se recalcula cada segundo).
+     *
+     * @param SoporteTiSolicitud $solicitud
+     * @param int                $totalSeg
+     * @param bool               $pausado
+     * @param int                $restanteSeg
+     * @return string|null
+     */
+    protected function calcularIsoFinContadorSla(SoporteTiSolicitud $solicitud, $totalSeg, $pausado, $restanteSeg)
+    {
+        if ($pausado) {
+            return Carbon::now()->addSeconds($restanteSeg)->toIso8601String();
+        }
+
+        if ($solicitud->sla_reanudado_en) {
+            $acum = (int) $solicitud->sla_segundos_acumulados;
+
+            return Carbon::parse($solicitud->sla_reanudado_en)
+                ->addSeconds(max(0, $totalSeg - $acum))
+                ->toIso8601String();
+        }
+
+        $inicio = $this->obtenerInicioEnProgreso($solicitud);
+        if ($inicio) {
+            return $inicio->copy()->addSeconds($totalSeg)->toIso8601String();
+        }
+
+        return Carbon::now()->addSeconds($restanteSeg)->toIso8601String();
     }
 
     /**
@@ -1227,7 +1364,6 @@ class SoporteTiService
         $this->validarTransicionEstado($solicitud, $nuevoEstado);
 
         $codigoAnterior = $solicitud->estadoActual ? $solicitud->estadoActual->codigo : null;
-        $this->gestionarSlaContadorTransicion($solicitud, $codigoAnterior, $nuevoEstado->codigo);
 
         $solicitud->estado_actual_id = $nuevoEstadoId;
         if ($nuevoEstado->codigo === 'operativo') {
@@ -1245,6 +1381,8 @@ class SoporteTiService
         );
 
         $solicitud->load('estadoActual', 'salaChat');
+        $this->gestionarSlaContadorTransicion($solicitud, $codigoAnterior, $nuevoEstado->codigo);
+        $solicitud->save();
         $estado = $solicitud->estadoActual;
         if ($solicitud->salaChat && $estado) {
             $this->crearMensajeSistema(
