@@ -2669,8 +2669,9 @@ class CotizacionFinalController extends Controller
         $productsCount = count($data['cliente']['productos']);
         $columnaIndex = Coordinate::stringFromColumnIndex($productsCount + 3);
 
-        // Hoja 1 ← hoja cálculos: col total = una después del último producto (C=1er producto)
-        $sheet1->setCellValue('K14', "='2'!" . $columnaIndex . "11");
+        //MAX between  11 and 12
+        $sheet1->setCellValue('K14', "=MAX('2'!" . $columnaIndex . "11,'2'!" . $columnaIndex . "12)");
+
         $sheet1->setCellValue('K15', "='2'!" . $columnaIndex . "14");
         $sheet1->setCellValue('K16', "='2'!" . $columnaIndex . "15+'2'!" . $columnaIndex . "18");
         $sheet1->setCellValue('K17', "=MAX('2'!" . $columnaIndex . "19,'2'!" . $columnaIndex . "20)");
@@ -4835,7 +4836,7 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
                 $cfrvCell = $InitialColumn . $rowValorCfr;
                 $objPHPExcel->getActiveSheet()->getStyle($InitialColumn . $rowValorCfr)->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_CURRENCY_USD_SIMPLE);
 
-                $objPHPExcel->setActiveSheetIndex(2)->setCellValue($InitialColumn . $rowCfrValorizado, "=" . $InitialColumn . $rowValorExwValoracion . '+' . $InitialColumn . $rowFlete);
+                $objPHPExcel->setActiveSheetIndex(2)->setCellValue($InitialColumn . $rowCfrValorizado, "=" . $InitialColumn . $rowValorExwValoracion . '+' . $InitialColumn . $rowFlete . '+' . $InitialColumn . $rowCostosFob);
                 $cfrvCell = $InitialColumn . $rowCfrValorizado;
                 $objPHPExcel->getActiveSheet()->getStyle($InitialColumn . $rowCfrValorizado)->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_CURRENCY_USD_SIMPLE);
 

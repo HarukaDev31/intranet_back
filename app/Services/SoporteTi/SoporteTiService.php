@@ -279,6 +279,22 @@ class SoporteTiService
             $meta = $this->metaRemitente($user);
             $ordenEvid = $this->maxOrdenEvidencia($solicitud->id) + 1;
 
+            $descripcionTxt = isset($data['descripcion']) ? trim((string) $data['descripcion']) : '';
+            if ($descripcionTxt !== '') {
+                $msgDetalle = $this->crearMensajeUsuarioSimple(
+                    $sala,
+                    $solicitud,
+                    $descripcionTxt,
+                    null,
+                    $user,
+                    $meta
+                );
+                $this->registrarEvidenciaTexto($solicitud->id, $msgDetalle->id, $descripcionTxt, $ordenEvid);
+                ++$ordenEvid;
+                $msgDetalle->load(array('imagenes', 'replyTo'));
+                event(new SoporteTiMensajeCreado($solicitud, $this->mapMensaje($msgDetalle, null)));
+            }
+
             $filesInicial = array();
             foreach ($imagenesIniciales as $f) {
                 if ($f instanceof UploadedFile) {
