@@ -481,20 +481,34 @@ class ContenedorController extends Controller
         }
         return $stepsJefeImportacion;
     }
+
+    public function getJefeMarketingSteps($idContenedor)
+    {
+        $stepsJefeMarketing = [];
+        $idContenedor = intval($idContenedor);
+        $index = 1;
+        foreach ($this->defaultJefeMarketing as $step) {
+            $stepsJefeMarketing[] = [
+                'id_pedido' => $idContenedor,
+                'id_order' => $index,
+                'tipo' => 'JEFE MARKETING',
+                'name' => $step['name'],
+                'iconURL' => $step['iconURL'],
+                'status' => 'PENDING',
+            ];
+            $index++;
+        }
+
+        return $stepsJefeMarketing;
+    }
+
     public function insertSteps($steps, $stepsDocumentacion, $stepsAdministracion, $stepsJefeImportacion, $stepsJefeMarketing)
     {
-        try {
-            ContenedorPasos::insert($steps);
-            ContenedorPasos::insert($stepsDocumentacion);
-            ContenedorPasos::insert($stepsAdministracion);
-            ContenedorPasos::insert($stepsJefeImportacion);
-            ContenedorPasos::insert($stepsJefeMarketing);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Error al insertar pasos: ' . $e->getMessage()
-            ], 500);
-        }
+        ContenedorPasos::insert($steps);
+        ContenedorPasos::insert($stepsDocumentacion);
+        ContenedorPasos::insert($stepsAdministracion);
+        ContenedorPasos::insert($stepsJefeImportacion);
+        ContenedorPasos::insert($stepsJefeMarketing);
     }
     
     /**
