@@ -1332,11 +1332,12 @@ class CotizacionFinalController extends Controller
                 ->whereNotNull('contenedor_consolidado_cotizacion.estado_cliente')
                 ->whereNull('contenedor_consolidado_cotizacion.id_cliente_importacion')
                 ->where('contenedor_consolidado_cotizacion.estado_cotizador', 'CONFIRMADO')
+                // Misma base que General: cualquier proveedor asociado (no solo LOADED).
+                // Los totales china siguen calculándose solo con proveedores LOADED en el subquery CPL.
                 ->whereExists(function ($q) {
                     $q->select(DB::raw(1))
                         ->from($this->table_contenedor_cotizacion_proveedores . ' as CP2')
-                        ->whereColumn('CP2.id_cotizacion', 'contenedor_consolidado_cotizacion.id')
-                        ->whereRaw("UPPER(TRIM(COALESCE(CP2.estados_proveedor, ''))) = 'LOADED'");
+                        ->whereColumn('CP2.id_cotizacion', 'contenedor_consolidado_cotizacion.id');
                 });
 
             if ($request->has('search') && trim((string) $request->search) !== '') {
@@ -2669,9 +2670,8 @@ class CotizacionFinalController extends Controller
         $productsCount = count($data['cliente']['productos']);
         $columnaIndex = Coordinate::stringFromColumnIndex($productsCount + 3);
 
-        //MAX between  11 and 12
-        $sheet1->setCellValue('K14', "=MAX('2'!" . $columnaIndex . "11,'2'!" . $columnaIndex . "12)");
-
+        // Hoja 1 ← hoja cálculos: col total = una después del último producto (C=1er producto)
+        $sheet1->setCellValue('K14', "='2'!" . $columnaIndex . "11");
         $sheet1->setCellValue('K15', "='2'!" . $columnaIndex . "14");
         $sheet1->setCellValue('K16', "='2'!" . $columnaIndex . "15+'2'!" . $columnaIndex . "18");
         $sheet1->setCellValue('K17', "=MAX('2'!" . $columnaIndex . "19,'2'!" . $columnaIndex . "20)");
@@ -4836,7 +4836,7 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
                 $cfrvCell = $InitialColumn . $rowValorCfr;
                 $objPHPExcel->getActiveSheet()->getStyle($InitialColumn . $rowValorCfr)->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_CURRENCY_USD_SIMPLE);
 
-                $objPHPExcel->setActiveSheetIndex(2)->setCellValue($InitialColumn . $rowCfrValorizado, "=" . $InitialColumn . $rowValorExwValoracion . '+' . $InitialColumn . $rowFlete . '+' . $InitialColumn . $rowCostosFob);
+                $objPHPExcel->setActiveSheetIndex(2)->setCellValue($InitialColumn . $rowCfrValorizado, "=" . $InitialColumn . $rowValorExwValoracion . '+' . $InitialColumn . $rowFlete);
                 $cfrvCell = $InitialColumn . $rowCfrValorizado;
                 $objPHPExcel->getActiveSheet()->getStyle($InitialColumn . $rowCfrValorizado)->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_CURRENCY_USD_SIMPLE);
 
