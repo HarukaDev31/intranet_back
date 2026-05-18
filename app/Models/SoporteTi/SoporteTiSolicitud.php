@@ -29,6 +29,8 @@ class SoporteTiSolicitud extends Model
         'progreso',
         'sla_horas',
         'horas_transcurridas',
+        'sla_segundos_acumulados',
+        'sla_reanudado_en',
         'fecha_fin_estimado',
         'seccion_ruta',
         'descripcion',
@@ -41,6 +43,8 @@ class SoporteTiSolicitud extends Model
         'progreso' => 'integer',
         'sla_horas' => 'integer',
         'horas_transcurridas' => 'float',
+        'sla_segundos_acumulados' => 'integer',
+        'sla_reanudado_en' => 'datetime',
         'fecha_fin_estimado' => 'date',
         'ultima_actualizacion' => 'datetime',
     ];

@@ -34,6 +34,12 @@ class SoporteTiService
     /** Zona horaria de visualización (Perú). */
     const TZ_PERU = 'America/Lima';
 
+    /** Estados en los que el tiempo SLA del solicitante sigue corriendo. */
+    const ESTADOS_SLA_CORRE = array('en_progreso', 'hecho');
+
+    /** Estados en los que se muestra el contador (corriendo o pausado). */
+    const ESTADOS_SLA_CONTADOR_VISIBLE = array('en_progreso', 'hecho', 'desplegado', 'observado');
+
     /** @var SoporteTiCacheService */
     protected $cache;
 
@@ -656,7 +662,7 @@ class SoporteTiService
      */
     protected function calcularFinSlaContador(SoporteTiSolicitud $solicitud, Carbon $inicioEnProgreso)
     {
-        if ((int) $solicitud->sla_horas > 0 && $this->complejidadValida($solicitud->criticidad)) {
+        if ($this->slaConfigurado($solicitud)) {
             return $inicioEnProgreso->copy()->addHours((int) $solicitud->sla_horas);
         }
 
@@ -665,6 +671,95 @@ class SoporteTiService
         }
 
         return null;
+    }
+
+    /**
+     * @param SoporteTiSolicitud $solicitud
+     * @return bool
+     */
+    protected function slaConfigurado(SoporteTiSolicitud $solicitud)
+    {
+        if ((int) $solicitud->sla_horas <= 0) {
+            return false;
+        }
+        if ($solicitud->tipo_solicitud === 'A') {
+            $helper = $this->tipoASla();
+
+            return $helper->complejidadValida($solicitud->complejidad_pm)
+                || $helper->complejidadValida($solicitud->complejidad_analista);
+        }
+
+        return $this->complejidadValida($solicitud->criticidad);
+    }
+
+    /**
+     * @param SoporteTiSolicitud $solicitud
+     */
+    protected function acumularSegmentoSlaActivo(SoporteTiSolicitud $solicitud)
+    {
+        if (!$solicitud->sla_reanudado_en) {
+            return;
+        }
+        $inicio = Carbon::parse($solicitud->sla_reanudado_en);
+        $delta = max(0, Carbon::now()->getTimestamp() - $inicio->getTimestamp());
+        $solicitud->sla_segundos_acumulados = (int) $solicitud->sla_segundos_acumulados + (int) $delta;
+        $solicitud->sla_reanudado_en = null;
+    }
+
+    /**
+     * @param SoporteTiSolicitud $solicitud
+     */
+    protected function iniciarSegmentoSla(SoporteTiSolicitud $solicitud)
+    {
+        if (!$this->slaConfigurado($solicitud)) {
+            return;
+        }
+        $solicitud->sla_reanudado_en = Carbon::now();
+    }
+
+    /**
+     * @param SoporteTiSolicitud $solicitud
+     * @return int
+     */
+    protected function segundosSlaTranscurridos(SoporteTiSolicitud $solicitud)
+    {
+        $seg = (int) $solicitud->sla_segundos_acumulados;
+        $codigo = $solicitud->estadoActual ? $solicitud->estadoActual->codigo : null;
+        if (
+            in_array($codigo, self::ESTADOS_SLA_CORRE, true)
+            && $solicitud->sla_reanudado_en
+        ) {
+            $inicio = Carbon::parse($solicitud->sla_reanudado_en);
+            $seg += max(0, Carbon::now()->getTimestamp() - $inicio->getTimestamp());
+        }
+
+        return $seg;
+    }
+
+    /**
+     * @param SoporteTiSolicitud $solicitud
+     */
+    protected function persistirHorasTranscurridasSla(SoporteTiSolicitud $solicitud)
+    {
+        $solicitud->horas_transcurridas = round($this->segundosSlaTranscurridos($solicitud) / 3600, 2);
+    }
+
+    /**
+     * Pausa o reanuda el contador SLA según el cambio de estado.
+     *
+     * @param SoporteTiSolicitud $solicitud
+     * @param string|null        $codigoAnterior
+     * @param string             $codigoNuevo
+     */
+    protected function gestionarSlaContadorTransicion(SoporteTiSolicitud $solicitud, $codigoAnterior, $codigoNuevo)
+    {
+        if ($codigoAnterior && in_array($codigoAnterior, self::ESTADOS_SLA_CORRE, true)) {
+            $this->acumularSegmentoSlaActivo($solicitud);
+        }
+        if (in_array($codigoNuevo, self::ESTADOS_SLA_CORRE, true)) {
+            $this->iniciarSegmentoSla($solicitud);
+        }
+        $this->persistirHorasTranscurridasSla($solicitud);
     }
 
     /**
@@ -798,28 +893,43 @@ class SoporteTiService
      */
     protected function contadorSla(SoporteTiSolicitud $solicitud)
     {
+        $inactivo = array(
+            'activo' => false,
+            'pausado' => false,
+            'fin' => null,
+            'restante_segundos' => null,
+            'vencido' => false,
+        );
+
         $estadoCodigo = $solicitud->estadoActual ? $solicitud->estadoActual->codigo : null;
-        $estadosVigentes = array('en_progreso', 'hecho', 'desplegado');
-        if (!in_array($estadoCodigo, $estadosVigentes, true)) {
-            return array('activo' => false, 'fin' => null, 'vencido' => false);
+        if (!in_array($estadoCodigo, self::ESTADOS_SLA_CONTADOR_VISIBLE, true)) {
+            return $inactivo;
+        }
+
+        if (!$this->slaConfigurado($solicitud)) {
+            return $inactivo;
         }
 
         $inicio = $this->obtenerInicioEnProgreso($solicitud);
         if (!$inicio) {
-            return array('activo' => false, 'fin' => null, 'vencido' => false);
+            return $inactivo;
         }
 
-        $fin = $this->calcularFinSlaContador($solicitud, $inicio);
-
-        if (!$fin) {
-            return array('activo' => false, 'fin' => null, 'vencido' => false);
+        $totalSeg = (int) $solicitud->sla_horas * 3600;
+        if ($totalSeg <= 0) {
+            return $inactivo;
         }
 
-        $vencido = Carbon::now()->greaterThan($fin);
+        $transcurridos = $this->segundosSlaTranscurridos($solicitud);
+        $restanteSeg = max(0, $totalSeg - $transcurridos);
+        $pausado = !in_array($estadoCodigo, self::ESTADOS_SLA_CORRE, true);
+        $vencido = $restanteSeg <= 0;
 
         return array(
             'activo' => true,
-            'fin' => $fin->toIso8601String(),
+            'pausado' => $pausado,
+            'fin' => Carbon::now()->addSeconds($restanteSeg)->toIso8601String(),
+            'restante_segundos' => $restanteSeg,
             'vencido' => $vencido,
         );
     }
@@ -900,7 +1010,9 @@ class SoporteTiService
             'ver_sla' => $esStaff && ($esTipoA ? $pmOk : $complejidadOk),
             'puede_en_progreso' => $this->puedeEnProgreso($solicitud),
             'contador_activo' => $contador['activo'],
+            'contador_pausado' => $contador['pausado'],
             'contador_fin' => $contador['fin'],
+            'contador_restante_segundos' => $contador['restante_segundos'],
             'contador_vencido' => $contador['vencido'],
         );
     }
@@ -1113,6 +1225,9 @@ class SoporteTiService
         $nuevoEstado = $this->obtenerEstadoActivoPorId($nuevoEstadoId);
         $this->validarCambioEstadoPorRol($solicitud, $nuevoEstado, $user);
         $this->validarTransicionEstado($solicitud, $nuevoEstado);
+
+        $codigoAnterior = $solicitud->estadoActual ? $solicitud->estadoActual->codigo : null;
+        $this->gestionarSlaContadorTransicion($solicitud, $codigoAnterior, $nuevoEstado->codigo);
 
         $solicitud->estado_actual_id = $nuevoEstadoId;
         if ($nuevoEstado->codigo === 'operativo') {
@@ -2078,7 +2193,7 @@ class SoporteTiService
             'fase_index' => (int) $s->fase_index,
             'progreso' => (int) $s->progreso,
             'sla_horas' => (int) $s->sla_horas,
-            'horas_transcurridas' => (float) $s->horas_transcurridas,
+            'horas_transcurridas' => round($this->segundosSlaTranscurridos($s) / 3600, 2),
             'fecha_registro' => $this->formatearMarcaTiempo($registro),
             'fecha_registro_iso' => $registro->toIso8601String(),
             'prioridad' => (int) (isset($s->prioridad) ? $s->prioridad : 2),
