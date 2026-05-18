@@ -247,9 +247,11 @@ class SoporteTiTipoASlaHelper
     if ($sla['es_rango']) {
       return $sla['etiqueta'];
     }
-    $base = $base ?: Carbon::now();
+    $tz = 'America/Lima';
+    $base = $base ? Carbon::parse($base)->setTimezone($tz) : Carbon::now($tz);
     $fin = $base->copy()->addHours((int) $sla['horas']);
     $meses = array('ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic');
+
     return $fin->format('d') . ' ' . $meses[(int) $fin->format('n') - 1] . ' ' . $fin->format('H:i');
   }
 

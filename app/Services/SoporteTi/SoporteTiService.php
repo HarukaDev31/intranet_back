@@ -31,6 +31,9 @@ class SoporteTiService
 {
     const CHAT_PAGE_SIZE = 25;
 
+    /** Zona horaria de visualización (Perú). */
+    const TZ_PERU = 'America/Lima';
+
     /** @var SoporteTiCacheService */
     protected $cache;
 
@@ -1735,8 +1738,21 @@ class SoporteTiService
         return strtoupper(substr($n, 0, 2));
     }
 
+    /**
+     * Convierte un instante almacenado (UTC) a hora de Perú para mostrar en UI.
+     *
+     * @param Carbon|string $dt
+     * @return Carbon
+     */
+    protected function enZonaPeru($dt)
+    {
+        return Carbon::parse($dt)->setTimezone(self::TZ_PERU);
+    }
+
     protected function formatearMarcaTiempoLectura(Carbon $dt)
     {
+        $dt = $this->enZonaPeru($dt);
+
         return $dt->format('j/n/Y') . ' a la(s) ' . $dt->format('g:i a');
     }
 
@@ -1833,13 +1849,17 @@ class SoporteTiService
 
     protected function formatearFechaCorta(Carbon $dt)
     {
+        $dt = $this->enZonaPeru($dt);
         $meses = array('ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic');
+
         return $dt->format('j') . ' ' . $meses[(int) $dt->format('n') - 1];
     }
 
     protected function formatearMarcaTiempo(Carbon $dt)
     {
+        $dt = $this->enZonaPeru($dt);
         $meses = array('ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic');
+
         return $dt->format('j') . ' ' . $meses[(int) $dt->format('n') - 1] . ' ' . $dt->format('H:i');
     }
 
@@ -2161,6 +2181,7 @@ class SoporteTiService
             'texto' => $m->texto ? $m->texto : '',
             'es_sistema' => (bool) $m->es_sistema,
             'marca_tiempo' => $this->formatearMarcaTiempo(Carbon::parse($m->created_at)),
+            'created_at_iso' => Carbon::parse($m->created_at)->toIso8601String(),
             'es_propio' => $esPropio,
             'leido' => $leido,
             'lecturas_count' => $lecturasCount,
