@@ -9,6 +9,7 @@ use App\Models\SoporteTi\SoporteTiSolicitud;
 use App\Models\SoporteTi\SoporteTiSolicitudEvidencia;
 use App\Services\SoporteTi\SoporteTiCacheService;
 use App\Services\SoporteTi\SoporteTiService;
+use App\Support\SoporteTi\SoporteTiQueue;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -28,6 +29,7 @@ class ProcessSoporteTiChatAdjuntosJob implements ShouldQueue
     use InteractsWithQueue;
     use Queueable;
     use SerializesModels;
+    use SoporteTiQueue;
 
     /** @var int */
     protected $solicitudId;
@@ -55,6 +57,7 @@ class ProcessSoporteTiChatAdjuntosJob implements ShouldQueue
         $this->mensajeId = (int) $mensajeId;
         $this->archivosPendientes = $archivosPendientes;
         $this->ordenEvidencia = (int) $ordenEvidencia;
+        $this->assignSoporteTiQueue();
     }
 
     public function handle(SoporteTiService $service)

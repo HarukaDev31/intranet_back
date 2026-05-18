@@ -85,6 +85,7 @@ return [
 
     'waits' => [
         'redis:default' => 120,
+        'redis:soporte_ti' => 60,
     ],
 
     /*
@@ -201,6 +202,15 @@ return [
         'nice' => 0,
         'timeout' => 180,
     ],
+        'supervisor-soporte-ti' => [
+            'connection' => 'redis',
+            'queue' => ['soporte_ti'],
+            'balance' => 'auto',
+            'maxProcesses' => 2,
+            'tries' => 3,
+            'nice' => 0,
+            'timeout' => 180,
+        ],
     ],
 
     'environments' => [
@@ -257,6 +267,19 @@ return [
                 'balanceMaxShift' => 1,
                 'balanceCooldown' => 3,
             ],
+            'supervisor-soporte-ti' => [
+                'connection' => 'redis',
+                'queue' => ['soporte_ti'],
+                'balance' => 'auto',
+                'maxProcesses' => 3,
+                'maxTime' => 0,
+                'maxJobs' => 0,
+                'memory' => 128,
+                'tries' => 3,
+                'timeout' => 180,
+                'balanceMaxShift' => 1,
+                'balanceCooldown' => 3,
+            ],
         ],
         'local' => [
 
@@ -271,6 +294,9 @@ return [
             ],
             'supervisor-notificaciones' => [
                 'maxProcesses' => 1,
+            ],
+            'supervisor-soporte-ti' => [
+                'maxProcesses' => 2,
             ],
         ],
     ],

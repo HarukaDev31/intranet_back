@@ -33,13 +33,13 @@ class EnqueueUnsyncedLandingLeadsToBitrixCommand extends Command
         }
 
         $pendingConsolidado = LandingConsolidadoLead::query()
-            ->whereNull('bitrix_synced_at')
+            ->pendingBitrixSync()
             ->count();
 
         $dispatchedConsolidado = 0;
         foreach (
             LandingConsolidadoLead::query()
-                ->whereNull('bitrix_synced_at')
+                ->pendingBitrixSync()
                 ->orderBy('id')
                 ->cursor() as $lead
         ) {
@@ -53,12 +53,12 @@ class EnqueueUnsyncedLandingLeadsToBitrixCommand extends Command
         $pendingCurso = 0;
         if ($cursoEnabled) {
             $pendingCurso = LandingCursoLead::query()
-                ->whereNull('bitrix_synced_at')
+                ->pendingBitrixSync()
                 ->count();
 
             foreach (
                 LandingCursoLead::query()
-                    ->whereNull('bitrix_synced_at')
+                    ->pendingBitrixSync()
                     ->orderBy('id')
                     ->cursor() as $lead
             ) {

@@ -5,6 +5,7 @@ namespace App\Events\SoporteTi;
 use App\Models\SoporteTi\SoporteTiSolicitud;
 use App\Models\SoporteTi\SoporteTiSolicitudEstado;
 use App\Services\SoporteTi\SoporteTiService;
+use App\Support\SoporteTi\SoporteTiQueue;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
@@ -13,7 +14,7 @@ use Illuminate\Queue\SerializesModels;
 
 class SoporteTiEstadoActualizado implements ShouldBroadcast
 {
-    use Dispatchable, InteractsWithSockets, SerializesModels;
+    use Dispatchable, InteractsWithSockets, SerializesModels, SoporteTiQueue;
 
     public $payload;
 

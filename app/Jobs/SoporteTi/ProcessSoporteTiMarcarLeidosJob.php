@@ -8,6 +8,7 @@ use App\Models\SoporteTi\SoporteTiMensajeLectura;
 use App\Models\SoporteTi\SoporteTiSolicitud;
 use App\Services\SoporteTi\SoporteTiCacheService;
 use App\Services\SoporteTi\SoporteTiService;
+use App\Support\SoporteTi\SoporteTiQueue;
 use Carbon\Carbon;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -24,6 +25,7 @@ class ProcessSoporteTiMarcarLeidosJob implements ShouldQueue
     use InteractsWithQueue;
     use Queueable;
     use SerializesModels;
+    use SoporteTiQueue;
 
     /** @var int */
     protected $solicitudId;
@@ -44,6 +46,7 @@ class ProcessSoporteTiMarcarLeidosJob implements ShouldQueue
         $this->solicitudId = (int) $solicitudId;
         $this->lectorUsuarioId = (int) $lectorUsuarioId;
         $this->mensajeIds = array_values(array_map('intval', $mensajeIds));
+        $this->assignSoporteTiQueue();
     }
 
     public function handle()

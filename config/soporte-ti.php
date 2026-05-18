@@ -2,6 +2,11 @@
 
 return array(
     /*
+    | Cola Horizon/Redis para jobs y broadcasts del módulo Soporte TI.
+    */
+    'queue' => env('SOPORTE_TI_QUEUE', 'soporte_ti'),
+
+    /*
     | TTL de cache Soporte TI (segundos). Usa el driver CACHE_DRIVER de Laravel (file, redis, etc.).
     */
     'cache_ttl_list_seconds' => (int) env('SOPORTE_TI_CACHE_TTL_LIST', 120),

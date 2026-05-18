@@ -20,6 +20,9 @@ class SyncLandingLeadToCrmJob implements ShouldQueue, ShouldBeUnique
     use Queueable;
     use SerializesModels;
 
+    /** Máximo de fallos antes de marcar el lead como fallido permanente (alineado con modelos landing). */
+    private const MAX_SYNC_FAILURES = LandingCursoLead::MAX_BITRIX_SYNC_FAILURES;
+
     /** @var int */
     public $tries = 3;
 
@@ -76,7 +79,37 @@ class SyncLandingLeadToCrmJob implements ShouldQueue, ShouldBeUnique
             return;
         }
 
-        $result = $adapter->sync($lead->toArray());
+        if ($lead->bitrix_sync_failed_at !== null) {
+            Log::info('[CRM] Lead ya marcado como fallido; se omite sincronización.', [
+                'funnel' => $this->funnel,
+                'lead_id' => $this->leadId,
+                'bitrix_sync_errors' => (int) $lead->bitrix_sync_errors,
+                'bitrix_sync_last_error' => $lead->bitrix_sync_last_error,
+            ]);
+
+            return;
+        }
+
+        try {
+            $result = $adapter->sync($lead->toArray());
+        } catch (\Throwable $e) {
+            $permanentlyFailed = $this->recordSyncFailure($e);
+
+            Log::warning('[CRM] Error al sincronizar lead.', [
+                'funnel' => $this->funnel,
+                'lead_id' => $this->leadId,
+                'attempt' => $this->attempts(),
+                'bitrix_sync_errors' => $this->currentSyncErrorCount(),
+                'permanently_failed' => $permanentlyFailed,
+                'error' => $e->getMessage(),
+            ]);
+
+            if ($permanentlyFailed) {
+                return;
+            }
+
+            throw $e;
+        }
 
         if (($result['skipped'] ?? false) === true) {
             Log::debug('[CRM] Sincronización omitida por adaptador.', [
@@ -128,11 +161,79 @@ class SyncLandingLeadToCrmJob implements ShouldQueue, ShouldBeUnique
         ]);
     }
 
-    public function failed(\Throwable $exception)
+    /**
+     * Incrementa errores de sync; si supera MAX_SYNC_FAILURES marca fallido permanente.
+     *
+     * @return bool true si el lead quedó marcado como fallido y no debe reintentarse
+     */
+    private function recordSyncFailure(\Throwable $exception): bool
     {
-        Log::critical('[CRM] Sincronización landing → CRM falló tras reintentos.', [
+        $message = mb_substr($exception->getMessage(), 0, 500);
+        $errors = $this->currentSyncErrorCount() + 1;
+
+        $payload = [
+            'bitrix_sync_errors' => $errors,
+            'bitrix_sync_last_error' => $message,
+        ];
+
+        $permanentlyFailed = $errors >= self::MAX_SYNC_FAILURES;
+        if ($permanentlyFailed) {
+            $payload['bitrix_sync_failed_at'] = now();
+        }
+
+        $this->updateLeadSyncState($payload);
+
+        if ($permanentlyFailed) {
+            Log::critical('[CRM] Lead marcado como fallido tras superar reintentos de sincronización.', [
+                'funnel' => $this->funnel,
+                'lead_id' => $this->leadId,
+                'bitrix_sync_errors' => $errors,
+                'error' => $message,
+            ]);
+        }
+
+        return $permanentlyFailed;
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private function updateLeadSyncState(array $payload): void
+    {
+        if ($this->funnel === 'consolidado') {
+            LandingConsolidadoLead::query()->whereKey($this->leadId)->update($payload);
+        } elseif ($this->funnel === 'curso') {
+            LandingCursoLead::query()->whereKey($this->leadId)->update($payload);
+        }
+    }
+
+    private function markBitrixFailed(?string $lastError = null): void
+    {
+        $payload = ['bitrix_sync_failed_at' => now()];
+        if ($lastError !== null && $lastError !== '') {
+            $payload['bitrix_sync_last_error'] = mb_substr($lastError, 0, 500);
+        }
+        $this->updateLeadSyncState($payload);
+    }
+
+    private function currentSyncErrorCount(): int
+    {
+        $lead = $this->findLeadModel();
+
+        return $lead ? (int) $lead->bitrix_sync_errors : 0;
+    }
+
+    public function failed(\Throwable $exception): void
+    {
+        $lead = $this->findLeadModel();
+        if ($lead !== null && $lead->bitrix_sync_failed_at === null && (int) $lead->bitrix_sync_errors < self::MAX_SYNC_FAILURES) {
+            $this->recordSyncFailure($exception);
+        }
+
+        Log::critical('[CRM] Sincronización landing → CRM falló tras reintentos de cola.', [
             'funnel' => $this->funnel,
             'lead_id' => $this->leadId,
+            'bitrix_sync_errors' => $this->currentSyncErrorCount(),
             'error' => $exception->getMessage(),
         ]);
     }

@@ -9,6 +9,7 @@ use App\Models\SoporteTi\SoporteTiMensajeImagen;
 use App\Models\SoporteTi\SoporteTiSolicitud;
 use App\Services\SoporteTi\SoporteTiCacheService;
 use App\Services\SoporteTi\SoporteTiService;
+use App\Support\SoporteTi\SoporteTiQueue;
 use Carbon\Carbon;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -29,6 +30,7 @@ class ProcessSoporteTiMaquetaUploadJob implements ShouldQueue
     use InteractsWithQueue;
     use Queueable;
     use SerializesModels;
+    use SoporteTiQueue;
 
     /** @var int */
     protected $solicitudId;
@@ -48,6 +50,7 @@ class ProcessSoporteTiMaquetaUploadJob implements ShouldQueue
         $this->mensajeId = (int) $mensajeId;
         $this->maquetaId = (int) $maquetaId;
         $this->localPathPending = (string) $localPathPending;
+        $this->assignSoporteTiQueue();
     }
 
     public function handle(SoporteTiService $service)
