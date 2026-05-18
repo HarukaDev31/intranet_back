@@ -13,6 +13,7 @@ class SoporteTiSolicitud extends Model
         'tipo_solicitud',
         'subtipo_b',
         'titulo',
+        'prioridad',
         'area',
         'solicitante',
         'solicitante_user_id',
@@ -21,6 +22,8 @@ class SoporteTiSolicitud extends Model
         'analista',
         'analista_user_id',
         'criticidad',
+        'complejidad_pm',
+        'complejidad_analista',
         'estado_actual_id',
         'fase_index',
         'progreso',
@@ -33,6 +36,7 @@ class SoporteTiSolicitud extends Model
     ];
 
     protected $casts = [
+        'prioridad' => 'integer',
         'fase_index' => 'integer',
         'progreso' => 'integer',
         'sla_horas' => 'integer',

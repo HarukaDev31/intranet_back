@@ -7,6 +7,7 @@ use App\Models\SoporteTi\SoporteTiMensaje;
 use App\Models\SoporteTi\SoporteTiMensajeImagen;
 use App\Models\SoporteTi\SoporteTiSolicitud;
 use App\Models\SoporteTi\SoporteTiSolicitudEvidencia;
+use App\Services\SoporteTi\SoporteTiCacheService;
 use App\Services\SoporteTi\SoporteTiService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -128,6 +129,12 @@ class ProcessSoporteTiChatAdjuntosJob implements ShouldQueue
 
         $mensaje->load(array('imagenes', 'replyTo'));
         event(new SoporteTiMensajeCreado($solicitud, $service->mapMensaje($mensaje, null)));
+
+        $cache = app(SoporteTiCacheService::class);
+        $cache->invalidateAfterMensajeWrite(
+            $solicitud,
+            $solicitud->salaChat ? (string) $solicitud->salaChat->chat_uuid : null
+        );
     }
 
     public function failed(\Throwable $e)

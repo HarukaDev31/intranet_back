@@ -57,7 +57,12 @@ Broadcast::channel('JefeImportacion-notifications', function ($user) {
 Broadcast::channel('Contabilidad-notifications', function ($user) {
     return $user->grupo && $user->grupo->No_Grupo === Usuario::ROL_CONTABILIDAD;
 });
-
+Broadcast::channel('Soporte-notifications', function ($user) {
+    return $user->grupo && $user->grupo->No_Grupo === Usuario::ROL_SOPORTE;
+});
+Broadcast::channel('PM-notifications', function ($user) {
+    return $user->grupo && $user->grupo->No_Grupo === Usuario::ROL_PM;
+});
 // Canal privado para todos los usuarios autenticados
 Broadcast::channel('User-notifications', function ($user) {
     // Cualquier usuario autenticado puede acceder
@@ -67,4 +72,34 @@ Broadcast::channel('User-notifications', function ($user) {
 // Canal privado para cotizaciones específicas
 Broadcast::channel('cotizacion.{id}', function ($user, $cotizacion) {
     return $user->ID_Usuario === $cotizacion->id_usuario;
+});
+
+// Chat Soporte TI — private-soporte-ti.chat.{chatUuid}
+Broadcast::channel('soporte-ti.chat.{chatUuid}', function ($user, $chatUuid) {
+    if (!$user) {
+        return false;
+    }
+
+    $sala = \App\Models\SoporteTi\SoporteTiChatSala::where('chat_uuid', $chatUuid)->first();
+    if (!$sala) {
+        return false;
+    }
+
+    $solicitud = $sala->solicitud;
+    if (!$solicitud) {
+        return false;
+    }
+
+    $user->loadMissing('grupo');
+    $grupo = $user->grupo ? strtolower(trim((string) $user->grupo->No_Grupo)) : '';
+    $esStaff = $grupo === strtolower(\App\Models\Usuario::ROL_PM)
+        || $grupo === strtolower(\App\Models\Usuario::ROL_SOPORTE);
+
+    if ($esStaff) {
+        return true;
+    }
+
+    $uid = (int) $user->ID_Usuario;
+    return $solicitud->solicitante_user_id !== null
+        && (int) $solicitud->solicitante_user_id === $uid;
 });

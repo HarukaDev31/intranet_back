@@ -44,4 +44,48 @@ class SoporteTiChatController extends Controller
             return response()->json(array('success' => false, 'message' => $e->getMessage()), 404);
         }
     }
+
+    public function marcarLeidos(Request $request, $chatUuid)
+    {
+        $request->validate(array(
+            'mensaje_ids' => 'required|array|min:1|max:200',
+            'mensaje_ids.*' => 'integer|min:1',
+        ));
+
+        try {
+            $result = $this->service->marcarMensajesLeidos(
+                $chatUuid,
+                $request->input('mensaje_ids', array()),
+                Auth::user()
+            );
+
+            return response()->json($result);
+        } catch (AuthorizationException $e) {
+            return response()->json(
+                array('success' => false, 'message' => $e->getMessage() ?: 'No autorizado'),
+                403
+            );
+        } catch (\Exception $e) {
+            return response()->json(array('success' => false, 'message' => $e->getMessage()), 404);
+        }
+    }
+
+    public function infoMensaje($chatUuid, $mensajeId)
+    {
+        try {
+            $data = $this->service->infoLecturaMensaje($chatUuid, (int) $mensajeId, Auth::user());
+
+            return response()->json(array(
+                'success' => true,
+                'data' => $data,
+            ));
+        } catch (AuthorizationException $e) {
+            return response()->json(
+                array('success' => false, 'message' => $e->getMessage() ?: 'No autorizado'),
+                403
+            );
+        } catch (\Exception $e) {
+            return response()->json(array('success' => false, 'message' => $e->getMessage()), 404);
+        }
+    }
 }

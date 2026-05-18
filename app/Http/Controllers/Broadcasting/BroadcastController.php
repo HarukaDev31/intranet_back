@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Broadcasting;
 
 use App\Http\Controllers\Controller;
+use App\Models\SoporteTi\SoporteTiChatSala;
+use App\Models\Usuario;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Log;
@@ -99,6 +101,28 @@ class BroadcastController extends Controller
                 return response()->json(['message' => 'No autorizado para este canal'], 403);
             }
 
+            // Chat Soporte TI: private-soporte-ti.chat.{uuid}
+            $soporteTiPrefix = 'private-soporte-ti.chat.';
+            if (strpos($channelName, $soporteTiPrefix) === 0) {
+                $chatUuid = substr($channelName, strlen($soporteTiPrefix));
+                if ($this->usuarioPuedeAccederSalaSoporteTi($user, $chatUuid)) {
+                    $signature = hash_hmac(
+                        'sha256',
+                        $request->socket_id . ':' . $channelName,
+                        config('broadcasting.connections.pusher.secret')
+                    );
+                    return response()->json([
+                        'auth' => config('broadcasting.connections.pusher.key') . ':' . $signature
+                    ]);
+                }
+                Log::error('User not authorized for soporte-ti chat channel', [
+                    'user_id' => $user->ID_Usuario,
+                    'channel' => $channelName,
+                    'chat_uuid' => $chatUuid,
+                ]);
+                return response()->json(['message' => 'No autorizado para este canal'], 403);
+            }
+
             // Verificar si el canal está en nuestra lista de canales configurados (por rol)
             if (isset($this->CHANNELS[$channelName])) {
                 $requiredRole = $this->CHANNELS[$channelName];
@@ -155,5 +179,38 @@ class BroadcastController extends Controller
                 'error' => $e->getMessage()
             ], 403);
         }
+    }
+
+    /**
+     * Misma regla que SoporteTiService: PM/Soporte ven todas; resto solo sus solicitudes.
+     *
+     * @param \App\Models\Usuario $user
+     * @param string $chatUuid
+     * @return bool
+     */
+    protected function usuarioPuedeAccederSalaSoporteTi($user, $chatUuid)
+    {
+        $sala = SoporteTiChatSala::where('chat_uuid', $chatUuid)->first();
+        if (!$sala) {
+            return false;
+        }
+
+        $solicitud = $sala->solicitud;
+        if (!$solicitud) {
+            return false;
+        }
+
+        $user->loadMissing('grupo');
+        $grupo = $user->grupo ? strtolower(trim((string) $user->grupo->No_Grupo)) : '';
+        $esStaff = $grupo === strtolower(Usuario::ROL_PM)
+            || $grupo === strtolower(Usuario::ROL_SOPORTE);
+
+        if ($esStaff) {
+            return true;
+        }
+
+        $uid = (int) $user->ID_Usuario;
+        return $solicitud->solicitante_user_id !== null
+            && (int) $solicitud->solicitante_user_id === $uid;
     }
 }

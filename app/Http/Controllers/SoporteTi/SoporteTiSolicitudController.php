@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Services\SoporteTi\SoporteTiService;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -63,19 +64,7 @@ class SoporteTiSolicitudController extends Controller
             'imagenes.*' => 'file|max:10240',
         ));
 
-        $imagenes = array();
-        if ($request->hasFile('imagenes')) {
-            $files = $request->file('imagenes');
-            if (is_array($files)) {
-                foreach ($files as $f) {
-                    if ($f) {
-                        $imagenes[] = $f;
-                    }
-                }
-            } else {
-                $imagenes[] = $files;
-            }
-        }
+        $imagenes = $this->extraerImagenesRequest($request);
 
         try {
             $data = $this->service->crearSolicitud($request->except('imagenes'), Auth::user(), $imagenes);
@@ -90,6 +79,8 @@ class SoporteTiSolicitudController extends Controller
         try {
             $data = $this->service->actualizarSolicitud($id, $request->all(), Auth::user());
             return response()->json(array('success' => true, 'data' => $data));
+        } catch (\InvalidArgumentException $e) {
+            return response()->json(array('success' => false, 'message' => $e->getMessage()), 422);
         } catch (\Exception $e) {
             return response()->json(array('success' => false, 'message' => $e->getMessage()), 500);
         }
@@ -102,24 +93,7 @@ class SoporteTiSolicitudController extends Controller
             'reply_to_id' => 'nullable|integer',
         ));
 
-        $imagenes = array();
-        if ($request->hasFile('imagenes')) {
-            $imagenes = $request->file('imagenes');
-            if (!is_array($imagenes)) {
-                $imagenes = array($imagenes);
-            }
-        } else {
-            $all = $request->allFiles();
-            foreach ($all as $key => $file) {
-                if (strpos($key, 'imagenes') === 0 && $file) {
-                    if (is_array($file)) {
-                        $imagenes = array_merge($imagenes, $file);
-                    } else {
-                        $imagenes[] = $file;
-                    }
-                }
-            }
-        }
+        $imagenes = $this->extraerImagenesRequest($request);
 
         try {
             $mensaje = $this->service->enviarMensaje(
@@ -161,22 +135,54 @@ class SoporteTiSolicitudController extends Controller
 
     public function cambiarEstado(Request $request, $id)
     {
+        return $this->responderActualizacionEstado($request, $id);
+    }
+
+    public function actualizarPrioridad(Request $request, $id)
+    {
         $request->validate(array(
-            'estado_id' => 'required|integer|min:1|max:255',
-            'comentario' => 'nullable|string',
+            'prioridad' => 'required|integer|in:1,2,3',
         ));
 
         try {
-            $data = $this->service->cambiarEstado(
+            $data = $this->service->actualizarSolicitud(
                 $id,
-                (int) $request->input('estado_id'),
-                $request->input('comentario'),
+                array('prioridad' => (int) $request->input('prioridad')),
                 Auth::user()
             );
             return response()->json(array('success' => true, 'data' => $data));
+        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
+            return response()->json(array('success' => false, 'message' => $e->getMessage()), 403);
+        } catch (\InvalidArgumentException $e) {
+            return response()->json(array('success' => false, 'message' => $e->getMessage()), 422);
         } catch (\Exception $e) {
             return response()->json(array('success' => false, 'message' => $e->getMessage()), 500);
         }
+    }
+
+    public function actualizarComplejidad(Request $request, $id)
+    {
+        $request->validate(array(
+            'criticidad' => 'required|string|in:Baja,Media,Alta,Máxima',
+        ));
+
+        try {
+            $data = $this->service->actualizarComplejidad(
+                $id,
+                $request->input('criticidad'),
+                Auth::user()
+            );
+            return response()->json(array('success' => true, 'data' => $data));
+        } catch (\InvalidArgumentException $e) {
+            return response()->json(array('success' => false, 'message' => $e->getMessage()), 422);
+        } catch (\Exception $e) {
+            return response()->json(array('success' => false, 'message' => $e->getMessage()), 500);
+        }
+    }
+
+    public function actualizarEstado(Request $request, $id)
+    {
+        return $this->responderActualizacionEstado($request, $id);
     }
 
     public function historialEstados($id)
@@ -187,5 +193,79 @@ class SoporteTiSolicitudController extends Controller
         } catch (\Exception $e) {
             return response()->json(array('success' => false, 'message' => $e->getMessage()), 500);
         }
+    }
+
+    /**
+     * PATCH/POST estado: una sola respuesta; el servicio resuelve por código o por id.
+     *
+     * @param Request $request
+     * @param int|string $id
+     * @return JsonResponse
+     */
+    protected function responderActualizacionEstado(Request $request, $id)
+    {
+        $request->validate(array(
+            'estado_id' => 'required_without:estado_codigo|integer|min:1|max:255',
+            'estado_codigo' => 'required_without:estado_id|string|max:64',
+            'comentario' => 'nullable|string',
+        ));
+
+        try {
+            if ($request->filled('estado_codigo')) {
+                $data = $this->service->actualizarEstadoPorCodigo(
+                    $id,
+                    $request->input('estado_codigo'),
+                    $request->input('comentario'),
+                    Auth::user()
+                );
+            } else {
+                $data = $this->service->actualizarEstado(
+                    $id,
+                    (int) $request->input('estado_id'),
+                    $request->input('comentario'),
+                    Auth::user()
+                );
+            }
+
+            return response()->json(array('success' => true, 'data' => $data));
+        } catch (\InvalidArgumentException $e) {
+            return response()->json(array('success' => false, 'message' => $e->getMessage()), 422);
+        } catch (\Exception $e) {
+            return response()->json(array('success' => false, 'message' => $e->getMessage()), 500);
+        }
+    }
+
+    /**
+     * @param Request $request
+     * @return array
+     */
+    protected function extraerImagenesRequest(Request $request)
+    {
+        $imagenes = array();
+        if ($request->hasFile('imagenes')) {
+            $files = $request->file('imagenes');
+            if (is_array($files)) {
+                foreach ($files as $f) {
+                    if ($f) {
+                        $imagenes[] = $f;
+                    }
+                }
+            } else {
+                $imagenes[] = $files;
+            }
+            return $imagenes;
+        }
+
+        foreach ($request->allFiles() as $key => $file) {
+            if (strpos($key, 'imagenes') === 0 && $file) {
+                if (is_array($file)) {
+                    $imagenes = array_merge($imagenes, $file);
+                } else {
+                    $imagenes[] = $file;
+                }
+            }
+        }
+
+        return $imagenes;
     }
 }

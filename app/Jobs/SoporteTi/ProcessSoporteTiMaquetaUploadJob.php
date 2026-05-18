@@ -7,6 +7,7 @@ use App\Models\SoporteTi\SoporteTiMaqueta;
 use App\Models\SoporteTi\SoporteTiMensaje;
 use App\Models\SoporteTi\SoporteTiMensajeImagen;
 use App\Models\SoporteTi\SoporteTiSolicitud;
+use App\Services\SoporteTi\SoporteTiCacheService;
 use App\Services\SoporteTi\SoporteTiService;
 use Carbon\Carbon;
 use Illuminate\Bus\Queueable;
@@ -117,6 +118,9 @@ class ProcessSoporteTiMaquetaUploadJob implements ShouldQueue
                 'Maqueta "' . $maqueta->nombre . '" subida. Pendiente de aprobación del solicitante.'
             );
         }
+
+        $solicitud->load('salaChat');
+        app(SoporteTiCacheService::class)->invalidateAfterSolicitudWrite($solicitud);
     }
 
     public function failed(\Throwable $e)
