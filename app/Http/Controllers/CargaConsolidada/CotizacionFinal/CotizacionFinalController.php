@@ -1653,80 +1653,33 @@ class CotizacionFinalController extends Controller
             Log::info('Intentando leer Excel desde: ' . $fullStoredPath);
             $spreadsheet = IOFactory::load($fullStoredPath);
 
-            // --- Parsear valores finales desde el Excel
-            $sheet = $spreadsheet->getSheet(0);
-
-            // Helper inline para obtener y normalizar valores numéricos desde celdas
-            $getNumeric = function ($cellAddress) use ($sheet) {
+            $parsed = $this->parseCotizacionFinalExcelUploadValues($spreadsheet);
+            if ($parsed === null) {
                 try {
-                    $raw = $sheet->getCell($cellAddress)->getCalculatedValue();
-                } catch (\Exception $e) {
-                    try {
-                        $raw = $sheet->getCell($cellAddress)->getValue();
-                    } catch (\Exception $_) {
-                        $raw = null;
-                    }
+                    Storage::disk('public')->delete($dbPath);
+                } catch (\Exception $_) {
                 }
-                if ($raw === null) return null;
-                $str = (string) $raw;
-                // Remover símbolos comunes de moneda y espacios
-                $clean = preg_replace('/[^0-9\.,\-]/', '', $str);
-                // Normalizar coma decimal -> punto si hay más comas que puntos
-                if (substr_count($clean, ',') > 0 && substr_count($clean, '.') === 0) {
-                    $clean = str_replace(',', '.', $clean);
-                } else {
-                    // eliminar comas de miles
-                    $clean = str_replace(',', '', $clean);
-                }
-                if ($clean === '' || $clean === null) return null;
-                return floatval($clean);
-            };
 
-            // Mapa viejo: etiqueta ANTIDUMPING en B26 (percepción arriba). Mapa nuevo: B23/K23 bajo IPM, B26 vacío.
-            $hasAntidumpingLegacy = strtoupper(trim((string) $sheet->getCell('B26')->getValue())) === 'ANTIDUMPING';
-            $hasAntidumping = $hasAntidumpingLegacy;
-
-            if ($hasAntidumpingLegacy) {
-                $fob_final = $getNumeric('K30');
-                $logistica_sheet = $getNumeric('K31');
-                $impuestos_final = $getNumeric('K32');
-                $monto_final = $getNumeric('K31');
-            } else {
-                $fob_final = $getNumeric('K29');
-                $logistica_sheet = $getNumeric('K30');
-                $impuestos_final = $getNumeric('K31');
-                $monto_final = $getNumeric('K30');
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No se encontraron en la hoja 1 las filas COSTOS FOB, SERVICIO DE IMPORTACIÓN e IMPUESTOS (columna B). Verifique que sea el Excel de cotización final del sistema.',
+                ], 422);
             }
 
-            $tarifa_final = $getNumeric('K27');
-            $volumen_final = $getNumeric('J11');
+            Log::info('Cotización final upload: valores extraídos', [
+                'id_cotizacion' => $idCotizacion,
+                'layout' => $parsed['layout'] ?? 'unknown',
+                'row_map' => $parsed['row_map'] ?? [],
+            ]);
 
-            $pesoCellRaw = $sheet->getCell('J9')->getValue();
-            $peso_final = null;
-            if ($pesoCellRaw !== null) {
-                $pesoClean = preg_replace('/[^0-9\.,\-]/', '', (string) $pesoCellRaw);
-                if ($pesoClean !== '' && $pesoClean !== null) {
-                    if (substr_count($pesoClean, ',') > 0 && substr_count($pesoClean, '.') === 0) {
-                        $pesoClean = str_replace(',', '.', $pesoClean);
-                    } else {
-                        $pesoClean = str_replace(',', '', $pesoClean);
-                    }
-                    $peso_final = is_numeric($pesoClean) ? (float) $pesoClean : null;
-                    if ($peso_final !== null && stripos((string) $pesoCellRaw, 'tn') !== false) {
-                        $peso_final *= 1000;
-                    }
-                }
-            }
+            $monto_final = $parsed['monto_final'];
+            $impuestos_final = $parsed['impuestos_final'];
+            $logistica_final = $parsed['logistica_final'];
+            $fob_final = $parsed['fob_final'];
+            $tarifa_final = $parsed['tarifa_final'];
+            $volumen_final = $parsed['volumen_final'];
+            $peso_final = $parsed['peso_final'];
 
-            $logistica_final = $logistica_sheet;
-
-            if ($tarifa_final === null && $volumen_final !== null && $volumen_final > 0) {
-                $tarifa_final = $volumen_final < 1 ? $logistica_final : ($logistica_final / $volumen_final);
-            } elseif ($tarifa_final !== null && $volumen_final !== null && $volumen_final > 0) {
-                $logistica_final = $volumen_final < 1 ? $tarifa_final : $tarifa_final * $volumen_final;
-            }
-
-            // Validación estricta: monto, impuestos y logística deben extraerse correctamente
             if ($monto_final === null || $impuestos_final === null || $logistica_final === null) {
                 // borrar archivo almacenado
                 try {
@@ -3348,21 +3301,217 @@ class CotizacionFinalController extends Controller
             ], 500);
         }
     }
+    /** Solo trim + espacios internos; sin cambiar mayúsculas/minúsculas. */
+    private function trimMainSheetColumnBLabel(string $value): string
+    {
+        return trim(preg_replace('/\s+/u', ' ', (string) $value));
+    }
+
+    private function getMainSheetColumnBLabel($sheet, int $row): string
+    {
+        try {
+            $raw = $sheet->getCell('B' . $row)->getCalculatedValue();
+        } catch (\Throwable $e) {
+            $raw = $sheet->getCell('B' . $row)->getValue();
+        }
+
+        return $this->trimMainSheetColumnBLabel((string) $raw);
+    }
+
     /**
-     * Lectura numérica de celda para boleta (misma idea que cotización inicial calculadora; implementación local).
+     * Monto de la fila: prioriza K (boleta v2) y cae a J (calculadora).
      */
+    private function getMainSheetRowAmount($sheet, int $row): float
+    {
+        $amountK = $this->boletaFinalGetCellFloat($sheet, 'K' . $row);
+        if ($amountK > 0.00001) {
+            return round($amountK, 2);
+        }
+
+        return round($this->boletaFinalGetCellFloat($sheet, 'J' . $row), 2);
+    }
+
+    /**
+     * Primera fila (arriba → abajo) cuya columna B coincide exactamente con la etiqueta (case-sensitive, trim).
+     */
+    private function findMainSheetRowByColumnBLabelExact($sheet, string $expectedLabel): ?int
+    {
+        $expected = $this->trimMainSheetColumnBLabel($expectedLabel);
+        if ($expected === '') {
+            return null;
+        }
+
+        $maxRow = max(80, (int) $sheet->getHighestDataRow('B'));
+        for ($row = 1; $row <= $maxRow; $row++) {
+            if ($this->getMainSheetColumnBLabel($sheet, $row) === $expected) {
+                return $row;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Primera fila (arriba → abajo) cuya columna B contiene el texto (case-sensitive, trim).
+     */
+    private function findMainSheetRowByColumnBLabelContains(
+        $sheet,
+        string $mustContain,
+        string $mustNotContain = ''
+    ): ?int {
+        $needle = $this->trimMainSheetColumnBLabel($mustContain);
+        $exclude = $this->trimMainSheetColumnBLabel($mustNotContain);
+        if ($needle === '') {
+            return null;
+        }
+
+        $maxRow = max(80, (int) $sheet->getHighestDataRow('B'));
+        for ($row = 1; $row <= $maxRow; $row++) {
+            $label = $this->getMainSheetColumnBLabel($sheet, $row);
+            if ($label === '' || !str_contains($label, $needle)) {
+                continue;
+            }
+            if ($exclude !== '' && str_contains($label, $exclude)) {
+                continue;
+            }
+
+            return $row;
+        }
+
+        return null;
+    }
+
+    /**
+     * Lee montos de la hoja 1 buscando etiquetas en columna B (formato dinámico v2).
+     *
+     * @return array<string, mixed>|null
+     */
+    private function parseCotizacionFinalExcelUploadValues(Spreadsheet $spreadsheet): ?array
+    {
+        $sheet = $spreadsheet->getSheet(0);
+
+        $rowFob = $this->findMainSheetRowByColumnBLabelExact($sheet, 'COSTOS FOB');
+        $rowImpuestos = $this->findMainSheetRowByColumnBLabelExact($sheet, 'IMPUESTOS');
+        $rowServicio = $this->findMainSheetRowByColumnBLabelExact($sheet, 'SERVICIO DE IMPORTACIÓN');
+        if ($rowServicio === null) {
+            $rowServicio = $this->findMainSheetRowByColumnBLabelContains(
+                $sheet,
+                'SERVICIO DE IMPORTACIÓN',
+                'CALCULO DE'
+            );
+        }
+
+        if ($rowFob === null || $rowServicio === null || $rowImpuestos === null) {
+            Log::warning('Upload cotización final: etiquetas B no encontradas', [
+                'row_fob' => $rowFob,
+                'row_servicio' => $rowServicio,
+                'row_impuestos' => $rowImpuestos,
+            ]);
+
+            return null;
+        }
+
+        $fob = $this->getMainSheetRowAmount($sheet, $rowFob);
+        $logistica = $this->getMainSheetRowAmount($sheet, $rowServicio);
+        $impuestos = $this->getMainSheetRowAmount($sheet, $rowImpuestos);
+
+        $volumen = round($this->boletaFinalGetCellFloat($sheet, 'J11'), 4);
+        if ($volumen <= 0) {
+            $volumen = round($this->boletaFinalGetCellFloat($sheet, 'I11'), 4);
+        }
+
+        $tarifa = 0.0;
+        if ($volumen > 0 && $logistica > 0) {
+            $tarifa = $volumen < 1 ? $logistica : round($logistica / $volumen, 2);
+        }
+
+        $peso = $this->parsePesoFromMainSheetCell($sheet, 'J9');
+        if ($peso <= 0) {
+            $peso = $this->parsePesoFromMainSheetCell($sheet, 'I9');
+        }
+
+        if ($logistica <= 0 && $impuestos <= 0 && $fob <= 0) {
+            return null;
+        }
+
+        return [
+            'layout' => 'column_b_labels',
+            'row_map' => [
+                'fob' => $rowFob,
+                'servicio_importacion' => $rowServicio,
+                'impuestos' => $rowImpuestos,
+            ],
+            'monto_final' => $logistica,
+            'impuestos_final' => $impuestos,
+            'logistica_final' => $logistica,
+            'fob_final' => $fob,
+            'tarifa_final' => $tarifa,
+            'volumen_final' => $volumen,
+            'peso_final' => $peso,
+        ];
+    }
+
+    private function parsePesoFromMainSheetCell($sheet, string $cell): float
+    {
+        try {
+            $raw = $sheet->getCell($cell)->getCalculatedValue();
+        } catch (\Throwable $e) {
+            $raw = $sheet->getCell($cell)->getValue();
+        }
+
+        if ($raw === null || $raw === '') {
+            return 0.0;
+        }
+
+        $pesoClean = preg_replace('/[^0-9\.,\-]/', '', (string) $raw);
+        if ($pesoClean === '') {
+            return 0.0;
+        }
+
+        if (substr_count($pesoClean, ',') > 0 && substr_count($pesoClean, '.') === 0) {
+            $pesoClean = str_replace(',', '.', $pesoClean);
+        } else {
+            $pesoClean = str_replace(',', '', $pesoClean);
+        }
+
+        if (!is_numeric($pesoClean)) {
+            return 0.0;
+        }
+
+        $peso = (float) $pesoClean;
+
+        if (stripos((string) $raw, 'tn') !== false) {
+            $peso *= 1000;
+        }
+
+        return $peso;
+    }
+
     /**
      * Excel v2 (Boleta_Template): montos en K14–K33; cliente en C8. Excel tipo calculadora: J14–J43 y B8.
      */
     private function boletaFinalIsLegacyMainSheetKLayout($sheet): bool
     {
         try {
-            $k14 = $sheet->getCell('K14')->getValue();
-            $j14 = $sheet->getCell('J14')->getValue();
-            $kStr = is_string($k14) ? trim($k14) : '';
-            $jStr = is_string($j14) ? trim($j14) : '';
+            $b20 = strtoupper(trim((string) $sheet->getCell('B20')->getValue()));
+            $hasTributosBlock = str_contains($b20, 'ADVALOREM')
+                || str_contains(strtoupper(trim((string) $sheet->getCell('B24')->getValue())), 'SUB')
+                || str_contains(strtoupper(trim((string) $sheet->getCell('B24')->getValue())), 'ANTIDUMPING');
+
+            $k14Raw = $sheet->getCell('K14')->getValue();
+            $j14Raw = $sheet->getCell('J14')->getValue();
+            $kStr = is_string($k14Raw) ? trim($k14Raw) : '';
+            $jStr = is_string($j14Raw) ? trim($j14Raw) : '';
             $kFormula = $kStr !== '' && str_starts_with($kStr, '=');
             $jFormula = $jStr !== '' && str_starts_with($jStr, '=');
+
+            $k14Calc = $sheet->getCell('K14')->getCalculatedValue();
+            $k14HasAmount = is_numeric($k14Calc) && (float) $k14Calc > 0;
+
+            // Generado por getFinalCotizacionExcelv2: fórmulas en K14 o valores ya calculados + bloque tributos B20–B24.
+            if ($hasTributosBlock && ($kFormula || $k14HasAmount) && !$jFormula) {
+                return true;
+            }
 
             return $kFormula && !$jFormula;
         } catch (\Throwable $e) {
@@ -5088,7 +5237,7 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
             $rowProductosTemplateEnd = $rowProductosStart + $rowProductosTemplateSpan;
 
             // Resumen hoja 1 ↔ hoja cálculos ('3' luego renombrada a '2'): K14 valor EXW, K15 costos FOB total, K16 flete+seguro, K17 CIF
-            $objPHPExcel->getActiveSheet()->setCellValue('K14', "='3'!" . $columnaIndex . $rowValorExw);
+            $objPHPExcel->getActiveSheet()->setCellValue('K14', "=MAX('3'!" . $columnaIndex . $rowValorExw . ",'3'!" . $columnaIndex . $rowValorExwValoracion . ")");
             $objPHPExcel->getActiveSheet()->setCellValue('K15', "='3'!" . $columnaIndex . $rowCostosFob);
             $objPHPExcel->getActiveSheet()->setCellValue(
                 'K16',
