@@ -1662,7 +1662,7 @@ class CotizacionFinalController extends Controller
 
                 return response()->json([
                     'success' => false,
-                    'message' => 'No se encontraron en la hoja 1 las filas COSTOS FOB, SERVICIO DE IMPORTACIÓN e IMPUESTOS (columna B). Verifique que sea el Excel de cotización final del sistema.',
+                    'message' => 'No se encontraron en la hoja 1 las filas SERVICIO DE IMPORTACIÓN e IMPUESTOS (columna B). Verifique que sea el Excel de cotización final del sistema.',
                 ], 422);
             }
 
@@ -1670,6 +1670,8 @@ class CotizacionFinalController extends Controller
                 'id_cotizacion' => $idCotizacion,
                 'layout' => $parsed['layout'] ?? 'unknown',
                 'row_map' => $parsed['row_map'] ?? [],
+                'logistica_servicio_importacion' => $parsed['logistica_servicio_importacion'] ?? null,
+                'logistica_servicios_extra' => $parsed['logistica_servicios_extra'] ?? null,
             ]);
 
             $monto_final = $parsed['monto_final'];
@@ -3382,6 +3384,65 @@ class CotizacionFinalController extends Controller
     }
 
     /**
+     * Filas de servicios extra en hoja 1 (columna B) que deben sumarse a logística al subir cotización final.
+     */
+    private function mainSheetColumnBLabelMatchesLogisticaServicioExtra(string $label): bool
+    {
+        $u = mb_strtoupper($this->trimMainSheetColumnBLabel($label));
+        if ($u === '') {
+            return false;
+        }
+
+        if (str_contains($u, 'SERVICIO DE MONTACARGA')) {
+            return true;
+        }
+
+        if (str_contains($u, 'SERVICIO DE ENVIO') && str_contains($u, 'ALMACEN')) {
+            return true;
+        }
+
+        if (str_contains($u, 'RECARGOS ADUANEROS')) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Suma montos (columna K/J) de montacarga, envío almacén-agencia y recargos aduaneros en hoja 1.
+     */
+    private function sumMainSheetLogisticaServiciosExtraFromColumnB($sheet): float
+    {
+        $sum = 0.0;
+        $maxRow = max(80, (int) $sheet->getHighestDataRow('B'));
+        $rowsMatched = [];
+
+        for ($row = 1; $row <= $maxRow; $row++) {
+            $label = $this->getMainSheetColumnBLabel($sheet, $row);
+            if (!$this->mainSheetColumnBLabelMatchesLogisticaServicioExtra($label)) {
+                continue;
+            }
+
+            $amount = $this->getMainSheetRowAmount($sheet, $row);
+            if ($amount <= 0.00001) {
+                continue;
+            }
+
+            $sum += $amount;
+            $rowsMatched[] = ['row' => $row, 'label' => $label, 'amount' => $amount];
+        }
+
+        if ($rowsMatched !== []) {
+            Log::info('Upload cotización final: servicios extra sumados a logística', [
+                'filas' => $rowsMatched,
+                'total_servicios_extra' => round($sum, 2),
+            ]);
+        }
+
+        return round($sum, 2);
+    }
+
+    /**
      * Lee montos de la hoja 1 buscando etiquetas en columna B (formato dinámico v2).
      *
      * @return array<string, mixed>|null
@@ -3390,7 +3451,6 @@ class CotizacionFinalController extends Controller
     {
         $sheet = $spreadsheet->getSheet(0);
 
-        $rowFob = $this->findMainSheetRowByColumnBLabelExact($sheet, 'COSTOS FOB');
         $rowImpuestos = $this->findMainSheetRowByColumnBLabelExact($sheet, 'IMPUESTOS');
         $rowServicio = $this->findMainSheetRowByColumnBLabelExact($sheet, 'SERVICIO DE IMPORTACIÓN');
         if ($rowServicio === null) {
@@ -3401,9 +3461,8 @@ class CotizacionFinalController extends Controller
             );
         }
 
-        if ($rowFob === null || $rowServicio === null || $rowImpuestos === null) {
+        if ($rowServicio === null || $rowImpuestos === null) {
             Log::warning('Upload cotización final: etiquetas B no encontradas', [
-                'row_fob' => $rowFob,
                 'row_servicio' => $rowServicio,
                 'row_impuestos' => $rowImpuestos,
             ]);
@@ -3411,8 +3470,10 @@ class CotizacionFinalController extends Controller
             return null;
         }
 
-        $fob = $this->getMainSheetRowAmount($sheet, $rowFob);
-        $logistica = $this->getMainSheetRowAmount($sheet, $rowServicio);
+        $fob = $this->getMainSheetFobFinalAmount($sheet);
+        $logisticaServicioImportacion = $this->getMainSheetRowAmount($sheet, $rowServicio);
+        $serviciosExtraLogistica = $this->sumMainSheetLogisticaServiciosExtraFromColumnB($sheet);
+        $logistica = round($logisticaServicioImportacion + $serviciosExtraLogistica, 2);
         $impuestos = $this->getMainSheetRowAmount($sheet, $rowImpuestos);
 
         $volumen = round($this->boletaFinalGetCellFloat($sheet, 'J11'), 4);
@@ -3421,8 +3482,10 @@ class CotizacionFinalController extends Controller
         }
 
         $tarifa = 0.0;
-        if ($volumen > 0 && $logistica > 0) {
-            $tarifa = $volumen < 1 ? $logistica : round($logistica / $volumen, 2);
+        if ($volumen > 0 && $logisticaServicioImportacion > 0) {
+            $tarifa = $volumen < 1
+                ? $logisticaServicioImportacion
+                : round($logisticaServicioImportacion / $volumen, 2);
         }
 
         $peso = $this->parsePesoFromMainSheetCell($sheet, 'J9');
@@ -3437,10 +3500,12 @@ class CotizacionFinalController extends Controller
         return [
             'layout' => 'column_b_labels',
             'row_map' => [
-                'fob' => $rowFob,
+                'fob_k14' => 'K14',
                 'servicio_importacion' => $rowServicio,
                 'impuestos' => $rowImpuestos,
             ],
+            'logistica_servicio_importacion' => $logisticaServicioImportacion,
+            'logistica_servicios_extra' => $serviciosExtraLogistica,
             'monto_final' => $logistica,
             'impuestos_final' => $impuestos,
             'logistica_final' => $logistica,
@@ -3517,6 +3582,14 @@ class CotizacionFinalController extends Controller
         } catch (\Throwable $e) {
             return false;
         }
+    }
+
+    /**
+     * FOB para BD: valor EXW en K14 de la hoja 1 (no la fila "COSTOS FOB" del bloque de servicios).
+     */
+    private function getMainSheetFobFinalAmount($sheet): float
+    {
+        return round($this->boletaFinalGetCellFloat($sheet, 'K14'), 2);
     }
 
     private function boletaFinalGetCellFloat($sheet, string $cellReference): float
@@ -4985,7 +5058,7 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
                 $cfrvCell = $InitialColumn . $rowValorCfr;
                 $objPHPExcel->getActiveSheet()->getStyle($InitialColumn . $rowValorCfr)->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_CURRENCY_USD_SIMPLE);
 
-                $objPHPExcel->setActiveSheetIndex(2)->setCellValue($InitialColumn . $rowCfrValorizado, "=" . $InitialColumn . $rowValorExwValoracion . '+' . $InitialColumn . $rowFlete);
+                $objPHPExcel->setActiveSheetIndex(2)->setCellValue($InitialColumn . $rowCfrValorizado, "=" . $InitialColumn . $rowValorExwValoracion . '+' . $InitialColumn . $rowFlete.'+'.$InitialColumn . $rowCostosFob);
                 $cfrvCell = $InitialColumn . $rowCfrValorizado;
                 $objPHPExcel->getActiveSheet()->getStyle($InitialColumn . $rowCfrValorizado)->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_CURRENCY_USD_SIMPLE);
 
@@ -5585,25 +5658,21 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
 
             if ($hasAntidumpingMain) {
                 try {
-                    $fob = is_numeric($sheet1->getCell('K' . $rowMainFobS0)->getCalculatedValue()) ? $sheet1->getCell('K' . $rowMainFobS0)->getCalculatedValue() : 0;
                     $logistica = is_numeric($sheet1->getCell('K' . $rowMainLogisticaS0)->getCalculatedValue()) ? $sheet1->getCell('K' . $rowMainLogisticaS0)->getCalculatedValue() : 0;
                     $impRaw = $objPHPExcel->getSheet(2)->getCell($columnaIndex . $rowTotalTributos)->getCalculatedValue();
                     $impuestos = is_numeric($impRaw) ? $impRaw : 0;
                 } catch (\Exception $e) {
                     Log::warning('Error calculando valores con antidumping: ' . $e->getMessage());
-                    $fob = 0;
                     $logistica = 0;
                     $impuestos = 0;
                 }
             } else {
                 try {
-                    $fob = is_numeric($sheet1->getCell('K' . $rowMainFobS0)->getCalculatedValue()) ? $sheet1->getCell('K' . $rowMainFobS0)->getCalculatedValue() : 0;
                     $logistica = is_numeric($sheet1->getCell('K' . $rowMainLogisticaS0)->getCalculatedValue()) ? $sheet1->getCell('K' . $rowMainLogisticaS0)->getCalculatedValue() : 0;
                     $impRaw = $objPHPExcel->getSheet(2)->getCell($columnaIndex . $rowTotalTributos)->getCalculatedValue();
                     $impuestos = is_numeric($impRaw) ? $impRaw : 0;
                 } catch (\Exception $e) {
                     Log::warning('Error calculando valores sin antidumping: ' . $e->getMessage());
-                    $fob = 0;
                     $logistica = 0;
                     $impuestos = 0;
                 }
@@ -5711,25 +5780,21 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
 
             if ($hasAntidumpingMain) {
                 try {
-                    $fob = is_numeric($sheet1->getCell('K' . $rowMainFobS0)->getCalculatedValue()) ? $sheet1->getCell('K' . $rowMainFobS0)->getCalculatedValue() : 0;
                     $logistica = is_numeric($sheet1->getCell('K' . $rowMainLogisticaS0)->getCalculatedValue()) ? $sheet1->getCell('K' . $rowMainLogisticaS0)->getCalculatedValue() : 0;
                     $impRaw = $objPHPExcel->getSheet(1)->getCell($columnaIndex . $rowTotalTributos)->getCalculatedValue();
                     $impuestos = is_numeric($impRaw) ? $impRaw : 0;
                 } catch (\Exception $e) {
                     Log::warning('Error en valores finales con antidumping: ' . $e->getMessage());
-                    $fob = 0;
                     $logistica = 0;
                     $impuestos = 0;
                 }
             } else {
                 try {
-                    $fob = is_numeric($sheet1->getCell('K' . $rowMainFobS0)->getCalculatedValue()) ? $sheet1->getCell('K' . $rowMainFobS0)->getCalculatedValue() : 0;
                     $logistica = is_numeric($sheet1->getCell('K' . $rowMainLogisticaS0)->getCalculatedValue()) ? $sheet1->getCell('K' . $rowMainLogisticaS0)->getCalculatedValue() : 0;
                     $impRaw = $objPHPExcel->getSheet(1)->getCell($columnaIndex . $rowTotalTributos)->getCalculatedValue();
                     $impuestos = is_numeric($impRaw) ? $impRaw : 0;
                 } catch (\Exception $e) {
                     Log::warning('Error en valores finales sin antidumping: ' . $e->getMessage());
-                    $fob = 0;
                     $logistica = 0;
                     $impuestos = 0;
                 }
@@ -5741,6 +5806,7 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
             $logistica = is_numeric($logisticaCalculada) ? $logisticaCalculada : $logistica;
 
             $objWriter->save($fullPath);
+            $fob = $this->getMainSheetFobFinalAmount($objPHPExcel->getSheet(0));
             $recargosDescuentosFinal = ($extrasCalc['recargos'] ?? 0)-($extrasCalc['descuento'] ?? 0);
             return [    
                 'id' => $data['id'] ?? null,
@@ -5757,7 +5823,7 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
                 'logistica_final' => is_numeric($logistica) ? $logistica : 0,
                 'servicios_extra_final' => $deliveryServiciosExtras,
                 'recargos_descuentos_final' => $recargosDescuentosFinal,
-                'fob_final' => is_numeric($fob) ? $fob : 0,
+                'fob_final' => $fob,
                 'peso_final' => is_numeric($pesoTotal) ? $pesoTotal : 0,
                 'estado' => 'PENDIENTE',
                 "excel_file_name" => $excelFileName,
