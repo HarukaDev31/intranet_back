@@ -1,5 +1,4 @@
 <?php
-
 namespace App\Http\Controllers\CargaConsolidada\CotizacionFinal;
 
 use App\Http\Controllers\Controller;
@@ -1146,24 +1145,24 @@ class CotizacionFinalController extends Controller
                 $fechaArribo = $contenedor->fecha_arribo;
                 $telefono = preg_replace('/\s+/', '', $cotizacion->telefono);
                 $this->phoneNumberId = $telefono ? $telefono . '@c.us' : '';
-                $message = "ðŸ“¦ *Consolidado #" . $carga . "*\n" .
-                    "Hola " . $nombre . " ðŸ˜ un gusto saludarte! \n" .
-                    "A continuaciÃ³n te envio la cotizaciÃ³n final de tu importaciÃ³nðŸ“‹ðŸ“¦.\n" .
-                    "ðŸ™‹â€â™‚ï¸PAGO PENDIENTE: \n" .
-                    "â˜‘ï¸Costo CBM: $" . number_format($logisticaFinal, 2) . "\n" .
-                    "â˜‘ï¸Impuestos: $" . number_format($impuestosFinal, 2) . "\n" .
-                    ($serviciosExtraFinal > 0 ? "â˜‘ï¸Servicios extras: $" . number_format($serviciosExtraFinal, 2) . "\n" : "") .
-                    "âœ…Total: $" . number_format($total, 2) . "\n" .
+                $message = "📦 *Consolidado #" . $carga . "*\n" .
+                    "Hola " . $nombre . " 😁 un gusto saludarte! \n" .
+                    "A continuación te envio la cotización final de tu importación📋📦.\n" .
+                    "🙋‍♂️PAGO PENDIENTE: \n" .
+                    "☑️Costo CBM: $" . number_format($logisticaFinal, 2) . "\n" .
+                    "☑️Impuestos: $" . number_format($impuestosFinal, 2) . "\n" .
+                    ($serviciosExtraFinal > 0 ? "☑️Servicios extras: $" . number_format($serviciosExtraFinal, 2) . "\n" : "") .
+                    "✅Total: $" . number_format($total, 2) . "\n" .
                     "Pronto le aviso nuevos avances, que tengan buen dia \n" .
-                    "Ãšltimo dÃ­a de pago: " . date('d/m/Y', strtotime($fechaArribo)) . "\n";
+                    "Último día de pago: " . date('d/m/Y', strtotime($fechaArribo)) . "\n";
                 $this->sendMessage($message);
                 $pathCotizacionFinalPDF = $this->getBoletaForSend($request->idCotizacion);
                 Log::info('pathCotizacionFinalPDF: ' . $pathCotizacionFinalPDF);
                 $this->sendMedia($pathCotizacionFinalPDF, null, null, null, 3);
-                $message = "ðŸ’°*Resumen de Pago*\n" .
-                    "âœ…CotizaciÃ³n final: $" . number_format($total, 2) . "\n" .
-                    "âœ…Adelanto: $" . number_format($totalPagos, 2) . "\n" .
-                    "âœ… *Pendiente de pago: $" . number_format($totalAPagar, 2) . "*\n";
+                $message = "💰*Resumen de Pago*\n" .
+                    "✅Cotización final: $" . number_format($total, 2) . "\n" .
+                    "✅Adelanto: $" . number_format($totalPagos, 2) . "\n" .
+                    "✅ *Pendiente de pago: $" . number_format($totalAPagar, 2) . "*\n";
                 $this->sendMessage($message, null, 5);
                 $pagosUrl = public_path('assets/images/pagos-full.jpg');
                 $this->sendMedia($pagosUrl, 'image/jpg', null, null, 10);
@@ -1175,7 +1174,7 @@ class CotizacionFinalController extends Controller
             }
             return response()->json([
                 'success' => true,
-                'message' => 'Estado de cotizaciÃ³n final actualizado correctamente'
+                'message' => 'Estado de cotización final actualizado correctamente'
             ]);
         } catch (\Exception $e) {
             return response()->json([
