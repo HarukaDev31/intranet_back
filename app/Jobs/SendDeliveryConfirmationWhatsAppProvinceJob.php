@@ -16,10 +16,11 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use App\Models\User;
 use App\Services\Delivery\ProvinciaEntregaNotificacionService;
+use App\Traits\MailTrait;
 
 class SendDeliveryConfirmationWhatsAppProvinceJob implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, WhatsappTrait, DatabaseConnectionTrait;
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, WhatsappTrait, DatabaseConnectionTrait, MailTrait;
 
     protected $deliveryFormId;
     protected $domain;
@@ -96,19 +97,17 @@ class SendDeliveryConfirmationWhatsAppProvinceJob implements ShouldQueue
 
             // Enviar el mensaje de WhatsApp
             $resultado = $this->sendMessage($mensaje, $telefono);
-            
+            $this->sendMailTo($user->email, new \App\Mail\DeliveryConfirmationProvinceMail(
+                $deliveryForm,
+                $cotizacion,
+                $user,
+                $carga,
+                public_path('storage/logo_icons/logo_header_white.png'),
+                public_path('storage/logo_icons/logo_footer.png'),
+                $notificacion
+            ));
             // Enviar email de confirmación si el usuario tiene email
-            if ($user && $user->email) {
-                Mail::to($user->email)->send(new \App\Mail\DeliveryConfirmationProvinceMail(
-                    $deliveryForm,
-                    $cotizacion,
-                    $user,
-                    $carga,
-                    public_path('storage/logo_icons/logo_header_white.png'),
-                    public_path('storage/logo_icons/logo_footer.png'),
-                    $notificacion
-                ));
-            }
+           
 
             if ($resultado['status']) {
                 Log::info('Mensaje de WhatsApp enviado exitosamente a cliente de provincia', [

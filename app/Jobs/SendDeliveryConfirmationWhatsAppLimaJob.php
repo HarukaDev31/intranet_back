@@ -15,10 +15,11 @@ use App\Models\User;
 use App\Services\Delivery\LimaRecojoNotificacionService;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use App\Traits\MailTrait;
 
 class SendDeliveryConfirmationWhatsAppLimaJob implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, WhatsappTrait;
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, WhatsappTrait, MailTrait;
 
     protected $deliveryFormId;
 
@@ -73,7 +74,7 @@ class SendDeliveryConfirmationWhatsAppLimaJob implements ShouldQueue
             $resultado = $this->sendMessage($mensaje, $telefono);
 
             if ($user && $user->email) {
-                Mail::to($user->email)->send(new \App\Mail\DeliveryConfirmationLimaMail(
+                $email=$this->sendMailTo($user->email, new \App\Mail\DeliveryConfirmationLimaMail(
                     $deliveryForm,
                     $cotizacion,
                     $user,
@@ -82,6 +83,7 @@ class SendDeliveryConfirmationWhatsAppLimaJob implements ShouldQueue
                     public_path('storage/logo_icons/logo_footer.png'),
                     $notificacion
                 ));
+                Log::info('email', ['email' => $email]);
             }
 
             if ($resultado['status']) {
