@@ -9,8 +9,8 @@ use Illuminate\Support\Facades\Log;
 /**
  * Centraliza la lógica para resolver los datos de "formulario de comprobante" de una cotización:
  *
- *   - findLatestUsuarioDatosFacturacion: resuelve el cliente via UserLookupHelper y devuelve
- *     su última fila en usuario_datos_facturacion (orden created_at desc, id desc).
+     *   - findLatestUsuarioDatosFacturacion: resuelve el cliente via UserLookupHelper; si no hay match
+     *     en users, busca id_user en usuario_datos_facturacion por DNI/RUC (UsuarioDatosFacturacionLookupHelper).
  *   - buildSyntheticFromUdf: arma un payload con la misma forma de ComprobanteForm a partir
  *     de un UsuarioDatosFacturacion (para vistas que aceptan cualquiera de las dos fuentes).
  *   - resolveForListing: dada una cotización (y opcionalmente un ComprobanteForm pre-cargado),
@@ -21,33 +21,45 @@ class ComprobanteFormResolverHelper
 {
     /**
      * Última fila de usuario_datos_facturacion del cliente vinculado a la cotización.
-     * El id_user se resuelve con UserLookupHelper (correo, teléfono, documento).
+     * El id_user se resuelve con UserLookupHelper (correo, teléfono, documento) o, en fallback,
+     * UsuarioDatosFacturacionLookupHelper (DNI/RUC en usuario_datos_facturacion).
      *
      * @param object $cotizacion Cualquier objeto con propiedades correo / telefono / documento / id.
      * @return UsuarioDatosFacturacion|null
      */
     public static function findLatestUsuarioDatosFacturacion($cotizacion)
     {
+        $idUser = null;
+
         try {
             $user = UserLookupHelper::findUserByContact(
                 $cotizacion->correo ?? null,
                 $cotizacion->telefono ?? null,
                 $cotizacion->documento ?? null
             );
+            if ($user && !empty($user->id)) {
+                $idUser = (int) $user->id;
+            }
         } catch (\Exception $e) {
             Log::warning('ComprobanteFormResolverHelper::findLatestUsuarioDatosFacturacion - UserLookupHelper falló', [
                 'id_cotizacion' => $cotizacion->id ?? null,
                 'error' => $e->getMessage(),
             ]);
-            return null;
         }
 
-        if (!$user || empty($user->id)) {
+        if ($idUser === null) {
+            $idUser = UsuarioDatosFacturacionLookupHelper::findIdUserByDniOrRuc(
+                $cotizacion->documento ?? null,
+                null
+            );
+        }
+
+        if ($idUser === null || $idUser <= 0) {
             return null;
         }
 
         return UsuarioDatosFacturacion::query()
-            ->where('id_user', (int) $user->id)
+            ->where('id_user', $idUser)
             ->orderByDesc('created_at')
             ->orderByDesc('id')
             ->first();

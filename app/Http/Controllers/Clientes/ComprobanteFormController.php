@@ -354,7 +354,7 @@ class ComprobanteFormController extends Controller
 
             $form = ComprobanteForm::where('id_cotizacion', $idCotizacion)->first();
             $udf = $this->findUsuarioDatosFacturacionForCotizacion($cotizacion);
-
+            Log::info('udf', ['udf' => $udf]);
             // Prioridad 1: último registro en usuario_datos_facturacion.
             if ($udf) {
                 $synthetic = $this->buildSyntheticComprobanteFormFromUsuarioDatosFacturacion($udf, $cotizacion);
