@@ -30,6 +30,7 @@ use Dompdf\Options;
 use Tymon\JWTAuth\Facades\JWTAuth;
 use App\Traits\FileTrait;
 use App\Jobs\SendReminderPagoWhatsAppJob;
+use App\Services\CargaConsolidada\CotizacionFinal\PlantillaFinalBatchService;
 
 class CotizacionFinalController extends Controller
 {
@@ -64,7 +65,7 @@ class CotizacionFinalController extends Controller
     private $table_contenedor_almacen_inspection = "contenedor_consolidado_almacen_inspection";
     private $table_conteneodr_proveedor_estados_tracking = "contenedor_proveedor_estados_tracking";
     private $roleCotizador = "Cotizador";
-    private $roleCoordinacion = "Coordinación";
+    private $roleCoordinacion = "CoordinaciÃ³n";
     private $roleContenedorAlmacen = "ContenedorAlmacen";
     private $roleCatalogoChina = "CatalogoChina";
     private $rolesChina = ["CatalogoChina", "ContenedorAlmacen"];
@@ -82,9 +83,9 @@ class CotizacionFinalController extends Controller
     /**
      * @OA\Get(
      *     path="/carga-consolidada/contenedores/{idContenedor}/cotizaciones-finales",
-     *     tags={"Cotización Final"},
+     *     tags={"CotizaciÃ³n Final"},
      *     summary="Obtener cotizaciones finales",
-     *     description="Obtiene las cotizaciones finales de un contenedor específico",
+     *     description="Obtiene las cotizaciones finales de un contenedor especÃ­fico",
      *     operationId="getContenedorCotizacionesFinales",
      *     security={{"bearerAuth":{}}},
      *     @OA\Parameter(name="idContenedor", in="path", required=true, @OA\Schema(type="integer")),
@@ -95,7 +96,7 @@ class CotizacionFinalController extends Controller
      *     @OA\Response(response=401, description="No autenticado")
      * )
      *
-     * Obtiene las cotizaciones finales de un contenedor específico
+     * Obtiene las cotizaciones finales de un contenedor especÃ­fico
      */
     public function getContenedorCotizacionesFinales(Request $request, $idContenedor)
     {
@@ -164,7 +165,7 @@ class CotizacionFinalController extends Controller
                     return $p;
                 });
 
-                // Determinar si los pagos asociados están todos confirmados
+                // Determinar si los pagos asociados estÃ¡n todos confirmados
                 $pagosNotConfirmed = $pagos->filter(function ($p) {
                     $status = isset($p->status) ? strtoupper(trim($p->status)) : '';
                     return $status !== 'CONFIRMADO';
@@ -241,7 +242,7 @@ class CotizacionFinalController extends Controller
     }
 
     /**
-     * Obtiene las cotizaciones finales con documentación y pagos para un contenedor
+     * Obtiene las cotizaciones finales con documentaciÃ³n y pagos para un contenedor
      */
     public function getCotizacionFinalDocumentacionPagos(Request $request, $idContenedor)
     {
@@ -313,7 +314,7 @@ class CotizacionFinalController extends Controller
 
             $data = $query->paginate($perPage);
 
-            // Transformar los datos para incluir las columnas específicas
+            // Transformar los datos para incluir las columnas especÃ­ficas
             $transformedData = [];
             $index = 1;
 
@@ -365,17 +366,17 @@ class CotizacionFinalController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Error al obtener cotizaciones con documentación y pagos: ' . $e->getMessage()
+                'message' => 'Error al obtener cotizaciones con documentaciÃ³n y pagos: ' . $e->getMessage()
             ], 500);
         }
     }
     /**
-     * Obtiene y procesa la boleta para envío
+     * Obtiene y procesa la boleta para envÃ­o
      */
     private function getBoletaForSend($idCotizacion)
     {
         try {
-            // Obtener URL de cotización final
+            // Obtener URL de cotizaciÃ³n final
             $cotizacion = DB::table('contenedor_consolidado_cotizacion')
                 ->select('cotizacion_final_url')
                 ->where('id', $idCotizacion)
@@ -383,7 +384,7 @@ class CotizacionFinalController extends Controller
                 ->first();
 
             if (!$cotizacion || !$cotizacion->cotizacion_final_url) {
-                Log::error('Cotización final no encontrada o sin URL', ['id_cotizacion' => $idCotizacion]);
+                Log::error('CotizaciÃ³n final no encontrada o sin URL', ['id_cotizacion' => $idCotizacion]);
                 return false;
             }
 
@@ -393,7 +394,7 @@ class CotizacionFinalController extends Controller
             // Intentar diferentes ubicaciones
             $possiblePaths = [];
 
-            // Nueva ubicación: storage/app/public/CargaConsolidada/cotizacionfinal/{idContenedor}
+            // Nueva ubicaciÃ³n: storage/app/public/CargaConsolidada/cotizacionfinal/{idContenedor}
             $possiblePaths[] = storage_path('app/public/' . $originalUrl);
 
             // Procesar ruta de la DB con generateImageUrl
@@ -439,8 +440,8 @@ class CotizacionFinalController extends Controller
 
 
             if ($fileContent === false) {
-                Log::error('No se pudo leer el archivo de cotización final');
-                throw new \Exception("No se pudo leer el archivo Excel desde ninguna ubicación.");
+                Log::error('No se pudo leer el archivo de cotizaciÃ³n final');
+                throw new \Exception("No se pudo leer el archivo Excel desde ninguna ubicaciÃ³n.");
             }
 
             // Crear archivo temporal
@@ -479,9 +480,9 @@ class CotizacionFinalController extends Controller
         Log::info("=== INICIO downloadFileFromUrl ===", ['url' => $url]);
 
         try {
-            // Verificar si cURL está disponible
+            // Verificar si cURL estÃ¡ disponible
             if (!function_exists('curl_init')) {
-                Log::error("cURL no está disponible en el servidor");
+                Log::error("cURL no estÃ¡ disponible en el servidor");
                 return false;
             }
 
@@ -524,19 +525,19 @@ class CotizacionFinalController extends Controller
                 return false;
             }
 
-            Log::info("Ejecutando petición cURL...");
+            Log::info("Ejecutando peticiÃ³n cURL...");
 
-            // Ejecutar la petición
+            // Ejecutar la peticiÃ³n
             $fileContent = curl_exec($ch);
 
-            // Obtener información de la petición
+            // Obtener informaciÃ³n de la peticiÃ³n
             $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
             $error = curl_error($ch);
             $contentType = curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
             $totalTime = curl_getinfo($ch, CURLINFO_TOTAL_TIME);
             $downloadSize = curl_getinfo($ch, CURLINFO_SIZE_DOWNLOAD);
 
-            Log::info("Información de cURL", [
+            Log::info("InformaciÃ³n de cURL", [
                 'http_code' => $httpCode,
                 'content_type' => $contentType,
                 'total_time' => $totalTime,
@@ -546,9 +547,9 @@ class CotizacionFinalController extends Controller
 
             curl_close($ch);
 
-            // Verificar si hubo error en la ejecución
+            // Verificar si hubo error en la ejecuciÃ³n
             if ($fileContent === false) {
-                Log::error("curl_exec retornó false", ['curl_error' => $error]);
+                Log::error("curl_exec retornÃ³ false", ['curl_error' => $error]);
                 return false;
             }
 
@@ -558,18 +559,18 @@ class CotizacionFinalController extends Controller
                 return false;
             }
 
-            // Verificar código HTTP
+            // Verificar cÃ³digo HTTP
             if ($httpCode !== 200) {
-                Log::error("Error HTTP al descargar archivo. Código: " . $httpCode, [
+                Log::error("Error HTTP al descargar archivo. CÃ³digo: " . $httpCode, [
                     'url' => $url,
                     'content_type' => $contentType
                 ]);
                 return false;
             }
 
-            // Verificar que el contenido no esté vacío
+            // Verificar que el contenido no estÃ© vacÃ­o
             if (empty($fileContent)) {
-                Log::error("Archivo descargado está vacío", ['url' => $url]);
+                Log::error("Archivo descargado estÃ¡ vacÃ­o", ['url' => $url]);
                 return false;
             }
 
@@ -581,10 +582,10 @@ class CotizacionFinalController extends Controller
                 'first_bytes' => bin2hex(substr($fileContent, 0, 16)) // Primeros 16 bytes en hex
             ]);
 
-            // Verificar que sea un archivo Excel válido mirando los primeros bytes
+            // Verificar que sea un archivo Excel vÃ¡lido mirando los primeros bytes
             $signature = substr($fileContent, 0, 4);
             if ($signature !== "PK\x03\x04") {
-                Log::warning("El archivo descargado no parece ser un archivo ZIP/Excel válido", [
+                Log::warning("El archivo descargado no parece ser un archivo ZIP/Excel vÃ¡lido", [
                     'signature' => bin2hex($signature),
                     'expected' => bin2hex("PK\x03\x04")
                 ]);
@@ -594,7 +595,7 @@ class CotizacionFinalController extends Controller
             Log::info("=== FIN downloadFileFromUrl EXITOSO ===");
             return $fileContent;
         } catch (\Exception $e) {
-            Log::error("Excepción al descargar archivo desde URL: " . $e->getMessage(), [
+            Log::error("ExcepciÃ³n al descargar archivo desde URL: " . $e->getMessage(), [
                 'url' => $url,
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
@@ -619,7 +620,7 @@ class CotizacionFinalController extends Controller
             if (!$contenedor || !$contenedor->factura_general_url) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'No se encontró la factura general'
+                    'message' => 'No se encontrÃ³ la factura general'
                 ], 404);
             }
 
@@ -650,7 +651,7 @@ class CotizacionFinalController extends Controller
             $plantillaPath = public_path('assets/templates/PLANTILLA_GENERAL.xlsx');
 
             if (!file_exists($plantillaPath)) {
-                throw new \Exception('No se encontró la plantilla general');
+                throw new \Exception('No se encontrÃ³ la plantilla general');
             }
 
             // Cargar archivos Excel
@@ -717,7 +718,7 @@ class CotizacionFinalController extends Controller
                     }
                 }
 
-                // Obtener información del cliente - manejar tanto celdas mergeadas como individuales
+                // Obtener informaciÃ³n del cliente - manejar tanto celdas mergeadas como individuales
                 $clientName = '';
                 $clientType = '';
                 $currentRow = $startRow;
@@ -744,7 +745,7 @@ class CotizacionFinalController extends Controller
                     $newRow++;
                 }
 
-                // Combinar celdas para el cliente solo si hay múltiples filas
+                // Combinar celdas para el cliente solo si hay mÃºltiples filas
                 if ($clientMergeRange && $mergeStartRow < ($newRow - 1)) {
                     $this->applyClientMerges($newSheet, $mergeStartRow, $newRow - 1);
                 }
@@ -786,7 +787,7 @@ class CotizacionFinalController extends Controller
     }
 
     /**
-     * Aplica estilos a una fila específica
+     * Aplica estilos a una fila especÃ­fica
      */
     private function applyRowStyles($sheet, $row)
     {
@@ -828,7 +829,7 @@ class CotizacionFinalController extends Controller
         $sheet->getStyle('S' . $row)->applyFromArray($percentageStyle);
         $sheet->getStyle('T' . $row)->applyFromArray($percentageStyle);
 
-        // Ajustar texto y ajuste automático
+        // Ajustar texto y ajuste automÃ¡tico
         $sheet->getStyle('A' . $row . ':V' . $row)
             ->getAlignment()
             ->setWrapText(true)
@@ -932,7 +933,7 @@ class CotizacionFinalController extends Controller
             ->getNumberFormat()
             ->setFormatCode(\PhpOffice\PhpSpreadsheet\Style\NumberFormat::FORMAT_PERCENTAGE_00);
 
-        // Fórmula de suma para columna P con estilo
+        // FÃ³rmula de suma para columna P con estilo
         $sheet->setCellValue('P' . $lastRow, '=SUM(P2:P' . ($lastRow - 1) . ')');
         $totalRowStyle = [
             'font' => [
@@ -948,7 +949,7 @@ class CotizacionFinalController extends Controller
 
         // Ajustar altura de filas
         $sheet->getDefaultRowDimension()->setRowHeight(20);
-        $sheet->getRowDimension(1)->setRowHeight(25); // Encabezado más alto
+        $sheet->getRowDimension(1)->setRowHeight(25); // Encabezado mÃ¡s alto
     }
 
     /**
@@ -956,7 +957,7 @@ class CotizacionFinalController extends Controller
      */
     private function isNameMatch($fullName, $partialName)
     {
-        // Verificación inicial
+        // VerificaciÃ³n inicial
         if (empty($fullName) || empty($partialName)) {
             return false;
         }
@@ -964,12 +965,12 @@ class CotizacionFinalController extends Controller
         $fullName = $this->normalizeString($fullName);
         $partialName = $this->normalizeString($partialName);
 
-        // Verificar que normalizeString no devolvió cadenas vacías
+        // Verificar que normalizeString no devolviÃ³ cadenas vacÃ­as
         if (empty($fullName) || empty($partialName)) {
             return false;
         }
 
-        // Comparación exacta - la única forma válida de match
+        // ComparaciÃ³n exacta - la Ãºnica forma vÃ¡lida de match
         if ($fullName === $partialName) {
             return true;
         }
@@ -978,7 +979,7 @@ class CotizacionFinalController extends Controller
         $fullWords = array_filter(explode(' ', $fullName));
         $partialWords = array_filter(explode(' ', $partialName));
 
-        // Deben tener el mismo número de palabras para ser exactos
+        // Deben tener el mismo nÃºmero de palabras para ser exactos
         if (count($fullWords) !== count($partialWords)) {
             return false;
         }
@@ -1005,64 +1006,64 @@ class CotizacionFinalController extends Controller
     {
         $string = strtolower(trim($string));
         $accents = [
-            'á' => 'a',
-            'à' => 'a',
-            'ä' => 'a',
-            'â' => 'a',
-            'ā' => 'a',
-            'ã' => 'a',
-            'é' => 'e',
-            'è' => 'e',
-            'ë' => 'e',
-            'ê' => 'e',
-            'ē' => 'e',
-            'í' => 'i',
-            'ì' => 'i',
-            'ï' => 'i',
-            'î' => 'i',
-            'ī' => 'i',
-            'ó' => 'o',
-            'ò' => 'o',
-            'ö' => 'o',
-            'ô' => 'o',
-            'ō' => 'o',
-            'õ' => 'o',
-            'ú' => 'u',
-            'ù' => 'u',
-            'ü' => 'u',
-            'û' => 'u',
-            'ū' => 'u',
-            'ñ' => 'n',
-            'ç' => 'c',
-            'Á' => 'a',
-            'À' => 'a',
-            'Ä' => 'a',
-            'Â' => 'a',
-            'Ā' => 'a',
-            'Ã' => 'a',
-            'É' => 'e',
-            'È' => 'e',
-            'Ë' => 'e',
-            'Ê' => 'e',
-            'Ē' => 'e',
-            'Í' => 'i',
-            'Ì' => 'i',
-            'Ï' => 'i',
-            'Î' => 'i',
-            'Ī' => 'i',
-            'Ó' => 'o',
-            'Ò' => 'o',
-            'Ö' => 'o',
-            'Ô' => 'o',
-            'Ō' => 'o',
-            'Õ' => 'o',
-            'Ú' => 'u',
-            'Ù' => 'u',
-            'Ü' => 'u',
-            'Û' => 'u',
-            'Ū' => 'u',
-            'Ñ' => 'n',
-            'Ç' => 'c'
+            'Ã¡' => 'a',
+            'Ã ' => 'a',
+            'Ã¤' => 'a',
+            'Ã¢' => 'a',
+            'Ä' => 'a',
+            'Ã£' => 'a',
+            'Ã©' => 'e',
+            'Ã¨' => 'e',
+            'Ã«' => 'e',
+            'Ãª' => 'e',
+            'Ä“' => 'e',
+            'Ã­' => 'i',
+            'Ã¬' => 'i',
+            'Ã¯' => 'i',
+            'Ã®' => 'i',
+            'Ä«' => 'i',
+            'Ã³' => 'o',
+            'Ã²' => 'o',
+            'Ã¶' => 'o',
+            'Ã´' => 'o',
+            'Å' => 'o',
+            'Ãµ' => 'o',
+            'Ãº' => 'u',
+            'Ã¹' => 'u',
+            'Ã¼' => 'u',
+            'Ã»' => 'u',
+            'Å«' => 'u',
+            'Ã±' => 'n',
+            'Ã§' => 'c',
+            'Ã' => 'a',
+            'Ã€' => 'a',
+            'Ã„' => 'a',
+            'Ã‚' => 'a',
+            'Ä€' => 'a',
+            'Ãƒ' => 'a',
+            'Ã‰' => 'e',
+            'Ãˆ' => 'e',
+            'Ã‹' => 'e',
+            'ÃŠ' => 'e',
+            'Ä’' => 'e',
+            'Ã' => 'i',
+            'ÃŒ' => 'i',
+            'Ã' => 'i',
+            'ÃŽ' => 'i',
+            'Äª' => 'i',
+            'Ã“' => 'o',
+            'Ã’' => 'o',
+            'Ã–' => 'o',
+            'Ã”' => 'o',
+            'ÅŒ' => 'o',
+            'Ã•' => 'o',
+            'Ãš' => 'u',
+            'Ã™' => 'u',
+            'Ãœ' => 'u',
+            'Ã›' => 'u',
+            'Åª' => 'u',
+            'Ã‘' => 'n',
+            'Ã‡' => 'c'
         ];
 
         return strtr($string, $accents);
@@ -1070,9 +1071,9 @@ class CotizacionFinalController extends Controller
     /**
      * @OA\Put(
      *     path="/carga-consolidada/contenedor/cotizacion-final/general/update-estado",
-     *     tags={"Cotización Final"},
-     *     summary="Actualizar estado de cotización final",
-     *     description="Cambia el estado de una cotización final",
+     *     tags={"CotizaciÃ³n Final"},
+     *     summary="Actualizar estado de cotizaciÃ³n final",
+     *     description="Cambia el estado de una cotizaciÃ³n final",
      *     operationId="updateEstadoCotizacionFinal",
      *     security={{"bearerAuth":{}}},
      *     @OA\RequestBody(
@@ -1117,7 +1118,7 @@ class CotizacionFinalController extends Controller
                     ->first();
 
                 if (!$cotizacion) {
-                    throw new \Exception('Cotización no encontrada');
+                    throw new \Exception('CotizaciÃ³n no encontrada');
                 }
                 $telefono = preg_replace('/\s+/', '', $cotizacion->telefono);
                 $phoneNumberId = $telefono ? $telefono . '@c.us' : '';
@@ -1145,24 +1146,24 @@ class CotizacionFinalController extends Controller
                 $fechaArribo = $contenedor->fecha_arribo;
                 $telefono = preg_replace('/\s+/', '', $cotizacion->telefono);
                 $this->phoneNumberId = $telefono ? $telefono . '@c.us' : '';
-                $message = "📦 *Consolidado #" . $carga . "*\n" .
-                    "Hola " . $nombre . " 😁 un gusto saludarte! \n" .
-                    "A continuación te envio la cotización final de tu importación📋📦.\n" .
-                    "🙋‍♂️PAGO PENDIENTE: \n" .
-                    "☑️Costo CBM: $" . number_format($logisticaFinal, 2) . "\n" .
-                    "☑️Impuestos: $" . number_format($impuestosFinal, 2) . "\n" .
-                    ($serviciosExtraFinal > 0 ? "☑️Servicios extras: $" . number_format($serviciosExtraFinal, 2) . "\n" : "") .
-                    "✅Total: $" . number_format($total, 2) . "\n" .
+                $message = "ðŸ“¦ *Consolidado #" . $carga . "*\n" .
+                    "Hola " . $nombre . " ðŸ˜ un gusto saludarte! \n" .
+                    "A continuaciÃ³n te envio la cotizaciÃ³n final de tu importaciÃ³nðŸ“‹ðŸ“¦.\n" .
+                    "ðŸ™‹â€â™‚ï¸PAGO PENDIENTE: \n" .
+                    "â˜‘ï¸Costo CBM: $" . number_format($logisticaFinal, 2) . "\n" .
+                    "â˜‘ï¸Impuestos: $" . number_format($impuestosFinal, 2) . "\n" .
+                    ($serviciosExtraFinal > 0 ? "â˜‘ï¸Servicios extras: $" . number_format($serviciosExtraFinal, 2) . "\n" : "") .
+                    "âœ…Total: $" . number_format($total, 2) . "\n" .
                     "Pronto le aviso nuevos avances, que tengan buen dia \n" .
-                    "Último día de pago: " . date('d/m/Y', strtotime($fechaArribo)) . "\n";
+                    "Ãšltimo dÃ­a de pago: " . date('d/m/Y', strtotime($fechaArribo)) . "\n";
                 $this->sendMessage($message);
                 $pathCotizacionFinalPDF = $this->getBoletaForSend($request->idCotizacion);
                 Log::info('pathCotizacionFinalPDF: ' . $pathCotizacionFinalPDF);
                 $this->sendMedia($pathCotizacionFinalPDF, null, null, null, 3);
-                $message = "💰*Resumen de Pago*\n" .
-                    "✅Cotización final: $" . number_format($total, 2) . "\n" .
-                    "✅Adelanto: $" . number_format($totalPagos, 2) . "\n" .
-                    "✅ *Pendiente de pago: $" . number_format($totalAPagar, 2) . "*\n";
+                $message = "ðŸ’°*Resumen de Pago*\n" .
+                    "âœ…CotizaciÃ³n final: $" . number_format($total, 2) . "\n" .
+                    "âœ…Adelanto: $" . number_format($totalPagos, 2) . "\n" .
+                    "âœ… *Pendiente de pago: $" . number_format($totalAPagar, 2) . "*\n";
                 $this->sendMessage($message, null, 5);
                 $pagosUrl = public_path('assets/images/pagos-full.jpg');
                 $this->sendMedia($pagosUrl, 'image/jpg', null, null, 10);
@@ -1174,18 +1175,18 @@ class CotizacionFinalController extends Controller
             }
             return response()->json([
                 'success' => true,
-                'message' => 'Estado de cotización final actualizado correctamente'
+                'message' => 'Estado de cotizaciÃ³n final actualizado correctamente'
             ]);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Error al actualizar estado de cotización final: ' . $e->getMessage()
+                'message' => 'Error al actualizar estado de cotizaciÃ³n final: ' . $e->getMessage()
             ], 500);
         }
     }
 
     /**
-     * Enviar recordatorio de pago por WhatsApp al cliente para una cotización final.
+     * Enviar recordatorio de pago por WhatsApp al cliente para una cotizaciÃ³n final.
      * Body (opcional): { "sleep": <segundos de espera entre llamadas> }
      */
     public function sendReminderPago(Request $request, $idCotizacion)
@@ -1195,7 +1196,7 @@ class CotizacionFinalController extends Controller
                 ->where('id', (int) $idCotizacion)
                 ->exists();
             if (!$exists) {
-                return response()->json(['message' => 'Cotización no encontrada', 'success' => false], 404);
+                return response()->json(['message' => 'CotizaciÃ³n no encontrada', 'success' => false], 404);
             }
 
             $sleep = $request->input('sleep', 0);
@@ -1259,7 +1260,7 @@ class CotizacionFinalController extends Controller
                 }
             }
 
-            throw new \Exception("No se encontró el archivo en ninguna ubicación: " . $fileUrl);
+            throw new \Exception("No se encontrÃ³ el archivo en ninguna ubicaciÃ³n: " . $fileUrl);
         } catch (\Exception $e) {
             Log::error('Error en getLocalPath: ' . $e->getMessage(), [
                 'fileUrl' => $fileUrl,
@@ -1333,7 +1334,7 @@ class CotizacionFinalController extends Controller
                 ->whereNull('contenedor_consolidado_cotizacion.id_cliente_importacion')
                 ->where('contenedor_consolidado_cotizacion.estado_cotizador', 'CONFIRMADO')
                 // Misma base que General: cualquier proveedor asociado (no solo LOADED).
-                // Los totales china siguen calculándose solo con proveedores LOADED en el subquery CPL.
+                // Los totales china siguen calculÃ¡ndose solo con proveedores LOADED en el subquery CPL.
                 ->whereExists(function ($q) {
                     $q->select(DB::raw(1))
                         ->from($this->table_contenedor_cotizacion_proveedores . ' as CP2')
@@ -1400,7 +1401,7 @@ class CotizacionFinalController extends Controller
                 ],
             ]);
         } catch (\Exception $e) {
-            Log::error('Error al obtener cargos extra de cotización final: ' . $e->getMessage());
+            Log::error('Error al obtener cargos extra de cotizaciÃ³n final: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
                 'message' => 'Error al obtener cargos extra: ' . $e->getMessage(),
@@ -1411,9 +1412,9 @@ class CotizacionFinalController extends Controller
     /**
      * @OA\Post(
      *     path="/carga-consolidada/contenedor/cotizacion-final/pagos",
-     *     tags={"Cotización Final"},
-     *     summary="Registrar pago de cotización final",
-     *     description="Guarda un nuevo pago para una cotización final",
+     *     tags={"CotizaciÃ³n Final"},
+     *     summary="Registrar pago de cotizaciÃ³n final",
+     *     description="Guarda un nuevo pago para una cotizaciÃ³n final",
      *     operationId="storeCotizacionFinalPago",
      *     security={{"bearerAuth":{}}},
      *     @OA\RequestBody(
@@ -1431,7 +1432,7 @@ class CotizacionFinalController extends Controller
      *         )
      *     ),
      *     @OA\Response(response=200, description="Pago registrado exitosamente"),
-     *     @OA\Response(response=422, description="Datos inválidos")
+     *     @OA\Response(response=422, description="Datos invÃ¡lidos")
      * )
      */
     public function store(Request $request)
@@ -1458,7 +1459,7 @@ class CotizacionFinalController extends Controller
                 $voucherUrl = $file->storeAs('cargaconsolidada/pagos', $fileName, 'public');
             }
 
-            // Verificar si la cotización tiene cotizacion_final_url
+            // Verificar si la cotizaciÃ³n tiene cotizacion_final_url
             $cotizacion = DB::table($this->table_contenedor_cotizacion)
                 ->select('cotizacion_final_url')
                 ->where('id', $request->idCotizacion)
@@ -1523,7 +1524,7 @@ class CotizacionFinalController extends Controller
                         ]
                     ]);
                 }
-                // Sincronizar estado de la cotización a partir de los pagos (LOGISTICA / IMPUESTOS)
+                // Sincronizar estado de la cotizaciÃ³n a partir de los pagos (LOGISTICA / IMPUESTOS)
                 try {
                     app()->make(\App\Http\Controllers\CargaConsolidada\PagosController::class)
                         ->syncEstadoCotizacionFromPayments($request->idCotizacion, false);
@@ -1552,7 +1553,7 @@ class CotizacionFinalController extends Controller
     /**
      * @OA\Post(
      *     path="/carga-consolidada/contenedor/cotizacion-final/general/upload-factura-comercial",
-     *     tags={"Cotización Final"},
+     *     tags={"CotizaciÃ³n Final"},
      *     summary="Subir factura comercial",
      *     description="Sube una factura comercial general para un contenedor",
      *     operationId="uploadFacturaComercialCF",
@@ -1597,9 +1598,9 @@ class CotizacionFinalController extends Controller
     /**
      * @OA\Post(
      *     path="/carga-consolidada/contenedor/cotizacion-final/general/upload-cotizacion-final/{idCotizacion}",
-     *     tags={"Cotización Final"},
-     *     summary="Subir cotización final",
-     *     description="Sube un archivo Excel de cotización final para una cotización específica",
+     *     tags={"CotizaciÃ³n Final"},
+     *     summary="Subir cotizaciÃ³n final",
+     *     description="Sube un archivo Excel de cotizaciÃ³n final para una cotizaciÃ³n especÃ­fica",
      *     operationId="uploadCotizacionFinalFile",
      *     security={{"bearerAuth":{}}},
      *     @OA\Parameter(name="idCotizacion", in="path", required=true, @OA\Schema(type="integer")),
@@ -1613,16 +1614,16 @@ class CotizacionFinalController extends Controller
      *         )
      *     ),
      *     @OA\Response(response=200, description="Archivo subido exitosamente"),
-     *     @OA\Response(response=404, description="Cotización no encontrada")
+     *     @OA\Response(response=404, description="CotizaciÃ³n no encontrada")
      * )
      *
-     * Subir una cotización final a partir de un archivo (Excel) para una cotización específica.
+     * Subir una cotizaciÃ³n final a partir de un archivo (Excel) para una cotizaciÃ³n especÃ­fica.
      * Campos esperados: file (xlsx/xls), idCotizacion (int)
      */
     public function uploadCotizacionFinalFile(Request $request, $idCotizacion)
     {
         try {
-            // Requerir idCotizacion: el flujo debe ser por id para evitar ambigüedades
+            // Requerir idCotizacion: el flujo debe ser por id para evitar ambigÃ¼edades
             $request->validate([
                 'file' => 'required|file|mimes:xlsx,xls',
 
@@ -1636,7 +1637,7 @@ class CotizacionFinalController extends Controller
             if (! $cotizacion) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Cotización no encontrada'
+                    'message' => 'CotizaciÃ³n no encontrada'
                 ], 404);
             }
 
@@ -1662,11 +1663,11 @@ class CotizacionFinalController extends Controller
 
                 return response()->json([
                     'success' => false,
-                    'message' => 'No se encontraron en la hoja 1 las filas SERVICIO DE IMPORTACIÓN e IMPUESTOS (columna B). Verifique que sea el Excel de cotización final del sistema.',
+                    'message' => 'No se encontraron en la hoja 1 las filas SERVICIO DE IMPORTACIÃ“N e IMPUESTOS (columna B). Verifique que sea el Excel de cotizaciÃ³n final del sistema.',
                 ], 422);
             }
 
-            Log::info('Cotización final upload: valores extraídos', [
+            Log::info('CotizaciÃ³n final upload: valores extraÃ­dos', [
                 'id_cotizacion' => $idCotizacion,
                 'layout' => $parsed['layout'] ?? 'unknown',
                 'row_map' => $parsed['row_map'] ?? [],
@@ -1688,10 +1689,10 @@ class CotizacionFinalController extends Controller
                     Storage::disk('public')->delete($dbPath);
                 } catch (\Exception $_) {
                 }
-                Log::warning('Extraccion obligatoria falló (monto/impuestos/logistica) al subir cotizacion final. Archivo eliminado: ' . $dbPath);
+                Log::warning('Extraccion obligatoria fallÃ³ (monto/impuestos/logistica) al subir cotizacion final. Archivo eliminado: ' . $dbPath);
                 return response()->json([
                     'success' => false,
-                    'message' => 'No se pudieron extraer los campos obligatorios (monto, impuestos, logística) del Excel. La cotización final no fue guardada.'
+                    'message' => 'No se pudieron extraer los campos obligatorios (monto, impuestos, logÃ­stica) del Excel. La cotizaciÃ³n final no fue guardada.'
                 ], 422);
             }
 
@@ -1715,11 +1716,11 @@ class CotizacionFinalController extends Controller
                 DB::table($this->table_contenedor_cotizacion)
                     ->where('id', $idCotizacion)
                     ->update($updateData);
-                Log::info('Cotización final actualizada', ['id' => $idCotizacion, 'update' => $updateData]);
+                Log::info('CotizaciÃ³n final actualizada', ['id' => $idCotizacion, 'update' => $updateData]);
             } catch (\Exception $dbError) {
                 Log::error('Error al actualizar cotizacion final: ' . $dbError->getMessage(), ['id' => $idCotizacion, 'update' => $updateData]);
                 if (strpos($dbError->getMessage(), 'Out of range value') !== false) {
-                    // aplicar límites y reintentar
+                    // aplicar lÃ­mites y reintentar
                     $limited = $updateData;
                     if (isset($limited['monto_final'])) $limited['monto_final'] = min($limited['monto_final'], 999999.99);
                     if (isset($limited['logistica_final'])) $limited['logistica_final'] = min($limited['logistica_final'], 999999.99);
@@ -1728,32 +1729,32 @@ class CotizacionFinalController extends Controller
                         DB::table($this->table_contenedor_cotizacion)
                             ->where('id', $idCotizacion)
                             ->update($limited);
-                        Log::info('Cotización final actualizada con valores limitados', ['id' => $idCotizacion]);
+                        Log::info('CotizaciÃ³n final actualizada con valores limitados', ['id' => $idCotizacion]);
                     } catch (\Exception $retryErr) {
                         Log::error('Fallo persistente al actualizar cotizacion final: ' . $retryErr->getMessage(), ['id' => $idCotizacion]);
                         return response()->json([
                             'success' => false,
-                            'message' => 'Error al actualizar la cotización final en la base de datos.'
+                            'message' => 'Error al actualizar la cotizaciÃ³n final en la base de datos.'
                         ], 500);
                     }
                 } else {
                     return response()->json([
                         'success' => false,
-                        'message' => 'Error al actualizar la cotización final en la base de datos.'
+                        'message' => 'Error al actualizar la cotizaciÃ³n final en la base de datos.'
                     ], 500);
                 }
             }
 
             return response()->json([
                 'success' => true,
-                'message' => 'Cotización final subida y registrada correctamente',
+                'message' => 'CotizaciÃ³n final subida y registrada correctamente',
                 'data' => $updateData
             ]);
         } catch (\Exception $e) {
             Log::error('Error en uploadCotizacionFinalFile: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
-                'message' => 'Error al subir cotización final: ' . $e->getMessage()
+                'message' => 'Error al subir cotizaciÃ³n final: ' . $e->getMessage()
             ], 500);
         }
     }
@@ -1771,7 +1772,7 @@ class CotizacionFinalController extends Controller
         // Convertir a string si no lo es
         $string = (string) $string;
 
-        // Verificar si la cadena es UTF-8 válida
+        // Verificar si la cadena es UTF-8 vÃ¡lida
         if (!mb_check_encoding($string, 'UTF-8')) {
             // Intentar convertir desde diferentes encodings
             $encodings = ['ISO-8859-1', 'ISO-8859-15', 'Windows-1252', 'CP1252'];
@@ -1784,7 +1785,7 @@ class CotizacionFinalController extends Controller
             }
         }
 
-        // Limpiar caracteres inválidos
+        // Limpiar caracteres invÃ¡lidos
         $string = mb_convert_encoding($string, 'UTF-8', 'UTF-8');
 
         // Remover caracteres de control excepto tab, newline, carriage return
@@ -1799,7 +1800,7 @@ class CotizacionFinalController extends Controller
     /**
      * @OA\Options(
      *     path="/carga-consolidada/contenedor/cotizacion-final/general/upload-plantilla-final",
-     *     tags={"Cotización Final"},
+     *     tags={"CotizaciÃ³n Final"},
      *     summary="Options CORS",
      *     description="Maneja peticiones OPTIONS para CORS",
      *     @OA\Response(response=200, description="OK")
@@ -1818,9 +1819,9 @@ class CotizacionFinalController extends Controller
     /**
      * @OA\Post(
      *     path="/carga-consolidada/contenedor/cotizacion-final/general/upload-plantilla-final",
-     *     tags={"Cotización Final"},
+     *     tags={"CotizaciÃ³n Final"},
      *     summary="Generar Excel masivo",
-     *     description="Genera Excel masivo de cotizaciones para múltiples clientes",
+     *     description="Genera Excel masivo de cotizaciones para mÃºltiples clientes",
      *     operationId="generateMassiveExcelPayrolls",
      *     security={{"bearerAuth":{}}},
      *     @OA\RequestBody(
@@ -1834,367 +1835,56 @@ class CotizacionFinalController extends Controller
      *         )
      *     ),
      *     @OA\Response(response=200, description="Excel generado exitosamente"),
-     *     @OA\Response(response=422, description="Datos inválidos")
+     *     @OA\Response(response=422, description="Datos invÃ¡lidos")
      * )
      *
-     * Genera Excel masivo de cotizaciones para múltiples clientes
+     * Genera Excel masivo de cotizaciones para mÃºltiples clientes
      */
     public function generateMassiveExcelPayrolls(Request $request)
     {
         try {
-            // Visibile en la terminal donde corre `php artisan serve` (stderr del PHP embebido)
-            error_log('[upload-plantilla-final] entrada al controlador');
-            Log::info('upload-plantilla-final: entrada al controlador', [
-                'path' => $request->path(),
-                'has_file' => $request->hasFile('file'),
+            Log::info('upload-plantilla-final: encolando generaciÃ³n', [
                 'idContenedor' => $request->input('idContenedor'),
+                'has_file' => $request->hasFile('file'),
             ]);
 
-            // Validar datos de entrada
             $request->validate([
                 'file' => 'required|file|mimes:xlsx,xls',
-                'idContenedor' => 'required|integer'
+                'idContenedor' => 'required|integer',
             ]);
 
-            $originalMemoryLimit = ini_get('memory_limit');
-            ini_set('memory_limit', '2048M');
-            $idContainer = $request->idContenedor;
-
-            Log::info('upload-plantilla-final: inicio lectura Excel');
-            $data = $this->getMassiveExcelData($request->file('file'));
-
-            Log::info('upload-plantilla-final: Excel parseado', [
-                'clientes' => is_array($data) ? count($data) : 0,
-            ]);
-
-            // Obtener datos de cotizaciones confirmadas
-            $result = DB::table($this->table_contenedor_cotizacion . ' as cc')
-                ->join($this->table_contenedor_tipo_cliente . ' as tc', 'cc.id_tipo_cliente', '=', 'tc.id')
-                ->select([
-                    'cc.id',
-                    'cc.tarifa',
-                    'cc.nombre',
-                    'tc.id as id_tipo_cliente',
-                    'tc.name as tipoCliente',
-                    'cc.correo',
-                    'cc.vol_selected',
-                    'cc.volumen',
-                    'cc.volumen_china',
-                    'cc.volumen_doc'
-                ])
-                ->where('id_contenedor', $idContainer)
-                ->where('estado_cotizador', 'CONFIRMADO')
-                ->whereNotNull('estado_cliente')
-                ->whereNull('id_cliente_importacion')
-                ->whereExists(function ($query) {
-                    $query->select(DB::raw(1))
-                        ->from($this->table_contenedor_cotizacion_proveedores)
-                        ->whereRaw($this->table_contenedor_cotizacion_proveedores . '.id_cotizacion = cc.id');
-                })
-                ->get();
-
-            Log::info('Datos de cotizaciones encontrados: ' . json_encode($result));
-            Log::info('Datos de excel: ' . json_encode($data));
-            // Procesar datos y hacer matching
-            foreach ($data as &$cliente) {
-                $nombreCliente = $cliente['cliente']['nombre'];
-                $matchFound = false;
-
-                foreach ($result as $item) {
-                    Log::info('Comparando: ' . $nombreCliente . ' con ' . $item->nombre);
-                    if ($this->isNameMatch($nombreCliente, $item->nombre)) {
-                        Log::info('Coincidencia encontrada: ' . $nombreCliente . ' con ' . json_encode($item));
-                        $cliente['cliente']['tarifa'] = $item->tarifa ?? 0;
-                        Log::info('Tarifa: ' . $cliente['cliente']['tarifa']);
-                        $cliente['cliente']['correo'] = $item->correo ?? '';
-                        $cliente['cliente']['tipo_cliente'] = $item->tipoCliente ?? '';
-                        $cliente['cliente']['id_tipo_cliente'] = $item->id_tipo_cliente ?? 0;
-                        $cliente['id'] = $item->id;
-
-                        // Asignar volumen basado en vol_selected, con fallback a volumen disponible
-                        $volumenAsignado = 0;
-                        if ($item->vol_selected == 'volumen' && is_numeric($item->volumen)) {
-                            $volumenAsignado = (float)$item->volumen;
-                        } else if ($item->vol_selected == 'volumen_china' && is_numeric($item->volumen_china)) {
-                            $volumenAsignado = (float)$item->volumen_china;
-                        } else if ($item->vol_selected == 'volumen_doc' && is_numeric($item->volumen_doc)) {
-                            $volumenAsignado = (float)$item->volumen_doc;
-                        } else {
-                            // Si vol_selected no está definido o es inválido, usar el primer volumen disponible
-                            if (is_numeric($item->volumen) && $item->volumen > 0) {
-                                $volumenAsignado = (float)$item->volumen;
-                            } else if (is_numeric($item->volumen_china) && $item->volumen_china > 0) {
-                                $volumenAsignado = (float)$item->volumen_china;
-                            } else if (is_numeric($item->volumen_doc) && $item->volumen_doc > 0) {
-                                $volumenAsignado = (float)$item->volumen_doc;
-                            }
-                        }
-                        $cliente['cliente']['volumen'] = $volumenAsignado;
-
-                        Log::info('Volumen asignado para ' . $nombreCliente . ': ' . $volumenAsignado . ' (vol_selected: ' . ($item->vol_selected ?? 'null') . ')');
-                        $matchFound = true;
-                        break;
-                    }
-                }
-
-                // Si no se encontró match, asignar valores por defecto
-                if (!$matchFound) {
-                    Log::warning('No se encontró match para cliente: ' . $nombreCliente);
-                    $cliente['cliente']['tarifa'] = 0;
-                    $cliente['cliente']['correo'] = '';
-                    $cliente['cliente']['tipo_cliente'] = '';
-                    $cliente['cliente']['id_tipo_cliente'] = 0;
-                    $cliente['cliente']['volumen'] = 0;
-                    $cliente['id'] = 0;
-                }
-            }
-            unset($cliente);
-
-            // Generar nombre único para el archivo ZIP temporal
-            $zipFileName = 'Boletas_' . $idContainer . '_' . time() . '.zip';
-            $zipFilePath = storage_path('app' . DIRECTORY_SEPARATOR . 'temp' . DIRECTORY_SEPARATOR . $zipFileName);
-
-            // Crear directorio temporal si no existe
-            $tempDir = storage_path('app' . DIRECTORY_SEPARATOR . 'temp');
-            if (!file_exists($tempDir)) {
-                mkdir($tempDir, 0755, true);
-            }
-
-            // Eliminar archivo ZIP anterior si existe
-            if (file_exists($zipFilePath)) {
-                unlink($zipFilePath);
-                Log::info('Archivo ZIP anterior eliminado: ' . $zipFilePath);
-            }
-
-            // Crear nuevo archivo ZIP
-            $zip = new ZipArchive();
-
-            $zipResult = $zip->open($zipFilePath, ZipArchive::CREATE);
-            if ($zipResult !== TRUE) {
-                $errorMessages = [
-                    ZipArchive::ER_OK => 'Sin errores',
-                    ZipArchive::ER_MULTIDISK => 'Multi-disk zip archives not supported',
-                    ZipArchive::ER_RENAME => 'Renaming temporary file failed',
-                    ZipArchive::ER_CLOSE => 'Closing zip archive failed',
-                    ZipArchive::ER_SEEK => 'Seek error',
-                    ZipArchive::ER_READ => 'Read error',
-                    ZipArchive::ER_WRITE => 'Write error',
-                    ZipArchive::ER_CRC => 'CRC error',
-                    ZipArchive::ER_ZIPCLOSED => 'Containing zip archive was closed',
-                    ZipArchive::ER_NOENT => 'No such file',
-                    ZipArchive::ER_EXISTS => 'File already exists',
-                    ZipArchive::ER_OPEN => 'Can\'t open file',
-                    ZipArchive::ER_TMPOPEN => 'Failure to create temporary file',
-                    ZipArchive::ER_ZLIB => 'Zlib error',
-                    ZipArchive::ER_MEMORY => 'Memory allocation failure',
-                    ZipArchive::ER_CHANGED => 'Entry has been changed',
-                    ZipArchive::ER_COMPNOTSUPP => 'Compression method not supported',
-                    ZipArchive::ER_EOF => 'Premature EOF',
-                    ZipArchive::ER_INVAL => 'Invalid argument',
-                    ZipArchive::ER_NOZIP => 'Not a zip archive',
-                    ZipArchive::ER_INTERNAL => 'Internal error',
-                    ZipArchive::ER_INCONS => 'Zip archive inconsistent',
-                    ZipArchive::ER_REMOVE => 'Can\'t remove file',
-                    ZipArchive::ER_DELETED => 'Entry has been deleted'
-                ];
-
-                $errorMessage = $errorMessages[$zipResult] ?? 'Error desconocido';
-                Log::error('Error al crear archivo ZIP. Código: ' . $zipResult . ' - ' . $errorMessage);
-                throw new \Exception('No se pudo crear el archivo ZIP. Error: ' . $errorMessage . ' (Código: ' . $zipResult . ')');
-            }
-
-            Log::info('Archivo ZIP creado exitosamente: ' . $zipFilePath);
-
-            // Generar Excel para cada cliente
-            Log::info('Total de clientes a procesar: ' . count($data));
-            $processedCount = 0;
-
-            foreach ($data as $key => $value) {
-                // Validar que el cliente tiene los datos necesarios
-                if (!isset($value['cliente']['tarifa']) || $value['cliente']['tarifa'] == 0) {
-                    Log::warning('Cliente sin tarifa válida, saltando: ' . $value['cliente']['nombre']);
-                    continue;
-                }
-
-                if (!isset($value['id']) || $value['id'] == 0) {
-                    Log::warning('Cliente sin ID válido, saltando: ' . $value['cliente']['nombre']);
-                    continue;
-                }
-
-                if (!isset($value['cliente']['volumen']) || $value['cliente']['volumen'] == 0) {
-                    Log::warning('Cliente sin volumen válido, saltando: ' . $value['cliente']['nombre'] . ' (volumen: ' . ($value['cliente']['volumen'] ?? 'null') . ')');
-                    continue;
-                }
-
-                if (!isset($value['cliente']['productos']) || empty($value['cliente']['productos'])) {
-                    Log::warning('Cliente sin productos, saltando: ' . $value['cliente']['nombre']);
-                    continue;
-                }
-
-                $processedCount++;
-
-                try {
-                    Log::info('Iniciando generación de Excel para: ' . $value['cliente']['nombre']);
-
-                    // Cargar plantilla de Excel como en el original de CodeIgniter
-                    $templatePath = public_path('assets/templates/Boleta_Template.xlsx');
-                    if (!file_exists($templatePath)) {
-                        Log::error('Plantilla no encontrada: ' . $templatePath);
-                        throw new \Exception('Plantilla de cotización no encontrada');
-                    }
-                    $objPHPExcel = IOFactory::load($templatePath);
-
-                    $result = $this->getFinalCotizacionExcelv2($objPHPExcel, $value, $idContainer);
-
-                    if (!$result || !isset($result['excel_file_name']) || !isset($result['excel_file_path'])) {
-                        Log::error('getFinalCotizacionExcelv2 no retornó datos válidos para: ' . $value['cliente']['nombre']);
-                        continue;
-                    }
-
-                    $excelFileName = $result['excel_file_name'];
-                    $excelFilePath = $result['excel_file_path'];
-                    $fullExcelPath = public_path('storage/' . $excelFilePath);
-
-                    // Agregar archivo al ZIP
-                    Log::info('Agregando archivo al ZIP: ' . $excelFileName);
-                    Log::info('Archivo Excel existe: ' . (file_exists($fullExcelPath) ? 'Sí' : 'No'));
-
-                    if (file_exists($fullExcelPath)) {
-                        $addResult = $zip->addFile($fullExcelPath, $excelFileName);
-                        if ($addResult) {
-                        } else {
-                            Log::error('Error al agregar archivo al ZIP: ' . $excelFileName);
-                        }
-                    } else {
-                        Log::error('El archivo Excel no existe: ' . $fullExcelPath);
-                    }
-                    $estadoCotizacionFinal = DB::table($this->table_contenedor_cotizacion)
-                        ->where('id', $result['id'])
-                        ->where('estado_cotizacion_final', '!=', 'PENDIENTE')
-                        ->where('estado_cotizacion_final', '!=', null)
-                        ->first();
-
-                    // Validar valores antes de actualizar la base de datos
-                    $updateData = [
-                        'cotizacion_final_url' => $result['cotizacion_final_url'],
-                        'volumen_final' => $result['volumen_final'],
-                        'monto_final' => $result['monto_final'],
-                        'tarifa_final' => $result['tarifa_final'],
-                        'impuestos_final' => $result['impuestos_final'],
-                        'logistica_final' => $result['logistica_final'],
-                        'servicios_extra_final' => $result['servicios_extra_final'] ?? 0,
-                        'fob_final' => $result['fob_final'],
-                        'peso_final' => $result['peso_final'],
-                        'recargos_descuentos_final' => $result['recargos_descuentos_final'],
-                    ];
-                    if (!$estadoCotizacionFinal) {
-                        $updateData['estado_cotizacion_final'] = 'COTIZADO';
-                    }
-
-
-                    // Actualizar tabla de cotizaciones con manejo de errores
-                    try {
-                        DB::table($this->table_contenedor_cotizacion)
-                            ->where('id', $result['id'])
-                            ->update($updateData);
-                    } catch (\Exception $dbError) {
-                        Log::error('Error al actualizar cotización en BD: ' . $dbError->getMessage(), [
-                            'id' => $result['id'],
-                            'cliente' => $value['cliente']['nombre'],
-                            'update_data' => $updateData
-                        ]);
-
-                        // Si es un error de rango numérico, intentar con valores limitados
-                        if (strpos($dbError->getMessage(), 'Out of range value') !== false) {
-                            Log::warning('Intentando actualizar con valores limitados...');
-                            $limitedData = $updateData;
-                            $limitedData['monto_final'] = min($limitedData['monto_final'], 999999.99);
-                            $limitedData['logistica_final'] = min($limitedData['logistica_final'], 999999.99);
-                            $limitedData['impuestos_final'] = min($limitedData['impuestos_final'], 999999.99);
-                            $limitedData['fob_final'] = min($limitedData['fob_final'], 999999.99);
-
-                            try {
-                                DB::table($this->table_contenedor_cotizacion)
-                                    ->where('id', $result['id'])
-                                    ->update($limitedData);
-                                Log::info('Cotización actualizada con valores limitados');
-                            } catch (\Exception $retryError) {
-                                Log::error('Error persistente al actualizar cotización: ' . $retryError->getMessage());
-                                continue; // Saltar este cliente y continuar con el siguiente
-                            }
-                        } else {
-                            continue; // Saltar este cliente si no es un error de rango
-                        }
-                    }
-                } catch (\Exception $e) {
-                    Log::error('Error procesando cliente ' . $value['cliente']['nombre'] . ': ' . $e->getMessage());
-                    continue;
-                }
-            }
-            // Verificar si se agregaron archivos al ZIP
-            $zipFileCount = $zip->numFiles;
-            Log::info('Archivos en el ZIP: ' . $zipFileCount);
-
-            if ($zipFileCount === 0) {
-                Log::warning('No se agregaron archivos al ZIP. Creando archivo ZIP vacío con mensaje informativo.');
-
-                // Crear contenido informativo directamente en el ZIP
-                $infoContent = "No se encontraron clientes válidos para procesar.\n\nTotal de clientes en Excel: " . count($data) . "\nClientes procesados: " . $processedCount . "\n\nVerifique que los clientes tengan tarifa válida y datos completos.";
-
-                // Agregar contenido directamente al ZIP sin crear archivo temporal
-                $zip->addFromString('INFORMACION.txt', $infoContent);
-                Log::info('Archivo informativo agregado al ZIP');
-            }
+            $authUser = null;
             try {
-                $zip->close();
-            } catch (\Exception $zipCloseError) {
-                Log::error('Error al cerrar ZIP: ' . $zipCloseError->getMessage());
-                Log::error('Archivo ZIP existe al momento del error: ' . (file_exists($zipFilePath) ? 'Sí' : 'No'));
-                throw new \Exception('Error al cerrar archivo ZIP: ' . $zipCloseError->getMessage());
+                $authUser = JWTAuth::parseToken()->authenticate();
+            } catch (\Exception $e) {
+                $authUser = auth()->user();
             }
 
-            // Restaurar límite de memoria
-            ini_set('memory_limit', $originalMemoryLimit);
-            gc_collect_cycles();
-            if (!file_exists($zipFilePath)) {
-                Log::error('El archivo ZIP no existe después de cerrarlo');
-                throw new \Exception('El archivo ZIP no se creó correctamente');
-            }
+            $result = app(PlantillaFinalBatchService::class)->enqueue(
+                $request->file('file'),
+                (int) $request->input('idContenedor'),
+                $authUser ? (int) $authUser->id : null
+            );
 
-            $fileSize = filesize($zipFilePath);
-            Log::info('Tamaño del archivo ZIP: ' . ($fileSize !== false ? $fileSize . ' bytes' : 'No se puede leer'));
-
-            if ($fileSize === false || $fileSize === 0) {
-                Log::error('El archivo ZIP está vacío o no se puede leer el tamaño');
-                throw new \Exception('El archivo ZIP está vacío o no se puede leer');
-            }
-
-            Log::info('Descargando archivo ZIP: ' . $zipFilePath . ' (Tamaño: ' . $fileSize . ' bytes)');
-
-            // Configurar headers para descarga directa con CORS
-            $response = response()->download($zipFilePath, 'Boletas_' . $idContainer . '.zip')
-                ->deleteFileAfterSend(true);
-
-            // Agregar headers CORS
-            $response->headers->set('Access-Control-Allow-Origin', '*');
-            $response->headers->set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-            $response->headers->set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
-            $response->headers->set('Cache-Control', 'no-cache, must-revalidate');
-            $response->headers->set('Expires', '0');
-
-            Log::info('Archivo ZIP enviado para descarga: ' . $zipFilePath);
-
-            return $response;
+            return response()->json([
+                'success' => true,
+                'message' => 'GeneraciÃ³n encolada. Se notificarÃ¡ cuando finalice.',
+                'data' => $result,
+            ])->header('Access-Control-Allow-Origin', '*')
+                ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+                ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            throw $e;
         } catch (\Exception $e) {
-            Log::error('Error en generateMassiveExcelPayrolls: ' . $e->getMessage());
-            ini_set('memory_limit', $originalMemoryLimit ?? '128M');
+            Log::error('Error en generateMassiveExcelPayrolls (enqueue): ' . $e->getMessage());
 
             return response()->json([
                 'success' => false,
-                'message' => 'Error al generar Excel masivo: ' . $e->getMessage()
+                'message' => 'Error al encolar generaciÃ³n: ' . $e->getMessage(),
             ], 500);
         }
     }
+
 
 
 
@@ -2210,20 +1900,20 @@ class CotizacionFinalController extends Controller
                 throw new \Exception('Archivo Excel no proporcionado');
             }
 
-            // Obtener el path del archivo - intentar diferentes métodos
+            // Obtener el path del archivo - intentar diferentes mÃ©todos
             $filePath = null;
 
-            // Método 1: getRealPath()
+            // MÃ©todo 1: getRealPath()
             if (method_exists($excelFile, 'getRealPath') && $excelFile->getRealPath()) {
                 $filePath = $excelFile->getRealPath();
             }
 
-            // Método 2: getPathname()
+            // MÃ©todo 2: getPathname()
             if (!$filePath && method_exists($excelFile, 'getPathname') && $excelFile->getPathname()) {
                 $filePath = $excelFile->getPathname();
             }
 
-            // Método 3: path()
+            // MÃ©todo 3: path()
             if (!$filePath && method_exists($excelFile, 'path') && $excelFile->path()) {
                 $filePath = $excelFile->path();
             }
@@ -2236,19 +1926,19 @@ class CotizacionFinalController extends Controller
             $excel = IOFactory::load($filePath);
             $worksheet = $excel->getActiveSheet();
 
-            // Obtener el rango total de datos válidos
+            // Obtener el rango total de datos vÃ¡lidos
             $highestRow = $worksheet->getHighestRow();
             $highestColumn = $worksheet->getHighestColumn();
 
             // Obtener todas las celdas combinadas
             $mergedCells = $worksheet->getMergeCells();
 
-            // Función para obtener el valor real de una celda (considerando combinadas)
+            // FunciÃ³n para obtener el valor real de una celda (considerando combinadas)
             $getCellValue = function ($col, $row) use ($worksheet, $mergedCells) {
                 $cellAddress = $col . $row;
                 $cellValue = trim($worksheet->getCell($cellAddress)->getValue());
 
-                // Si la celda está vacía, buscar en celdas combinadas
+                // Si la celda estÃ¡ vacÃ­a, buscar en celdas combinadas
                 if (empty($cellValue)) {
                     foreach ($mergedCells as $mergedRange) {
                         // Verificar si es un rango (contiene :)
@@ -2266,7 +1956,7 @@ class CotizacionFinalController extends Controller
                                 $endCol = $endMatches[1];
                                 $endRow = (int)$endMatches[2];
 
-                                // Verificar si la celda actual está dentro del rango
+                                // Verificar si la celda actual estÃ¡ dentro del rango
                                 if ($col >= $startCol && $col <= $endCol && $row >= $startRow && $row <= $endRow) {
                                     $cellValue = trim($worksheet->getCell($startCell)->getValue());
                                     break;
@@ -2279,12 +1969,12 @@ class CotizacionFinalController extends Controller
                 return $cellValue;
             };
 
-            // Función para verificar si una fila pertenece a un cliente específico
+            // FunciÃ³n para verificar si una fila pertenece a un cliente especÃ­fico
             $getClientRowRange = function ($startRow) use ($worksheet, $getCellValue, $highestRow) {
                 $endRow = $startRow;
                 $clientName = $getCellValue('A', $startRow);
 
-                // Buscar hasta dónde se extiende este cliente
+                // Buscar hasta dÃ³nde se extiende este cliente
                 for ($row = $startRow + 1; $row <= $highestRow; $row++) {
                     $nextClientName = $getCellValue('A', $row);
                     if (!empty($nextClientName) && $nextClientName !== $clientName) {
@@ -2308,7 +1998,7 @@ class CotizacionFinalController extends Controller
 
                 $clientName = $getCellValue('A', $row);
 
-                // Verificar si hay un nombre de cliente válido o si es una fila de header
+                // Verificar si hay un nombre de cliente vÃ¡lido o si es una fila de header
                 if (empty($clientName) || $this->isHeaderRow($clientName)) {
                     continue;
                 }
@@ -2321,7 +2011,7 @@ class CotizacionFinalController extends Controller
                     $processedRows[] = $r;
                 }
 
-                // Obtener datos básicos del cliente
+                // Obtener datos bÃ¡sicos del cliente
                 $client = [
                     'nombre' => $clientName,
                     'tipo' => $getCellValue('B', $row),
@@ -2450,7 +2140,7 @@ class CotizacionFinalController extends Controller
 
         $clientNameUpper = strtoupper(trim($clientName));
 
-        // Si el nombre del cliente contiene palabras típicas de header, es probablemente un header
+        // Si el nombre del cliente contiene palabras tÃ­picas de header, es probablemente un header
         foreach ($headerKeywords as $keyword) {
             if (strpos($clientNameUpper, $keyword) !== false) {
                 return true;
@@ -2461,7 +2151,7 @@ class CotizacionFinalController extends Controller
     }
 
     /**
-     * Calcula tarifa según tipo de cliente y volumen
+     * Calcula tarifa segÃºn tipo de cliente y volumen
      */
     private function calculateTarifaByTipoCliente($tipoCliente, $volumen, $tarifaBase)
     {
@@ -2505,11 +2195,11 @@ class CotizacionFinalController extends Controller
                 return 250; // Tarifa fija para socios
         }
 
-        return $tarifaBase; // Retornar tarifa base si no coincide con ningún caso
+        return $tarifaBase; // Retornar tarifa base si no coincide con ningÃºn caso
     }
 
     /**
-     * Configura la sección de tributos
+     * Configura la secciÃ³n de tributos
      */
     private function configureTributosSection($objPHPExcel, $InitialColumn, $InitialColumnLetter, $borders, $grayColor)
     {
@@ -2561,7 +2251,7 @@ class CotizacionFinalController extends Controller
     }
 
     /**
-     * Configura la sección de costos destino
+     * Configura la secciÃ³n de costos destino
      */
     private function configureCostosDestinoSection($objPHPExcel, $InitialColumn, $InitialColumnLetter, $borders, $grayColor)
     {
@@ -2597,11 +2287,11 @@ class CotizacionFinalController extends Controller
      */
     private function configureMainSheet($objPHPExcel, $data, $pesoTotal, $tipoCliente, $cbmTotalProductos, $tarifaValue, $antidumpingSum)
     {
-        // Asegurarse de trabajar con la hoja principal (índice 0)
+        // Asegurarse de trabajar con la hoja principal (Ã­ndice 0)
         $objPHPExcel->setActiveSheetIndex(0);
         $sheet1 = $objPHPExcel->getActiveSheet();
 
-        // Configurar información del cliente
+        // Configurar informaciÃ³n del cliente
         $sheet1->mergeCells('C8:C9');
         $sheet1->getStyle('C8')->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
         $sheet1->getStyle('C8')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
@@ -2625,12 +2315,12 @@ class CotizacionFinalController extends Controller
         $productsCount = count($data['cliente']['productos']);
         $columnaIndex = Coordinate::stringFromColumnIndex($productsCount + 3);
 
-        // Hoja 1 ← hoja cálculos: col total = una después del último producto (C=1er producto)
+        // Hoja 1 â† hoja cÃ¡lculos: col total = una despuÃ©s del Ãºltimo producto (C=1er producto)
         $sheet1->setCellValue('K14', "='2'!" . $columnaIndex . "11");
         $sheet1->setCellValue('K15', "='2'!" . $columnaIndex . "14");
         $sheet1->setCellValue('K16', "='2'!" . $columnaIndex . "15+'2'!" . $columnaIndex . "18");
         $sheet1->setCellValue('K17', "=MAX('2'!" . $columnaIndex . "19,'2'!" . $columnaIndex . "20)");
-        // Impuestos hoja 1 ← hoja 2: AD, IGV, IPM; ANTIDUMPING debajo de IPM (K23); K24 subtotal; K25 percepción; K26 total tributos
+        // Impuestos hoja 1 â† hoja 2: AD, IGV, IPM; ANTIDUMPING debajo de IPM (K23); K24 subtotal; K25 percepciÃ³n; K26 total tributos
         $sheet1->setCellValue('B23', 'ANTIDUMPING');
         $sheet1->setCellValue('K20', "='2'!" . $columnaIndex . "27"); // AD VALOREM (valor)
         $sheet1->setCellValue('K21', "='2'!" . $columnaIndex . "30"); // IGV
@@ -2639,7 +2329,7 @@ class CotizacionFinalController extends Controller
         $sheet1->setCellValue('K24', '=SUM(K20:K23)');
         $sheet1->setCellValue('B24', 'SUB TOTAL');
         $sheet1->setCellValue('B25', 'PERCEPCION');
-        $sheet1->setCellValue('K25', "='2'!" . $columnaIndex . "32"); // PERCEPCIÓN
+        $sheet1->setCellValue('K25', "='2'!" . $columnaIndex . "32"); // PERCEPCIÃ“N
         $sheet1->setCellValue('B26', '');
         $sheet1->setCellValue('K26', '=K24+K25'); // Total bloque tributos (= Excel/boleta)
 
@@ -2650,21 +2340,21 @@ class CotizacionFinalController extends Controller
             $style->getFill()->getStartColor()->setARGB($yellowColor);
         }
 
-        // Configurar fórmulas para casos sin antidumping
+        // Configurar fÃ³rmulas para casos sin antidumping
         $sheet1->setCellValue('K29', "=K14"); // FOB
 
-        // K30 = Logística (como en CodeIgniter): si CBM<1 usar tarifa, sino tarifa*CBM
+        // K30 = LogÃ­stica (como en CodeIgniter): si CBM<1 usar tarifa, sino tarifa*CBM
         //costos fob
         $sheet1->setCellValue('K30', "='2'!" . $columnaIndex . "11");
-        //flete (col. Total hoja cálculos, fila 15)
+        //flete (col. Total hoja cÃ¡lculos, fila 15)
         $sheet1->setCellValue('K31', "='2'!" . $columnaIndex . "15");
         //costos destino (misma col., fila 40)
         $sheet1->setCellValue('K32', "='2'!" . $columnaIndex . "40");
 
-        Log::info('Fórmula K30 configurada: ' . "=IF(J11<1, " . $tarifaValue . ", " . $tarifaValue . "*J11)");
+        Log::info('FÃ³rmula K30 configurada: ' . "=IF(J11<1, " . $tarifaValue . ", " . $tarifaValue . "*J11)");
         Log::info('CBM en J11: ' . $cbmTotalProductos . ', Tarifa: ' . $tarifaValue);
 
-        // Total resumen: logística/FOB + subtotal tributos (K24 incluye AD–IPM–antidumping) + percepción (K25) vía K26, sin duplicar líneas
+        // Total resumen: logÃ­stica/FOB + subtotal tributos (K24 incluye ADâ€“IPMâ€“antidumping) + percepciÃ³n (K25) vÃ­a K26, sin duplicar lÃ­neas
         $sheet1->setCellValue('K33', '=K29+K30+K31+K32+K24+K25');
 
         // Configurar mensaje de WhatsApp
@@ -2673,30 +2363,30 @@ class CotizacionFinalController extends Controller
         $ivK26 = $sheet1->getCell('K26')->getCalculatedValue();
         $ImpuestosCellValue = round(is_numeric($ivK26) ? (float) $ivK26 : 0, 2);
 
-        // Asegurar que los valores sean numéricos
+        // Asegurar que los valores sean numÃ©ricos
         $CobroCellValue = is_numeric($CobroCellValue) ? (float)$CobroCellValue : 0;
         $ImpuestosCellValue = is_numeric($ImpuestosCellValue) ? round((float)$ImpuestosCellValue, 2) : 0;
         $TotalValue = $ImpuestosCellValue + $CobroCellValue;
 
-        $N20CellValue = "Hola " . $ClientName . " 😁 un gusto saludarte!\n" .
-            "A continuación te envío la cotización final de tu importación📋📦.\n" .
-            "🙋‍♂️ PAGO PENDIENTE :\n" .
-            "☑️Costo CBM: $" . $CobroCellValue . "\n" .
-            "☑️Impuestos: $" . $ImpuestosCellValue . "\n" .
-            "☑️ Total: $" . $TotalValue . "\n" .
-            "Pronto le aviso nuevos avances, que tengan buen día🚢\n" .
-            "Último día de pago:";
+        $N20CellValue = "Hola " . $ClientName . " ðŸ˜ un gusto saludarte!\n" .
+            "A continuaciÃ³n te envÃ­o la cotizaciÃ³n final de tu importaciÃ³nðŸ“‹ðŸ“¦.\n" .
+            "ðŸ™‹â€â™‚ï¸ PAGO PENDIENTE :\n" .
+            "â˜‘ï¸Costo CBM: $" . $CobroCellValue . "\n" .
+            "â˜‘ï¸Impuestos: $" . $ImpuestosCellValue . "\n" .
+            "â˜‘ï¸ Total: $" . $TotalValue . "\n" .
+            "Pronto le aviso nuevos avances, que tengan buen dÃ­aðŸš¢\n" .
+            "Ãšltimo dÃ­a de pago:";
 
         $sheet1->setCellValue('N20', $N20CellValue);
 
-        // Remover página 2 (índice 1) y renombrar hoja de cálculos (índice 2) como "2"
+        // Remover pÃ¡gina 2 (Ã­ndice 1) y renombrar hoja de cÃ¡lculos (Ã­ndice 2) como "2"
         $objPHPExcel->removeSheetByIndex(1);
         $objPHPExcel->setActiveSheetIndex(1);
         $objPHPExcel->getActiveSheet()->setTitle('2');
     }
 
     /**
-     * Genera cotización individual
+     * Genera cotizaciÃ³n individual
      */
     public function generateIndividualCotizacion(Request $request, $idContenedor)
     {
@@ -2714,7 +2404,7 @@ class CotizacionFinalController extends Controller
             $templatePath = public_path('assets/templates/Boleta_Template.xlsx');
             if (!file_exists($templatePath)) {
                 Log::error('Plantilla no encontrada: ' . $templatePath);
-                throw new \Exception('Plantilla de cotización no encontrada');
+                throw new \Exception('Plantilla de cotizaciÃ³n no encontrada');
             }
             $objPHPExcel = IOFactory::load($templatePath);
 
@@ -2739,14 +2429,14 @@ class CotizacionFinalController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'Cotización individual generada correctamente',
+                'message' => 'CotizaciÃ³n individual generada correctamente',
                 'data' => $result
             ]);
         } catch (\Exception $e) {
             Log::error('Error en generateIndividualCotizacion: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
-                'message' => 'Error al generar cotización individual: ' . $e->getMessage()
+                'message' => 'Error al generar cotizaciÃ³n individual: ' . $e->getMessage()
             ], 500);
         }
     }
@@ -2781,12 +2471,12 @@ class CotizacionFinalController extends Controller
     /**
      * @OA\Get(
      *     path="/carga-consolidada/contenedor/cotizacion-final/general/check-temp-directory",
-     *     tags={"Cotización Final"},
+     *     tags={"CotizaciÃ³n Final"},
      *     summary="Verificar directorio temporal",
      *     description="Verifica el directorio temporal y permisos del sistema",
      *     operationId="checkTempDirectory",
      *     security={{"bearerAuth":{}}},
-     *     @OA\Response(response=200, description="Información del directorio"),
+     *     @OA\Response(response=200, description="InformaciÃ³n del directorio"),
      *     @OA\Response(response=500, description="Error interno")
      * )
      *
@@ -2804,7 +2494,7 @@ class CotizacionFinalController extends Controller
                 'readable' => is_readable($tempDir),
                 'permissions' => file_exists($tempDir) ? substr(sprintf('%o', fileperms($tempDir)), -4) : 'N/A',
                 'php_version' => PHP_VERSION,
-                'zip_extension' => extension_loaded('zip') ? 'Sí' : 'No',
+                'zip_extension' => extension_loaded('zip') ? 'SÃ­' : 'No',
                 'memory_limit' => ini_get('memory_limit'),
                 'max_execution_time' => ini_get('max_execution_time')
             ];
@@ -2838,7 +2528,7 @@ class CotizacionFinalController extends Controller
     }
 
     /**
-     * Add value_formatted to headers with currency values (CBMs and logística related)
+     * Add value_formatted to headers with currency values (CBMs and logÃ­stica related)
      */
     private function addCurrencyFormatting(array $headers)
     {
@@ -2863,9 +2553,9 @@ class CotizacionFinalController extends Controller
     /**
      * @OA\Get(
      *     path="/carga-consolidada/contenedor/cotizacion-final/general/{idContenedor}/headers",
-     *     tags={"Cotización Final"},
-     *     summary="Obtener headers de cotización final",
-     *     description="Obtiene los totales y métricas de cotizaciones finales de un contenedor",
+     *     tags={"CotizaciÃ³n Final"},
+     *     summary="Obtener headers de cotizaciÃ³n final",
+     *     description="Obtiene los totales y mÃ©tricas de cotizaciones finales de un contenedor",
      *     operationId="getCotizacionFinalHeaders",
      *     security={{"bearerAuth":{}}},
      *     @OA\Parameter(name="idContenedor", in="path", required=true, @OA\Schema(type="integer")),
@@ -2881,13 +2571,13 @@ class CotizacionFinalController extends Controller
             // Obtener ID del usuario autenticado
             $userId = auth()->user()->ID_Usuario ?? null;
 
-            // Consulta principal con múltiples subconsultas
+            // Consulta principal con mÃºltiples subconsultas
             $result = DB::table($this->table_contenedor_cotizacion_proveedores . ' as cccp')
                 ->select([
-                    // CBM Total China con condición de estado
+                    // CBM Total China con condiciÃ³n de estado
                     DB::raw('COALESCE(SUM(IF(cc.estado_cotizador = "CONFIRMADO", cccp.cbm_total_china, 0)), 0) as cbm_total_china'),
 
-                    // CBM Total Perú (todos los CONFIRMADO)
+                    // CBM Total PerÃº (todos los CONFIRMADO)
                     DB::raw('(
                         SELECT COALESCE(SUM(volumen_final), 0)
                         FROM ' . $this->table_contenedor_cotizacion . '
@@ -3077,7 +2767,7 @@ class CotizacionFinalController extends Controller
                         'cbm_embarcado' => ["value" => 0, "label" => "CBM Embarcado", "icon" => "fas fa-ship"],
                         'total_logistica' => ["value" => 0, "label" => "Logistica", "icon" => "fas fa-dollar-sign"],
                         'qty_items' => ["value" => 0, "label" => "Items", "icon" => "bi:boxes"],
-                        'cbm_total_peru' => ["value" => 0, "label" => "CBM Total Perú", "icon" => "https://upload.wikimedia.org/wikipedia/commons/c/cf/Flag_of_Peru.svg"],
+                        'cbm_total_peru' => ["value" => 0, "label" => "CBM Total PerÃº", "icon" => "https://upload.wikimedia.org/wikipedia/commons/c/cf/Flag_of_Peru.svg"],
                         'total_fob' => ["value" => 0, "label" => "FOB", "icon" => "fas fa-dollar-sign"]
                     ],
                     'carga' => '',
@@ -3095,24 +2785,24 @@ class CotizacionFinalController extends Controller
     /**
      * @OA\Delete(
      *     path="/carga-consolidada/contenedor/cotizacion-final/general/delete-cotizacion-final-file/{idCotizacion}",
-     *     tags={"Cotización Final"},
-     *     summary="Eliminar archivo de cotización final",
-     *     description="Elimina el archivo de cotización final de una cotización",
+     *     tags={"CotizaciÃ³n Final"},
+     *     summary="Eliminar archivo de cotizaciÃ³n final",
+     *     description="Elimina el archivo de cotizaciÃ³n final de una cotizaciÃ³n",
      *     operationId="deleteCotizacionFinalFile",
      *     security={{"bearerAuth":{}}},
      *     @OA\Parameter(name="idCotizacion", in="path", required=true, @OA\Schema(type="integer")),
      *     @OA\Response(response=200, description="Archivo eliminado exitosamente"),
-     *     @OA\Response(response=404, description="Cotización no encontrada")
+     *     @OA\Response(response=404, description="CotizaciÃ³n no encontrada")
      * )
      */
     public function deleteCotizacionFinalFile($idCotizacionFinal)
     {
         try {
-            // Buscar la cotización por ID
+            // Buscar la cotizaciÃ³n por ID
             $cotizacion = Cotizacion::find($idCotizacionFinal);
 
             if (!$cotizacion) {
-                Log::error('Error en deleteCotizacionFinalFile: Cotización no encontrada con ID: ' . $idCotizacionFinal);
+                Log::error('Error en deleteCotizacionFinalFile: CotizaciÃ³n no encontrada con ID: ' . $idCotizacionFinal);
                 return false;
             }
 
@@ -3128,13 +2818,13 @@ class CotizacionFinalController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'Cotización final eliminada correctamente'
+                'message' => 'CotizaciÃ³n final eliminada correctamente'
             ]);
         } catch (\Exception $e) {
             Log::error('Error en deleteCotizacionFinalFile: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
-                'message' => 'Error al eliminar cotización final: ' . $e->getMessage()
+                'message' => 'Error al eliminar cotizaciÃ³n final: ' . $e->getMessage()
             ], 500);
         }
     }
@@ -3142,35 +2832,35 @@ class CotizacionFinalController extends Controller
     /**
      * @OA\Get(
      *     path="/carga-consolidada/contenedor/cotizacion-final/general/download-cotizacion-excel/{idCotizacion}",
-     *     tags={"Cotización Final"},
-     *     summary="Descargar Excel de cotización final",
-     *     description="Descarga el archivo Excel de cotización final individual",
+     *     tags={"CotizaciÃ³n Final"},
+     *     summary="Descargar Excel de cotizaciÃ³n final",
+     *     description="Descarga el archivo Excel de cotizaciÃ³n final individual",
      *     operationId="downloadCotizacionFinalExcel",
      *     security={{"bearerAuth":{}}},
      *     @OA\Parameter(name="idCotizacion", in="path", required=true, @OA\Schema(type="integer")),
      *     @OA\Response(response=200, description="Archivo Excel descargado"),
-     *     @OA\Response(response=404, description="Cotización o archivo no encontrado")
+     *     @OA\Response(response=404, description="CotizaciÃ³n o archivo no encontrado")
      * )
      *
-     * Descarga el archivo Excel de cotización final individual
+     * Descarga el archivo Excel de cotizaciÃ³n final individual
      */
     public function downloadCotizacionFinalExcel($idCotizacion)
     {
         try {
-            // Buscar la cotización por ID
+            // Buscar la cotizaciÃ³n por ID
             $cotizacion = Cotizacion::find($idCotizacion);
 
             if (!$cotizacion) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Cotización no encontrada'
+                    'message' => 'CotizaciÃ³n no encontrada'
                 ], 404);
             }
 
             if (!$cotizacion->cotizacion_final_url) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'No se encontró archivo de cotización final'
+                    'message' => 'No se encontrÃ³ archivo de cotizaciÃ³n final'
                 ], 404);
             }
 
@@ -3180,10 +2870,10 @@ class CotizacionFinalController extends Controller
             // Intentar diferentes ubicaciones
             $possiblePaths = [];
 
-            // Nueva ubicación: storage/app/public/CargaConsolidada/cotizacionfinal/{idContenedor}
+            // Nueva ubicaciÃ³n: storage/app/public/CargaConsolidada/cotizacionfinal/{idContenedor}
             $possiblePaths[] = storage_path('app/public/' . $fileUrl);
 
-            // Ubicación legacy: public/assets/downloads
+            // UbicaciÃ³n legacy: public/assets/downloads
             if (strpos($fileUrl, 'http') === 0) {
                 $pathParts = parse_url($fileUrl);
                 $possiblePaths[] = storage_path('app/public' . $pathParts['path']);
@@ -3204,7 +2894,7 @@ class CotizacionFinalController extends Controller
 
             // Verificar que el archivo existe
             if (!$filePath || !file_exists($filePath)) {
-                Log::error('Archivo de cotización final no encontrado');
+                Log::error('Archivo de cotizaciÃ³n final no encontrado');
                 return response()->json([
                     'success' => false,
                     'message' => 'Archivo no encontrado en el servidor'
@@ -3220,22 +2910,22 @@ class CotizacionFinalController extends Controller
             Log::error('Error en downloadCotizacionFinalExcel: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
-                'message' => 'Error al descargar cotización final: ' . $e->getMessage()
+                'message' => 'Error al descargar cotizaciÃ³n final: ' . $e->getMessage()
             ], 500);
         }
     }
 
     public function downloadCotizacionFinalPdf($idCotizacionFinal)
     {
-        // Obtener la URL de cotización final y generar boleta
+        // Obtener la URL de cotizaciÃ³n final y generar boleta
         try {
             $cotizacion = Cotizacion::find($idCotizacionFinal);
 
             if (!$cotizacion || !$cotizacion->cotizacion_final_url) {
-                Log::error('Error en downloadBoleta: Cotización no encontrada o sin archivo final con ID: ' . $idCotizacionFinal);
+                Log::error('Error en downloadBoleta: CotizaciÃ³n no encontrada o sin archivo final con ID: ' . $idCotizacionFinal);
                 return response()->json([
                     'success' => false,
-                    'message' => 'Cotización no encontrada o sin archivo final'
+                    'message' => 'CotizaciÃ³n no encontrada o sin archivo final'
                 ], 404);
             }
 
@@ -3248,12 +2938,12 @@ class CotizacionFinalController extends Controller
             // Intentar diferentes ubicaciones
             $possiblePaths = [];
 
-            // 1) storage/app/public (ruta física)
+            // 1) storage/app/public (ruta fÃ­sica)
             $possiblePaths[] = storage_path('app/public/' . $relativePath);
             // 2) public/storage (symlink a storage/app/public; coincide con URL /storage/...)
             $possiblePaths[] = public_path('storage/' . $relativePath);
 
-            // Ubicación legacy
+            // UbicaciÃ³n legacy
             if (strpos($cotizacionFinalUrl, 'http') === 0) {
                 $fileUrl = str_replace(' ', '%20', $cotizacionFinalUrl);
                 $possiblePaths[] = $fileUrl;
@@ -3278,8 +2968,8 @@ class CotizacionFinalController extends Controller
             }
 
             if ($fileContent === false) {
-                Log::error('No se pudo leer el archivo de cotización final para PDF');
-                throw new \Exception("No se pudo leer el archivo Excel desde ninguna ubicación.");
+                Log::error('No se pudo leer el archivo de cotizaciÃ³n final para PDF');
+                throw new \Exception("No se pudo leer el archivo Excel desde ninguna ubicaciÃ³n.");
             }
 
             $tempFile = tempnam(sys_get_temp_dir(), 'cotizacion_') . '.xlsx';
@@ -3303,7 +2993,7 @@ class CotizacionFinalController extends Controller
             ], 500);
         }
     }
-    /** Solo trim + espacios internos; sin cambiar mayúsculas/minúsculas. */
+    /** Solo trim + espacios internos; sin cambiar mayÃºsculas/minÃºsculas. */
     private function trimMainSheetColumnBLabel(string $value): string
     {
         return trim(preg_replace('/\s+/u', ' ', (string) $value));
@@ -3334,7 +3024,7 @@ class CotizacionFinalController extends Controller
     }
 
     /**
-     * Primera fila (arriba → abajo) cuya columna B coincide exactamente con la etiqueta (case-sensitive, trim).
+     * Primera fila (arriba â†’ abajo) cuya columna B coincide exactamente con la etiqueta (case-sensitive, trim).
      */
     private function findMainSheetRowByColumnBLabelExact($sheet, string $expectedLabel): ?int
     {
@@ -3354,7 +3044,7 @@ class CotizacionFinalController extends Controller
     }
 
     /**
-     * Primera fila (arriba → abajo) cuya columna B contiene el texto (case-sensitive, trim).
+     * Primera fila (arriba â†’ abajo) cuya columna B contiene el texto (case-sensitive, trim).
      */
     private function findMainSheetRowByColumnBLabelContains(
         $sheet,
@@ -3384,7 +3074,7 @@ class CotizacionFinalController extends Controller
     }
 
     /**
-     * Filas de servicios extra en hoja 1 (columna B) que deben sumarse a logística al subir cotización final.
+     * Filas de servicios extra en hoja 1 (columna B) que deben sumarse a logÃ­stica al subir cotizaciÃ³n final.
      */
     private function mainSheetColumnBLabelMatchesLogisticaServicioExtra(string $label): bool
     {
@@ -3409,7 +3099,7 @@ class CotizacionFinalController extends Controller
     }
 
     /**
-     * Suma montos (columna K/J) de montacarga, envío almacén-agencia y recargos aduaneros en hoja 1.
+     * Suma montos (columna K/J) de montacarga, envÃ­o almacÃ©n-agencia y recargos aduaneros en hoja 1.
      */
     private function sumMainSheetLogisticaServiciosExtraFromColumnB($sheet): float
     {
@@ -3433,7 +3123,7 @@ class CotizacionFinalController extends Controller
         }
 
         if ($rowsMatched !== []) {
-            Log::info('Upload cotización final: servicios extra sumados a logística', [
+            Log::info('Upload cotizaciÃ³n final: servicios extra sumados a logÃ­stica', [
                 'filas' => $rowsMatched,
                 'total_servicios_extra' => round($sum, 2),
             ]);
@@ -3443,7 +3133,7 @@ class CotizacionFinalController extends Controller
     }
 
     /**
-     * Lee montos de la hoja 1 buscando etiquetas en columna B (formato dinámico v2).
+     * Lee montos de la hoja 1 buscando etiquetas en columna B (formato dinÃ¡mico v2).
      *
      * @return array<string, mixed>|null
      */
@@ -3452,17 +3142,17 @@ class CotizacionFinalController extends Controller
         $sheet = $spreadsheet->getSheet(0);
 
         $rowImpuestos = $this->findMainSheetRowByColumnBLabelExact($sheet, 'IMPUESTOS');
-        $rowServicio = $this->findMainSheetRowByColumnBLabelExact($sheet, 'SERVICIO DE IMPORTACIÓN');
+        $rowServicio = $this->findMainSheetRowByColumnBLabelExact($sheet, 'SERVICIO DE IMPORTACIÃ“N');
         if ($rowServicio === null) {
             $rowServicio = $this->findMainSheetRowByColumnBLabelContains(
                 $sheet,
-                'SERVICIO DE IMPORTACIÓN',
+                'SERVICIO DE IMPORTACIÃ“N',
                 'CALCULO DE'
             );
         }
 
         if ($rowServicio === null || $rowImpuestos === null) {
-            Log::warning('Upload cotización final: etiquetas B no encontradas', [
+            Log::warning('Upload cotizaciÃ³n final: etiquetas B no encontradas', [
                 'row_servicio' => $rowServicio,
                 'row_impuestos' => $rowImpuestos,
             ]);
@@ -3553,7 +3243,7 @@ class CotizacionFinalController extends Controller
     }
 
     /**
-     * Excel v2 (Boleta_Template): montos en K14–K33; cliente en C8. Excel tipo calculadora: J14–J43 y B8.
+     * Excel v2 (Boleta_Template): montos en K14â€“K33; cliente en C8. Excel tipo calculadora: J14â€“J43 y B8.
      */
     private function boletaFinalIsLegacyMainSheetKLayout($sheet): bool
     {
@@ -3573,7 +3263,7 @@ class CotizacionFinalController extends Controller
             $k14Calc = $sheet->getCell('K14')->getCalculatedValue();
             $k14HasAmount = is_numeric($k14Calc) && (float) $k14Calc > 0;
 
-            // Generado por getFinalCotizacionExcelv2: fórmulas en K14 o valores ya calculados + bloque tributos B20–B24.
+            // Generado por getFinalCotizacionExcelv2: fÃ³rmulas en K14 o valores ya calculados + bloque tributos B20â€“B24.
             if ($hasTributosBlock && ($kFormula || $k14HasAmount) && !$jFormula) {
                 return true;
             }
@@ -3620,9 +3310,9 @@ class CotizacionFinalController extends Controller
     }
 
     /**
-     * Calcula el MAX del % AD VALOREM leyendo directamente la fila 26 de la hoja de cálculos ('2').
-     * Es la fuente de la verdad cuando J20 (=MAX('2'!C26:X26)) trae un valor en caché stale o
-     * cuando alguien sobrescribió manualmente J20/I20 en la hoja 1.
+     * Calcula el MAX del % AD VALOREM leyendo directamente la fila 26 de la hoja de cÃ¡lculos ('2').
+     * Es la fuente de la verdad cuando J20 (=MAX('2'!C26:X26)) trae un valor en cachÃ© stale o
+     * cuando alguien sobrescribiÃ³ manualmente J20/I20 en la hoja 1.
      */
     private function boletaFinalGetAdValoremMaxPercentFromCalcSheet(
         \PhpOffice\PhpSpreadsheet\Spreadsheet $spreadsheet
@@ -3703,7 +3393,7 @@ class CotizacionFinalController extends Controller
     }
 
     /**
-     * Suma de servicios extra de la cotización:
+     * Suma de servicios extra de la cotizaciÃ³n:
      * MONTACARGA + DELIVERY + (BQ + SANCIONES)
      */
     private function getDeliveryServiciosExtrasByCotizacion(int $idCotizacion): float
@@ -3816,7 +3506,7 @@ class CotizacionFinalController extends Controller
 
     /**
      * HTML listo para DomPDF: PLANTILLA_COTIZACION_FINAL.html.
-     * Soporta hoja 1 tipo calculadora (J14–J43, B8, ítems fila 38) y legacy v2 (K14–K33, C8, ítems fila 48).
+     * Soporta hoja 1 tipo calculadora (J14â€“J43, B8, Ã­tems fila 38) y legacy v2 (K14â€“K33, C8, Ã­tems fila 48).
      */
     private function buildCotizacionFinalBoletaFilledHtml(Spreadsheet $spreadsheet): string
     {
@@ -3829,7 +3519,7 @@ class CotizacionFinalController extends Controller
         try {
             $d7 = $sheet->getCell('D7')->getCalculatedValue();
             $d7Str = trim((string) $d7);
-            if ($d7Str !== '' && preg_match('/COTIZACION\s+N[°º]?\s*(.+)/u', $d7Str, $m)) {
+            if ($d7Str !== '' && preg_match('/COTIZACION\s+N[Â°Âº]?\s*(.+)/u', $d7Str, $m)) {
                 $codigoCotizacion = trim($m[1]);
             }
         } catch (\Throwable $e) {
@@ -3840,7 +3530,7 @@ class CotizacionFinalController extends Controller
         Log::info('legacyK: ' . $legacyK);
         if ($legacyK) {
             // Hoja principal final (layout K):
-            // J8 = N° cajas (qty_box_china + qty_pallet_china)
+            // J8 = NÂ° cajas (qty_box_china + qty_pallet_china)
             // J10 = QTY proveedores LOADED
             $qtyCajas = intval($this->boletaFinalGetCellFloat($sheet, 'J8'));
             $qtySuppliers = intval($this->boletaFinalGetCellFloat($sheet, 'J10'));
@@ -3887,15 +3577,15 @@ class CotizacionFinalController extends Controller
                 $legacyTotalTributos = round($subtotalTrib + $percepcionTrib, 2);
             }
 
-            // En el flujo de cotización final (Excel masivo) el % AD VALOREM está en J20
-            // (=MAX('2'!C26:X26)). I20 está vacío en este flujo. Para que el PDF cuadre
+            // En el flujo de cotizaciÃ³n final (Excel masivo) el % AD VALOREM estÃ¡ en J20
+            // (=MAX('2'!C26:X26)). I20 estÃ¡ vacÃ­o en este flujo. Para que el PDF cuadre
             // con el Excel:
             //   1) Calculamos el MAX directo desde la hoja '2' (fuente de la verdad: no
-            //      depende del caché de la fórmula de J20 ni de que J20 haya sido
+            //      depende del cachÃ© de la fÃ³rmula de J20 ni de que J20 haya sido
             //      sobrescrito manualmente).
-            //   2) Si por algún motivo la hoja '2' no existe / está vacía, caemos a J20.
-            //   3) Si J20 también es 0, caemos a I20 (templates antiguos).
-            //   4) Como último respaldo, 6%.
+            //   2) Si por algÃºn motivo la hoja '2' no existe / estÃ¡ vacÃ­a, caemos a J20.
+            //   3) Si J20 tambiÃ©n es 0, caemos a I20 (templates antiguos).
+            //   4) Como Ãºltimo respaldo, 6%.
             $adPct = intval(round(
                 $this->boletaFinalGetAdValoremMaxPercentFromCalcSheet($spreadsheet) * 100
             ));
@@ -3940,7 +3630,7 @@ class CotizacionFinalController extends Controller
                 'peso' => $pesoDisplay !== '' ? $pesoDisplay : '-',
                 'qtysuppliers' => $qtySuppliers,
                 'qtycajas' => $qtyCajas,
-                'cbm' => number_format($this->boletaFinalGetCellFloat($sheet, 'J11'), 2, '.', ',') . ' m³',
+                'cbm' => number_format($this->boletaFinalGetCellFloat($sheet, 'J11'), 2, '.', ',') . ' mÂ³',
                 'valorcarga' => round($this->boletaFinalGetCellFloat($sheet, 'K14'), 2),
                 'costosfob' => $kCostosFob,
                 'fleteseguro' => round($this->boletaFinalGetCellFloat($sheet, 'K16'), 2),
@@ -3967,7 +3657,7 @@ class CotizacionFinalController extends Controller
                 'montototal' => round($totalSvcLegacy + $impuestosSum + $extraServiciosResumen, 2),
             ];
 
-            // Sin AD: ítems desde 48. Con AD: se inserta fila recargos antes de 36 → primera fila de ítems 49 (plantilla: 48=ítem, 49=TOTAL).
+            // Sin AD: Ã­tems desde 48. Con AD: se inserta fila recargos antes de 36 â†’ primera fila de Ã­tems 49 (plantilla: 48=Ã­tem, 49=TOTAL).
             $startRowItems = $hasAntidumpingRow ? 49 : 48;
             $items = [];
             $maxRow = (int) $sheet->getHighestDataRow('B');
@@ -4013,7 +3703,7 @@ class CotizacionFinalController extends Controller
                 'peso' => number_format($this->boletaFinalGetCellFloat($sheet, 'I9'), 2, '.', ',') . ' kg',
                 'qtysuppliers' => $sheet->getCell('E11')->getValue(),
                 'qtycajas' => $qtyCajas,
-                'cbm' => number_format($this->boletaFinalGetCellFloat($sheet, 'I11'), 2, '.', ',') . ' m³',
+                'cbm' => number_format($this->boletaFinalGetCellFloat($sheet, 'I11'), 2, '.', ',') . ' mÂ³',
                 'valorcarga' => round($this->boletaFinalGetCellFloat($sheet, 'J14'), 2),
                 'costosfob' => round($this->boletaFinalGetCellFloat($sheet, 'J15'), 2),
                 'fleteseguro' => round($this->boletaFinalGetCellFloat($sheet, 'J16'), 2),
@@ -4225,10 +3915,10 @@ class CotizacionFinalController extends Controller
                 ->header('Content-Disposition', 'attachment; filename="Cotizacion.pdf"')
                 ->header('Content-Length', strlen($pdfContent));
         } catch (\PhpOffice\PhpSpreadsheet\Exception $e) {
-            Log::error("Error en la fórmula de la celda: " . $e->getMessage());
+            Log::error("Error en la fÃ³rmula de la celda: " . $e->getMessage());
             throw $e;
         } catch (\Exception $e) {
-            Log::error('Excepción descargarBoleta: ' . $e->getMessage());
+            Log::error('ExcepciÃ³n descargarBoleta: ' . $e->getMessage());
             throw $e;
         }
     }
@@ -4256,10 +3946,10 @@ class CotizacionFinalController extends Controller
 
             return $tempFile;
         } catch (\PhpOffice\PhpSpreadsheet\Exception $e) {
-            Log::error("Error en la fórmula de la celda: " . $e->getMessage());
+            Log::error("Error en la fÃ³rmula de la celda: " . $e->getMessage());
             throw $e;
         } catch (\Exception $e) {
-            Log::error('Excepción generateBoletaForSend: ' . $e->getMessage());
+            Log::error('ExcepciÃ³n generateBoletaForSend: ' . $e->getMessage());
             throw $e;
         }
     }
@@ -4273,7 +3963,7 @@ class CotizacionFinalController extends Controller
             $newSheet->insertNewRowBefore($newRow);
         }
 
-        // Combinar celdas de descripción
+        // Combinar celdas de descripciÃ³n
         $newSheet->mergeCells('F' . $newRow . ':M' . $newRow);
 
         // Copiar datos
@@ -4314,7 +4004,7 @@ class CotizacionFinalController extends Controller
     }
 
     /**
-     * Configura los productos en la hoja principal (filas base 48–51; antidumping B23/K23 bajo IPM; subtotal K24; percepción K25; total tributos K26)
+     * Configura los productos en la hoja principal (filas base 48â€“51; antidumping B23/K23 bajo IPM; subtotal K24; percepciÃ³n K25; total tributos K26)
      */
     private function configureProductsInMainSheet($objPHPExcel, $data, $antidumpingSum)
     {
@@ -4359,11 +4049,11 @@ class CotizacionFinalController extends Controller
         $rowProductosStart = 48 + $rowBumpSheet0;
         $rowProductosTemplateEnd = $rowProductosStart + 3;
 
-        // Limpiar filas de plantilla de ítems
+        // Limpiar filas de plantilla de Ã­tems
         for ($row = $rowProductosStart; $row <= $rowProductosTemplateEnd; $row++) {
             for ($col = 1; $col <= 12; $col++) {
                 $cell = Coordinate::stringFromColumnIndex($col) . $row;
-                $sheet1->setCellValue($cell, ''); // Establecer el valor de la celda como vacío
+                $sheet1->setCellValue($cell, ''); // Establecer el valor de la celda como vacÃ­o
                 $sheet1->getStyle($cell)->applyFromArray([]); // Eliminar cualquier estilo aplicado a la celda
             }
         }
@@ -4384,7 +4074,7 @@ class CotizacionFinalController extends Controller
         for ($index = 0; $index < $productsCount; $index++) {
             $row = $rowProductosStart + $index;
 
-            // Insertar nueva fila si hay más de 7 productos
+            // Insertar nueva fila si hay mÃ¡s de 7 productos
             if ($index >= 7 && $index != $productsCount) {
                 $sheet1->insertNewRowBefore($row, 1);
             }
@@ -4500,30 +4190,30 @@ class CotizacionFinalController extends Controller
     }
 
     /**
-     * Actualiza los campos calculados (FOB, Logística, Impuestos) en el Excel
+     * Actualiza los campos calculados (FOB, LogÃ­stica, Impuestos) en el Excel
      */
     private function updateCalculatedFieldsInExcel($objPHPExcel, $fob, $logistica, $impuestos, $montoFinal, $antidumpingSum)
     {
         $sheet1 = $objPHPExcel->getSheet(0); // Hoja principal
 
         Log::info('Actualizando campos calculados en Excel');
-        Log::info('FOB: ' . $fob . ', Logística: ' . $logistica . ', Impuestos: ' . $impuestos . ', Monto Final: ' . $montoFinal);
+        Log::info('FOB: ' . $fob . ', LogÃ­stica: ' . $logistica . ', Impuestos: ' . $impuestos . ', Monto Final: ' . $montoFinal);
 
         try {
-            // Forzar recálculo de fórmulas
+            // Forzar recÃ¡lculo de fÃ³rmulas
             $objPHPExcel->getActiveSheet()->getParent()->getCalculationEngine()->flushInstance();
             $objPHPExcel->setActiveSheetIndex(0);
             $objPHPExcel->getActiveSheet()->calculateColumnWidths();
 
-            // Hoja principal sin fila insertada por antidumping: FOB K29, logística K30, impuestos K31
-            Log::info('Actualizando valores en hoja principal (mapa fijo K29–K31)');
+            // Hoja principal sin fila insertada por antidumping: FOB K29, logÃ­stica K30, impuestos K31
+            Log::info('Actualizando valores en hoja principal (mapa fijo K29â€“K31)');
             if ($fob > 0) {
                 $sheet1->setCellValue('K29', $fob);
                 Log::info('K29 (FOB) actualizado: ' . $fob);
             }
             if ($logistica > 0) {
                 $sheet1->setCellValue('K30', $logistica);
-                Log::info('K30 (Logística) actualizado: ' . $logistica);
+                Log::info('K30 (LogÃ­stica) actualizado: ' . $logistica);
             }
             if ($impuestos > 0) {
                 $sheet1->setCellValue('K31', $impuestos);
@@ -4532,19 +4222,19 @@ class CotizacionFinalController extends Controller
 
             // Actualizar mensaje de WhatsApp con valores correctos
             $clientName = $sheet1->getCell('C8')->getValue();
-            $whatsappMessage = "Hola " . $clientName . " 😁 un gusto saludarte!
-A continuación te envío la cotización final de tu importación📋📦.
-🙋‍♂️ PAGO PENDIENTE :
-☑️Costo CBM: $" . number_format($logistica, 2) . "
-☑️Impuestos: $" . number_format($impuestos, 2) . "
-☑️ Total: $" . number_format($logistica + $impuestos, 2) . "
-Pronto le aviso nuevos avances, que tengan buen día🚢
-Último día de pago:";
+            $whatsappMessage = "Hola " . $clientName . " ðŸ˜ un gusto saludarte!
+A continuaciÃ³n te envÃ­o la cotizaciÃ³n final de tu importaciÃ³nðŸ“‹ðŸ“¦.
+ðŸ™‹â€â™‚ï¸ PAGO PENDIENTE :
+â˜‘ï¸Costo CBM: $" . number_format($logistica, 2) . "
+â˜‘ï¸Impuestos: $" . number_format($impuestos, 2) . "
+â˜‘ï¸ Total: $" . number_format($logistica + $impuestos, 2) . "
+Pronto le aviso nuevos avances, que tengan buen dÃ­aðŸš¢
+Ãšltimo dÃ­a de pago:";
 
             $sheet1->setCellValue('N20', $whatsappMessage);
             Log::info('Mensaje WhatsApp actualizado');
 
-            // Forzar recálculo final
+            // Forzar recÃ¡lculo final
             $objPHPExcel->getActiveSheet()->getParent()->getCalculationEngine()->flushInstance();
             $objPHPExcel->getActiveSheet()->calculateColumnWidths();
 
@@ -4589,7 +4279,7 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
 
         $usdFmt = '_-[$$-en-US]* #,##0.00_-;[Red]-[$$-en-US]* #,##0.00_-;_-[$$-en-US]* "-"??_-;_-@_-';
 
-        // Reservar la nueva fila de recargos y correr todo lo inferior una posición.
+        // Reservar la nueva fila de recargos y correr todo lo inferior una posiciÃ³n.
 
         $this->applyBoletaDeliveryServicioOneRow($sheet, $rowMonta, $monta, $usdFmt);
         $this->applyBoletaDeliveryServicioOneRow($sheet, $rowDeliv, $deliv, $usdFmt);
@@ -4602,7 +4292,7 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
     }
 
     /**
-     * Obtiene agregados de proveedores LOADED para la cotización:
+     * Obtiene agregados de proveedores LOADED para la cotizaciÃ³n:
      * - total_qty_bultos_china: SUM(qty_box_china + qty_pallet_china)
      * - total_peso_china: SUM(peso_china)
      * - total_proveedores_loaded: COUNT(*)
@@ -4660,7 +4350,7 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
     }
 
     /**
-     * Tras renombrar la hoja de cálculos, las fórmulas de la hoja principal pueden seguir citando el nombre anterior (p. ej. '3'! → '2'!).
+     * Tras renombrar la hoja de cÃ¡lculos, las fÃ³rmulas de la hoja principal pueden seguir citando el nombre anterior (p. ej. '3'! â†’ '2'!).
      */
     private function normalizeMainSheetFormulasCalcSheetName(\PhpOffice\PhpSpreadsheet\Spreadsheet $spreadsheet, string $fromTitle, string $toTitle): void
     {
@@ -4682,9 +4372,9 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
     }
 
     /**
-     * MIGRACIÓN COMPLETA del método getFinalCotizacionExcelv2 de CodeIgniter
-     * Este método reemplaza la implementación actual con toda la lógica de CodeIgniter
-     * IMPORTANTE: Recibe $objPHPExcel como primer parámetro (igual que el original)
+     * MIGRACIÃ“N COMPLETA del mÃ©todo getFinalCotizacionExcelv2 de CodeIgniter
+     * Este mÃ©todo reemplaza la implementaciÃ³n actual con toda la lÃ³gica de CodeIgniter
+     * IMPORTANTE: Recibe $objPHPExcel como primer parÃ¡metro (igual que el original)
      */
     public function getFinalCotizacionExcelv2($objPHPExcel, $data, $idContenedor)
     {
@@ -4706,7 +4396,7 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
                     ),
                 ),
             );
-            // Filas de plantilla (evita hardcodes de números de fila)
+            // Filas de plantilla (evita hardcodes de nÃºmeros de fila)
             $rowTributosTitle = 3;
             $rowHeaderNombre = 5;
             $rowPeso = 6;
@@ -4725,7 +4415,7 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
             $rowValorCif = 19;
             $rowCifValorizado = 20;
             $rowTributosAplicablesTitle = 23;
-            // Hoja cálculos (tributos): ANTIDUMPING debajo de AD VALOREM y resto del bloque desplazado 1 fila
+            // Hoja cÃ¡lculos (tributos): ANTIDUMPING debajo de AD VALOREM y resto del bloque desplazado 1 fila
             $rowAdValoremPercent = 26;
             $rowAdValorem = 27;
             $rowAntidumping = 28;
@@ -4743,7 +4433,7 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
             $rowCostosDestinoDetalleCantidad = 46;
             $rowCostosDestinoDetalleCostoUnitario = 47;
             $rowCostosDestinoDetalleCostoSoles = 48;
-            // Hoja 1: primera fila de datos de ítems en plantilla = 48 (fila 47 cabeceras; 49 TOTAL). El +1 con AD era incorrecto: con insert de recargos basta rowProductosStart++.
+            // Hoja 1: primera fila de datos de Ã­tems en plantilla = 48 (fila 47 cabeceras; 49 TOTAL). El +1 con AD era incorrecto: con insert de recargos basta rowProductosStart++.
             $rowProductosStartBase = 48;
             $rowProductosTemplateSpan = 3;
             $rowMainNombre = 8;
@@ -4821,7 +4511,7 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
             $COSTOSDESTINOMULTIPLIER = 0.4000;
             // first iterate for tributes zone, set values and apply styles to cells
             foreach ($data['cliente']['productos'] as $producto) {
-                // Validar y convertir valores a numéricos
+                // Validar y convertir valores a numÃ©ricos
                 $precioUnitario = is_numeric($producto["precio_unitario"] ?? 0) ? (float)$producto["precio_unitario"] : 0;
                 $valoracion = is_numeric($producto["valoracion"] ?? 0) ? (float)$producto["valoracion"] : 0;
                 $cantidad = is_numeric($producto["cantidad"] ?? 0) ? (float)$producto["cantidad"] : 0;
@@ -4896,12 +4586,12 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
             $objPHPExcel->getActiveSheet()->getStyle($tarifaCellValue)->applyFromArray($borders);
 
             // create remaining zones and apply styles
-            // Última columna con producto (C..N); $LastColumnLetter = columna Total (una más que la última ítem)
+            // Ãšltima columna con producto (C..N); $LastColumnLetter = columna Total (una mÃ¡s que la Ãºltima Ã­tem)
             $InitialColumnLetter = $this->incrementColumn($InitialColumn, -1);
             $LastColumnLetter = $InitialColumn;
             $totalColumnLetter = $LastColumnLetter;
 
-            // Asegurarse de que la hoja 2 (tributos) esté activa antes de aplicar los bordes
+            // Asegurarse de que la hoja 2 (tributos) estÃ© activa antes de aplicar los bordes
             $objPHPExcel->setActiveSheetIndex(2);
 
             $objPHPExcel->getActiveSheet()->getStyle('B' . $rowHeaderNombre . ':' . $InitialColumn . $rowCifValorizado)->applyFromArray($borders);
@@ -5024,7 +4714,7 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
 
             // second iteration for each product and set values and apply styles
             foreach ($data['cliente']['productos'] as $producto) {
-                // Validar y convertir valores a numéricos
+                // Validar y convertir valores a numÃ©ricos
                 $antidumping = is_numeric($producto["antidumping"] ?? 0) ? (float)$producto["antidumping"] : 0;
                 $adValorem = is_numeric($producto["ad_valorem"] ?? 0) ? (float)$producto["ad_valorem"] : 0;
                 $iscPercent = is_numeric($producto["isc_percent"] ?? null)
@@ -5149,7 +4839,7 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
                 $InitialColumn++;
             }
 
-            // Continue with final columns styling (alineado a lógica de cotización inicial)
+            // Continue with final columns styling (alineado a lÃ³gica de cotizaciÃ³n inicial)
             $objPHPExcel->getActiveSheet()->getStyle($InitialColumn . $rowValorExw)->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_CURRENCY_USD_SIMPLE);
             $objPHPExcel->getActiveSheet()->getStyle($InitialColumn . $rowValorExw)->getFont()->setBold(true);
             $objPHPExcel->setActiveSheetIndex(2)->setCellValue($InitialColumn . $rowValorExwValoracion, "=SUM(C{$rowValorExwValoracion}:" . $InitialColumnLetter . "{$rowValorExwValoracion})");
@@ -5309,7 +4999,7 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
             $rowProductosStart = $rowProductosStartBase + $rowBumpSheet0;
             $rowProductosTemplateEnd = $rowProductosStart + $rowProductosTemplateSpan;
 
-            // Resumen hoja 1 ↔ hoja cálculos ('3' luego renombrada a '2'): K14 valor EXW, K15 costos FOB total, K16 flete+seguro, K17 CIF
+            // Resumen hoja 1 â†” hoja cÃ¡lculos ('3' luego renombrada a '2'): K14 valor EXW, K15 costos FOB total, K16 flete+seguro, K17 CIF
             $objPHPExcel->getActiveSheet()->setCellValue('K14', "=MAX('3'!" . $columnaIndex . $rowValorExw . ",'3'!" . $columnaIndex . $rowValorExwValoracion . ")");
             $objPHPExcel->getActiveSheet()->setCellValue('K15', "='3'!" . $columnaIndex . $rowCostosFob);
             $objPHPExcel->getActiveSheet()->setCellValue(
@@ -5321,7 +5011,7 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
                 "=MAX('3'!" . $columnaIndex . $rowValorCif . ",'3'!" . $columnaIndex . $rowCifValorizado . ")"
             );
 
-            // Bloque "Calculo de Tributos" en hoja 1 (filas dinámicas).
+            // Bloque "Calculo de Tributos" en hoja 1 (filas dinÃ¡micas).
             $objPHPExcel->getActiveSheet()->setCellValue('B20', 'ADVALOREM');
             $objPHPExcel->getActiveSheet()->setCellValue('B21', 'ISC');
             $objPHPExcel->getActiveSheet()->setCellValue('B22', 'IGV');
@@ -5381,7 +5071,7 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
             // Bloque "Calculo de Servicio de Importacion" y subtotal.
             if ($hasAntidumpingMain) {
                 // Layout requerido con AD: fila 30 cabecera de servicio en B/J/K/L.
-                $sheet0->setCellValue('B30', 'CALCULO DE SERVICIO DE IMPORTACIÓN');
+                $sheet0->setCellValue('B30', 'CALCULO DE SERVICIO DE IMPORTACIÃ“N');
                 $sheet0->setCellValue('J30', 'IGV');
                 $sheet0->setCellValue('K30', 'MONTO');
                 $sheet0->setCellValue('L30', 'MONEDA');
@@ -5441,7 +5131,7 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
                     '_-[$$-en-US]* #,##0.00_-;[Red]-[$$-en-US]* #,##0.00_-;_-[$$-en-US]* "-"??_-;_-@_-'
                 );
                 $sheet0->setCellValue('L36', 'USD');
-                // TOTAL del bloque servicio (fila 38): subtotal fila 34 + recargos 36 − descuento 37 (tras el insert, la plantilla suele desplazar la fórmula mal).
+                // TOTAL del bloque servicio (fila 38): subtotal fila 34 + recargos 36 âˆ’ descuento 37 (tras el insert, la plantilla suele desplazar la fÃ³rmula mal).
                 $sheet0->setCellValue('K38', '=K34+K36-K37');
                 $sheet0->getStyle('K38')->getNumberFormat()->setFormatCode(
                     '_-[$$-en-US]* #,##0.00_-;[Red]-[$$-en-US]* #,##0.00_-;_-[$$-en-US]* "-"??_-;_-@_-'
@@ -5475,8 +5165,8 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
             $sheet0->setCellValue('L' . $rowTotalServicio, 'USD');
             $sheet0->getStyle('K' . $rowTotalServicio)->getNumberFormat()->setFormatCode($usdFmt);
 
-            // Detectar de forma dinámica la cabecera "SIMULACIÓN DEL PRECIO PUESTO..." y anclar ahí las filas de ítems.
-            // Evita que los ítems se monten sobre el título cuando cambian inserts previos.
+            // Detectar de forma dinÃ¡mica la cabecera "SIMULACIÃ“N DEL PRECIO PUESTO..." y anclar ahÃ­ las filas de Ã­tems.
+            // Evita que los Ã­tems se monten sobre el tÃ­tulo cuando cambian inserts previos.
             $rowProductosStart = $this->detectMainSheetProductsStartRow($sheet0, $rowProductosStartBase + $rowBumpSheet0);
             $this->ensureMainSheetProductsTitleRow($sheet0, $rowProductosStart);
             $rowProductosTemplateEnd = $rowProductosStart + $rowProductosTemplateSpan;
@@ -5553,7 +5243,7 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
                 $objPHPExcel->getActiveSheet()->mergeCells('G' . $row . ':H' . $row);
                 $objPHPExcel->getActiveSheet()->mergeCells('K' . $row . ':L' . $row);
 
-                // Aplicar estilos de fuente y alineación
+                // Aplicar estilos de fuente y alineaciÃ³n
                 $columnsToApply = ['B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K'];
                 foreach ($columnsToApply as $column) {
                     $objPHPExcel->getActiveSheet()->getStyle($column . $row)->getFont()->setName('Calibri');
@@ -5575,8 +5265,8 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
                 $lastRow = $row;
             }
 
-            // Aplicar bordes a TODAS las filas de productos DESPUÉS del loop
-            // Esto asegura que todas las filas tengan bordes sin importar si fueron insertadas o ya existían
+            // Aplicar bordes a TODAS las filas de productos DESPUÃ‰S del loop
+            // Esto asegura que todas las filas tengan bordes sin importar si fueron insertadas o ya existÃ­an
             for ($index = 0; $index < $productsCount; $index++) {
                 $row = $rowProductosStart + $index;
 
@@ -5638,7 +5328,7 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
             $objPHPExcel->getActiveSheet()->getStyle('F' . $lastRow)->applyFromArray($borders);
             $objPHPExcel->getActiveSheet()->getStyle('J' . $lastRow)->applyFromArray($borders);
 
-            // Establecer tamaño de fuente
+            // Establecer tamaÃ±o de fuente
             $objPHPExcel->getActiveSheet()->getStyle('B' . $lastRow . ':L' . ($lastRow + 1))->getFont()->setSize(11);
             //apply for total row=lastRow+1
 
@@ -5651,7 +5341,7 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
                     $mfRaw = $objPHPExcel->getSheet(2)->getCell($columnaIndex . $rowTotalTributos)->getCalculatedValue();
                     $montoFinal = is_numeric($mfRaw) ? $mfRaw : 0;
                 } catch (\Exception $e) {
-                    Log::warning('Error calculando montoFinal (tributos hoja cálculos): ' . $e->getMessage());
+                    Log::warning('Error calculando montoFinal (tributos hoja cÃ¡lculos): ' . $e->getMessage());
                     $montoFinal = 0;
                 }
             }
@@ -5709,20 +5399,20 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
             $objPHPExcel->getActiveSheet()->getStyle('C' . $rowMainNombre)->getAlignment()->setWrapText(true);
 
             $N20CellValue =
-                "Hola " . $ClientName . " 😁 un gusto saludarte!
-        A continuación te envío la cotización final de tu importación📋📦.
-        🙋‍♂️ PAGO PENDIENTE :
-        ☑️Costo CBM: $" . $CobroCellValue . "
-        ☑️Impuestos: $" . $ImpuestosCellValue . "
-        ☑️ Total: $" . ($ImpuestosCellValue + $CobroCellValue) . "
-        Pronto le aviso nuevos avances, que tengan buen día🚢
-        Último día de pago:";
+                "Hola " . $ClientName . " ðŸ˜ un gusto saludarte!
+        A continuaciÃ³n te envÃ­o la cotizaciÃ³n final de tu importaciÃ³nðŸ“‹ðŸ“¦.
+        ðŸ™‹â€â™‚ï¸ PAGO PENDIENTE :
+        â˜‘ï¸Costo CBM: $" . $CobroCellValue . "
+        â˜‘ï¸Impuestos: $" . $ImpuestosCellValue . "
+        â˜‘ï¸ Total: $" . ($ImpuestosCellValue + $CobroCellValue) . "
+        Pronto le aviso nuevos avances, que tengan buen dÃ­aðŸš¢
+        Ãšltimo dÃ­a de pago:";
 
             $objPHPExcel->getActiveSheet()->setCellValue('N' . $rowMainMensaje, $N20CellValue);
 
             // remove page 2
             $objPHPExcel->removeSheetByIndex(1);
-            // La hoja de cálculos pasa a índice 1 y debe llamarse '2' (fórmulas de la hoja 0 se citaban como '3'! durante el armado)
+            // La hoja de cÃ¡lculos pasa a Ã­ndice 1 y debe llamarse '2' (fÃ³rmulas de la hoja 0 se citaban como '3'! durante el armado)
             $objPHPExcel->setActiveSheetIndex(1);
             $objPHPExcel->getActiveSheet()->setTitle('2');
             $this->normalizeMainSheetFormulasCalcSheetName($objPHPExcel, '3', '2');
@@ -5757,7 +5447,7 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
 
             $objPHPExcel->setActiveSheetIndex(0);
 
-            // Obtener valores después del recálculo con validación
+            // Obtener valores despuÃ©s del recÃ¡lculo con validaciÃ³n
             $sheet1 = $objPHPExcel->getActiveSheet();
 
             try {
@@ -5801,7 +5491,7 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
             }
 
             $objPHPExcel->setActiveSheetIndex(1);
-            // Recalcular logística basado en cbm
+            // Recalcular logÃ­stica basado en cbm
             $logisticaCalculada = ($cbmTotalProductos < 1.00) ? $tarifaValue : ($cbmTotalProductos * $tarifaValue);
             $logistica = is_numeric($logisticaCalculada) ? $logisticaCalculada : $logistica;
 
@@ -5831,7 +5521,7 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
                 "cotizacion_final_url" => $excelFilePath
             ];
         } catch (\Exception $e) {
-            echo 'Excepción capturada: ',  $e->getMessage(), "\n";
+            echo 'ExcepciÃ³n capturada: ',  $e->getMessage(), "\n";
             Log::error('Error en getFinalCotizacionExcelv2: ' . $e->getMessage());
             Log::error('Trace: ' . $e->getTraceAsString());
             Log::error('Line: ' . $e->getLine());
@@ -5841,7 +5531,7 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
     }
 
     /**
-     * Configura la hoja de tributos con toda la lógica migrada
+     * Configura la hoja de tributos con toda la lÃ³gica migrada
      */
     private function setupTributosSheetModern($spreadsheet, $sheet, $data, $idContenedor)
     {
@@ -5863,7 +5553,7 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
             ],
         ];
 
-        // Título principal
+        // TÃ­tulo principal
         $sheet->mergeCells('B3:G3');
         $sheet->setCellValue('B3', 'Calculo de Tributos');
         $sheet->getStyle('B3')->getFill()->setFillType(Fill::FILL_SOLID);
@@ -5908,7 +5598,7 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
 
         $sheet->getColumnDimension('B')->setAutoSize(true);
 
-        // Procesar productos y configurar fórmulas
+        // Procesar productos y configurar fÃ³rmulas
         $this->processProductsInTributosSheet($sheet, $data, $borders, $blueColor, $yellowColor);
 
         // Configurar secciones adicionales
@@ -5927,7 +5617,7 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
         $volumen = $data['cliente']['volumen'];
         $pesoTotal = isset($productos[0]['peso']) && is_numeric($productos[0]['peso']) ? (float)$productos[0]['peso'] : 0;
 
-        // Validar y calcular tarifa según tipo de cliente
+        // Validar y calcular tarifa segÃºn tipo de cliente
         $volumenNumerico = is_numeric($volumen) ? (float)$volumen : 0;
         $tarifaBase = is_numeric($tarifa) ? (float)$tarifa : 0;
         $tarifaValue = $this->calculateTarifaByTipoCliente($tipoCliente, $volumenNumerico, $tarifaBase);
@@ -5938,13 +5628,13 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
             $column = $this->incrementColumn($InitialColumn, $index);
             $sheet->getColumnDimension($column)->setAutoSize(true);
 
-            // Validar y convertir valores numéricos
+            // Validar y convertir valores numÃ©ricos
             $precioUnitario = is_numeric($producto["precio_unitario"]) ? (float)$producto["precio_unitario"] : 0;
             $valoracion = is_numeric($producto["valoracion"]) ? (float)$producto["valoracion"] : 0;
             $cantidad = is_numeric($producto["cantidad"]) ? (float)$producto["cantidad"] : 0;
             $antidumping = is_numeric($producto["antidumping"]) ? (float)$producto["antidumping"] : 0;
 
-            // Configurar datos básicos del producto
+            // Configurar datos bÃ¡sicos del producto
             $sheet->setCellValue($column . '5', $producto["nombre"]);
             $sheet->getStyle($column . '5')->getFill()->setFillType(Fill::FILL_SOLID);
             $sheet->getStyle($column . '5')->getFill()->getStartColor()->setARGB($blueColor);
@@ -5967,12 +5657,12 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
             $antidumpingSum += $antidumping * $cantidad;
         }
 
-        // Configurar columna total y fórmulas complejas
+        // Configurar columna total y fÃ³rmulas complejas
         $this->setupTotalColumnAndFormulas($sheet, $data, $productos, $pesoTotal, $tarifaValue, $blueColor);
     }
 
     /**
-     * Configura la columna total y las fórmulas complejas
+     * Configura la columna total y las fÃ³rmulas complejas
      */
     private function setupTotalColumnAndFormulas($sheet, $data, $productos, $pesoTotal, $tarifaValue, $blueColor)
     {
@@ -5985,7 +5675,7 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
         $sheet->setCellValue($totalColumn . '5', "Total");
         $sheet->getStyle($totalColumn . '5')->getFont()->getColor()->setARGB(Color::COLOR_WHITE);
 
-        // Configurar peso (validar que sea numérico)
+        // Configurar peso (validar que sea numÃ©rico)
         $pesoNumerico = is_numeric($pesoTotal) ? (float)$pesoTotal : 0;
         $sheet->setCellValue($totalColumn . '6', $pesoNumerico > 1000 ? round($pesoNumerico / 1000, 2) : $pesoNumerico);
         if ($pesoNumerico > 1000) {
@@ -5994,8 +5684,8 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
             $sheet->getStyle($totalColumn . '6')->getNumberFormat()->setFormatCode('0.00" Kg"');
         }
 
-        // Configurar CBM y totales básicos
-        // IMPORTANTE: Usar el CBM del primer producto (como en la versión original)
+        // Configurar CBM y totales bÃ¡sicos
+        // IMPORTANTE: Usar el CBM del primer producto (como en la versiÃ³n original)
         $cbmPrimerProducto = isset($productos[0]['cbm']) && is_numeric($productos[0]['cbm'])
             ? (float)$productos[0]['cbm'] : 0;
         $sheet->setCellValue($totalColumn . '7', $cbmPrimerProducto);
@@ -6018,17 +5708,17 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
         $sheet->setCellValue($tipoClienteCellValue, $data['cliente']['tipo_cliente']);
         $sheet->setCellValue($tarifaCellValue, $tarifaValue);
 
-        // Configurar fórmulas principales
+        // Configurar fÃ³rmulas principales
         $CBMTotal = $totalColumn . "7";
         $sheet->setCellValue($totalColumn . '14', "=IF($CBMTotal<1, $tarifaCellValue*0.6, $tarifaCellValue*0.6*$CBMTotal)");
         $sheet->setCellValue($totalColumn . '40', "=IF($CBMTotal<1, $tarifaCellValue*0.4, $tarifaCellValue*0.4*$CBMTotal)");
 
-        // Configurar fórmulas complejas para cada producto
+        // Configurar fÃ³rmulas complejas para cada producto
         $this->setupComplexFormulasForProducts($sheet, $data['cliente']['productos'], $totalColumn);
     }
 
     /**
-     * Configura fórmulas complejas para cada producto
+     * Configura fÃ³rmulas complejas para cada producto
      */
     private function setupComplexFormulasForProducts($sheet, $productos, $totalColumn)
     {
@@ -6039,7 +5729,7 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
         foreach ($productos as $index => $producto) {
             $column = $this->incrementColumn($InitialColumn, $index);
 
-            // Fórmulas de distribución y cálculos
+            // FÃ³rmulas de distribuciÃ³n y cÃ¡lculos
             $sheet->setCellValue($column . '13', "=" . $column . '11/' . $totalColumn . '11');
             $sheet->getStyle($column . '13')->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_PERCENTAGE_00);
 
@@ -6063,7 +5753,7 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
             $sheet->getStyle($column . '18')->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_CURRENCY_USD_SIMPLE);
             $sheet->getStyle($column . '19')->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_CURRENCY_USD_SIMPLE);
 
-            // Configurar tributos específicos
+            // Configurar tributos especÃ­ficos
             $this->setupTributesForProduct($sheet, $column, $producto);
 
             // Costos destino y resumen final
@@ -6082,11 +5772,11 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
     }
 
     /**
-     * Configura tributos específicos para un producto
+     * Configura tributos especÃ­ficos para un producto
      */
     private function setupTributesForProduct($sheet, $column, $producto)
     {
-        // Validar y convertir valores numéricos
+        // Validar y convertir valores numÃ©ricos
         $antidumping = is_numeric($producto["antidumping"]) ? (float)$producto["antidumping"] : 0;
         $cantidad = is_numeric($producto["cantidad"]) ? (float)$producto["cantidad"] : 0;
         $adValorem = is_numeric($producto["ad_valorem"]) ? (float)$producto["ad_valorem"] : 0;
@@ -6106,7 +5796,7 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
         $sheet->setCellValue($AdValoremCell, "=MAX(" . $column . "19," . $column . "18)*" . $column . "27");
         $sheet->getStyle($AdValoremCell)->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_CURRENCY_USD_SIMPLE);
 
-        // IGV, IPM, Percepción
+        // IGV, IPM, PercepciÃ³n
         $sheet->setCellValue($column . '29', "=" . (16 / 100) . "*(" . "MAX(" . $column . "19," . $column . "18)+" . $AdValoremCell . ")");
         $sheet->getStyle($column . '29')->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_CURRENCY_USD_SIMPLE);
 
@@ -6129,7 +5819,7 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
         $totalColumn = $this->incrementColumn('C', count($productos));
         $lastProductColumn = $this->incrementColumn('C', count($productos) - 1);
 
-        // Sección de tributos aplicables
+        // SecciÃ³n de tributos aplicables
         $sheet->mergeCells('B23:E23');
         $sheet->setCellValue('B23', 'Tributos Aplicables');
         $sheet->getStyle('B23')->getFill()->setFillType(Fill::FILL_SOLID);
@@ -6150,7 +5840,7 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
             $sheet->setCellValue($cell, $label);
         }
 
-        // Sección de costos destinos
+        // SecciÃ³n de costos destinos
         $sheet->mergeCells('B37:E37');
         $sheet->setCellValue('B37', 'Costos Destinos');
         $sheet->getStyle('B37')->getFill()->setFillType(Fill::FILL_SOLID);
@@ -6216,7 +5906,7 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
     {
         $spreadsheet->setActiveSheetIndex(0); // Activar hoja principal
 
-        // Configurar información básica del cliente
+        // Configurar informaciÃ³n bÃ¡sica del cliente
         $sheet->mergeCells('C8:C9');
         $sheet->getStyle('C8')->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
         $sheet->getStyle('C8')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
@@ -6236,7 +5926,7 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
         $sheet->setCellValue('I11', "CBM");
         $sheet->getStyle('J11')->getNumberFormat()->setFormatCode('#,##0.00');
 
-        // Configurar referencias y fórmulas principales
+        // Configurar referencias y fÃ³rmulas principales
         $this->setupMainSheetFormulas($sheet, $data);
 
         // Configurar productos en la hoja principal
@@ -6247,14 +5937,14 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
     }
 
     /**
-     * Configura las fórmulas principales en la hoja principal
+     * Configura las fÃ³rmulas principales en la hoja principal
      */
     private function setupMainSheetFormulas($sheet, $data)
     {
         $productsCount = count($data['cliente']['productos']);
         $columnaIndex = Coordinate::stringFromColumnIndex($productsCount + 3);
 
-        // Configurar CBM en J11 como FÓRMULA que referencia la hoja de tributos (como en original)
+        // Configurar CBM en J11 como FÃ“RMULA que referencia la hoja de tributos (como en original)
         // En el original: $objPHPExcel->getActiveSheet()->setCellValue('J11', "='3'!" . $CBMTotal);
         $CBMTotalCell = $columnaIndex . "7"; // Celda de CBM en la hoja de tributos
         $sheet->setCellValue('J11', "='2'!" . $CBMTotalCell);
@@ -6272,7 +5962,7 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
             $antidumpingSum += $antidumping * $cantidad;
         }
 
-        // Tributos: Ad Valorem, ISC, IGV, IPM (K20–K23); ANTIDUMPING debajo de IPM en K24 (sin insertar fila)
+        // Tributos: Ad Valorem, ISC, IGV, IPM (K20â€“K23); ANTIDUMPING debajo de IPM en K24 (sin insertar fila)
         $sheet->setCellValue('K20', "='2'!" . $columnaIndex . "28"); // Ad Valorem
         $sheet->setCellValue('K21', "='2'!" . $columnaIndex . "30"); // ISC (valor)
         $sheet->setCellValue('K22', "='2'!" . $columnaIndex . "31"); // IGV
@@ -6291,8 +5981,8 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
         $sheet->setCellValue('B25', 'SUB TOTAL');
         $sheet->setCellValue('K25', '=SUM(K20:K24)');
         $sheet->setCellValue('B26', 'PERCEPCION');
-        $sheet->setCellValue('K26', "='2'!" . $columnaIndex . "33"); // Percepción
-        $sheet->setCellValue('K27', '=K25+K26'); // Total tributos (alineado con cotización final v2 / boleta)
+        $sheet->setCellValue('K26', "='2'!" . $columnaIndex . "33"); // PercepciÃ³n
+        $sheet->setCellValue('K27', '=K25+K26'); // Total tributos (alineado con cotizaciÃ³n final v2 / boleta)
 
         // Calcular tarifa
         $tarifaValue = $this->calculateTarifaByTipoCliente(
@@ -6302,13 +5992,13 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
         );
 
         $sheet->setCellValue('K29', "=K14"); // FOB
-        $sheet->setCellValue('K30', "=IF(J11<1, " . $tarifaValue . ", " . $tarifaValue . "*J11)"); // Logística
-        $sheet->setCellValue('K31', '=K27'); // Impuestos totales (subtotal + percepción)
+        $sheet->setCellValue('K30', "=IF(J11<1, " . $tarifaValue . ", " . $tarifaValue . "*J11)"); // LogÃ­stica
+        $sheet->setCellValue('K31', '=K27'); // Impuestos totales (subtotal + percepciÃ³n)
         $sheet->setCellValue('K32', '=K29+K30+K31'); // Total final
     }
 
     /**
-     * Configura los productos en la hoja principal (filas base 48–51)
+     * Configura los productos en la hoja principal (filas base 48â€“51)
      */
     private function setupProductsInMainSheetModern($sheet, $data)
     {
@@ -6328,7 +6018,7 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
             ],
         ];
 
-        // Limpiar filas de plantilla de ítems
+        // Limpiar filas de plantilla de Ã­tems
         for ($row = $rowProductosStart; $row <= $rowProductosStart + 3; $row++) {
             for ($col = 1; $col <= 12; $col++) {
                 $cell = Coordinate::stringFromColumnIndex($col) . $row;
@@ -6344,7 +6034,7 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
             $row = $rowProductosStart + $index;
             $column = $this->incrementColumn($InitialColumn, $index);
 
-            if ($row <= $rowProductosStart + 3) { // Primeras 4 filas del bloque de ítems
+            if ($row <= $rowProductosStart + 3) { // Primeras 4 filas del bloque de Ã­tems
                 $sheet->setCellValue('B' . $row, $index + 1);
                 $sheet->setCellValue('C' . $row, $productos[$index]["nombre"]);
                 $sheet->setCellValue('F' . $row, "='2'!" . $column . '10'); // Cantidad
@@ -6400,12 +6090,12 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
                 $sheet->getStyle('J' . $lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
                 $sheet->getStyle('J' . $lastRow)->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_CURRENCY_USD_SIMPLE);
 
-                // Aplicar tamaño de fuente
+                // Aplicar tamaÃ±o de fuente
                 $sheet->getStyle('B' . $lastRow . ':L' . $lastRow)->getFont()->setSize(11);
             }
         }
 
-        // Limpiar filas no utilizadas (eliminar bordes de filas vacías)
+        // Limpiar filas no utilizadas (eliminar bordes de filas vacÃ­as)
         if ($productsCount < 4) {
             for ($row = ($rowProductosStart + $productsCount); $row <= $rowProductosStart + 3; $row++) {
                 // Remover bordes de las filas no utilizadas
@@ -6426,23 +6116,23 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
     private function setupWhatsAppMessageModern($sheet, $data)
     {
         $clientName = $data['cliente']['nombre'];
-        $message = "Hola " . $clientName . " 😁 un gusto saludarte!\n" .
-            "A continuación te envío la cotización final de tu importación📋📦.\n" .
-            "🙋‍♂️ PAGO PENDIENTE :\n" .
-            "Pronto le aviso nuevos avances, que tengan buen día🚢\n" .
-            "Último día de pago:";
+        $message = "Hola " . $clientName . " ðŸ˜ un gusto saludarte!\n" .
+            "A continuaciÃ³n te envÃ­o la cotizaciÃ³n final de tu importaciÃ³nðŸ“‹ðŸ“¦.\n" .
+            "ðŸ™‹â€â™‚ï¸ PAGO PENDIENTE :\n" .
+            "Pronto le aviso nuevos avances, que tengan buen dÃ­aðŸš¢\n" .
+            "Ãšltimo dÃ­a de pago:";
 
         $sheet->setCellValue('N20', $message);
     }
 
     /**
-     * Ubica la fila de inicio de ítems en hoja principal a partir del título de la tabla.
+     * Ubica la fila de inicio de Ã­tems en hoja principal a partir del tÃ­tulo de la tabla.
      */
     private function detectMainSheetProductsStartRow(
         \PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $sheet,
         int $fallbackStartRow
     ): int {
-        $needle = 'SIMULACIÓN DEL PRECIO PUESTO EN PERÚ POR PIEZA';
+        $needle = 'SIMULACIÃ“N DEL PRECIO PUESTO EN PERÃš POR PIEZA';
         for ($row = 40; $row <= 70; $row++) {
             foreach (range('B', 'L') as $col) {
                 $value = trim((string) $sheet->getCell($col . $row)->getValue());
@@ -6467,7 +6157,7 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
     }
 
     /**
-     * Garantiza que el título de la tabla de ítems exista en la fila inmediatamente superior al inicio.
+     * Garantiza que el tÃ­tulo de la tabla de Ã­tems exista en la fila inmediatamente superior al inicio.
      */
     private function ensureMainSheetProductsTitleRow(
         \PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $sheet,
@@ -6488,7 +6178,7 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
             $sheet->mergeCells('B' . $titleRow . ':L' . $titleRow);
         }
 
-        $sheet->setCellValue('B' . $titleRow, 'SIMULACIÓN DEL PRECIO PUESTO EN PERÚ POR PIEZA');
+        $sheet->setCellValue('B' . $titleRow, 'SIMULACIÃ“N DEL PRECIO PUESTO EN PERÃš POR PIEZA');
         $sheet->getRowDimension($titleRow)->setVisible(true);
         $sheet->getStyle('B' . $titleRow . ':L' . $titleRow)->getFill()->setFillType(Fill::FILL_SOLID);
         $sheet->getStyle('B' . $titleRow . ':L' . $titleRow)->getFill()->getStartColor()->setARGB('009999');
@@ -6499,7 +6189,7 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
     }
 
     /**
-     * Valida y sanitiza los datos para evitar errores de valores no numéricos
+     * Valida y sanitiza los datos para evitar errores de valores no numÃ©ricos
      */
     private function validateAndSanitizeData($data)
     {
@@ -6508,17 +6198,17 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
             throw new \Exception('Datos de cliente no encontrados');
         }
 
-        // Sanitizar valores numéricos del cliente
+        // Sanitizar valores numÃ©ricos del cliente
         $data['cliente']['tarifa'] = is_numeric($data['cliente']['tarifa'] ?? 0) ? (float)$data['cliente']['tarifa'] : 0;
         $data['cliente']['volumen'] = is_numeric($data['cliente']['volumen'] ?? 0) ? (float)$data['cliente']['volumen'] : 0;
 
         // Validar y sanitizar productos
         if (!isset($data['cliente']['productos']) || !is_array($data['cliente']['productos'])) {
-            throw new \Exception('Productos no encontrados o formato inválido');
+            throw new \Exception('Productos no encontrados o formato invÃ¡lido');
         }
 
         foreach ($data['cliente']['productos'] as &$producto) {
-            // Sanitizar valores numéricos de cada producto
+            // Sanitizar valores numÃ©ricos de cada producto
             $producto['precio_unitario'] = is_numeric($producto['precio_unitario'] ?? 0) ? (float)$producto['precio_unitario'] : 0;
             $producto['valoracion'] = is_numeric($producto['valoracion'] ?? 0) ? (float)$producto['valoracion'] : 0;
             $producto['cantidad'] = is_numeric($producto['cantidad'] ?? 0) ? (float)$producto['cantidad'] : 0;
@@ -6529,7 +6219,7 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
             $producto['peso'] = is_numeric($producto['peso'] ?? 0) ? (float)$producto['peso'] : 0;
             $producto['cbm'] = is_numeric($producto['cbm'] ?? 0) ? (float)$producto['cbm'] : 0;
 
-            // Asegurar que el nombre del producto no esté vacío
+            // Asegurar que el nombre del producto no estÃ© vacÃ­o
             $producto['nombre'] = trim($producto['nombre'] ?? 'Producto sin nombre');
             if (empty($producto['nombre'])) {
                 $producto['nombre'] = 'Producto sin nombre';
@@ -6543,13 +6233,13 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
     }
 
     /**
-     * Registra información sobre la plantilla cargada para debugging
+     * Registra informaciÃ³n sobre la plantilla cargada para debugging
      */
     private function logTemplateInfo($spreadsheet)
     {
         try {
             $sheetCount = $spreadsheet->getSheetCount();
-            Log::info('Información de plantilla cargada:');
+            Log::info('InformaciÃ³n de plantilla cargada:');
             Log::info('- Total de hojas: ' . $sheetCount);
 
             for ($i = 0; $i < $sheetCount; $i++) {
@@ -6576,7 +6266,7 @@ Pronto le aviso nuevos avances, que tengan buen día🚢
                 }
             }
         } catch (\Exception $e) {
-            Log::warning('Error al obtener información de plantilla: ' . $e->getMessage());
+            Log::warning('Error al obtener informaciÃ³n de plantilla: ' . $e->getMessage());
         }
     }
 }

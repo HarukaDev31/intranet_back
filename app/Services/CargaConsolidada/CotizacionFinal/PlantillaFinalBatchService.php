@@ -1,0 +1,443 @@
+<?php
+
+namespace App\Services\CargaConsolidada\CotizacionFinal;
+
+use App\Events\PlantillaFinalBatchFinished;
+use App\Http\Controllers\CargaConsolidada\CotizacionFinal\CotizacionFinalController;
+use App\Jobs\GenerateMassiveExcelPayrollsJob;
+use App\Models\CargaConsolidada\ConsolidadoPlantillaFinalBatch;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
+use PhpOffice\PhpSpreadsheet\IOFactory;
+use ZipArchive;
+
+class PlantillaFinalBatchService
+{
+    /** @var CotizacionFinalController */
+    protected $cotizacionFinalController;
+
+    public function __construct(CotizacionFinalController $cotizacionFinalController)
+    {
+        $this->cotizacionFinalController = $cotizacionFinalController;
+    }
+
+    public function enqueue($file, $idContenedor, $createdBy = null)
+    {
+        $idContenedor = (int) $idContenedor;
+        $clientesExcel = $this->countClientsInExcel($file);
+
+        $plantillaRelative = $file->storeAs(
+            'plantillas-finales/uploads',
+            $idContenedor . '_' . time() . '_' . uniqid() . '_' . $file->getClientOriginalName(),
+            'public'
+        );
+
+        $zipRelative = 'plantillas-finales/zips/' . $idContenedor . '_' . time() . '_' . uniqid() . '.zip';
+
+        $batch = ConsolidadoPlantillaFinalBatch::create([
+            'id_contenedor' => $idContenedor,
+            'clientes_excel' => $clientesExcel,
+            'clientes_completados' => 0,
+            'clientes_error' => 0,
+            'estado' => 'PENDING',
+            'created_by' => $createdBy ? (int) $createdBy : null,
+            'plantilla_url' => $plantillaRelative,
+            'zip_path' => $zipRelative,
+            'nombre_plantilla' => $file->getClientOriginalName(),
+        ]);
+
+        GenerateMassiveExcelPayrollsJob::dispatch((int) $batch->id);
+
+        return [
+            'batch_id' => (int) $batch->id,
+            'estado' => $batch->estado,
+            'id_contenedor' => $idContenedor,
+        ];
+    }
+
+    public function processBatchById($batchId)
+    {
+        $batch = ConsolidadoPlantillaFinalBatch::find((int) $batchId);
+        if (!$batch) {
+            throw new \InvalidArgumentException('Lote de plantilla final no encontrado.');
+        }
+
+        if ($batch->estado === 'COMPLETED') {
+            return $batch;
+        }
+
+        $batch->update([
+            'fecha_inicio' => now(),
+            'estado' => 'PENDING',
+        ]);
+
+        try {
+            $stats = $this->runMassiveGeneration($batch);
+            $batch->update([
+                'clientes_completados' => (int) $stats['completados'],
+                'clientes_error' => (int) $stats['errores'],
+                'fecha_fin' => now(),
+                'estado' => 'COMPLETED',
+                'mensaje_error' => null,
+            ]);
+
+            event(new PlantillaFinalBatchFinished(
+                $batch->fresh(),
+                'Generación de plantillas finales completada.'
+            ));
+        } catch (\Throwable $e) {
+            Log::error('PlantillaFinalBatchService::processBatchById', [
+                'batch_id' => $batch->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            $batch->update([
+                'fecha_fin' => now(),
+                'estado' => 'FAILED',
+                'mensaje_error' => $e->getMessage(),
+            ]);
+
+            event(new PlantillaFinalBatchFinished(
+                $batch->fresh(),
+                'Error al generar plantillas finales: ' . $e->getMessage()
+            ));
+
+            throw $e;
+        }
+
+        return $batch->fresh();
+    }
+
+    public function listByContenedor($idContenedor, $limit = 100)
+    {
+        $limit = max(1, min((int) $limit, 500));
+
+        return ConsolidadoPlantillaFinalBatch::query()
+            ->where('id_contenedor', (int) $idContenedor)
+            ->orderByDesc('id')
+            ->limit($limit)
+            ->get()
+            ->map(function (ConsolidadoPlantillaFinalBatch $batch) {
+                return $this->mapBatchForApi($batch);
+            })
+            ->values()
+            ->all();
+    }
+
+    public function findBatchOrFail($id)
+    {
+        $batch = ConsolidadoPlantillaFinalBatch::find((int) $id);
+        if (!$batch) {
+            throw new \InvalidArgumentException('Registro no encontrado.');
+        }
+        return $batch;
+    }
+
+    public function resolveStoragePath($relativePath)
+    {
+        $relativePath = ltrim((string) $relativePath, '/');
+        $full = storage_path('app/public/' . $relativePath);
+        if (!file_exists($full)) {
+            throw new \InvalidArgumentException('Archivo no encontrado.');
+        }
+        return $full;
+    }
+
+    protected function mapBatchForApi(ConsolidadoPlantillaFinalBatch $batch)
+    {
+        return [
+            'id' => (int) $batch->id,
+            'id_contenedor' => (int) $batch->id_contenedor,
+            'clientes_excel' => (int) $batch->clientes_excel,
+            'clientes_completados' => (int) $batch->clientes_completados,
+            'clientes_error' => (int) $batch->clientes_error,
+            'detalle' => (int) $batch->clientes_completados . ' exitosos / ' . (int) $batch->clientes_error . ' con error',
+            'estado' => $batch->estado,
+            'fecha_inicio' => $batch->fecha_inicio ? $batch->fecha_inicio->toIso8601String() : null,
+            'fecha_fin' => $batch->fecha_fin ? $batch->fecha_fin->toIso8601String() : null,
+            'created_by' => $batch->created_by ? (int) $batch->created_by : null,
+            'plantilla_url' => $batch->plantilla_url,
+            'zip_path' => $batch->zip_path,
+            'nombre_plantilla' => $batch->nombre_plantilla,
+            'has_plantilla' => !empty($batch->plantilla_url),
+            'has_zip' => !empty($batch->zip_path) && file_exists(storage_path('app/public/' . $batch->zip_path)),
+            'mensaje_error' => $batch->mensaje_error,
+            'created_at' => $batch->created_at ? $batch->created_at->toIso8601String() : null,
+        ];
+    }
+
+    protected function countClientsInExcel($file)
+    {
+        try {
+            $spreadsheet = IOFactory::load($file->getRealPath());
+            $worksheet = $spreadsheet->getActiveSheet();
+            $highestRow = (int) $worksheet->getHighestRow();
+            $count = 0;
+            for ($row = 2; $row <= $highestRow; $row++) {
+                $name = trim((string) $worksheet->getCell('A' . $row)->getValue());
+                if ($name !== '') {
+                    $count++;
+                }
+            }
+            return $count;
+        } catch (\Exception $e) {
+            Log::warning('No se pudo contar clientes del excel: ' . $e->getMessage());
+            return 0;
+        }
+    }
+
+    /**
+     * Ejecuta la generación masiva (lógica extraída del controlador).
+     *
+     * @return array{completados:int,errores:int}
+     */
+    protected function runMassiveGeneration(ConsolidadoPlantillaFinalBatch $batch)
+    {
+        $originalMemoryLimit = ini_get('memory_limit');
+        ini_set('memory_limit', '2048M');
+
+        $idContainer = (int) $batch->id_contenedor;
+        $excelFullPath = $this->resolveStoragePath($batch->plantilla_url);
+        $zipFullPath = storage_path('app/public/' . ltrim($batch->zip_path, '/'));
+
+        $zipDir = dirname($zipFullPath);
+        if (!file_exists($zipDir)) {
+            mkdir($zipDir, 0755, true);
+        }
+        if (file_exists($zipFullPath)) {
+            unlink($zipFullPath);
+        }
+
+        $uploaded = new UploadedFile(
+            $excelFullPath,
+            $batch->nombre_plantilla ?: basename($excelFullPath),
+            null,
+            null,
+            true
+        );
+
+        $controller = $this->cotizacionFinalController;
+        $data = $controller->getMassiveExcelData($uploaded);
+
+        $result = DB::table('contenedor_consolidado_cotizacion as cc')
+            ->join('contenedor_consolidado_tipo_cliente as tc', 'cc.id_tipo_cliente', '=', 'tc.id')
+            ->select([
+                'cc.id',
+                'cc.tarifa',
+                'cc.nombre',
+                'tc.id as id_tipo_cliente',
+                'tc.name as tipoCliente',
+                'cc.correo',
+                'cc.vol_selected',
+                'cc.volumen',
+                'cc.volumen_china',
+                'cc.volumen_doc',
+            ])
+            ->where('id_contenedor', $idContainer)
+            ->where('estado_cotizador', 'CONFIRMADO')
+            ->whereNotNull('estado_cliente')
+            ->whereNull('id_cliente_importacion')
+            ->whereExists(function ($query) {
+                $query->select(DB::raw(1))
+                    ->from('contenedor_consolidado_cotizacion_proveedores')
+                    ->whereRaw('contenedor_consolidado_cotizacion_proveedores.id_cotizacion = cc.id');
+            })
+            ->get();
+
+        foreach ($data as &$cliente) {
+            $nombreCliente = $cliente['cliente']['nombre'];
+            $matchFound = false;
+
+            foreach ($result as $item) {
+                if ($this->matchClientName($nombreCliente, $item->nombre)) {
+                    $cliente['cliente']['tarifa'] = $item->tarifa ?? 0;
+                    $cliente['cliente']['correo'] = $item->correo ?? '';
+                    $cliente['cliente']['tipo_cliente'] = $item->tipoCliente ?? '';
+                    $cliente['cliente']['id_tipo_cliente'] = $item->id_tipo_cliente ?? 0;
+                    $cliente['id'] = $item->id;
+
+                    $volumenAsignado = 0;
+                    if ($item->vol_selected == 'volumen' && is_numeric($item->volumen)) {
+                        $volumenAsignado = (float) $item->volumen;
+                    } elseif ($item->vol_selected == 'volumen_china' && is_numeric($item->volumen_china)) {
+                        $volumenAsignado = (float) $item->volumen_china;
+                    } elseif ($item->vol_selected == 'volumen_doc' && is_numeric($item->volumen_doc)) {
+                        $volumenAsignado = (float) $item->volumen_doc;
+                    } elseif (is_numeric($item->volumen) && $item->volumen > 0) {
+                        $volumenAsignado = (float) $item->volumen;
+                    } elseif (is_numeric($item->volumen_china) && $item->volumen_china > 0) {
+                        $volumenAsignado = (float) $item->volumen_china;
+                    } elseif (is_numeric($item->volumen_doc) && $item->volumen_doc > 0) {
+                        $volumenAsignado = (float) $item->volumen_doc;
+                    }
+                    $cliente['cliente']['volumen'] = $volumenAsignado;
+                    $matchFound = true;
+                    break;
+                }
+            }
+
+            if (!$matchFound) {
+                $cliente['cliente']['tarifa'] = 0;
+                $cliente['cliente']['correo'] = '';
+                $cliente['cliente']['tipo_cliente'] = '';
+                $cliente['cliente']['id_tipo_cliente'] = 0;
+                $cliente['cliente']['volumen'] = 0;
+                $cliente['id'] = 0;
+            }
+        }
+        unset($cliente);
+
+        $zip = new ZipArchive();
+        $zipResult = $zip->open($zipFullPath, ZipArchive::CREATE);
+        if ($zipResult !== true) {
+            throw new \Exception('No se pudo crear el archivo ZIP (código ' . $zipResult . ')');
+        }
+
+        $processedCount = 0;
+        $errorCount = 0;
+        $totalExcel = is_array($data) ? count($data) : 0;
+
+        foreach ($data as $value) {
+            if (!isset($value['cliente']['tarifa']) || $value['cliente']['tarifa'] == 0) {
+                $errorCount++;
+                continue;
+            }
+            if (!isset($value['id']) || $value['id'] == 0) {
+                $errorCount++;
+                continue;
+            }
+            if (!isset($value['cliente']['volumen']) || $value['cliente']['volumen'] == 0) {
+                $errorCount++;
+                continue;
+            }
+            if (!isset($value['cliente']['productos']) || empty($value['cliente']['productos'])) {
+                $errorCount++;
+                continue;
+            }
+
+            try {
+                $templatePath = public_path('assets/templates/Boleta_Template.xlsx');
+                if (!file_exists($templatePath)) {
+                    throw new \Exception('Plantilla de cotización no encontrada');
+                }
+                $objPHPExcel = IOFactory::load($templatePath);
+                $genResult = $controller->getFinalCotizacionExcelv2($objPHPExcel, $value, $idContainer);
+
+                if (!$genResult || !isset($genResult['excel_file_name'], $genResult['excel_file_path'])) {
+                    $errorCount++;
+                    continue;
+                }
+
+                $fullExcelPath = public_path('storage/' . $genResult['excel_file_path']);
+                if (file_exists($fullExcelPath)) {
+                    $zip->addFile($fullExcelPath, $genResult['excel_file_name']);
+                }
+
+                $estadoCotizacionFinal = DB::table('contenedor_consolidado_cotizacion')
+                    ->where('id', $genResult['id'])
+                    ->where('estado_cotizacion_final', '!=', 'PENDIENTE')
+                    ->whereNotNull('estado_cotizacion_final')
+                    ->first();
+
+                $updateData = [
+                    'cotizacion_final_url' => $genResult['cotizacion_final_url'],
+                    'volumen_final' => $genResult['volumen_final'],
+                    'monto_final' => $genResult['monto_final'],
+                    'tarifa_final' => $genResult['tarifa_final'],
+                    'impuestos_final' => $genResult['impuestos_final'],
+                    'logistica_final' => $genResult['logistica_final'],
+                    'servicios_extra_final' => $genResult['servicios_extra_final'] ?? 0,
+                    'fob_final' => $genResult['fob_final'],
+                    'peso_final' => $genResult['peso_final'],
+                    'recargos_descuentos_final' => $genResult['recargos_descuentos_final'],
+                ];
+                if (!$estadoCotizacionFinal) {
+                    $updateData['estado_cotizacion_final'] = 'COTIZADO';
+                }
+
+                DB::table('contenedor_consolidado_cotizacion')
+                    ->where('id', $genResult['id'])
+                    ->update($updateData);
+
+                $processedCount++;
+            } catch (\Exception $e) {
+                Log::error('Error procesando cliente en batch plantilla final: ' . $e->getMessage());
+                $errorCount++;
+            }
+        }
+
+        if ($zip->numFiles === 0) {
+            $infoContent = "No se encontraron clientes válidos para procesar.\n\nTotal en Excel: {$totalExcel}\nProcesados: {$processedCount}\n";
+            $zip->addFromString('INFORMACION.txt', $infoContent);
+        }
+
+        $zip->close();
+        ini_set('memory_limit', $originalMemoryLimit);
+        gc_collect_cycles();
+
+        if (!file_exists($zipFullPath) || filesize($zipFullPath) === 0) {
+            throw new \Exception('El archivo ZIP no se generó correctamente');
+        }
+
+        return [
+            'completados' => $processedCount,
+            'errores' => $errorCount,
+        ];
+    }
+
+    protected function matchClientName($fullName, $partialName)
+    {
+        if (empty($fullName) || empty($partialName)) {
+            return false;
+        }
+
+        $fullName = $this->normalizeString($fullName);
+        $partialName = $this->normalizeString($partialName);
+
+        if (empty($fullName) || empty($partialName)) {
+            return false;
+        }
+
+        if ($fullName === $partialName) {
+            return true;
+        }
+
+        $fullWords = array_filter(explode(' ', $fullName));
+        $partialWords = array_filter(explode(' ', $partialName));
+
+        if (count($fullWords) !== count($partialWords)) {
+            return false;
+        }
+
+        if (empty($fullWords) || empty($partialWords)) {
+            return false;
+        }
+
+        sort($fullWords);
+        sort($partialWords);
+
+        for ($i = 0; $i < count($fullWords); $i++) {
+            if ($fullWords[$i] !== $partialWords[$i]) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    protected function normalizeString($string)
+    {
+        $string = strtolower(trim($string));
+        $accents = [
+            'á' => 'a', 'à' => 'a', 'ä' => 'a', 'â' => 'a', 'ã' => 'a',
+            'é' => 'e', 'è' => 'e', 'ë' => 'e', 'ê' => 'e',
+            'í' => 'i', 'ì' => 'i', 'ï' => 'i', 'î' => 'i',
+            'ó' => 'o', 'ò' => 'o', 'ö' => 'o', 'ô' => 'o',
+            'ú' => 'u', 'ù' => 'u', 'ü' => 'u', 'û' => 'u',
+            'ñ' => 'n',
+        ];
+        return strtr($string, $accents);
+    }
+}

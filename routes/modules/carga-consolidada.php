@@ -154,6 +154,9 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
             Route::post('/pagos', [CotizacionFinalController::class, 'store']);
             Route::options('/general/upload-plantilla-final', [CotizacionFinalController::class, 'handleOptions']);
             Route::post('/general/upload-plantilla-final', [CotizacionFinalController::class, 'generateMassiveExcelPayrolls']);
+            Route::get('/general/plantilla-final-batches/{idContenedor}', [\App\Http\Controllers\CargaConsolidada\CotizacionFinal\PlantillaFinalBatchController::class, 'listByContenedor']);
+            Route::get('/general/plantilla-final-batches/{id}/download-plantilla', [\App\Http\Controllers\CargaConsolidada\CotizacionFinal\PlantillaFinalBatchController::class, 'downloadPlantilla']);
+            Route::get('/general/plantilla-final-batches/{id}/download-zip', [\App\Http\Controllers\CargaConsolidada\CotizacionFinal\PlantillaFinalBatchController::class, 'downloadZip']);
             Route::get('/general/check-temp-directory', [CotizacionFinalController::class, 'checkTempDirectory']);
             Route::get('/general/download-cotizacion-final-pdf/{idCotizacion}', [CotizacionFinalController::class, 'downloadCotizacionFinalPdf']);
             Route::delete('/general/delete-cotizacion-final-file/{idCotizacion}', [CotizacionFinalController::class, 'deleteCotizacionFinalFile']);
