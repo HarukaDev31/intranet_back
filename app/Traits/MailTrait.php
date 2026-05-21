@@ -60,9 +60,7 @@ trait MailTrait
      */
     protected function shouldRedirectOutboundMail(): bool
     {
-        if (app()->environment('local')) {
-            return true;
-        }
+        
 
         $domain = $this->resolveMailRequestDomain();
         if ($domain !== null && $domain !== '') {
