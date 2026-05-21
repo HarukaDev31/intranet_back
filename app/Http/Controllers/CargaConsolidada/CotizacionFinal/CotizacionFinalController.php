@@ -200,6 +200,8 @@ class CotizacionFinalController extends Controller
                     'volumen_final' => $row->volumen_final_formateado ?? $row->volumen_final,
                     'fob_final' => $row->fob_final_formateado ?? $row->fob_final,
                     'logistica_final' => $row->logistica_final_formateado ?? $row->logistica_final,
+                    'servicios_extra_final' => $row->servicios_extra_final ?? 0,
+                    'recargos_descuentos_final' => $row->recargos_descuentos_final ?? 0,
                     'impuestos_final' => $row->impuestos_final_formateado ?? $row->impuestos_final,
                     'tarifa_final' => $row->tarifa_final_formateado ?? $row->tarifa_final,
                     'estado_cotizacion_final' => $this->cleanUtf8String($row->estado_cotizacion_final),
