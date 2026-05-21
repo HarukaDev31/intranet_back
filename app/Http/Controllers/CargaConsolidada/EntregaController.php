@@ -123,6 +123,23 @@ class EntregaController extends Controller
     }
 
     /**
+     * URL pública del formulario de entrega en app clientes.
+     * Con destino: ?destino=lima|provincia; sin tipo definido: solo /formulario-entrega/{idContenedor}
+     */
+    private function buildFormularioEntregaUrl(int $idContenedor, ?int $typeForm): string
+    {
+        $base = rtrim((string) env('APP_URL_CLIENTES'), '/') . '/formulario-entrega/' . $idContenedor;
+        if ($typeForm === 1) {
+            return $base . '?destino=lima';
+        }
+        if ($typeForm === 0) {
+            return $base . '?destino=provincia';
+        }
+
+        return $base;
+    }
+
+    /**
      * @OA\Get(
      *     path="/carga-consolidada/contenedores/{idContenedor}/entregas/horarios",
      *     tags={"Entregas"},
@@ -3608,16 +3625,14 @@ Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, 
             if (!$contenedor) {
                 return response()->json(['message' => 'Contenedor no encontrada', 'success' => false]);
             }
-            $urlClientes = env('APP_URL_CLIENTES');
-            $urlProvincia = $urlClientes . '/formulario-entrega/provincia/' . $idContenedor;
-            $urlLima = $urlClientes . '/formulario-entrega/lima/' . $idContenedor;
-
             $typeForm = isset($cotizacion->type_form) ? (int) $cotizacion->type_form : null;
+            if ($typeForm !== 0 && $typeForm !== 1) {
+                $typeForm = null;
+            }
             $message = $this->buildDeliveryFormsMessage(
                 (string) $contenedor->carga,
                 $typeForm,
-                $urlLima,
-                $urlProvincia
+                (int) $idContenedor
             );
 
             $telefono = preg_replace('/\D+/', '', (string) $cotizacion->telefono);
@@ -3700,12 +3715,13 @@ Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, 
         }
     }
 
-    private function buildDeliveryFormsMessage(string $carga, ?int $typeForm, string $urlLima, string $urlProvincia): string
+    private function buildDeliveryFormsMessage(string $carga, ?int $typeForm, int $idContenedor): string
     {
         $isLima = ($typeForm === 1);
-        $titulo = $isLima ? 'MENSAJE CLIENTES LIMA:' : 'MENSAJE CLIENTES PROVINCIA:';
-        $logistica = $isLima ? 'Cliente Lima' : 'Cliente Provincia';
-        $forms = $isLima ? $urlLima : $urlProvincia;
+        $isProvincia = ($typeForm === 0);
+        $titulo = $isLima ? 'MENSAJE CLIENTES LIMA:' : ($isProvincia ? 'MENSAJE CLIENTES PROVINCIA:' : 'MENSAJE CLIENTES:');
+        $logistica = $isLima ? 'Cliente Lima' : ($isProvincia ? 'Cliente Provincia' : 'Cliente');
+        $forms = $this->buildFormularioEntregaUrl($idContenedor, $typeForm);
 
         return $titulo . "\n\n"
             . "# Consolidado " . $carga . "\n"

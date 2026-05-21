@@ -17,6 +17,7 @@ class UsuarioDatosFacturacion extends Model
         'ruc',
         'razon_social',
         'domicilio_fiscal',
+        'updated_from',
     ];
 
     public function importacion()

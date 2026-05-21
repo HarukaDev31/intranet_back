@@ -180,6 +180,10 @@ class DeliveryController extends Controller
                     ->first();
             }
 
+            $ultimo = UsuarioDatosFacturacion::where('id_user', $idUser)
+                ->orderByDesc('id')
+                ->first();
+
             $typeForm = UsuarioDatosFacturacionHelper::getLatestTypeFormForUserId($idUser);
 
             if (!$row) {
@@ -187,6 +191,7 @@ class DeliveryController extends Controller
                     'success' => true,
                     'data' => null,
                     'type_form' => $typeForm,
+                    'ultimo_destino' => $ultimo ? $ultimo->destino : null,
                     'message' => 'Sin datos de facturación previos',
                 ]);
             }
@@ -194,6 +199,7 @@ class DeliveryController extends Controller
             return response()->json([
                 'success' => true,
                 'type_form' => $typeForm,
+                'ultimo_destino' => $ultimo ? $ultimo->destino : null,
                 'data' => [
                     'nombre_completo' => $row->nombre_completo,
                     'dni' => $row->dni,
@@ -205,6 +211,59 @@ class DeliveryController extends Controller
             ]);
         } catch (\Exception $e) {
             Log::error('getUsuarioDatosFacturacion', ['error' => $e->getMessage()]);
+
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Clona el último registro de usuario_datos_facturacion con destino Lima
+     * (solicitud de aviso cuando no hay horarios en formulario de entrega).
+     */
+    public function solicitarNotificacionHorariosLima(Request $request)
+    {
+        try {
+            $idUser = JWTAuth::user()->id;
+            if (!$idUser) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No se encontró el usuario.',
+                ], 404);
+            }
+
+            $ultimo = UsuarioDatosFacturacion::where('id_user', $idUser)
+                ->orderByDesc('id')
+                ->first();
+
+            if (!$ultimo) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No hay datos de facturación previos.',
+                ], 404);
+            }
+
+            if (strcasecmp((string) $ultimo->destino, 'Provincia') !== 0) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'El último registro no corresponde a Provincia.',
+                ], 422);
+            }
+
+            $clone = $ultimo->replicate();
+            $clone->destino = 'Lima';
+            $clone->updated_from = 'form_entrega';
+            $clone->save();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Registramos tu solicitud. Te avisaremos cuando haya horarios disponibles para Lima.',
+                'data' => [
+                    'id' => $clone->id,
+                    'destino' => $clone->destino,
+                ],
+            ]);
+        } catch (\Exception $e) {
+            Log::error('solicitarNotificacionHorariosLima', ['error' => $e->getMessage()]);
 
             return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
         }

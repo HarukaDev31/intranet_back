@@ -102,21 +102,19 @@ class SendDeliveryFormBulkJob implements ShouldQueue
                     continue;
                 }
 
-                $urlClientes = env('APP_URL_CLIENTES');
-                $urlProvincia = $urlClientes . '/formulario-entrega/provincia/' . $row->id_contenedor;
-                $urlLima = $urlClientes . '/formulario-entrega/lima/' . $row->id_contenedor;
-
                 $typeFormPayload = isset($cotizacionData['type_form']) && $cotizacionData['type_form'] !== null
                     ? (int) $cotizacionData['type_form']
                     : null;
                 $typeFormDb = isset($row->type_form) ? (int) $row->type_form : null;
                 $typeForm = ($typeFormPayload === 0 || $typeFormPayload === 1) ? $typeFormPayload : $typeFormDb;
+                if ($typeForm !== 0 && $typeForm !== 1) {
+                    $typeForm = null;
+                }
                 [$messagePrincipal, $messageSecundario] = $this->buildDeliveryFormsMessages(
                     (string) $contenedor->carga,
                     (string) ($row->nombre_cliente ?? ''),
                     $typeForm,
-                    $urlLima,
-                    $urlProvincia
+                    (int) $row->id_contenedor
                 );
 
                 $telefono = preg_replace('/\D+/', '', (string) $row->telefono);
@@ -172,14 +170,29 @@ class SendDeliveryFormBulkJob implements ShouldQueue
             . 'ELSE NULL END';
     }
 
-    private function buildDeliveryFormsMessages(string $carga, string $nombreCliente, ?int $typeForm, string $urlLima, string $urlProvincia): array
+    private function buildFormularioEntregaUrl(int $idContenedor, ?int $typeForm): string
+    {
+        $base = rtrim((string) env('APP_URL_CLIENTES'), '/') . '/formulario-entrega/' . $idContenedor;
+        if ($typeForm === 1) {
+            return $base . '?destino=lima';
+        }
+        if ($typeForm === 0) {
+            return $base . '?destino=provincia';
+        }
+
+        return $base;
+    }
+
+    private function buildDeliveryFormsMessages(string $carga, string $nombreCliente, ?int $typeForm, int $idContenedor): array
     {
         $isLima = ($typeForm === 1);
-        $forms = $isLima ? $urlLima : $urlProvincia;
-        $destinoCliente = $isLima ? 'Lima' : 'Provincia';
+        $isProvincia = ($typeForm === 0);
+        $forms = $this->buildFormularioEntregaUrl($idContenedor, $typeForm);
+        $destinoCliente = $isLima ? 'Lima' : ($isProvincia ? 'Provincia' : '');
         $nombreCliente = trim($nombreCliente) !== '' ? trim($nombreCliente) : 'cliente';
+        $lineaDestino = $destinoCliente !== '' ? "Cliente: {$destinoCliente}\n\n" : '';
         $saludoInicial = "🙋🏻‍♀️Hola {$nombreCliente} te saluda área de Coordinación.\n\n"
-            . "Cliente: {$destinoCliente}\n\n";
+            . $lineaDestino;
 
         $messagePrincipal = $isLima
             ? "# Consolidado " . $carga . "\n\n"
@@ -194,9 +207,11 @@ class SendDeliveryFormBulkJob implements ShouldQueue
                 . $saludoInicial
                 . "✅ *Registrarse*, en el siguiente link.\n"
                 . "✅ *Plazo máximo* para el registro: 48 horas\n"
-                . "✅ *Organizaremos los envíos* una vez liberado el contenedor.\n"
+                . ($isProvincia ? "✅ *Organizaremos los envíos* una vez liberado el contenedor.\n" : '')
                 . "✅ *FORMS:* " . $forms . "\n \n"
-                . "⚠  De no llenar el formulario no se programará el envío de sus productos.";
+                . ($isProvincia || $typeForm === null
+                    ? "⚠  De no llenar el formulario no se programará el envío de sus productos."
+                    : '');
         // intval of carga <5 use El *costo de flete* Almacén – Agencia se cotizará y será informado por interno. instead ➡ El *costo de flete* Almacén – Agencia detalla en su cotización final.
         $messageSecundario = $isLima
             ? "❌ Tiempo máximo de recojo: *30 minutos* según horario reservado\n"
