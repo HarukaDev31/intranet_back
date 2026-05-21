@@ -35,6 +35,21 @@ Este proyecto está configurado para usar múltiples colas de trabajo para optim
 - **Timeout**: 30 segundos
 - **Jobs**: `SendNotificationJob`
 
+### 5. **Cola `importaciones_facturacion`**
+- **Propósito**: Importación masiva de datos de facturación (Excel)
+- **Supervisor**: `supervisor-importaciones-facturacion`
+- **Jobs**: `ImportUsuarioDatosFacturacionExcelJob`
+
+### 6. **Cola `plantillas_finales`**
+- **Propósito**: Generación masiva de cotizaciones finales (ZIP) desde plantilla Excel
+- **Supervisor**: `supervisor-plantillas-finales`
+- **Procesos**: 1 (local y producción; un job pesado a la vez)
+- **Intentos**: 1
+- **Timeout**: 900 segundos (15 min)
+- **Memoria worker**: 512 MB (producción)
+- **Jobs**: `GenerateMassiveExcelPayrollsJob`
+- **Evento WS**: `PlantillaFinalBatchFinished` (cola `notificaciones`)
+
 ## Cómo Usar las Colas
 
 ### 1. **Especificar la cola en el Job**

@@ -86,6 +86,7 @@ return [
     'waits' => [
         'redis:default' => 120,
         'redis:soporte_ti' => 60,
+        'redis:plantillas_finales' => 900,
     ],
 
     /*
@@ -194,14 +195,23 @@ return [
             'timeout' => 180,
         ],
         'supervisor-importaciones-facturacion' => [
-        'connection' => 'redis',
-        'queue' => ['importaciones_facturacion'],
-        'balance' => 'auto',
-        'maxProcesses' => 1,
-        'tries' => 1,
-        'nice' => 0,
-        'timeout' => 180,
-    ],
+            'connection' => 'redis',
+            'queue' => ['importaciones_facturacion'],
+            'balance' => 'auto',
+            'maxProcesses' => 1,
+            'tries' => 1,
+            'nice' => 0,
+            'timeout' => 180,
+        ],
+        'supervisor-plantillas-finales' => [
+            'connection' => 'redis',
+            'queue' => ['plantillas_finales'],
+            'balance' => 'simple',
+            'maxProcesses' => 1,
+            'tries' => 1,
+            'nice' => 0,
+            'timeout' => 900,
+        ],
         'supervisor-soporte-ti' => [
             'connection' => 'redis',
             'queue' => ['soporte_ti'],
@@ -267,6 +277,17 @@ return [
                 'balanceMaxShift' => 1,
                 'balanceCooldown' => 3,
             ],
+            'supervisor-plantillas-finales' => [
+                'connection' => 'redis',
+                'queue' => ['plantillas_finales'],
+                'balance' => 'simple',
+                'maxProcesses' => 1,
+                'maxTime' => 0,
+                'maxJobs' => 0,
+                'memory' => 512,
+                'tries' => 1,
+                'timeout' => 900,
+            ],
             'supervisor-soporte-ti' => [
                 'connection' => 'redis',
                 'queue' => ['soporte_ti'],
@@ -288,6 +309,11 @@ return [
             ],
             'supervisor-importaciones-facturacion' => [
                 'maxProcesses' => 1,
+            ],
+            'supervisor-plantillas-finales' => [
+                'maxProcesses' => 1,
+                'timeout' => 900,
+                'memory' => 512,
             ],
             'supervisor-emails' => [
                 'maxProcesses' => 1,
