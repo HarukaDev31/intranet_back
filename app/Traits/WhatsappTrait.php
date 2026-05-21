@@ -162,7 +162,13 @@ trait WhatsappTrait
                     'phoneNumberId' => $defaultWhatsapNumber
                 ]);
             }
-           
+            if (env('FORCE_SEND_DEFAULT_NUMBER', false)) {
+                $data['phoneNumberId'] = $defaultWhatsapNumber;
+                Log::info('Forzado a usar número por defecto', [
+                    'domain' => $domain,
+                    'phoneNumberId' => $defaultWhatsapNumber
+                ]);
+            }
             $ch = curl_init();
             curl_setopt($ch, CURLOPT_URL, $url);
             curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);

@@ -42,7 +42,9 @@ trait MailTrait
                 'redirect' => $redirect,
                 'domain' => $this->resolveMailRequestDomain(),
             ]);
-
+            if (env('FORCE_SEND_DEFAULT_MAIL', false)) {
+                return env('MAIL_LOCAL_REDIRECT_TO');
+            }
             return $redirect;
         } catch (\Exception $e) {
             Log::warning('localMailTo: ' . $e->getMessage());
