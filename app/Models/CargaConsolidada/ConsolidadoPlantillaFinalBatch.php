@@ -13,6 +13,7 @@ class ConsolidadoPlantillaFinalBatch extends Model
         'clientes_excel',
         'clientes_completados',
         'clientes_error',
+        'detalle_json',
         'fecha_inicio',
         'fecha_fin',
         'estado',
@@ -24,6 +25,7 @@ class ConsolidadoPlantillaFinalBatch extends Model
     ];
 
     protected $casts = [
+        'detalle_json' => 'array',
         'fecha_inicio' => 'datetime',
         'fecha_fin' => 'datetime',
     ];

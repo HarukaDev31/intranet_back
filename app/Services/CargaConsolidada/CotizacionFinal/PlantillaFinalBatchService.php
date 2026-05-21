@@ -78,6 +78,7 @@ class PlantillaFinalBatchService
             $batch->update([
                 'clientes_completados' => (int) $stats['completados'],
                 'clientes_error' => (int) $stats['errores'],
+                'detalle_json' => $stats['detalle'],
                 'fecha_fin' => now(),
                 'estado' => 'COMPLETED',
                 'mensaje_error' => null,
@@ -154,6 +155,7 @@ class PlantillaFinalBatchService
             'clientes_completados' => (int) $batch->clientes_completados,
             'clientes_error' => (int) $batch->clientes_error,
             'detalle' => (int) $batch->clientes_completados . ' exitosos / ' . (int) $batch->clientes_error . ' con error',
+            'detalle_json' => $batch->detalle_json ?: ['exitosos' => [], 'fallidos' => []],
             'estado' => $batch->estado,
             'fecha_inicio' => $batch->fecha_inicio ? $batch->fecha_inicio->toIso8601String() : null,
             'fecha_fin' => $batch->fecha_fin ? $batch->fecha_fin->toIso8601String() : null,
@@ -298,22 +300,41 @@ class PlantillaFinalBatchService
         $processedCount = 0;
         $errorCount = 0;
         $totalExcel = is_array($data) ? count($data) : 0;
+        $detalle = $this->buildEmptyDetalle();
 
         foreach ($data as $value) {
+            $nombre = $this->clienteNombreFromValue($value);
+
             if (!isset($value['cliente']['tarifa']) || $value['cliente']['tarifa'] == 0) {
                 $errorCount++;
+                $detalle['fallidos'][] = [
+                    'nombre' => $nombre,
+                    'motivo' => 'Sin tarifa válida',
+                ];
                 continue;
             }
             if (!isset($value['id']) || $value['id'] == 0) {
                 $errorCount++;
+                $detalle['fallidos'][] = [
+                    'nombre' => $nombre,
+                    'motivo' => 'No coincide con un cliente confirmado del contenedor',
+                ];
                 continue;
             }
             if (!isset($value['cliente']['volumen']) || $value['cliente']['volumen'] == 0) {
                 $errorCount++;
+                $detalle['fallidos'][] = [
+                    'nombre' => $nombre,
+                    'motivo' => 'Sin volumen válido',
+                ];
                 continue;
             }
             if (!isset($value['cliente']['productos']) || empty($value['cliente']['productos'])) {
                 $errorCount++;
+                $detalle['fallidos'][] = [
+                    'nombre' => $nombre,
+                    'motivo' => 'Sin productos en el Excel',
+                ];
                 continue;
             }
 
@@ -327,6 +348,10 @@ class PlantillaFinalBatchService
 
                 if (!$genResult || !isset($genResult['excel_file_name'], $genResult['excel_file_path'])) {
                     $errorCount++;
+                    $detalle['fallidos'][] = [
+                        'nombre' => $nombre,
+                        'motivo' => 'No se pudo generar el Excel de cotización final',
+                    ];
                     continue;
                 }
 
@@ -362,9 +387,18 @@ class PlantillaFinalBatchService
                     ->update($updateData);
 
                 $processedCount++;
+                $detalle['exitosos'][] = [
+                    'nombre' => $nombre,
+                    'id_cotizacion' => (int) $genResult['id'],
+                    'archivo' => isset($genResult['excel_file_name']) ? (string) $genResult['excel_file_name'] : null,
+                ];
             } catch (\Exception $e) {
                 Log::error('Error procesando cliente en batch plantilla final: ' . $e->getMessage());
                 $errorCount++;
+                $detalle['fallidos'][] = [
+                    'nombre' => $nombre,
+                    'motivo' => $e->getMessage(),
+                ];
             }
         }
 
@@ -384,7 +418,24 @@ class PlantillaFinalBatchService
         return [
             'completados' => $processedCount,
             'errores' => $errorCount,
+            'detalle' => $detalle,
         ];
+    }
+
+    protected function buildEmptyDetalle()
+    {
+        return [
+            'exitosos' => [],
+            'fallidos' => [],
+        ];
+    }
+
+    protected function clienteNombreFromValue($value)
+    {
+        if (isset($value['cliente']['nombre']) && trim((string) $value['cliente']['nombre']) !== '') {
+            return trim((string) $value['cliente']['nombre']);
+        }
+        return 'Sin nombre';
     }
 
     protected function matchClientName($fullName, $partialName)
