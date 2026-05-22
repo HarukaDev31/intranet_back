@@ -240,6 +240,7 @@ class PlantillaFinalBatchService
             ->where('id_contenedor', $idContainer)
             ->where('estado_cotizador', 'CONFIRMADO')
             ->whereNotNull('estado_cliente')
+            ->whereNull('cc.deleted_at')
             ->whereNull('id_cliente_importacion')
             ->whereExists(function ($query) {
                 $query->select(DB::raw(1))
@@ -250,37 +251,31 @@ class PlantillaFinalBatchService
 
         foreach ($data as &$cliente) {
             $nombreCliente = $cliente['cliente']['nombre'];
-            $matchFound = false;
+            $item = $this->resolveCotizacionMatchForCliente($nombreCliente, $result);
 
-            foreach ($result as $item) {
-                if ($this->matchClientName($nombreCliente, $item->nombre)) {
-                    $cliente['cliente']['tarifa'] = $item->tarifa ?? 0;
-                    $cliente['cliente']['correo'] = $item->correo ?? '';
-                    $cliente['cliente']['tipo_cliente'] = $item->tipoCliente ?? '';
-                    $cliente['cliente']['id_tipo_cliente'] = $item->id_tipo_cliente ?? 0;
-                    $cliente['id'] = $item->id;
+            if ($item) {
+                $cliente['cliente']['tarifa'] = $item->tarifa ?? 0;
+                $cliente['cliente']['correo'] = $item->correo ?? '';
+                $cliente['cliente']['tipo_cliente'] = $item->tipoCliente ?? '';
+                $cliente['cliente']['id_tipo_cliente'] = $item->id_tipo_cliente ?? 0;
+                $cliente['id'] = $item->id;
 
-                    $volumenAsignado = 0;
-                    if ($item->vol_selected == 'volumen' && is_numeric($item->volumen)) {
-                        $volumenAsignado = (float) $item->volumen;
-                    } elseif ($item->vol_selected == 'volumen_china' && is_numeric($item->volumen_china)) {
-                        $volumenAsignado = (float) $item->volumen_china;
-                    } elseif ($item->vol_selected == 'volumen_doc' && is_numeric($item->volumen_doc)) {
-                        $volumenAsignado = (float) $item->volumen_doc;
-                    } elseif (is_numeric($item->volumen) && $item->volumen > 0) {
-                        $volumenAsignado = (float) $item->volumen;
-                    } elseif (is_numeric($item->volumen_china) && $item->volumen_china > 0) {
-                        $volumenAsignado = (float) $item->volumen_china;
-                    } elseif (is_numeric($item->volumen_doc) && $item->volumen_doc > 0) {
-                        $volumenAsignado = (float) $item->volumen_doc;
-                    }
-                    $cliente['cliente']['volumen'] = $volumenAsignado;
-                    $matchFound = true;
-                    break;
+                $volumenAsignado = 0;
+                if ($item->vol_selected == 'volumen' && is_numeric($item->volumen)) {
+                    $volumenAsignado = (float) $item->volumen;
+                } elseif ($item->vol_selected == 'volumen_china' && is_numeric($item->volumen_china)) {
+                    $volumenAsignado = (float) $item->volumen_china;
+                } elseif ($item->vol_selected == 'volumen_doc' && is_numeric($item->volumen_doc)) {
+                    $volumenAsignado = (float) $item->volumen_doc;
+                } elseif (is_numeric($item->volumen) && $item->volumen > 0) {
+                    $volumenAsignado = (float) $item->volumen;
+                } elseif (is_numeric($item->volumen_china) && $item->volumen_china > 0) {
+                    $volumenAsignado = (float) $item->volumen_china;
+                } elseif (is_numeric($item->volumen_doc) && $item->volumen_doc > 0) {
+                    $volumenAsignado = (float) $item->volumen_doc;
                 }
-            }
-
-            if (!$matchFound) {
+                $cliente['cliente']['volumen'] = $volumenAsignado;
+            } else {
                 $cliente['cliente']['tarifa'] = 0;
                 $cliente['cliente']['correo'] = '';
                 $cliente['cliente']['tipo_cliente'] = '';
@@ -444,6 +439,7 @@ class PlantillaFinalBatchService
         $estadoCotizacionFinal = DB::table('contenedor_consolidado_cotizacion')
             ->where('id', $idCotizacion)
             ->where('id_contenedor', $idContenedor)
+            ->whereNull('deleted_at')
             ->where('estado_cotizacion_final', '!=', 'PENDIENTE')
             ->whereNotNull('estado_cotizacion_final')
             ->first();
@@ -517,7 +513,56 @@ class PlantillaFinalBatchService
         return DB::table('contenedor_consolidado_cotizacion')
             ->where('id', (int) $idCotizacion)
             ->where('id_contenedor', (int) $idContenedor)
+            ->whereNull('deleted_at')
             ->update($updateData);
+    }
+
+    /**
+     * Resuelve la cotización a usar cuando hay varias con el mismo nombre (p. ej. fila reemplazada tras soft-delete).
+     * Prioriza cotización activa (deleted_at null) y mayor id.
+     */
+    protected function resolveCotizacionMatchForCliente($nombreCliente, $result)
+    {
+        $candidates = [];
+        foreach ($result as $item) {
+            if ($this->matchClientName($nombreCliente, $item->nombre)) {
+                $candidates[] = $item;
+            }
+        }
+
+        if (empty($candidates)) {
+            return null;
+        }
+
+        if (count($candidates) > 1) {
+            Log::warning('PlantillaFinalBatchService: varias cotizaciones coinciden con el nombre del Excel', [
+                'nombre_excel' => $nombreCliente,
+                'ids' => array_map(function ($c) {
+                    return (int) $c->id;
+                }, $candidates),
+            ]);
+        }
+
+        usort($candidates, function ($a, $b) {
+            $aDeleted = !empty($a->deleted_at);
+            $bDeleted = !empty($b->deleted_at);
+            if ($aDeleted !== $bDeleted) {
+                return $aDeleted <=> $bDeleted;
+            }
+
+            return (int) $b->id <=> (int) $a->id;
+        });
+
+        $chosen = $candidates[0];
+        if (!empty($chosen->deleted_at)) {
+            Log::warning('PlantillaFinalBatchService: solo hay cotizaciones eliminadas para este nombre', [
+                'nombre_excel' => $nombreCliente,
+                'id' => (int) $chosen->id,
+            ]);
+            return null;
+        }
+
+        return $chosen;
     }
 
     protected function buildEmptyDetalle()
