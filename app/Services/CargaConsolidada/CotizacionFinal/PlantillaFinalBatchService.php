@@ -355,41 +355,43 @@ class PlantillaFinalBatchService
                     continue;
                 }
 
+                $idCotizacion = (int) ($value['id'] ?? 0);
+                $idFromGen = isset($genResult['id']) ? (int) $genResult['id'] : 0;
+                if ($idFromGen > 0) {
+                    $idCotizacion = $idFromGen;
+                }
+
+                $persisted = $this->persistCotizacionFinalLink($idCotizacion, $idContainer, $genResult, $nombre);
+                if (!$persisted) {
+                    $errorCount++;
+                    $detalle['fallidos'][] = [
+                        'nombre' => $nombre,
+                        'motivo' => 'No se pudo vincular la cotización final en base de datos',
+                    ];
+                    continue;
+                }
+
                 $fullExcelPath = public_path('storage/' . $genResult['excel_file_path']);
                 if (file_exists($fullExcelPath)) {
-                    $zip->addFile($fullExcelPath, $genResult['excel_file_name']);
+                    if (!$zip->addFile($fullExcelPath, $genResult['excel_file_name'])) {
+                        Log::warning('PlantillaFinalBatchService: Excel generado pero no se pudo agregar al ZIP', [
+                            'batch_id' => $batch->id,
+                            'id_cotizacion' => $idCotizacion,
+                            'archivo' => $genResult['excel_file_name'],
+                        ]);
+                    }
+                } else {
+                    Log::warning('PlantillaFinalBatchService: cotización vinculada pero archivo Excel no encontrado para ZIP', [
+                        'batch_id' => $batch->id,
+                        'id_cotizacion' => $idCotizacion,
+                        'path' => $genResult['excel_file_path'],
+                    ]);
                 }
-
-                $estadoCotizacionFinal = DB::table('contenedor_consolidado_cotizacion')
-                    ->where('id', $genResult['id'])
-                    ->where('estado_cotizacion_final', '!=', 'PENDIENTE')
-                    ->whereNotNull('estado_cotizacion_final')
-                    ->first();
-
-                $updateData = [
-                    'cotizacion_final_url' => $genResult['cotizacion_final_url'],
-                    'volumen_final' => $genResult['volumen_final'],
-                    'monto_final' => $genResult['monto_final'],
-                    'tarifa_final' => $genResult['tarifa_final'],
-                    'impuestos_final' => $genResult['impuestos_final'],
-                    'logistica_final' => $genResult['logistica_final'],
-                    'servicios_extra_final' => $genResult['servicios_extra_final'] ?? 0,
-                    'fob_final' => $genResult['fob_final'],
-                    'peso_final' => $genResult['peso_final'],
-                    'recargos_descuentos_final' => $genResult['recargos_descuentos_final'],
-                ];
-                if (!$estadoCotizacionFinal) {
-                    $updateData['estado_cotizacion_final'] = 'COTIZADO';
-                }
-
-                DB::table('contenedor_consolidado_cotizacion')
-                    ->where('id', $genResult['id'])
-                    ->update($updateData);
 
                 $processedCount++;
                 $detalle['exitosos'][] = [
                     'nombre' => $nombre,
-                    'id_cotizacion' => (int) $genResult['id'],
+                    'id_cotizacion' => $idCotizacion,
                     'archivo' => isset($genResult['excel_file_name']) ? (string) $genResult['excel_file_name'] : null,
                 ];
             } catch (\Exception $e) {
@@ -420,6 +422,102 @@ class PlantillaFinalBatchService
             'errores' => $errorCount,
             'detalle' => $detalle,
         ];
+    }
+
+    /**
+     * Persiste cotizacion_final_url y montos en contenedor_consolidado_cotizacion.
+     * Devuelve false si no se actualizó ninguna fila o falló tras reintentos.
+     */
+    protected function persistCotizacionFinalLink($idCotizacion, $idContenedor, array $genResult, $nombreCliente)
+    {
+        $idCotizacion = (int) $idCotizacion;
+        $idContenedor = (int) $idContenedor;
+
+        if ($idCotizacion <= 0) {
+            Log::warning('PlantillaFinalBatchService: id de cotización inválido al vincular', [
+                'nombre' => $nombreCliente,
+                'id' => $idCotizacion,
+            ]);
+            return false;
+        }
+
+        $estadoCotizacionFinal = DB::table('contenedor_consolidado_cotizacion')
+            ->where('id', $idCotizacion)
+            ->where('id_contenedor', $idContenedor)
+            ->where('estado_cotizacion_final', '!=', 'PENDIENTE')
+            ->whereNotNull('estado_cotizacion_final')
+            ->first();
+
+        $updateData = [
+            'cotizacion_final_url' => $genResult['cotizacion_final_url'],
+            'volumen_final' => $genResult['volumen_final'],
+            'monto_final' => $genResult['monto_final'],
+            'tarifa_final' => $genResult['tarifa_final'],
+            'impuestos_final' => $genResult['impuestos_final'],
+            'logistica_final' => $genResult['logistica_final'],
+            'servicios_extra_final' => $genResult['servicios_extra_final'] ?? 0,
+            'fob_final' => $genResult['fob_final'],
+            'peso_final' => $genResult['peso_final'],
+            'recargos_descuentos_final' => $genResult['recargos_descuentos_final'],
+        ];
+        if (!$estadoCotizacionFinal) {
+            $updateData['estado_cotizacion_final'] = 'COTIZADO';
+        }
+
+        try {
+            $affected = $this->applyCotizacionFinalUpdate($idCotizacion, $idContenedor, $updateData);
+        } catch (\Throwable $e) {
+            if (strpos($e->getMessage(), 'Out of range value') === false) {
+                Log::error('PlantillaFinalBatchService: error al vincular cotización final', [
+                    'id_cotizacion' => $idCotizacion,
+                    'nombre' => $nombreCliente,
+                    'error' => $e->getMessage(),
+                ]);
+                return false;
+            }
+
+            Log::warning('PlantillaFinalBatchService: valores fuera de rango, reintento con límites', [
+                'id_cotizacion' => $idCotizacion,
+                'nombre' => $nombreCliente,
+            ]);
+
+            $limitedData = $updateData;
+            foreach (['monto_final', 'logistica_final', 'impuestos_final', 'fob_final'] as $field) {
+                if (isset($limitedData[$field]) && is_numeric($limitedData[$field])) {
+                    $limitedData[$field] = min((float) $limitedData[$field], 9999999999999.99);
+                }
+            }
+
+            try {
+                $affected = $this->applyCotizacionFinalUpdate($idCotizacion, $idContenedor, $limitedData);
+            } catch (\Throwable $retryError) {
+                Log::error('PlantillaFinalBatchService: falló reintento al vincular cotización final', [
+                    'id_cotizacion' => $idCotizacion,
+                    'nombre' => $nombreCliente,
+                    'error' => $retryError->getMessage(),
+                ]);
+                return false;
+            }
+        }
+
+        if ($affected < 1) {
+            Log::warning('PlantillaFinalBatchService: UPDATE sin filas afectadas', [
+                'id_cotizacion' => $idCotizacion,
+                'id_contenedor' => $idContenedor,
+                'nombre' => $nombreCliente,
+            ]);
+            return false;
+        }
+
+        return true;
+    }
+
+    protected function applyCotizacionFinalUpdate($idCotizacion, $idContenedor, array $updateData)
+    {
+        return DB::table('contenedor_consolidado_cotizacion')
+            ->where('id', (int) $idCotizacion)
+            ->where('id_contenedor', (int) $idContenedor)
+            ->update($updateData);
     }
 
     protected function buildEmptyDetalle()
