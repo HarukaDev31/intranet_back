@@ -345,7 +345,7 @@ class PlantillaFinalBatchService
                 }
                 $objPHPExcel = IOFactory::load($templatePath);
                 $genResult = $controller->getFinalCotizacionExcelv2($objPHPExcel, $value, $idContainer);
-
+                Log::info('GenResult: ' . json_encode($genResult));
                 if (!$genResult || !isset($genResult['excel_file_name'], $genResult['excel_file_path'])) {
                     $errorCount++;
                     $detalle['fallidos'][] = [
