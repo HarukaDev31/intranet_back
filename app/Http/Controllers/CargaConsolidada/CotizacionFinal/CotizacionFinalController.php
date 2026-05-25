@@ -3062,7 +3062,7 @@ class CotizacionFinalController extends Controller
         $fob = $this->getMainSheetFobFinalAmount($sheet);
         $logisticaServicioImportacion = $this->getMainSheetRowAmount($sheet, $rowServicio);
         $serviciosExtraLogistica = $this->sumMainSheetLogisticaServiciosExtraFromColumnB($sheet);
-        $logistica = round($logisticaServicioImportacion + $serviciosExtraLogistica, 2);
+        $logistica = round($logisticaServicioImportacion, 2);
         $impuestos = $this->getMainSheetRowAmount($sheet, $rowImpuestos);
 
         $volumen = round($this->boletaFinalGetCellFloat($sheet, 'J11'), 4);
