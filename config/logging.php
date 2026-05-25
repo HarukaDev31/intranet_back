@@ -50,7 +50,7 @@ return [
     'channels' => [
         'stack' => [
             'driver' => 'stack',
-            'channels' => ['daily'],
+            'channels' => array_filter(array_map('trim', explode(',', env('LOG_STACK_CHANNELS', 'daily')))),
             'ignore_exceptions' => false,
         ],
 
@@ -70,9 +70,9 @@ return [
         'slack' => [
             'driver' => 'slack',
             'url' => env('LOG_SLACK_WEBHOOK_URL'),
-            'username' => 'Laravel Log',
+            'username' => env('LOG_SLACK_USERNAME', 'Intranet Probusiness'),
             'emoji' => ':boom:',
-            'level' => env('LOG_LEVEL', 'critical'),
+            'level' => env('LOG_SLACK_LEVEL', 'error'),
         ],
 
         'papertrail' => [
