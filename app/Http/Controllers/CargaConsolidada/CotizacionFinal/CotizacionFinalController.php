@@ -1661,10 +1661,10 @@ class CotizacionFinalController extends Controller
                     Storage::disk('public')->delete($dbPath);
                 } catch (\Exception $_) {
                 }
-
+                Log::error('No se encontraron en la hoja 1 las filas SERVICIO DE IMPORTACIÓN e IMPUESTOS (columna B). Verifique que sea el Excel de cotización final del sistema.');
                 return response()->json([
                     'success' => false,
-                    'message' => 'No se encontraron en la hoja 1 las filas SERVICIO DE IMPORTACIÃ“N e IMPUESTOS (columna B). Verifique que sea el Excel de cotizaciÃ³n final del sistema.',
+                    'message' => 'No se encontraron en la hoja 1 las filas SERVICIO DE IMPORTACIÓN e IMPUESTOS (columna B). Verifique que sea el Excel de cotización final del sistema.',
                 ], 422);
             }
 
@@ -3045,13 +3045,13 @@ class CotizacionFinalController extends Controller
         if ($rowServicio === null) {
             $rowServicio = $this->findMainSheetRowByColumnBLabelContains(
                 $sheet,
-                'SERVICIO DE IMPORTACIÃ“N',
+                'SERVICIO DE IMPORTACIÓN',
                 'CALCULO DE'
             );
         }
 
         if ($rowServicio === null || $rowImpuestos === null) {
-            Log::warning('Upload cotizaciÃ³n final: etiquetas B no encontradas', [
+            Log::warning('Upload cotización final: etiquetas B no encontradas', [
                 'row_servicio' => $rowServicio,
                 'row_impuestos' => $rowImpuestos,
             ]);
