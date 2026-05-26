@@ -50,8 +50,16 @@ return [
     'channels' => [
         'stack' => [
             'driver' => 'stack',
-            'channels' => array_filter(array_map('trim', explode(',', env('LOG_STACK_CHANNELS', 'daily')))),
+            // Por defecto: info+ a laravel.log y error+ a Slack
+            'channels' => array_filter(array_map('trim', explode(',', env('LOG_STACK_CHANNELS', 'laravel_info,slack')))),
             'ignore_exceptions' => false,
+        ],
+
+        // Canal para escribir logs de aplicación (info+)
+        'laravel_info' => [
+            'driver' => 'single',
+            'path' => storage_path('logs/laravel.log'),
+            'level' => env('LOG_FILE_LEVEL', 'info'),
         ],
 
         'single' => [

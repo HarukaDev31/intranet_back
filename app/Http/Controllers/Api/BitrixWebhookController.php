@@ -10,7 +10,7 @@ class BitrixWebhookController extends Controller
 {
     public function handle(Request $request)
     {
-        Log::error('Bitrix webhook recibido', [
+        Log::info('Bitrix webhook recibido', [
             'payload' => $request->all(),
             'headers' => $request->headers->all(),
             'ip' => $request->ip(),
