@@ -77,18 +77,17 @@ class EntregaController extends Controller
 
     /**
      * type_form para el front: 0 = Provincia, 1 = Lima, NULL = sin determinar.
-     * Prioridad: consolidado_comprobante_forms.destino_entrega; si no aplica, formularios L/P del contenedor.
+     * Prioridad: formulario L/P del contenedor; si no hay, consolidado_comprobante_forms.destino_entrega.
      */
     private function sqlCaseTypeFormNullable(): string
     {
         $cf = $this->sqlComprobanteFormTieneDestino();
 
-        // Solo aplica comprobante si destino_entrega se reconoce; si no, se usa L/P.
         return 'CASE '
-            . 'WHEN ' . $cf . ' AND (UPPER(TRIM(CF.destino_entrega)) IN (\'PROVINCIA\',\'PROVINCE\') OR UPPER(TRIM(CF.destino_entrega)) LIKE \'%PROVIN%\') THEN 0 '
-            . 'WHEN ' . $cf . ' AND (UPPER(TRIM(CF.destino_entrega)) IN (\'LIMA\') OR UPPER(TRIM(CF.destino_entrega)) LIKE \'%LIMA%\') THEN 1 '
             . 'WHEN P.id IS NOT NULL THEN 0 '
             . 'WHEN L.id IS NOT NULL THEN 1 '
+            . 'WHEN ' . $cf . ' AND (UPPER(TRIM(CF.destino_entrega)) IN (\'PROVINCIA\',\'PROVINCE\') OR UPPER(TRIM(CF.destino_entrega)) LIKE \'%PROVIN%\') THEN 0 '
+            . 'WHEN ' . $cf . ' AND (UPPER(TRIM(CF.destino_entrega)) IN (\'LIMA\') OR UPPER(TRIM(CF.destino_entrega)) LIKE \'%LIMA%\') THEN 1 '
             . 'ELSE NULL END';
     }
 
@@ -100,25 +99,25 @@ class EntregaController extends Controller
         $cf = $this->sqlComprobanteFormTieneDestino();
 
         return 'CASE '
-            . 'WHEN ' . $cf . ' AND (UPPER(TRIM(CF.destino_entrega)) IN (\'PROVINCIA\',\'PROVINCE\') OR UPPER(TRIM(CF.destino_entrega)) LIKE \'%PROVIN%\') THEN 0 '
-            . 'WHEN ' . $cf . ' AND (UPPER(TRIM(CF.destino_entrega)) IN (\'LIMA\') OR UPPER(TRIM(CF.destino_entrega)) LIKE \'%LIMA%\') THEN 1 '
             . 'WHEN P.id IS NOT NULL THEN 0 '
             . 'WHEN L.id IS NOT NULL THEN 1 '
+            . 'WHEN ' . $cf . ' AND (UPPER(TRIM(CF.destino_entrega)) IN (\'PROVINCIA\',\'PROVINCE\') OR UPPER(TRIM(CF.destino_entrega)) LIKE \'%PROVIN%\') THEN 0 '
+            . 'WHEN ' . $cf . ' AND (UPPER(TRIM(CF.destino_entrega)) IN (\'LIMA\') OR UPPER(TRIM(CF.destino_entrega)) LIKE \'%LIMA%\') THEN 1 '
             . 'ELSE 2 END';
     }
 
     /**
-     * Etiqueta LIMA / PROVINCIA / N/A para tab Delivery (prioridad comprobante reconocible).
+     * Etiqueta LIMA / PROVINCIA / N/A para tab Delivery (prioridad formulario L/P, luego comprobante).
      */
     private function sqlCaseEntregaLabel(): string
     {
         $cf = $this->sqlComprobanteFormTieneDestino();
 
         return 'CASE '
+            . 'WHEN P.id IS NOT NULL THEN \'PROVINCIA\' '
+            . 'WHEN L.id IS NOT NULL THEN \'LIMA\' '
             . 'WHEN ' . $cf . ' AND (UPPER(TRIM(CF.destino_entrega)) IN (\'PROVINCIA\',\'PROVINCE\') OR UPPER(TRIM(CF.destino_entrega)) LIKE \'%PROVIN%\') THEN \'PROVINCIA\' '
             . 'WHEN ' . $cf . ' AND (UPPER(TRIM(CF.destino_entrega)) IN (\'LIMA\') OR UPPER(TRIM(CF.destino_entrega)) LIKE \'%LIMA%\') THEN \'LIMA\' '
-            . 'WHEN L.id IS NOT NULL THEN \'LIMA\' '
-            . 'WHEN P.id IS NOT NULL THEN \'PROVINCIA\' '
             . 'ELSE \'N/A\' END';
     }
 

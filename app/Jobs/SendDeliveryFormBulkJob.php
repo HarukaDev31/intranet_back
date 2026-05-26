@@ -163,10 +163,10 @@ class SendDeliveryFormBulkJob implements ShouldQueue
     {
         $cf = $this->sqlComprobanteFormTieneDestino();
         return 'CASE '
-            . 'WHEN ' . $cf . ' AND (UPPER(TRIM(CF.destino_entrega)) IN (\'PROVINCIA\',\'PROVINCE\') OR UPPER(TRIM(CF.destino_entrega)) LIKE \'%PROVIN%\') THEN 0 '
-            . 'WHEN ' . $cf . ' AND (UPPER(TRIM(CF.destino_entrega)) IN (\'LIMA\') OR UPPER(TRIM(CF.destino_entrega)) LIKE \'%LIMA%\') THEN 1 '
             . 'WHEN P.id IS NOT NULL THEN 0 '
             . 'WHEN L.id IS NOT NULL THEN 1 '
+            . 'WHEN ' . $cf . ' AND (UPPER(TRIM(CF.destino_entrega)) IN (\'PROVINCIA\',\'PROVINCE\') OR UPPER(TRIM(CF.destino_entrega)) LIKE \'%PROVIN%\') THEN 0 '
+            . 'WHEN ' . $cf . ' AND (UPPER(TRIM(CF.destino_entrega)) IN (\'LIMA\') OR UPPER(TRIM(CF.destino_entrega)) LIKE \'%LIMA%\') THEN 1 '
             . 'ELSE NULL END';
     }
 
