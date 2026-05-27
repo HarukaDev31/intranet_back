@@ -342,6 +342,7 @@ class CotizacionFinalController extends Controller
                     'total_pagos' => $row->total_pagos == 0 ? "0.00" : $row->total_pagos,
                     'pagos_count' => $row->pagos_count,
                     'id_cotizacion' => $row->id_cotizacion,
+                    'show_pagos_grid' => (int) ($row->show_pagos_grid ?? 1),
                     'pagos' => json_encode($pagos),
                     'estado_cotizacion_final' => $row->estado_cotizacion_final ?? null,
                     'diferencia' => round($totalLi + $serviciosExtraFinal + $recargosDescuentosFinal - $totalPag, 2),

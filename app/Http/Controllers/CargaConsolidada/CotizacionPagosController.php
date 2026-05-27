@@ -287,6 +287,7 @@ class CotizacionPagosController extends Controller
                         'id_cotizacion' => $row->id_cotizacion,
                         'id_contenedor'=>$row->id_contenedor,
                         'id_contenedor_pago'=>$row->id_contenedor_pago,
+                        'show_pagos_grid' => (int) ($row->show_pagos_grid ?? 1),
                         'pagos' => $pagos,
                         'estado_permiso_por_tipo' => $estadoPermisoPorCotizacion[$row->id_cotizacion] ?? [],
                         'id_tramite' => $idTramitePorCotizacion[$row->id_cotizacion] ?? null,
