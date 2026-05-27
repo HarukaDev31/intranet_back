@@ -23,6 +23,7 @@ use App\Models\CargaConsolidada\GuiaRemision;
 use App\Models\UsuarioDatosFacturacion;
 use App\Helpers\ComprobanteFormResolverHelper;
 use App\Helpers\UserLookupHelper;
+
 class FacturaGuiaController extends Controller
 {
     use WhatsappTrait;
@@ -61,31 +62,10 @@ class FacturaGuiaController extends Controller
         }
         Log::info('cotizacion', ['cotizacion' => $cotizacion]);
         $documento = trim((string) ($cotizacion->documento ?? ''));
-        $correo = trim((string) ($cotizacion->correo ?? ''));
         Log::info('documento', ['documento' => $documento]);
         if ($documento === '') {
             return null;
         }
-
-        $historico = UsuarioDatosFacturacion::where('ruc', $documento)
-            ->orWhere('dni', $documento)
-            ->orderBy('id', 'desc')
-            ->first();
-
-        if ($historico) {
-            return [
-                'es_antiguo' => true,
-                'destino' => $historico->destino ?: null,
-                'nombre_completo' => $historico->nombre_completo ?: null,
-                'dni' => $historico->dni ?: null,
-                'ruc' => $historico->ruc ?: null,
-                'razon_social' => $historico->razon_social ?: null,
-                'domicilio_fiscal' => $historico->domicilio_fiscal ?: null,
-            ];
-        }
-        Log::info('documento', ['documento' => $documento]);
-        Log::info('historico', ['historico' => $historico]);
-        Log::info('telefono', ['telefono' => $cotizacion->telefono]);
         $userLookup = UserLookupHelper::findUserByContact($cotizacion->correo, $cotizacion->telefono, $cotizacion->documento);
         Log::info('userLookup', ['userLookup' => $userLookup]);
         if ($userLookup) {
@@ -102,6 +82,22 @@ class FacturaGuiaController extends Controller
                 ];
             }
             return null;
+        }
+        $historico = UsuarioDatosFacturacion::where('ruc', $documento)
+            ->orWhere('dni', $documento)
+            ->orderBy('id', 'desc')
+            ->first();
+        Log::info('historico', ['historico' => $historico]);
+        if ($historico) {
+            return [
+                'es_antiguo' => true,
+                'destino' => $historico->destino ?: null,
+                'nombre_completo' => $historico->nombre_completo ?: null,
+                'dni' => $historico->dni ?: null,
+                'ruc' => $historico->ruc ?: null,
+                'razon_social' => $historico->razon_social ?: null,
+                'domicilio_fiscal' => $historico->domicilio_fiscal ?: null,
+            ];
         }
         return null;
     }
@@ -532,7 +528,7 @@ class FacturaGuiaController extends Controller
     {
         try {
             $idCotizacion = $request->idCotizacion;
-            
+
             if (!$idCotizacion) {
                 return response()->json([
                     'success' => false,
@@ -551,7 +547,7 @@ class FacturaGuiaController extends Controller
 
             // Obtener los archivos (puede ser uno o múltiples)
             $files = $request->file('files');
-            
+
             if (!$files || (is_array($files) && count($files) === 0)) {
                 return response()->json([
                     'success' => false,
@@ -578,7 +574,7 @@ class FacturaGuiaController extends Controller
                     $originalName = $file->getClientOriginalName();
                     $fileSize = $file->getSize();
                     $mimeType = $file->getMimeType();
-                    
+
                     // Guardar el archivo en el almacenamiento
                     $storedPath = $file->storeAs(
                         'cargaconsolidada/facturacomercial/' . $idCotizacion,
@@ -605,7 +601,6 @@ class FacturaGuiaController extends Controller
                     // Mantener compatibilidad: actualizar el campo factura_comercial en la cotización
                     // con el último archivo subido (para no romper funcionalidad existente)
                     $cotizacion->save();
-
                 } catch (\Exception $e) {
                     $errors[] = 'Error al subir ' . ($file ? $file->getClientOriginalName() : 'archivo') . ': ' . $e->getMessage();
                     Log::error('Error al subir factura comercial individual', [
@@ -624,7 +619,7 @@ class FacturaGuiaController extends Controller
                 ], 500);
             }
 
-            $message = count($uploadedFiles) === 1 
+            $message = count($uploadedFiles) === 1
                 ? 'Factura comercial subida correctamente'
                 : count($uploadedFiles) . ' facturas comerciales subidas correctamente';
 
@@ -640,7 +635,6 @@ class FacturaGuiaController extends Controller
             }
 
             return response()->json($response);
-
         } catch (\Exception $e) {
             Log::error('Error al subir facturas comerciales', [
                 'quotation_id' => $request->idCotizacion,
@@ -721,7 +715,7 @@ class FacturaGuiaController extends Controller
     {
         try {
             $facturaComercial = FacturaComercial::find($idFactura);
-            
+
             if (!$facturaComercial) {
                 //find factura comercial by id_cotizacion in table contenedor_consolidado_cotizacion
                 $facturaComercial = Cotizacion::find($idFactura)->factura_comercial;
@@ -730,7 +724,7 @@ class FacturaGuiaController extends Controller
                         'success' => false,
                         'message' => 'Factura comercial no encontrada'
                     ], 404);
-                }else{
+                } else {
                     unlink($this->generateImageUrl($facturaComercial));
                     Cotizacion::find($idFactura)->factura_comercial = null;
                     Cotizacion::find($idFactura)->save();
@@ -753,7 +747,7 @@ class FacturaGuiaController extends Controller
             // Verificar si quedan más facturas para esta cotización
             $cotizacion = Cotizacion::find($facturaComercial->quotation_id);
             $facturasRestantes = FacturaComercial::where('quotation_id', $facturaComercial->id_cotizacion)->count();
-            
+
             // Si no quedan facturas, limpiar el campo legacy en la cotización
             if ($cotizacion && $facturasRestantes === 0) {
                 $cotizacion->factura_comercial = null;
@@ -773,7 +767,6 @@ class FacturaGuiaController extends Controller
                 'success' => true,
                 'message' => 'Factura comercial eliminada correctamente'
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error al eliminar factura comercial', [
                 'id_factura' => $idFactura,
@@ -879,7 +872,7 @@ class FacturaGuiaController extends Controller
     {
         try {
             $cotizacion = Cotizacion::find($idCotizacion);
-            
+
             if (!$cotizacion) {
                 return response()->json([
                     'success' => false,
@@ -897,7 +890,7 @@ class FacturaGuiaController extends Controller
 
             // Obtener la ruta del archivo
             $filePath = storage_path('app/cargaconsolidada/facturacomercial/' . $idCotizacion . '/' . $cotizacion->factura_comercial);
-            
+
             if (!file_exists($filePath)) {
                 return response()->json([
                     'success' => false,
@@ -929,9 +922,9 @@ class FacturaGuiaController extends Controller
 ✅ Recordar, solo recuperan como crédito fiscal el 18% (IGV + IPM) que esta contemplado en su cotización final.
 ✅ El plazo máximo para notificar una observación de su comprobante es de 24 h. Después de este periodo, no será posible realizar modificaciones de ningún tipo. */
             $message = "Buenas tardes " . $cotizacion->nombre . " 🙋🏻‍♀, te adjunto la factura de tu consolidado #" . $carga . ".\n\n"  .
-            "✅ Verificar que el monto de crédito fiscal sea el correcto.\n\n" .
-            "✅ Recordar, solo recuperan como crédito fiscal el 18% (IGV + IPM) que esta contemplado en su cotización final.\n\n" .
-            "✅ El plazo máximo para notificar una observación de su comprobante es de 24 h. Después de este periodo, no será posible realizar modificaciones de ningún tipo.";
+                "✅ Verificar que el monto de crédito fiscal sea el correcto.\n\n" .
+                "✅ Recordar, solo recuperan como crédito fiscal el 18% (IGV + IPM) que esta contemplado en su cotización final.\n\n" .
+                "✅ El plazo máximo para notificar una observación de su comprobante es de 24 h. Después de este periodo, no será posible realizar modificaciones de ningún tipo.";
 
             // Detectar MIME type del archivo
             $mimeType = mime_content_type($filePath);
@@ -1028,7 +1021,7 @@ class FacturaGuiaController extends Controller
     {
         try {
             $cotizacion = Cotizacion::find($idCotizacion);
-            
+
             if (!$cotizacion) {
                 return response()->json([
                     'success' => false,
@@ -1053,7 +1046,7 @@ class FacturaGuiaController extends Controller
                 $filePath = storage_path('app/' . $lastGuia->file_path);
                 $fileName = $lastGuia->file_name ?? basename($lastGuia->file_path);
             }
-            
+
             if (!file_exists($filePath)) {
                 return response()->json([
                     'success' => false,
@@ -1091,10 +1084,10 @@ Calle Río Nazca 243 – San Luis
 
 Cualquier duda nos escribe.  ¡Gracias! */
             $message =  "Hola " . $cotizacion->nombre . " 😊,\n\n" .
-                       "Te envío tu Guía de Remisión del consolidado #" . $carga . " para que puedas realizar el recojo de tu mercadería.\n\n" .
-                       "🏢 Dirección de recojo:\nCalle Río Nazca 243 – San Luis\n📍 Referencia: Al costado de la Agencia Antezana\n\n" .
-                       "➡ MAPS: https://maps.app.goo.gl/5raLmkX65nNHB2Fr9\n\n" .
-                       "Cualquier duda nos escribe.  ¡Gracias!";
+                "Te envío tu Guía de Remisión del consolidado #" . $carga . " para que puedas realizar el recojo de tu mercadería.\n\n" .
+                "🏢 Dirección de recojo:\nCalle Río Nazca 243 – San Luis\n📍 Referencia: Al costado de la Agencia Antezana\n\n" .
+                "➡ MAPS: https://maps.app.goo.gl/5raLmkX65nNHB2Fr9\n\n" .
+                "Cualquier duda nos escribe.  ¡Gracias!";
 
             // Detectar MIME type del archivo
             $mimeType = mime_content_type($filePath);
@@ -1444,7 +1437,7 @@ Cualquier duda nos escribe.  ¡Gracias! */
             $constancia = Detraccion::create([
                 'quotation_id'    => $comprobante->quotation_id,
                 'comprobante_id'  => $comprobante->id,
-                'monto_detraccion'=> $montoConstanciaSoles,
+                'monto_detraccion' => $montoConstanciaSoles,
                 'file_name'       => $originalName,
                 'file_path'       => $storedPath,
                 'size'            => $fileSize,
