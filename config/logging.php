@@ -4,6 +4,23 @@ use Monolog\Handler\NullHandler;
 use Monolog\Handler\StreamHandler;
 use Monolog\Handler\SyslogUdpHandler;
 
+$slackWebhookUrl = env('LOG_SLACK_WEBHOOK_URL');
+
+$stackChannels = array_filter(array_map('trim', explode(',', (string) env('LOG_STACK_CHANNELS', ''))));
+if ($stackChannels === []) {
+    $stackChannels = ['laravel_info'];
+    if (!empty($slackWebhookUrl)) {
+        $stackChannels[] = 'slack';
+    }
+}
+$stackChannels = array_values(array_filter($stackChannels, function ($channel) use ($slackWebhookUrl) {
+    if ($channel === 'slack') {
+        return !empty($slackWebhookUrl);
+    }
+
+    return $channel !== '';
+}));
+
 return [
 
     /*
@@ -50,8 +67,8 @@ return [
     'channels' => [
         'stack' => [
             'driver' => 'stack',
-            // Por defecto: info+ a laravel.log y error+ a Slack
-            'channels' => array_filter(array_map('trim', explode(',', env('LOG_STACK_CHANNELS', 'laravel_info,slack')))),
+            // info+ → laravel.log; error+ → Slack solo si LOG_SLACK_WEBHOOK_URL está definido
+            'channels' => $stackChannels,
             'ignore_exceptions' => false,
         ],
 

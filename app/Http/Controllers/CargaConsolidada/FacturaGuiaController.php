@@ -22,7 +22,7 @@ use App\Models\CargaConsolidada\ConsolidadoDeliveryFormProvince;
 use App\Models\CargaConsolidada\GuiaRemision;
 use App\Models\UsuarioDatosFacturacion;
 use App\Helpers\ComprobanteFormResolverHelper;
-
+use App\Helpers\UserLookupHelper;
 class FacturaGuiaController extends Controller
 {
     use WhatsappTrait;
@@ -59,8 +59,10 @@ class FacturaGuiaController extends Controller
                 'domicilio_fiscal' => $formActual->domicilio_fiscal ?: null,
             ];
         }
-
+        Log::info('cotizacion', ['cotizacion' => $cotizacion]);
         $documento = trim((string) ($cotizacion->documento ?? ''));
+        $correo = trim((string) ($cotizacion->correo ?? ''));
+        Log::info('documento', ['documento' => $documento]);
         if ($documento === '') {
             return null;
         }
@@ -70,19 +72,38 @@ class FacturaGuiaController extends Controller
             ->orderBy('id', 'desc')
             ->first();
 
-        if (!$historico) {
+        if ($historico) {
+            return [
+                'es_antiguo' => true,
+                'destino' => $historico->destino ?: null,
+                'nombre_completo' => $historico->nombre_completo ?: null,
+                'dni' => $historico->dni ?: null,
+                'ruc' => $historico->ruc ?: null,
+                'razon_social' => $historico->razon_social ?: null,
+                'domicilio_fiscal' => $historico->domicilio_fiscal ?: null,
+            ];
+        }
+        Log::info('documento', ['documento' => $documento]);
+        Log::info('historico', ['historico' => $historico]);
+        Log::info('telefono', ['telefono' => $cotizacion->telefono]);
+        $userLookup = UserLookupHelper::findUserByContact($cotizacion->correo, $cotizacion->telefono, $cotizacion->documento);
+        Log::info('userLookup', ['userLookup' => $userLookup]);
+        if ($userLookup) {
+            $historico = UsuarioDatosFacturacion::where('id_user', $userLookup->id)->orderBy('id', 'desc')->first();
+            if ($historico) {
+                return [
+                    'es_antiguo' => true,
+                    'destino' => $historico->destino ?: null,
+                    'nombre_completo' => $historico->nombre_completo ?: null,
+                    'dni' => $historico->dni ?: null,
+                    'ruc' => $historico->ruc ?: null,
+                    'razon_social' => $historico->razon_social ?: null,
+                    'domicilio_fiscal' => $historico->domicilio_fiscal ?: null,
+                ];
+            }
             return null;
         }
-
-        return [
-            'es_antiguo' => true,
-            'destino' => $historico->destino ?: null,
-            'nombre_completo' => $historico->nombre_completo ?: null,
-            'dni' => $historico->dni ?: null,
-            'ruc' => $historico->ruc ?: null,
-            'razon_social' => $historico->razon_social ?: null,
-            'domicilio_fiscal' => $historico->domicilio_fiscal ?: null,
-        ];
+        return null;
     }
 
     private function buildMensajeFormularioNuevo(Cotizacion $cotizacion, $idContenedor, $clientesUrlBase)
