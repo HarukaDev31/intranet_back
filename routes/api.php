@@ -4,6 +4,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Models\BaseDatos\Clientes\Cliente;
 use App\Http\Controllers\Api\BitrixWebhookController;
+use App\Http\Controllers\Api\EvolutionWebhookController;
 use App\Http\Controllers\CargaConsolidada\FacturaGuiaController;
 
 /*
@@ -18,8 +19,7 @@ use App\Http\Controllers\CargaConsolidada\FacturaGuiaController;
 */
 
 Route::post('/bitrix/webhook', [BitrixWebhookController::class, 'handle']);
-
-
+Route::post('/evolution/webhook', [EvolutionWebhookController::class, 'handle']);
 
 /*
 |--------------------------------------------------------------------------
@@ -118,6 +118,9 @@ require __DIR__.'/modules/public-landing-curso-lead.php';
 
 // API privada: leads de landings para intranet
 require __DIR__.'/modules/landing-leads.php';
+
+// API privada: Copiloto WhatsApp
+require __DIR__.'/modules/copiloto.php';
 
 // Google Sheets API Routes
 Route::prefix('google-sheets')->group(function () {

@@ -15,7 +15,11 @@ class CopilotoService
         $lineasPermitidas = ['ventas_cc', 'consolidado'];
 
         $query = CopilotoConversacion::query()
-            ->whereIn('linea', $lineasPermitidas)
+            ->where(function ($q) use ($lineasPermitidas) {
+                $q->whereIn('linea', $lineasPermitidas)
+                    ->orWhereNull('linea')
+                    ->orWhere('linea', '');
+            })
             ->orderByDesc('last_message_at');
 
         if ($search !== '') {
