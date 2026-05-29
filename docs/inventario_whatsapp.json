@@ -1,0 +1,2871 @@
+[
+  {
+    "file": "app/Console/Commands/NotifyArriveDateToday.php",
+    "line": 73,
+    "function": "handle",
+    "method": "sendMessage",
+    "call": "$resultado = $controller->sendMessage($mensaje, $this->formatPhoneNumber($telefono));",
+    "conditions": [
+      "L52: if (!empty($prov->arrive_date_china) && !in_array($prov->arrive_date_china, ['0000-00-00','0000-00-00 00:00:00'], true)) {",
+      "L58: if ($dateToCheck !== $today) {"
+    ],
+    "variables": [
+      "$signature",
+      "$description",
+      "$this",
+      "$today",
+      "$providers",
+      "$q",
+      "$controller",
+      "$count",
+      "$prov",
+      "$dateToCheck",
+      "$cotizacion",
+      "$clienteNombre",
+      "$providerCode",
+      "$telefono",
+      "$mensaje",
+      "$resultado"
+    ],
+    "inline_literals": []
+  },
+  {
+    "file": "app/Http/Controllers/CargaConsolidada/ContenedorController.php",
+    "line": 974,
+    "function": "moveCotizacionToConsolidado",
+    "method": "sendMessageVentas",
+    "call": "// $this->sendMessageVentas($message, $telefono, 3);",
+    "conditions": [
+      "L964: if ($contenedorDestino->carga < $cargaOrigen) {"
+    ],
+    "variables": [
+      "$v",
+      "$e",
+      "$request",
+      "$data",
+      "$idCotizacion",
+      "$idContenedorDestino",
+      "$cotizacion",
+      "$idContenedorOrigen",
+      "$contenedorDestino",
+      "$contenedorOrigen",
+      "$cargaOrigen",
+      "$pagos",
+      "$pago",
+      "$proveedores",
+      "$proveedor",
+      "$this",
+      "$message",
+      "$telefono"
+    ],
+    "inline_literals": []
+  },
+  {
+    "file": "app/Http/Controllers/CargaConsolidada/CotizacionController.php",
+    "line": 2382,
+    "function": "moveCotizacionToConsolidado",
+    "method": "sendMessage",
+    "call": "$this->sendMessage($message, null, 3);",
+    "conditions": [
+      "L2367: if ($cotizacion) {"
+    ],
+    "variables": [
+      "$dataToInsert",
+      "$this",
+      "$cotizacionFile",
+      "$cotizacion",
+      "$tempFile",
+      "$e",
+      "$hoy",
+      "$idCotizacion",
+      "$idContenedorDestino",
+      "$contenedorDestino",
+      "$message"
+    ],
+    "inline_literals": []
+  },
+  {
+    "file": "app/Http/Controllers/CargaConsolidada/CotizacionController.php",
+    "line": 3768,
+    "function": "sendRecordatorioFirmaContrato",
+    "method": "sendMessageVentas",
+    "call": "// $wspMessageData = $this->sendMessageVentas($message, $telefono);",
+    "conditions": [
+      "L3748: if (!$contenedor) {"
+    ],
+    "variables": [
+      "$cotizacion",
+      "$usuarioActual",
+      "$contenedor",
+      "$notificacion",
+      "$notificacionJefeVentas",
+      "$e",
+      "$id",
+      "$nombreCliente",
+      "$carga",
+      "$signUrl",
+      "$message",
+      "$telefono",
+      "$wspMessageData",
+      "$this"
+    ],
+    "inline_literals": []
+  },
+  {
+    "file": "app/Http/Controllers/CargaConsolidada/CotizacionProveedorController.php",
+    "line": 551,
+    "function": "updateContenedorCotizacionProveedoresByUuid",
+    "method": "sendMessage",
+    "call": "$resultadoWhatsApp = $this->sendMessage($mensaje, $telefono);",
+    "conditions": [
+      "L527: if (count($proveedoresPendientes) > 0) {"
+    ],
+    "variables": [
+      "$proveedorData",
+      "$this",
+      "$ahora",
+      "$trackingActual",
+      "$proveedor",
+      "$cotizacion",
+      "$proveedoresActualizados",
+      "$proveedoresActualizadosDB",
+      "$proveedoresPendientes",
+      "$telefono",
+      "$mensaje",
+      "$tipoMensaje",
+      "$pendiente",
+      "$url",
+      "$uuid",
+      "$resultadoWhatsApp"
+    ],
+    "inline_literals": []
+  },
+  {
+    "file": "app/Http/Controllers/CargaConsolidada/CotizacionProveedorController.php",
+    "line": 878,
+    "function": "procesarEstadoRotulado",
+    "method": "sendWelcome",
+    "call": "$this->sendWelcome($carga);",
+    "conditions": [
+      "L856: if (!file_exists($htmlWelcomePath)) {",
+      "L872: if (empty($providersHasNoSended)) {",
+      "L877: if (count($providersHasSended) == 0) {"
+    ],
+    "variables": [
+      "$proveedores",
+      "$this",
+      "$idCotizacion",
+      "$contenedorInfo",
+      "$idContenedor",
+      "$carga",
+      "$estado",
+      "$cliente",
+      "$idProveedor",
+      "$e",
+      "$proveedor",
+      "$htmlWelcomePath",
+      "$htmlWelcomeContent",
+      "$providersHasSended",
+      "$providersHasNoSended"
+    ],
+    "inline_literals": []
+  },
+  {
+    "file": "app/Http/Controllers/CargaConsolidada/CotizacionProveedorController.php",
+    "line": 880,
+    "function": "procesarEstadoRotulado",
+    "method": "sendMessage",
+    "call": "$this->sendMessage(\"Hola 🙋🏻‍♀, te escribe el área de coordinación de Probusiness.",
+    "conditions": [
+      "L856: if (!file_exists($htmlWelcomePath)) {",
+      "L872: if (empty($providersHasNoSended)) {",
+      "L877: if (count($providersHasSended) == 0) {"
+    ],
+    "variables": [
+      "$proveedores",
+      "$contenedorInfo",
+      "$idContenedor",
+      "$carga",
+      "$estado",
+      "$this",
+      "$cliente",
+      "$idCotizacion",
+      "$idProveedor",
+      "$e",
+      "$proveedor",
+      "$htmlWelcomePath",
+      "$htmlWelcomeContent",
+      "$providersHasSended",
+      "$providersHasNoSended"
+    ],
+    "inline_literals": []
+  },
+  {
+    "file": "app/Http/Controllers/CargaConsolidada/CotizacionProveedorController.php",
+    "line": 1017,
+    "function": "procesarEstadoRotulado",
+    "method": "sendDataItem",
+    "call": "$this->sendDataItem(",
+    "conditions": [
+      "L997: if (file_exists($tempFilePath)) {",
+      "L1001: if (file_put_contents($tempFilePath, $pdfContent) === false) {",
+      "L1009: if (!$zip->addFile($tempFilePath, \"Rotulado_{$supplierCode}.pdf\")) {"
+    ],
+    "variables": [
+      "$providersHasNoSended",
+      "$proveedor",
+      "$supplierCode",
+      "$products",
+      "$sleepSendMedia",
+      "$htmlFilePath",
+      "$htmlContent",
+      "$headerImagePath",
+      "$headerImageBase64",
+      "$imageData",
+      "$cliente",
+      "$carga",
+      "$dompdf",
+      "$options",
+      "$pdfContent",
+      "$pdfException",
+      "$tempFilePath",
+      "$zip",
+      "$this"
+    ],
+    "inline_literals": []
+  },
+  {
+    "file": "app/Http/Controllers/CargaConsolidada/CotizacionProveedorController.php",
+    "line": 1053,
+    "function": "procesarEstadoRotulado",
+    "method": "sendMedia",
+    "call": "$this->sendMedia($direccionUrl, 'image/jpg', '🏽Dile a tu proveedor que envíe la carga a nuestro almacén en China', null, $sleepSendMedia);",
+    "conditions": [
+      "L1043: if (!$zip->close()) {"
+    ],
+    "variables": [
+      "$supplierCode",
+      "$dompdf",
+      "$options",
+      "$htmlContent",
+      "$pdfContent",
+      "$pdfException",
+      "$tempFilePath",
+      "$zip",
+      "$this",
+      "$products",
+      "$proveedorArray",
+      "$processedProviders",
+      "$e",
+      "$direccionUrl",
+      "$sleepSendMedia"
+    ],
+    "inline_literals": [
+      "🏽Dile a tu proveedor que envíe la carga a nuestro almacén en China"
+    ]
+  },
+  {
+    "file": "app/Http/Controllers/CargaConsolidada/CotizacionProveedorController.php",
+    "line": 1057,
+    "function": "procesarEstadoRotulado",
+    "method": "sendMessage",
+    "call": "$this->sendMessage(\"También necesito los datos de tu proveedor para comunicarnos y recibir tu carga.",
+    "conditions": [
+      "L1043: if (!$zip->close()) {"
+    ],
+    "variables": [
+      "$dompdf",
+      "$htmlContent",
+      "$pdfContent",
+      "$pdfException",
+      "$supplierCode",
+      "$tempFilePath",
+      "$zip",
+      "$this",
+      "$products",
+      "$proveedorArray",
+      "$processedProviders",
+      "$e",
+      "$direccionUrl",
+      "$sleepSendMedia"
+    ],
+    "inline_literals": []
+  },
+  {
+    "file": "app/Http/Controllers/CargaConsolidada/CotizacionProveedorController.php",
+    "line": 1224,
+    "function": "procesarEstadoCobrando",
+    "method": "sendMessage",
+    "call": "$this->sendMessage($message, 'administracion');",
+    "conditions": [
+      "L1205: if ($pendiente < 0) {",
+      "L1215: if (!empty($countPagosLogistica) && $countPagosLogistica > 0) {"
+    ],
+    "variables": [
+      "$idProveedor",
+      "$idCotizacion",
+      "$carga",
+      "$proveedorInfo",
+      "$supplierCode",
+      "$cotizacionInfo",
+      "$volumen",
+      "$valorCot",
+      "$idContenedor",
+      "$contenedor",
+      "$fechaCierre",
+      "$fCierre",
+      "$meses",
+      "$clienteInfo",
+      "$telefono",
+      "$phoneNumberId",
+      "$queryPagos",
+      "$totalPagosLogistica",
+      "$countPagosLogistica",
+      "$e",
+      "$pendiente",
+      "$message",
+      "$this"
+    ],
+    "inline_literals": [
+      "administracion"
+    ]
+  },
+  {
+    "file": "app/Http/Controllers/CargaConsolidada/CotizacionProveedorController.php",
+    "line": 1228,
+    "function": "procesarEstadoCobrando",
+    "method": "sendMedia",
+    "call": "$this->sendMedia($pagosUrl, 'image/jpg', 'administracion');",
+    "conditions": [
+      "L1205: if ($pendiente < 0) {",
+      "L1215: if (!empty($countPagosLogistica) && $countPagosLogistica > 0) {"
+    ],
+    "variables": [
+      "$proveedorInfo",
+      "$idProveedor",
+      "$supplierCode",
+      "$idCotizacion",
+      "$cotizacionInfo",
+      "$volumen",
+      "$valorCot",
+      "$idContenedor",
+      "$contenedor",
+      "$fechaCierre",
+      "$fCierre",
+      "$meses",
+      "$clienteInfo",
+      "$telefono",
+      "$phoneNumberId",
+      "$queryPagos",
+      "$totalPagosLogistica",
+      "$countPagosLogistica",
+      "$e",
+      "$pendiente",
+      "$message",
+      "$carga",
+      "$this",
+      "$pagosUrl"
+    ],
+    "inline_literals": [
+      "administracion"
+    ]
+  },
+  {
+    "file": "app/Http/Controllers/CargaConsolidada/CotizacionProveedorController.php",
+    "line": 1388,
+    "function": "updateProveedorData",
+    "method": "sendMessage",
+    "call": "$this->sendMessage($message);",
+    "conditions": [],
+    "variables": [
+      "$idProveedor",
+      "$idCotizacion",
+      "$trackingActual",
+      "$this",
+      "$ahora",
+      "$idContenedor",
+      "$data",
+      "$proveedor",
+      "$user",
+      "$estadoProveedorOrder",
+      "$estadoProveedor",
+      "$estadoProvedorToUpdate",
+      "$date",
+      "$month",
+      "$day",
+      "$months",
+      "$message",
+      "$supplierCode",
+      "$cotizacion",
+      "$telefono"
+    ],
+    "inline_literals": []
+  },
+  {
+    "file": "app/Http/Controllers/CargaConsolidada/CotizacionProveedorController.php",
+    "line": 1658,
+    "function": "sendAlertDifferenceCbmMessage",
+    "method": "sendMessage",
+    "call": "$response = $this->sendMessage($message);",
+    "conditions": [
+      "L1637: if ($proveedor->cbm_total_china - $proveedor->cbm_total > 0.50) {",
+      "L1642: if ($sendMessage) {",
+      "L1650: if ($diferencia > 0.50) {",
+      "L1657: if ($cotizacion->send_alert_difference_cbm_status == 'PENDING') {"
+    ],
+    "variables": [
+      "$user",
+      "$allowedRoles",
+      "$proveedor",
+      "$idProveedor",
+      "$arriveDate",
+      "$request",
+      "$dateTime",
+      "$normalized",
+      "$e",
+      "$idCotizacion",
+      "$cotizacion",
+      "$proveedores",
+      "$telefono",
+      "$this",
+      "$sendMessage",
+      "$totalDiferencia",
+      "$message",
+      "$cbmTotalChina",
+      "$cbmTotal",
+      "$diferencia",
+      "$response"
+    ],
+    "inline_literals": []
+  },
+  {
+    "file": "app/Http/Controllers/CargaConsolidada/CotizacionProveedorController.php",
+    "line": 2045,
+    "function": "validateToSendInspectionMessage",
+    "method": "sendMedia",
+    "call": "$this->sendMedia($pagosUrl, 'image/jpg', null, $telefono, 15, 'consolidado', 'Numeros_de_cuenta.jpg');",
+    "conditions": [
+      "L2039: if ($proveedorsWithFilesSended < 1) {",
+      "L2040: if ($this->shouldSendReservationMessage($idCotizacion)) {"
+    ],
+    "variables": [
+      "$files",
+      "$file",
+      "$this",
+      "$e",
+      "$idProveedor",
+      "$idCotizacion",
+      "$user",
+      "$proveedor",
+      "$cotizacion",
+      "$inspectionFiles",
+      "$telefono",
+      "$qtyBox",
+      "$baseUrl",
+      "$cotizacionUuid",
+      "$inspeccionViewUrl",
+      "$inspectionMessage",
+      "$proveedorsWithFilesSended",
+      "$sentFiles",
+      "$usuarioActual",
+      "$carga",
+      "$pagosUrl"
+    ],
+    "inline_literals": [
+      "consolidado",
+      "Numeros_de_cuenta.jpg"
+    ]
+  },
+  {
+    "file": "app/Http/Controllers/CargaConsolidada/CotizacionProveedorController.php",
+    "line": 2151,
+    "function": "sendInspectionFiles",
+    "method": "sendMessage",
+    "call": "$this->sendMessage($message, $telefono);",
+    "conditions": [
+      "L2133: if (!empty($inspeccionViewUrl)) {",
+      "L2150: if ($totalFiles > 0) {"
+    ],
+    "variables": [
+      "$idCotizacion",
+      "$idProveedor",
+      "$user",
+      "$proveedor",
+      "$e",
+      "$cliente",
+      "$codeSupplier",
+      "$qtyBox",
+      "$inspeccionViewUrl",
+      "$msg",
+      "$inspectionFiles",
+      "$message",
+      "$telefono",
+      "$sentFiles",
+      "$totalFiles",
+      "$this"
+    ],
+    "inline_literals": []
+  },
+  {
+    "file": "app/Http/Controllers/CargaConsolidada/CotizacionProveedorController.php",
+    "line": 2290,
+    "function": "sendReservationMessage",
+    "method": "sendMessage",
+    "call": "$this->sendMessage($message, $telefono, 10, 'administracion');",
+    "conditions": [
+      "L2267: if ($pendiente < 0) {",
+      "L2280: if (!empty($countPagosLogistica) && $countPagosLogistica > 0) {"
+    ],
+    "variables": [
+      "$response",
+      "$file",
+      "$codeSupplier",
+      "$idCotizacion",
+      "$totalProviders",
+      "$inspectedProviders",
+      "$cotizacion",
+      "$telefono",
+      "$contenedor",
+      "$fechaCierre",
+      "$this",
+      "$queryPagos",
+      "$totalPagosLogistica",
+      "$countPagosLogistica",
+      "$e",
+      "$pendiente",
+      "$message"
+    ],
+    "inline_literals": [
+      "administracion"
+    ]
+  },
+  {
+    "file": "app/Http/Controllers/CargaConsolidada/CotizacionProveedorController.php",
+    "line": 2292,
+    "function": "sendReservationMessage",
+    "method": "sendMedia",
+    "call": "$this->sendMedia($pagosUrl, 'image/jpg',null,$telefono,10,'administracion');",
+    "conditions": [
+      "L2267: if ($pendiente < 0) {",
+      "L2280: if (!empty($countPagosLogistica) && $countPagosLogistica > 0) {"
+    ],
+    "variables": [
+      "$file",
+      "$codeSupplier",
+      "$response",
+      "$idCotizacion",
+      "$totalProviders",
+      "$inspectedProviders",
+      "$cotizacion",
+      "$telefono",
+      "$contenedor",
+      "$fechaCierre",
+      "$this",
+      "$queryPagos",
+      "$totalPagosLogistica",
+      "$countPagosLogistica",
+      "$e",
+      "$pendiente",
+      "$message",
+      "$pagosUrl"
+    ],
+    "inline_literals": [
+      "administracion"
+    ]
+  },
+  {
+    "file": "app/Http/Controllers/CargaConsolidada/CotizacionProveedorController.php",
+    "line": 3722,
+    "function": "signServiceContract",
+    "method": "sendMedia",
+    "call": "$this->sendMedia($finalFilePath, 'application/pdf', $message, $telefono, 10, 'ventas', $fileName);",
+    "conditions": [
+      "L3701: if (file_exists($filePath)) {"
+    ],
+    "variables": [
+      "$contenedor",
+      "$cotizacion",
+      "$carga",
+      "$imagePath",
+      "$signedFile",
+      "$imageData",
+      "$signatureBase64",
+      "$mimeType",
+      "$viewData",
+      "$contractHtml",
+      "$options",
+      "$dompdf",
+      "$start",
+      "$duration",
+      "$pdfContent",
+      "$pdfPath",
+      "$filename",
+      "$pdfFilename",
+      "$relativePath",
+      "$uuid",
+      "$filePath",
+      "$contratosDir",
+      "$telefono",
+      "$message",
+      "$finalFilePath"
+    ],
+    "inline_literals": [
+      "ventas"
+    ]
+  },
+  {
+    "file": "app/Http/Controllers/CargaConsolidada/EntregaController.php",
+    "line": 3056,
+    "function": "uploadConformidad",
+    "method": "sendMessage",
+    "call": "$this->sendMessage($message, $numeroWhatsapp);",
+    "conditions": [
+      "L3047: if (strlen($numeroWhatsapp) < 9) {"
+    ],
+    "variables": [
+      "$formId",
+      "$disk",
+      "$folder",
+      "$idCotizacion",
+      "$inserted",
+      "$photo1Path",
+      "$photo1MimeType",
+      "$photo2Path",
+      "$photo2MimeType",
+      "$request",
+      "$file",
+      "$filename",
+      "$storedPath",
+      "$insert",
+      "$formIdField",
+      "$idContenedor",
+      "$newId",
+      "$tableName",
+      "$cotizacion",
+      "$nombre",
+      "$numeroWhatsapp",
+      "$contenedor",
+      "$carga",
+      "$message",
+      "$this"
+    ],
+    "inline_literals": []
+  },
+  {
+    "file": "app/Http/Controllers/CargaConsolidada/EntregaController.php",
+    "line": 3058,
+    "function": "uploadConformidad",
+    "method": "sendMedia",
+    "call": "$this->sendMedia($photo1Path, $photo1MimeType, null, $numeroWhatsapp);",
+    "conditions": [
+      "L3047: if (strlen($numeroWhatsapp) < 9) {",
+      "L3057: if ($photo1Path) {"
+    ],
+    "variables": [
+      "$disk",
+      "$folder",
+      "$idCotizacion",
+      "$inserted",
+      "$photo1Path",
+      "$photo1MimeType",
+      "$photo2Path",
+      "$photo2MimeType",
+      "$request",
+      "$file",
+      "$filename",
+      "$storedPath",
+      "$insert",
+      "$formIdField",
+      "$formId",
+      "$idContenedor",
+      "$newId",
+      "$tableName",
+      "$cotizacion",
+      "$nombre",
+      "$numeroWhatsapp",
+      "$contenedor",
+      "$carga",
+      "$message",
+      "$this"
+    ],
+    "inline_literals": []
+  },
+  {
+    "file": "app/Http/Controllers/CargaConsolidada/EntregaController.php",
+    "line": 3061,
+    "function": "uploadConformidad",
+    "method": "sendMedia",
+    "call": "$this->sendMedia($photo2Path, $photo2MimeType, null, $numeroWhatsapp);",
+    "conditions": [
+      "L3047: if (strlen($numeroWhatsapp) < 9) {",
+      "L3057: if ($photo1Path) {",
+      "L3060: if ($photo2Path) {"
+    ],
+    "variables": [
+      "$disk",
+      "$folder",
+      "$idCotizacion",
+      "$inserted",
+      "$photo1Path",
+      "$photo1MimeType",
+      "$photo2Path",
+      "$photo2MimeType",
+      "$request",
+      "$file",
+      "$filename",
+      "$storedPath",
+      "$insert",
+      "$formIdField",
+      "$formId",
+      "$idContenedor",
+      "$newId",
+      "$tableName",
+      "$cotizacion",
+      "$nombre",
+      "$numeroWhatsapp",
+      "$contenedor",
+      "$carga",
+      "$message",
+      "$this"
+    ],
+    "inline_literals": []
+  },
+  {
+    "file": "app/Http/Controllers/CargaConsolidada/EntregaController.php",
+    "line": 3646,
+    "function": "sendMessageDelivery",
+    "method": "sendMessage",
+    "call": "$result = $this->sendMessage($message, $numeroWhatsapp);",
+    "conditions": [
+      "L3624: if (!$contenedor) {",
+      "L3628: if ($typeForm !== 0 && $typeForm !== 1) {",
+      "L3638: if (!$telefono) {",
+      "L3641: if (strlen($telefono) < 9) {"
+    ],
+    "variables": [
+      "$cotizacion",
+      "$voucherUrl",
+      "$voucher",
+      "$pago",
+      "$idCotizacion",
+      "$idContenedor",
+      "$monto",
+      "$banco",
+      "$fecha",
+      "$e",
+      "$request",
+      "$join",
+      "$this",
+      "$contenedor",
+      "$typeForm",
+      "$message",
+      "$telefono",
+      "$numeroWhatsapp",
+      "$result"
+    ],
+    "inline_literals": []
+  },
+  {
+    "file": "app/Http/Controllers/CargaConsolidada/EntregaController.php",
+    "line": 3769,
+    "function": "sendRecordatorioFormularioDelivery",
+    "method": "sendMessage",
+    "call": "$result = $this->sendMessage($message, $numeroWhatsapp);",
+    "conditions": [
+      "L3748: if (!$cotizacion) {",
+      "L3754: if (!$contenedor) {",
+      "L3759: if (!$message) {",
+      "L3764: if (strlen($telefono) < 9) {"
+    ],
+    "variables": [
+      "$ids",
+      "$request",
+      "$idCotizacion",
+      "$cotizacionesPayload",
+      "$e",
+      "$carga",
+      "$typeForm",
+      "$idContenedor",
+      "$isLima",
+      "$isProvincia",
+      "$titulo",
+      "$logistica",
+      "$forms",
+      "$this",
+      "$cotizacion",
+      "$contenedor",
+      "$message",
+      "$telefono",
+      "$numeroWhatsapp",
+      "$result"
+    ],
+    "inline_literals": []
+  },
+  {
+    "file": "app/Http/Controllers/CargaConsolidada/EntregaController.php",
+    "line": 3801,
+    "function": "sendCobroCotizacionFinalDelivery",
+    "method": "sendMessage",
+    "call": "$result = $this->sendMessage($message, $numeroWhatsapp);",
+    "conditions": [
+      "L3786: if (!$cotizacion) {",
+      "L3791: if (!$message) {",
+      "L3796: if (strlen($telefono) < 9) {"
+    ],
+    "variables": [
+      "$titulo",
+      "$isLima",
+      "$isProvincia",
+      "$logistica",
+      "$forms",
+      "$this",
+      "$idContenedor",
+      "$typeForm",
+      "$carga",
+      "$request",
+      "$idCotizacion",
+      "$cotizacion",
+      "$contenedor",
+      "$message",
+      "$telefono",
+      "$numeroWhatsapp",
+      "$result",
+      "$e"
+    ],
+    "inline_literals": []
+  },
+  {
+    "file": "app/Http/Controllers/CargaConsolidada/EntregaController.php",
+    "line": 3884,
+    "function": "sendCobroDeliveryDelivery",
+    "method": "sendMessage",
+    "call": "$result = $this->sendMessage($message, $numeroWhatsapp);",
+    "conditions": [
+      "L3879: if (strlen($telefono) < 9) {"
+    ],
+    "variables": [
+      "$result",
+      "$e",
+      "$request",
+      "$idCotizacion",
+      "$cotizacion",
+      "$contenedor",
+      "$carga",
+      "$servicioIds",
+      "$linesQuery",
+      "$this",
+      "$ids",
+      "$lines",
+      "$bloques",
+      "$line",
+      "$tipo",
+      "$imp",
+      "$message",
+      "$telefono",
+      "$numeroWhatsapp"
+    ],
+    "inline_literals": []
+  },
+  {
+    "file": "app/Http/Controllers/CargaConsolidada/EntregaController.php",
+    "line": 3887,
+    "function": "sendCobroDeliveryDelivery",
+    "method": "sendMedia",
+    "call": "$this->sendMedia($pagosUrl, 'image/jpg', null, $telefono, 15, 'consolidado', 'Numeros_de_cuenta.jpg');",
+    "conditions": [
+      "L3879: if (strlen($telefono) < 9) {"
+    ],
+    "variables": [
+      "$e",
+      "$request",
+      "$idCotizacion",
+      "$cotizacion",
+      "$contenedor",
+      "$carga",
+      "$servicioIds",
+      "$linesQuery",
+      "$this",
+      "$ids",
+      "$lines",
+      "$bloques",
+      "$line",
+      "$tipo",
+      "$imp",
+      "$message",
+      "$telefono",
+      "$numeroWhatsapp",
+      "$result",
+      "$pagosUrl"
+    ],
+    "inline_literals": [
+      "consolidado",
+      "Numeros_de_cuenta.jpg"
+    ]
+  },
+  {
+    "file": "app/Http/Controllers/CargaConsolidada/EntregaController.php",
+    "line": 4648,
+    "function": "signCargoEntrega",
+    "method": "sendMessage",
+    "call": "$this->sendMessage($message, $numeroWhatsapp);",
+    "conditions": [
+      "L4623: if (!is_dir($publicDir)) {",
+      "L4640: if (strlen($numeroWhatsapp) < 9) {"
+    ],
+    "variables": [
+      "$dni",
+      "$request",
+      "$signature",
+      "$row",
+      "$idCotizacion",
+      "$idContenedor",
+      "$qty",
+      "$signatureBase64",
+      "$viewData",
+      "$nombre",
+      "$html",
+      "$options",
+      "$dompdf",
+      "$pdfContent",
+      "$publicDir",
+      "$filename",
+      "$relativePath",
+      "$this",
+      "$numeroWhatsapp",
+      "$message",
+      "$fullPath"
+    ],
+    "inline_literals": []
+  },
+  {
+    "file": "app/Http/Controllers/CargaConsolidada/EntregaController.php",
+    "line": 4649,
+    "function": "signCargoEntrega",
+    "method": "sendMedia",
+    "call": "$this->sendMedia($fullPath, 'application/pdf', null, $numeroWhatsapp, 0, 'consolidado', 'cargo_entrega_firmado.pdf');",
+    "conditions": [
+      "L4640: if (strlen($numeroWhatsapp) < 9) {"
+    ],
+    "variables": [
+      "$signature",
+      "$request",
+      "$row",
+      "$idCotizacion",
+      "$idContenedor",
+      "$qty",
+      "$signatureBase64",
+      "$viewData",
+      "$nombre",
+      "$dni",
+      "$html",
+      "$options",
+      "$dompdf",
+      "$pdfContent",
+      "$publicDir",
+      "$filename",
+      "$relativePath",
+      "$this",
+      "$numeroWhatsapp",
+      "$message",
+      "$fullPath"
+    ],
+    "inline_literals": [
+      "consolidado",
+      "cargo_entrega_firmado.pdf"
+    ]
+  },
+  {
+    "file": "app/Http/Controllers/CargaConsolidada/FacturaGuiaController.php",
+    "line": 936,
+    "function": "sendFactura",
+    "method": "sendMedia",
+    "call": "$result = $this->sendMedia($filePath, $mimeType, $message, $numeroWhatsapp, 0, 'administracion', $cotizacion->factura_comercial);",
+    "conditions": [
+      "L911: if (strlen($telefono) < 9) {",
+      "L931: if (!$mimeType) {"
+    ],
+    "variables": [
+      "$idCotizacion",
+      "$cotizacion",
+      "$filePath",
+      "$telefono",
+      "$numeroWhatsapp",
+      "$contenedor",
+      "$carga",
+      "$message",
+      "$mimeType",
+      "$result",
+      "$this"
+    ],
+    "inline_literals": [
+      "administracion"
+    ]
+  },
+  {
+    "file": "app/Http/Controllers/CargaConsolidada/FacturaGuiaController.php",
+    "line": 1101,
+    "function": "sendGuia",
+    "method": "sendMedia",
+    "call": "$result = $this->sendMedia($filePath, $mimeType, $message, $numeroWhatsapp, 0, 'administracion', $fileName);",
+    "conditions": [
+      "L1094: if (!$mimeType) {"
+    ],
+    "variables": [
+      "$cotizacion",
+      "$idCotizacion",
+      "$fileName",
+      "$filePath",
+      "$lastGuia",
+      "$telefono",
+      "$numeroWhatsapp",
+      "$contenedor",
+      "$carga",
+      "$message",
+      "$mimeType",
+      "$phoneNumberId",
+      "$sleep",
+      "$fromNumber",
+      "$result",
+      "$this"
+    ],
+    "inline_literals": [
+      "administracion"
+    ]
+  },
+  {
+    "file": "app/Http/Controllers/CargaConsolidada/FacturaGuiaController.php",
+    "line": 1901,
+    "function": "enviarFormulario",
+    "method": "sendMessage",
+    "call": "$result = $this->sendMessage($message, $numeroWhatsapp, 0, 'administracion');",
+    "conditions": [
+      "L1879: if (!$cotizacion) {",
+      "L1885: if (empty($telefono)) {",
+      "L1890: if (strlen($telefono) < 9) {"
+    ],
+    "variables": [
+      "$idCotizacion",
+      "$e",
+      "$request",
+      "$cotizacion",
+      "$idContenedor",
+      "$cotizacionIds",
+      "$clientesUrlBase",
+      "$enviados",
+      "$errores",
+      "$telefono",
+      "$numeroWhatsapp",
+      "$datosFacturacion",
+      "$this",
+      "$message",
+      "$result"
+    ],
+    "inline_literals": [
+      "administracion"
+    ]
+  },
+  {
+    "file": "app/Http/Controllers/CargaConsolidada/FacturaGuiaController.php",
+    "line": 2049,
+    "function": "sendComprobantesContabilidad",
+    "method": "sendMedia",
+    "call": "$result = $this->sendMedia($fullPath, $mimeType, $message, $numeroWhatsapp, 1, 'administracion', $c->file_name ?? null);",
+    "conditions": [
+      "L2024: if (empty($telefono)) {",
+      "L2027: if (strlen($telefono) < 9) {",
+      "L2039: if (empty($c->file_path)) {",
+      "L2043: if (!is_file($fullPath)) {"
+    ],
+    "variables": [
+      "$request",
+      "$idCotizacion",
+      "$validated",
+      "$cotizacion",
+      "$e",
+      "$comprobantes",
+      "$telefono",
+      "$numeroWhatsapp",
+      "$contenedor",
+      "$carga",
+      "$mensajeInicial",
+      "$enviados",
+      "$errores",
+      "$idx",
+      "$c",
+      "$fullPath",
+      "$mimeType",
+      "$message",
+      "$result",
+      "$this"
+    ],
+    "inline_literals": [
+      "administracion"
+    ]
+  },
+  {
+    "file": "app/Http/Controllers/CargaConsolidada/FacturaGuiaController.php",
+    "line": 2114,
+    "function": "sendGuiasContabilidad",
+    "method": "sendMedia",
+    "call": "$result = $this->sendMedia($legacyPath, $mimeType, $mensajeInicial, $numeroWhatsapp, 0, 'administracion', $cotizacion->guia_remision_url);",
+    "conditions": [
+      "L2090: if (!is_file($legacyPath)) {",
+      "L2094: if ($guias->isEmpty() && !$legacyPath) {",
+      "L2099: if (empty($telefono)) {",
+      "L2102: if (strlen($telefono) < 9) {",
+      "L2112: if ($legacyPath) {"
+    ],
+    "variables": [
+      "$mensajeInicial",
+      "$cotizacion",
+      "$carga",
+      "$enviados",
+      "$errores",
+      "$comprobantes",
+      "$idx",
+      "$c",
+      "$fullPath",
+      "$mimeType",
+      "$message",
+      "$result",
+      "$this",
+      "$numeroWhatsapp",
+      "$e",
+      "$idCotizacion",
+      "$guias",
+      "$legacyPath",
+      "$telefono",
+      "$contenedor"
+    ],
+    "inline_literals": [
+      "administracion"
+    ]
+  },
+  {
+    "file": "app/Http/Controllers/CargaConsolidada/FacturaGuiaController.php",
+    "line": 2129,
+    "function": "sendGuiasContabilidad",
+    "method": "sendMedia",
+    "call": "$result = $this->sendMedia($fullPath, $mimeType, $message, $numeroWhatsapp, 1, 'administracion', $g->file_name ?? null);",
+    "conditions": [
+      "L2112: if ($legacyPath) {",
+      "L2115: if ($result && is_array($result) && !empty($result['status'])) {",
+      "L2120: if (empty($g->file_path)) {",
+      "L2124: if (!is_file($fullPath)) {"
+    ],
+    "variables": [
+      "$result",
+      "$this",
+      "$fullPath",
+      "$mimeType",
+      "$message",
+      "$numeroWhatsapp",
+      "$c",
+      "$enviados",
+      "$errores",
+      "$e",
+      "$idCotizacion",
+      "$cotizacion",
+      "$guias",
+      "$legacyPath",
+      "$telefono",
+      "$contenedor",
+      "$carga",
+      "$mensajeInicial",
+      "$idx",
+      "$g"
+    ],
+    "inline_literals": [
+      "administracion"
+    ]
+  },
+  {
+    "file": "app/Http/Controllers/CargaConsolidada/FacturaGuiaController.php",
+    "line": 2195,
+    "function": "sendDetraccionesContabilidad",
+    "method": "sendMedia",
+    "call": "$result = $this->sendMedia($fullPath, $mimeType, $message, $numeroWhatsapp, 1, 'administracion', $det->file_name ?? null);",
+    "conditions": [
+      "L2170: if (empty($constancias)) {",
+      "L2175: if (empty($telefono)) {",
+      "L2178: if (strlen($telefono) < 9) {",
+      "L2190: if (!is_file($fullPath)) {"
+    ],
+    "variables": [
+      "$result",
+      "$enviados",
+      "$guias",
+      "$idx",
+      "$g",
+      "$fullPath",
+      "$mimeType",
+      "$message",
+      "$mensajeInicial",
+      "$this",
+      "$numeroWhatsapp",
+      "$e",
+      "$idCotizacion",
+      "$cotizacion",
+      "$comprobantesConDetraccion",
+      "$constancias",
+      "$c",
+      "$det",
+      "$telefono",
+      "$contenedor",
+      "$carga"
+    ],
+    "inline_literals": [
+      "administracion"
+    ]
+  },
+  {
+    "file": "app/Http/Controllers/CargaConsolidada/FacturaGuiaController.php",
+    "line": 2243,
+    "function": "sendFormularioContabilidad",
+    "method": "sendMessage",
+    "call": "$result = $this->sendMessage($message, $numeroWhatsapp, 0, 'administracion');",
+    "conditions": [
+      "L2223: if (!$cotizacion) {",
+      "L2228: if (empty($telefono)) {",
+      "L2231: if (strlen($telefono) < 9) {"
+    ],
+    "variables": [
+      "$constancias",
+      "$comprobantesConDetraccion",
+      "$c",
+      "$det",
+      "$telefono",
+      "$cotizacion",
+      "$numeroWhatsapp",
+      "$contenedor",
+      "$carga",
+      "$mensajeInicial",
+      "$enviados",
+      "$idx",
+      "$fullPath",
+      "$mimeType",
+      "$message",
+      "$result",
+      "$this",
+      "$e",
+      "$idCotizacion",
+      "$idContenedor",
+      "$clientesUrlBase",
+      "$datosFacturacion"
+    ],
+    "inline_literals": [
+      "administracion"
+    ]
+  },
+  {
+    "file": "app/Http/Controllers/CargaConsolidada/PagosController.php",
+    "line": 791,
+    "function": "actualizarPagoCoordinacion",
+    "method": "sendMessage",
+    "call": "$this->sendMessage($message, $telefono, 0, 'administracion');",
+    "conditions": [
+      "L771: if ($request->input('status') === 'CONFIRMADO') {",
+      "L786: if (!$esDelivery && $cotizacion && $cotizacion->contenedor) {",
+      "L790: if ($telefono) {"
+    ],
+    "variables": [
+      "$request",
+      "$idPago",
+      "$pago",
+      "$cotizacionId",
+      "$totales",
+      "$this",
+      "$e",
+      "$cotizacion",
+      "$conceptoName",
+      "$montoFormateado",
+      "$esDelivery",
+      "$moneda",
+      "$telefono",
+      "$nombre",
+      "$message"
+    ],
+    "inline_literals": [
+      "administracion"
+    ]
+  },
+  {
+    "file": "app/Http/Controllers/CargaConsolidada/PagosController.php",
+    "line": 1450,
+    "function": "updateStatusCurso",
+    "method": "sendMessage",
+    "call": "$this->sendMessage($message, $telefono, 0, 'administracion');",
+    "conditions": [
+      "L1435: if ($request->input('status') === 'CONFIRMADO') {",
+      "L1449: if ($telefono) {"
+    ],
+    "variables": [
+      "$aPagar",
+      "$pedidoCurso",
+      "$totalPagado",
+      "$pagos",
+      "$nombre",
+      "$e",
+      "$request",
+      "$idPedidoCurso",
+      "$curso",
+      "$conceptoName",
+      "$montoFormateado",
+      "$telefono",
+      "$message",
+      "$this"
+    ],
+    "inline_literals": [
+      "administracion"
+    ]
+  },
+  {
+    "file": "app/Http/Controllers/CargaConsolidada/Clientes/GeneralController.php",
+    "line": 969,
+    "function": "recordatoriosDocumentos",
+    "method": "sendMessage",
+    "call": "$response = $this->sendMessage($mensaje, $telefono, 5);",
+    "conditions": [
+      "L944: if (!$idProveedor || empty($documentos)) {",
+      "L950: if (!$proveedor) {"
+    ],
+    "variables": [
+      "$request",
+      "$idCotizacion",
+      "$proveedores",
+      "$cot",
+      "$nombreCliente",
+      "$telefono",
+      "$documentosMap",
+      "$mensaje",
+      "$prov",
+      "$idProveedor",
+      "$documentos",
+      "$proveedor",
+      "$codeSupplier",
+      "$doc",
+      "$nombreDocumento",
+      "$response",
+      "$this"
+    ],
+    "inline_literals": []
+  },
+  {
+    "file": "app/Http/Controllers/CargaConsolidada/CotizacionFinal/CotizacionFinalController.php",
+    "line": 1161,
+    "function": "updateEstadoCotizacionFinal",
+    "method": "sendMessage",
+    "call": "$this->sendMessage($message);",
+    "conditions": [
+      "L1144: if (!$contenedor) {"
+    ],
+    "variables": [
+      "$request",
+      "$cotizacion",
+      "$this",
+      "$telefono",
+      "$phoneNumberId",
+      "$totalPagos",
+      "$volumen",
+      "$nombre",
+      "$extrasCalc",
+      "$logisticaFinal",
+      "$impuestosFinal",
+      "$serviciosExtraFinal",
+      "$total",
+      "$totalAPagar",
+      "$idContenedor",
+      "$contenedor",
+      "$carga",
+      "$fechaArribo",
+      "$message"
+    ],
+    "inline_literals": []
+  },
+  {
+    "file": "app/Http/Controllers/CargaConsolidada/CotizacionFinal/CotizacionFinalController.php",
+    "line": 1164,
+    "function": "updateEstadoCotizacionFinal",
+    "method": "sendMedia",
+    "call": "$this->sendMedia($pathCotizacionFinalPDF, null, null, null, 3);",
+    "conditions": [
+      "L1144: if (!$contenedor) {"
+    ],
+    "variables": [
+      "$request",
+      "$cotizacion",
+      "$this",
+      "$telefono",
+      "$phoneNumberId",
+      "$totalPagos",
+      "$volumen",
+      "$nombre",
+      "$extrasCalc",
+      "$logisticaFinal",
+      "$impuestosFinal",
+      "$serviciosExtraFinal",
+      "$total",
+      "$totalAPagar",
+      "$idContenedor",
+      "$contenedor",
+      "$carga",
+      "$fechaArribo",
+      "$message",
+      "$pathCotizacionFinalPDF"
+    ],
+    "inline_literals": []
+  },
+  {
+    "file": "app/Http/Controllers/CargaConsolidada/CotizacionFinal/CotizacionFinalController.php",
+    "line": 1169,
+    "function": "updateEstadoCotizacionFinal",
+    "method": "sendMessage",
+    "call": "$this->sendMessage($message, null, 5);",
+    "conditions": [
+      "L1144: if (!$contenedor) {"
+    ],
+    "variables": [
+      "$request",
+      "$cotizacion",
+      "$this",
+      "$telefono",
+      "$phoneNumberId",
+      "$totalPagos",
+      "$volumen",
+      "$nombre",
+      "$extrasCalc",
+      "$logisticaFinal",
+      "$impuestosFinal",
+      "$serviciosExtraFinal",
+      "$total",
+      "$totalAPagar",
+      "$idContenedor",
+      "$contenedor",
+      "$carga",
+      "$fechaArribo",
+      "$message",
+      "$pathCotizacionFinalPDF"
+    ],
+    "inline_literals": []
+  },
+  {
+    "file": "app/Http/Controllers/CargaConsolidada/CotizacionFinal/CotizacionFinalController.php",
+    "line": 1171,
+    "function": "updateEstadoCotizacionFinal",
+    "method": "sendMedia",
+    "call": "$this->sendMedia($pagosUrl, 'image/jpg', null, null, 10);",
+    "conditions": [],
+    "variables": [
+      "$request",
+      "$cotizacion",
+      "$this",
+      "$telefono",
+      "$phoneNumberId",
+      "$totalPagos",
+      "$volumen",
+      "$nombre",
+      "$extrasCalc",
+      "$logisticaFinal",
+      "$impuestosFinal",
+      "$serviciosExtraFinal",
+      "$total",
+      "$totalAPagar",
+      "$idContenedor",
+      "$contenedor",
+      "$carga",
+      "$fechaArribo",
+      "$message",
+      "$pathCotizacionFinalPDF",
+      "$pagosUrl"
+    ],
+    "inline_literals": []
+  },
+  {
+    "file": "app/Http/Controllers/Clientes/DeliveryController.php",
+    "line": 758,
+    "function": "sendInitialDeliveryFormMessage",
+    "method": "sendMessage",
+    "call": "$this->sendMessage($message, $phoneNumber);",
+    "conditions": [
+      "L736: if ($t !== '') {",
+      "L748: if (empty($cotizacion->telefono)) {",
+      "L752: if (!$phoneNumber) {"
+    ],
+    "variables": [
+      "$rangeId",
+      "$rangeDate",
+      "$cotizacion",
+      "$idUser",
+      "$wasCreated",
+      "$this",
+      "$deliveryForm",
+      "$e",
+      "$keys",
+      "$request",
+      "$key",
+      "$v",
+      "$t",
+      "$phoneNumber",
+      "$contenedor",
+      "$carga",
+      "$message"
+    ],
+    "inline_literals": []
+  },
+  {
+    "file": "app/Http/Controllers/Curso/CursoController.php",
+    "line": 1869,
+    "function": "enviarEmailUsuarioMoodle",
+    "method": "sendMessageVentas",
+    "call": "$this->sendMessageVentas($message, $telefono);",
+    "conditions": [
+      "L1848: if ($entidad) {",
+      "L1855: if ($prefijoPais) {"
+    ],
+    "variables": [
+      "$arrPost",
+      "$results",
+      "$id",
+      "$ID_Pedido_Curso",
+      "$id_pedido_curso",
+      "$response_usuario_bd",
+      "$this",
+      "$result",
+      "$entidad",
+      "$idEntidad",
+      "$idPais",
+      "$telefono",
+      "$prefijoPais",
+      "$message",
+      "$mensaje"
+    ],
+    "inline_literals": []
+  },
+  {
+    "file": "app/Http/Controllers/Curso/CursoController.php",
+    "line": 1870,
+    "function": "enviarEmailUsuarioMoodle",
+    "method": "sendMessageVentas",
+    "call": "$this->sendMessageVentas($mensaje, $telefono, 2);",
+    "conditions": [
+      "L1848: if ($entidad) {",
+      "L1855: if ($prefijoPais) {"
+    ],
+    "variables": [
+      "$arrPost",
+      "$results",
+      "$id",
+      "$ID_Pedido_Curso",
+      "$id_pedido_curso",
+      "$response_usuario_bd",
+      "$this",
+      "$result",
+      "$entidad",
+      "$idEntidad",
+      "$idPais",
+      "$telefono",
+      "$prefijoPais",
+      "$message",
+      "$mensaje"
+    ],
+    "inline_literals": []
+  },
+  {
+    "file": "app/Http/Controllers/Curso/CursoController.php",
+    "line": 2203,
+    "function": "enviarCredencialesMoodle",
+    "method": "sendMessageCurso",
+    "call": "$this->sendMessageCurso($whatsappMessage, $phoneNumber);",
+    "conditions": [
+      "L2198: if (strlen($phoneNumber) == 9) {"
+    ],
+    "variables": [
+      "$e",
+      "$username",
+      "$password",
+      "$email",
+      "$nombre",
+      "$phoneNumber",
+      "$moodleUrl",
+      "$logo_header",
+      "$logo_footer",
+      "$whatsappMessage",
+      "$this"
+    ],
+    "inline_literals": []
+  },
+  {
+    "file": "app/Http/Controllers/Curso/CursoController.php",
+    "line": 2576,
+    "function": "enviarRecordatorioPago",
+    "method": "sendMessageCurso",
+    "call": "$response = $this->sendMessageCurso($mensaje, $phoneNumber);",
+    "conditions": [
+      "L2568: if (strlen($phoneNumber) == 9) {"
+    ],
+    "variables": [
+      "$idPedido",
+      "$user",
+      "$pedido",
+      "$importe",
+      "$adelanto",
+      "$deuda",
+      "$importeFormateado",
+      "$adelantoFormateado",
+      "$deudaFormateada",
+      "$nombreCliente",
+      "$mensaje",
+      "$phoneNumber",
+      "$response",
+      "$this"
+    ],
+    "inline_literals": []
+  },
+  {
+    "file": "app/Http/Controllers/Curso/CursoController.php",
+    "line": 2695,
+    "function": "enviarInstruccionesCambioPassword",
+    "method": "sendMessageCurso",
+    "call": "$response = $this->sendMessageCurso($mensaje, $phoneNumber);",
+    "conditions": [
+      "L2687: if (strlen($phoneNumber) == 9) {"
+    ],
+    "variables": [
+      "$idPedido",
+      "$user",
+      "$pedido",
+      "$nombreCliente",
+      "$mensaje",
+      "$phoneNumber",
+      "$response",
+      "$this"
+    ],
+    "inline_literals": []
+  },
+  {
+    "file": "app/Jobs/ForceSendCobrandoJob.php",
+    "line": 121,
+    "function": "handle",
+    "method": "sendMessage",
+    "call": "$this->sendMessage($message,$this->phoneNumberId,0,'administracion');",
+    "conditions": [
+      "L104: if ($pendiente < 0) {"
+    ],
+    "variables": [
+      "$this",
+      "$cotizacionInfo",
+      "$volumen",
+      "$valorCot",
+      "$telefono",
+      "$cliente",
+      "$contenedor",
+      "$carga",
+      "$fechaCierre",
+      "$anioContenedor",
+      "$fCierre",
+      "$meses",
+      "$queryPagos",
+      "$totalPagosLogistica",
+      "$countPagosLogistica",
+      "$e",
+      "$pendiente",
+      "$message"
+    ],
+    "inline_literals": [
+      "administracion"
+    ]
+  },
+  {
+    "file": "app/Jobs/ForceSendCobrandoJob.php",
+    "line": 125,
+    "function": "handle",
+    "method": "sendMedia",
+    "call": "$this->sendMedia($pagosUrl, 'image/jpg',null,$telefono,10,'administracion');",
+    "conditions": [
+      "L104: if ($pendiente < 0) {"
+    ],
+    "variables": [
+      "$this",
+      "$cotizacionInfo",
+      "$volumen",
+      "$valorCot",
+      "$telefono",
+      "$cliente",
+      "$contenedor",
+      "$carga",
+      "$fechaCierre",
+      "$anioContenedor",
+      "$fCierre",
+      "$meses",
+      "$queryPagos",
+      "$totalPagosLogistica",
+      "$countPagosLogistica",
+      "$e",
+      "$pendiente",
+      "$message",
+      "$pagosUrl"
+    ],
+    "inline_literals": [
+      "administracion"
+    ]
+  },
+  {
+    "file": "app/Jobs/ForceSendRotuladoJob.php",
+    "line": 92,
+    "function": "handle",
+    "method": "sendWelcome",
+    "call": "$this->sendWelcome($carga);",
+    "conditions": [
+      "L72: if (!$contenedor) {",
+      "L79: if (!file_exists($htmlWelcomePath)) {",
+      "L91: if ($sendWelcome) {"
+    ],
+    "variables": [
+      "$idCotizacion",
+      "$proveedoresIds",
+      "$idContainer",
+      "$domain",
+      "$this",
+      "$cotizacionInfo",
+      "$telefono",
+      "$totalproveedores",
+      "$contenedor",
+      "$carga",
+      "$htmlWelcomePath",
+      "$htmlWelcomeContent",
+      "$sendWelcome"
+    ],
+    "inline_literals": []
+  },
+  {
+    "file": "app/Jobs/ForceSendRotuladoJob.php",
+    "line": 95,
+    "function": "handle",
+    "method": "sendMessage",
+    "call": "$this->sendMessage(\"Hola 🙋🏻‍♀, te escribe el área de coordinación de Probusiness.",
+    "conditions": [
+      "L72: if (!$contenedor) {",
+      "L79: if (!file_exists($htmlWelcomePath)) {",
+      "L91: if ($sendWelcome) {"
+    ],
+    "variables": [
+      "$idCotizacion",
+      "$proveedoresIds",
+      "$idContainer",
+      "$domain",
+      "$this",
+      "$cotizacionInfo",
+      "$telefono",
+      "$totalproveedores",
+      "$contenedor",
+      "$carga",
+      "$htmlWelcomePath",
+      "$htmlWelcomeContent",
+      "$sendWelcome"
+    ],
+    "inline_literals": []
+  },
+  {
+    "file": "app/Jobs/ForceSendRotuladoJob.php",
+    "line": 256,
+    "function": "handle",
+    "method": "sendDataItem",
+    "call": "$this->sendDataItem(",
+    "conditions": [
+      "L236: if (file_exists($tempFilePath)) {",
+      "L240: if (file_put_contents($tempFilePath, $pdfContent) === false) {",
+      "L248: if (!$zip->addFile($tempFilePath, \"Rotulado_{$supplierCode}.pdf\")) {"
+    ],
+    "variables": [
+      "$proveedorArray",
+      "$proveedor",
+      "$supplierCode",
+      "$products",
+      "$sleepSendMedia",
+      "$htmlFilePath",
+      "$htmlContent",
+      "$headerImagePath",
+      "$headerImageBase64",
+      "$imageData",
+      "$cliente",
+      "$carga",
+      "$dompdf",
+      "$options",
+      "$pdfContent",
+      "$pdfException",
+      "$tempFilePath",
+      "$zip",
+      "$this"
+    ],
+    "inline_literals": []
+  },
+  {
+    "file": "app/Jobs/ForceSendRotuladoJob.php",
+    "line": 284,
+    "function": "handle",
+    "method": "sendMedia",
+    "call": "$this->sendMedia($direccionUrl, 'image/jpg', '🏽Dile a tu proveedor que envíe la carga a nuestro almacén en China', null, $sleepSendMedia);",
+    "conditions": [
+      "L274: if (!$zip->close()) {"
+    ],
+    "variables": [
+      "$htmlContent",
+      "$cliente",
+      "$supplierCode",
+      "$carga",
+      "$headerImageBase64",
+      "$dompdf",
+      "$options",
+      "$pdfContent",
+      "$pdfException",
+      "$tempFilePath",
+      "$zip",
+      "$this",
+      "$products",
+      "$processedProviders",
+      "$e",
+      "$direccionUrl",
+      "$sleepSendMedia"
+    ],
+    "inline_literals": [
+      "🏽Dile a tu proveedor que envíe la carga a nuestro almacén en China"
+    ]
+  },
+  {
+    "file": "app/Jobs/ForceSendRotuladoJob.php",
+    "line": 288,
+    "function": "handle",
+    "method": "sendMessage",
+    "call": "$this->sendMessage(\"También necesito los datos de tu proveedor para comunicarnos y recibir tu carga.",
+    "conditions": [
+      "L274: if (!$zip->close()) {"
+    ],
+    "variables": [
+      "$supplierCode",
+      "$dompdf",
+      "$options",
+      "$htmlContent",
+      "$pdfContent",
+      "$pdfException",
+      "$tempFilePath",
+      "$zip",
+      "$this",
+      "$products",
+      "$processedProviders",
+      "$e",
+      "$direccionUrl",
+      "$sleepSendMedia"
+    ],
+    "inline_literals": []
+  },
+  {
+    "file": "app/Jobs/SendComprobanteFormNotificationJob.php",
+    "line": 76,
+    "function": "handle",
+    "method": "sendMessage",
+    "call": "//$this->sendMessage($msgAdmin, null, 0, 'administracion');",
+    "conditions": [
+      "L60: if ($tipoComprobante === 'FACTURA') {"
+    ],
+    "variables": [
+      "$comprobanteFormId",
+      "$this",
+      "$form",
+      "$cotizacion",
+      "$contenedor",
+      "$carga",
+      "$anioCarga",
+      "$cargaTexto",
+      "$consolidadoLabel",
+      "$clienteNombre",
+      "$tipoComprobante",
+      "$dom",
+      "$datosLineas",
+      "$msgAdmin"
+    ],
+    "inline_literals": [
+      "administracion"
+    ]
+  },
+  {
+    "file": "app/Jobs/SendComprobanteFormNotificationJob.php",
+    "line": 110,
+    "function": "handle",
+    "method": "sendMessage",
+    "call": "$this->sendMessage($msgCliente, $numeroCliente, 0, 'administracion');",
+    "conditions": [
+      "L86: if ($tipoComprobante === 'FACTURA') {"
+    ],
+    "variables": [
+      "$this",
+      "$form",
+      "$cotizacion",
+      "$contenedor",
+      "$carga",
+      "$anioCarga",
+      "$cargaTexto",
+      "$consolidadoLabel",
+      "$clienteNombre",
+      "$tipoComprobante",
+      "$dom",
+      "$datosLineas",
+      "$msgAdmin",
+      "$telefono",
+      "$numeroCliente",
+      "$msgCliente"
+    ],
+    "inline_literals": [
+      "administracion"
+    ]
+  },
+  {
+    "file": "app/Jobs/SendConstanciaCurso.php",
+    "line": 85,
+    "function": "handle",
+    "method": "sendMedia",
+    "call": "$response = $this->sendMedia(",
+    "conditions": [
+      "L63: if (! $this->pedidoCurso) {"
+    ],
+    "variables": [
+      "$phoneNumberId",
+      "$pedidoCurso",
+      "$table",
+      "$this",
+      "$pdfPath",
+      "$nombreParticipante",
+      "$fechaEmision",
+      "$emailParticipante",
+      "$mensaje",
+      "$response"
+    ],
+    "inline_literals": []
+  },
+  {
+    "file": "app/Jobs/SendContabilidadComprobantesJob.php",
+    "line": 73,
+    "function": "handle",
+    "method": "sendMedia",
+    "call": "$this->sendMedia($filePath, $mimeType, $message, $numeroWhatsapp, 0, 'administracion', $comp->file_name);",
+    "conditions": [
+      "L61: if ($comprobantes->isEmpty()) {",
+      "L68: if (!file_exists($filePath)) {"
+    ],
+    "variables": [
+      "$idCotizacion",
+      "$this",
+      "$cotizacion",
+      "$telefono",
+      "$numeroWhatsapp",
+      "$contenedor",
+      "$carga",
+      "$message",
+      "$comprobantes",
+      "$comp",
+      "$filePath",
+      "$mimeType"
+    ],
+    "inline_literals": [
+      "administracion"
+    ]
+  },
+  {
+    "file": "app/Jobs/SendContabilidadDetraccionesJob.php",
+    "line": 78,
+    "function": "handle",
+    "method": "sendMedia",
+    "call": "$this->sendMedia($filePath, $mimeType, $message, $numeroWhatsapp, 0, 'administracion', $comp->constancia->file_name);",
+    "conditions": [
+      "L62: if ($comprobantes->isEmpty()) {",
+      "L69: if (!$comp->constancia || empty($comp->constancia->file_path)) {",
+      "L73: if (!file_exists($filePath)) {"
+    ],
+    "variables": [
+      "$idCotizacion",
+      "$this",
+      "$cotizacion",
+      "$telefono",
+      "$numeroWhatsapp",
+      "$contenedor",
+      "$carga",
+      "$message",
+      "$comprobantes",
+      "$enviados",
+      "$comp",
+      "$filePath",
+      "$mimeType"
+    ],
+    "inline_literals": [
+      "administracion"
+    ]
+  },
+  {
+    "file": "app/Jobs/SendContabilidadGuiasJob.php",
+    "line": 70,
+    "function": "handle",
+    "method": "sendMedia",
+    "call": "$this->sendMedia($filePath, $mimeType, $message, $numeroWhatsapp, 0, 'administracion', $guia->file_name);",
+    "conditions": [
+      "L46: if (strlen($telefono) < 9) {",
+      "L58: if ($guias->isEmpty()) {",
+      "L65: if (!file_exists($filePath)) {"
+    ],
+    "variables": [
+      "$idCotizacion",
+      "$this",
+      "$cotizacion",
+      "$telefono",
+      "$numeroWhatsapp",
+      "$contenedor",
+      "$carga",
+      "$message",
+      "$guias",
+      "$guia",
+      "$filePath",
+      "$mimeType"
+    ],
+    "inline_literals": [
+      "administracion"
+    ]
+  },
+  {
+    "file": "app/Jobs/SendDeliveryConfirmationWhatsAppLimaJob.php",
+    "line": 74,
+    "function": "handle",
+    "method": "sendMessage",
+    "call": "$resultado = $this->sendMessage($mensaje, $telefono);",
+    "conditions": [
+      "L49: if (!$cotizacion) {",
+      "L55: if (!$contenedor) {",
+      "L61: if (empty($cotizacion->telefono)) {"
+    ],
+    "variables": [
+      "$deliveryFormId",
+      "$this",
+      "$deliveryForm",
+      "$user",
+      "$cotizacion",
+      "$contenedor",
+      "$carga",
+      "$telefono",
+      "$notificacion",
+      "$mensaje",
+      "$resultado"
+    ],
+    "inline_literals": []
+  },
+  {
+    "file": "app/Jobs/SendDeliveryConfirmationWhatsAppProvinceJob.php",
+    "line": 99,
+    "function": "handle",
+    "method": "sendMessage",
+    "call": "$resultado = $this->sendMessage($mensaje, $telefono);",
+    "conditions": [
+      "L77: if (!$contenedor) {",
+      "L84: if (empty($cotizacion->telefono)) {"
+    ],
+    "variables": [
+      "$deliveryFormId",
+      "$domain",
+      "$this",
+      "$deliveryForm",
+      "$idUser",
+      "$user",
+      "$cotizacion",
+      "$contenedor",
+      "$carga",
+      "$telefono",
+      "$notificacion",
+      "$mensaje",
+      "$resultado"
+    ],
+    "inline_literals": []
+  },
+  {
+    "file": "app/Jobs/SendDeliveryFormBulkJob.php",
+    "line": 130,
+    "function": "handle",
+    "method": "sendMessage",
+    "call": "$resultPrincipal = $this->sendMessage($messagePrincipal, $numeroWhatsapp);",
+    "conditions": [
+      "L110: if ($typeForm !== 0 && $typeForm !== 1) {",
+      "L121: if (!$telefono) {",
+      "L125: if (strlen($telefono) < 9) {"
+    ],
+    "variables": [
+      "$indexed",
+      "$idCotizacion",
+      "$typeForm",
+      "$this",
+      "$cotizacionData",
+      "$numeroWhatsapp",
+      "$resultPrincipal",
+      "$resultSecundario",
+      "$row",
+      "$join",
+      "$contenedor",
+      "$typeFormPayload",
+      "$typeFormDb",
+      "$messagePrincipal",
+      "$messageSecundario",
+      "$telefono"
+    ],
+    "inline_literals": []
+  },
+  {
+    "file": "app/Jobs/SendDeliveryFormBulkJob.php",
+    "line": 140,
+    "function": "handle",
+    "method": "sendMessage",
+    "call": "$resultSecundario = $this->sendMessage($messageSecundario, $numeroWhatsapp,5);",
+    "conditions": [
+      "L121: if (!$telefono) {",
+      "L125: if (strlen($telefono) < 9) {",
+      "L131: if (!$resultPrincipal['status']) {"
+    ],
+    "variables": [
+      "$this",
+      "$cotizacionData",
+      "$numeroWhatsapp",
+      "$resultPrincipal",
+      "$resultSecundario",
+      "$idCotizacion",
+      "$row",
+      "$join",
+      "$contenedor",
+      "$typeFormPayload",
+      "$typeFormDb",
+      "$typeForm",
+      "$messagePrincipal",
+      "$messageSecundario",
+      "$telefono"
+    ],
+    "inline_literals": []
+  },
+  {
+    "file": "app/Jobs/SendInspectionMediaJob.php",
+    "line": 191,
+    "function": "handle",
+    "method": "sendMessage",
+    "call": "$this->sendMessage($message, $telefono);",
+    "conditions": [
+      "L179: if (count($cotizacionProviders) != count($this->idsProveedores)) {"
+    ],
+    "variables": [
+      "$fCierre",
+      "$meses",
+      "$proveedorUpdate",
+      "$this",
+      "$ahora",
+      "$trackingActual",
+      "$cliente",
+      "$cotizacion",
+      "$telefono",
+      "$sendStatus",
+      "$cotizacionProviders",
+      "$qtyBox",
+      "$proveedor",
+      "$baseUrl",
+      "$inspeccionLink",
+      "$message"
+    ],
+    "inline_literals": []
+  },
+  {
+    "file": "app/Jobs/SendRecordatorioDatosProveedorJob.php",
+    "line": 83,
+    "function": "handle",
+    "method": "sendMessage",
+    "call": "$this->sendMessage($message, $this->phoneNumberId);",
+    "conditions": [
+      "L71: if ($proveedor) {"
+    ],
+    "variables": [
+      "$idCotizacion",
+      "$idContainer",
+      "$proveedores",
+      "$domain",
+      "$this",
+      "$cotizacion",
+      "$uuid",
+      "$nombreCliente",
+      "$url",
+      "$message",
+      "$proveedorId",
+      "$proveedor",
+      "$telefono"
+    ],
+    "inline_literals": []
+  },
+  {
+    "file": "app/Jobs/SendReminderPagoWhatsAppJob.php",
+    "line": 118,
+    "function": "handle",
+    "method": "sendMessage",
+    "call": "$result = $this->sendMessage($message, $this->phoneNumberId, $this->sleep, 'administracion');",
+    "conditions": [
+      "L95: if (strlen($telefonoDigits) === 9) {",
+      "L101: if (empty($telefonoDigits)) {"
+    ],
+    "variables": [
+      "$this",
+      "$cotizacion",
+      "$contenedor",
+      "$carga",
+      "$fechaArribo",
+      "$recargosDescuentosFinal",
+      "$serviciosExtraFinal",
+      "$logisticaFinal",
+      "$impuestosFinal",
+      "$totalCotizacion",
+      "$totalPagos",
+      "$pendiente",
+      "$isAjustado",
+      "$descripcionPendiente",
+      "$message",
+      "$rawTelefono",
+      "$telefonoDigits",
+      "$result"
+    ],
+    "inline_literals": [
+      "administracion"
+    ]
+  },
+  {
+    "file": "app/Jobs/SendReminderPagoWhatsAppJob.php",
+    "line": 120,
+    "function": "handle",
+    "method": "sendMedia",
+    "call": "$this->sendMedia($pagosUrl, 'image/jpg', null, null, 10, 'administracion');",
+    "conditions": [
+      "L95: if (strlen($telefonoDigits) === 9) {",
+      "L101: if (empty($telefonoDigits)) {"
+    ],
+    "variables": [
+      "$this",
+      "$cotizacion",
+      "$contenedor",
+      "$carga",
+      "$fechaArribo",
+      "$recargosDescuentosFinal",
+      "$serviciosExtraFinal",
+      "$logisticaFinal",
+      "$impuestosFinal",
+      "$totalCotizacion",
+      "$totalPagos",
+      "$pendiente",
+      "$isAjustado",
+      "$descripcionPendiente",
+      "$message",
+      "$rawTelefono",
+      "$telefonoDigits",
+      "$result",
+      "$pagosUrl"
+    ],
+    "inline_literals": [
+      "administracion"
+    ]
+  },
+  {
+    "file": "app/Jobs/SendRotuladoJob.php",
+    "line": 145,
+    "function": "handle",
+    "method": "sendWelcome",
+    "call": "$result = $this->sendWelcome($this->carga);",
+    "conditions": [
+      "L124: if ($forceSend) {",
+      "L136: if (empty($providersHasNoSended)) {",
+      "L143: if (count($providersHasSended) == 0 || $hasForceSend) {"
+    ],
+    "variables": [
+      "$this",
+      "$cotizacionInfo",
+      "$telefono",
+      "$proveedores",
+      "$proveedor",
+      "$proveedorIds",
+      "$proveedoresFromDB",
+      "$providersHasSended",
+      "$providersHasNoSended",
+      "$hasForceSend",
+      "$proveedorDB",
+      "$forceSend",
+      "$result"
+    ],
+    "inline_literals": []
+  },
+  {
+    "file": "app/Jobs/SendRotuladoJob.php",
+    "line": 148,
+    "function": "handle",
+    "method": "sendMessage",
+    "call": "$this->sendMessage(\"Hola 🙋🏻‍♀, te escribe el área de coordinación de Probusiness.",
+    "conditions": [
+      "L124: if ($forceSend) {",
+      "L136: if (empty($providersHasNoSended)) {",
+      "L143: if (count($providersHasSended) == 0 || $hasForceSend) {"
+    ],
+    "variables": [
+      "$this",
+      "$cotizacionInfo",
+      "$telefono",
+      "$proveedores",
+      "$proveedor",
+      "$proveedorIds",
+      "$proveedoresFromDB",
+      "$providersHasSended",
+      "$providersHasNoSended",
+      "$hasForceSend",
+      "$proveedorDB",
+      "$forceSend",
+      "$result"
+    ],
+    "inline_literals": []
+  },
+  {
+    "file": "app/Jobs/SendRotuladoJob.php",
+    "line": 238,
+    "function": "handle",
+    "method": "sendMedia",
+    "call": "$this->sendMedia(",
+    "conditions": [
+      "L214: if (file_exists($tempFilePath)) {",
+      "L218: if (file_put_contents($tempFilePath, $pdfContent) === false) {",
+      "L224: if (!$zip->addFile($tempFilePath, \"Rotulado_{$supplierCode}.pdf\")) {",
+      "L231: if (file_exists($tempFileForSend)) {"
+    ],
+    "variables": [
+      "$zipFileName",
+      "$zipDirectory",
+      "$zip",
+      "$zipResult",
+      "$options",
+      "$sleepSendMedia",
+      "$processedProviders",
+      "$providersHasNoSended",
+      "$proveedor",
+      "$proveedorDB",
+      "$proveedoresFromDB",
+      "$supplierCode",
+      "$products",
+      "$tipoRotulado",
+      "$pdfContent",
+      "$this",
+      "$tempFilePath",
+      "$fileName",
+      "$tempFileForSend"
+    ],
+    "inline_literals": []
+  },
+  {
+    "file": "app/Jobs/SendRotuladoJob.php",
+    "line": 308,
+    "function": "handle",
+    "method": "sendMedia",
+    "call": "$this->sendMedia($direccionUrl, 'image/jpg', '🏽Dile a tu proveedor que envíe la carga a nuestro almacén en China', null, $sleepSendMedia);",
+    "conditions": [
+      "L301: if (!$zip->close()) {"
+    ],
+    "variables": [
+      "$fileName",
+      "$supplierCode",
+      "$tempFileForSend",
+      "$tempFilePath",
+      "$sleepSendMedia",
+      "$this",
+      "$products",
+      "$tipoRotulado",
+      "$proveedor",
+      "$updateData",
+      "$proveedorDB",
+      "$ahora",
+      "$trackingActual",
+      "$processedProviders",
+      "$e",
+      "$zip",
+      "$direccionUrl"
+    ],
+    "inline_literals": [
+      "🏽Dile a tu proveedor que envíe la carga a nuestro almacén en China"
+    ]
+  },
+  {
+    "file": "app/Jobs/SendRotuladoJob.php",
+    "line": 335,
+    "function": "handle",
+    "method": "sendMessage",
+    "call": "$this->sendMessage($message, null, $sleepSendMedia);",
+    "conditions": [
+      "L328: if ($provider) {"
+    ],
+    "variables": [
+      "$proveedorDB",
+      "$updateData",
+      "$ahora",
+      "$trackingActual",
+      "$this",
+      "$processedProviders",
+      "$e",
+      "$supplierCode",
+      "$zip",
+      "$direccionUrl",
+      "$sleepSendMedia",
+      "$cotizacion",
+      "$uuid",
+      "$url",
+      "$message",
+      "$providers",
+      "$query",
+      "$provider"
+    ],
+    "inline_literals": []
+  },
+  {
+    "file": "app/Jobs/SendRotuladoJob.php",
+    "line": 628,
+    "function": "sendRotuladoCalzado",
+    "method": "sendMedia",
+    "call": "$this->sendMedia($calzadoPdfPath, 'application/pdf', $message, null, $sleepSendMedia);",
+    "conditions": [
+      "L627: if (file_exists($calzadoPdfPath)) {"
+    ],
+    "variables": [
+      "$htmlContent",
+      "$headerImagePath",
+      "$headerImageBase64",
+      "$imageData",
+      "$this",
+      "$supplierCode",
+      "$products",
+      "$htmlFilePath",
+      "$options",
+      "$dompdf",
+      "$sleepSendMedia",
+      "$message",
+      "$calzadoPdfPath"
+    ],
+    "inline_literals": []
+  },
+  {
+    "file": "app/Jobs/SendRotuladoJob.php",
+    "line": 644,
+    "function": "sendRotuladoRopa",
+    "method": "sendMedia",
+    "call": "$this->sendMedia($ropaPdfPath, 'application/pdf', $message, null, $sleepSendMedia);",
+    "conditions": [
+      "L627: if (file_exists($calzadoPdfPath)) {",
+      "L643: if (file_exists($ropaPdfPath)) {"
+    ],
+    "variables": [
+      "$supplierCode",
+      "$products",
+      "$htmlFilePath",
+      "$this",
+      "$htmlContent",
+      "$headerImagePath",
+      "$headerImageBase64",
+      "$imageData",
+      "$options",
+      "$dompdf",
+      "$sleepSendMedia",
+      "$message",
+      "$calzadoPdfPath",
+      "$ropaPdfPath"
+    ],
+    "inline_literals": []
+  },
+  {
+    "file": "app/Jobs/SendRotuladoJob.php",
+    "line": 660,
+    "function": "sendRotuladoRopaInterior",
+    "method": "sendMedia",
+    "call": "$this->sendMedia($ropaInteriorPdfPath, 'application/pdf', $message, null, $sleepSendMedia);",
+    "conditions": [
+      "L643: if (file_exists($ropaPdfPath)) {",
+      "L659: if (file_exists($ropaInteriorPdfPath)) {"
+    ],
+    "variables": [
+      "$htmlContent",
+      "$this",
+      "$supplierCode",
+      "$headerImageBase64",
+      "$options",
+      "$dompdf",
+      "$products",
+      "$sleepSendMedia",
+      "$message",
+      "$calzadoPdfPath",
+      "$ropaPdfPath",
+      "$ropaInteriorPdfPath"
+    ],
+    "inline_literals": []
+  },
+  {
+    "file": "app/Jobs/SendRotuladoJob.php",
+    "line": 676,
+    "function": "sendRotuladoMaquinaria",
+    "method": "sendMedia",
+    "call": "$this->sendMedia($maquinariaPdfPath, 'application/pdf', $message, null, $sleepSendMedia);",
+    "conditions": [
+      "L659: if (file_exists($ropaInteriorPdfPath)) {",
+      "L675: if (file_exists($maquinariaPdfPath)) {"
+    ],
+    "variables": [
+      "$options",
+      "$dompdf",
+      "$htmlContent",
+      "$supplierCode",
+      "$products",
+      "$sleepSendMedia",
+      "$message",
+      "$calzadoPdfPath",
+      "$this",
+      "$ropaPdfPath",
+      "$ropaInteriorPdfPath",
+      "$maquinariaPdfPath"
+    ],
+    "inline_literals": []
+  },
+  {
+    "file": "app/Jobs/SendRotuladoJob.php",
+    "line": 765,
+    "function": "sendRotuladoMovilidadPersonal",
+    "method": "sendMedia",
+    "call": "$this->sendMedia($movilidadPersonalPath, 'application/pdf', $message, null, $sleepSendMedia);",
+    "conditions": [
+      "L764: if (file_exists($excelPath)) {"
+    ],
+    "variables": [
+      "$cotizacionInfo",
+      "$this",
+      "$idContenedor",
+      "$carga",
+      "$proveedorDB",
+      "$supplierCode",
+      "$qtyBox",
+      "$proveedorData",
+      "$items",
+      "$lastRowData",
+      "$lastCode",
+      "$lastRowNumber",
+      "$codes",
+      "$sheetName",
+      "$excelPath",
+      "$movilidadPersonalPath",
+      "$message",
+      "$sleepSendMedia"
+    ],
+    "inline_literals": []
+  },
+  {
+    "file": "app/Jobs/SendRotuladoJob.php",
+    "line": 773,
+    "function": "sendRotuladoMovilidadPersonal",
+    "method": "sendMedia",
+    "call": "$this->sendMedia($excelPath, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', $message, null, $sleepSendMedia, 'consolidado', 'vin_movilidad.xlsx');",
+    "conditions": [
+      "L764: if (file_exists($excelPath)) {",
+      "L771: if (file_exists($excelPath)) {"
+    ],
+    "variables": [
+      "$proveedorDB",
+      "$supplierCode",
+      "$this",
+      "$qtyBox",
+      "$proveedorData",
+      "$items",
+      "$cotizacionInfo",
+      "$lastRowData",
+      "$lastCode",
+      "$lastRowNumber",
+      "$codes",
+      "$sheetName",
+      "$carga",
+      "$excelPath",
+      "$movilidadPersonalPath",
+      "$message",
+      "$sleepSendMedia"
+    ],
+    "inline_literals": [
+      "consolidado",
+      "vin_movilidad.xlsx"
+    ]
+  },
+  {
+    "file": "app/Jobs/SendViaticoWhatsappNotificationJob.php",
+    "line": 54,
+    "function": "handle",
+    "method": "sendMessage",
+    "call": "$this->sendMessage($this->message, $this->phoneNumberId, 0, 'administracion');",
+    "conditions": [
+      "L51: if (strlen($this->userPhone) === 9) {"
+    ],
+    "variables": [
+      "$message",
+      "$userId",
+      "$paymentReceiptPath",
+      "$userPhone",
+      "$retribucionId",
+      "$this"
+    ],
+    "inline_literals": [
+      "administracion"
+    ]
+  },
+  {
+    "file": "app/Jobs/SendViaticoWhatsappNotificationJob.php",
+    "line": 77,
+    "function": "handle",
+    "method": "sendMedia",
+    "call": "$this->sendMedia($fullPath, $mime, null, $this->phoneNumberId, 0, 'administracion', $fileName);",
+    "conditions": [
+      "L56: if ($this->paymentReceiptPath) {",
+      "L59: if (preg_match('#/storage/(.+)$#', $this->paymentReceiptPath, $m)) {",
+      "L65: if (!file_exists($fullPath)) {",
+      "L68: if (!file_exists($fullPath) && method_exists(Storage::disk('public'), 'path')) {",
+      "L71: if (file_exists($fullPath) && is_readable($fullPath)) {",
+      "L73: if ($mime === 'application/octet-stream') {"
+    ],
+    "variables": [
+      "$message",
+      "$userId",
+      "$paymentReceiptPath",
+      "$userPhone",
+      "$retribucionId",
+      "$this",
+      "$pathToUse",
+      "$m",
+      "$pathNormalized",
+      "$fullPath",
+      "$mime",
+      "$fileName"
+    ],
+    "inline_literals": [
+      "administracion"
+    ]
+  },
+  {
+    "file": "app/Jobs/SolicitarDocumentosWhatsAppJob.php",
+    "line": 75,
+    "function": "handle",
+    "method": "sendMessage",
+    "call": "$response = $this->sendMessage($message, $telefono, 5);",
+    "conditions": [
+      "L50: if (!$cot) {",
+      "L59: if ($telefono === '') {"
+    ],
+    "variables": [
+      "$idCotizacion",
+      "$proveedores",
+      "$validateMaxDate",
+      "$this",
+      "$excelService",
+      "$cot",
+      "$telefono",
+      "$cont",
+      "$carga",
+      "$cargaCode",
+      "$message",
+      "$response"
+    ],
+    "inline_literals": []
+  },
+  {
+    "file": "app/Jobs/SolicitarDocumentosWhatsAppJob.php",
+    "line": 96,
+    "function": "handle",
+    "method": "sendMedia",
+    "call": "$response = $this->sendMedia($fullPath, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'Documento de confirmación', $telefono, 5);",
+    "conditions": [
+      "L80: if (!is_dir($outputDir)) {",
+      "L92: if (!$ok) {"
+    ],
+    "variables": [
+      "$idCotizacion",
+      "$proveedores",
+      "$validateMaxDate",
+      "$this",
+      "$excelService",
+      "$cot",
+      "$telefono",
+      "$cont",
+      "$carga",
+      "$cargaCode",
+      "$message",
+      "$response",
+      "$templatePath",
+      "$outputDir",
+      "$prov",
+      "$cotizacionProveedor",
+      "$codeSupplier",
+      "$suffixArchivo",
+      "$fileName",
+      "$fullPath",
+      "$ok"
+    ],
+    "inline_literals": [
+      "Documento de confirmación"
+    ]
+  },
+  {
+    "file": "app/Jobs/SolicitarDocumentosWhatsAppJob.php",
+    "line": 117,
+    "function": "handle",
+    "method": "sendMessage",
+    "call": "$this->sendMessage($messagePaso2, $telefono, 8);",
+    "conditions": [
+      "L92: if (!$ok) {",
+      "L113: if ($this->validateMaxDate && $fecha_documentacion_max_formatted) {"
+    ],
+    "variables": [
+      "$this",
+      "$validateMaxDate",
+      "$excelService",
+      "$cot",
+      "$telefono",
+      "$cont",
+      "$carga",
+      "$cargaCode",
+      "$message",
+      "$response",
+      "$templatePath",
+      "$outputDir",
+      "$prov",
+      "$cotizacionProveedor",
+      "$codeSupplier",
+      "$suffixArchivo",
+      "$fileName",
+      "$fullPath",
+      "$ok",
+      "$contenedor",
+      "$fecha_documentacion_max",
+      "$fecha_documentacion_max_formatted",
+      "$messagePaso2"
+    ],
+    "inline_literals": []
+  },
+  {
+    "file": "app/Jobs/SolicitarDocumentosWhatsAppJob.php",
+    "line": 120,
+    "function": "handle",
+    "method": "sendMedia",
+    "call": "$response = $this->sendMedia($considerationsPath, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'Consideraciones', $telefono, 10);",
+    "conditions": [
+      "L113: if ($this->validateMaxDate && $fecha_documentacion_max_formatted) {"
+    ],
+    "variables": [
+      "$excelService",
+      "$cot",
+      "$this",
+      "$telefono",
+      "$cont",
+      "$carga",
+      "$cargaCode",
+      "$message",
+      "$response",
+      "$templatePath",
+      "$outputDir",
+      "$prov",
+      "$cotizacionProveedor",
+      "$codeSupplier",
+      "$suffixArchivo",
+      "$fileName",
+      "$fullPath",
+      "$ok",
+      "$contenedor",
+      "$fecha_documentacion_max",
+      "$fecha_documentacion_max_formatted",
+      "$messagePaso2",
+      "$considerationsPath"
+    ],
+    "inline_literals": [
+      "Consideraciones"
+    ]
+  },
+  {
+    "file": "app/Services/CalculadoraImportacion/CalculadoraImportacionWhatsappService.php",
+    "line": 27,
+    "function": "sendCotizacionSequence",
+    "method": "sendMessage",
+    "call": "$this->sendMessage($primerMensaje, $phoneNumberId, 2);",
+    "conditions": [
+      "L16: if (!$whatsappCliente) {"
+    ],
+    "variables": [
+      "$whatsappCliente",
+      "$calculadora",
+      "$phoneNumberId",
+      "$this",
+      "$primerMensaje"
+    ],
+    "inline_literals": []
+  },
+  {
+    "file": "app/Services/CalculadoraImportacion/CalculadoraImportacionWhatsappService.php",
+    "line": 32,
+    "function": "sendCotizacionSequence",
+    "method": "sendMedia",
+    "call": "$this->sendMedia($pdfPath, 'application/pdf', null, $phoneNumberId, 3);",
+    "conditions": [
+      "L16: if (!$whatsappCliente) {",
+      "L29: if (!empty($calculadora->url_cotizacion_pdf)) {",
+      "L31: if ($pdfPath && file_exists($pdfPath)) {"
+    ],
+    "variables": [
+      "$whatsappCliente",
+      "$calculadora",
+      "$phoneNumberId",
+      "$this",
+      "$primerMensaje",
+      "$pdfPath"
+    ],
+    "inline_literals": []
+  },
+  {
+    "file": "app/Services/CalculadoraImportacion/CalculadoraImportacionWhatsappService.php",
+    "line": 43,
+    "function": "sendCotizacionSequence",
+    "method": "sendMessage",
+    "call": "$this->sendMessage($tercerMensaje, $phoneNumberId, 2);",
+    "conditions": [
+      "L29: if (!empty($calculadora->url_cotizacion_pdf)) {",
+      "L31: if ($pdfPath && file_exists($pdfPath)) {"
+    ],
+    "variables": [
+      "$whatsappCliente",
+      "$calculadora",
+      "$phoneNumberId",
+      "$this",
+      "$primerMensaje",
+      "$pdfPath",
+      "$tercerMensaje"
+    ],
+    "inline_literals": []
+  },
+  {
+    "file": "app/Services/CalculadoraImportacion/CalculadoraImportacionWhatsappService.php",
+    "line": 49,
+    "function": "sendCotizacionSequence",
+    "method": "sendMedia",
+    "call": "$this->sendMedia($imagenResumen['path'], 'image/png', '📊 Resumen detallado de costos y pagos', $phoneNumberId, 4);",
+    "conditions": [
+      "L29: if (!empty($calculadora->url_cotizacion_pdf)) {",
+      "L31: if ($pdfPath && file_exists($pdfPath)) {",
+      "L48: if ($imagenResumen) {"
+    ],
+    "variables": [
+      "$whatsappCliente",
+      "$calculadora",
+      "$phoneNumberId",
+      "$this",
+      "$primerMensaje",
+      "$pdfPath",
+      "$tercerMensaje",
+      "$resumenCostosService",
+      "$imagenResumen"
+    ],
+    "inline_literals": [
+      "📊 Resumen detallado de costos y pagos"
+    ]
+  }
+]
