@@ -16,6 +16,8 @@ use App\Models\CargaConsolidada\Cotizacion;
 use App\Traits\WhatsappTrait;
 use App\Traits\DatabaseConnectionTrait;
 use App\Traits\GoogleSheetsHelper;
+use App\Traits\MailTrait;
+use App\Mail\RotuladoCoordinationMail;
 use Maatwebsite\Excel\Facades\Excel;
 use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\WithHeadings;
@@ -34,7 +36,7 @@ use App\Models\CargaConsolidada\Contenedor;
 
 class SendRotuladoJob implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, WhatsappTrait, DatabaseConnectionTrait, GoogleSheetsHelper;
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, WhatsappTrait, DatabaseConnectionTrait, GoogleSheetsHelper, MailTrait;
 
     protected $cliente;
     protected $carga;
@@ -42,6 +44,12 @@ class SendRotuladoJob implements ShouldQueue
     protected $idCotizacion;
     protected $total_movilidad_personal;
     protected $domain;
+
+    /** @var array<int, array{title: string|null, body: string}> */
+    protected $coordinationSections = [];
+
+    /** @var array<string, array{path: string, name: string, mime: string}> */
+    protected $coordinationAttachments = [];
 
     /**
      * Create a new job instance.
@@ -65,6 +73,8 @@ class SendRotuladoJob implements ShouldQueue
             // Establecer la conexión de BD basándose en el dominio
             $this->setDatabaseConnection($this->domain);
 
+            $this->resetCoordinationEmailPayload();
+
             Log::info('Iniciando SendRotuladoJob', [
                 'cliente' => $this->cliente,
                 'carga' => $this->carga,
@@ -74,6 +84,7 @@ class SendRotuladoJob implements ShouldQueue
             ]);
 
             // Obtener información de la cotización para configurar el teléfono
+            $cotizacionInfo = null;
             $cotizacionInfo = Cotizacion::where('id', $this->idCotizacion)->first();
             if ($cotizacionInfo) {
                 $telefono = preg_replace('/\s+/', '', $cotizacionInfo->telefono);
@@ -144,14 +155,17 @@ class SendRotuladoJob implements ShouldQueue
                 Log::info('Enviando mensaje de bienvenida - no hay proveedores enviados previamente o hay proveedores con force_send');
                 $result = $this->sendWelcome($this->carga);
                 Log::info('Resultado del envío de bienvenida: ' . json_encode($result));
+                $this->addCoordinationSection(null, WhatsappTrait::buildWelcomeRotuladoMessageText($this->carga));
             } elseif (count($providersHasSended) > 0 && count($providersHasNoSended) > 0) {
-                $this->sendMessage("Hola 🙋🏻‍♀, te escribe el área de coordinación de Probusiness. 
+                $nuevoProveedorMsg = "Hola 🙋🏻‍♀, te escribe el área de coordinación de Probusiness. 
         
 📢 Añadiste un nuevo proveedor en el *Consolidado #{$this->carga}*
 
 *Rotulado: 👇🏼*  
 Tienes que indicarle a tu proveedor que las cajas máster 📦 cuenten con un rotulado para 
-identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro almacén.");
+identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro almacén.";
+                $this->sendMessage($nuevoProveedorMsg);
+                $this->addCoordinationSection(null, $nuevoProveedorMsg);
             }
 
             // Configurar ZIP
@@ -233,12 +247,16 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                     }
                     copy($tempFilePath, $tempFileForSend);
 
+                    $rotuladoCaption = "Producto: {$products}\nCódigo de proveedor: {$supplierCode}";
+                    $this->addCoordinationSection(null, $rotuladoCaption);
+                    $this->addCoordinationAttachment($tempFileForSend, $fileName, 'application/pdf');
+
                     // PASO 1: Enviar rotulado PDF del proveedor
                     $sleepSendMedia += 1;
                     $this->sendMedia(
                         $tempFileForSend,
                         'application/pdf',
-                        "Producto: {$products}\nCódigo de proveedor: {$supplierCode}",
+                        $rotuladoCaption,
                         null,
                         $sleepSendMedia
                     );
@@ -304,8 +322,13 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
 
             // PASO 3: Enviar imagen de dirección (después de todos los proveedores)
             $direccionUrl = public_path('assets/images/Direccion_27_04_26.jpeg');
+            $direccionCaption = '🏽Dile a tu proveedor que envíe la carga a nuestro almacén en China';
+            $this->addCoordinationSection(null, $direccionCaption);
+            if (is_file($direccionUrl)) {
+                $this->addCoordinationAttachment($direccionUrl, 'Direccion_almacen_China.jpeg', 'image/jpeg');
+            }
             $sleepSendMedia += 3;
-            $this->sendMedia($direccionUrl, 'image/jpg', '🏽Dile a tu proveedor que envíe la carga a nuestro almacén en China', null, $sleepSendMedia);
+            $this->sendMedia($direccionUrl, 'image/jpg', $direccionCaption, null, $sleepSendMedia);
 
             // PASO 4: Enviar mensaje con URL (después de todos los proveedores)
             $sleepSendMedia += 6;
@@ -332,7 +355,10 @@ Ingresar aquí: " . $url."\n\n";
                     $message .= "----------------------------------------------------------\n";
                 }
             }
+            $this->addCoordinationSection(null, $message);
             $this->sendMessage($message, null, $sleepSendMedia);
+
+            $this->sendCoordinationRotuladoEmail($cotizacionInfo ? $cotizacionInfo->telefono : null);
 
             Log::info('SendRotuladoJob completado exitosamente');
         } catch (\Exception $e) {
@@ -625,6 +651,8 @@ Ingresar aquí: " . $url."\n\n";
         // Enviar PDF específico para calzado
         $calzadoPdfPath = $this->getRotuladoPdfPath('calzado');
         if (file_exists($calzadoPdfPath)) {
+            $this->addCoordinationSection(null, $message);
+            $this->addCoordinationAttachment($calzadoPdfPath, 'calzado_ejemplo.pdf', 'application/pdf');
             $this->sendMedia($calzadoPdfPath, 'application/pdf', $message, null, $sleepSendMedia);
         } else {
             Log::warning('No se encontró PDF específico para calzado: ' . $calzadoPdfPath);
@@ -641,6 +669,8 @@ Ingresar aquí: " . $url."\n\n";
         // Enviar PDF específico para ropa
         $ropaPdfPath = $this->getRotuladoPdfPath('ropa');
         if (file_exists($ropaPdfPath)) {
+            $this->addCoordinationSection(null, $message);
+            $this->addCoordinationAttachment($ropaPdfPath, 'ropa_ejemplo.pdf', 'application/pdf');
             $this->sendMedia($ropaPdfPath, 'application/pdf', $message, null, $sleepSendMedia);
         } else {
             Log::warning('No se encontró PDF específico para ropa: ' . $ropaPdfPath);
@@ -657,6 +687,8 @@ Ingresar aquí: " . $url."\n\n";
         // Enviar PDF específico para ropa interior
         $ropaInteriorPdfPath = $this->getRotuladoPdfPath('ropa_interior');
         if (file_exists($ropaInteriorPdfPath)) {
+            $this->addCoordinationSection(null, $message);
+            $this->addCoordinationAttachment($ropaInteriorPdfPath, 'ropa_interior_ejemplo.pdf', 'application/pdf');
             $this->sendMedia($ropaInteriorPdfPath, 'application/pdf', $message, null, $sleepSendMedia);
         } else {
             Log::warning('No se encontró PDF específico para ropa interior: ' . $ropaInteriorPdfPath);
@@ -673,6 +705,8 @@ Ingresar aquí: " . $url."\n\n";
         // Enviar PDF específico para maquinaria
         $maquinariaPdfPath = $this->getRotuladoPdfPath('maquinaria');
         if (file_exists($maquinariaPdfPath)) {
+            $this->addCoordinationSection(null, $message);
+            $this->addCoordinationAttachment($maquinariaPdfPath, 'maquinaria_ejemplo.pdf', 'application/pdf');
             $this->sendMedia($maquinariaPdfPath, 'application/pdf', $message, null, $sleepSendMedia);
         } else {
             Log::warning('No se encontró PDF específico para maquinaria: ' . $maquinariaPdfPath);
@@ -761,6 +795,11 @@ Por lo tanto, dile a tu proveedor #{$supplierCode} que le ponga la etiqueta.
 ⛔ No aceptamos cargas sin código VIN o Motor ya que la aduana lo puede observar o decomisar.
 📝 Aquí tienes el archivo con los códigos generados";
 
+            if (file_exists($movilidadPersonalPath)) {
+                $this->addCoordinationSection(null, $message);
+                $this->addCoordinationAttachment($movilidadPersonalPath, 'movilidad_personal_ejemplo.pdf', 'application/pdf');
+            }
+
             if (file_exists($excelPath)) {
                 $this->sendMedia($movilidadPersonalPath, 'application/pdf', $message, null, $sleepSendMedia);
 
@@ -769,8 +808,14 @@ Por lo tanto, dile a tu proveedor #{$supplierCode} que le ponga la etiqueta.
                 Log::error('No se pudo crear el archivo VIM: ' . $excelPath);
             }
             if (file_exists($excelPath)) {
-                $message = "👆🏼Le adjuntamos la lista de códigos vins que deben ir grabados en los vehículos de movilidad personal.";
-                $this->sendMedia($excelPath, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', $message, null, $sleepSendMedia, 'consolidado', 'vin_movilidad.xlsx');
+                $vinMessage = "👆🏼Le adjuntamos la lista de códigos vins que deben ir grabados en los vehículos de movilidad personal.";
+                $this->addCoordinationSection(null, $vinMessage);
+                $this->addCoordinationAttachment(
+                    $excelPath,
+                    'vin_movilidad.xlsx',
+                    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                );
+                $this->sendMedia($excelPath, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', $vinMessage, null, $sleepSendMedia, 'consolidado', 'vin_movilidad.xlsx');
                 Log::info('Archivo VIM enviado por WhatsApp exitosamente');
             } else {
                 Log::error('No se pudo crear el archivo VIM: ' . $excelPath);
@@ -1168,6 +1213,70 @@ Por lo tanto, dile a tu proveedor #{$supplierCode} que le ponga la etiqueta.
             Log::info("Bordes aplicados a las filas {$startRow}-{$endRow} desde columna {$startColumn} hasta {$endColumn}");
         } catch (\Exception $e) {
             Log::error("Error aplicando bordes a filas {$startRow}-{$endRow}: " . $e->getMessage());
+        }
+    }
+
+    protected function resetCoordinationEmailPayload(): void
+    {
+        $this->coordinationSections = [];
+        $this->coordinationAttachments = [];
+    }
+
+    protected function addCoordinationSection(?string $title, string $body): void
+    {
+        $body = trim($body);
+        if ($body === '') {
+            return;
+        }
+
+        $this->coordinationSections[] = [
+            'title' => $title,
+            'body' => $body,
+        ];
+    }
+
+    protected function addCoordinationAttachment(string $path, ?string $name = null, ?string $mime = null): void
+    {
+        if (!is_file($path)) {
+            return;
+        }
+
+        $resolved = realpath($path) ?: $path;
+        $this->coordinationAttachments[$resolved] = [
+            'path' => $path,
+            'name' => $name ?? basename($path),
+            'mime' => $mime ?? (function_exists('mime_content_type') ? mime_content_type($path) : null) ?: 'application/octet-stream',
+        ];
+    }
+
+    protected function sendCoordinationRotuladoEmail(?string $telefonoCliente): void
+    {
+        $to = trim((string) env('COORDINATION_EMAIL', ''));
+        if ($to === '') {
+            Log::warning('SendRotuladoJob: COORDINATION_EMAIL no configurado; se omite correo a coordinación');
+
+            return;
+        }
+
+        if ($this->coordinationSections === [] && $this->coordinationAttachments === []) {
+            return;
+        }
+
+        try {
+            $this->sendMailTo(
+                $to,
+                new RotuladoCoordinationMail(
+                    (string) $this->cliente,
+                    $this->carga,
+                    (int) $this->idCotizacion,
+                    $telefonoCliente,
+                    $this->coordinationSections,
+                    array_values($this->coordinationAttachments)
+                )
+            );
+            Log::info('SendRotuladoJob: correo de rotulado enviado a coordinación', ['to' => $to]);
+        } catch (\Throwable $e) {
+            Log::error('SendRotuladoJob: error enviando correo a coordinación: ' . $e->getMessage());
         }
     }
 }

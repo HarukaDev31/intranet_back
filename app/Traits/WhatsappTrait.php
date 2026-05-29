@@ -188,7 +188,6 @@ trait WhatsappTrait
             $error = curl_error($ch);
             curl_close($ch);
             if ($error) {
-             
                 return [
                     'status' => false,
                     'response' => ['error' => 'Error de conexión: ' . $error]
@@ -225,6 +224,24 @@ trait WhatsappTrait
             ];
         }
     }
+    /**
+     * Texto del mensaje de bienvenida V2 (welcomeV2). Mismo contenido que recibe el cliente por WhatsApp.
+     */
+    public static function buildWelcomeRotuladoMessageText($carga): string
+    {
+        $carga = (string) $carga;
+
+        return "Hola 🙋🏻‍♀, te escribe el área de coordinación de probusiness, \n"
+            . "yo me encargaré de ayudarte en tu importación del *consolidado #{$carga}*.\n\n"
+            . "📢 Preste atención al siguiente paso: \n"
+            . "*Rotulado* 👇🏼\n"
+            . "Tienes que indicarle a tu proveedor que las cajas máster 📦 cuenten con un rotulado para identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro almacén.\n\n"
+            . "☑ El documento está en idioma chino, solo debes enviarle a tu proveedor 📤\n\n"
+            . "Nota: No cambiar ninguno de los datos, en caso tu proveedor tenga alguna consulta, se puede comunicarse:\n\n"
+            . "🙍🏻‍♂ Álmacen China: Mr. Younus \n"
+            . "📞 Wechat: 13185122926 ";
+    }
+
     public function sendWelcome($carga, $phoneNumberId = null, $sleep = 0): array
     {
         $phoneNumberId = $phoneNumberId ? $phoneNumberId : $this->phoneNumberId;
