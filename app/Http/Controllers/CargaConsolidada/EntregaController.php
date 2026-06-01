@@ -19,6 +19,7 @@ use App\Exports\FormatoResumenExport;
 use App\Exports\ClientesEntregaExport;
 use App\Jobs\SendDeliveryFormBulkJob;
 use App\Helpers\UsuarioDatosFacturacionHelper;
+use App\Services\Delivery\DeliveryFormLinkCoordinationNotifier;
 use Dompdf\Dompdf;
 use Dompdf\Options;
 use ZipArchive;
@@ -3650,6 +3651,16 @@ Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, 
                     'success' => false
                 ], 500);
             }
+
+            (new DeliveryFormLinkCoordinationNotifier())->notify(
+                $message,
+                null,
+                trim((string) ($cotizacion->nombre_cliente ?? '')) !== '' ? trim((string) $cotizacion->nombre_cliente) : 'cliente',
+                (string) $contenedor->carga,
+                $idCotizacion,
+                $telefono,
+                $typeForm
+            );
 
             return response()->json(['message' => 'Mensaje enviado correctamente', 'success' => true]);
         } catch (\Exception $e) {

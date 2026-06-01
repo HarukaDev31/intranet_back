@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Models\CargaConsolidada\Contenedor;
+use App\Services\Delivery\DeliveryFormLinkCoordinationNotifier;
 use App\Traits\WhatsappTrait;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -136,6 +137,16 @@ class SendDeliveryFormBulkJob implements ShouldQueue
                     ]);
                     continue;
                 }
+
+                (new DeliveryFormLinkCoordinationNotifier())->notify(
+                    $messagePrincipal,
+                    $messageSecundario,
+                    trim((string) ($row->nombre_cliente ?? '')) !== '' ? trim((string) $row->nombre_cliente) : 'cliente',
+                    (string) $contenedor->carga,
+                    $idCotizacion,
+                    $telefono,
+                    $typeForm
+                );
 
                 $resultSecundario = $this->sendMessage($messageSecundario, $numeroWhatsapp,5);
                 if (!$resultSecundario['status']) {
