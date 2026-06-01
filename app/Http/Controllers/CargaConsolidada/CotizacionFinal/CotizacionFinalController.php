@@ -4122,14 +4122,14 @@ class CotizacionFinalController extends Controller
 
             // Actualizar mensaje de WhatsApp con valores correctos
             $clientName = $sheet1->getCell('C8')->getValue();
-            $whatsappMessage = "Hola " . $clientName . " ðŸ˜ un gusto saludarte!
-A continuaciÃ³n te envÃ­o la cotizaciÃ³n final de tu importaciÃ³nðŸ“‹ðŸ“¦.
-ðŸ™‹â€â™‚ï¸ PAGO PENDIENTE :
-â˜‘ï¸Costo CBM: $" . number_format($logistica, 2) . "
-â˜‘ï¸Impuestos: $" . number_format($impuestos, 2) . "
-â˜‘ï¸ Total: $" . number_format($logistica + $impuestos, 2) . "
-Pronto le aviso nuevos avances, que tengan buen dÃ­aðŸš¢
-Ãšltimo dÃ­a de pago:";
+            $whatsappMessage = "Hola " . $clientName . " 😁 un gusto saludarte!\n" .
+                "A continuación te envío la cotización final de tu importación📋📦.\n" .
+                "🙋‍♂️ PAGO PENDIENTE :\n" .
+                "☑️Costo CBM: $" . number_format($logistica, 2) . "\n" .
+                "☑️Impuestos: $" . number_format($impuestos, 2) . "\n" .
+                "☑️ Total: $" . number_format($logistica + $impuestos, 2) . "\n" .
+                "Pronto le aviso nuevos avances, que tengan buen día🚢\n" .
+                "Último día de pago:";
 
             $sheet1->setCellValue('N20', $whatsappMessage);
             Log::info('Mensaje WhatsApp actualizado');
@@ -5299,14 +5299,14 @@ Pronto le aviso nuevos avances, que tengan buen dÃ­aðŸš¢
             $objPHPExcel->getActiveSheet()->getStyle('C' . $rowMainNombre)->getAlignment()->setWrapText(true);
 
             $N20CellValue =
-                "Hola " . $ClientName . " ðŸ˜ un gusto saludarte!
-        A continuaciÃ³n te envÃ­o la cotizaciÃ³n final de tu importaciÃ³nðŸ“‹ðŸ“¦.
-        ðŸ™‹â€â™‚ï¸ PAGO PENDIENTE :
-        â˜‘ï¸Costo CBM: $" . $CobroCellValue . "
-        â˜‘ï¸Impuestos: $" . $ImpuestosCellValue . "
-        â˜‘ï¸ Total: $" . ($ImpuestosCellValue + $CobroCellValue) . "
-        Pronto le aviso nuevos avances, que tengan buen dÃ­aðŸš¢
-        Ãšltimo dÃ­a de pago:";
+                "Hola " . $ClientName . " 😁 un gusto saludarte!\n" .
+                "A continuación te envío la cotización final de tu importación📋📦.\n" .
+                "🙋‍♂️ PAGO PENDIENTE :\n" .
+                "☑️Costo CBM: $" . $CobroCellValue . "\n" .
+                "☑️Impuestos: $" . $ImpuestosCellValue . "\n" .
+                "☑️ Total: $" . ($ImpuestosCellValue + $CobroCellValue) . "\n" .
+                "Pronto le aviso nuevos avances, que tengan buen día🚢\n" .
+                "Último día de pago:";
 
             $objPHPExcel->getActiveSheet()->setCellValue('N' . $rowMainMensaje, $N20CellValue);
 
@@ -6016,11 +6016,11 @@ Pronto le aviso nuevos avances, que tengan buen dÃ­aðŸš¢
     private function setupWhatsAppMessageModern($sheet, $data)
     {
         $clientName = $data['cliente']['nombre'];
-        $message = "Hola " . $clientName . " ðŸ˜ un gusto saludarte!\n" .
-            "A continuaciÃ³n te envÃ­o la cotizaciÃ³n final de tu importaciÃ³nðŸ“‹ðŸ“¦.\n" .
-            "ðŸ™‹â€â™‚ï¸ PAGO PENDIENTE :\n" .
-            "Pronto le aviso nuevos avances, que tengan buen dÃ­aðŸš¢\n" .
-            "Ãšltimo dÃ­a de pago:";
+        $message = "Hola " . $clientName . " 😁 un gusto saludarte!\n" .
+            "A continuación te envío la cotización final de tu importación📋📦.\n" .
+            "🙋‍♂️ PAGO PENDIENTE :\n" .
+            "Pronto le aviso nuevos avances, que tengan buen día🚢\n" .
+            "Último día de pago:";
 
         $sheet->setCellValue('N20', $message);
     }
