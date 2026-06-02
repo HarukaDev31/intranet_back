@@ -787,9 +787,7 @@ class PagosController extends Controller
                         $message .= "\nConsolidado: #{$cotizacion->contenedor->carga}";
                     }
 
-                    if ($telefono) {
-                        $this->sendMessage($message, $telefono, 0, 'administracion');
-                    }
+                   
                 } catch (\Exception $e) {
                     Log::error('Error enviando WhatsApp confirmacion pago: ' . $e->getMessage());
                 }
@@ -1446,9 +1444,7 @@ class PagosController extends Controller
                     $message .= "Monto: S/ {$montoFormateado}\n";
                     $message .= "Servicio: {$conceptoName}";
 
-                    if ($telefono) {
-                        $this->sendMessage($message, $telefono, 0, 'administracion');
-                    }
+                   
                 } catch (\Exception $e) {
                     Log::error('Error enviando WhatsApp confirmacion pago curso: ' . $e->getMessage());
                 }
