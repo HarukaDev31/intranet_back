@@ -226,11 +226,15 @@ class WhatsappInboxMessageService
                     : null;
                 if (!empty($stored['body'])) {
                     $body = (string) $stored['body'];
+                } elseif (in_array($messageType, ['image', 'video', 'audio'], true)) {
+                    $body = '';
+                } elseif ($messageType === 'document') {
+                    $body = isset($stored['filename']) ? (string) $stored['filename'] : '';
                 } else {
                     $body = '[' . $messageType . ']';
                 }
             } else {
-                $body = '[' . $messageType . ']';
+                $body = in_array($messageType, ['image', 'video', 'audio'], true) ? '' : '[' . $messageType . ']';
             }
         } else {
             $body = '[' . $type . ']';
