@@ -35,15 +35,16 @@ class ProcessWaInboxInboundJob implements ShouldQueue
 
     public function handle(WhatsappInboxMessageService $messageService)
     {
-        $this->setDatabaseConnection(
-            WaInboxJobContext::resolveJobDomain($this->domain)
-        );
+        $domain = WaInboxJobContext::resolveJobDomain($this->domain);
+        $connection = $this->setDatabaseConnection($domain);
 
         try {
             $messageService->processWebhookLog($this->webhookLogId);
         } catch (\Exception $e) {
             Log::error('ProcessWaInboxInboundJob failed', [
                 'webhook_log_id' => $this->webhookLogId,
+                'job_domain' => $domain,
+                'db_connection' => $connection,
                 'message' => $e->getMessage(),
             ]);
             throw $e;

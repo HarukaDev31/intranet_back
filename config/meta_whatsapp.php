@@ -72,10 +72,11 @@ return [
     ),
 
     /**
-     * Dominio para setDatabaseConnection en jobs WaInbox (cola sin HTTP).
-     * En local/WSL suele ser localhost → mysql_local.
+     * Dominio para setDatabaseConnection en jobs WaInbox cuando el worker no tiene request HTTP.
+     * En producción definir META_WHATSAPP_INBOX_JOB_DOMAIN=intranetv2.probusiness.pe (o el host del API).
+     * En local/WSL: localhost → mysql_local. Si no se define, WaInboxJobContext usa APP_URL / host del webhook.
      */
-    'inbox_job_domain' => env('META_WHATSAPP_INBOX_JOB_DOMAIN', 'localhost'),
+    'inbox_job_domain' => env('META_WHATSAPP_INBOX_JOB_DOMAIN', env('QUEUE_JOB_DB_DOMAIN', '')),
 
     /** WebSocket/Pusher en tiempo real; si false, no se emite broadcast (el envío Meta sigue). */
     'inbox_broadcast_enabled' => filter_var(env('META_WHATSAPP_INBOX_BROADCAST', true), FILTER_VALIDATE_BOOLEAN),
