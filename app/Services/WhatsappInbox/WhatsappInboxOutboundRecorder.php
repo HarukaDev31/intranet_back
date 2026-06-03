@@ -131,35 +131,17 @@ class WhatsappInboxOutboundRecorder
             $contactName
         );
 
-        $mediaUrl = null;
-        $mediaMime = null;
-        if (is_array($header)) {
-            if (!empty($header['path'])) {
-                $mediaUrl = (string) $header['path'];
-            } elseif (!empty($header['link'])) {
-                $mediaUrl = CoordinacionMediaLink::resolveStoragePath((string) $header['link'])
-                    ?: (string) $header['link'];
-            }
-            if ($mediaUrl !== null && isset($header['type'])) {
-                $ht = strtolower((string) $header['type']);
-                if ($ht === 'image') {
-                    $mediaMime = 'image/jpeg';
-                } elseif ($ht === 'video') {
-                    $mediaMime = 'video/mp4';
-                } elseif ($ht === 'document') {
-                    $mediaMime = 'application/pdf';
-                }
-            }
+        $headerMedia = CoordinacionMediaLink::templateHeaderMediaForDatabase(
+            is_array($header) ? $header : null
+        );
+        $mediaUrl = $headerMedia['media_url'];
+        $mediaMime = WaInboxMime::normalizeForStorage($headerMedia['media_mime']);
+        if (is_array($header) && !empty($header['filename'])) {
+            $templateParams['_media_filename'] = (string) $header['filename'];
         }
 
         $userId = isset($context['user_id']) ? (int) $context['user_id'] : null;
         $preview = $mediaUrl !== null ? '[Plantilla con archivo]' : mb_substr($bodyPreview, 0, 200);
-
-        if ($mediaUrl !== null && $mediaUrl !== '') {
-            $storedPath = CoordinacionMediaLink::storagePathForDatabase($mediaUrl);
-            $mediaUrl = $storedPath !== null ? $storedPath : $mediaUrl;
-        }
-        $mediaMime = WaInboxMime::normalizeForStorage($mediaMime);
 
         $message = WaInboxMessage::create([
             'conversation_id' => $conversation->id,

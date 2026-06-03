@@ -93,6 +93,13 @@ class MetaWhatsAppCoordinacionService
         bool $requiresHeaderComponent = false,
         array $inboxContext = []
     ): array {
+        if (is_array($header) && !empty($header['type'])) {
+            $preparedHeader = CoordinacionMediaLink::prepareHeader($header);
+            if ($preparedHeader !== null) {
+                $header = $preparedHeader;
+            }
+        }
+
         $phoneNumberId = (string) config('meta_whatsapp.phone_number_id');
         $version = (string) config('meta_whatsapp.graph_api_version', 'v19.0');
         $url = "https://graph.facebook.com/{$version}/{$phoneNumberId}/messages";

@@ -342,22 +342,9 @@ class WhatsappInboxMessageService
             $header = isset($templateParams['_header']) && is_array($templateParams['_header'])
                 ? $templateParams['_header']
                 : null;
-            if ($header && !empty($header['path'])) {
-                $rawPath = (string) $header['path'];
-                $mediaUrl = CoordinacionMediaLink::resolveStoragePath($rawPath) ?: $rawPath;
-            } elseif ($header && !empty($header['link'])) {
-                $mediaUrl = CoordinacionMediaLink::resolveStoragePath((string) $header['link'])
-                    ?: (string) $header['link'];
-                if ($mediaMime === null && isset($header['type'])) {
-                    $ht = strtolower((string) $header['type']);
-                    if ($ht === 'image') {
-                        $mediaMime = 'image/jpeg';
-                    } elseif ($ht === 'video') {
-                        $mediaMime = 'video/mp4';
-                    } elseif ($ht === 'document') {
-                        $mediaMime = 'application/pdf';
-                    }
-                }
+            $mediaUrl = $this->resolveTemplateHeaderMediaPath($header, $mediaMime);
+            if ($header && !empty($header['filename']) && empty($templateParams['_media_filename'])) {
+                $templateParams['_media_filename'] = (string) $header['filename'];
             }
         }
 
@@ -457,23 +444,10 @@ class WhatsappInboxMessageService
         $header = isset($templateParams['_header']) && is_array($templateParams['_header'])
             ? $templateParams['_header']
             : null;
-        $mediaUrl = null;
-        if ($header && !empty($header['path'])) {
-            $mediaUrl = (string) $header['path'];
-        } elseif ($header && !empty($header['link'])) {
-            $mediaUrl = CoordinacionMediaLink::resolveStoragePath((string) $header['link'])
-                ?: (string) $header['link'];
-        }
         $mediaMime = null;
-        if ($header && isset($header['type'])) {
-            $ht = strtolower((string) $header['type']);
-            if ($ht === 'image') {
-                $mediaMime = 'image/jpeg';
-            } elseif ($ht === 'video') {
-                $mediaMime = 'video/mp4';
-            } elseif ($ht === 'document') {
-                $mediaMime = 'application/pdf';
-            }
+        $mediaUrl = $this->resolveTemplateHeaderMediaPath($header, $mediaMime);
+        if ($header && !empty($header['filename'])) {
+            $templateParams['_media_filename'] = (string) $header['filename'];
         }
 
         $preview = $mediaUrl !== null ? '[Plantilla con archivo]' : '[Template enviado]';
@@ -591,5 +565,20 @@ class WhatsappInboxMessageService
                 'error' => $e->getMessage(),
             ]);
         }
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $header
+     * @param  string|null  $mediaMime
+     * @return string|null
+     */
+    private function resolveTemplateHeaderMediaPath($header, &$mediaMime = null)
+    {
+        $resolved = CoordinacionMediaLink::templateHeaderMediaForDatabase($header);
+        if ($resolved['media_mime'] !== null) {
+            $mediaMime = $resolved['media_mime'];
+        }
+
+        return $resolved['media_url'];
     }
 }

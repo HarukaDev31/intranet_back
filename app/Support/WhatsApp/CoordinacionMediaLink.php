@@ -108,7 +108,13 @@ class CoordinacionMediaLink
 
         $path = (string) ($header['path'] ?? '');
         if ($path !== '') {
-            $link = self::urlForMetaSend($path);
+            $header = self::ensureHeaderStoredOnObjectStorage($header, $path);
+            if ($header === null) {
+                return null;
+            }
+
+            $storagePath = (string) ($header['path'] ?? '');
+            $link = self::urlForMetaSend($storagePath);
             if ($link === null) {
                 return null;
             }
@@ -122,6 +128,64 @@ class CoordinacionMediaLink
         }
 
         return $header;
+    }
+
+    /**
+     * Clave S3 + mime para persistir plantilla con encabezado multimedia en wa_inbox_messages.
+     *
+     * @param  array<string, mixed>|null  $header
+     * @return array{media_url: string|null, media_mime: string|null}
+     */
+    public static function templateHeaderMediaForDatabase($header)
+    {
+        $mediaMime = null;
+        $mediaUrl = null;
+
+        if (!is_array($header) || $header === []) {
+            return ['media_url' => null, 'media_mime' => null];
+        }
+
+        $path = (string) ($header['path'] ?? '');
+        if ($path !== '' && self::resolveStoragePath($path) === null) {
+            $stored = self::ensureHeaderStoredOnObjectStorage($header, $path);
+            if ($stored !== null) {
+                $header = $stored;
+            }
+        }
+
+        if (!empty($header['path'])) {
+            $rawPath = (string) $header['path'];
+            $mediaUrl = self::storagePathForDatabase($rawPath)
+                ?: self::resolveStoragePath($rawPath);
+        } elseif (!empty($header['link'])) {
+            $rawLink = (string) $header['link'];
+            $mediaUrl = self::storagePathForDatabase($rawLink)
+                ?: self::resolveStoragePath($rawLink);
+        }
+
+        if (isset($header['type'])) {
+            $ht = strtolower((string) $header['type']);
+            if ($ht === 'image') {
+                $mediaMime = 'image/jpeg';
+            } elseif ($ht === 'video') {
+                $mediaMime = 'video/mp4';
+            } elseif ($ht === 'document') {
+                $mime = isset($header['mimeType']) ? trim((string) $header['mimeType']) : '';
+                $mediaMime = $mime !== '' ? $mime : 'application/pdf';
+            }
+        }
+
+        if ($mediaUrl !== null && $mediaUrl !== '') {
+            $stored = self::storagePathForDatabase($mediaUrl);
+            if ($stored !== null && $stored !== '') {
+                $mediaUrl = $stored;
+            }
+        }
+
+        return [
+            'media_url' => $mediaUrl !== null && $mediaUrl !== '' ? $mediaUrl : null,
+            'media_mime' => $mediaMime,
+        ];
     }
 
     /**
@@ -436,6 +500,66 @@ class CoordinacionMediaLink
         }
 
         return $url;
+    }
+
+    /**
+     * Archivos locales (rotulado PDF, etc.) → clave S3 en header.path para el inbox.
+     *
+     * @param  array<string, mixed>  $header
+     * @param  string  $path
+     * @return array<string, mixed>|null
+     */
+    private static function ensureHeaderStoredOnObjectStorage(array $header, $path)
+    {
+        $resolved = self::resolveStoragePath($path);
+        if ($resolved !== null) {
+            try {
+                $storage = app(ObjectStorageConnectorInterface::class);
+                if ($storage->exists($resolved)) {
+                    $header['path'] = $resolved;
+
+                    return $header;
+                }
+            } catch (\Throwable $e) {
+                Log::debug('CoordinacionMediaLink: ensureHeader exists check', [
+                    'path' => $resolved,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        $localPath = $path;
+        if (!self::isAbsoluteLocalFile($localPath)) {
+            $relative = ltrim(str_replace('\\', '/', $localPath), '/');
+            $candidates = [
+                storage_path('app/' . $relative),
+                storage_path($relative),
+                public_path($relative),
+            ];
+            foreach ($candidates as $candidate) {
+                if (is_file($candidate)) {
+                    $localPath = $candidate;
+                    break;
+                }
+            }
+        }
+
+        if (!is_file($localPath)) {
+            return null;
+        }
+
+        $storageKey = self::buildTempKey(
+            $localPath,
+            isset($header['filename']) ? (string) $header['filename'] : null
+        );
+        $uploaded = self::uploadLocalFile($localPath, $storageKey);
+        if ($uploaded === null || $uploaded === '') {
+            return null;
+        }
+
+        $header['path'] = ltrim($storageKey, '/');
+
+        return $header;
     }
 
     private static function buildTempKey(string $sourcePath, ?string $filename): string

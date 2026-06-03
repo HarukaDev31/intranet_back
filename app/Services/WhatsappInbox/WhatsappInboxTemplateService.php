@@ -15,6 +15,11 @@ class WhatsappInboxTemplateService
      */
     private $knownDocumentHeaderTemplates = [
         'pb_docs_consideraciones_doc_v1',
+        'pb_rotulado_pdf_producto_v1',
+        'pb_rotulado_etiqueta_calzado_v1',
+        'pb_rotulado_etiqueta_ropa_v1',
+        'pb_rotulado_etiqueta_ropa_interior_v1',
+        'pb_rotulado_etiqueta_maquinaria_v1',
     ];
 
     /**
