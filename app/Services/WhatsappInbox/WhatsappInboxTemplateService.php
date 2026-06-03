@@ -15,7 +15,7 @@ class WhatsappInboxTemplateService
      */
     private function defaultTemplates()
     {
-        return [
+        return $this->withParamDefs([
             [
                 'name' => 'pb_proveedor_llegada_china_v1',
                 'label' => 'Proveedor — No llegó a almacén',
@@ -37,7 +37,7 @@ class WhatsappInboxTemplateService
                 'text' => "📩 Recordatorio:\n\n{{mensaje}}\n\n🙌",
                 'params' => ['mensaje'],
             ],
-        ];
+        ]);
     }
 
     /**
@@ -102,27 +102,17 @@ class WhatsappInboxTemplateService
                     continue;
                 }
 
-                $bodyText = '';
-                $params = [];
-                $components = isset($item['components']) && is_array($item['components'])
-                    ? $item['components']
-                    : [];
-                foreach ($components as $comp) {
-                    if (!is_array($comp) || ($comp['type'] ?? '') !== 'BODY') {
-                        continue;
-                    }
-                    $bodyText = isset($comp['text']) ? (string) $comp['text'] : '';
-                    if (preg_match_all('/\{\{([^}]+)\}\}/', $bodyText, $m)) {
-                        $params = $m[1];
-                    }
-                }
+                $parsed = $this->parseTemplateComponents(
+                    isset($item['components']) && is_array($item['components']) ? $item['components'] : []
+                );
 
                 $out[] = [
                     'name' => $name,
                     'label' => $name,
                     'language' => isset($item['language']) ? (string) $item['language'] : 'es_PE',
-                    'text' => $bodyText,
-                    'params' => $params,
+                    'text' => $parsed['text'],
+                    'params' => $parsed['params'],
+                    'param_defs' => $parsed['param_defs'],
                 ];
             }
 
@@ -136,5 +126,80 @@ class WhatsappInboxTemplateService
 
             return $this->defaultTemplates();
         }
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $components
+     * @return array{text: string, params: array<int, string>, param_defs: array<int, array<string, mixed>>}
+     */
+    private function parseTemplateComponents(array $components)
+    {
+        $bodyText = '';
+        $params = [];
+        $paramDefs = [];
+
+        foreach ($components as $comp) {
+            if (!is_array($comp)) {
+                continue;
+            }
+            $type = strtoupper((string) ($comp['type'] ?? ''));
+
+            if ($type === 'HEADER') {
+                $format = strtoupper((string) ($comp['format'] ?? 'TEXT'));
+                if (in_array($format, ['DOCUMENT', 'IMAGE', 'VIDEO'], true)) {
+                    $paramDefs[] = [
+                        'name' => 'header_media',
+                        'type' => 'file',
+                        'file_kind' => strtolower($format),
+                        'label' => 'Archivo de encabezado',
+                    ];
+                }
+                continue;
+            }
+
+            if ($type !== 'BODY') {
+                continue;
+            }
+
+            $bodyText = isset($comp['text']) ? (string) $comp['text'] : '';
+            if (preg_match_all('/\{\{([^}]+)\}\}/', $bodyText, $m)) {
+                foreach ($m[1] as $paramName) {
+                    $params[] = $paramName;
+                    $paramDefs[] = [
+                        'name' => $paramName,
+                        'type' => 'text',
+                        'label' => str_replace('_', ' ', $paramName),
+                    ];
+                }
+            }
+        }
+
+        return [
+            'text' => $bodyText,
+            'params' => $params,
+            'param_defs' => $paramDefs,
+        ];
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $templates
+     * @return array<int, array<string, mixed>>
+     */
+    private function withParamDefs(array $templates)
+    {
+        foreach ($templates as $i => $tpl) {
+            if (!empty($tpl['param_defs'])) {
+                continue;
+            }
+            $templates[$i]['param_defs'] = array_map(function ($name) {
+                return [
+                    'name' => $name,
+                    'type' => 'text',
+                    'label' => str_replace('_', ' ', $name),
+                ];
+            }, isset($tpl['params']) && is_array($tpl['params']) ? $tpl['params'] : []);
+        }
+
+        return $templates;
     }
 }

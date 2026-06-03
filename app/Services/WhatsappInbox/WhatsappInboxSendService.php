@@ -4,6 +4,7 @@ namespace App\Services\WhatsappInbox;
 
 use App\Models\WhatsappInbox\WaInboxMessage;
 use App\Services\WhatsApp\MetaWhatsAppCoordinacionService;
+use App\Support\WhatsApp\CoordinacionMediaLink;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -128,14 +129,17 @@ class WhatsappInboxSendService
     {
         $templateName = (string) $message->template_name;
         $params = is_array($message->template_params) ? $message->template_params : [];
+        $header = isset($params['_header']) && is_array($params['_header']) ? $params['_header'] : null;
+        unset($params['_header']);
         $bodyParams = $this->metaService->normalizeBodyParameters($params);
+        $header = CoordinacionMediaLink::prepareHeader($header);
 
         $result = $this->metaService->sendMetaTemplate(
             $phoneE164,
             $templateName,
             (string) config('meta_whatsapp.default_language', 'es_PE'),
             $bodyParams,
-            null
+            $header
         );
 
         if (!empty($result['status'])) {

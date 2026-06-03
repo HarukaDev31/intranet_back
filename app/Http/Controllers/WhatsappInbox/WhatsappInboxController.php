@@ -10,7 +10,9 @@ use App\Services\WhatsappInbox\WhatsappInboxMessageService;
 use App\Services\WhatsappInbox\WhatsappInboxSessionService;
 use App\Services\WhatsappInbox\WhatsappInboxTemplateService;
 use App\Services\WhatsappInbox\WhatsappInboxWindowService;
+use App\Support\WhatsApp\CoordinacionMediaLink;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Tymon\JWTAuth\Facades\JWTAuth;
 
 class WhatsappInboxController extends Controller
@@ -141,8 +143,17 @@ class WhatsappInboxController extends Controller
                     'message' => 'Plantilla requerida',
                 ], 422);
             }
+            if (is_string($params)) {
+                $decoded = json_decode($params, true);
+                $params = is_array($decoded) ? $decoded : [];
+            }
             if (!is_array($params)) {
                 $params = [];
+            }
+
+            $header = $this->resolveTemplateHeaderFromRequest($request);
+            if ($header !== null) {
+                $params['_header'] = $header;
             }
 
             $body = $this->buildTemplatePreviewBody($templateName, $params);
@@ -242,9 +253,53 @@ class WhatsappInboxController extends Controller
         }
 
         foreach ($params as $key => $val) {
+            if ($key === '_header' || is_array($val)) {
+                continue;
+            }
             $text = str_replace('{{' . $key . '}}', (string) $val, $text);
         }
 
         return $text;
+    }
+
+    /**
+     * @param  \Illuminate\Http\Request  $request
+     * @return array<string, mixed>|null
+     */
+    private function resolveTemplateHeaderFromRequest(Request $request)
+    {
+        $file = $request->file('header_media');
+        if (!$file || !$file->isValid()) {
+            foreach ($request->allFiles() as $uploaded) {
+                $candidate = is_array($uploaded) ? ($uploaded[0] ?? null) : $uploaded;
+                if ($candidate && $candidate->isValid()) {
+                    $file = $candidate;
+                    break;
+                }
+            }
+        }
+
+        if (!$file || !$file->isValid()) {
+            return null;
+        }
+
+        $kind = strtolower((string) $request->input('header_file_kind', 'document'));
+        if (!in_array($kind, ['document', 'image', 'video'], true)) {
+            $kind = 'document';
+        }
+
+        $storageKey = CoordinacionMediaLink::META_TEMP_PREFIX . '/inbox/'
+            . Str::uuid() . '_' . preg_replace('/[^a-zA-Z0-9._-]/', '_', $file->getClientOriginalName());
+
+        $url = CoordinacionMediaLink::uploadLocalFile($file->getRealPath(), $storageKey);
+        if ($url === null || $url === '') {
+            return null;
+        }
+
+        return [
+            'type' => $kind,
+            'link' => $url,
+            'filename' => $file->getClientOriginalName(),
+        ];
     }
 }
