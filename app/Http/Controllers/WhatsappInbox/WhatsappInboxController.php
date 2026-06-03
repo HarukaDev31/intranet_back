@@ -418,6 +418,24 @@ class WhatsappInboxController extends Controller
         }
     }
 
+    public function renameContact(Request $request, $id)
+    {
+        try {
+            $result = $this->conversationService->renameContact(
+                (int) $id,
+                $request->input('contact_name', '')
+            );
+            $status = !empty($result['success']) ? 200 : 422;
+
+            return response()->json($result, $status);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al renombrar: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
     public function markRead($id)
     {
         try {

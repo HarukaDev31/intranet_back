@@ -177,6 +177,39 @@ class WhatsappInboxConversationService
     }
 
     /**
+     * @param  int  $conversationId
+     * @param  string  $contactName
+     * @return array<string, mixed>
+     */
+    public function renameContact($conversationId, $contactName)
+    {
+        $name = trim((string) $contactName);
+        if ($name === '') {
+            return [
+                'success' => false,
+                'message' => 'El nombre no puede estar vacío.',
+            ];
+        }
+
+        if (mb_strlen($name) > 120) {
+            return [
+                'success' => false,
+                'message' => 'El nombre es demasiado largo (máximo 120 caracteres).',
+            ];
+        }
+
+        $conversation = WaInboxConversation::query()->findOrFail($conversationId);
+        $conversation->contact_name = $name;
+        $conversation->save();
+
+        return [
+            'success' => true,
+            'message' => 'Nombre actualizado',
+            'data' => $this->formatConversation($conversation),
+        ];
+    }
+
+    /**
      * Registra un contacto manual en wa_inbox_conversations (sesión activa).
      *
      * @param  array<string, mixed>  $params  phone, contact_name, assigned_user_id (opcional)

@@ -24,6 +24,7 @@ Route::group([
     Route::post('/conversations/{id}/messages', [WhatsappInboxController::class, 'sendMessage']);
     Route::post('/conversations/{id}/templates', [WhatsappInboxController::class, 'sendTemplate']);
     Route::patch('/conversations/{id}/assign', [WhatsappInboxController::class, 'assign']);
+    Route::patch('/conversations/{id}/contact-name', [WhatsappInboxController::class, 'renameContact']);
     Route::patch('/conversations/{id}/read', [WhatsappInboxController::class, 'markRead']);
     Route::get('/templates', [WhatsappInboxController::class, 'templates']);
     Route::get('/users/assignable', [WhatsappInboxController::class, 'assignableUsers']);
