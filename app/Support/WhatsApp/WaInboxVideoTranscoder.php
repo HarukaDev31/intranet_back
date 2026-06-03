@@ -34,10 +34,13 @@ class WaInboxVideoTranscoder
         $timeoutSec = max(30, (int) config('meta_whatsapp.video_transcode_timeout', 120));
         $maxBytes = (int) config('meta_whatsapp.inbox_header_max_bytes.video', 16 * 1024 * 1024);
 
+        // Sin comas en el filtro: en filtergraph la coma separa filtros y rompe min(1280,iw) → "No such filter: iw):-2".
+        $scaleFilter = 'scale=1280:-2:force_original_aspect_ratio=decrease';
+
         $cmd = $ffmpeg
             . ' -y -i ' . escapeshellarg($inputPath)
             . ' -c:v libx264 -profile:v main -pix_fmt yuv420p'
-            . ' -vf ' . escapeshellarg('scale=min(1280,iw):-2')
+            . ' -vf ' . escapeshellarg($scaleFilter)
             . ' -c:a aac -b:a 128k -ac 1'
             . ' -movflags +faststart'
             . ' ' . escapeshellarg($outputPath)
