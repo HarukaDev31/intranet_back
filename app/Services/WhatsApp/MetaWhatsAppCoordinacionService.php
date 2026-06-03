@@ -8,6 +8,7 @@ use App\Services\Crm\Bitrix\BitrixCrmClient;
 use App\Support\WhatsApp\CoordinacionMediaLink;
 use App\Support\WhatsApp\CoordinacionWhatsappPayload;
 use App\Support\WhatsApp\WaInboxLog;
+use App\Support\WhatsApp\WaInboxMetaError;
 use App\Support\WhatsApp\WhatsappEnvironmentPhone;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -375,16 +376,7 @@ class MetaWhatsAppCoordinacionService
 
         if (!$response->successful()) {
             $json = $response->json();
-            $errorMsg = 'Meta API HTTP ' . $response->status();
-            if (is_array($json) && isset($json['error']['message'])) {
-                $errorMsg .= ': ' . (string) $json['error']['message'];
-                if (isset($json['error']['code'])) {
-                    $errorMsg .= ' (#' . $json['error']['code'] . ')';
-                }
-                if (isset($json['error']['error_data']['details'])) {
-                    $errorMsg .= ' — ' . (string) $json['error']['error_data']['details'];
-                }
-            }
+            $errorMsg = WaInboxMetaError::userMessage($response->status(), $json);
 
             WaInboxLog::error('metaTemplate.graph_error', [
                 'status' => $response->status(),

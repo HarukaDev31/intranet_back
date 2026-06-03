@@ -581,7 +581,8 @@ class WhatsappInboxController extends Controller
             return 'La imagen pesa ' . $fileMb . ' MB. WhatsApp permite máximo ' . $maxMb . ' MB en plantillas con encabezado de imagen.';
         }
         if ($key === 'video') {
-            return 'El video pesa ' . $fileMb . ' MB. WhatsApp permite máximo ' . $maxMb . ' MB.';
+            return 'El video pesa ' . $fileMb . ' MB (máximo ' . $maxMb . ' MB). '
+                . 'WhatsApp solo acepta MP4 con H.264 y audio AAC, sin Opus.';
         }
 
         return 'El archivo pesa ' . $fileMb . ' MB. WhatsApp permite máximo ' . $maxMb . ' MB para documentos en plantilla.';

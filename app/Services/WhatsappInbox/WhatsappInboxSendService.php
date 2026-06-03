@@ -6,6 +6,7 @@ use App\Models\WhatsappInbox\WaInboxMessage;
 use App\Services\WhatsApp\MetaWhatsAppCoordinacionService;
 use App\Support\WhatsApp\CoordinacionMediaLink;
 use App\Support\WhatsApp\WaInboxLog;
+use App\Support\WhatsApp\WaInboxMetaError;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -338,14 +339,6 @@ class WhatsappInboxSendService
      */
     private function formatMetaError($httpStatus, $json)
     {
-        $msg = 'Meta API HTTP ' . $httpStatus;
-        if (is_array($json) && isset($json['error']['message'])) {
-            $msg .= ': ' . (string) $json['error']['message'];
-            if (isset($json['error']['code'])) {
-                $msg .= ' (#' . $json['error']['code'] . ')';
-            }
-        }
-
-        return $msg;
+        return WaInboxMetaError::userMessage($httpStatus, $json);
     }
 }
