@@ -80,6 +80,26 @@ class WhatsappInboxController extends Controller
         }
     }
 
+    public function storeConversation(Request $request)
+    {
+        try {
+            $result = $this->conversationService->createManualContact([
+                'phone' => $request->input('phone'),
+                'contact_name' => $request->input('contact_name'),
+                'assigned_user_id' => (int) $request->input('assigned_user_id', 0),
+            ]);
+
+            $status = !empty($result['success']) ? 200 : 422;
+
+            return response()->json($result, $status);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al registrar contacto: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
     public function messages(Request $request, $id)
     {
         try {

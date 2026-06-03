@@ -177,6 +177,94 @@ class WhatsappInboxConversationService
     }
 
     /**
+     * Registra un contacto manual en wa_inbox_conversations (sesión activa).
+     *
+     * @param  array<string, mixed>  $params  phone, contact_name, assigned_user_id (opcional)
+     * @return array<string, mixed>
+     */
+    public function createManualContact(array $params = [])
+    {
+        $session = $this->sessionService->ensureDefaultSession();
+        $phoneE164 = $this->normalizePhoneE164(isset($params['phone']) ? $params['phone'] : '');
+        if ($phoneE164 === '' || strlen($phoneE164) < 10 || strlen($phoneE164) > 15) {
+            return [
+                'success' => false,
+                'message' => 'Indica un teléfono válido (9 dígitos Perú o con código 51).',
+            ];
+        }
+
+        $contactName = trim((string) ($params['contact_name'] ?? ''));
+        if ($contactName === '' || mb_strlen($contactName) < 2) {
+            return [
+                'success' => false,
+                'message' => 'Indica el nombre del contacto (mínimo 2 caracteres).',
+            ];
+        }
+
+        $assignedUserId = isset($params['assigned_user_id']) ? (int) $params['assigned_user_id'] : 0;
+        if ($assignedUserId > 0) {
+            $allowed = [];
+            foreach ($this->getAssignableUsers()['data'] as $row) {
+                if (isset($row['id'])) {
+                    $allowed[] = (int) $row['id'];
+                }
+            }
+            if (!in_array($assignedUserId, $allowed, true)) {
+                return [
+                    'success' => false,
+                    'message' => 'El usuario para asignar no es válido.',
+                ];
+            }
+        }
+
+        $existing = WaInboxConversation::query()
+            ->where('session_id', $session->id)
+            ->where('phone_e164', $phoneE164)
+            ->first();
+
+        if ($existing) {
+            $dirty = false;
+            if ($contactName !== '' && trim((string) $existing->contact_name) === '') {
+                $existing->contact_name = $contactName;
+                $dirty = true;
+            }
+            if ($assignedUserId > 0 && !$existing->assigned_user_id) {
+                $existing->assigned_user_id = $assignedUserId;
+                $existing->assigned_at = now();
+                $dirty = true;
+            }
+            if ($dirty) {
+                $existing->save();
+            }
+
+            return [
+                'success' => true,
+                'created' => false,
+                'message' => 'Este número ya está registrado en el inbox.',
+                'data' => $this->formatConversation($existing->fresh()),
+            ];
+        }
+
+        $conversation = WaInboxConversation::create([
+            'session_id' => $session->id,
+            'wa_contact_id' => null,
+            'phone_e164' => $phoneE164,
+            'contact_name' => $contactName,
+            'channel_label' => 'Coordinación',
+            'status' => 'open',
+            'assigned_user_id' => $assignedUserId > 0 ? $assignedUserId : null,
+            'assigned_at' => $assignedUserId > 0 ? now() : null,
+        ]);
+
+        return [
+            'success' => true,
+            'created' => true,
+            'message' => 'Contacto registrado. Para el primer mensaje usa una plantilla aprobada.',
+            'data' => $this->formatConversation($conversation),
+        ];
+    }
+
+    /**
      * @param  WaInboxSession  $session
      * @param  string  $phoneE164
      * @param  string|null  $waContactId
@@ -241,6 +329,10 @@ class WhatsappInboxConversationService
         $digits = preg_replace('/\D+/', '', (string) $phone);
         if ($digits === '') {
             return '';
+        }
+
+        if (strlen($digits) === 9) {
+            $digits = '51' . $digits;
         }
 
         return $digits;

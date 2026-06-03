@@ -19,6 +19,7 @@ Route::group([
 ], function () {
     Route::get('/session', [WhatsappInboxController::class, 'session']);
     Route::get('/conversations', [WhatsappInboxController::class, 'conversations']);
+    Route::post('/conversations', [WhatsappInboxController::class, 'storeConversation']);
     Route::get('/conversations/{id}/messages', [WhatsappInboxController::class, 'messages']);
     Route::post('/conversations/{id}/messages', [WhatsappInboxController::class, 'sendMessage']);
     Route::post('/conversations/{id}/templates', [WhatsappInboxController::class, 'sendTemplate']);
