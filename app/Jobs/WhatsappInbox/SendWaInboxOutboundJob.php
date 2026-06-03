@@ -3,6 +3,7 @@
 namespace App\Jobs\WhatsappInbox;
 
 use App\Services\WhatsappInbox\WhatsappInboxSendService;
+use App\Support\WhatsApp\WaInboxLog;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -28,12 +29,43 @@ class SendWaInboxOutboundJob implements ShouldQueue
 
     public function handle(WhatsappInboxSendService $sendService)
     {
-        $result = $sendService->sendOutboundMessage($this->messageId);
-        if (empty($result['success'])) {
-            Log::warning('SendWaInboxOutboundJob failed', [
+        WaInboxLog::info('job.SendWaInboxOutbound.start', [
+            'message_id' => $this->messageId,
+            'queue' => $this->queue,
+            'attempt' => $this->attempts(),
+        ]);
+
+        try {
+            $result = $sendService->sendOutboundMessage($this->messageId);
+            if (empty($result['success'])) {
+                WaInboxLog::warning('job.SendWaInboxOutbound.failed', [
+                    'message_id' => $this->messageId,
+                    'error' => isset($result['error']) ? $result['error'] : null,
+                ]);
+            } else {
+                WaInboxLog::info('job.SendWaInboxOutbound.done', [
+                    'message_id' => $this->messageId,
+                ]);
+            }
+        } catch (\Exception $e) {
+            WaInboxLog::error('job.SendWaInboxOutbound.exception', [
                 'message_id' => $this->messageId,
-                'error' => isset($result['error']) ? $result['error'] : null,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
             ]);
+            Log::error('SendWaInboxOutboundJob exception', [
+                'message_id' => $this->messageId,
+                'error' => $e->getMessage(),
+            ]);
+            throw $e;
         }
+    }
+
+    public function failed(\Exception $exception)
+    {
+        WaInboxLog::error('job.SendWaInboxOutbound.permanently_failed', [
+            'message_id' => $this->messageId,
+            'error' => $exception->getMessage(),
+        ]);
     }
 }

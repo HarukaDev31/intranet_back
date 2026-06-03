@@ -11,6 +11,7 @@ use App\Services\WhatsappInbox\WhatsappInboxSessionService;
 use App\Services\WhatsappInbox\WhatsappInboxTemplateService;
 use App\Services\WhatsappInbox\WhatsappInboxWindowService;
 use App\Support\WhatsApp\CoordinacionMediaLink;
+use App\Support\WhatsApp\WaInboxLog;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Log;
@@ -142,12 +143,24 @@ class WhatsappInboxController extends Controller
 
             SendWaInboxOutboundJob::dispatch($message->id);
 
+            WaInboxLog::info('sendMessage.queued', [
+                'conversation_id' => (int) $conversation->id,
+                'message_id' => (int) $message->id,
+                'phone_e164' => $conversation->phone_e164,
+                'queue' => (string) config('meta_whatsapp.inbox_queue', 'notificaciones'),
+            ]);
+
             return response()->json([
                 'success' => true,
                 'message' => 'Mensaje en cola de envío',
                 'data' => $this->messageService->formatMessage($message),
             ]);
         } catch (\Exception $e) {
+            WaInboxLog::error('sendMessage.exception', [
+                'conversation_id' => (int) $id,
+                'error' => $e->getMessage(),
+            ]);
+
             return response()->json([
                 'success' => false,
                 'message' => 'Error al enviar: ' . $e->getMessage(),
@@ -181,10 +194,29 @@ class WhatsappInboxController extends Controller
             $headerFormat = $this->templateService->getTemplateHeaderFormat($templateName);
             $requiresHeaderMedia = $this->templateService->templateRequiresHeaderMedia($templateName)
                 || count($request->allFiles()) > 0;
+            $fileKeys = array_keys($request->allFiles());
+
+            WaInboxLog::info('sendTemplate.start', [
+                'conversation_id' => (int) $conversation->id,
+                'phone_e164' => $conversation->phone_e164,
+                'template' => $templateName,
+                'header_format' => $headerFormat,
+                'requires_header_media' => $requiresHeaderMedia,
+                'uploaded_file_keys' => $fileKeys,
+                'header_file_kind' => $request->input('header_file_kind'),
+                'param_keys' => array_keys($params),
+                'user_id' => $userId,
+            ]);
 
             $header = null;
             if ($requiresHeaderMedia) {
                 if ($headerFormat !== null && count($request->allFiles()) === 0) {
+                    WaInboxLog::warning('sendTemplate.missing_header_file', [
+                        'conversation_id' => (int) $conversation->id,
+                        'template' => $templateName,
+                        'header_format' => $headerFormat,
+                    ]);
+
                     return response()->json([
                         'success' => false,
                         'message' => 'Esta plantilla requiere un archivo en el encabezado (PDF para documentos).',
@@ -197,17 +229,37 @@ class WhatsappInboxController extends Controller
                         ? 'No se pudo subir el PDF a S3. Esta plantilla exige un PDF en el encabezado.'
                         : 'No se pudo subir el archivo a S3. Revisa la configuración de almacenamiento.';
 
+                    WaInboxLog::error('sendTemplate.header_upload_failed', [
+                        'conversation_id' => (int) $conversation->id,
+                        'template' => $templateName,
+                        'header_format' => $headerFormat,
+                        'uploaded_file_keys' => $fileKeys,
+                    ]);
+
                     return response()->json([
                         'success' => false,
                         'message' => $message,
                     ], 422);
                 }
                 $params['_header'] = $header;
+
+                WaInboxLog::info('sendTemplate.header_ready', [
+                    'conversation_id' => (int) $conversation->id,
+                    'template' => $templateName,
+                    'header_type' => isset($header['type']) ? $header['type'] : null,
+                    'header_has_link' => !empty($header['link']),
+                    'header_filename' => isset($header['filename']) ? $header['filename'] : null,
+                ]);
             }
 
             $body = $this->buildTemplatePreviewBody($templateName, $params);
 
             if ($requiresHeaderMedia && $header !== null) {
+                WaInboxLog::info('sendTemplate.path_sync', [
+                    'conversation_id' => (int) $conversation->id,
+                    'template' => $templateName,
+                ]);
+
                 $sync = $this->messageService->sendTemplateWithHeaderSync(
                     $conversation,
                     $body,
@@ -217,11 +269,23 @@ class WhatsappInboxController extends Controller
                 );
 
                 if (empty($sync['success'])) {
+                    WaInboxLog::error('sendTemplate.sync_failed', [
+                        'conversation_id' => (int) $conversation->id,
+                        'template' => $templateName,
+                        'error' => isset($sync['error']) ? (string) $sync['error'] : null,
+                    ]);
+
                     return response()->json([
                         'success' => false,
                         'message' => isset($sync['error']) ? (string) $sync['error'] : 'Error al enviar plantilla',
                     ], 422);
                 }
+
+                WaInboxLog::info('sendTemplate.sync_ok', [
+                    'conversation_id' => (int) $conversation->id,
+                    'message_id' => isset($sync['message']) ? (int) $sync['message']->id : null,
+                    'meta_message_id' => isset($sync['message']) ? $sync['message']->meta_message_id : null,
+                ]);
 
                 return response()->json([
                     'success' => true,
@@ -229,6 +293,13 @@ class WhatsappInboxController extends Controller
                     'data' => $this->messageService->formatMessage($sync['message']),
                 ]);
             }
+
+            WaInboxLog::info('sendTemplate.path_queue', [
+                'conversation_id' => (int) $conversation->id,
+                'template' => $templateName,
+                'requires_header_media' => $requiresHeaderMedia,
+                'has_header_in_params' => isset($params['_header']),
+            ]);
 
             $message = $this->messageService->createOutboundPending(
                 $conversation,
@@ -241,12 +312,25 @@ class WhatsappInboxController extends Controller
 
             SendWaInboxOutboundJob::dispatch($message->id);
 
+            WaInboxLog::info('sendTemplate.queued', [
+                'conversation_id' => (int) $conversation->id,
+                'message_id' => (int) $message->id,
+                'template' => $templateName,
+                'queue' => (string) config('meta_whatsapp.inbox_queue', 'notificaciones'),
+            ]);
+
             return response()->json([
                 'success' => true,
                 'message' => 'Plantilla en cola de envío',
                 'data' => $this->messageService->formatMessage($message),
             ]);
         } catch (\Exception $e) {
+            WaInboxLog::error('sendTemplate.exception', [
+                'conversation_id' => (int) $id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
             return response()->json([
                 'success' => false,
                 'message' => 'Error al enviar plantilla: ' . $e->getMessage(),
@@ -354,6 +438,11 @@ class WhatsappInboxController extends Controller
         }
 
         if (!$file || !$file->isValid()) {
+            WaInboxLog::warning('resolveHeader.no_valid_file', [
+                'template' => $templateName,
+                'all_file_keys' => array_keys($request->allFiles()),
+            ]);
+
             return null;
         }
 
@@ -403,13 +492,24 @@ class WhatsappInboxController extends Controller
         }
 
         if ($url === null || $url === '') {
-            Log::error('WhatsappInbox: fallo subida S3 de header plantilla', [
+            WaInboxLog::error('resolveHeader.s3_upload_failed', [
+                'template' => $templateName,
                 'storage_key' => $storageKey,
                 'name' => $file->getClientOriginalName(),
+                'kind' => $kind,
             ]);
 
             return null;
         }
+
+        WaInboxLog::info('resolveHeader.ok', [
+            'template' => $templateName,
+            'kind' => $kind,
+            'header_format' => $headerFormat,
+            'storage_key' => $storageKey,
+            'size_bytes' => $file->getSize(),
+            'mime' => $file->getMimeType(),
+        ]);
 
         return [
             'type' => $kind,

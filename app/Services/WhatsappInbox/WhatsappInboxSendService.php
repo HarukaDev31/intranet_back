@@ -5,6 +5,7 @@ namespace App\Services\WhatsappInbox;
 use App\Models\WhatsappInbox\WaInboxMessage;
 use App\Services\WhatsApp\MetaWhatsAppCoordinacionService;
 use App\Support\WhatsApp\CoordinacionMediaLink;
+use App\Support\WhatsApp\WaInboxLog;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -30,20 +31,41 @@ class WhatsappInboxSendService
      */
     public function sendOutboundMessage($messageId)
     {
+        WaInboxLog::info('sendOutbound.start', ['message_id' => (int) $messageId]);
+
         $message = WaInboxMessage::query()->find($messageId);
         if (!$message || $message->direction !== 'out') {
+            WaInboxLog::warning('sendOutbound.message_not_found', ['message_id' => (int) $messageId]);
+
             return ['success' => false, 'error' => 'Mensaje no encontrado'];
         }
 
         $conversation = $message->conversation;
         if (!$conversation) {
+            WaInboxLog::warning('sendOutbound.conversation_not_found', ['message_id' => (int) $messageId]);
+
             return ['success' => false, 'error' => 'Conversación no encontrada'];
         }
 
         $phone = $conversation->phone_e164;
         if ($phone === '') {
+            WaInboxLog::warning('sendOutbound.invalid_phone', [
+                'message_id' => (int) $messageId,
+                'conversation_id' => (int) $conversation->id,
+            ]);
+
             return ['success' => false, 'error' => 'Teléfono inválido'];
         }
+
+        WaInboxLog::info('sendOutbound.dispatch', [
+            'message_id' => (int) $message->id,
+            'conversation_id' => (int) $conversation->id,
+            'phone_e164' => $phone,
+            'message_type' => $message->message_type,
+            'template_name' => $message->template_name,
+            'has_template_header' => is_array($message->template_params)
+                && isset($message->template_params['_header']),
+        ]);
 
         if ($message->message_type === 'template') {
             $result = $this->sendTemplateMessage($message, $phone);
@@ -59,6 +81,11 @@ class WhatsappInboxSendService
             $message->save();
             $this->messageService->broadcastMessageStatusUpdated($message);
 
+            WaInboxLog::info('sendOutbound.ok', [
+                'message_id' => (int) $message->id,
+                'meta_message_id' => $metaId,
+            ]);
+
             return ['success' => true];
         }
 
@@ -66,6 +93,14 @@ class WhatsappInboxSendService
         $message->failed_reason = isset($result['error']) ? (string) $result['error'] : 'Error Meta';
         $message->save();
         $this->messageService->broadcastMessageStatusUpdated($message);
+
+        WaInboxLog::error('sendOutbound.failed', [
+            'message_id' => (int) $message->id,
+            'conversation_id' => (int) $conversation->id,
+            'phone_e164' => $phone,
+            'error' => $message->failed_reason,
+            'meta_response' => WaInboxLog::sanitizePayload(isset($result['response']) ? $result['response'] : null),
+        ]);
 
         return ['success' => false, 'error' => $message->failed_reason];
     }
@@ -78,11 +113,15 @@ class WhatsappInboxSendService
     private function sendTextMessage($phoneE164, $text)
     {
         if (!config('meta_whatsapp.coordinacion_enabled')) {
+            WaInboxLog::warning('sendText.coordinacion_disabled', ['phone_e164' => $phoneE164]);
+
             return ['success' => false, 'error' => 'Meta coordinación deshabilitado'];
         }
 
         $token = (string) config('meta_whatsapp.access_token');
         if ($token === '') {
+            WaInboxLog::error('sendText.missing_token', ['phone_e164' => $phoneE164]);
+
             return ['success' => false, 'error' => 'META_WHATSAPP_ACCESS_TOKEN no configurado'];
         }
 
@@ -102,17 +141,21 @@ class WhatsappInboxSendService
             ]);
 
         if (!$response->successful()) {
-            Log::error('WhatsappInboxSend: error texto Meta', [
+            $json = $response->json();
+            WaInboxLog::error('sendText.meta_http_error', [
+                'phone_e164' => $phoneE164,
                 'status' => $response->status(),
-                'body' => $response->json() ?? $response->body(),
+                'body' => WaInboxLog::sanitizePayload(is_array($json) ? $json : $response->body()),
             ]);
 
             return [
                 'success' => false,
-                'error' => 'Meta API HTTP ' . $response->status(),
-                'response' => $response->json(),
+                'error' => $this->formatMetaError($response->status(), $json),
+                'response' => $json,
             ];
         }
+
+        WaInboxLog::info('sendText.meta_ok', ['phone_e164' => $phoneE164]);
 
         return [
             'success' => true,
@@ -139,7 +182,24 @@ class WhatsappInboxSendService
         $templateService = app(WhatsappInboxTemplateService::class);
         $requiredHeaderFormat = $templateService->getTemplateHeaderFormat($templateName);
 
+        WaInboxLog::info('dispatchMetaTemplate.start', [
+            'phone_e164' => $phoneE164,
+            'template' => $templateName,
+            'required_header_format' => $requiredHeaderFormat,
+            'has_header' => is_array($header),
+            'header_type_before_prepare' => is_array($header) && isset($header['type']) ? $header['type'] : null,
+            'body_param_count' => count($bodyParams),
+            'body_param_keys' => array_map(function ($p) {
+                return isset($p['parameter_name']) ? $p['parameter_name'] : (isset($p['text']) ? 'text' : '?');
+            }, $bodyParams),
+        ]);
+
         if ($requiredHeaderFormat !== null && $header === null) {
+            WaInboxLog::error('dispatchMetaTemplate.missing_header', [
+                'phone_e164' => $phoneE164,
+                'template' => $templateName,
+            ]);
+
             return [
                 'success' => false,
                 'error' => 'Falta el archivo del encabezado requerido por la plantilla',
@@ -159,11 +219,24 @@ class WhatsappInboxSendService
         $header = CoordinacionMediaLink::prepareHeader($header);
 
         if ($header === null && ($requiredHeaderFormat !== null || $this->paramsHadHeaderMedia($templateParams))) {
+            WaInboxLog::error('dispatchMetaTemplate.header_prepare_failed', [
+                'phone_e164' => $phoneE164,
+                'template' => $templateName,
+                'required_header_format' => $requiredHeaderFormat,
+            ]);
+
             return [
                 'success' => false,
                 'error' => 'No se pudo preparar el archivo del encabezado para Meta (URL pública)',
             ];
         }
+
+        WaInboxLog::info('dispatchMetaTemplate.call_meta', [
+            'phone_e164' => $phoneE164,
+            'template' => $templateName,
+            'requires_header_component' => $requiredHeaderFormat !== null,
+            'header_type' => is_array($header) && isset($header['type']) ? $header['type'] : null,
+        ]);
 
         $result = $this->metaService->sendMetaTemplate(
             $phoneE164,
@@ -175,12 +248,25 @@ class WhatsappInboxSendService
         );
 
         if (!empty($result['status'])) {
+            WaInboxLog::info('dispatchMetaTemplate.ok', [
+                'phone_e164' => $phoneE164,
+                'template' => $templateName,
+                'meta_message_id' => $this->extractMetaMessageId(isset($result['response']) ? $result['response'] : null),
+            ]);
+
             return [
                 'success' => true,
                 'meta_message_id' => $this->extractMetaMessageId(isset($result['response']) ? $result['response'] : null),
                 'response' => isset($result['response']) ? $result['response'] : null,
             ];
         }
+
+        WaInboxLog::error('dispatchMetaTemplate.meta_failed', [
+            'phone_e164' => $phoneE164,
+            'template' => $templateName,
+            'error' => isset($result['error']) ? $result['error'] : null,
+            'response' => WaInboxLog::sanitizePayload(isset($result['response']) ? $result['response'] : null),
+        ]);
 
         return [
             'success' => false,
@@ -243,5 +329,23 @@ class WhatsappInboxSendService
         }
 
         return null;
+    }
+
+    /**
+     * @param  int  $httpStatus
+     * @param  mixed  $json
+     * @return string
+     */
+    private function formatMetaError($httpStatus, $json)
+    {
+        $msg = 'Meta API HTTP ' . $httpStatus;
+        if (is_array($json) && isset($json['error']['message'])) {
+            $msg .= ': ' . (string) $json['error']['message'];
+            if (isset($json['error']['code'])) {
+                $msg .= ' (#' . $json['error']['code'] . ')';
+            }
+        }
+
+        return $msg;
     }
 }

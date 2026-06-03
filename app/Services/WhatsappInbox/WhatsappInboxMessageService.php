@@ -7,6 +7,7 @@ use App\Events\WhatsappInbox\WaInboxMessageStatusUpdated;
 use App\Models\WhatsappInbox\WaInboxConversation;
 use App\Models\WhatsappInbox\WaInboxMessage;
 use App\Models\WhatsappInbox\WaInboxWebhookLog;
+use App\Support\WhatsApp\WaInboxLog;
 use Carbon\Carbon;
 
 class WhatsappInboxMessageService
@@ -270,6 +271,13 @@ class WhatsappInboxMessageService
         $this->conversationService->refreshHeader($conversation, $preview, 'out', now(), false);
         $this->broadcastMessageCreated($message, $conversation);
 
+        WaInboxLog::info('createOutboundPending', [
+            'message_id' => (int) $message->id,
+            'conversation_id' => (int) $conversation->id,
+            'message_type' => $messageType,
+            'template_name' => $templateName,
+        ]);
+
         return $message;
     }
 
@@ -292,6 +300,12 @@ class WhatsappInboxMessageService
     ) {
         /** @var WhatsappInboxSendService $sendService */
         $sendService = app(WhatsappInboxSendService::class);
+        WaInboxLog::info('sendTemplateWithHeaderSync.start', [
+            'conversation_id' => (int) $conversation->id,
+            'phone_e164' => $conversation->phone_e164,
+            'template' => $templateName,
+        ]);
+
         $result = $sendService->dispatchMetaTemplate(
             $conversation->phone_e164,
             $templateName,
@@ -299,6 +313,12 @@ class WhatsappInboxMessageService
         );
 
         if (empty($result['success'])) {
+            WaInboxLog::error('sendTemplateWithHeaderSync.failed', [
+                'conversation_id' => (int) $conversation->id,
+                'template' => $templateName,
+                'error' => isset($result['error']) ? (string) $result['error'] : null,
+            ]);
+
             return [
                 'success' => false,
                 'error' => isset($result['error']) ? (string) $result['error'] : 'Error al enviar plantilla por Meta',

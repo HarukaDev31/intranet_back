@@ -7,6 +7,7 @@ use App\Models\WhatsAppCoordinacionBitrixRegistro;
 use App\Services\Crm\Bitrix\BitrixCrmClient;
 use App\Support\WhatsApp\CoordinacionMediaLink;
 use App\Support\WhatsApp\CoordinacionWhatsappPayload;
+use App\Support\WhatsApp\WaInboxLog;
 use App\Support\WhatsApp\WhatsappEnvironmentPhone;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -324,9 +325,10 @@ class MetaWhatsAppCoordinacionService
         }
 
         if ($requiresHeaderComponent && $headerComponent === null) {
-            Log::error('MetaWhatsAppCoordinacion: encabezado requerido no construido', [
+            WaInboxLog::error('metaTemplate.header_component_missing', [
                 'template' => $templateName,
-                'header' => $header,
+                'phone_e164' => $phoneE164,
+                'header' => WaInboxLog::sanitizePayload($header),
             ]);
 
             return [
@@ -354,6 +356,17 @@ class MetaWhatsAppCoordinacionService
             $body['template']['components'] = $components;
         }
 
+        WaInboxLog::info('metaTemplate.request', [
+            'template' => $templateName,
+            'phone_e164' => $phoneE164,
+            'language' => $languageCode,
+            'requires_header' => $requiresHeaderComponent,
+            'component_types' => array_map(function ($c) {
+                return isset($c['type']) ? $c['type'] : '?';
+            }, $components),
+            'payload' => WaInboxLog::sanitizePayload($body),
+        ]);
+
         $response = Http::timeout(60)
             ->withToken((string) config('meta_whatsapp.access_token'))
             ->acceptJson()
@@ -361,22 +374,50 @@ class MetaWhatsAppCoordinacionService
             ->post($url, $body);
 
         if (!$response->successful()) {
+            $json = $response->json();
+            $errorMsg = 'Meta API HTTP ' . $response->status();
+            if (is_array($json) && isset($json['error']['message'])) {
+                $errorMsg .= ': ' . (string) $json['error']['message'];
+                if (isset($json['error']['code'])) {
+                    $errorMsg .= ' (#' . $json['error']['code'] . ')';
+                }
+                if (isset($json['error']['error_data']['details'])) {
+                    $errorMsg .= ' — ' . (string) $json['error']['error_data']['details'];
+                }
+            }
+
+            WaInboxLog::error('metaTemplate.graph_error', [
+                'status' => $response->status(),
+                'template' => $templateName,
+                'phone_e164' => $phoneE164,
+                'body' => WaInboxLog::sanitizePayload(is_array($json) ? $json : $response->body()),
+            ]);
+
             Log::error('MetaWhatsAppCoordinacion: error Graph API', [
                 'status' => $response->status(),
-                'body' => $response->json() ?? $response->body(),
+                'body' => $json ?? $response->body(),
                 'template' => $templateName,
             ]);
 
             return [
                 'status' => false,
-                'error' => 'Meta API HTTP ' . $response->status(),
-                'response' => $response->json(),
+                'error' => $errorMsg,
+                'response' => $json,
             ];
         }
 
+        $jsonOk = $response->json();
+        WaInboxLog::info('metaTemplate.ok', [
+            'template' => $templateName,
+            'phone_e164' => $phoneE164,
+            'wamid' => is_array($jsonOk) && isset($jsonOk['messages'][0]['id'])
+                ? $jsonOk['messages'][0]['id']
+                : null,
+        ]);
+
         return [
             'status' => true,
-            'response' => $response->json(),
+            'response' => $jsonOk,
         ];
     }
 
