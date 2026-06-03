@@ -307,6 +307,11 @@ class CalculadoraImportacionExcelService
         }
 
         try {
+            $relative = $this->objectStorage()->normalizeRelativePath($fileUrl);
+            if ($relative !== null && $this->objectStorage()->exists($relative)) {
+                return file_get_contents($this->storageLocalPath($relative));
+            }
+
             if (filter_var($fileUrl, FILTER_VALIDATE_URL)) {
                 $context = stream_context_create([
                     'http' => [

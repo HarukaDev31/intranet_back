@@ -33,6 +33,32 @@ class CalculadoraImportacionService
     /** USD por cada proveedor que exceda MAX_PROVEEDORES */
     const TARIFA_EXTRA_PROVEEDOR = 50;
 
+    /**
+     * Ruta relativa en storage (templates/..., boletas/...) para columnas url_cotizacion*.
+     * No guardar URLs firmadas S3: exceden varchar y expiran.
+     */
+    public function storageRelativePathForDb(?string $value): ?string
+    {
+        if ($value === null || trim($value) === '') {
+            return null;
+        }
+
+        return $this->objectStorage()->normalizeRelativePath($value);
+    }
+
+    /**
+     * URL pública o firmada para respuestas API / descarga puntual.
+     */
+    public function publicUrlFromStoragePath(?string $stored): ?string
+    {
+        $relative = $this->storageRelativePathForDb($stored);
+        if ($relative === null) {
+            return null;
+        }
+
+        return $this->objectStorage()->url($relative);
+    }
+
     /** Tarifas extra por ítem según rango de CBM (reglas de negocio calculadora) */
     const TARIFAS_EXTRA_ITEM_PER_CBM = [
         ['limit_inf' => 0.01,   'limit_sup' => 1.0,   'item_base' => 6,  'item_extra' => 4,  'tarifa' => 20],
@@ -208,15 +234,17 @@ class CalculadoraImportacionService
                 Log::info('[CREAR COTIZACIÓN] Boleta generada: ' . $boletaInfo['filename']);
             }
 
-            $calculadora->url_cotizacion = $url;
+            $calculadora->url_cotizacion = $this->storageRelativePathForDb($url);
             $calculadora->total_fob = $totalFob;
             $calculadora->total_impuestos = $totalImpuestos;
             $calculadora->logistica = $logistica;
             $calculadora->cargos_extra = $this->valorCargosExtraDesdeCotizacionInicial($result);
 
-            // Guardar URL del PDF si se generó la boleta
+            // Guardar ruta relativa del PDF (no URL firmada)
             if ($boletaInfo) {
-                $calculadora->url_cotizacion_pdf = $boletaInfo['url'];
+                $calculadora->url_cotizacion_pdf = $this->storageRelativePathForDb(
+                    $boletaInfo['relative_path'] ?? $boletaInfo['url'] ?? null
+                );
                 Log::info('[CREAR COTIZACIÓN] Boleta PDF guardada en: ' . $boletaInfo['path']);
                 Log::info('[CREAR COTIZACIÓN] URL pública del PDF: ' . $boletaInfo['url']);
             }
@@ -1674,8 +1702,6 @@ class CalculadoraImportacionService
                     // Continuar sin la boleta
                 }
 
-                $publicUrl = $this->objectStorage()->url($relativeTemplate);
-
                 $totalFob = $sheetCalculos->getCell($totalColumn . $rowValorFob)->getCalculatedValue();
                 $totalImpuestos = $sheetCalculos->getCell($totalColumn . $rowTotalTributos)->getCalculatedValue();
                 $j30 = $sheetResumen->getCell('J30')->getCalculatedValue();
@@ -1686,7 +1712,7 @@ class CalculadoraImportacionService
                 $logistica = $j41 > 0 ? $j41 : 0;
 
                 return [
-                    'url' => $publicUrl,
+                    'url' => $relativeTemplate,
                     'totalfob' => $totalFob,
                     'totalimpuestos' => $totalImpuestos,
                     'logistica' => $logistica,
@@ -1718,8 +1744,13 @@ class CalculadoraImportacionService
         $calculadora->refresh();
         if ($calculadora->url_cotizacion) {
             $boletaInfo = $this->regenerarBoletaPdf($calculadora);
-            if ($boletaInfo && !empty($boletaInfo['url'])) {
-                $calculadora->update(['url_cotizacion_pdf' => $boletaInfo['url']]);
+            if ($boletaInfo) {
+                $pdfRelative = $this->storageRelativePathForDb(
+                    $boletaInfo['relative_path'] ?? $boletaInfo['url'] ?? null
+                );
+                if ($pdfRelative !== null) {
+                    $calculadora->update(['url_cotizacion_pdf' => $pdfRelative]);
+                }
             }
         }
     }
@@ -2022,15 +2053,20 @@ class CalculadoraImportacionService
 
         // update() solo con columnas del archivo: no toca cod_cotizacion ni otros campos aunque el modelo esté sucio en memoria
         $payload = [
-            'url_cotizacion' => $result['url'],
+            'url_cotizacion' => $this->storageRelativePathForDb($result['url'] ?? null),
             'total_fob' => $result['totalfob'] ?? $calculadora->total_fob,
             'total_impuestos' => $result['totalimpuestos'] ?? $calculadora->total_impuestos,
             'logistica' => $result['logistica'] ?? $calculadora->logistica,
             'cargos_extra' => $this->valorCargosExtraDesdeCotizacionInicial($result) ?? $calculadora->cargos_extra,
             'tipo_cotizacion' => $tipoCotizacion,
         ];
-        if (!empty($result['boleta']['url'])) {
-            $payload['url_cotizacion_pdf'] = $result['boleta']['url'];
+        if (!empty($result['boleta'])) {
+            $pdfRelative = $this->storageRelativePathForDb(
+                $result['boleta']['relative_path'] ?? $result['boleta']['url'] ?? null
+            );
+            if ($pdfRelative !== null) {
+                $payload['url_cotizacion_pdf'] = $pdfRelative;
+            }
         }
         $calculadora->update($payload);
 
@@ -2103,24 +2139,25 @@ class CalculadoraImportacionService
             ini_set('memory_limit', '2G');
             ini_set('max_execution_time', 300);
 
-            // Si recibe una URL, cargar el archivo Excel
+            // Si recibe ruta relativa o URL legacy, cargar el archivo Excel
             if (is_string($objPHPExcelOrUrl)) {
                 $fileUrl = $objPHPExcelOrUrl;
                 $filePath = null;
-                // Convertir URL a ruta de archivo
-                if (strpos($fileUrl, 'http') === 0) {
+                $pathRel = $this->storageRelativePathForDb($fileUrl);
+                if ($pathRel !== null && $this->objectStorage()->exists($pathRel)) {
+                    $filePath = $this->storageLocalPath($pathRel);
+                } elseif (strpos($fileUrl, 'http') === 0) {
                     $parsedUrl = parse_url($fileUrl);
-                    $path = $parsedUrl['path'] ?? '';
-                    if (strpos($path, '/storage/') === 0) {
-                        $path = substr($path, 9); // Remover '/storage/'
+                    $path = ltrim((string) ($parsedUrl['path'] ?? ''), '/');
+                    if (strpos($path, 'storage/') === 0) {
+                        $path = substr($path, 8);
                     }
-                    $path = ltrim($path, '/');
-                    $path = ltrim($path, '/');
-                    $filePath = $this->storageLocalPath($path);
+                    if ($path !== '' && $this->objectStorage()->exists($path)) {
+                        $filePath = $this->storageLocalPath($path);
+                    }
                 } else {
-                    $pathRel = preg_replace('#^/?(storage/)?#', '', $fileUrl);
-                    $pathRel = ltrim($pathRel, '/');
-                    if ($this->objectStorage()->exists($pathRel)) {
+                    $pathRel = ltrim(preg_replace('#^/?(storage/)?#', '', $fileUrl), '/');
+                    if ($pathRel !== '' && $this->objectStorage()->exists($pathRel)) {
                         $filePath = $this->storageLocalPath($pathRel);
                     } else {
                         $filePath = public_path($fileUrl);
@@ -2373,7 +2410,7 @@ class CalculadoraImportacionService
                 'path' => $pdfPath,
                 'filename' => $pdfFileName,
                 'relative_path' => $relativeBoleta,
-                'url' => $this->objectStorage()->url($relativeBoleta),
+                'url' => $relativeBoleta,
             ];
         } catch (\Exception $e) {
             Log::error('Error al generar boleta: ' . $e->getMessage());

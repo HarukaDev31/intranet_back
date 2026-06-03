@@ -459,10 +459,12 @@ class CalculadoraImportacionController extends Controller
 
     private function generateUrl($ruta)
     {
-        if ($ruta) {
-            return env('APP_URL') . $ruta;
+        if (!$ruta) {
+            return null;
         }
-        return null;
+
+        return $this->calculadoraImportacionService->publicUrlFromStoragePath($ruta)
+            ?? (filter_var($ruta, FILTER_VALIDATE_URL) ? $ruta : rtrim((string) env('APP_URL'), '/') . '/' . ltrim($ruta, '/'));
     }
     /**
      * Guardar o actualizar cálculo de importación
@@ -592,7 +594,9 @@ class CalculadoraImportacionController extends Controller
                 if ($calculadora->url_cotizacion) {
                     $boletaInfo = $this->calculadoraImportacionService->regenerarBoletaPdf($calculadora);
                     if ($boletaInfo && !empty($boletaInfo['url'])) {
-                        $calculadora->url_cotizacion_pdf = $boletaInfo['url'];
+                        $calculadora->url_cotizacion_pdf = $this->calculadoraImportacionService->storageRelativePathForDb(
+                            $boletaInfo['relative_path'] ?? $boletaInfo['url'] ?? null
+                        );
                         $calculadora->save();
                     }
                 }
@@ -1217,9 +1221,14 @@ class CalculadoraImportacionController extends Controller
             // Regenerar boleta PDF para reflejar el Excel actualizado (si aplica)
             if ($calculadora->url_cotizacion) {
                 $boletaInfo = $this->calculadoraImportacionService->regenerarBoletaPdf($calculadora);
-                if ($boletaInfo && !empty($boletaInfo['url'])) {
-                    $calculadora->url_cotizacion_pdf = $boletaInfo['url'];
-                    $calculadora->save();
+                if ($boletaInfo) {
+                    $pdfRelative = $this->calculadoraImportacionService->storageRelativePathForDb(
+                        $boletaInfo['relative_path'] ?? $boletaInfo['url'] ?? null
+                    );
+                    if ($pdfRelative !== null) {
+                        $calculadora->url_cotizacion_pdf = $pdfRelative;
+                        $calculadora->save();
+                    }
                 }
             }
 

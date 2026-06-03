@@ -134,6 +134,11 @@ class CalculadoraImportacionWhatsappService
     public function getPdfPathFromUrl(string $url): ?string
     {
         try {
+            $relative = $this->objectStorage()->normalizeRelativePath($url);
+            if ($relative !== null && $this->objectStorage()->exists($relative)) {
+                return $this->storageLocalPath($relative);
+            }
+
             if (strpos($url, 'http') === 0) {
                 $parsedUrl = parse_url($url);
                 $path = $parsedUrl['path'] ?? '';
