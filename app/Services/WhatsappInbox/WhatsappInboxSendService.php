@@ -121,18 +121,27 @@ class WhatsappInboxSendService
     }
 
     /**
-     * @param  WaInboxMessage  $message
+     * Envío directo a Meta (sin fila previa en BD). Usado para plantillas con archivo en encabezado.
+     *
      * @param  string  $phoneE164
-     * @return array{success: bool, response?: mixed, error?: string}
+     * @param  string  $templateName
+     * @param  array<string, mixed>  $templateParams
+     * @return array{success: bool, meta_message_id?: string|null, error?: string, response?: mixed}
      */
-    private function sendTemplateMessage(WaInboxMessage $message, $phoneE164)
+    public function dispatchMetaTemplate($phoneE164, $templateName, array $templateParams)
     {
-        $templateName = (string) $message->template_name;
-        $params = is_array($message->template_params) ? $message->template_params : [];
+        $params = $templateParams;
         $header = isset($params['_header']) && is_array($params['_header']) ? $params['_header'] : null;
         unset($params['_header']);
         $bodyParams = $this->metaService->normalizeBodyParameters($params);
         $header = CoordinacionMediaLink::prepareHeader($header);
+
+        if ($header === null && $this->paramsHadHeaderMedia($templateParams)) {
+            return [
+                'success' => false,
+                'error' => 'No se pudo preparar el archivo del encabezado para Meta',
+            ];
+        }
 
         $result = $this->metaService->sendMetaTemplate(
             $phoneE164,
@@ -143,6 +152,42 @@ class WhatsappInboxSendService
         );
 
         if (!empty($result['status'])) {
+            return [
+                'success' => true,
+                'meta_message_id' => $this->extractMetaMessageId(isset($result['response']) ? $result['response'] : null),
+                'response' => isset($result['response']) ? $result['response'] : null,
+            ];
+        }
+
+        return [
+            'success' => false,
+            'error' => isset($result['error']) ? (string) $result['error'] : 'Error plantilla Meta',
+            'response' => isset($result['response']) ? $result['response'] : null,
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $templateParams
+     * @return bool
+     */
+    private function paramsHadHeaderMedia(array $templateParams)
+    {
+        return isset($templateParams['_header']) && is_array($templateParams['_header']);
+    }
+
+    /**
+     * @param  WaInboxMessage  $message
+     * @param  string  $phoneE164
+     * @return array{success: bool, response?: mixed, error?: string}
+     */
+    private function sendTemplateMessage(WaInboxMessage $message, $phoneE164)
+    {
+        $templateName = (string) $message->template_name;
+        $params = is_array($message->template_params) ? $message->template_params : [];
+
+        $result = $this->dispatchMetaTemplate($phoneE164, $templateName, $params);
+
+        if (!empty($result['success'])) {
             return [
                 'success' => true,
                 'response' => isset($result['response']) ? $result['response'] : null,

@@ -74,6 +74,7 @@ class WhatsappInboxMessageService
             'sent_at' => $message->sent_at,
             'time_label' => $message->sent_at ? Carbon::parse($message->sent_at)->format('H:i') : '',
             'delivery_status' => $message->delivery_status,
+            'failed_reason' => $message->failed_reason,
             'is_template' => $isTemplate,
             'template_name' => $message->template_name,
             'message_type' => $message->message_type,
@@ -270,6 +271,88 @@ class WhatsappInboxMessageService
         $this->broadcastMessageCreated($message, $conversation);
 
         return $message;
+    }
+
+    /**
+     * Plantilla con media en encabezado: envío Meta + persistencia solo si tuvo éxito.
+     *
+     * @param  WaInboxConversation  $conversation
+     * @param  string  $body
+     * @param  int|null  $userId
+     * @param  string  $templateName
+     * @param  array<string, mixed>  $templateParams
+     * @return array{success: bool, message?: WaInboxMessage, error?: string}
+     */
+    public function sendTemplateWithHeaderSync(
+        WaInboxConversation $conversation,
+        $body,
+        $userId,
+        $templateName,
+        array $templateParams
+    ) {
+        /** @var WhatsappInboxSendService $sendService */
+        $sendService = app(WhatsappInboxSendService::class);
+        $result = $sendService->dispatchMetaTemplate(
+            $conversation->phone_e164,
+            $templateName,
+            $templateParams
+        );
+
+        if (empty($result['success'])) {
+            return [
+                'success' => false,
+                'error' => isset($result['error']) ? (string) $result['error'] : 'Error al enviar plantilla por Meta',
+            ];
+        }
+
+        $preview = '[Template enviado]';
+        $message = WaInboxMessage::create([
+            'conversation_id' => $conversation->id,
+            'session_id' => $conversation->session_id,
+            'direction' => 'out',
+            'body' => $body,
+            'message_type' => 'template',
+            'template_name' => $templateName,
+            'template_params' => $templateParams,
+            'meta_message_id' => isset($result['meta_message_id']) ? $result['meta_message_id'] : null,
+            'delivery_status' => 'sent',
+            'failed_reason' => null,
+            'sent_at' => now(),
+            'sent_by_user_id' => $userId,
+        ]);
+
+        $this->conversationService->refreshHeader($conversation, $preview, 'out', now(), false);
+        $this->broadcastMessageCreated($message, $conversation);
+
+        return ['success' => true, 'message' => $message];
+    }
+
+    /**
+     * @param  WaInboxConversation  $conversation
+     */
+    public function syncConversationPreviewFromLastMessage(WaInboxConversation $conversation)
+    {
+        $last = WaInboxMessage::query()
+            ->where('conversation_id', $conversation->id)
+            ->orderByDesc('sent_at')
+            ->orderByDesc('id')
+            ->first();
+
+        if (!$last) {
+            return;
+        }
+
+        $preview = $last->message_type === 'template'
+            ? '[Template enviado]'
+            : mb_substr(trim((string) $last->body), 0, 500);
+
+        $this->conversationService->refreshHeader(
+            $conversation,
+            $preview,
+            (string) $last->direction,
+            $last->sent_at,
+            false
+        );
     }
 
     /**

@@ -41,6 +41,30 @@ class WhatsappInboxTemplateService
     }
 
     /**
+     * @param  string  $templateName
+     * @return bool
+     */
+    public function templateRequiresHeaderMedia($templateName)
+    {
+        $list = $this->listTemplates();
+        $templates = isset($list['data']) && is_array($list['data']) ? $list['data'] : [];
+
+        foreach ($templates as $tpl) {
+            if (!is_array($tpl) || ($tpl['name'] ?? '') !== $templateName) {
+                continue;
+            }
+            $defs = isset($tpl['param_defs']) && is_array($tpl['param_defs']) ? $tpl['param_defs'] : [];
+            foreach ($defs as $def) {
+                if (is_array($def) && ($def['type'] ?? '') === 'file') {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public function listTemplates()

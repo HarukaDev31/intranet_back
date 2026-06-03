@@ -12,6 +12,9 @@ use App\Services\WhatsappInbox\WhatsappInboxTemplateService;
 use App\Services\WhatsappInbox\WhatsappInboxWindowService;
 use App\Support\WhatsApp\CoordinacionMediaLink;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Tymon\JWTAuth\Facades\JWTAuth;
 
@@ -151,20 +154,54 @@ class WhatsappInboxController extends Controller
                 $params = [];
             }
 
-            $header = $this->resolveTemplateHeaderFromRequest($request);
-            if ($header !== null) {
+            $conversation = WaInboxConversation::query()->findOrFail((int) $id);
+            $user = JWTAuth::parseToken()->authenticate();
+            $userId = $user ? (int) $user->getIdUsuario() : null;
+
+            $requiresHeaderMedia = $this->templateService->templateRequiresHeaderMedia($templateName)
+                || count($request->allFiles()) > 0;
+
+            $header = null;
+            if ($requiresHeaderMedia) {
+                $header = $this->resolveTemplateHeaderFromRequest($request);
+                if ($header === null) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'No se pudo subir el archivo a S3. Revisa la configuración de almacenamiento.',
+                    ], 422);
+                }
                 $params['_header'] = $header;
             }
 
             $body = $this->buildTemplatePreviewBody($templateName, $params);
 
-            $conversation = WaInboxConversation::query()->findOrFail((int) $id);
-            $user = JWTAuth::parseToken()->authenticate();
+            if ($requiresHeaderMedia && $header !== null) {
+                $sync = $this->messageService->sendTemplateWithHeaderSync(
+                    $conversation,
+                    $body,
+                    $userId,
+                    $templateName,
+                    $params
+                );
+
+                if (empty($sync['success'])) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => isset($sync['error']) ? (string) $sync['error'] : 'Error al enviar plantilla',
+                    ], 422);
+                }
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Plantilla enviada',
+                    'data' => $this->messageService->formatMessage($sync['message']),
+                ]);
+            }
 
             $message = $this->messageService->createOutboundPending(
                 $conversation,
                 $body,
-                $user ? (int) $user->getIdUsuario() : null,
+                $userId,
                 'template',
                 $templateName,
                 $params
@@ -283,23 +320,63 @@ class WhatsappInboxController extends Controller
             return null;
         }
 
-        $kind = strtolower((string) $request->input('header_file_kind', 'document'));
+        $kind = strtolower((string) $request->input('header_file_kind', ''));
         if (!in_array($kind, ['document', 'image', 'video'], true)) {
-            $kind = 'document';
+            $kind = $this->guessHeaderKindFromFile($file);
         }
 
         $storageKey = CoordinacionMediaLink::META_TEMP_PREFIX . '/inbox/'
             . Str::uuid() . '_' . preg_replace('/[^a-zA-Z0-9._-]/', '_', $file->getClientOriginalName());
 
-        $url = CoordinacionMediaLink::uploadLocalFile($file->getRealPath(), $storageKey);
+        $localRelative = $file->store('temp/wa-inbox-uploads', 'local');
+        if ($localRelative === false) {
+            Log::error('WhatsappInbox: no se pudo guardar archivo temporal', [
+                'name' => $file->getClientOriginalName(),
+            ]);
+
+            return null;
+        }
+
+        $fullPath = storage_path('app/' . $localRelative);
+        $url = CoordinacionMediaLink::uploadLocalFile($fullPath, $storageKey);
+
+        try {
+            Storage::disk('local')->delete($localRelative);
+        } catch (\Exception $e) {
+            // ignorar limpieza local
+        }
+
         if ($url === null || $url === '') {
+            Log::error('WhatsappInbox: fallo subida S3 de header plantilla', [
+                'storage_key' => $storageKey,
+                'name' => $file->getClientOriginalName(),
+            ]);
+
             return null;
         }
 
         return [
             'type' => $kind,
             'link' => $url,
+            'path' => $storageKey,
             'filename' => $file->getClientOriginalName(),
         ];
+    }
+
+    /**
+     * @param  UploadedFile  $file
+     * @return string
+     */
+    private function guessHeaderKindFromFile(UploadedFile $file)
+    {
+        $mime = strtolower((string) $file->getMimeType());
+        if (strpos($mime, 'image/') === 0) {
+            return 'image';
+        }
+        if (strpos($mime, 'video/') === 0) {
+            return 'video';
+        }
+
+        return 'document';
     }
 }
