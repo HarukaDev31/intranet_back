@@ -62,7 +62,18 @@ return [
     |
     */
 
-    'enabled' => env('TELESCOPE_ENABLED', true),
+    'enabled' => env('TELESCOPE_ENABLED', false),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Acceso al panel (producción, sin login web)
+    |--------------------------------------------------------------------------
+    | TELESCOPE_DASHBOARD_TOKEN: ?token=... o header X-Telescope-Token
+    | TELESCOPE_ALLOWED_IPS: lista separada por comas (opcional)
+    */
+    'dashboard_token' => env('TELESCOPE_DASHBOARD_TOKEN'),
+
+    'allowed_ips' => array_values(array_filter(array_map('trim', explode(',', (string) env('TELESCOPE_ALLOWED_IPS', ''))))),
 
     /*
     |--------------------------------------------------------------------------
