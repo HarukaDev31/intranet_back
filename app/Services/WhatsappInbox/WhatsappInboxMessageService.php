@@ -2,6 +2,8 @@
 
 namespace App\Services\WhatsappInbox;
 
+use App\Events\WhatsappInbox\WaInboxMessageCreated;
+use App\Events\WhatsappInbox\WaInboxMessageStatusUpdated;
 use App\Models\WhatsappInbox\WaInboxConversation;
 use App\Models\WhatsappInbox\WaInboxMessage;
 use App\Models\WhatsappInbox\WaInboxWebhookLog;
@@ -182,7 +184,7 @@ class WhatsappInboxMessageService
         $timestamp = isset($msg['timestamp']) ? (int) $msg['timestamp'] : time();
         $sentAt = Carbon::createFromTimestamp($timestamp);
 
-        WaInboxMessage::create([
+        $message = WaInboxMessage::create([
             'conversation_id' => $conversation->id,
             'session_id' => $session->id,
             'direction' => 'in',
@@ -194,6 +196,7 @@ class WhatsappInboxMessageService
         ]);
 
         $this->conversationService->refreshHeader($conversation, $body, 'in', $sentAt, true);
+        $this->broadcastMessageCreated($message, $conversation);
     }
 
     /**
@@ -225,6 +228,7 @@ class WhatsappInboxMessageService
                 $message->failed_reason = (string) $status['errors'][0]['title'];
             }
             $message->save();
+            $this->broadcastMessageStatusUpdated($message);
         }
     }
 
@@ -263,7 +267,34 @@ class WhatsappInboxMessageService
         ]);
 
         $this->conversationService->refreshHeader($conversation, $preview, 'out', now(), false);
+        $this->broadcastMessageCreated($message, $conversation);
 
         return $message;
+    }
+
+    /**
+     * @param  WaInboxMessage  $message
+     * @param  WaInboxConversation  $conversation
+     */
+    public function broadcastMessageCreated(WaInboxMessage $message, WaInboxConversation $conversation)
+    {
+        $conversation->refresh();
+        event(new WaInboxMessageCreated(
+            $this->formatMessage($message),
+            $this->conversationService->formatConversation($conversation)
+        ));
+    }
+
+    /**
+     * @param  WaInboxMessage  $message
+     */
+    public function broadcastMessageStatusUpdated(WaInboxMessage $message)
+    {
+        event(new WaInboxMessageStatusUpdated(
+            (int) $message->conversation_id,
+            (int) $message->id,
+            (string) $message->delivery_status,
+            $this->formatMessage($message)
+        ));
     }
 }

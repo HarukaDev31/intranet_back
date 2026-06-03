@@ -45,6 +45,11 @@ Broadcast::channel('Documentacion-notifications', function ($user) {
 Broadcast::channel('Coordinacion-notifications', function ($user) {
     return $user->grupo && $user->grupo->No_Grupo === Usuario::ROL_COORDINACION;
 });
+
+// WhatsApp Inbox coordinación — tiempo real del chat Meta
+Broadcast::channel('whatsapp-inbox.coordinacion', function ($user) {
+    return $user->grupo && $user->grupo->No_Grupo === Usuario::ROL_COORDINACION;
+});
 Broadcast::channel('Administracion-notifications', function ($user) {
     return $user->grupo && $user->grupo->No_Grupo === Usuario::ROL_ADMINISTRACION;
 });

@@ -12,9 +12,15 @@ class WhatsappInboxSendService
     /** @var MetaWhatsAppCoordinacionService */
     protected $metaService;
 
-    public function __construct(MetaWhatsAppCoordinacionService $metaService)
-    {
+    /** @var WhatsappInboxMessageService */
+    protected $messageService;
+
+    public function __construct(
+        MetaWhatsAppCoordinacionService $metaService,
+        WhatsappInboxMessageService $messageService
+    ) {
         $this->metaService = $metaService;
+        $this->messageService = $messageService;
     }
 
     /**
@@ -50,6 +56,7 @@ class WhatsappInboxSendService
             $message->delivery_status = 'sent';
             $message->failed_reason = null;
             $message->save();
+            $this->messageService->broadcastMessageStatusUpdated($message);
 
             return ['success' => true];
         }
@@ -57,6 +64,7 @@ class WhatsappInboxSendService
         $message->delivery_status = 'failed';
         $message->failed_reason = isset($result['error']) ? (string) $result['error'] : 'Error Meta';
         $message->save();
+        $this->messageService->broadcastMessageStatusUpdated($message);
 
         return ['success' => false, 'error' => $message->failed_reason];
     }
