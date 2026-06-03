@@ -412,7 +412,13 @@ trait WhatsappTrait
 
         if ($this->shouldRouteCoordinacionToMeta($fromNumber)) {
             if (is_array($meta) && !empty($meta['template'])) {
-                $meta['chat_preview'] = $meta['chat_preview'] ?? $meta['bitrix_message'] ?? $message;
+                if (
+                    !isset($meta['chat_preview'])
+                    && !isset($meta['bitrix_message'])
+                    && trim((string) $message) !== ''
+                ) {
+                    $meta['chat_preview'] = $message;
+                }
                 $meta['phone'] = $meta['phone'] ?? $phoneNumberId;
                 $meta['sleep'] = $meta['sleep'] ?? $sleep;
 
@@ -493,7 +499,13 @@ trait WhatsappTrait
                 if (is_array($meta) && !empty($meta['template'])) {
                     $meta['phone'] = $meta['phone'] ?? $phoneNumberId;
                     $meta['sleep'] = $meta['sleep'] ?? $sleep;
-                    $meta['chat_preview'] = $meta['chat_preview'] ?? $meta['bitrix_message'] ?? (string) ($message ?? '');
+                    if (
+                        !isset($meta['chat_preview'])
+                        && !isset($meta['bitrix_message'])
+                        && trim((string) ($message ?? '')) !== ''
+                    ) {
+                        $meta['chat_preview'] = $message;
+                    }
                     if (empty($meta['header'])) {
                         $meta['header'] = [
                             'type' => is_string($mimeType) && strpos($mimeType, 'image/') === 0 ? 'image' : 'document',
@@ -563,7 +575,13 @@ trait WhatsappTrait
             if ($this->shouldRouteCoordinacionToMeta('consolidado') && is_array($meta) && !empty($meta['template'])) {
                 $meta['phone'] = $meta['phone'] ?? $phoneNumberId;
                 $meta['sleep'] = $meta['sleep'] ?? $sleep;
-                $meta['chat_preview'] = $meta['chat_preview'] ?? $meta['bitrix_message'] ?? (string) ($message ?? '');
+                if (
+                    !isset($meta['chat_preview'])
+                    && !isset($meta['bitrix_message'])
+                    && trim((string) ($message ?? '')) !== ''
+                ) {
+                    $meta['chat_preview'] = $message;
+                }
                 if (empty($meta['header']) && $filePath !== '') {
                     $meta['header'] = [
                         'type' => is_string($mimeType) && strpos($mimeType, 'video/') === 0 ? 'video' : (
@@ -651,7 +669,13 @@ trait WhatsappTrait
             if ($this->shouldRouteCoordinacionToMeta('consolidado') && is_array($meta) && !empty($meta['template'])) {
                 $meta['phone'] = $meta['phone'] ?? $phoneNumberId;
                 $meta['sleep'] = $meta['sleep'] ?? $sleep;
-                $meta['chat_preview'] = $meta['chat_preview'] ?? $meta['bitrix_message'] ?? (string) ($message ?? '');
+                if (
+                    !isset($meta['chat_preview'])
+                    && !isset($meta['bitrix_message'])
+                    && trim((string) ($message ?? '')) !== ''
+                ) {
+                    $meta['chat_preview'] = $message;
+                }
                 if (empty($meta['header'])) {
                     $mediaPath = is_string($filePath) && $filePath !== '' ? $filePath : '';
                     if ($mediaPath !== '') {

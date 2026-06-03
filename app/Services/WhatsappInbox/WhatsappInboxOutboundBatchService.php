@@ -37,7 +37,11 @@ class WhatsappInboxOutboundBatchService
             ->orderBy('sort_order')
             ->get();
 
+        $stepDelay = max(0, min((int) config('meta_whatsapp.inbox_outbound_step_delay_seconds', 2), 30));
+        $queue = (string) config('meta_whatsapp.inbox_queue', 'notificaciones');
+
         $jobs = [];
+        $jobIndex = 0;
         foreach ($items as $item) {
             $message = WaInboxMessage::query()->find((int) $item->inbox_message_id);
             if ($message === null || $message->direction !== 'out') {
@@ -50,8 +54,10 @@ class WhatsappInboxOutboundBatchService
             $jobs[] = new SendWaInboxOutboundJob(
                 (int) $message->id,
                 $domain,
-                (string) $item->label
+                (string) $item->label,
+                $jobIndex > 0 ? $stepDelay : 0
             );
+            $jobIndex++;
         }
 
         if ($jobs === []) {
@@ -81,23 +87,27 @@ class WhatsappInboxOutboundBatchService
             $batch->cliente ? ' · ' . mb_substr((string) $batch->cliente, 0, 35) : ''
         );
 
-        $laravelBatch = Bus::batch($jobs)
-            ->name($horizonName)
-            ->allowFailures()
-            ->onQueue((string) config('meta_whatsapp.inbox_queue', 'notificaciones'))
-            ->dispatch();
+        if (count($jobs) === 1) {
+            dispatch($jobs[0])->onQueue($queue);
+            $outboundRef = null;
+        } else {
+            Bus::chain($jobs)->onQueue($queue)->dispatch();
+            $outboundRef = sprintf('chain-%d', $coordinacionBatchId);
+        }
 
         $batch->update([
-            'outbound_laravel_batch_id' => $laravelBatch->id,
+            'outbound_laravel_batch_id' => $outboundRef,
         ]);
 
-        Log::info('WhatsappInboxOutboundBatch: jobs despachados', [
+        Log::info('WhatsappInboxOutboundBatch: jobs despachados (cadena secuencial)', [
             'coordinacion_batch_id' => $coordinacionBatchId,
-            'outbound_laravel_batch_id' => $laravelBatch->id,
+            'outbound_ref' => $outboundRef,
+            'horizon_label' => $horizonName,
             'total_jobs' => count($jobs),
+            'step_delay_seconds' => $stepDelay,
             'domain' => WaInboxJobContext::resolveJobDomain($domain),
         ]);
 
-        return $laravelBatch->id;
+        return $outboundRef;
     }
 }

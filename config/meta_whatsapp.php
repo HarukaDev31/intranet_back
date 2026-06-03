@@ -59,6 +59,18 @@ return [
 
     'inbox_queue' => env('META_WHATSAPP_INBOX_QUEUE', env('META_WHATSAPP_QUEUE', 'notificaciones')),
 
+    /** Pausa entre envíos Meta encadenados (batch 2) para respetar orden en el teléfono del cliente. */
+    'inbox_outbound_step_delay_seconds' => (int) env('META_WHATSAPP_INBOX_OUTBOUND_STEP_DELAY', 2),
+
+    /**
+     * Automatización coordinación: texto del chat = cuerpo de plantilla Meta (Graph) + body_parameters.
+     * Si false, usa chat_preview/bitrix_message del payload (comportamiento legacy).
+     */
+    'coordinacion_inbox_preview_from_template' => filter_var(
+        env('META_WHATSAPP_COORDINACION_PREVIEW_FROM_TEMPLATE', true),
+        FILTER_VALIDATE_BOOLEAN
+    ),
+
     /**
      * Dominio para setDatabaseConnection en jobs WaInbox (cola sin HTTP).
      * En local/WSL suele ser localhost → mysql_local.

@@ -163,11 +163,14 @@ class CoordinacionWhatsappPayload
      * @param  array<string, string>  $bodyParameters  nombre Meta => valor
      * @return array<string, mixed>
      */
+    /**
+     * @param  string|null  $chatPreview  Opcional; si se omite, el inbox arma el texto desde la plantilla Meta (Graph).
+     */
     public static function template(
         string $phone,
         string $templateName,
         array $bodyParameters,
-        string $chatPreview,
+        ?string $chatPreview = null,
         int $sleep = 0,
         ?array $header = null
     ): array {
@@ -177,9 +180,11 @@ class CoordinacionWhatsappPayload
             'template' => $templateName,
             'language' => 'es_PE',
             'body_parameters' => $bodyParameters,
-            'chat_preview' => $chatPreview,
             'sleep' => $sleep,
         ];
+        if ($chatPreview !== null && trim($chatPreview) !== '') {
+            $payload['chat_preview'] = $chatPreview;
+        }
         if ($header !== null) {
             $payload['header'] = $header;
         }
@@ -272,7 +277,7 @@ class CoordinacionWhatsappPayload
         string $templateName,
         array $bodyParameters,
         string $filePath,
-        string $bitrixMessage,
+        ?string $chatPreview = null,
         ?string $filename = null,
         ?string $mimeType = null,
         int $sleep = 0
@@ -281,7 +286,7 @@ class CoordinacionWhatsappPayload
             $phone,
             $templateName,
             $bodyParameters,
-            $bitrixMessage,
+            $chatPreview,
             $sleep,
             [
                 'type' => 'document',
@@ -300,14 +305,14 @@ class CoordinacionWhatsappPayload
         string $templateName,
         array $bodyParameters,
         string $filePath,
-        string $bitrixMessage,
+        ?string $chatPreview = null,
         int $sleep = 0
     ): array {
         return self::template(
             $phone,
             $templateName,
             $bodyParameters,
-            $bitrixMessage,
+            $chatPreview,
             $sleep,
             [
                 'type' => 'image',
@@ -342,7 +347,7 @@ class CoordinacionWhatsappPayload
             'carga' => $carga,
             'codigo_proveedor' => $codigoProveedor,
             'link_excel' => $link ?? '',
-        ], self::docsExcelLinkPreview($carga, $codigoProveedor, $link ?? ''), $sleep);
+        ], null, $sleep);
         $payload['id_proveedor'] = $idProveedor;
 
         return $payload;
@@ -384,9 +389,7 @@ class CoordinacionWhatsappPayload
         $codigo = (string) (($payload['body_parameters']['codigo_proveedor'] ?? '') ?: $code);
 
         $payload['body_parameters']['link_excel'] = $link;
-        if ($carga !== '' && $codigo !== '') {
-            $payload['chat_preview'] = self::docsExcelLinkPreview($carga, $codigo, $link);
-        }
+        unset($payload['chat_preview'], $payload['bitrix_message']);
 
         return true;
     }
@@ -481,7 +484,7 @@ class CoordinacionWhatsappPayload
     public static function docsConsideraciones(
         string $phone,
         string $filePath,
-        string $bitrixMessage,
+        ?string $chatPreview = null,
         ?string $filename = null,
         ?string $mimeType = null,
         int $sleep = 0
@@ -491,7 +494,7 @@ class CoordinacionWhatsappPayload
             'pb_docs_consideraciones_doc_v1',
             [],
             $filePath,
-            $bitrixMessage,
+            $chatPreview,
             $filename,
             $mimeType ?? 'application/pdf',
             $sleep

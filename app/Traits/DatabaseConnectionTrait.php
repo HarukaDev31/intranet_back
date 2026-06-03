@@ -22,6 +22,8 @@ trait DatabaseConnectionTrait
             'cargaconsolidada.probusiness.pe' => 'mysql', 
             'qaintranet.probusiness.pe' => 'mysql_qa', 
             'localhost' => 'mysql_local',
+            '127.0.0.1' => 'mysql_local',
+            
         ];
     }
 
@@ -74,13 +76,9 @@ trait DatabaseConnectionTrait
                 }
             }
 
-            // Si aún no hay dominio, usar la conexión actual o por defecto
+            // Si aún no hay dominio, usar localhost (mysql_local en WSL vía DB_HOST_LOCAL_WSL)
             if (!$domain) {
-                $currentConnection = DB::getDefaultConnection();
-                Log::info('No se pudo obtener dominio, usando conexión actual', [
-                    'connection' => $currentConnection
-                ]);
-                return $currentConnection;
+                $domain = (string) config('database.queue_job_domain', 'localhost');
             }
 
             // Obtener la conexión de base de datos según el dominio

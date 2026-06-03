@@ -302,7 +302,8 @@ class WhatsappInboxMessageService
                 ? $templateParams['_header']
                 : null;
             if ($header && !empty($header['path'])) {
-                $mediaUrl = (string) $header['path'];
+                $rawPath = (string) $header['path'];
+                $mediaUrl = CoordinacionMediaLink::resolveStoragePath($rawPath) ?: $rawPath;
             } elseif ($header && !empty($header['link'])) {
                 $mediaUrl = CoordinacionMediaLink::resolveStoragePath((string) $header['link'])
                     ?: (string) $header['link'];

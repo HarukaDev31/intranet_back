@@ -116,13 +116,25 @@ class WhatsappInboxTemplateService
     {
         $list = $this->listTemplates();
         $templates = isset($list['data']) && is_array($list['data']) ? $list['data'] : [];
-        $text = '[' . $templateName . ']';
+        $bodyText = '[' . $templateName . ']';
+        $headerText = '';
         foreach ($templates as $tpl) {
-            if (is_array($tpl) && isset($tpl['name']) && $tpl['name'] === $templateName) {
-                $text = isset($tpl['text']) ? (string) $tpl['text'] : $text;
-                break;
+            if (!is_array($tpl) || ($tpl['name'] ?? '') !== $templateName) {
+                continue;
             }
+            $bodyText = isset($tpl['text']) ? (string) $tpl['text'] : $bodyText;
+            $headerText = isset($tpl['header_text']) ? (string) $tpl['header_text'] : '';
+            break;
         }
+
+        $parts = [];
+        if ($headerText !== '') {
+            $parts[] = $headerText;
+        }
+        if ($bodyText !== '') {
+            $parts[] = $bodyText;
+        }
+        $text = $parts === [] ? '[' . $templateName . ']' : implode("\n\n", $parts);
 
         foreach ($params as $key => $val) {
             if ($key === '_header' || is_array($val)) {
@@ -132,6 +144,31 @@ class WhatsappInboxTemplateService
         }
 
         return $text;
+    }
+
+    /**
+     * Texto del chat inbox: cuerpo de plantilla Meta (caché Graph) + parámetros del job.
+     * Evita duplicar copy en CoordinacionWhatsappPayload / jobs.
+     *
+     * @param  string  $templateName
+     * @param  array<string, mixed>  $params
+     * @param  string|null  $fallback  Solo si la plantilla no está en caché (p. ej. texto legacy multilínea)
+     * @return string
+     */
+    public function resolvePreviewText($templateName, array $params, $fallback = null)
+    {
+        $fromMeta = trim($this->buildPreviewBody($templateName, $params));
+        $missingMarker = '[' . $templateName . ']';
+
+        if (config('meta_whatsapp.coordinacion_inbox_preview_from_template', true)) {
+            if ($fromMeta !== '' && $fromMeta !== $missingMarker) {
+                return $fromMeta;
+            }
+        }
+
+        $fb = trim((string) $fallback);
+
+        return $fb !== '' ? $fb : ($fromMeta !== '' ? $fromMeta : $templateName);
     }
 
     /**
@@ -205,6 +242,7 @@ class WhatsappInboxTemplateService
                     'label' => $name,
                     'language' => isset($item['language']) ? (string) $item['language'] : 'es_PE',
                     'text' => $parsed['text'],
+                    'header_text' => $parsed['header_text'],
                     'params' => $parsed['params'],
                     'param_defs' => $parsed['param_defs'],
                     'header_format' => $parsed['header_format'],
@@ -225,11 +263,12 @@ class WhatsappInboxTemplateService
 
     /**
      * @param  array<int, array<string, mixed>>  $components
-     * @return array{text: string, params: array<int, string>, param_defs: array<int, array<string, mixed>>, header_format: string|null}
+     * @return array{text: string, header_text: string, params: array<int, string>, param_defs: array<int, array<string, mixed>>, header_format: string|null}
      */
     private function parseTemplateComponents(array $components)
     {
         $bodyText = '';
+        $headerText = '';
         $params = [];
         $paramDefs = [];
         $headerFormat = null;
@@ -242,7 +281,16 @@ class WhatsappInboxTemplateService
 
             if ($type === 'HEADER') {
                 $format = strtoupper((string) ($comp['format'] ?? 'TEXT'));
-                if (in_array($format, ['DOCUMENT', 'IMAGE', 'VIDEO'], true)) {
+                if ($format === 'TEXT') {
+                    $headerText = isset($comp['text']) ? (string) $comp['text'] : '';
+                    if (preg_match_all('/\{\{([^}]+)\}\}/', $headerText, $m)) {
+                        foreach ($m[1] as $paramName) {
+                            if (!in_array($paramName, $params, true)) {
+                                $params[] = $paramName;
+                            }
+                        }
+                    }
+                } elseif (in_array($format, ['DOCUMENT', 'IMAGE', 'VIDEO'], true)) {
                     $headerFormat = $format;
                     $label = 'Archivo de encabezado';
                     if ($format === 'DOCUMENT') {
@@ -277,6 +325,7 @@ class WhatsappInboxTemplateService
 
         return [
             'text' => $bodyText,
+            'header_text' => $headerText,
             'params' => $params,
             'param_defs' => $paramDefs,
             'header_format' => $headerFormat,

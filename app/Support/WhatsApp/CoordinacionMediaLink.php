@@ -125,23 +125,41 @@ class CoordinacionMediaLink
     }
 
     /**
-     * URL para el chat / intranet (siempre CDN si está configurado).
+     * URL para el chat / intranet (presigned S3 por defecto; evita CDN 403 en templates privados).
      *
      * @param  string|null  $pathOrUrl  Clave relativa S3 o URL guardada en BD
      * @return string|null
      */
     public static function urlForDisplay($pathOrUrl)
     {
+        $directUrl = self::stringOrNullUrl($pathOrUrl);
+        if ($directUrl !== null && self::isPresignedOrDirectObjectUrl($directUrl)) {
+            return $directUrl;
+        }
+
         $resolved = self::resolveStoragePath($pathOrUrl);
         if ($resolved === null) {
-            return self::stringOrNullUrl($pathOrUrl);
+            return $directUrl;
         }
 
         try {
             $storage = app(ObjectStorageConnectorInterface::class);
-            if ($storage->exists($resolved)) {
-                return $storage->url($resolved);
+            if (!$storage->exists($resolved)) {
+                return $directUrl;
             }
+
+            if (method_exists($storage, 'metaPresignedUrl') && self::shouldUsePresignedForDisplay($resolved)) {
+                try {
+                    return $storage->metaPresignedUrl($resolved);
+                } catch (\Throwable $e) {
+                    Log::debug('CoordinacionMediaLink: urlForDisplay presigned fallback CDN', [
+                        'path' => $resolved,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+
+            return $storage->url($resolved);
         } catch (\Throwable $e) {
             Log::debug('CoordinacionMediaLink: urlForDisplay', [
                 'path' => $resolved,
@@ -149,7 +167,33 @@ class CoordinacionMediaLink
             ]);
         }
 
-        return self::stringOrNullUrl($pathOrUrl);
+        return $directUrl;
+    }
+
+    /**
+     * @param  string  $url
+     * @return bool
+     */
+    private static function isPresignedOrDirectObjectUrl($url)
+    {
+        if (stripos($url, 'X-Amz-Signature=') !== false || stripos($url, 'X-Amz-Algorithm=') !== false) {
+            return true;
+        }
+
+        return stripos($url, '.amazonaws.com') !== false;
+    }
+
+    /**
+     * @param  string  $relativePath
+     * @return bool
+     */
+    private static function shouldUsePresignedForDisplay($relativePath)
+    {
+        if (config('object_storage.inbox_display_use_presigned', true)) {
+            return true;
+        }
+
+        return strpos($relativePath, 'templates/') === 0;
     }
 
     /**

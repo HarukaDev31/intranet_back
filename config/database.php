@@ -18,7 +18,11 @@ return [
     'default' => env('DB_CONNECTION', 'mysql'),
 
     /*
-    |--------------------------------------------------------------------------
+    | Dominio usado por jobs en cola cuando no hay Origin/Referer (WSL → localhost → mysql_local).
+    */
+    'queue_job_domain' => env('QUEUE_JOB_DB_DOMAIN', 'localhost'),
+
+    /*    |--------------------------------------------------------------------------
     | Database Connections
     |--------------------------------------------------------------------------
     |

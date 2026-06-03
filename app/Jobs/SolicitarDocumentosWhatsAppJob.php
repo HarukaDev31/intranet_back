@@ -312,8 +312,8 @@ class SolicitarDocumentosWhatsAppJob implements ShouldQueue
             $this->queueCoordinacionWhatsApp(
                 CoordinacionWhatsappPayload::docsConsideraciones(
                     $telefono,
-                    $considerationsFile['meta_url'],
-                    'Consideraciones para la documentación de tu importación. 📋',
+                    (string) $considerationsFile['storage_path'],
+                    null,
                     $considerationsFile['filename'],
                     $considerationsFile['mime'],
                     10
@@ -368,6 +368,7 @@ class SolicitarDocumentosWhatsAppJob implements ShouldQueue
 
             return [
                 'meta_url' => $metaUrl,
+                'storage_path' => $relative,
                 'email_path' => $emailPath,
                 'filename' => $candidate['filename'],
                 'mime' => $candidate['mime'],

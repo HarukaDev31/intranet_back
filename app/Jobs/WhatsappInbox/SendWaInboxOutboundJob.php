@@ -6,7 +6,6 @@ use App\Services\WhatsappInbox\WhatsappInboxSendService;
 use App\Support\WhatsApp\WaInboxJobContext;
 use App\Support\WhatsApp\WaInboxLog;
 use App\Traits\DatabaseConnectionTrait;
-use Illuminate\Bus\Batchable;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -16,7 +15,6 @@ use Illuminate\Support\Facades\Log;
 
 class SendWaInboxOutboundJob implements ShouldQueue
 {
-    use Batchable;
     use DatabaseConnectionTrait;
     use Dispatchable;
     use InteractsWithQueue;
@@ -32,11 +30,15 @@ class SendWaInboxOutboundJob implements ShouldQueue
     /** @var string|null Etiqueta en Horizon (batch de envío). */
     public $displayLabel;
 
-    public function __construct($messageId, ?string $domain = null, ?string $displayLabel = null)
+    /** @var int Segundos de espera antes de enviar (cadena batch 2, respeta orden en WhatsApp). */
+    public $delayBeforeSendSeconds;
+
+    public function __construct($messageId, ?string $domain = null, ?string $displayLabel = null, int $delayBeforeSendSeconds = 0)
     {
         $this->messageId = (int) $messageId;
         $this->domain = $domain;
         $this->displayLabel = $displayLabel;
+        $this->delayBeforeSendSeconds = max(0, min($delayBeforeSendSeconds, 30));
         $this->onQueue((string) config('meta_whatsapp.inbox_queue', 'notificaciones'));
     }
 
@@ -61,6 +63,10 @@ class SendWaInboxOutboundJob implements ShouldQueue
             'attempt' => $this->attempts(),
             'domain' => WaInboxJobContext::resolveJobDomain($this->domain),
         ]);
+
+        if ($this->delayBeforeSendSeconds > 0) {
+            sleep($this->delayBeforeSendSeconds);
+        }
 
         try {
             $result = $sendService->sendOutboundMessage($this->messageId);

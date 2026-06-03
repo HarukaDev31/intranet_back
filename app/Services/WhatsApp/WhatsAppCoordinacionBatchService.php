@@ -106,7 +106,7 @@ class WhatsAppCoordinacionBatchService
             ->name($horizonName)
             ->allowFailures()
             ->onQueue((string) config('meta_whatsapp.queue', 'notificaciones'))
-            ->finally([new FinalizeWhatsAppCoordinacionBatchCallback($batchIdRef)])
+            ->finally(new FinalizeWhatsAppCoordinacionBatchCallback($batchIdRef))
             ->dispatch();
 
         $batch->update([

@@ -86,11 +86,6 @@ class WhatsappInboxCoordinacionOutboundService
             return ['status' => false, 'error' => 'Sin enlace Google Drive válido para Excel de confirmación'];
         }
 
-        $previewBody = trim((string) ($payload['chat_preview'] ?? $payload['bitrix_message'] ?? ''));
-        if ($previewBody === '') {
-            return ['status' => false, 'error' => 'chat_preview requerido (texto para mostrar en el inbox)'];
-        }
-
         $rawHeader = isset($payload['header']) && is_array($payload['header']) ? $payload['header'] : null;
         $header = CoordinacionMediaLink::prepareHeader($rawHeader);
         if ($rawHeader !== null && !empty($rawHeader['type']) && $header === null) {
@@ -103,7 +98,15 @@ class WhatsappInboxCoordinacionOutboundService
         }
 
         $templateParams = $this->buildTemplateParams($payload, $header);
-        $body = $previewBody !== '' ? $previewBody : $this->templateService->buildPreviewBody($templateName, $templateParams);
+        $fallbackPreview = trim((string) ($payload['chat_preview'] ?? $payload['bitrix_message'] ?? ''));
+        $body = $this->templateService->resolvePreviewText(
+            $templateName,
+            $templateParams,
+            $fallbackPreview !== '' ? $fallbackPreview : null
+        );
+        if (trim($body) === '') {
+            return ['status' => false, 'error' => 'No se pudo resolver el texto de la plantilla para el inbox'];
+        }
 
         $session = $this->sessionService->ensureDefaultSession();
         $contactName = $this->resolveContactName($payload, $phone);

@@ -27,7 +27,8 @@ class DatabaseSelectionMiddleware
         'agentecompras.probusiness.pe' => 'mysql',
         'cargaconsolidada.probusiness.pe' => 'mysql', 
         'qaintranet.probusiness.pe' => 'mysql_qa', 
-        'localhost' => 'mysql_local', 
+        'localhost' => 'mysql_local',
+        '127.0.0.1' => 'mysql_local',
 
     ];
 

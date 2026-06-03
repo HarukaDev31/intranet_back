@@ -7,7 +7,9 @@ Historial operativo en **WhatsApp Inbox** (`wa_inbox_*`). Envíos vía `SendCoor
 ## Dos batches en Horizon
 
 1. **Programático** — `SendCoordinacionWhatsAppJob` (`Programático · …`). Crea/actualiza filas en `wa_inbox_*`.
-2. **Envío inbox** — `SendWaInboxOutboundJob` (`Inbox envío · …`), despachado al finalizar el batch 1. Solo mensajes `pending` hacia Meta.
+2. **Envío inbox** — `SendWaInboxOutboundJob` en **cadena secuencial** (`Bus::chain`, orden `sort_order`, pausa `META_WHATSAPP_INBOX_OUTBOUND_STEP_DELAY`). Solo mensajes `pending` hacia Meta.
+
+Chat inbox: media S3 con `OBJECT_STORAGE_INBOX_DISPLAY_PRESIGNED=true` (evita CDN 403 en `templates/`).
 
 Helpers: `runWhatsAppCoordinacionBatch()` o `setWhatsAppCoordinacionBatchId` + `dispatchWhatsAppCoordinacionBatch`.
 
@@ -23,4 +25,4 @@ META_WHATSAPP_QUEUE=notificaciones
 META_WHATSAPP_INBOX_QUEUE=notificaciones
 ```
 
-Payload de plantilla: `chat_preview` (texto en el inbox). Ver `docs/META_WHATSAPP_TEMPLATES_CUERPO.md` y `probusiness_intranetv3/docs/WHATSAPP_INBOX_ENVIOS_PROGRAMATICOS.md`.
+Payload de plantilla: `body_parameters` obligatorios; `chat_preview` opcional (por defecto se resuelve desde Graph/Meta vía `WhatsappInboxTemplateService::resolvePreviewText`, config `META_WHATSAPP_COORDINACION_PREVIEW_FROM_TEMPLATE=true`). Ver `docs/META_WHATSAPP_TEMPLATES_CUERPO.md`.

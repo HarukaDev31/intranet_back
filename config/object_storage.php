@@ -46,4 +46,9 @@ return [
     /** Usar CDN cuando FILESYSTEM_UPLOAD_DISK=s3 (aunque el objeto aún esté solo en disco legacy) */
     'cdn_when_upload_disk_s3' => env('OBJECT_STORAGE_CDN_WHEN_S3', true),
 
+    /**
+     * Chat inbox: URL firmada S3 en lugar de CDN (templates/ y objetos privados suelen dar 403 en CDN).
+     */
+    'inbox_display_use_presigned' => filter_var(env('OBJECT_STORAGE_INBOX_DISPLAY_PRESIGNED', true), FILTER_VALIDATE_BOOLEAN),
+
 ];
