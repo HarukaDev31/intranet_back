@@ -32,6 +32,13 @@ return [
     | WhatsApp Inbox (intranet coordinación)
     |--------------------------------------------------------------------------
     */
+    /** Límites Meta para media en encabezado de plantilla (bytes). */
+    'inbox_header_max_bytes' => [
+        'image' => (int) env('META_WHATSAPP_INBOX_MAX_IMAGE_BYTES', 5 * 1024 * 1024),
+        'video' => (int) env('META_WHATSAPP_INBOX_MAX_VIDEO_BYTES', 16 * 1024 * 1024),
+        'document' => (int) env('META_WHATSAPP_INBOX_MAX_DOCUMENT_BYTES', 100 * 1024 * 1024),
+    ],
+
     'inbox_queue' => env('META_WHATSAPP_INBOX_QUEUE', env('META_WHATSAPP_QUEUE', 'notificaciones')),
     'inbox_display_number' => env('META_WHATSAPP_INBOX_DISPLAY_NUMBER', ''),
     'inbox_alert_phone' => env('WA_INBOX_ALERT_PHONE', ''),

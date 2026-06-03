@@ -225,9 +225,25 @@ class WhatsappInboxController extends Controller
 
                 $header = $this->resolveTemplateHeaderFromRequest($request, $templateName);
                 if ($header === null) {
-                    $message = $headerFormat === 'DOCUMENT'
-                        ? 'No se pudo subir el PDF a S3. Esta plantilla exige un PDF en el encabezado.'
-                        : 'No se pudo subir el archivo a S3. Revisa la configuración de almacenamiento.';
+                    $file = $request->file('header_media');
+                    if (!$file || !$file->isValid()) {
+                        foreach ($request->allFiles() as $uploaded) {
+                            $candidate = is_array($uploaded) ? ($uploaded[0] ?? null) : $uploaded;
+                            if ($candidate && $candidate->isValid()) {
+                                $file = $candidate;
+                                break;
+                            }
+                        }
+                    }
+                    $sizeMsg = ($file && $file->isValid())
+                        ? $this->validateTemplateHeaderFileSize($file, $headerFormat, $templateName)
+                        : null;
+
+                    $message = $sizeMsg !== null
+                        ? $sizeMsg
+                        : ($headerFormat === 'DOCUMENT'
+                            ? 'No se pudo subir el PDF a S3. Esta plantilla exige un PDF en el encabezado.'
+                            : 'No se pudo subir el archivo a S3. Revisa la configuración de almacenamiento.');
 
                     WaInboxLog::error('sendTemplate.header_upload_failed', [
                         'conversation_id' => (int) $conversation->id,
@@ -447,6 +463,18 @@ class WhatsappInboxController extends Controller
         }
 
         $headerFormat = $this->templateService->getTemplateHeaderFormat($templateName);
+        $sizeError = $this->validateTemplateHeaderFileSize($file, $headerFormat, $templateName);
+        if ($sizeError !== null) {
+            WaInboxLog::warning('resolveHeader.file_too_large', [
+                'template' => $templateName,
+                'header_format' => $headerFormat,
+                'size_bytes' => $file->getSize(),
+                'message' => $sizeError,
+            ]);
+
+            return null;
+        }
+
         if ($headerFormat === 'DOCUMENT') {
             $ext = strtolower((string) $file->getClientOriginalExtension());
             if ($ext !== 'pdf') {
@@ -517,6 +545,46 @@ class WhatsappInboxController extends Controller
             'path' => $storageKey,
             'filename' => $file->getClientOriginalName(),
         ];
+    }
+
+    /**
+     * @param  UploadedFile  $file
+     * @param  string|null  $headerFormat  DOCUMENT|IMAGE|VIDEO
+     * @param  string  $templateName
+     * @return string|null  Mensaje de error o null si OK
+     */
+    private function validateTemplateHeaderFileSize(UploadedFile $file, $headerFormat, $templateName = '')
+    {
+        $limits = config('meta_whatsapp.inbox_header_max_bytes', []);
+        $format = strtoupper((string) $headerFormat);
+        $key = 'document';
+        if ($format === 'IMAGE') {
+            $key = 'image';
+        } elseif ($format === 'VIDEO') {
+            $key = 'video';
+        }
+
+        $max = isset($limits[$key]) ? (int) $limits[$key] : 0;
+        if ($max <= 0) {
+            return null;
+        }
+
+        $size = (int) $file->getSize();
+        if ($size <= $max) {
+            return null;
+        }
+
+        $maxMb = round($max / 1024 / 1024, 1);
+        $fileMb = round($size / 1024 / 1024, 1);
+
+        if ($key === 'image') {
+            return 'La imagen pesa ' . $fileMb . ' MB. WhatsApp permite máximo ' . $maxMb . ' MB en plantillas con encabezado de imagen.';
+        }
+        if ($key === 'video') {
+            return 'El video pesa ' . $fileMb . ' MB. WhatsApp permite máximo ' . $maxMb . ' MB.';
+        }
+
+        return 'El archivo pesa ' . $fileMb . ' MB. WhatsApp permite máximo ' . $maxMb . ' MB para documentos en plantilla.';
     }
 
     /**

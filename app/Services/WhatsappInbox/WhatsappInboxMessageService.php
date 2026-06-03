@@ -226,8 +226,33 @@ class WhatsappInboxMessageService
 
         if (isset($map[$state])) {
             $message->delivery_status = $map[$state];
-            if ($state === 'failed' && isset($status['errors'][0]['title'])) {
-                $message->failed_reason = (string) $status['errors'][0]['title'];
+            if ($state === 'failed') {
+                $err = isset($status['errors'][0]) && is_array($status['errors'][0])
+                    ? $status['errors'][0]
+                    : [];
+                $parts = [];
+                if (!empty($err['message'])) {
+                    $parts[] = (string) $err['message'];
+                } elseif (!empty($err['title'])) {
+                    $parts[] = (string) $err['title'];
+                }
+                if (!empty($err['code'])) {
+                    $parts[] = '#' . $err['code'];
+                }
+                if (!empty($err['error_data']['details'])) {
+                    $parts[] = (string) $err['error_data']['details'];
+                }
+                $message->failed_reason = $parts !== []
+                    ? implode(' — ', $parts)
+                    : 'Error de entrega WhatsApp';
+
+                WaInboxLog::error('webhook.delivery_failed', [
+                    'message_id' => (int) $message->id,
+                    'meta_message_id' => $metaId,
+                    'conversation_id' => (int) $message->conversation_id,
+                    'failed_reason' => $message->failed_reason,
+                    'status' => WaInboxLog::sanitizePayload($status),
+                ]);
             }
             $message->save();
             $this->broadcastMessageStatusUpdated($message);
