@@ -191,6 +191,31 @@ class CoordinacionMediaLink
     }
 
     /**
+     * Clave S3 para media recibida del cliente (webhook Meta).
+     *
+     * @param  int  $conversationId
+     * @param  string  $kind
+     * @param  string  $originalFilename
+     * @return string
+     */
+    public static function buildInboxInboundStorageKey($conversationId, $kind, $originalFilename)
+    {
+        $conversationId = (int) $conversationId;
+        $kind = strtolower(preg_replace('/[^a-z]/', '', (string) $kind));
+        if ($kind === '') {
+            $kind = 'document';
+        }
+
+        $name = preg_replace('/[^a-zA-Z0-9._-]/', '_', (string) $originalFilename);
+        if ($name === '') {
+            $name = 'media.bin';
+        }
+
+        return 'whatsapp-meta/inbox/conversations/' . $conversationId . '/inbound/' . $kind . '/'
+            . Str::uuid() . '_' . $name;
+    }
+
+    /**
      * @param  string  $url
      * @return bool
      */

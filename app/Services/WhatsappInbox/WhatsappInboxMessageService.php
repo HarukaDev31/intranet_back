@@ -83,6 +83,14 @@ class WhatsappInboxMessageService
             $replyToMetaId = $rid !== '' ? $rid : null;
         }
 
+        $mediaSizeBytes = null;
+        if (isset($params['_media_size_bytes'])) {
+            $mediaSizeBytes = (int) $params['_media_size_bytes'];
+            if ($mediaSizeBytes <= 0) {
+                $mediaSizeBytes = null;
+            }
+        }
+
         return [
             'id' => (int) $message->id,
             'direction' => $message->direction,
@@ -98,6 +106,7 @@ class WhatsappInboxMessageService
             'media_url' => CoordinacionMediaLink::urlForDisplay($message->media_url),
             'media_mime' => $message->media_mime,
             'media_filename' => $mediaFilename !== '' ? $mediaFilename : null,
+            'media_size_bytes' => $mediaSizeBytes,
             'reply_to_meta_message_id' => $replyToMetaId,
         ];
     }
@@ -192,13 +201,37 @@ class WhatsappInboxMessageService
         }
 
         $type = isset($msg['type']) ? (string) $msg['type'] : 'text';
+        $messageType = $type === 'sticker' ? 'image' : $type;
         $body = '';
+        $mediaUrl = null;
+        $mediaMime = null;
+        $templateParams = null;
+
         if ($type === 'text' && isset($msg['text']['body'])) {
             $body = (string) $msg['text']['body'];
         } elseif ($type === 'button' && isset($msg['button']['text'])) {
             $body = (string) $msg['button']['text'];
         } elseif ($type === 'interactive') {
             $body = '[Mensaje interactivo]';
+        } elseif (in_array($type, ['image', 'video', 'document', 'audio', 'sticker'], true)) {
+            /** @var WaInboxInboundMediaService $inboundMedia */
+            $inboundMedia = app(WaInboxInboundMediaService::class);
+            $stored = $inboundMedia->downloadAndStore($msg, (int) $conversation->id);
+            if (is_array($stored)) {
+                $mediaUrl = (string) $stored['path'];
+                $mediaMime = isset($stored['mime']) ? $stored['mime'] : null;
+                $messageType = isset($stored['message_type']) ? (string) $stored['message_type'] : $messageType;
+                $templateParams = isset($stored['template_params']) && is_array($stored['template_params'])
+                    ? $stored['template_params']
+                    : null;
+                if (!empty($stored['body'])) {
+                    $body = (string) $stored['body'];
+                } else {
+                    $body = '[' . $messageType . ']';
+                }
+            } else {
+                $body = '[' . $messageType . ']';
+            }
         } else {
             $body = '[' . $type . ']';
         }
@@ -211,7 +244,10 @@ class WhatsappInboxMessageService
             'session_id' => $session->id,
             'direction' => 'in',
             'body' => $body,
-            'message_type' => $type,
+            'message_type' => $messageType,
+            'template_params' => $templateParams,
+            'media_url' => $mediaUrl,
+            'media_mime' => $mediaMime,
             'meta_message_id' => $metaId !== '' ? $metaId : null,
             'delivery_status' => 'delivered',
             'sent_at' => $sentAt,
