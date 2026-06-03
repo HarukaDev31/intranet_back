@@ -754,14 +754,18 @@ class DeliveryController extends Controller
                 return;
             }
             $contenedor = Contenedor::find($cotizacion->id_contenedor);
-            $carga = $contenedor ? $contenedor->carga : '';
-            $message = "Hola {$cotizacion->nombre}.\n\nGracias por llenar nuestro formulario del consolidado #{$carga}, le estaremos avisando de nuevos avances.";
+            $carga = $contenedor ? (string) $contenedor->carga : '';
+            $meta = CoordinacionWhatsappPayload::deliveryWhatsapp(
+                (string) $phoneNumber,
+                (string) $cotizacion->nombre,
+                $carga
+            );
             $this->sendMessage(
-                $message,
+                (string) ($meta['chat_preview'] ?? ''),
                 $phoneNumber,
                 0,
                 'consolidado',
-                CoordinacionWhatsappPayload::deliveryWhatsapp((string) $phoneNumber, $message, $message)
+                $meta
             );
         } catch (\Throwable $th) {
             Log::warning('No se pudo enviar el mensaje inicial del formulario de Lima', [

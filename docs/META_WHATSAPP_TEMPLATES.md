@@ -219,7 +219,7 @@ Los **PDF** e **imágenes** (jpg/png) sí van en plantillas con encabezado DOCUM
 | P04 | `pb_general_cliente_v1` | TEXT | Usos puntuales con texto corto (no recordatorios documentos) | `{{mensaje}}` (texto corto, una línea) |
 | P06 | `pb_proveedor_datos_guardado_pendiente_v1` | TEXT | `CotizacionProveedorController::updateContenedorCotizacionProveedoresByUuid` (`guardar1`) | `{{codigos_pendientes}}`, `{{link_datos_proveedor}}` |
 | P07 | `pb_proveedor_datos_guardado_completo_v1` | TEXT | `CotizacionProveedorController::updateContenedorCotizacionProveedoresByUuid` (`guardar2`) | — (texto fijo) |
-| P05 | `pb_delivery_whatsapp_v1` | TEXT | `DeliveryController` | `{{mensaje}}` (una línea) |
+| P05 | `pb_delivery_whatsapp_v1` | TEXT | `DeliveryController::sendInitialDeliveryFormMessage` | `{{nombre}}`, `{{carga}}` |
 
 ---
 

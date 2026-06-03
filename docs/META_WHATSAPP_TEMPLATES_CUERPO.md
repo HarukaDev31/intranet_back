@@ -1044,19 +1044,24 @@ Mensaje armado en `CotizacionProveedorController` — usar `{{mensaje}}` cuerpo 
 
 ### P05 — `pb_delivery_whatsapp_v1`
 
-**Tipo:** TEXT · **Origen:** `DeliveryController` · Mensaje dinámico de entrega (misma restricción que P04: una línea en `{{mensaje}}`).
+**Tipo:** TEXT · **Origen:** `DeliveryController::sendInitialDeliveryFormMessage` · Confirmación tras registrar formulario de delivery Lima.
 
 **BODY:**
 
 ```
-{{mensaje}}
+Hola {{nombre}}.
+
+Gracias por llenar nuestro formulario del consolidado #{{carga}}, le estaremos avisando de nuevos avances.
 
 📦
 ```
 
 | Parámetro Meta | Orden API | Campo backend |
 |----------------|-----------|---------------|
-| `{{mensaje}}` | 1 | Texto entrega (sin saltos de línea) |
+| `{{nombre}}` | 1 | `Cotizacion::nombre` |
+| `{{carga}}` | 2 | `Contenedor::carga` |
+
+> Texto fijo en plantilla Meta; backend solo envía `nombre` y `carga` vía `CoordinacionWhatsappPayload::deliveryWhatsapp()`.
 
 ---
 

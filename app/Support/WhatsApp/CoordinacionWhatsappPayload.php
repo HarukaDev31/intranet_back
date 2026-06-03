@@ -999,11 +999,27 @@ class CoordinacionWhatsappPayload
         ], $bitrixMessage, $sleep);
     }
 
-    public static function deliveryWhatsapp(string $phone, string $mensaje, string $bitrixMessage, int $sleep = 0): array
-    {
+    public static function deliveryWhatsapp(
+        string $phone,
+        string $nombre,
+        string $carga,
+        ?string $bitrixMessage = null,
+        int $sleep = 0
+    ): array {
+        $preview = $bitrixMessage ?? self::deliveryWhatsappPreview($nombre, $carga);
+
         return self::template($phone, 'pb_delivery_whatsapp_v1', [
-            'mensaje' => $mensaje,
-        ], $bitrixMessage, $sleep);
+            'nombre' => $nombre,
+            'carga' => $carga,
+        ], $preview, $sleep);
+    }
+
+    /**
+     * Vista previa Bitrix / legacy (mismo texto que la plantilla Meta P05).
+     */
+    public static function deliveryWhatsappPreview(string $nombre, string $carga): string
+    {
+        return "Hola {$nombre}.\n\nGracias por llenar nuestro formulario del consolidado #{$carga}, le estaremos avisando de nuevos avances.";
     }
 
     public static function inspeccionLlegada(
