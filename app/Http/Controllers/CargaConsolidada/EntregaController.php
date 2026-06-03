@@ -2984,8 +2984,10 @@ class EntregaController extends Controller
             try {
                 $inserted = [];
                 $photo1Path = null;
+                $photo1StoragePath = null;
                 $photo1MimeType = null;
                 $photo2Path = null;
+                $photo2StoragePath = null;
                 $photo2MimeType = null;
 
                 // Procesar photo_1 si existe
@@ -2993,6 +2995,7 @@ class EntregaController extends Controller
                     $file = $request->file('photo_1');
                     $filename = time() . '_1_' . $file->getClientOriginalName();
                     $storedPath = $this->storageStoreUpload($file, $folder, $filename);
+                    $photo1StoragePath = $storedPath;
                     $photo1Path = $this->storageLocalPath($storedPath);
                     $photo1MimeType = $file->getClientMimeType();
 
@@ -3016,6 +3019,7 @@ class EntregaController extends Controller
                     $file = $request->file('photo_2');
                     $filename = time() . '_2_' . $file->getClientOriginalName();
                     $storedPath = $this->storageStoreUpload($file, $folder, $filename);
+                    $photo2StoragePath = $storedPath;
                     $photo2Path = $this->storageLocalPath($storedPath);
                     $photo2MimeType = $file->getClientMimeType();
 
@@ -3065,7 +3069,7 @@ Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, 
                         3,
                         'consolidado',
                         null,
-                        CoordinacionWhatsappPayload::entregaConformidadFoto($numeroWhatsapp, '1', $photo1Path, $captionFoto1, 3)
+                        CoordinacionWhatsappPayload::entregaConformidadFoto($numeroWhatsapp, '1', (string) $photo1StoragePath, $captionFoto1, 3)
                     );
                 }
                 if ($photo2Path) {
@@ -3078,7 +3082,7 @@ Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, 
                         3,
                         'consolidado',
                         null,
-                        CoordinacionWhatsappPayload::entregaConformidadFoto($numeroWhatsapp, '2', $photo2Path, $captionFoto2, 3)
+                        CoordinacionWhatsappPayload::entregaConformidadFoto($numeroWhatsapp, '2', (string) $photo2StoragePath, $captionFoto2, 3)
                     );
                 }
 
@@ -4710,7 +4714,7 @@ Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, 
                 $numeroWhatsapp,
                 (string) $row->cliente,
                 (string) $row->carga,
-                $fullPath,
+                $relativePath,
                 $message
             );
             if ($this->shouldRouteCoordinacionToMeta('consolidado')) {

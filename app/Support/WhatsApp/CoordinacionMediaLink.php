@@ -204,9 +204,27 @@ class CoordinacionMediaLink
      */
     public static function urlForMetaSend($pathOrUrl)
     {
+        if ($pathOrUrl === null) {
+            return null;
+        }
+
+        $pathOrUrl = trim((string) $pathOrUrl);
+        if ($pathOrUrl === '') {
+            return null;
+        }
+
+        $directUrl = self::stringOrNullUrl($pathOrUrl);
+        if ($directUrl !== null) {
+            return $directUrl;
+        }
+
+        if (self::isAbsoluteLocalFile($pathOrUrl)) {
+            return self::resolveForMetaHeader($pathOrUrl);
+        }
+
         $resolved = self::resolveStoragePath($pathOrUrl);
         if ($resolved === null) {
-            return self::stringOrNullUrl($pathOrUrl);
+            return self::resolveForMetaHeader($pathOrUrl);
         }
 
         try {
@@ -258,6 +276,10 @@ class CoordinacionMediaLink
         }
 
         if (!filter_var($pathOrUrl, FILTER_VALIDATE_URL)) {
+            if (self::isAbsoluteLocalFile($pathOrUrl)) {
+                return null;
+            }
+
             return ltrim(str_replace('\\', '/', $pathOrUrl), '/');
         }
 
