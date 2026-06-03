@@ -55,7 +55,13 @@ class WhatsappInboxAlertService
                     'pb_entrega_recordatorio_v1',
                     (string) config('meta_whatsapp.default_language', 'es_PE'),
                     [['type' => 'text', 'text' => mb_substr($text, 0, 900)]],
-                    null
+                    null,
+                    false,
+                    [
+                        'body_preview' => $text,
+                        'source' => 'inbox_alert_failed_jobs',
+                        'contact_name' => 'Alertas sistema',
+                    ]
                 );
                 $sent++;
             } catch (\Exception $e) {

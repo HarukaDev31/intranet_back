@@ -106,23 +106,140 @@ class CoordinacionMediaLink
             return $header;
         }
 
+        $path = (string) ($header['path'] ?? '');
+        if ($path !== '') {
+            $link = self::urlForMetaSend($path);
+            if ($link === null) {
+                return null;
+            }
+            $header['link'] = $link;
+
+            return $header;
+        }
+
         if (!empty($header['link']) && filter_var($header['link'], FILTER_VALIDATE_URL)) {
             return $header;
         }
 
-        $path = (string) ($header['path'] ?? '');
-        if ($path === '') {
-            return $header;
+        return $header;
+    }
+
+    /**
+     * URL para el chat / intranet (siempre CDN si está configurado).
+     *
+     * @param  string|null  $pathOrUrl  Clave relativa S3 o URL guardada en BD
+     * @return string|null
+     */
+    public static function urlForDisplay($pathOrUrl)
+    {
+        $resolved = self::resolveStoragePath($pathOrUrl);
+        if ($resolved === null) {
+            return self::stringOrNullUrl($pathOrUrl);
         }
 
-        $link = self::resolveForMetaHeader($path, isset($header['filename']) ? (string) $header['filename'] : null);
-        if ($link === null) {
+        try {
+            $storage = app(ObjectStorageConnectorInterface::class);
+            if ($storage->exists($resolved)) {
+                return $storage->url($resolved);
+            }
+        } catch (\Throwable $e) {
+            Log::debug('CoordinacionMediaLink: urlForDisplay', [
+                'path' => $resolved,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        return self::stringOrNullUrl($pathOrUrl);
+    }
+
+    /**
+     * URL HTTPS para envío a Meta (presigned S3 si hace falta; si no, CDN/url pública).
+     *
+     * @param  string|null  $pathOrUrl
+     * @return string|null
+     */
+    public static function urlForMetaSend($pathOrUrl)
+    {
+        $resolved = self::resolveStoragePath($pathOrUrl);
+        if ($resolved === null) {
+            return self::stringOrNullUrl($pathOrUrl);
+        }
+
+        try {
+            $storage = app(ObjectStorageConnectorInterface::class);
+            if (!$storage->exists($resolved)) {
+                return self::resolveForMetaHeader($resolved);
+            }
+
+            if (method_exists($storage, 'metaPresignedUrl')) {
+                try {
+                    return $storage->metaPresignedUrl($resolved);
+                } catch (\Throwable $e) {
+                    Log::debug('CoordinacionMediaLink: metaPresignedUrl fallback a CDN', [
+                        'path' => $resolved,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+
+            $cdn = $storage->url($resolved);
+            if ($cdn !== null && $cdn !== '') {
+                return $cdn;
+            }
+
+            return self::resolveForMetaHeader($resolved);
+        } catch (\Throwable $e) {
+            Log::warning('CoordinacionMediaLink: urlForMetaSend', [
+                'path' => $resolved,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        return self::resolveForMetaHeader((string) $pathOrUrl);
+    }
+
+    /**
+     * @param  string|null  $pathOrUrl
+     * @return string|null  Ruta relativa en object storage
+     */
+    public static function resolveStoragePath($pathOrUrl)
+    {
+        if ($pathOrUrl === null) {
             return null;
         }
 
-        $header['link'] = $link;
+        $pathOrUrl = trim((string) $pathOrUrl);
+        if ($pathOrUrl === '') {
+            return null;
+        }
 
-        return $header;
+        if (!filter_var($pathOrUrl, FILTER_VALIDATE_URL)) {
+            return ltrim(str_replace('\\', '/', $pathOrUrl), '/');
+        }
+
+        try {
+            $storage = app(ObjectStorageConnectorInterface::class);
+            $relative = $storage->normalizeRelativePath($pathOrUrl);
+
+            return $relative !== null && $relative !== '' ? $relative : null;
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
+
+    /**
+     * @param  string|null  $value
+     * @return string|null
+     */
+    private static function stringOrNullUrl($value)
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $value = trim((string) $value);
+
+        return $value !== '' && filter_var($value, FILTER_VALIDATE_URL) ? $value : null;
     }
 
     private static function uploadToPublicDisk(string $contents, string $storageRelative): ?string

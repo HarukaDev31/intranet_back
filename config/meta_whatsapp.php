@@ -39,6 +39,14 @@ return [
         'document' => (int) env('META_WHATSAPP_INBOX_MAX_DOCUMENT_BYTES', 100 * 1024 * 1024),
     ],
 
+    /** Límites para media libre (ventana abierta) en el inbox. */
+    'inbox_media_max_bytes' => [
+        'image' => (int) env('META_WHATSAPP_INBOX_MAX_IMAGE_BYTES', 5 * 1024 * 1024),
+        'video' => (int) env('META_WHATSAPP_INBOX_MAX_VIDEO_BYTES', 16 * 1024 * 1024),
+        'document' => (int) env('META_WHATSAPP_INBOX_MAX_DOCUMENT_BYTES', 100 * 1024 * 1024),
+        'audio' => (int) env('META_WHATSAPP_INBOX_MAX_AUDIO_BYTES', 16 * 1024 * 1024),
+    ],
+
     /** Tamaño máximo del archivo original antes de transcodificar video (bytes). */
     'inbox_header_max_video_input_bytes' => (int) env('META_WHATSAPP_INBOX_MAX_VIDEO_INPUT_BYTES', 80 * 1024 * 1024),
 
@@ -50,71 +58,18 @@ return [
     'video_transcode_timeout' => (int) env('META_WHATSAPP_VIDEO_TRANSCODE_TIMEOUT', 120),
 
     'inbox_queue' => env('META_WHATSAPP_INBOX_QUEUE', env('META_WHATSAPP_QUEUE', 'notificaciones')),
+
+    /**
+     * Dominio para setDatabaseConnection en jobs WaInbox (cola sin HTTP).
+     * En local/WSL suele ser localhost → mysql_local.
+     */
+    'inbox_job_domain' => env('META_WHATSAPP_INBOX_JOB_DOMAIN', 'localhost'),
+
+    /** WebSocket/Pusher en tiempo real; si false, no se emite broadcast (el envío Meta sigue). */
+    'inbox_broadcast_enabled' => filter_var(env('META_WHATSAPP_INBOX_BROADCAST', true), FILTER_VALIDATE_BOOLEAN),
+
     'inbox_display_number' => env('META_WHATSAPP_INBOX_DISPLAY_NUMBER', ''),
     'inbox_alert_phone' => env('WA_INBOX_ALERT_PHONE', ''),
-
-    /*
-    |--------------------------------------------------------------------------
-    | Bitrix Open Lines — línea coordinación (consolidado)
-    |--------------------------------------------------------------------------
-    */
-    'bitrix_line_id' => (int) env('META_WHATSAPP_BITRIX_LINE_ID', 39),
-    'bitrix_user_id' => (int) env('META_WHATSAPP_BITRIX_USER_ID', 181),
-    'bitrix_webhook_intercept' => env('BITRIX_WEBHOOK_INTERCEPT'),
-
-    /**
-     * Filtro de chat CRM para imopenlines.crm.message.add (la API no acepta LINE_ID).
-     * CONNECTOR_TITLE del canal en Bitrix que corresponde a coordinación/consolidado.
-     * Varias palabras separadas por coma; coincide si el título contiene alguna (sin distinguir mayúsculas).
-     */
-    'bitrix_connector_match' => array_values(array_filter(array_map('trim', explode(
-        ',',
-        (string) env(
-            'META_WHATSAPP_BITRIX_CONNECTOR_MATCH',
-            'coordinación,coordinacion,consolidado,powerapp,whatcrm,whatsapp'
-        )
-    )))),
-
-    /** Si el CONNECTOR_TITLE contiene alguna de estas palabras, no se usa ese chat (ej. ventas). */
-    'bitrix_connector_exclude' => array_values(array_filter(array_map('trim', explode(
-        ',',
-        (string) env('META_WHATSAPP_BITRIX_CONNECTOR_EXCLUDE', 'ventas')
-    )))),
-
-    /**
-     * Tras Meta OK: imopenlines.crm.message.add en línea 39 (texto bitrix_message para operadores).
-     * Requerido para que el chat de coordinación muestre lo enviado.
-     * Si el cliente recibe el mismo texto dos veces en WhatsApp, el conector de la línea 39
-     * está reenviando: revisar configuración del canal en Bitrix o contactar soporte Bitrix.
-     */
-    'bitrix_register_openline_message' => filter_var(
-        env('META_WHATSAPP_BITRIX_REGISTER_OPENLINE_MESSAGE', true),
-        FILTER_VALIDATE_BOOLEAN
-    ),
-
-    /** Si Meta falla, igual registrar en línea 39 para que coordinación vea el intento. */
-    'bitrix_register_openline_on_meta_failure' => filter_var(
-        env('META_WHATSAPP_BITRIX_REGISTER_OPENLINE_ON_META_FAILURE', true),
-        FILTER_VALIDATE_BOOLEAN
-    ),
-
-    /** Comentario extra en timeline CRM además del open line (cuando hay CHAT_ID). */
-    'bitrix_timeline_log' => filter_var(env('META_WHATSAPP_BITRIX_TIMELINE_LOG', false), FILTER_VALIDATE_BOOLEAN),
-
-    /**
-     * Si no hay CHAT_ID (sin sesión / conector no reconocido), guardar bitrix_message en timeline del contacto.
-     * No abre conversación en línea 39 ni reenvía WhatsApp; solo historial en la ficha CRM.
-     */
-    'bitrix_fallback_timeline_when_no_chat' => filter_var(
-        env('META_WHATSAPP_BITRIX_FALLBACK_TIMELINE_NO_CHAT', true),
-        FILTER_VALIDATE_BOOLEAN
-    ),
-
-    /** Cola del job que registra en Bitrix open line (tras envío Meta). */
-    'bitrix_register_queue' => env('META_WHATSAPP_BITRIX_REGISTER_QUEUE', env('META_WHATSAPP_QUEUE', 'notificaciones')),
-
-    /** Reintentos máximos en tabla whatsapp_coordinacion_bitrix_registros (no se vuelve a encolar). */
-    'bitrix_register_max_attempts' => (int) env('META_WHATSAPP_BITRIX_REGISTER_MAX_ATTEMPTS', 3),
 
     'queue' => env('META_WHATSAPP_QUEUE', 'notificaciones'),
 

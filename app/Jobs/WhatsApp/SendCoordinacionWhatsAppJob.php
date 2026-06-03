@@ -3,8 +3,8 @@
 namespace App\Jobs\WhatsApp;
 
 use App\Models\WhatsAppCoordinacionBatchItem;
-use App\Services\WhatsApp\MetaWhatsAppCoordinacionService;
 use App\Services\WhatsApp\WhatsAppCoordinacionBatchService;
+use App\Services\WhatsappInbox\WhatsappInboxCoordinacionOutboundService;
 use App\Traits\DatabaseConnectionTrait;
 use Illuminate\Bus\Batchable;
 use Illuminate\Bus\Queueable;
@@ -65,7 +65,7 @@ class SendCoordinacionWhatsAppJob implements ShouldQueue
     }
 
     public function handle(
-        MetaWhatsAppCoordinacionService $service,
+        WhatsappInboxCoordinacionOutboundService $inboxService,
         WhatsAppCoordinacionBatchService $batchService
     ): void {
         $domain = isset($this->payload['_domain']) ? (string) $this->payload['_domain'] : null;
@@ -85,7 +85,7 @@ class SendCoordinacionWhatsAppJob implements ShouldQueue
         }
 
         try {
-            $result = $service->process($this->payload);
+            $result = $inboxService->process($this->payload);
 
             if (empty($result['status'])) {
                 $error = (string) ($result['error'] ?? 'Error desconocido en envío Meta');
@@ -103,8 +103,8 @@ class SendCoordinacionWhatsAppJob implements ShouldQueue
             }
 
             if ($this->batchItemId !== null) {
-                $bitrixRegistroId = isset($result['bitrix_registro_id']) ? (int) $result['bitrix_registro_id'] : null;
-                $batchService->markItemCompleted($this->batchItemId, $bitrixRegistroId);
+                $inboxMessageId = isset($result['inbox_message_id']) ? (int) $result['inbox_message_id'] : null;
+                $batchService->markItemCompleted($this->batchItemId, $inboxMessageId);
             }
         } catch (\Throwable $e) {
             if ($this->batchItemId !== null) {

@@ -106,6 +106,35 @@ class WhatsappInboxTemplateService
     }
 
     /**
+     * Texto legible en el chat (sustituye {{param}}).
+     *
+     * @param  string  $templateName
+     * @param  array<string, mixed>  $params
+     * @return string
+     */
+    public function buildPreviewBody($templateName, array $params)
+    {
+        $list = $this->listTemplates();
+        $templates = isset($list['data']) && is_array($list['data']) ? $list['data'] : [];
+        $text = '[' . $templateName . ']';
+        foreach ($templates as $tpl) {
+            if (is_array($tpl) && isset($tpl['name']) && $tpl['name'] === $templateName) {
+                $text = isset($tpl['text']) ? (string) $tpl['text'] : $text;
+                break;
+            }
+        }
+
+        foreach ($params as $key => $val) {
+            if ($key === '_header' || is_array($val)) {
+                continue;
+            }
+            $text = str_replace('{{' . $key . '}}', (string) $val, $text);
+        }
+
+        return $text;
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public function listTemplates()

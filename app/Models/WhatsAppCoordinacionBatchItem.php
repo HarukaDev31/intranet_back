@@ -28,7 +28,7 @@ class WhatsAppCoordinacionBatchItem extends Model
         'payload_type',
         'status',
         'last_error',
-        'bitrix_registro_id',
+        'inbox_message_id',
         'started_at',
         'finished_at',
     ];

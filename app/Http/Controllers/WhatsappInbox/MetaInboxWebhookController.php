@@ -5,6 +5,7 @@ namespace App\Http\Controllers\WhatsappInbox;
 use App\Http\Controllers\Controller;
 use App\Jobs\WhatsappInbox\ProcessWaInboxInboundJob;
 use App\Models\WhatsappInbox\WaInboxWebhookLog;
+use App\Support\WhatsApp\WaInboxJobContext;
 use Illuminate\Http\Request;
 
 class MetaInboxWebhookController extends Controller
@@ -46,7 +47,7 @@ class MetaInboxWebhookController extends Controller
             'processed_at' => null,
         ]);
 
-        ProcessWaInboxInboundJob::dispatch($log->id);
+        ProcessWaInboxInboundJob::dispatch($log->id, WaInboxJobContext::resolveJobDomain());
 
         return response()->json(['success' => true]);
     }

@@ -3,6 +3,8 @@
 namespace App\Jobs\WhatsappInbox;
 
 use App\Services\WhatsappInbox\WhatsappInboxMessageService;
+use App\Support\WhatsApp\WaInboxJobContext;
+use App\Traits\DatabaseConnectionTrait;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -12,6 +14,7 @@ use Illuminate\Support\Facades\Log;
 
 class ProcessWaInboxInboundJob implements ShouldQueue
 {
+    use DatabaseConnectionTrait;
     use Dispatchable;
     use InteractsWithQueue;
     use Queueable;
@@ -20,14 +23,22 @@ class ProcessWaInboxInboundJob implements ShouldQueue
     /** @var int */
     public $webhookLogId;
 
-    public function __construct($webhookLogId)
+    /** @var string|null */
+    public $domain;
+
+    public function __construct($webhookLogId, ?string $domain = null)
     {
         $this->webhookLogId = (int) $webhookLogId;
+        $this->domain = $domain;
         $this->onQueue((string) config('meta_whatsapp.inbox_queue', 'notificaciones'));
     }
 
     public function handle(WhatsappInboxMessageService $messageService)
     {
+        $this->setDatabaseConnection(
+            WaInboxJobContext::resolveJobDomain($this->domain)
+        );
+
         try {
             $messageService->processWebhookLog($this->webhookLogId);
         } catch (\Exception $e) {

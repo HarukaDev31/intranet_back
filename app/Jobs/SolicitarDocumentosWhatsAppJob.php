@@ -272,6 +272,7 @@ class SolicitarDocumentosWhatsAppJob implements ShouldQueue
             'cliente' => $nombreCliente !== '' ? $nombreCliente : 'Cliente',
             'carga' => $cargaCode,
             'phone_e164' => $phoneE164,
+            'job_domain' => $this->domain,
         ]);
         $this->setWhatsAppCoordinacionBatchId((int) $batch->id);
 

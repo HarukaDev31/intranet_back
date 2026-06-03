@@ -167,7 +167,7 @@ class CoordinacionWhatsappPayload
         string $phone,
         string $templateName,
         array $bodyParameters,
-        string $bitrixMessage,
+        string $chatPreview,
         int $sleep = 0,
         ?array $header = null
     ): array {
@@ -177,7 +177,7 @@ class CoordinacionWhatsappPayload
             'template' => $templateName,
             'language' => 'es_PE',
             'body_parameters' => $bodyParameters,
-            'bitrix_message' => $bitrixMessage,
+            'chat_preview' => $chatPreview,
             'sleep' => $sleep,
         ];
         if ($header !== null) {
@@ -342,7 +342,7 @@ class CoordinacionWhatsappPayload
             'carga' => $carga,
             'codigo_proveedor' => $codigoProveedor,
             'link_excel' => $link ?? '',
-        ], self::docsExcelLinkBitrix($carga, $codigoProveedor, $link ?? ''), $sleep);
+        ], self::docsExcelLinkPreview($carga, $codigoProveedor, $link ?? ''), $sleep);
         $payload['id_proveedor'] = $idProveedor;
 
         return $payload;
@@ -385,7 +385,7 @@ class CoordinacionWhatsappPayload
 
         $payload['body_parameters']['link_excel'] = $link;
         if ($carga !== '' && $codigo !== '') {
-            $payload['bitrix_message'] = self::docsExcelLinkBitrix($carga, $codigo, $link);
+            $payload['chat_preview'] = self::docsExcelLinkPreview($carga, $codigo, $link);
         }
 
         return true;
@@ -462,7 +462,7 @@ class CoordinacionWhatsappPayload
         ], $bitrixMessage, $sleep);
     }
 
-    public static function docsExcelLinkBitrix(string $carga, string $codigoProveedor, string $linkExcel): string
+    public static function docsExcelLinkPreview(string $carga, string $codigoProveedor, string $linkExcel): string
     {
         return "Documentación: CONSOLIDADO #{$carga}\n\nExcel de confirmación — Proveedor {$codigoProveedor}\n\nDescárgalo aquí: {$linkExcel} 📄";
     }

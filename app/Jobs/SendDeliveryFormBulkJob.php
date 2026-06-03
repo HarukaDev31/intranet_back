@@ -150,14 +150,30 @@ class SendDeliveryFormBulkJob implements ShouldQueue
                             $linkForm,
                             $messagePrincipal
                         );
-                    $resultPrincipal = $this->queueCoordinacionWhatsApp($payloadPrincipal);
 
                     $payloadSecundario = $typeForm === 1
                         ? CoordinacionWhatsappPayload::entregaReglasLima($numeroWhatsapp, $messageSecundario, 5)
                         : (intval($cargaStr) >= 5
                             ? CoordinacionWhatsappPayload::entregaReglasProvinciaFleteFinal($numeroWhatsapp, $messageSecundario, 5)
                             : CoordinacionWhatsappPayload::entregaReglasProvinciaFleteCotiza($numeroWhatsapp, $messageSecundario, 5));
-                    $resultSecundario = $this->queueCoordinacionWhatsApp($payloadSecundario);
+
+                    $this->runWhatsAppCoordinacionBatch('entrega_form', [
+                        'id_cotizacion' => $idCotizacion,
+                        'cliente' => $nombreCliente,
+                        'carga' => $cargaStr,
+                        'phone_e164' => $telefono,
+                    ], function () use ($payloadPrincipal, $payloadSecundario) {
+                        $this->queueCoordinacionWhatsApp(
+                            $payloadPrincipal,
+                            'entrega_link',
+                            'Enlace formulario entrega'
+                        );
+                        $this->queueCoordinacionWhatsApp(
+                            $payloadSecundario,
+                            'entrega_reglas',
+                            'Reglas de entrega'
+                        );
+                    });
                 } else {
                     $resultPrincipal = $this->sendMessage($messagePrincipal, $numeroWhatsapp);
                     if (!$resultPrincipal['status']) {

@@ -29,7 +29,9 @@ class WhatsAppCoordinacionBatch extends Model
         'total_items',
         'completed_items',
         'failed_items',
+        'job_domain',
         'laravel_batch_id',
+        'outbound_laravel_batch_id',
         'dispatched_at',
         'finished_at',
     ];

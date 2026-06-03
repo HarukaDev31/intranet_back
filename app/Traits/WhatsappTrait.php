@@ -3,7 +3,6 @@
 namespace App\Traits;
 
 use App\Jobs\WhatsApp\SendCoordinacionWhatsAppJob;
-use App\Services\WhatsApp\MetaWhatsAppCoordinacionService;
 use App\Services\WhatsApp\WhatsAppCoordinacionBatchService;
 use App\Support\WhatsApp\CoordinacionWhatsappPayload;
 use App\Support\WhatsApp\WhatsappEnvironmentPhone;
@@ -38,6 +37,46 @@ trait WhatsappTrait
 
         return app(WhatsAppCoordinacionBatchService::class)
             ->dispatchBuffered($this->whatsappCoordinacionBatchId);
+    }
+
+    /**
+     * Agrupa varios envíos en un batch de Horizon (un grupo visible por operación).
+     *
+     * @param  array<string, mixed>  $context  id_cotizacion, cliente, carga, phone_e164, …
+     * @param  callable(): void  $enqueue  Llama queueCoordinacionWhatsApp por cada paso
+     */
+    protected function resolveCoordinacionJobDomain(): ?string
+    {
+        if (property_exists($this, 'domain') && !empty($this->domain)) {
+            return (string) $this->domain;
+        }
+
+        $domain = $this->getRequestDomain();
+
+        return $domain !== null && $domain !== '' ? $domain : null;
+    }
+
+    protected function runWhatsAppCoordinacionBatch(string $tipo, array $context, callable $enqueue): ?string
+    {
+        if (empty($context['job_domain'])) {
+            $resolved = $this->resolveCoordinacionJobDomain();
+            if ($resolved !== null) {
+                $context['job_domain'] = $resolved;
+            }
+        }
+
+        $batch = app(WhatsAppCoordinacionBatchService::class)->create($tipo, $context);
+        $previousBatchId = $this->whatsappCoordinacionBatchId;
+        $this->setWhatsAppCoordinacionBatchId((int) $batch->id);
+
+        try {
+            $enqueue();
+        } finally {
+            $laravelBatchId = $this->dispatchWhatsAppCoordinacionBatch();
+            $this->setWhatsAppCoordinacionBatchId($previousBatchId);
+
+            return $laravelBatchId;
+        }
     }
     
     /**
@@ -364,7 +403,7 @@ trait WhatsappTrait
      *   Nota: para rutas dedicadas sin fromNumber (inspecciones, bienvenida,
      *   cursos) usa sendMediaInspection(), sendWelcome() o sendMessageCurso().
      *
-     * @param  array<string, mixed>|null  $meta  Payload Meta (template, body_parameters, bitrix_message). Ver CoordinacionWhatsappPayload.
+     * @param  array<string, mixed>|null  $meta  Payload Meta (template, body_parameters, chat_preview). Ver CoordinacionWhatsappPayload.
      * @return array ['status' => bool, 'response' => array]
      */
     public function sendMessage($message, $phoneNumberId = null, $sleep = 0, $fromNumber = 'consolidado', $meta = null): array
@@ -373,7 +412,7 @@ trait WhatsappTrait
 
         if ($this->shouldRouteCoordinacionToMeta($fromNumber)) {
             if (is_array($meta) && !empty($meta['template'])) {
-                $meta['bitrix_message'] = $meta['bitrix_message'] ?? $message;
+                $meta['chat_preview'] = $meta['chat_preview'] ?? $meta['bitrix_message'] ?? $message;
                 $meta['phone'] = $meta['phone'] ?? $phoneNumberId;
                 $meta['sleep'] = $meta['sleep'] ?? $sleep;
 
@@ -454,7 +493,7 @@ trait WhatsappTrait
                 if (is_array($meta) && !empty($meta['template'])) {
                     $meta['phone'] = $meta['phone'] ?? $phoneNumberId;
                     $meta['sleep'] = $meta['sleep'] ?? $sleep;
-                    $meta['bitrix_message'] = $meta['bitrix_message'] ?? (string) ($message ?? '');
+                    $meta['chat_preview'] = $meta['chat_preview'] ?? $meta['bitrix_message'] ?? (string) ($message ?? '');
                     if (empty($meta['header'])) {
                         $meta['header'] = [
                             'type' => is_string($mimeType) && strpos($mimeType, 'image/') === 0 ? 'image' : 'document',
@@ -524,7 +563,7 @@ trait WhatsappTrait
             if ($this->shouldRouteCoordinacionToMeta('consolidado') && is_array($meta) && !empty($meta['template'])) {
                 $meta['phone'] = $meta['phone'] ?? $phoneNumberId;
                 $meta['sleep'] = $meta['sleep'] ?? $sleep;
-                $meta['bitrix_message'] = $meta['bitrix_message'] ?? (string) ($message ?? '');
+                $meta['chat_preview'] = $meta['chat_preview'] ?? $meta['bitrix_message'] ?? (string) ($message ?? '');
                 if (empty($meta['header']) && $filePath !== '') {
                     $meta['header'] = [
                         'type' => is_string($mimeType) && strpos($mimeType, 'video/') === 0 ? 'video' : (
@@ -612,7 +651,7 @@ trait WhatsappTrait
             if ($this->shouldRouteCoordinacionToMeta('consolidado') && is_array($meta) && !empty($meta['template'])) {
                 $meta['phone'] = $meta['phone'] ?? $phoneNumberId;
                 $meta['sleep'] = $meta['sleep'] ?? $sleep;
-                $meta['bitrix_message'] = $meta['bitrix_message'] ?? (string) ($message ?? '');
+                $meta['chat_preview'] = $meta['chat_preview'] ?? $meta['bitrix_message'] ?? (string) ($message ?? '');
                 if (empty($meta['header'])) {
                     $mediaPath = is_string($filePath) && $filePath !== '' ? $filePath : '';
                     if ($mediaPath !== '') {
@@ -703,7 +742,7 @@ trait WhatsappTrait
     }
 
     /**
-     * Encola envío coordinación (Meta template + registro Bitrix). Usar desde Jobs.
+     * Encola envío coordinación (Meta + wa_inbox). Usar desde Jobs o dentro de runWhatsAppCoordinacionBatch.
      *
      * @param  array<string, mixed>  $payload
      * @return array{status: bool, queued: bool}
@@ -768,6 +807,6 @@ trait WhatsappTrait
      */
     public function processCoordinacionWhatsApp(array $payload): array
     {
-        return app(MetaWhatsAppCoordinacionService::class)->process($payload);
+        return app(\App\Services\WhatsappInbox\WhatsappInboxCoordinacionOutboundService::class)->process($payload);
     }
 }

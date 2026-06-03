@@ -9,8 +9,10 @@ use App\Services\WhatsappInbox\WhatsappInboxConversationService;
 use App\Services\WhatsappInbox\WhatsappInboxMessageService;
 use App\Services\WhatsappInbox\WhatsappInboxSessionService;
 use App\Services\WhatsappInbox\WhatsappInboxTemplateService;
+use App\Services\WhatsappInbox\WaInboxMediaUploadService;
 use App\Services\WhatsappInbox\WhatsappInboxWindowService;
 use App\Support\WhatsApp\CoordinacionMediaLink;
+use App\Support\WhatsApp\WaInboxJobContext;
 use App\Support\WhatsApp\WaInboxLog;
 use App\Support\WhatsApp\WaInboxVideoTranscoder;
 use Illuminate\Http\Request;
@@ -118,12 +120,8 @@ class WhatsappInboxController extends Controller
     {
         try {
             $text = trim((string) $request->input('message', ''));
-            if ($text === '') {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Mensaje vacío',
-                ], 422);
-            }
+            $replyMetaId = trim((string) $request->input('reply_to_meta_message_id', ''));
+            $file = $request->file('file');
 
             $conversation = WaInboxConversation::query()->findOrFail((int) $id);
             $window = $this->windowService->computeWindowState($conversation);
@@ -135,19 +133,67 @@ class WhatsappInboxController extends Controller
             }
 
             $user = JWTAuth::parseToken()->authenticate();
-            $message = $this->messageService->createOutboundPending(
-                $conversation,
-                $text,
-                $user ? (int) $user->getIdUsuario() : null,
-                'text'
-            );
+            $userId = $user ? (int) $user->getIdUsuario() : null;
 
-            SendWaInboxOutboundJob::dispatch($message->id);
+            $templateParams = null;
+            if ($replyMetaId !== '') {
+                $templateParams = ['_context' => ['message_id' => $replyMetaId]];
+            }
+
+            if ($file && $file->isValid()) {
+                /** @var WaInboxMediaUploadService $uploader */
+                $uploader = app(WaInboxMediaUploadService::class);
+                $kind = strtolower(trim((string) $request->input('media_kind', '')));
+                if ($kind === '') {
+                    $kind = $uploader->guessKindFromFile($file);
+                }
+                $uploadError = '';
+                $uploaded = $uploader->uploadFromFile($file, $kind, $uploadError);
+                if ($uploaded === null) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => $uploadError !== '' ? $uploadError : 'No se pudo subir el archivo',
+                    ], 422);
+                }
+
+                $messageType = (string) $uploaded['type'];
+                $body = $text !== '' ? $text : (string) $uploaded['filename'];
+                $params = is_array($templateParams) ? $templateParams : [];
+                $params['_media_filename'] = (string) $uploaded['filename'];
+
+                $message = $this->messageService->createOutboundPending(
+                    $conversation,
+                    $body,
+                    $userId,
+                    $messageType,
+                    null,
+                    $params,
+                    (string) $uploaded['path'],
+                    (string) $uploaded['mime']
+                );
+            } elseif ($text !== '') {
+                $message = $this->messageService->createOutboundPending(
+                    $conversation,
+                    $text,
+                    $userId,
+                    'text',
+                    null,
+                    $templateParams
+                );
+            } else {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Escribe un mensaje o adjunta un archivo',
+                ], 422);
+            }
+
+            SendWaInboxOutboundJob::dispatch($message->id, WaInboxJobContext::resolveJobDomain());
 
             WaInboxLog::info('sendMessage.queued', [
                 'conversation_id' => (int) $conversation->id,
                 'message_id' => (int) $message->id,
                 'phone_e164' => $conversation->phone_e164,
+                'message_type' => $message->message_type,
                 'queue' => (string) config('meta_whatsapp.inbox_queue', 'notificaciones'),
             ]);
 
@@ -330,7 +376,7 @@ class WhatsappInboxController extends Controller
                 $params
             );
 
-            SendWaInboxOutboundJob::dispatch($message->id);
+            SendWaInboxOutboundJob::dispatch($message->id, WaInboxJobContext::resolveJobDomain());
 
             WaInboxLog::info('sendTemplate.queued', [
                 'conversation_id' => (int) $conversation->id,
@@ -415,24 +461,7 @@ class WhatsappInboxController extends Controller
      */
     private function buildTemplatePreviewBody($templateName, array $params)
     {
-        $list = $this->templateService->listTemplates();
-        $templates = isset($list['data']) && is_array($list['data']) ? $list['data'] : [];
-        $text = '[' . $templateName . ']';
-        foreach ($templates as $tpl) {
-            if (isset($tpl['name']) && $tpl['name'] === $templateName) {
-                $text = isset($tpl['text']) ? (string) $tpl['text'] : $text;
-                break;
-            }
-        }
-
-        foreach ($params as $key => $val) {
-            if ($key === '_header' || is_array($val)) {
-                continue;
-            }
-            $text = str_replace('{{' . $key . '}}', (string) $val, $text);
-        }
-
-        return $text;
+        return $this->templateService->buildPreviewBody($templateName, $params);
     }
 
     /**

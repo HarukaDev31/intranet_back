@@ -977,10 +977,29 @@ class GeneralController extends Controller
                     $proveedoresPendientes
                 );
 
-                $response = ['status' => true, 'queued' => true];
-                foreach ($steps as $step) {
-                    $response = $this->queueCoordinacionWhatsApp($step);
-                }
+                $phoneDigits = preg_replace('/\D+/', '', (string) $telefono);
+                $laravelBatchId = $this->runWhatsAppCoordinacionBatch('docs_recordatorio', [
+                    'id_cotizacion' => $cot->id ?? null,
+                    'cliente' => $nombreCliente,
+                    'carga' => $cargaCode,
+                    'phone_e164' => $phoneDigits,
+                ], function () use ($steps) {
+                    $index = 0;
+                    foreach ($steps as $step) {
+                        $index++;
+                        $template = (string) ($step['template'] ?? 'paso_' . $index);
+                        $this->queueCoordinacionWhatsApp(
+                            $step,
+                            'recordatorio_' . $index,
+                            'Recordatorio · ' . $template
+                        );
+                    }
+                });
+                $response = [
+                    'status' => true,
+                    'queued' => true,
+                    'laravel_batch_id' => $laravelBatchId,
+                ];
             } else {
                 $legacyMessage = CoordinacionWhatsappPayload::docsRecordatorioLegacyMessage(
                     (string) $nombreCliente,

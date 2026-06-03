@@ -31,52 +31,67 @@ class CalculadoraImportacionWhatsappService
             $captionResumen = '📊 Resumen detallado de costos y pagos';
 
             if ($this->shouldRouteCoordinacionToMeta('consolidado')) {
-                $this->queueCoordinacionWhatsApp(
-                    CoordinacionWhatsappPayload::calcIntro($phoneNumberId, $primerMensaje, 2)
-                );
+                $phoneDigits = preg_replace('/\D+/', '', $phoneNumberId);
+                $this->runWhatsAppCoordinacionBatch('calculadora', [
+                    'id_cotizacion' => $calculadora->id ?? null,
+                    'cliente' => $calculadora->nombre_cliente ?? null,
+                    'phone_e164' => $phoneDigits,
+                ], function () use ($phoneNumberId, $calculadora, $primerMensaje, $tercerMensaje, $captionResumen) {
+                    $this->queueCoordinacionWhatsApp(
+                        CoordinacionWhatsappPayload::calcIntro($phoneNumberId, $primerMensaje, 2),
+                        'calc_intro',
+                        'Intro cotización'
+                    );
 
-                if (!empty($calculadora->url_cotizacion_pdf)) {
-                    $pdfPath = $this->getPdfPathFromUrl($calculadora->url_cotizacion_pdf);
-                    if ($pdfPath && file_exists($pdfPath)) {
+                    if (!empty($calculadora->url_cotizacion_pdf)) {
+                        $pdfPath = $this->getPdfPathFromUrl($calculadora->url_cotizacion_pdf);
+                        if ($pdfPath && file_exists($pdfPath)) {
+                            $this->queueCoordinacionWhatsApp(
+                                CoordinacionWhatsappPayload::calcPdf(
+                                    $phoneNumberId,
+                                    $pdfPath,
+                                    'Cotización de importación — Calculadora Pro Business.',
+                                    basename($pdfPath),
+                                    3
+                                ),
+                                'calc_pdf',
+                                'PDF cotización'
+                            );
+                        } else {
+                            Log::warning('No se pudo enviar PDF: archivo no encontrado', [
+                                'calculadora_id' => $calculadora->id ?? null,
+                                'url' => $calculadora->url_cotizacion_pdf,
+                                'path' => $pdfPath,
+                            ]);
+                        }
+                    }
+
+                    $this->queueCoordinacionWhatsApp(
+                        CoordinacionWhatsappPayload::calcResumenTexto($phoneNumberId, $tercerMensaje, 2),
+                        'calc_resumen_texto',
+                        'Resumen texto'
+                    );
+
+                    $resumenCostosService = new ResumenCostosImageService();
+                    $imagenResumen = $resumenCostosService->generateResumenCostosImage($calculadora);
+
+                    if ($imagenResumen) {
                         $this->queueCoordinacionWhatsApp(
-                            CoordinacionWhatsappPayload::calcPdf(
+                            CoordinacionWhatsappPayload::calcResumenImg(
                                 $phoneNumberId,
-                                $pdfPath,
-                                'Cotización de importación — Calculadora Pro Business.',
-                                basename($pdfPath),
-                                3
-                            )
+                                $imagenResumen['path'],
+                                $captionResumen,
+                                4
+                            ),
+                            'calc_resumen_img',
+                            'Imagen resumen costos'
                         );
                     } else {
-                        Log::warning('No se pudo enviar PDF: archivo no encontrado', [
+                        Log::warning('No se pudo generar la imagen del resumen de costos', [
                             'calculadora_id' => $calculadora->id ?? null,
-                            'url' => $calculadora->url_cotizacion_pdf,
-                            'path' => $pdfPath,
                         ]);
                     }
-                }
-
-                $this->queueCoordinacionWhatsApp(
-                    CoordinacionWhatsappPayload::calcResumenTexto($phoneNumberId, $tercerMensaje, 2)
-                );
-
-                $resumenCostosService = new ResumenCostosImageService();
-                $imagenResumen = $resumenCostosService->generateResumenCostosImage($calculadora);
-
-                if ($imagenResumen) {
-                    $this->queueCoordinacionWhatsApp(
-                        CoordinacionWhatsappPayload::calcResumenImg(
-                            $phoneNumberId,
-                            $imagenResumen['path'],
-                            $captionResumen,
-                            4
-                        )
-                    );
-                } else {
-                    Log::warning('No se pudo generar la imagen del resumen de costos', [
-                        'calculadora_id' => $calculadora->id ?? null,
-                    ]);
-                }
+                });
 
                 return;
             }

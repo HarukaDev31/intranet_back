@@ -5,15 +5,12 @@ namespace App\Events\WhatsappInbox;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
-class WaInboxMessageCreated implements ShouldBroadcast, ShouldQueue
+class WaInboxMessageCreated implements ShouldBroadcast
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
-
-    public $queue = 'notificaciones';
 
     /** @var array<string, mixed> */
     public $message;

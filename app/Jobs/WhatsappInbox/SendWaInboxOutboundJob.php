@@ -3,7 +3,10 @@
 namespace App\Jobs\WhatsappInbox;
 
 use App\Services\WhatsappInbox\WhatsappInboxSendService;
+use App\Support\WhatsApp\WaInboxJobContext;
 use App\Support\WhatsApp\WaInboxLog;
+use App\Traits\DatabaseConnectionTrait;
+use Illuminate\Bus\Batchable;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -13,6 +16,8 @@ use Illuminate\Support\Facades\Log;
 
 class SendWaInboxOutboundJob implements ShouldQueue
 {
+    use Batchable;
+    use DatabaseConnectionTrait;
     use Dispatchable;
     use InteractsWithQueue;
     use Queueable;
@@ -21,18 +26,40 @@ class SendWaInboxOutboundJob implements ShouldQueue
     /** @var int */
     public $messageId;
 
-    public function __construct($messageId)
+    /** @var string|null */
+    public $domain;
+
+    /** @var string|null Etiqueta en Horizon (batch de envío). */
+    public $displayLabel;
+
+    public function __construct($messageId, ?string $domain = null, ?string $displayLabel = null)
     {
         $this->messageId = (int) $messageId;
+        $this->domain = $domain;
+        $this->displayLabel = $displayLabel;
         $this->onQueue((string) config('meta_whatsapp.inbox_queue', 'notificaciones'));
+    }
+
+    public function displayName(): string
+    {
+        if ($this->displayLabel !== null && $this->displayLabel !== '') {
+            return 'Inbox Meta: ' . $this->displayLabel;
+        }
+
+        return 'Inbox Meta · mensaje #' . $this->messageId;
     }
 
     public function handle(WhatsappInboxSendService $sendService)
     {
+        $this->setDatabaseConnection(
+            WaInboxJobContext::resolveJobDomain($this->domain)
+        );
+
         WaInboxLog::info('job.SendWaInboxOutbound.start', [
             'message_id' => $this->messageId,
             'queue' => $this->queue,
             'attempt' => $this->attempts(),
+            'domain' => WaInboxJobContext::resolveJobDomain($this->domain),
         ]);
 
         try {

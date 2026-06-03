@@ -5,6 +5,7 @@ namespace App\Services\WhatsApp;
 use App\Jobs\WhatsApp\SendCoordinacionWhatsAppJob;
 use App\Models\WhatsAppCoordinacionBatch;
 use App\Models\WhatsAppCoordinacionBatchItem;
+use App\Services\WhatsappInbox\WhatsappInboxOutboundBatchService;
 use Illuminate\Bus\Batch;
 use App\Jobs\WhatsApp\FinalizeWhatsAppCoordinacionBatchCallback;
 use Illuminate\Support\Facades\Bus;
@@ -26,6 +27,7 @@ class WhatsAppCoordinacionBatchService
             'phone_e164' => $context['phone_e164'] ?? null,
             'cliente' => $context['cliente'] ?? null,
             'carga' => $context['carga'] ?? null,
+            'job_domain' => isset($context['job_domain']) ? (string) $context['job_domain'] : null,
             'status' => WhatsAppCoordinacionBatch::STATUS_PENDING,
         ]);
     }
@@ -55,6 +57,7 @@ class WhatsAppCoordinacionBatchService
         ]);
 
         $payload['batch_item_id'] = $item->id;
+        $payload['_coordinacion_batch_id'] = $batchId;
         $payload['_batch_label'] = $label;
         $job = new SendCoordinacionWhatsAppJob($payload, $item->id);
         self::$bufferedJobs[$batchId][] = $job;
@@ -87,14 +90,17 @@ class WhatsAppCoordinacionBatchService
         $tipoLabels = [
             'rotulado' => 'Rotulado',
             'solicitar_documentos' => 'Docs consolidado',
+            'calculadora' => 'Calculadora importación',
+            'entrega_form' => 'Formulario entrega',
+            'docs_recordatorio' => 'Recordatorio documentos',
         ];
         $tipoLabel = $tipoLabels[$batch->tipo] ?? ucfirst(str_replace('_', ' ', (string) $batch->tipo));
         $horizonName = sprintf(
-            '%s · carga %s · cot. #%s%s',
+            'Programático · %s · carga %s · cot. #%s%s',
             $tipoLabel,
             $batch->carga ?? '-',
             $batch->id_cotizacion ?? '-',
-            $batch->cliente ? ' · ' . mb_substr($batch->cliente, 0, 35) : ''
+            $batch->cliente ? ' · ' . mb_substr((string) $batch->cliente, 0, 35) : ''
         );
         $laravelBatch = Bus::batch($jobs)
             ->name($horizonName)
@@ -136,7 +142,7 @@ class WhatsAppCoordinacionBatchService
         }
     }
 
-    public function markItemCompleted(int $itemId, ?int $bitrixRegistroId = null): void
+    public function markItemCompleted(int $itemId, ?int $inboxMessageId = null): void
     {
         try {
             $item = WhatsAppCoordinacionBatchItem::query()->find($itemId);
@@ -149,8 +155,8 @@ class WhatsAppCoordinacionBatchService
                 'finished_at' => now(),
                 'last_error' => null,
             ];
-            if ($bitrixRegistroId !== null) {
-                $payload['bitrix_registro_id'] = $bitrixRegistroId;
+            if ($inboxMessageId !== null) {
+                $payload['inbox_message_id'] = $inboxMessageId;
             }
             $item->update($payload);
 
@@ -201,6 +207,8 @@ class WhatsAppCoordinacionBatchService
                 'laravel_batch_id' => $laravelBatch->id,
                 'finished_at' => $batch->finished_at ?? now(),
             ]);
+
+            app(WhatsappInboxOutboundBatchService::class)->dispatchForCoordinacionBatch($batchId);
         } catch (\Throwable $e) {
             Log::warning('WhatsAppCoordinacionBatch: finalize falló', [
                 'batch_id' => $batchId,
@@ -268,6 +276,7 @@ class WhatsAppCoordinacionBatchService
             'failed_items' => $batch->failed_items,
             'progress_percent' => $batch->progressPercent(),
             'laravel_batch_id' => $batch->laravel_batch_id,
+            'outbound_laravel_batch_id' => $batch->outbound_laravel_batch_id,
             'dispatched_at' => $batch->dispatched_at !== null ? $batch->dispatched_at->toIso8601String() : null,
             'finished_at' => $batch->finished_at !== null ? $batch->finished_at->toIso8601String() : null,
             'items' => $batch->items->map(static function (WhatsAppCoordinacionBatchItem $item) {
@@ -279,7 +288,7 @@ class WhatsAppCoordinacionBatchService
                     'template_name' => $item->template_name,
                     'status' => $item->status,
                     'last_error' => $item->last_error,
-                    'bitrix_registro_id' => $item->bitrix_registro_id,
+                    'inbox_message_id' => $item->inbox_message_id,
                     'started_at' => $item->started_at !== null ? $item->started_at->toIso8601String() : null,
                     'finished_at' => $item->finished_at !== null ? $item->finished_at->toIso8601String() : null,
                 ];

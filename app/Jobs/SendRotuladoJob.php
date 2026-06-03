@@ -137,6 +137,7 @@ class SendRotuladoJob implements ShouldQueue
                     'cliente' => $this->cliente,
                     'carga' => (string) $this->carga,
                     'phone_e164' => $phoneE164,
+                    'job_domain' => $this->domain,
                 ]);
                 $this->whatsappCoordinacionBatchId = (int) $batch->id;
             }

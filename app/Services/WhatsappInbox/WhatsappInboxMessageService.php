@@ -2,8 +2,10 @@
 
 namespace App\Services\WhatsappInbox;
 
+use App\Support\WhatsApp\CoordinacionMediaLink;
 use App\Events\WhatsappInbox\WaInboxMessageCreated;
 use App\Events\WhatsappInbox\WaInboxMessageStatusUpdated;
+use Illuminate\Broadcasting\BroadcastException;
 use App\Models\WhatsappInbox\WaInboxConversation;
 use App\Models\WhatsappInbox\WaInboxMessage;
 use App\Models\WhatsappInbox\WaInboxWebhookLog;
@@ -67,6 +69,18 @@ class WhatsappInboxMessageService
     public function formatMessage(WaInboxMessage $message)
     {
         $isTemplate = $message->message_type === 'template' || !empty($message->template_name);
+        $params = is_array($message->template_params) ? $message->template_params : [];
+        $mediaFilename = '';
+        if (isset($params['_media_filename'])) {
+            $mediaFilename = trim((string) $params['_media_filename']);
+        } elseif (isset($params['_header']['filename'])) {
+            $mediaFilename = trim((string) $params['_header']['filename']);
+        }
+        $replyToMetaId = null;
+        if (isset($params['_context']['message_id'])) {
+            $rid = trim((string) $params['_context']['message_id']);
+            $replyToMetaId = $rid !== '' ? $rid : null;
+        }
 
         return [
             'id' => (int) $message->id,
@@ -79,6 +93,11 @@ class WhatsappInboxMessageService
             'is_template' => $isTemplate,
             'template_name' => $message->template_name,
             'message_type' => $message->message_type,
+            'meta_message_id' => $message->meta_message_id,
+            'media_url' => CoordinacionMediaLink::urlForDisplay($message->media_url),
+            'media_mime' => $message->media_mime,
+            'media_filename' => $mediaFilename !== '' ? $mediaFilename : null,
+            'reply_to_meta_message_id' => $replyToMetaId,
         ];
     }
 
@@ -274,11 +293,37 @@ class WhatsappInboxMessageService
         $userId = null,
         $messageType = 'text',
         $templateName = null,
-        $templateParams = null
+        $templateParams = null,
+        $mediaUrl = null,
+        $mediaMime = null
     ) {
+        if ($mediaUrl === null && $messageType === 'template' && is_array($templateParams)) {
+            $header = isset($templateParams['_header']) && is_array($templateParams['_header'])
+                ? $templateParams['_header']
+                : null;
+            if ($header && !empty($header['path'])) {
+                $mediaUrl = (string) $header['path'];
+            } elseif ($header && !empty($header['link'])) {
+                $mediaUrl = CoordinacionMediaLink::resolveStoragePath((string) $header['link'])
+                    ?: (string) $header['link'];
+                if ($mediaMime === null && isset($header['type'])) {
+                    $ht = strtolower((string) $header['type']);
+                    if ($ht === 'image') {
+                        $mediaMime = 'image/jpeg';
+                    } elseif ($ht === 'video') {
+                        $mediaMime = 'video/mp4';
+                    } elseif ($ht === 'document') {
+                        $mediaMime = 'application/pdf';
+                    }
+                }
+            }
+        }
+
         $preview = $messageType === 'template'
-            ? '[Template enviado]'
-            : mb_substr(trim((string) $body), 0, 500);
+            ? ($mediaUrl !== null ? '[Plantilla con archivo]' : '[Template enviado]')
+            : ($this->isMediaMessageType($messageType)
+                ? '[' . $messageType . '] ' . mb_substr(trim((string) $body), 0, 200)
+                : mb_substr(trim((string) $body), 0, 500));
 
         $message = WaInboxMessage::create([
             'conversation_id' => $conversation->id,
@@ -288,6 +333,8 @@ class WhatsappInboxMessageService
             'message_type' => $messageType,
             'template_name' => $templateName,
             'template_params' => $templateParams,
+            'media_url' => $mediaUrl,
+            'media_mime' => $mediaMime,
             'delivery_status' => 'pending',
             'sent_at' => now(),
             'sent_by_user_id' => $userId,
@@ -304,6 +351,15 @@ class WhatsappInboxMessageService
         ]);
 
         return $message;
+    }
+
+    /**
+     * @param  string  $messageType
+     * @return bool
+     */
+    private function isMediaMessageType($messageType)
+    {
+        return in_array($messageType, ['image', 'video', 'document', 'audio'], true);
     }
 
     /**
@@ -350,7 +406,29 @@ class WhatsappInboxMessageService
             ];
         }
 
-        $preview = '[Template enviado]';
+        $header = isset($templateParams['_header']) && is_array($templateParams['_header'])
+            ? $templateParams['_header']
+            : null;
+        $mediaUrl = null;
+        if ($header && !empty($header['path'])) {
+            $mediaUrl = (string) $header['path'];
+        } elseif ($header && !empty($header['link'])) {
+            $mediaUrl = CoordinacionMediaLink::resolveStoragePath((string) $header['link'])
+                ?: (string) $header['link'];
+        }
+        $mediaMime = null;
+        if ($header && isset($header['type'])) {
+            $ht = strtolower((string) $header['type']);
+            if ($ht === 'image') {
+                $mediaMime = 'image/jpeg';
+            } elseif ($ht === 'video') {
+                $mediaMime = 'video/mp4';
+            } elseif ($ht === 'document') {
+                $mediaMime = 'application/pdf';
+            }
+        }
+
+        $preview = $mediaUrl !== null ? '[Plantilla con archivo]' : '[Template enviado]';
         $message = WaInboxMessage::create([
             'conversation_id' => $conversation->id,
             'session_id' => $conversation->session_id,
@@ -359,6 +437,8 @@ class WhatsappInboxMessageService
             'message_type' => 'template',
             'template_name' => $templateName,
             'template_params' => $templateParams,
+            'media_url' => $mediaUrl,
+            'media_mime' => $mediaMime,
             'meta_message_id' => isset($result['meta_message_id']) ? $result['meta_message_id'] : null,
             'delivery_status' => 'sent',
             'failed_reason' => null,
@@ -406,11 +486,28 @@ class WhatsappInboxMessageService
      */
     public function broadcastMessageCreated(WaInboxMessage $message, WaInboxConversation $conversation)
     {
+        if (!config('meta_whatsapp.inbox_broadcast_enabled', true)) {
+            return;
+        }
+
         $conversation->refresh();
-        event(new WaInboxMessageCreated(
-            $this->formatMessage($message),
-            $this->conversationService->formatConversation($conversation)
-        ));
+
+        try {
+            event(new WaInboxMessageCreated(
+                $this->formatMessage($message),
+                $this->conversationService->formatConversation($conversation)
+            ));
+        } catch (BroadcastException $e) {
+            WaInboxLog::warning('broadcastMessageCreated.failed', [
+                'message_id' => (int) $message->id,
+                'error' => $e->getMessage(),
+            ]);
+        } catch (\Throwable $e) {
+            WaInboxLog::warning('broadcastMessageCreated.failed', [
+                'message_id' => (int) $message->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     /**
@@ -418,11 +515,27 @@ class WhatsappInboxMessageService
      */
     public function broadcastMessageStatusUpdated(WaInboxMessage $message)
     {
-        event(new WaInboxMessageStatusUpdated(
-            (int) $message->conversation_id,
-            (int) $message->id,
-            (string) $message->delivery_status,
-            $this->formatMessage($message)
-        ));
+        if (!config('meta_whatsapp.inbox_broadcast_enabled', true)) {
+            return;
+        }
+
+        try {
+            event(new WaInboxMessageStatusUpdated(
+                (int) $message->conversation_id,
+                (int) $message->id,
+                (string) $message->delivery_status,
+                $this->formatMessage($message)
+            ));
+        } catch (BroadcastException $e) {
+            WaInboxLog::warning('broadcastMessageStatusUpdated.failed', [
+                'message_id' => (int) $message->id,
+                'error' => $e->getMessage(),
+            ]);
+        } catch (\Throwable $e) {
+            WaInboxLog::warning('broadcastMessageStatusUpdated.failed', [
+                'message_id' => (int) $message->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 }

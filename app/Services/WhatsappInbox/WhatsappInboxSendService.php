@@ -4,6 +4,7 @@ namespace App\Services\WhatsappInbox;
 
 use App\Models\WhatsappInbox\WaInboxMessage;
 use App\Services\WhatsApp\MetaWhatsAppCoordinacionService;
+use App\Services\WhatsappInbox\WhatsappInboxOutboundRecorder;
 use App\Support\WhatsApp\CoordinacionMediaLink;
 use App\Support\WhatsApp\WaInboxLog;
 use App\Support\WhatsApp\WaInboxMetaError;
@@ -70,8 +71,11 @@ class WhatsappInboxSendService
 
         if ($message->message_type === 'template') {
             $result = $this->sendTemplateMessage($message, $phone);
+        } elseif (in_array($message->message_type, ['image', 'video', 'document', 'audio'], true)) {
+            $result = $this->sendMediaMessage($message, $phone);
         } else {
-            $result = $this->sendTextMessage($phone, (string) $message->body);
+            $contextId = $this->extractReplyContextId($message);
+            $result = $this->sendTextMessage($phone, (string) $message->body, $contextId);
         }
 
         if (!empty($result['success'])) {
@@ -111,7 +115,13 @@ class WhatsappInboxSendService
      * @param  string  $text
      * @return array{success: bool, response?: mixed, error?: string}
      */
-    private function sendTextMessage($phoneE164, $text)
+    /**
+     * @param  string  $phoneE164
+     * @param  string  $text
+     * @param  string|null  $replyToMetaMessageId
+     * @return array{success: bool, response?: mixed, error?: string}
+     */
+    private function sendTextMessage($phoneE164, $text, $replyToMetaMessageId = null)
     {
         if (!config('meta_whatsapp.coordinacion_enabled')) {
             WaInboxLog::warning('sendText.coordinacion_disabled', ['phone_e164' => $phoneE164]);
@@ -130,16 +140,21 @@ class WhatsappInboxSendService
         $version = (string) config('meta_whatsapp.graph_api_version', 'v19.0');
         $url = "https://graph.facebook.com/{$version}/{$phoneNumberId}/messages";
 
+        $payload = [
+            'messaging_product' => 'whatsapp',
+            'to' => $phoneE164,
+            'type' => 'text',
+            'text' => ['body' => $text],
+        ];
+        if ($replyToMetaMessageId !== null && $replyToMetaMessageId !== '') {
+            $payload['context'] = ['message_id' => $replyToMetaMessageId];
+        }
+
         $response = Http::timeout(60)
             ->withToken($token)
             ->acceptJson()
             ->asJson()
-            ->post($url, [
-                'messaging_product' => 'whatsapp',
-                'to' => $phoneE164,
-                'type' => 'text',
-                'text' => ['body' => $text],
-            ]);
+            ->post($url, $payload);
 
         if (!$response->successful()) {
             $json = $response->json();
@@ -162,6 +177,135 @@ class WhatsappInboxSendService
             'success' => true,
             'response' => $response->json(),
         ];
+    }
+
+    /**
+     * @param  WaInboxMessage  $message
+     * @param  string  $phoneE164
+     * @return array{success: bool, response?: mixed, error?: string}
+     */
+    private function sendMediaMessage(WaInboxMessage $message, $phoneE164)
+    {
+        $link = CoordinacionMediaLink::urlForMetaSend($message->media_url);
+        if ($link === null || $link === '') {
+            return ['success' => false, 'error' => 'URL de media no disponible'];
+        }
+
+        $type = (string) $message->message_type;
+        $caption = trim((string) $message->body);
+        $filename = $this->extractMediaFilename($message);
+        $contextId = $this->extractReplyContextId($message);
+
+        if (!config('meta_whatsapp.coordinacion_enabled')) {
+            return ['success' => false, 'error' => 'Meta coordinación deshabilitado'];
+        }
+
+        $token = (string) config('meta_whatsapp.access_token');
+        if ($token === '') {
+            return ['success' => false, 'error' => 'META_WHATSAPP_ACCESS_TOKEN no configurado'];
+        }
+
+        $phoneNumberId = (string) config('meta_whatsapp.phone_number_id');
+        $version = (string) config('meta_whatsapp.graph_api_version', 'v19.0');
+        $url = "https://graph.facebook.com/{$version}/{$phoneNumberId}/messages";
+
+        $payload = [
+            'messaging_product' => 'whatsapp',
+            'to' => $phoneE164,
+            'type' => $type,
+        ];
+        if ($contextId !== null && $contextId !== '') {
+            $payload['context'] = ['message_id' => $contextId];
+        }
+
+        if ($type === 'image') {
+            $media = ['link' => $link];
+            if ($caption !== '') {
+                $media['caption'] = $caption;
+            }
+            $payload['image'] = $media;
+        } elseif ($type === 'video') {
+            $media = ['link' => $link];
+            if ($caption !== '') {
+                $media['caption'] = $caption;
+            }
+            $payload['video'] = $media;
+        } elseif ($type === 'document') {
+            $media = [
+                'link' => $link,
+                'filename' => $filename !== '' ? $filename : 'documento',
+            ];
+            if ($caption !== '') {
+                $media['caption'] = $caption;
+            }
+            $payload['document'] = $media;
+        } elseif ($type === 'audio') {
+            $payload['audio'] = ['link' => $link];
+        } else {
+            return ['success' => false, 'error' => 'Tipo de media no soportado'];
+        }
+
+        $response = Http::timeout(120)
+            ->withToken($token)
+            ->acceptJson()
+            ->asJson()
+            ->post($url, $payload);
+
+        if (!$response->successful()) {
+            $json = $response->json();
+            WaInboxLog::error('sendMedia.meta_http_error', [
+                'phone_e164' => $phoneE164,
+                'type' => $type,
+                'status' => $response->status(),
+                'body' => WaInboxLog::sanitizePayload(is_array($json) ? $json : $response->body()),
+            ]);
+
+            return [
+                'success' => false,
+                'error' => $this->formatMetaError($response->status(), $json),
+                'response' => $json,
+            ];
+        }
+
+        WaInboxLog::info('sendMedia.meta_ok', ['phone_e164' => $phoneE164, 'type' => $type]);
+
+        return [
+            'success' => true,
+            'response' => $response->json(),
+        ];
+    }
+
+    /**
+     * @param  WaInboxMessage  $message
+     * @return string|null
+     */
+    private function extractReplyContextId(WaInboxMessage $message)
+    {
+        $params = is_array($message->template_params) ? $message->template_params : [];
+        if (isset($params['_context']['message_id'])) {
+            $id = trim((string) $params['_context']['message_id']);
+
+            return $id !== '' ? $id : null;
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  WaInboxMessage  $message
+     * @return string
+     */
+    private function extractMediaFilename(WaInboxMessage $message)
+    {
+        $params = is_array($message->template_params) ? $message->template_params : [];
+        if (isset($params['_media_filename'])) {
+            return trim((string) $params['_media_filename']);
+        }
+        if (isset($params['_header']['filename'])) {
+            return trim((string) $params['_header']['filename']);
+        }
+
+        return '';
     }
 
     /**
@@ -239,14 +383,22 @@ class WhatsappInboxSendService
             'header_type' => is_array($header) && isset($header['type']) ? $header['type'] : null,
         ]);
 
-        $result = $this->metaService->sendMetaTemplate(
+        $result = WhatsappInboxOutboundRecorder::runWhileSuppressed(function () use (
             $phoneE164,
             $templateName,
-            (string) config('meta_whatsapp.default_language', 'es_PE'),
             $bodyParams,
             $header,
-            $requiredHeaderFormat !== null
-        );
+            $requiredHeaderFormat
+        ) {
+            return $this->metaService->sendMetaTemplate(
+                $phoneE164,
+                $templateName,
+                (string) config('meta_whatsapp.default_language', 'es_PE'),
+                $bodyParams,
+                $header,
+                $requiredHeaderFormat !== null
+            );
+        });
 
         if (!empty($result['status'])) {
             WaInboxLog::info('dispatchMetaTemplate.ok', [
