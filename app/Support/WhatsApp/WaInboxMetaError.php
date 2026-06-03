@@ -33,8 +33,8 @@ class WaInboxMetaError
             || strpos($haystack, 'audiocodec=opus') !== false
             || strpos($haystack, 'videocodec=unknown') !== false
             || strpos($haystack, 'choose a different file') !== false) {
-            return 'El video no es compatible con WhatsApp. Debe ser MP4 con video H.264 y audio AAC (no Opus). '
-                . 'Conviértelo antes de subir (por ejemplo con ffmpeg).';
+            return 'El video no es compatible con WhatsApp (H.264 + audio AAC). '
+                . 'El servidor intenta convertirlo automáticamente; si persiste, prueba otro archivo más corto.';
         }
 
         if ($code === 131052 || strpos($haystack, 'file too large') !== false) {

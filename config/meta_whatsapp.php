@@ -39,6 +39,16 @@ return [
         'document' => (int) env('META_WHATSAPP_INBOX_MAX_DOCUMENT_BYTES', 100 * 1024 * 1024),
     ],
 
+    /** Tamaño máximo del archivo original antes de transcodificar video (bytes). */
+    'inbox_header_max_video_input_bytes' => (int) env('META_WHATSAPP_INBOX_MAX_VIDEO_INPUT_BYTES', 80 * 1024 * 1024),
+
+    /** Ruta al binario ffmpeg (debe estar instalado en el servidor). */
+    'ffmpeg_binary' => env('META_WHATSAPP_FFMPEG_BINARY', 'ffmpeg'),
+
+    'video_transcode_enabled' => filter_var(env('META_WHATSAPP_VIDEO_TRANSCODE', true), FILTER_VALIDATE_BOOLEAN),
+
+    'video_transcode_timeout' => (int) env('META_WHATSAPP_VIDEO_TRANSCODE_TIMEOUT', 120),
+
     'inbox_queue' => env('META_WHATSAPP_INBOX_QUEUE', env('META_WHATSAPP_QUEUE', 'notificaciones')),
     'inbox_display_number' => env('META_WHATSAPP_INBOX_DISPLAY_NUMBER', ''),
     'inbox_alert_phone' => env('WA_INBOX_ALERT_PHONE', ''),

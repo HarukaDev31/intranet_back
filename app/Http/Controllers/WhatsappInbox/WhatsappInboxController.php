@@ -12,6 +12,7 @@ use App\Services\WhatsappInbox\WhatsappInboxTemplateService;
 use App\Services\WhatsappInbox\WhatsappInboxWindowService;
 use App\Support\WhatsApp\CoordinacionMediaLink;
 use App\Support\WhatsApp\WaInboxLog;
+use App\Support\WhatsApp\WaInboxVideoTranscoder;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Log;
@@ -223,7 +224,8 @@ class WhatsappInboxController extends Controller
                     ], 422);
                 }
 
-                $header = $this->resolveTemplateHeaderFromRequest($request, $templateName);
+                $headerError = '';
+                $header = $this->resolveTemplateHeaderFromRequest($request, $templateName, $headerError);
                 if ($header === null) {
                     $file = $request->file('header_media');
                     if (!$file || !$file->isValid()) {
@@ -239,11 +241,13 @@ class WhatsappInboxController extends Controller
                         ? $this->validateTemplateHeaderFileSize($file, $headerFormat, $templateName)
                         : null;
 
-                    $message = $sizeMsg !== null
+                    $message = $headerError !== ''
+                        ? $headerError
+                        : ($sizeMsg !== null
                         ? $sizeMsg
                         : ($headerFormat === 'DOCUMENT'
                             ? 'No se pudo subir el PDF a S3. Esta plantilla exige un PDF en el encabezado.'
-                            : 'No se pudo subir el archivo a S3. Revisa la configuración de almacenamiento.');
+                            : 'No se pudo subir el archivo a S3. Revisa la configuración de almacenamiento.'));
 
                     WaInboxLog::error('sendTemplate.header_upload_failed', [
                         'conversation_id' => (int) $conversation->id,
@@ -440,8 +444,9 @@ class WhatsappInboxController extends Controller
      * @param  string  $templateName
      * @return array<string, mixed>|null
      */
-    private function resolveTemplateHeaderFromRequest(Request $request, $templateName = '')
+    private function resolveTemplateHeaderFromRequest(Request $request, $templateName = '', &$errorMessage = '')
     {
+        $errorMessage = '';
         $file = $request->file('header_media');
         if (!$file || !$file->isValid()) {
             foreach ($request->allFiles() as $uploaded) {
@@ -511,10 +516,38 @@ class WhatsappInboxController extends Controller
         }
 
         $fullPath = storage_path('app/' . $localRelative);
-        $url = CoordinacionMediaLink::uploadLocalFile($fullPath, $storageKey);
+        $uploadPath = $fullPath;
+        $uploadFilename = $file->getClientOriginalName();
+        $transcodedPath = null;
+
+        if ($headerFormat === 'VIDEO') {
+            @set_time_limit(max(180, (int) config('meta_whatsapp.video_transcode_timeout', 120) + 30));
+            $transcoder = new WaInboxVideoTranscoder();
+            $transcode = $transcoder->transcodeForWhatsAppTemplate($fullPath);
+            if (!empty($transcode['success']) && !empty($transcode['path'])) {
+                $transcodedPath = (string) $transcode['path'];
+                $uploadPath = $transcodedPath;
+                $uploadFilename = pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME) . '.mp4';
+            } else {
+                $errorMessage = isset($transcode['error']) ? (string) $transcode['error'] : 'No se pudo convertir el video';
+
+                try {
+                    Storage::disk('local')->delete($localRelative);
+                } catch (\Exception $e) {
+                    // ignorar
+                }
+
+                return null;
+            }
+        }
+
+        $url = CoordinacionMediaLink::uploadLocalFile($uploadPath, $storageKey);
 
         try {
             Storage::disk('local')->delete($localRelative);
+            if ($transcodedPath !== null && is_file($transcodedPath)) {
+                @unlink($transcodedPath);
+            }
         } catch (\Exception $e) {
             // ignorar limpieza local
         }
@@ -543,7 +576,7 @@ class WhatsappInboxController extends Controller
             'type' => $kind,
             'link' => $url,
             'path' => $storageKey,
-            'filename' => $file->getClientOriginalName(),
+            'filename' => $uploadFilename,
         ];
     }
 
@@ -564,7 +597,11 @@ class WhatsappInboxController extends Controller
             $key = 'video';
         }
 
-        $max = isset($limits[$key]) ? (int) $limits[$key] : 0;
+        if ($key === 'video') {
+            $max = (int) config('meta_whatsapp.inbox_header_max_video_input_bytes', 80 * 1024 * 1024);
+        } else {
+            $max = isset($limits[$key]) ? (int) $limits[$key] : 0;
+        }
         if ($max <= 0) {
             return null;
         }
@@ -581,8 +618,7 @@ class WhatsappInboxController extends Controller
             return 'La imagen pesa ' . $fileMb . ' MB. WhatsApp permite máximo ' . $maxMb . ' MB en plantillas con encabezado de imagen.';
         }
         if ($key === 'video') {
-            return 'El video pesa ' . $fileMb . ' MB (máximo ' . $maxMb . ' MB). '
-                . 'WhatsApp solo acepta MP4 con H.264 y audio AAC, sin Opus.';
+            return 'El video pesa ' . $fileMb . ' MB. Máximo ' . $maxMb . ' MB al subir; el servidor lo convertirá para WhatsApp.';
         }
 
         return 'El archivo pesa ' . $fileMb . ' MB. WhatsApp permite máximo ' . $maxMb . ' MB para documentos en plantilla.';
