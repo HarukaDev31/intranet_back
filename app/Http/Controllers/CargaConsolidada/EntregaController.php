@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use App\Traits\WhatsappTrait;
 use App\Traits\FileTrait;
+use App\Traits\UsesObjectStorage;
 use App\Models\CargaConsolidada\Contenedor;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Exports\RotuladoParedExport;
@@ -20,6 +21,7 @@ use App\Exports\ClientesEntregaExport;
 use App\Jobs\SendDeliveryFormBulkJob;
 use App\Helpers\UsuarioDatosFacturacionHelper;
 use App\Services\Delivery\DeliveryFormLinkCoordinationNotifier;
+use App\Support\WhatsApp\CoordinacionWhatsappPayload;
 use Dompdf\Dompdf;
 use Dompdf\Options;
 use ZipArchive;
@@ -28,6 +30,7 @@ class EntregaController extends Controller
 {
     use WhatsappTrait;
     use FileTrait;
+    use UsesObjectStorage;
     private $table_contenedor_consolidado_cotizacion_coordinacion_pagos = "contenedor_consolidado_cotizacion_coordinacion_pagos";
     private $table_pagos_concept = "cotizacion_coordinacion_pagos_concept";
     private $CONCEPT_PAGO_LOGISTICA = 1;
@@ -1974,19 +1977,12 @@ class EntregaController extends Controller
                         file_put_contents($pdfPath, $output);
                         $pdfFiles[] = $pdfPath;
 
-                        // Guardar PDF en public/entregas/cargo_entrega/ (accesible sin CORS)
-                        $publicDir = public_path('entregas/cargo_entrega/' . $idContenedor);
-                        if (!is_dir($publicDir)) {
-                            mkdir($publicDir, 0755, true);
-                        }
-                        $publicPath = $publicDir . DIRECTORY_SEPARATOR . $pdfName;
-                        if (file_put_contents($publicPath, $output) !== false) {
-                            $relativePath = 'entregas/cargo_entrega/' . $idContenedor . '/' . $pdfName;
-                            DB::table('contenedor_consolidado_cotizacion')
-                                ->where('id', $r->id_cotizacion)
-                                ->whereNull('deleted_at')
-                                ->update(['cargo_entrega_pdf_url' => $relativePath]);
-                        }
+                        $relativePath = 'entregas/cargo_entrega/' . $idContenedor . '/' . $pdfName;
+                        $this->storagePutContents($relativePath, $output);
+                        DB::table('contenedor_consolidado_cotizacion')
+                            ->where('id', $r->id_cotizacion)
+                            ->whereNull('deleted_at')
+                            ->update(['cargo_entrega_pdf_url' => $relativePath]);
                     } catch (\Exception $e) {
                         Log::error('Error generating PDF for cotizacion ' . $r->id_cotizacion . ': ' . $e->getMessage());
                         // continue generating others
@@ -2982,8 +2978,6 @@ class EntregaController extends Controller
                 ], 404);
             }
 
-            // Definir disco y carpeta
-            $disk = 'public';
             $folder = 'delivery_conformidad/' . $idCotizacion;
 
             DB::beginTransaction();
@@ -2998,8 +2992,8 @@ class EntregaController extends Controller
                 if ($request->hasFile('photo_1')) {
                     $file = $request->file('photo_1');
                     $filename = time() . '_1_' . $file->getClientOriginalName();
-                    $storedPath = $file->storeAs($folder, $filename, $disk);
-                    $photo1Path = storage_path('app/public/' . $storedPath);
+                    $storedPath = $this->storageStoreUpload($file, $folder, $filename);
+                    $photo1Path = $this->storageLocalPath($storedPath);
                     $photo1MimeType = $file->getClientMimeType();
 
                     $insert = [
@@ -3021,8 +3015,8 @@ class EntregaController extends Controller
                 if ($request->hasFile('photo_2')) {
                     $file = $request->file('photo_2');
                     $filename = time() . '_2_' . $file->getClientOriginalName();
-                    $storedPath = $file->storeAs($folder, $filename, $disk);
-                    $photo2Path = storage_path('app/public/' . $storedPath);
+                    $storedPath = $this->storageStoreUpload($file, $folder, $filename);
+                    $photo2Path = $this->storageLocalPath($storedPath);
                     $photo2MimeType = $file->getClientMimeType();
 
                     $insert = [
@@ -3054,12 +3048,38 @@ class EntregaController extends Controller
                 $message = "Hola $nombre 👋
 Adjunto el sustento de entrega correspondiente a su importación del consolidado #$carga.\n
 Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, estaremos encantados de ayudarlo nuevamente. No dude en escribirnos ✈️📦";
-                $this->sendMessage($message, $numeroWhatsapp);
+                $metaTexto = CoordinacionWhatsappPayload::entregaConformidadTexto(
+                    $numeroWhatsapp,
+                    (string) $nombre,
+                    (string) $carga,
+                    $message
+                );
+                $this->sendMessage($message, $numeroWhatsapp, 0, 'consolidado', $metaTexto);
                 if ($photo1Path) {
-                    $this->sendMedia($photo1Path, $photo1MimeType, null, $numeroWhatsapp);
+                    $captionFoto1 = 'Sustento de entrega — foto 1. 📷';
+                    $this->sendMedia(
+                        $photo1Path,
+                        $photo1MimeType,
+                        $captionFoto1,
+                        $numeroWhatsapp,
+                        3,
+                        'consolidado',
+                        null,
+                        CoordinacionWhatsappPayload::entregaConformidadFoto($numeroWhatsapp, '1', $photo1Path, $captionFoto1, 3)
+                    );
                 }
                 if ($photo2Path) {
-                    $this->sendMedia($photo2Path, $photo2MimeType, null, $numeroWhatsapp);
+                    $captionFoto2 = 'Sustento de entrega — foto 2. 📷';
+                    $this->sendMedia(
+                        $photo2Path,
+                        $photo2MimeType,
+                        $captionFoto2,
+                        $numeroWhatsapp,
+                        3,
+                        'consolidado',
+                        null,
+                        CoordinacionWhatsappPayload::entregaConformidadFoto($numeroWhatsapp, '2', $photo2Path, $captionFoto2, 3)
+                    );
                 }
 
                 return response()->json([
@@ -3142,20 +3162,18 @@ Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, 
             return response()->json(['message' => 'Conformidad no encontrada', 'success' => false], 404);
         }
 
-        $disk = config('filesystems.default', 'public');
         $folder = 'delivery_conformidad/' . $row->id_cotizacion;
         $update = ['updated_at' => now(), 'uploaded_by' => auth()->id(), 'uploaded_at' => now()];
 
         if ($request->hasFile('photo_1')) {
-            // Eliminar archivo anterior si existe
             if (!empty($row->photo_1_path)) {
                 try {
-                    Storage::disk($disk)->delete($row->photo_1_path);
+                    $this->objectStorage()->delete($row->photo_1_path);
                 } catch (\Throwable $e) { /* ignore */
                 }
             }
             $p1 = $request->file('photo_1');
-            $path1 = $p1->store($folder, $disk);
+            $path1 = $this->storageStoreUpload($p1, $folder, time() . '_1_' . $p1->getClientOriginalName());
             $update['photo_1_path'] = $path1;
             $update['photo_1_mime'] = $p1->getClientMimeType();
             $update['photo_1_size'] = $p1->getSize();
@@ -3164,12 +3182,12 @@ Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, 
         if ($request->hasFile('photo_2')) {
             if (!empty($row->photo_2_path)) {
                 try {
-                    Storage::disk($disk)->delete($row->photo_2_path);
+                    $this->objectStorage()->delete($row->photo_2_path);
                 } catch (\Throwable $e) { /* ignore */
                 }
             }
             $p2 = $request->file('photo_2');
-            $path2 = $p2->store($folder, $disk);
+            $path2 = $this->storageStoreUpload($p2, $folder, time() . '_2_' . $p2->getClientOriginalName());
             $update['photo_2_path'] = $path2;
             $update['photo_2_mime'] = $p2->getClientMimeType();
             $update['photo_2_size'] = $p2->getSize();
@@ -3210,12 +3228,10 @@ Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, 
             return response()->json(['message' => 'Conformidad no encontrada', 'success' => false], 404);
         }
 
-        $disk = config('filesystems.default', 'public');
-
         // Eliminar archivo físico
         try {
             if (!empty($row->file_path)) {
-                Storage::disk($disk)->delete($row->file_path);
+                $this->objectStorage()->delete($row->file_path);
             }
         } catch (\Throwable $e) {
             // Ignorar errores de eliminación de archivos
@@ -3568,8 +3584,11 @@ Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, 
                 return response()->json(['message' => 'Cotización no encontrada', 'success' => false]);
             }
             DB::beginTransaction();
-            //save voucher in storage
-            $voucherUrl = Storage::disk('public')->put('vouchers', $voucher);
+            $voucherUrl = $this->storageStoreUpload(
+                $voucher,
+                'vouchers',
+                time() . '_' . $voucher->getClientOriginalName()
+            );
             $pago = new Pago();
             $pago->id_concept = PagoConcept::CONCEPT_PAGO_DELIVERY;
             $pago->id_cotizacion = $idCotizacion;
@@ -3644,7 +3663,13 @@ Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, 
             }
             $numeroWhatsapp = $telefono . '@c.us';
 
-            $result = $this->sendMessage($message, $numeroWhatsapp);
+            $result = $this->sendMessage(
+                $message,
+                $numeroWhatsapp,
+                0,
+                'consolidado',
+                CoordinacionWhatsappPayload::entregaRecordatorio($numeroWhatsapp, $message, $message)
+            );
             if (!$result['status']) {
                 return response()->json([
                     'message' => 'Error al enviar mensaje: ' . (isset($result['response']['error']) ? $result['response']['error'] : 'Error desconocido'),
@@ -3777,7 +3802,13 @@ Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, 
             }
             $numeroWhatsapp = $telefono . '@c.us';
 
-            $result = $this->sendMessage($message, $numeroWhatsapp);
+            $result = $this->sendMessage(
+                $message,
+                $numeroWhatsapp,
+                0,
+                'consolidado',
+                CoordinacionWhatsappPayload::entregaRecordatorio($numeroWhatsapp, $message, $message)
+            );
 
             if ($result['status']) {
                 return response()->json(['message' => 'Mensaje enviado correctamente', 'success' => true]);
@@ -3809,7 +3840,13 @@ Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, 
             }
             $numeroWhatsapp = $telefono . '@c.us';
 
-            $result = $this->sendMessage($message, $numeroWhatsapp);
+            $result = $this->sendMessage(
+                $message,
+                $numeroWhatsapp,
+                0,
+                'consolidado',
+                CoordinacionWhatsappPayload::entregaRecordatorio($numeroWhatsapp, $message, $message)
+            );
 
             if ($result['status']) {
                 return response()->json(['message' => 'Mensaje enviado correctamente', 'success' => true]);
@@ -3892,10 +3929,27 @@ Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, 
             }
             $numeroWhatsapp = $telefono . '@c.us';
 
-            $result = $this->sendMessage($message, $numeroWhatsapp);
+            $bloqueServicios = implode("\n\n", $bloques);
+            $metaCobro = CoordinacionWhatsappPayload::entregaCobroServicios(
+                $numeroWhatsapp,
+                (string) $carga,
+                (string) $cotizacion->nombre,
+                $bloqueServicios,
+                $message
+            );
+            $result = $this->sendMessage($message, $numeroWhatsapp, 0, 'consolidado', $metaCobro);
             $pagosUrl = public_path('assets/images/pagos-full-soles.jpeg');
-
-            $this->sendMedia($pagosUrl, 'image/jpg', null, $telefono, 15, 'consolidado', 'Numeros_de_cuenta.jpg');
+            $captionPagos = 'Números de cuenta para pago';
+            $this->sendMedia(
+                $pagosUrl,
+                'image/jpg',
+                $captionPagos,
+                $numeroWhatsapp,
+                15,
+                'consolidado',
+                'Numeros_de_cuenta.jpg',
+                CoordinacionWhatsappPayload::consolidadoPagosImg($numeroWhatsapp, $pagosUrl, $captionPagos, 15)
+            );
             if ($result['status']) {
                 return response()->json(['message' => 'Mensaje enviado correctamente', 'success' => true]);
             } else {
@@ -4495,13 +4549,9 @@ Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, 
             $dompdf->loadHtml($html);
             $dompdf->setPaper('A4', 'portrait');
             $dompdf->render();
-            $publicDir = public_path('entregas/cargo_entrega/' . $idCotizacion);
-            if (!is_dir($publicDir)) {
-                mkdir($publicDir, 0755, true);
-            }
             $filename = 'cargo_entrega_' . time() . '.pdf';
             $relativePath = 'entregas/cargo_entrega/' . $idCotizacion . '/' . $filename;
-            file_put_contents($publicDir . DIRECTORY_SEPARATOR . $filename, $dompdf->output());
+            $this->storagePutContents($relativePath, $dompdf->output());
             DB::table('contenedor_consolidado_cotizacion')
                 ->where('id', $idCotizacion)
                 ->where('id_contenedor', $idContenedor)
@@ -4630,13 +4680,9 @@ Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, 
             $dompdf->render();
             $pdfContent = $dompdf->output();
 
-            $publicDir = public_path('entregas/cargo_entrega/' . $idCotizacion);
-            if (!is_dir($publicDir)) {
-                mkdir($publicDir, 0755, true);
-            }
             $filename = 'cargo_entrega_firmado_' . time() . '.pdf';
             $relativePath = 'entregas/cargo_entrega/' . $idCotizacion . '/' . $filename;
-            file_put_contents($publicDir . DIRECTORY_SEPARATOR . $filename, $pdfContent);
+            $this->storagePutContents($relativePath, $pdfContent);
 
             DB::table('contenedor_consolidado_cotizacion')
                 ->where('id', $idCotizacion)
@@ -4644,8 +4690,12 @@ Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, 
                 ->whereNull('deleted_at')
                 ->update(['cargo_entrega_pdf_firmado_url' => $relativePath]);
 
-            // Registrar el PDF firmado en la tabla de conformidad (Lima o Provincia) según el tipo de formulario
-            $this->registrarCargoEntregaEnConformidad($idContenedor, $idCotizacion, $relativePath, $publicDir . DIRECTORY_SEPARATOR . $filename);
+            $this->registrarCargoEntregaEnConformidad(
+                $idContenedor,
+                $idCotizacion,
+                $relativePath,
+                $this->storageLocalPath($relativePath)
+            );
 
             $numeroWhatsapp = preg_replace('/[^0-9]/', '', $row->telefono ?? '');
             if (strlen($numeroWhatsapp) < 9) {
@@ -4655,9 +4705,29 @@ Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, 
 
             $message = "Hola {$row->cliente} 👋\nAdjunto el documento de cargo de entrega firmado correspondiente a su importación del consolidado #{$row->carga}.\n\nMuchas gracias por confiar en Pro Business. ✈️📦";
 
-            $fullPath = public_path($relativePath);
-            $this->sendMessage($message, $numeroWhatsapp);
-            $this->sendMedia($fullPath, 'application/pdf', null, $numeroWhatsapp, 0, 'consolidado', 'cargo_entrega_firmado.pdf');
+            $fullPath = $this->storageLocalPath($relativePath);
+            $metaCargo = CoordinacionWhatsappPayload::entregaCargoFirmado(
+                $numeroWhatsapp,
+                (string) $row->cliente,
+                (string) $row->carga,
+                $fullPath,
+                $message
+            );
+            if ($this->shouldRouteCoordinacionToMeta('consolidado')) {
+                $this->sendMedia(
+                    $fullPath,
+                    'application/pdf',
+                    $message,
+                    $numeroWhatsapp,
+                    0,
+                    'consolidado',
+                    'cargo_entrega_firmado.pdf',
+                    $metaCargo
+                );
+            } else {
+                $this->sendMessage($message, $numeroWhatsapp);
+                $this->sendMedia($fullPath, 'application/pdf', null, $numeroWhatsapp, 0, 'consolidado', 'cargo_entrega_firmado.pdf');
+            }
 
             return response()->json([
                 'success' => true,

@@ -5,11 +5,13 @@ namespace App\Services\CalculadoraImportacion;
 use App\Models\CalculadoraImportacion;
 use App\Models\CalculadoraImportacionProveedor;
 use App\Services\CalculadoraImportacionService;
+use App\Traits\UsesObjectStorage;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
 
 class CalculadoraImportacionExcelService
 {
+    use UsesObjectStorage;
     private CalculadoraImportacionService $calculadoraImportacionService;
 
     public function __construct(CalculadoraImportacionService $calculadoraImportacionService)
@@ -344,9 +346,9 @@ class CalculadoraImportacionExcelService
 
             if (strpos($fileUrl, '/storage/') !== false) {
                 $path = preg_replace('#^.*/storage/#', '', $fileUrl);
-                $storagePath = storage_path('app/public/' . $path);
-                if (file_exists($storagePath)) {
-                    return file_get_contents($storagePath);
+                $path = ltrim($path, '/');
+                if ($this->objectStorage()->exists($path)) {
+                    return file_get_contents($this->storageLocalPath($path));
                 }
             }
 
@@ -354,9 +356,9 @@ class CalculadoraImportacionExcelService
                 return file_get_contents($fileUrl);
             }
 
-            $publicPath = storage_path('app/public/' . ltrim($fileUrl, '/'));
-            if (file_exists($publicPath)) {
-                return file_get_contents($publicPath);
+            $relative = ltrim($fileUrl, '/');
+            if ($this->objectStorage()->exists($relative)) {
+                return file_get_contents($this->storageLocalPath($relative));
             }
 
             Log::error('No se pudo encontrar el archivo: ' . $fileUrl);
@@ -382,21 +384,26 @@ class CalculadoraImportacionExcelService
                     $path = substr($path, 9);
                 }
 
-                return storage_path('app/public/' . $path);
+                $path = ltrim($path, '/');
+                if ($this->objectStorage()->exists($path)) {
+                    return $this->storageLocalPath($path);
+                }
             }
 
             if (strpos($url, '/storage/') === 0) {
-                $path = substr($url, 9);
-                return storage_path('app/public/' . $path);
+                $path = ltrim(substr($url, 9), '/');
+                if ($this->objectStorage()->exists($path)) {
+                    return $this->storageLocalPath($path);
+                }
             }
 
             if (file_exists($url)) {
                 return $url;
             }
 
-            $publicPath = storage_path('app/public/' . ltrim($url, '/'));
-            if (file_exists($publicPath)) {
-                return $publicPath;
+            $relative = ltrim($url, '/');
+            if ($this->objectStorage()->exists($relative)) {
+                return $this->storageLocalPath($relative);
             }
 
             return null;

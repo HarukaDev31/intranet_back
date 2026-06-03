@@ -10,6 +10,7 @@ use App\Models\DeliveryAgency;
 use App\Models\CargaConsolidada\ConsolidadoDeliveryFormProvince;
 use App\Models\CargaConsolidada\ConsolidadoDeliveryFormLima;
 use App\Traits\WhatsappTrait;
+use App\Support\WhatsApp\CoordinacionWhatsappPayload;
 use App\Jobs\SendDeliveryConfirmationWhatsAppLimaJob;
 use App\Jobs\SendDeliveryConfirmationWhatsAppProvinceJob;
 use Tymon\JWTAuth\Facades\JWTAuth;
@@ -755,7 +756,13 @@ class DeliveryController extends Controller
             $contenedor = Contenedor::find($cotizacion->id_contenedor);
             $carga = $contenedor ? $contenedor->carga : '';
             $message = "Hola {$cotizacion->nombre}.\n\nGracias por llenar nuestro formulario del consolidado #{$carga}, le estaremos avisando de nuevos avances.";
-            $this->sendMessage($message, $phoneNumber);
+            $this->sendMessage(
+                $message,
+                $phoneNumber,
+                0,
+                'consolidado',
+                CoordinacionWhatsappPayload::deliveryWhatsapp((string) $phoneNumber, $message, $message)
+            );
         } catch (\Throwable $th) {
             Log::warning('No se pudo enviar el mensaje inicial del formulario de Lima', [
                 'cotizacion_id' => $cotizacion->id,

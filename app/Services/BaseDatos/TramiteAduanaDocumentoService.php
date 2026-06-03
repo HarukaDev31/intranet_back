@@ -8,12 +8,13 @@ use App\Models\CargaConsolidada\TramiteAduanaPago;
 use App\Models\CargaConsolidada\PagoPermisoDerechoTramite;
 use App\Models\CargaConsolidada\PagoPermisoTramite;
 use App\Models\CargaConsolidada\ConsolidadoCotizacionAduanaTramite;
+use App\Traits\UsesObjectStorage;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Storage;
 
 class TramiteAduanaDocumentoService
 {
+    use UsesObjectStorage;
     /** Secciones válidas */
     const SECCIONES = ['documentos_tramite', 'fotos', 'pago_servicio', 'seguimiento'];
 
@@ -253,7 +254,7 @@ class TramiteAduanaDocumentoService
 
             $archivo  = $request->file('archivo');
             $filename = time() . '_' . uniqid() . '.' . $archivo->getClientOriginalExtension();
-            $path     = $archivo->storeAs('tramites/documentos', $filename, 'public');
+            $path     = $this->storageStoreUpload($archivo, 'tramites/documentos', $filename);
 
             $documento = TramiteAduanaDocumento::create([
                 'id_tramite'       => $idTramite,
@@ -358,7 +359,7 @@ class TramiteAduanaDocumentoService
                 }
 
                 $filename = time() . '_' . uniqid() . '_' . $i . '.' . $archivo->getClientOriginalExtension();
-                $path     = $archivo->storeAs('tramites/documentos', $filename, 'public');
+                $path     = $this->storageStoreUpload($archivo, 'tramites/documentos', $filename);
 
                 $documento = TramiteAduanaDocumento::create([
                     'id_tramite'       => $idTramite,
@@ -466,7 +467,7 @@ class TramiteAduanaDocumentoService
                 }
 
                 $filename = time() . '_' . uniqid() . '_' . $i . '.' . $archivo->getClientOriginalExtension();
-                $path     = $archivo->storeAs('tramites/documentos', $filename, 'public');
+                $path     = $this->storageStoreUpload($archivo, 'tramites/documentos', $filename);
 
                 $documento = TramiteAduanaDocumento::create([
                     'id_tramite'       => $idTramite,
@@ -589,7 +590,7 @@ class TramiteAduanaDocumentoService
                 );
             }
             $filename = time() . '_' . uniqid() . '_pago_' . $i . '.' . $voucher->getClientOriginalExtension();
-            $path = $voucher->storeAs('tramites/documentos', $filename, 'public');
+            $path = $this->storageStoreUpload($voucher, 'tramites/documentos', $filename);
             $documentoPago = TramiteAduanaDocumento::create([
                 'id_tramite'       => $idTramite,
                 'id_categoria'     => $categoriaPago->id,
@@ -803,8 +804,8 @@ class TramiteAduanaDocumentoService
             $idTramite = $documento->id_tramite;
             $idTipoPermiso = $documento->id_tipo_permiso;
 
-            if (Storage::disk('public')->exists($documento->ruta)) {
-                Storage::disk('public')->delete($documento->ruta);
+            if ($this->objectStorage()->exists($documento->ruta)) {
+                $this->objectStorage()->delete($documento->ruta);
             }
 
             $documento->delete();
@@ -828,7 +829,7 @@ class TramiteAduanaDocumentoService
                 return ['success' => false, 'error' => 'Documento no encontrado'];
             }
 
-            $filePath = storage_path('app/public/' . $documento->ruta);
+            $filePath = $this->storageLocalPath($documento->ruta);
             if (!file_exists($filePath)) {
                 return ['success' => false, 'error' => 'Archivo no encontrado en el servidor'];
             }
@@ -976,7 +977,7 @@ class TramiteAduanaDocumentoService
             $banco = $request->input($prefix . 'banco') ?? $request->input('pago_derecho_' . $idTipoPermiso . '_banco');
             $fechaCierre = $request->input($prefix . 'fecha_cierre') ?? $request->input('pago_derecho_' . $idTipoPermiso . '_fecha_cierre');
             $filename = time() . '_' . uniqid() . '_der_' . $idTipoPermiso . '.' . $file->getClientOriginalExtension();
-            $path = $file->storeAs('tramites/documentos', $filename, 'public');
+            $path = $this->storageStoreUpload($file, 'tramites/documentos', $filename);
             PagoPermisoDerechoTramite::create([
                 'id_tramite'      => $idTramite,
                 'id_tipo_permiso' => $idTipoPermiso,
@@ -1000,7 +1001,7 @@ class TramiteAduanaDocumentoService
                 $banco = $request->input($prefix . 'banco') ?? $request->input('pago_tramitador_banco');
                 $fechaCierre = $request->input($prefix . 'fecha_cierre') ?? $request->input('pago_tramitador_fecha_cierre');
                 $filename = time() . '_' . uniqid() . '_tramitador.' . $fileTramitador->getClientOriginalExtension();
-                $path = $fileTramitador->storeAs('tramites/documentos', $filename, 'public');
+                $path = $this->storageStoreUpload($fileTramitador, 'tramites/documentos', $filename);
                 PagoPermisoTramite::create([
                     'id_tramite'      => $idTramite,
                     'ruta'            => $path,
@@ -1028,7 +1029,7 @@ class TramiteAduanaDocumentoService
             $banco = $request->input($prefix . 'banco');
             $fechaCierre = $request->input($prefix . 'fecha_cierre');
             $filename = time() . '_' . uniqid() . '_tramitador.' . $fileTramitador->getClientOriginalExtension();
-            $path = $fileTramitador->storeAs('tramites/documentos', $filename, 'public');
+            $path = $this->storageStoreUpload($fileTramitador, 'tramites/documentos', $filename);
             PagoPermisoTramite::create([
                 'id_tramite'      => $idTramite,
                 'ruta'            => $path,
@@ -1109,11 +1110,11 @@ class TramiteAduanaDocumentoService
             }
             $row = PagoPermisoDerechoTramite::where('id_tramite', $idTramite)->where('id', $idComp)->first();
             if ($row) {
-                if (Storage::disk('public')->exists($row->ruta)) {
-                    Storage::disk('public')->delete($row->ruta);
+                if ($this->objectStorage()->exists($row->ruta)) {
+                    $this->objectStorage()->delete($row->ruta);
                 }
                 $filename = time() . '_' . uniqid() . '_der_repl_' . $idComp . '.' . $file->getClientOriginalExtension();
-                $path = $file->storeAs('tramites/documentos', $filename, 'public');
+                $path = $this->storageStoreUpload($file, 'tramites/documentos', $filename);
                 $row->ruta = $path;
                 $row->nombre_original = $file->getClientOriginalName();
                 $row->extension = $file->getClientOriginalExtension();
@@ -1135,11 +1136,11 @@ class TramiteAduanaDocumentoService
             }
             $row = PagoPermisoTramite::where('id_tramite', $idTramite)->where('id', $idComp)->first();
             if ($row) {
-                if (Storage::disk('public')->exists($row->ruta)) {
-                    Storage::disk('public')->delete($row->ruta);
+                if ($this->objectStorage()->exists($row->ruta)) {
+                    $this->objectStorage()->delete($row->ruta);
                 }
                 $filename = time() . '_' . uniqid() . '_tram_repl_' . $idComp . '.' . $file->getClientOriginalExtension();
-                $path = $file->storeAs('tramites/documentos', $filename, 'public');
+                $path = $this->storageStoreUpload($file, 'tramites/documentos', $filename);
                 $row->ruta = $path;
                 $row->nombre_original = $file->getClientOriginalName();
                 $row->extension = $file->getClientOriginalExtension();
@@ -1160,8 +1161,8 @@ class TramiteAduanaDocumentoService
         if (!$row) {
             return ['success' => false, 'error' => 'Comprobante no encontrado'];
         }
-        if (Storage::disk('public')->exists($row->ruta)) {
-            Storage::disk('public')->delete($row->ruta);
+        if ($this->objectStorage()->exists($row->ruta)) {
+            $this->objectStorage()->delete($row->ruta);
         }
         $row->delete();
         return ['success' => true];
@@ -1176,8 +1177,8 @@ class TramiteAduanaDocumentoService
         if (!$row) {
             return ['success' => false, 'error' => 'Comprobante no encontrado'];
         }
-        if (Storage::disk('public')->exists($row->ruta)) {
-            Storage::disk('public')->delete($row->ruta);
+        if ($this->objectStorage()->exists($row->ruta)) {
+            $this->objectStorage()->delete($row->ruta);
         }
         $row->delete();
         return ['success' => true];

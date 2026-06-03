@@ -7,13 +7,14 @@ use App\Models\ViaticoPago;
 use App\Models\ViaticoRetribucion;
 use App\Support\MonetarioDosDecimales;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Http\UploadedFile;
 use App\Events\ViaticoCreado;
+use App\Traits\UsesObjectStorage;
 
 class ViaticoService
 {
+    use UsesObjectStorage;
     /**
      * Crear un nuevo viático (con items: concepto, monto, receipt_file por item)
      */
@@ -419,8 +420,7 @@ class ViaticoService
     private function guardarArchivo(UploadedFile $archivo): string
     {
         $nombreArchivo = time() . '_' . uniqid() . '.' . $archivo->getClientOriginalExtension();
-        $ruta = $archivo->storeAs('viaticos', $nombreArchivo, 'public');
-        return $ruta;
+        return $this->storageStoreUpload($archivo, 'viaticos', $nombreArchivo);
     }
 
     /**
@@ -429,7 +429,7 @@ class ViaticoService
     private function guardarArchivoPagoItem(UploadedFile $archivo): array
     {
         $nombreArchivo = time() . '_' . uniqid() . '.' . $archivo->getClientOriginalExtension();
-        $ruta = $archivo->storeAs('viaticos_pagos', $nombreArchivo, 'public');
+        $ruta = $this->storageStoreUpload($archivo, 'viaticos_pagos', $nombreArchivo);
         return [
             'file_path' => $ruta,
             'file_url' => null,
@@ -551,10 +551,7 @@ class ViaticoService
     private function eliminarArchivo(string $ruta): bool
     {
         try {
-            if (Storage::disk('public')->exists($ruta)) {
-                return Storage::disk('public')->delete($ruta);
-            }
-            return false;
+            return $this->objectStorage()->delete($ruta);
         } catch (\Exception $e) {
             Log::error('Error al eliminar archivo: ' . $e->getMessage());
             return false;

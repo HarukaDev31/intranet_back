@@ -8,9 +8,12 @@ use App\Models\CargaConsolidada\Contenedor;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use App\Traits\UsesObjectStorage;
 
 class AutoSignContracts extends Command
 {
+    use UsesObjectStorage;
+
     /**
      * The name and signature of the console command.
      *
@@ -81,20 +84,8 @@ class AutoSignContracts extends Command
      */
     private function generateAutoSignedContract(Cotizacion $cotizacion)
     {
-        // Crear directorio si no existe
-        $contratosDir = public_path('storage/contratos');
-        if (!file_exists($contratosDir)) {
-            mkdir($contratosDir, 0755, true);
-        }
-
-        // Generar nombre del archivo PDF
         $pdfFilename = $cotizacion->uuid . '_autosigned_contract.pdf';
-        $pdfPath = $contratosDir . '/' . $pdfFilename;
-
-        // Eliminar archivo anterior si existe
-        if (file_exists($pdfPath)) {
-            unlink($pdfPath);
-        }
+        $relativePath = 'contratos/' . $pdfFilename;
 
         // Obtener información del contenedor
         $contenedor = Contenedor::find($cotizacion->id_contenedor);
@@ -147,20 +138,14 @@ class AutoSignContracts extends Command
         Log::info('Renderizado PDF auto-firmado completado en ' . round($duration, 2) . 's para cotizacion ' . $cotizacion->id);
 
         $pdfContent = $dompdf->output();
+        $this->storagePutContents($relativePath, $pdfContent);
 
-        // Guardar PDF
-        file_put_contents($pdfPath, $pdfContent);
-
-        // Guardar ruta relativa en la base de datos
-        $relativePath = 'contratos/' . $pdfFilename;
-        $fullUrl = url('storage/' . $relativePath);
-        
         DB::table('contenedor_consolidado_cotizacion')
             ->where('id', $cotizacion->id)
             ->whereNull('deleted_at')
             ->update([
                 'autosigned_contract_at' => now(),
-                'cotizacion_contrato_autosigned_url' => $fullUrl
+                'cotizacion_contrato_autosigned_url' => $relativePath,
             ]);
 
         Log::info('Contrato auto-firmado guardado exitosamente', [

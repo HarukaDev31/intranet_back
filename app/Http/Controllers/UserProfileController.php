@@ -5,15 +5,16 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Storage;
 use App\Models\User;
 use App\Http\Requests\UserProfileRequest;
 use Tymon\JWTAuth\Facades\JWTAuth;
 use App\Traits\FileTrait;
+use App\Traits\UsesObjectStorage;
 
 class UserProfileController extends Controller
 {
     use FileTrait;
+    use UsesObjectStorage;
 
     /**
      * @OA\Get(
@@ -145,15 +146,14 @@ class UserProfileController extends Controller
             
             if ($request->hasFile('photo')) {
                 // Eliminar foto anterior si existe
-                if ($user->photo_url && Storage::disk('public')->exists($user->photo_url)) {
-                    Storage::disk('public')->delete($user->photo_url);
+                if ($user->photo_url) {
+                    $this->objectStorage()->delete($user->photo_url);
                 }
                 
                 // Guardar nueva foto
                 $photo = $request->file('photo');
                 $photoName = 'profile_' . $user->id . '_' . time() . '.' . $photo->getClientOriginalExtension();
-                $photoPath = $photo->storeAs('profiles', $photoName, 'public');
-                $photoUrl = $photoPath;
+                $photoUrl = $this->storageStoreUpload($photo, 'profiles', $photoName);
             }
 
             // Separar nombre completo en nombre y apellido
@@ -164,7 +164,7 @@ class UserProfileController extends Controller
                 'email' => $validatedData['email'],
                 'phone' => $validatedData['phone'] ?? null,
                 'whatsapp' => $validatedData['phone'] ?? null,
-                'photo_url' => $this->generateImageUrl($photoUrl),
+                'photo_url' => $photoUrl,
                 'birth_date' => $validatedData['fecha_nacimiento'] ?? null,
                 'pais_id' => $validatedData['country'] ?? null,
                 'provincia_id' => $validatedData['city'] ?? null,

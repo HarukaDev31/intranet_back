@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\CargaConsolidada\Documentacion;
 
 use App\Http\Controllers\Controller;
+use App\Traits\UsesObjectStorage;
+use App\Traits\FileTrait;
 use Illuminate\Http\Request;
 use App\Models\CargaConsolidada\DocumentacionFolder;
 use App\Models\CargaConsolidada\Contenedor;
@@ -33,6 +35,9 @@ use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
 
 class DocumentacionController extends Controller
 {
+    use UsesObjectStorage;
+    use FileTrait;
+
     private $STATUS_NOT_CONTACTED = "NC";
     private $STATUS_CONTACTED = "C";
     private $STATUS_RECIVED = "R";
@@ -164,39 +169,6 @@ class DocumentacionController extends Controller
             ], 500);
         }
     }
-    private function generateImageUrl($ruta)
-    {
-        if (empty($ruta)) {
-            return null;
-        }
-
-        // Si ya es una URL completa, devolverla tal como está
-        if (filter_var($ruta, FILTER_VALIDATE_URL)) {
-            return $ruta;
-        }
-        //if ruta contains app.url but not /storage/ then add /storage/
-        if (strpos($ruta, config('app.url')) !== false && strpos($ruta, '/storage/') === false) {
-            $ruta = config('app.url') . '/storage/' . $ruta;
-            return $ruta;
-        }
-
-        // Limpiar la ruta de barras iniciales para evitar doble slash
-        $ruta = ltrim($ruta, '/');
-
-        // Construir URL manualmente para evitar problemas con Storage::url()
-        $baseUrl = config('app.url');
-        $storagePath = '/storage/';
-
-        // Asegurar que no haya doble slash
-        $baseUrl = rtrim($baseUrl, '/');
-        $storagePath = ltrim($storagePath, '/');
-        $ruta = ltrim($ruta, '/');
-
-        // Codificar toda la ruta incluyendo el nombre del archivo para caracteres especiales como #
-        $rutaEncoded = rawurlencode($ruta);
-
-        return $baseUrl . '/' . $storagePath . '/' . $rutaEncoded;
-    }
 
     /**
      * Actualiza la documentación del cliente
@@ -278,8 +250,8 @@ class DocumentacionController extends Controller
     {
         try {
             // Eliminar archivo anterior si existe
-            if ($proveedor->$fieldName && Storage::exists($proveedor->$fieldName)) {
-                Storage::delete($proveedor->$fieldName);
+            if ($proveedor->$fieldName && $this->objectStorage()->exists($proveedor->$fieldName)) {
+                $this->objectStorage()->delete($proveedor->$fieldName);
             }
 
             // Generar nombre único para el archivo
@@ -289,7 +261,7 @@ class DocumentacionController extends Controller
             $path = 'assets/images/agentecompra/';
 
             // Guardar archivo
-            $filePath = $file->storeAs($path, $filename, 'public');
+            $filePath = $this->storageStoreUpload($file, $path, $filename);
 
             // Actualizar campo en los datos
             $data[$fieldName] = $filePath;
@@ -422,14 +394,12 @@ class DocumentacionController extends Controller
             $path = 'agentecompra/documentacion/';
 
             // Guardar archivo
-            $fileUrl = $file->storeAs($path, $filename, 'public');
+            $fileUrl = $this->storageStoreUpload($file, $path, $filename);
 
-            // Log para debug
             Log::info('Archivo guardado:', [
                 'original_name' => $file->getClientOriginalName(),
                 'stored_path' => $fileUrl,
-                'full_storage_path' => storage_path('app/public/' . $fileUrl),
-                'exists' => Storage::disk('public')->exists($fileUrl)
+                'exists' => $this->objectStorage()->exists($fileUrl),
             ]);
 
             // Eliminar archivo anterior si existe
@@ -1786,24 +1756,19 @@ class DocumentacionController extends Controller
                         continue; // Saltar archivos externos
                     }
 
-                    // Intentar múltiples rutas posibles para archivos locales
-                    $filePaths = [
-                        storage_path('app/public/' . $folder->file_url),
-                        storage_path($folder->file_url),
-                        public_path($folder->file_url),
-                        base_path('storage/app/public/' . $folder->file_url)
-                    ];
-
                     $fileFound = false;
                     $finalFilePath = null;
 
-                    foreach ($filePaths as $filePath) {
-                        if (file_exists($filePath) && is_readable($filePath)) {
-                            $fileFound = true;
-                            $finalFilePath = $filePath;
-                            Log::info('Archivo encontrado en: ' . $filePath);
-                            break;
+                    try {
+                        $relative = $this->objectStorage()->normalizeRelativePath($folder->file_url);
+                        if ($relative && $this->objectStorage()->exists($relative)) {
+                            $finalFilePath = $this->storageLocalPath($relative);
+                            $fileFound = is_readable($finalFilePath);
                         }
+                    } catch (\Throwable $e) {
+                        Log::warning('No se pudo resolver archivo para ZIP: ' . $e->getMessage(), [
+                            'file_url' => $folder->file_url,
+                        ]);
                     }
 
                     if ($fileFound && $finalFilePath) {
@@ -1943,18 +1908,13 @@ class DocumentacionController extends Controller
                 return $tempFile;
             }
 
-            // Si es una ruta local, probar diferentes ubicaciones
-            $possiblePaths = [
-                storage_path('app/public/' . $fileUrl),
-                storage_path($fileUrl),
-                public_path($fileUrl),
-                $fileUrl // ruta tal cual
-            ];
+            $relative = $this->objectStorage()->normalizeRelativePath($fileUrl);
+            if ($relative && $this->objectStorage()->exists($relative)) {
+                return $this->storageLocalPath($relative);
+            }
 
-            foreach ($possiblePaths as $path) {
-                if (file_exists($path)) {
-                    return $path;
-                }
+            if (file_exists($fileUrl)) {
+                return $fileUrl;
             }
 
             throw new \Exception("No se encontró el archivo en ninguna ubicación: " . $fileUrl);
@@ -2055,7 +2015,7 @@ class DocumentacionController extends Controller
             // Generar nombre único y guardar archivo
             $filename = time() . '_' . uniqid() . '.' . $request->file('file')->getClientOriginalExtension();
             $path = 'assets/images/agentecompra/';
-            $fileUrl = $request->file('file')->storeAs($path, $filename, 'public');
+            $fileUrl = $this->storageStoreUpload($request->file('file'), $path, $filename);
 
             if (!$fileUrl) {
                 return response()->json([
@@ -2106,8 +2066,8 @@ class DocumentacionController extends Controller
             } catch (\Exception $e) {
                 DB::rollback();
                 // Si hay error, eliminar el archivo subido
-                if ($fileUrl && Storage::disk('public')->exists($fileUrl)) {
-                    Storage::disk('public')->delete($fileUrl);
+                if ($fileUrl && $this->objectStorage()->exists($fileUrl)) {
+                    $this->objectStorage()->delete($fileUrl);
                 }
                 throw $e;
             }
@@ -2275,7 +2235,7 @@ class DocumentacionController extends Controller
             // Generar nombre único y guardar archivo
             $filename = time() . '_' . uniqid() . '.' . $fileExtension;
             $path = 'assets/images/agentecompra/';
-            $fileUrl = $file->storeAs($path, $filename, 'public');
+            $fileUrl = $this->storageStoreUpload($file, $path, $filename);
 
             if (!$fileUrl) {
                 return response()->json([
@@ -2340,8 +2300,8 @@ class DocumentacionController extends Controller
             } catch (\Exception $e) {
                 DB::rollback();
                 // Si hay error, eliminar el archivo subido
-                if ($fileUrl && Storage::disk('public')->exists($fileUrl)) {
-                    Storage::disk('public')->delete($fileUrl);
+                if ($fileUrl && $this->objectStorage()->exists($fileUrl)) {
+                    $this->objectStorage()->delete($fileUrl);
                 }
                 throw $e;
             }

@@ -2,9 +2,10 @@
 
 namespace App\Http\Controllers\CargaConsolidada\Clientes;
 use App\Http\Controllers\Controller;
+use App\Traits\FileTrait;
+use App\Traits\UsesObjectStorage;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 use App\Models\CargaConsolidada\Cotizacion;
 use App\Models\CargaConsolidada\CotizacionProveedor;
 use App\Models\Usuario;
@@ -13,6 +14,8 @@ use Exception;
 
 class EmbarcadosController extends Controller
 {
+    use FileTrait;
+    use UsesObjectStorage;
     private $table_contenedor_cotizacion = "contenedor_consolidado_cotizacion";
     private $table_contenedor_cotizacion_proveedores = "contenedor_consolidado_cotizacion_proveedores";
     private $table_contenedor_consolidado_cotizacion_coordinacion_pagos = "contenedor_consolidado_cotizacion_coordinacion_pagos";
@@ -191,10 +194,7 @@ class EmbarcadosController extends Controller
                 // Si no es una URL absoluta intentamos borrar del disco 'public'
                 if (!filter_var($path, FILTER_VALIDATE_URL)) {
                     // Normalizar: quitar prefijo /storage/ si lo tiene
-                    $normalized = preg_replace('#^/storage/#', '', $path);
-                    if (Storage::disk('public')->exists($normalized)) {
-                        Storage::disk('public')->delete($normalized);
-                    }
+                    $this->deleteStoredFile($path);
                 }
                 $prov->factura_comercial = null;
                 $prov->save();
@@ -234,10 +234,7 @@ class EmbarcadosController extends Controller
             $path = $prov->packing_list;
             if (!empty($path)) {
                 if (!filter_var($path, FILTER_VALIDATE_URL)) {
-                    $normalized = preg_replace('#^/storage/#', '', $path);
-                    if (Storage::disk('public')->exists($normalized)) {
-                        Storage::disk('public')->delete($normalized);
-                    }
+                    $this->deleteStoredFile($path);
                 }
                 $prov->packing_list = null;
                 $prov->save();
@@ -277,10 +274,7 @@ class EmbarcadosController extends Controller
             $path = $prov->excel_confirmacion;
             if (!empty($path)) {
                 if (!filter_var($path, FILTER_VALIDATE_URL)) {
-                    $normalized = preg_replace('#^/storage/#', '', $path);
-                    if (Storage::disk('public')->exists($normalized)) {
-                        Storage::disk('public')->delete($normalized);
-                    }
+                    $this->deleteStoredFile($path);
                 }
                 $prov->excel_confirmacion = null;
                 $prov->save();
@@ -343,13 +337,10 @@ class EmbarcadosController extends Controller
             // Borrar archivo previo si era local
             $current = $prov->factura_comercial;
             if (!empty($current) && !filter_var($current, FILTER_VALIDATE_URL)) {
-                $normalized = preg_replace('#^/storage/#', '', $current);
-                if (Storage::disk('public')->exists($normalized)) {
-                    Storage::disk('public')->delete($normalized);
-                }
+                $this->deleteStoredFile($current);
             }
 
-            $stored = Storage::disk('public')->putFileAs('assets/images/agentecompra', $file, $filename);
+            $stored = $this->storageStoreUpload($file, 'assets/images/agentecompra', $filename);
             $prov->factura_comercial = $stored; // ruta relativa dentro del disk 'public'
             $prov->save();
 
@@ -407,13 +398,10 @@ class EmbarcadosController extends Controller
             // Borrar previo si era local
             $current = $prov->packing_list;
             if (!empty($current) && !filter_var($current, FILTER_VALIDATE_URL)) {
-                $normalized = preg_replace('#^/storage/#', '', $current);
-                if (Storage::disk('public')->exists($normalized)) {
-                    Storage::disk('public')->delete($normalized);
-                }
+                $this->deleteStoredFile($current);
             }
 
-            $stored = Storage::disk('public')->putFileAs('assets/images/agentecompra', $file, $filename);
+            $stored = $this->storageStoreUpload($file, 'assets/images/agentecompra', $filename);
             $prov->packing_list = $stored;
             $prov->save();
 
@@ -471,13 +459,10 @@ class EmbarcadosController extends Controller
             // Borrar previo si era local
             $current = $prov->excel_confirmacion;
             if (!empty($current) && !filter_var($current, FILTER_VALIDATE_URL)) {
-                $normalized = preg_replace('#^/storage/#', '', $current);
-                if (Storage::disk('public')->exists($normalized)) {
-                    Storage::disk('public')->delete($normalized);
-                }
+                $this->deleteStoredFile($current);
             }
 
-            $stored = Storage::disk('public')->putFileAs('assets/images/agentecompra', $file, $filename);
+            $stored = $this->storageStoreUpload($file, 'assets/images/agentecompra', $filename);
             $prov->excel_confirmacion = $stored;
             $prov->save();
 
@@ -511,31 +496,14 @@ class EmbarcadosController extends Controller
         ]);
     }
 
-    /**
-     * Convierte una ruta relativa de archivo en una URL completa.
-     * Copiado del comportamiento usado en otros controllers para mantener consistencia.
-     */
-    private function generateImageUrl($ruta)
+    private function deleteStoredFile(?string $path): void
     {
-        if (empty($ruta)) {
-            return null;
+        if (empty($path) || filter_var($path, FILTER_VALIDATE_URL)) {
+            return;
         }
-
-        // Si ya es una URL completa, devolverla tal como está
-        if (filter_var($ruta, FILTER_VALIDATE_URL)) {
-            return $ruta;
+        $normalized = $this->objectStorage()->normalizeRelativePath(preg_replace('#^/storage/#', '', $path));
+        if ($normalized && $this->objectStorage()->exists($normalized)) {
+            $this->objectStorage()->delete($normalized);
         }
-
-        // Limpiar partes y unir sin producir dobles slashes
-        $baseUrl = config('app.url') ?? '';
-        $storagePath = '/storage/';
-
-        // Normalizar para que no queden slashes extras
-        $baseUrl = rtrim($baseUrl, '/');
-        $storagePath = trim($storagePath, '/');
-        $ruta = ltrim($ruta, '/');
-
-        // Unir con '/' garantizando una sola barra entre segmentos
-        return implode('/', array_filter([$baseUrl, $storagePath, $ruta], fn($s) => $s !== ''));
     }
 }

@@ -5,14 +5,17 @@ namespace App\Http\Controllers\CalculadoraImportacion;
 use App\Http\Controllers\Controller;
 use App\Models\CalculadoraImportacion;
 use App\Models\CalculadoraImportacionDocumento;
+use App\Traits\FileTrait;
+use App\Traits\UsesObjectStorage;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
 
 /**
  * Documentos asociados a una cotización de la calculadora de importación.
  */
 class CalculadoraImportacionDocumentosController extends Controller
 {
+    use FileTrait;
+    use UsesObjectStorage;
     /**
      * Lista los documentos de una cotización calculadora.
      */
@@ -103,8 +106,8 @@ class CalculadoraImportacionDocumentosController extends Controller
             return response()->json(['success' => false, 'message' => 'Documento no encontrado'], 404);
         }
 
-        if ($doc->file_url && Storage::disk('public')->exists($doc->file_url)) {
-            Storage::disk('public')->delete($doc->file_url);
+        if ($doc->file_url && $this->objectStorage()->exists($doc->file_url)) {
+            $this->objectStorage()->delete($doc->file_url);
         }
         $doc->delete();
 
@@ -127,20 +130,11 @@ class CalculadoraImportacionDocumentosController extends Controller
         }
         $filename = time() . '_' . uniqid() . '.' . $ext;
         $path = 'assets/images/calculadora-documentos/';
-        return $file->storeAs($path, $filename, 'public') ?: null;
+        return $this->storageStoreUpload($file, $path, $filename);
     }
 
     private function generateFileUrl(?string $ruta): ?string
     {
-        if (empty($ruta)) {
-            return null;
-        }
-        if (filter_var($ruta, FILTER_VALIDATE_URL)) {
-            return $ruta;
-        }
-        $ruta = ltrim($ruta, '/');
-        $baseUrl = rtrim(config('app.url'), '/');
-        $storagePath = 'storage';
-        return $baseUrl . '/' . $storagePath . '/' . $ruta;
+        return $this->generateImageUrl($ruta);
     }
 }

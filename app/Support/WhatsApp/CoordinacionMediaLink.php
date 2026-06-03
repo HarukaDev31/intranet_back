@@ -1,0 +1,208 @@
+<?php
+
+namespace App\Support\WhatsApp;
+
+use App\Contracts\ObjectStorageConnectorInterface;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
+
+/**
+ * URLs públicas (S3 firmadas o storage) para encabezados DOCUMENT/IMAGE/VIDEO en plantillas Meta.
+ */
+class CoordinacionMediaLink
+{
+    public const META_TEMP_PREFIX = 'temp/whatsapp-meta';
+
+    /**
+     * Resuelve ruta local, relativa en storage o URL existente a HTTPS usable por Meta Graph API.
+     */
+    public static function resolveForMetaHeader(string $path, ?string $filename = null): ?string
+    {
+        $path = trim($path);
+        if ($path === '') {
+            return null;
+        }
+
+        if (filter_var($path, FILTER_VALIDATE_URL)) {
+            return $path;
+        }
+
+        try {
+            $storage = app(ObjectStorageConnectorInterface::class);
+
+            if (self::isAbsoluteLocalFile($path)) {
+                $url = self::uploadLocalFile($path, self::buildTempKey($path, $filename));
+
+                return $url ?? self::fallbackPublicAssetUrl($path);
+            }
+
+            $relative = $storage->normalizeRelativePath($path);
+            if ($relative !== null && $storage->exists($relative)) {
+                return $storage->url($relative);
+            }
+
+            if ($relative !== null) {
+                $publicCandidate = public_path($relative);
+                if (is_file($publicCandidate)) {
+                    $url = self::uploadLocalFile($publicCandidate, self::buildTempKey($publicCandidate, $filename));
+
+                    return $url ?? self::fallbackPublicAssetUrl($publicCandidate);
+                }
+            }
+
+            $publicPath = public_path(ltrim(str_replace('\\', '/', $path), '/'));
+            if (is_file($publicPath)) {
+                $url = self::uploadLocalFile($publicPath, self::buildTempKey($publicPath, $filename));
+
+                return $url ?? self::fallbackPublicAssetUrl($publicPath);
+            }
+        } catch (\Throwable $e) {
+            Log::warning('CoordinacionMediaLink: no se pudo resolver media para Meta', [
+                'path' => $path,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        return self::fallbackPublicAssetUrl($path);
+    }
+
+    public static function uploadLocalFile(string $fullPath, string $storageRelative): ?string
+    {
+        if (!is_file($fullPath)) {
+            return null;
+        }
+
+        $contents = file_get_contents($fullPath);
+        if ($contents === false) {
+            return null;
+        }
+
+        try {
+            $storage = app(ObjectStorageConnectorInterface::class);
+            $relative = ltrim($storageRelative, '/');
+            $storage->putContents($relative, $contents);
+
+            return $storage->url($relative);
+        } catch (\Throwable $e) {
+            Log::warning('CoordinacionMediaLink: fallo subida S3, probando fallback', [
+                'path' => $fullPath,
+                'relative' => $storageRelative,
+                'error' => $e->getMessage(),
+            ]);
+
+            return self::uploadToPublicDisk($contents, $storageRelative)
+                ?? self::fallbackPublicAssetUrl($fullPath);
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $header
+     * @return array<string, mixed>|null  Header con link HTTPS o null si no hay media válida
+     */
+    public static function prepareHeader(?array $header): ?array
+    {
+        if (!is_array($header) || empty($header['type'])) {
+            return $header;
+        }
+
+        if (!empty($header['link']) && filter_var($header['link'], FILTER_VALIDATE_URL)) {
+            return $header;
+        }
+
+        $path = (string) ($header['path'] ?? '');
+        if ($path === '') {
+            return $header;
+        }
+
+        $link = self::resolveForMetaHeader($path, isset($header['filename']) ? (string) $header['filename'] : null);
+        if ($link === null) {
+            return null;
+        }
+
+        $header['link'] = $link;
+
+        return $header;
+    }
+
+    private static function uploadToPublicDisk(string $contents, string $storageRelative): ?string
+    {
+        try {
+            $relative = ltrim($storageRelative, '/');
+            if (!Storage::disk('public')->put($relative, $contents)) {
+                return null;
+            }
+
+            return Storage::disk('public')->url($relative);
+        } catch (\Throwable $e) {
+            Log::debug('CoordinacionMediaLink: fallback public disk falló', [
+                'relative' => $storageRelative,
+                'error' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
+    }
+
+    private static function fallbackPublicAssetUrl(string $fullPath): ?string
+    {
+        if (!config('meta_whatsapp.fallback_public_asset_url', true)) {
+            return null;
+        }
+
+        if (!is_file($fullPath)) {
+            return null;
+        }
+
+        $publicRoot = realpath(public_path());
+        $realPath = realpath($fullPath);
+        if ($publicRoot === false || $realPath === false) {
+            return null;
+        }
+
+        $publicRoot = str_replace('\\', '/', $publicRoot);
+        $realPath = str_replace('\\', '/', $realPath);
+        if (strpos($realPath, $publicRoot) !== 0) {
+            return null;
+        }
+
+        $relative = ltrim(substr($realPath, strlen($publicRoot)), '/');
+        $baseUrl = rtrim((string) config('app.url'), '/');
+        if ($baseUrl === '') {
+            return null;
+        }
+
+        $url = $baseUrl . '/' . $relative;
+        if (preg_match('#^https?://(localhost|127\.0\.0\.1)(:\d+)?/#i', $url)) {
+            Log::warning('CoordinacionMediaLink: URL pública es localhost; Meta no podrá descargarla sin túnel (ngrok) o permisos S3 PutObject', [
+                'url' => $url,
+            ]);
+        } else {
+            Log::info('CoordinacionMediaLink: usando URL pública como fallback', ['url' => $url]);
+        }
+
+        return $url;
+    }
+
+    private static function buildTempKey(string $sourcePath, ?string $filename): string
+    {
+        $name = $filename ?? basename(str_replace('\\', '/', $sourcePath));
+        $name = preg_replace('/[^a-zA-Z0-9._-]/', '_', $name) ?: 'media.bin';
+        $date = date('Y/m/d');
+
+        return self::META_TEMP_PREFIX . '/' . $date . '/' . Str::uuid()->toString() . '_' . $name;
+    }
+
+    private static function isAbsoluteLocalFile(string $path): bool
+    {
+        if (!is_file($path)) {
+            return false;
+        }
+
+        if ($path[0] === '/' || $path[0] === '\\') {
+            return true;
+        }
+
+        return strlen($path) > 2 && ctype_alpha($path[0]) && $path[1] === ':';
+    }
+}

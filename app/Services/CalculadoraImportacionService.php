@@ -9,7 +9,7 @@ use App\Models\BaseDatos\Clientes\Cliente;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
+use App\Traits\UsesObjectStorage;
 use App\Models\CargaConsolidada\Cotizacion;
 use App\Models\CargaConsolidada\CotizacionProveedor;
 use App\Models\CargaConsolidada\CotizacionProveedorItem;
@@ -24,6 +24,8 @@ use Illuminate\Support\Collection;
 
 class CalculadoraImportacionService
 {
+    use UsesObjectStorage;
+
     public $TCAMBIO = 3.75;
 
     /** Número de proveedores incluidos sin cargo extra */
@@ -1640,21 +1642,29 @@ class CalculadoraImportacionService
 
             $timestamp = now()->format('Y_m_d_H_i_s');
             $fileName = "COTIZACION_INICIAL_{$data['clienteInfo']['nombre']}_{$timestamp}.xlsx";
-            $filePath = storage_path('app/public/templates/' . $fileName);
+            $tempFile = storage_path('app/temp/' . $fileName);
+            $tempDir = dirname($tempFile);
+            if (!is_dir($tempDir)) {
+                mkdir($tempDir, 0755, true);
+            }
 
             try {
                 $writer = \PhpOffice\PhpSpreadsheet\IOFactory::createWriter($objPHPExcel, 'Xlsx');
                 $writer->setPreCalculateFormulas(false);
-                $writer->save($filePath);
+                $writer->save($tempFile);
 
-                if (!file_exists($filePath)) {
+                if (!file_exists($tempFile)) {
                     return $this->respuestaCotizacionInicialVacia();
                 }
 
-                $fileSize = filesize($filePath);
+                $fileSize = filesize($tempFile);
                 if ($fileSize === 0) {
                     return $this->respuestaCotizacionInicialVacia();
                 }
+
+                $relativeTemplate = 'templates/' . $fileName;
+                $this->storagePutContents($relativeTemplate, file_get_contents($tempFile));
+                @unlink($tempFile);
 
                 $boletaInfo = null;
                 try {
@@ -1664,7 +1674,7 @@ class CalculadoraImportacionService
                     // Continuar sin la boleta
                 }
 
-                $publicUrl = Storage::url('templates/' . $fileName);
+                $publicUrl = $this->objectStorage()->url($relativeTemplate);
 
                 $totalFob = $sheetCalculos->getCell($totalColumn . $rowValorFob)->getCalculatedValue();
                 $totalImpuestos = $sheetCalculos->getCell($totalColumn . $rowTotalTributos)->getCalculatedValue();
@@ -2105,13 +2115,13 @@ class CalculadoraImportacionService
                         $path = substr($path, 9); // Remover '/storage/'
                     }
                     $path = ltrim($path, '/');
-                    $filePath = storage_path('app/public/' . $path);
+                    $path = ltrim($path, '/');
+                    $filePath = $this->storageLocalPath($path);
                 } else {
-                    // url_cotizacion puede ser "storage/templates/..." o "/storage/templates/..."
                     $pathRel = preg_replace('#^/?(storage/)?#', '', $fileUrl);
-                    $pathStorage = storage_path('app/public/' . $pathRel);
-                    if (file_exists($pathStorage)) {
-                        $filePath = $pathStorage;
+                    $pathRel = ltrim($pathRel, '/');
+                    if ($this->objectStorage()->exists($pathRel)) {
+                        $filePath = $this->storageLocalPath($pathRel);
                     } else {
                         $filePath = public_path($fileUrl);
                     }
@@ -2355,20 +2365,15 @@ class CalculadoraImportacionService
             // Guardar PDF en storage
             $timestamp = now()->format('Y_m_d_H_i_s');
             $pdfFileName = "COTIZACION_INICIAL_{$clienteInfo['nombre']}_{$timestamp}.pdf";
-            $pdfPath = storage_path('app/public/boletas/' . $pdfFileName);
-
-            // Crear directorio si no existe
-            if (!is_dir(dirname($pdfPath))) {
-                mkdir(dirname($pdfPath), 0755, true);
-            }
-
-            // Guardar PDF
-            file_put_contents($pdfPath, $dompdf->output());
+            $relativeBoleta = 'boletas/' . $pdfFileName;
+            $this->storagePutContents($relativeBoleta, $dompdf->output());
+            $pdfPath = $this->storageLocalPath($relativeBoleta);
 
             return [
                 'path' => $pdfPath,
                 'filename' => $pdfFileName,
-                'url' => Storage::url('boletas/' . $pdfFileName)
+                'relative_path' => $relativeBoleta,
+                'url' => $this->objectStorage()->url($relativeBoleta),
             ];
         } catch (\Exception $e) {
             Log::error('Error al generar boleta: ' . $e->getMessage());

@@ -10,6 +10,7 @@ use Illuminate\Queue\SerializesModels;
 use App\Models\CargaConsolidada\Cotizacion;
 use App\Models\CargaConsolidada\Contenedor;
 use App\Models\CargaConsolidada\CotizacionProveedor;
+use App\Support\WhatsApp\CoordinacionWhatsappPayload;
 use App\Traits\WhatsappTrait;
 use App\Traits\DatabaseConnectionTrait;
 use Illuminate\Support\Facades\DB;
@@ -92,13 +93,20 @@ class ForceSendRotuladoJob implements ShouldQueue
                 $this->sendWelcome($carga);
                 Log::info('Mensaje de bienvenida enviado - procesando todos los proveedores');
             } else {
-                $this->sendMessage("Hola 🙋🏻‍♀, te escribe el área de coordinación de Probusiness. 
+                $nuevoMsg = "Hola 🙋🏻‍♀, te escribe el área de coordinación de Probusiness. 
 
 📢 Añadiste un nuevo proveedor en el *Consolidado #${carga}*
 
 *Rotulado: 👇🏼*  
 Tienes que indicarle a tu proveedor que las cajas máster 📦 cuenten con un rotulado para 
-identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro almacén.");
+identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro almacén.";
+                $this->sendMessage(
+                    $nuevoMsg,
+                    $this->phoneNumberId,
+                    0,
+                    'consolidado',
+                    CoordinacionWhatsappPayload::rotuladoNuevoProveedor((string) $this->phoneNumberId, (string) $carga, $nuevoMsg)
+                );
                 Log::info('Mensaje de nuevo proveedor enviado - procesando proveedores específicos');
             }
 
@@ -253,9 +261,21 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                     Log::info("Archivo añadido al ZIP: Rotulado_{$supplierCode}.pdf");
 
                     // Enviar documento al proveedor
+                    $rotCaption = "Producto: {$products}\nCódigo de proveedor: {$supplierCode}";
                     $this->sendDataItem(
-                        "Producto: {$products}\nCódigo de proveedor: {$supplierCode}",
-                        $tempFilePath
+                        $rotCaption,
+                        $tempFilePath,
+                        $this->phoneNumberId,
+                        $sleepSendMedia,
+                        "Rotulado_{$supplierCode}.pdf",
+                        CoordinacionWhatsappPayload::rotuladoPdfProducto(
+                            (string) $this->phoneNumberId,
+                            (string) $products,
+                            (string) $supplierCode,
+                            $tempFilePath,
+                            $rotCaption,
+                            $sleepSendMedia
+                        )
                     );
 
                     $processedProviders++;
@@ -281,11 +301,20 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
             // Enviar imagen de dirección
             $direccionUrl = public_path('assets/images/Direccion_27_04_26.jpeg');
             $sleepSendMedia += 3;
-            $this->sendMedia($direccionUrl, 'image/jpg', '🏽Dile a tu proveedor que envíe la carga a nuestro almacén en China', null, $sleepSendMedia);
+            $dirCaption = '🏽Dile a tu proveedor que envíe la carga a nuestro almacén en China';
+            $this->sendMedia(
+                $direccionUrl,
+                'image/jpg',
+                $dirCaption,
+                $this->phoneNumberId,
+                $sleepSendMedia,
+                'consolidado',
+                'Direccion_almacen_China.jpeg',
+                CoordinacionWhatsappPayload::rotuladoAlmacenChinaImg((string) $this->phoneNumberId, $direccionUrl, $dirCaption, $sleepSendMedia)
+            );
 
-            // Enviar mensaje adicional
             $sleepSendMedia += 3;
-            $this->sendMessage("También necesito los datos de tu proveedor para comunicarnos y recibir tu carga.
+            $datosMsg = "También necesito los datos de tu proveedor para comunicarnos y recibir tu carga.
 
 ➡ *Datos del proveedor: (Usted lo llena)*
 
@@ -293,7 +322,14 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
 ☑ Nombre del vendedor:
 ☑ Celular del vendedor:
 
-Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda me escribes. 🫡", null, $sleepSendMedia);
+Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda me escribes. 🫡";
+            $this->sendMessage(
+                $datosMsg,
+                $this->phoneNumberId,
+                $sleepSendMedia,
+                'consolidado',
+                CoordinacionWhatsappPayload::rotuladoDatosProveedor((string) $this->phoneNumberId, $datosMsg, $sleepSendMedia)
+            );
 
             // Verificar que el ZIP se generó correctamente
             if (!file_exists($zipFileName)) {

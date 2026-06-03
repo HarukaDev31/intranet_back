@@ -82,6 +82,19 @@ Carpetas habituales bajo `storage/app/public/` (y a veces también bajo `storage
 
 `cargaconsolidada`, `cotizacion_final`, `cotizaciones_finales`, `documentation`, `inspection`, `delivery_conformidad`, `delivery_cargo_firmado`, `entregas`, `profiles`, `productos`, `regulaciones`, `tramites`, `viaticos`, `viaticos_pagos`, `vouchers`, `imports`, `soporte-ti`, `assets/images/agentecompra`, `contratos`, `Cursos`, etc.
 
+Plantillas de documentación (CONSIDERATIONS, Excel confirmación) suelen quedar en S3 como:
+
+Bucket `probusiness-intranet`, claves en raíz del bucket:
+
+`templates/CONSIDERATIONS.pdf`  
+`templates/excel-confirmacion/EXCEL_DE_CONFIRMACION_GENERAL.xlsx`
+
+```bash
+php artisan storage:migrate-local-to-s3 --source=public --subdir=templates
+```
+
+`SolicitarDocumentosWhatsAppJob` lee plantillas solo desde S3 en `templates/` del bucket configurado en `AWS_BUCKET` (hardcodeado).
+
 **No migrar** (por defecto el comando los excluye):
 
 - `storage/app/temp/**`, `storage/app/public/temp/**`, `temp/whatsapp-meta/**`
@@ -116,6 +129,28 @@ php artisan storage:migrate-local-to-s3 --limit=100
 ```
 
 Los objetos quedan en el bucket bajo `AWS_UPLOAD_PREFIX` + `{ruta_bd}` (ej. `probusiness/production/cargaconsolidada/pagos/archivo.pdf`). **No hay que cambiar rutas en BD.**
+
+## CDN (`cdn.probusiness.pe`)
+
+Cuando `FILESYSTEM_UPLOAD_DISK=s3`, las URLs públicas de la API dejan de ser `{APP_URL}/storage/...` y pasan al CDN:
+
+```env
+OBJECT_STORAGE_CDN_URL=https://cdn.probusiness.pe
+OBJECT_STORAGE_CDN_INCLUDE_PREFIX=true
+OBJECT_STORAGE_CDN_WHEN_S3=true
+```
+
+Ejemplo:
+
+| En BD | URL API |
+|-------|---------|
+| `documentation/1779860347_6a16837b6376c.xlsx` | `https://cdn.probusiness.pe/probusiness/production/documentation/1779860347_6a16837b6376c.xlsx` |
+
+También reescribe URLs legacy guardadas en BD como `http://localhost:8001/storage/documentation/...`.
+
+Si el CDN sirve **sin** el prefijo S3 en la URL, usa `OBJECT_STORAGE_CDN_INCLUDE_PREFIX=false`.
+
+En local sin CDN: dejar `OBJECT_STORAGE_CDN_URL` vacío → sigue `{APP_URL}/storage/...`.
 
 ## Composer
 

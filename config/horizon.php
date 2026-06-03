@@ -189,7 +189,7 @@ return [
             'connection' => 'redis',
             'queue' => ['notificaciones'],
             'balance' => 'auto',
-            'maxProcesses' => 1,
+            'maxProcesses' => 3,
             'tries' => 2,
             'nice' => 0,
             'timeout' => 180,
@@ -316,10 +316,10 @@ return [
                 'memory' => 512,
             ],
             'supervisor-emails' => [
-                'maxProcesses' => 1,
+                'maxProcesses' => 2,
             ],
             'supervisor-notificaciones' => [
-                'maxProcesses' => 1,
+                'maxProcesses' => 3,
             ],
             'supervisor-soporte-ti' => [
                 'maxProcesses' => 2,

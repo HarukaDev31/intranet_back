@@ -20,6 +20,7 @@ use Illuminate\Support\Facades\Storage;
 use App\Models\CalculadoraImportacion;
 use App\Models\Notificacion;
 use App\Events\CotizacionChangeContainer;
+use App\Traits\UsesObjectStorage;
 use App\Traits\WhatsappTrait;
 use App\Traits\GoogleSheetsHelper;
 use Carbon\Carbon;
@@ -28,6 +29,7 @@ use App\Models\CargaConsolidada\ConsolidadoCotizacionAduanaTramite;
 
 class ContenedorController extends Controller
 {
+    use UsesObjectStorage;
     use WhatsappTrait, GoogleSheetsHelper;
     private $defaultAgenteSteps = [];
 
@@ -1233,7 +1235,7 @@ Le estaré informando cualquier avance 🫡.";
 
             $filename = time() . '_' . uniqid() . '.' . $fileExtension;
             $path = 'assets/images/agentecompra/';
-            $fileUrl = $file->storeAs($path, $filename, 'public');
+            $fileUrl = $this->storageStoreUpload($file, $path, $filename);
 
             $user = auth()->user();
             $userId = $user ? $user->ID_Usuario : null;

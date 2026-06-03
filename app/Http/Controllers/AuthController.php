@@ -8,7 +8,6 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Tymon\JWTAuth\Facades\JWTAuth;
 use Tymon\JWTAuth\Exceptions\JWTException;
@@ -25,10 +24,12 @@ use App\Http\Requests\RegisterRequest;
 use App\Models\User;
 use App\Models\CargaConsolidada\Cotizacion;
 use App\Traits\FileTrait;
+use App\Traits\UsesObjectStorage;
 
 class AuthController extends Controller
 {
     use FileTrait;
+    use UsesObjectStorage;
     /**
      * Create a new AuthController instance.
      *
@@ -559,14 +560,14 @@ class AuthController extends Controller
             if ($request->hasFile('photo')) {
                 // Eliminar foto anterior si existe
                 $fotoAnterior = $usuario->Txt_Foto ?? null;
-                if ($fotoAnterior && Storage::disk('public')->exists($fotoAnterior)) {
-                    Storage::disk('public')->delete($fotoAnterior);
+                if ($fotoAnterior) {
+                    $this->objectStorage()->delete($fotoAnterior);
                 }
                 
                 // Guardar nueva foto
                 $photo = $request->file('photo');
                 $photoName = 'profile_' . $idUsuario . '_' . time() . '.' . $photo->getClientOriginalExtension();
-                $photoPath = $photo->storeAs('profiles', $photoName, 'public');
+                $photoPath = $this->storageStoreUpload($photo, 'profiles', $photoName);
                 $updateData['Txt_Foto'] = $photoPath;
             } elseif ($request->has('photo')) {
                 // Manejar foto como base64/binary
@@ -575,8 +576,8 @@ class AuthController extends Controller
                 if ($photoData && !empty($photoData)) {
                     // Eliminar foto anterior si existe
                     $fotoAnterior = $usuario->Txt_Foto ?? null;
-                    if ($fotoAnterior && Storage::disk('public')->exists($fotoAnterior)) {
-                        Storage::disk('public')->delete($fotoAnterior);
+                    if ($fotoAnterior) {
+                        $this->objectStorage()->delete($fotoAnterior);
                     }
                     
                     // Decodificar base64 si es necesario
@@ -591,7 +592,7 @@ class AuthController extends Controller
                     if ($photoDecoded !== false) {
                         $photoName = 'profile_' . $idUsuario . '_' . time() . '.' . $type;
                         $photoPath = 'profiles/' . $photoName;
-                        Storage::disk('public')->put($photoPath, $photoDecoded);
+                        $this->storagePutContents($photoPath, $photoDecoded);
                         $updateData['Txt_Foto'] = $photoPath;
                     }
                 }

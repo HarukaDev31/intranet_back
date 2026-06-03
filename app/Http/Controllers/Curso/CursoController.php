@@ -18,6 +18,7 @@ use Illuminate\Support\Facades\Mail;
 use App\Traits\CodeIgniterEncryption;
 use App\Traits\MoodleRestProTrait;
 use App\Traits\FileTrait;
+use App\Traits\UsesObjectStorage;
 use App\Traits\WhatsappTrait;
 use App\Mail\MoodleCredentialsMail;
 use App\Exports\CursosExport;
@@ -25,7 +26,7 @@ use Maatwebsite\Excel\Facades\Excel;
 
 class CursoController extends Controller
 {
-    use CodeIgniterEncryption, MoodleRestProTrait, FileTrait, WhatsappTrait;
+    use CodeIgniterEncryption, MoodleRestProTrait, FileTrait, WhatsappTrait, UsesObjectStorage;
     public $table_pedido_curso_pagos = 'pedido_curso_pagos';
     
     /**
@@ -732,7 +733,11 @@ class CursoController extends Controller
                 'banco' => 'required|string'
             ]);
             $voucher = $request->file('voucher');
-            $voucherUrl = $voucher->store('public/vouchers');
+            $voucherUrl = $this->storageStoreUpload(
+                $voucher,
+                'vouchers',
+                time() . '_' . $voucher->getClientOriginalName()
+            );
             $data = [
                 'voucher_url' => $voucherUrl,
                 'id_pedido_curso' => $request->idPedido,

@@ -6,10 +6,14 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use App\Traits\UsesObjectStorage;
+use App\Traits\FileTrait;
 use Illuminate\Support\Facades\Storage;
 
 class MenuCatalogoController extends Controller
 {
+    use FileTrait, UsesObjectStorage;
+
     private const TIPOS_PRIVILEGIO = [
         1 => 'Personal Probusiness',
         2 => 'Personal China',
@@ -246,11 +250,13 @@ class MenuCatalogoController extends Controller
 
             $file = $request->file('file');
             $filename = time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
-            $file->storeAs('public/menu-icons', $filename);
+            $relativePath = $this->storageStoreUpload($file, 'menu-icons', $filename);
 
-            $url = '/storage/menu-icons/' . $filename;
-
-            return response()->json(['success' => true, 'url' => $url]);
+            return response()->json([
+                'success' => true,
+                'path' => $relativePath,
+                'url' => $this->generateImageUrl($relativePath),
+            ]);
         } catch (\Illuminate\Validation\ValidationException $e) {
             return response()->json(['success' => false, 'message' => 'Archivo inválido. Use PNG, JPG, GIF o SVG (máx. 512KB)'], 422);
         } catch (\Exception $e) {

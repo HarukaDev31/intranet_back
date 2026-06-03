@@ -5,8 +5,8 @@ namespace App\Services\BaseDatos\Clientes;
 use App\Models\BaseDatos\Clientes\Cliente;
 use App\Models\ImportCliente;
 use Illuminate\Http\Request;
+use App\Traits\UsesObjectStorage;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Storage;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use Carbon\Carbon;
 use App\Models\PedidoCurso;
@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\DB;
 
 class ClienteImportService
 {
+    use UsesObjectStorage;
     private const EXCEL_IMPORTS_STORAGE_PATH = 'public/excel-imports/';
     /**
      * Importar clientes desde Excel
@@ -34,12 +35,16 @@ class ClienteImportService
 
             // Validar tipo de archivo
             $allowedTypes = ['xlsx', 'xls', 'xlsm'];
-            $filePath = $file->storeAs('imports/clientes', time() . '_' . uniqid() . '_' . $file->getClientOriginalName(), 'public');
+            $filePath = $this->storageStoreUpload(
+                $file,
+                'imports/clientes',
+                time() . '_' . uniqid() . '_' . $file->getClientOriginalName()
+            );
 
             // Crear registro de importación con la ruta relativa
             $importId = $this->crearRegistroImportacion($file->getClientOriginalName(), $filePath);
 
-            $fullPath = storage_path('app/public/' . $filePath);
+            $fullPath = $this->storageLocalPath($filePath);
 
             // Procesar el Excel usando la ruta del sistema de archivos
             $resultado = $this->procesarExcel($fullPath, $importId, $file->getClientOriginalName());
@@ -466,7 +471,7 @@ class ClienteImportService
         }
 
         // Generar URL completa desde storage
-        return Storage::disk('public')->url($ruta);
+        return $this->objectStorage()->url($ruta);
     }
     /**
      * Eliminar importación

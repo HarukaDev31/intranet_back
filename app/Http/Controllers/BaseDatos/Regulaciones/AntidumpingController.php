@@ -3,15 +3,18 @@
 namespace App\Http\Controllers\BaseDatos\Regulaciones;
 
 use App\Http\Controllers\Controller;
+use App\Traits\FileTrait;
+use App\Traits\UsesObjectStorage;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Support\Facades\Storage;
 use App\Models\BaseDatos\ProductoRegulacionAntidumping;
 use App\Models\BaseDatos\ProductoRegulacionAntidumpingMedia;
 use App\Models\BaseDatos\Regulaciones\ProductoRubro;
 class AntidumpingController extends Controller
 {
+    use FileTrait;
+    use UsesObjectStorage;
     /**
      * @OA\Get(
      *     path="/regulaciones/antidumping",
@@ -196,8 +199,8 @@ class AntidumpingController extends Controller
                             
                         if ($media) {
                             // Eliminar archivo físico
-                            if (Storage::disk('public')->exists($media->ruta)) {
-                                Storage::disk('public')->delete($media->ruta);
+                            if ($this->objectStorage()->exists($media->ruta)) {
+                                $this->objectStorage()->delete($media->ruta);
                                 Log::info('Archivo eliminado del storage:', ['ruta' => $media->ruta]);
                             }
                             
@@ -217,7 +220,7 @@ class AntidumpingController extends Controller
                     foreach ($request->file('imagenes') as $imagen) {
                         if ($imagen->isValid()) {
                             $filename = time() . '_' . uniqid() . '.' . $imagen->getClientOriginalExtension();
-                            $path = $imagen->storeAs('regulaciones/antidumping', $filename, 'public');
+                            $path = $this->storageStoreUpload($imagen, 'regulaciones/antidumping', $filename);
                             
                             ProductoRegulacionAntidumpingMedia::create([
                                 'id_regulacion' => $antidumping->id,
@@ -243,8 +246,8 @@ class AntidumpingController extends Controller
                     // Eliminar todas las imágenes existentes
                     $existingMedia = ProductoRegulacionAntidumpingMedia::where('id_regulacion', $antidumping->id)->get();
                     foreach ($existingMedia as $media) {
-                        if (Storage::disk('public')->exists($media->ruta)) {
-                            Storage::disk('public')->delete($media->ruta);
+                        if ($this->objectStorage()->exists($media->ruta)) {
+                            $this->objectStorage()->delete($media->ruta);
                         }
                         $media->delete();
                     }
@@ -256,7 +259,7 @@ class AntidumpingController extends Controller
                         foreach ($request->file('imagenes') as $imagen) {
                             if ($imagen->isValid()) {
                                 $filename = time() . '_' . uniqid() . '.' . $imagen->getClientOriginalExtension();
-                                $path = $imagen->storeAs('regulaciones/antidumping', $filename, 'public');
+                                $path = $this->storageStoreUpload($imagen, 'regulaciones/antidumping', $filename);
                                 
                                 ProductoRegulacionAntidumpingMedia::create([
                                     'id_regulacion' => $antidumping->id,
@@ -302,7 +305,7 @@ class AntidumpingController extends Controller
                             $filename = time() . '_' . uniqid() . '.' . $imagen->getClientOriginalExtension();
                             
                             // Guardar archivo en storage
-                            $path = $imagen->storeAs('regulaciones/antidumping', $filename, 'public');
+                            $path = $this->storageStoreUpload($imagen, 'regulaciones/antidumping', $filename);
                             
                             // Crear registro en la tabla de media
                             ProductoRegulacionAntidumpingMedia::create([
@@ -343,21 +346,6 @@ class AntidumpingController extends Controller
     /**
      * Generar URL completa para una imagen
      */
-    private function generateImageUrl($ruta)
-    {
-        if (empty($ruta)) {
-            return null;
-        }
-        
-        // Si ya es una URL completa, devolverla tal como está
-        if (filter_var($ruta, FILTER_VALIDATE_URL)) {
-            return $ruta;
-        }
-        
-        // Generar URL completa desde storage
-        return Storage::disk('public')->url($ruta);
-    }
-
     /**
      * Mostrar regulación antidumping específica
      */
@@ -421,8 +409,8 @@ class AntidumpingController extends Controller
 
             // Eliminar archivos físicos
             foreach ($antidumping->media as $media) {
-                if (Storage::disk('public')->exists($media->ruta)) {
-                    Storage::disk('public')->delete($media->ruta);
+                if ($this->objectStorage()->exists($media->ruta)) {
+                    $this->objectStorage()->delete($media->ruta);
                 }
             }
 
@@ -560,8 +548,8 @@ class AntidumpingController extends Controller
             }
 
             // Eliminar archivo físico
-            if (Storage::disk('public')->exists($media->ruta)) {
-                Storage::disk('public')->delete($media->ruta);
+            if ($this->objectStorage()->exists($media->ruta)) {
+                $this->objectStorage()->delete($media->ruta);
             }
 
             // Eliminar registro

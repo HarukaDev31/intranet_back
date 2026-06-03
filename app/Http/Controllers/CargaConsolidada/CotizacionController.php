@@ -5,6 +5,7 @@ namespace App\Http\Controllers\CargaConsolidada;
 use App\Http\Controllers\Controller;
 use App\Traits\UserGroupsTrait;
 use App\Traits\FileTrait;
+use App\Traits\UsesObjectStorage;
 use Illuminate\Http\Request;
 use App\Models\CargaConsolidada\Cotizacion;
 use App\Models\CargaConsolidada\TipoCliente;
@@ -16,6 +17,7 @@ use App\Services\CargaConsolidada\CotizacionExportService;
 use App\Models\Usuario;
 use App\Models\Notificacion;
 use App\Traits\WhatsappTrait;
+use App\Support\WhatsApp\CoordinacionWhatsappPayload;
 use Tymon\JWTAuth\Facades\JWTAuth;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -42,7 +44,7 @@ class CotizacionController extends Controller
         $this->cotizacionExportService = $cotizacionExportService;
     }
 
-    use UserGroupsTrait, WhatsappTrait, FileTrait;
+    use UserGroupsTrait, WhatsappTrait, FileTrait, UsesObjectStorage;
 
     /**
      * Format a numeric value as currency string, e.g., $1,234.56
@@ -348,71 +350,6 @@ class CotizacionController extends Controller
                 'message' => 'Error al obtener cotizaciones: ' . $e->getMessage()
             ], 500);
         }
-    }
-    public function generateImageUrl($ruta)
-    {
-        if (empty($ruta)) {
-            return null;
-        }
-        Log::info($ruta);
-        if(strpos($ruta,'files//')!==false){
-            $ruta = str_replace('files//', '', $ruta);
-
-        }
-        // Si ya es una URL completa, verificar si tiene doble storage y corregirlo
-        if (filter_var($ruta, FILTER_VALIDATE_URL)) {
-            // Corregir URLs con doble storage
-            if (strpos($ruta, '/storage//storage/') !== false) {
-                $ruta = str_replace('/storage//storage/', '/storage/', $ruta);
-            }
-            return $ruta;
-        }
-
-        // Limpiar la ruta de barras iniciales para evitar doble slash
-        $ruta = ltrim($ruta, '/');
-        //if ruta contains files/ remove it 
-
-        // Corregir rutas con doble storage
-        if (strpos($ruta, 'storage//storage/') !== false) {
-            $ruta = str_replace('storage//storage/', 'storage/', $ruta);
-        }
-
-        // Si la ruta ya contiene 'storage/', no agregar otro 'storage/'
-        if (strpos($ruta, 'storage/') === 0) {
-            $baseUrl = config('app.url');
-            return rtrim($baseUrl, '/') . '/' . $ruta;
-        }
-
-        // Si la ruta empieza con 'contratos/', usar ruta con CORS para desarrollo
-        if (strpos($ruta, 'contratos/') === 0) {
-            $baseUrl = config('app.url');
-            // En desarrollo, usar /files/ para que pase por el FileController con CORS
-            if (config('app.env') === 'local') {
-                return rtrim($baseUrl, '/') . '/files/' . $ruta;
-            }
-            // En producción, usar /storage/ directamente
-            return rtrim($baseUrl, '/') . '/storage/' . $ruta;
-        }
-
-        // Si la ruta empieza con 'public/', remover 'public/' y agregar 'storage/'
-        if (strpos($ruta, 'public/') === 0) {
-            $ruta = substr($ruta, 7); // Remover 'public/'
-            $baseUrl = config('app.url');
-            return rtrim($baseUrl, '/') . '/storage/' . $ruta;
-        }
-        // Si la ruta contiene 'file/', removerlo
-    
-        
-        // Construir URL manualmente para evitar problemas con Storage::url()
-        $baseUrl = config('app.url');
-        $storagePath = 'storage/';
-
-        // Asegurar que no haya doble slash
-        $baseUrl = rtrim($baseUrl, '/');
-        $storagePath = ltrim($storagePath, '/');
-        $ruta = ltrim($ruta, '/');
-
-        return $baseUrl . '/' . $storagePath . $ruta;
     }
     public function getHeadersData($idContenedor)
     {
@@ -824,31 +761,17 @@ class CotizacionController extends Controller
             try {
                 // Subir archivo usando el sistema de almacenamiento de Laravel
                 $fileName = time() . '_' . $file->getClientOriginalName();
-                $fileUrl = $file->storeAs('public/agentecompra', $fileName);
+                $storedPath = $this->storageStoreUpload($file, 'assets/images/agentecompra', $fileName);
 
-                if (!$fileUrl) {
-                    Log::error('Error al subir archivo usando Laravel Storage');
-                    DB::rollBack();
-                    return response()->json([
-                        'status' => 'error',
-                        'success' => false,
-                        'message' => 'Error al subir el archivo'
-                    ], 500);
-                }
-
-                // Convertir la ruta de storage a URL pública
-                $fileUrl = Storage::url($fileUrl);
-                // Convertir a ruta con CORS habilitado
-                $fileUrl = route('storage.file', ['path' => str_replace('public/', '', $fileUrl)]);
                 Log::info('Cotizacion: ' . json_encode($cotizacion));
-                Log::info('Data: ' . $fileUrl);
+                Log::info('Data: ' . $storedPath);
 
                 $dataToInsert = $this->getCotizacionData($cotizacion);
 
                 // Verificar si getCotizacionData devolvió un error
                 if (!is_array($dataToInsert)) {
                     DB::rollBack();
-                    Storage::delete($fileUrl); // Limpiar el archivo si hay error
+                    $this->objectStorage()->delete($storedPath);
                     return response()->json([
                         'status' => 'error',
                         'success' => false,
@@ -856,7 +779,7 @@ class CotizacionController extends Controller
                     ], 500);
                 }
 
-                $dataToInsert['cotizacion_file_url'] = $fileUrl;
+                $dataToInsert['cotizacion_file_url'] = $storedPath;
                 $dataToInsert['id_contenedor'] = $request->id_contenedor;
                 $dataToInsert['id_usuario'] = Auth::id();
                 $dataToInsert['uuid'] = Str::uuid();
@@ -865,7 +788,7 @@ class CotizacionController extends Controller
 
                 if (!$cotizacionModel) {
                     DB::rollBack();
-                    Storage::delete($fileUrl);
+                    $this->objectStorage()->delete($storedPath);
                     return response()->json([
                         'status' => 'error',
                         'success' => false,
@@ -911,7 +834,7 @@ class CotizacionController extends Controller
                     } catch (\Exception $e) {
                         Log::error('Error al insertar proveedores: ' . $e->getMessage());
                         DB::rollBack();
-                        Storage::delete($fileUrl);
+                        $this->objectStorage()->delete($storedPath);
                         return response()->json([
                             'status' => 'error',
                             'success' => false,
@@ -959,8 +882,8 @@ class CotizacionController extends Controller
                 // En caso de cualquier error, hacer rollback y limpiar archivos
                 DB::rollBack();
 
-                if (isset($fileUrl)) {
-                    Storage::delete($fileUrl);
+                if (isset($storedPath)) {
+                    $this->objectStorage()->delete($storedPath);
                 }
 
                 // Limpiar archivo temporal
@@ -1063,33 +986,18 @@ class CotizacionController extends Controller
             DB::beginTransaction();
 
             try {
-                // Subir archivo usando el sistema de almacenamiento de Laravel
                 $fileName = time() . '_' . $file->getClientOriginalName();
-                $fileUrl = $file->storeAs('public/agentecompra', $fileName);
+                $storedPath = $this->storageStoreUpload($file, 'assets/images/agentecompra', $fileName);
 
-                if (!$fileUrl) {
-                    Log::error('Error al subir archivo usando Laravel Storage');
-                    DB::rollBack();
-                    return response()->json([
-                        'status' => 'error',
-                        'success' => false,
-                        'message' => 'Error al subir el archivo'
-                    ], 500);
-                }
-
-                // Convertir la ruta de storage a URL pública
-                $fileUrl = Storage::url($fileUrl);
-                // Convertir a ruta con CORS habilitado
-                $fileUrl = route('storage.file', ['path' => str_replace('public/', '', $fileUrl)]);
                 Log::info('Cotizacion desde calculadora: ' . json_encode($cotizacion));
-                Log::info('Data: ' . $fileUrl);
+                Log::info('Data: ' . $storedPath);
 
                 $dataToInsert = $this->getCotizacionDataFromCalculadora($cotizacion);
 
                 // Verificar si getCotizacionDataFromCalculadora devolvió un error
                 if (!is_array($dataToInsert)) {
                     DB::rollBack();
-                    Storage::delete($fileUrl); // Limpiar el archivo si hay error
+                    $this->objectStorage()->delete($storedPath); // Limpiar el archivo si hay error
                     return response()->json([
                         'status' => 'error',
                         'success' => false,
@@ -1097,7 +1005,7 @@ class CotizacionController extends Controller
                     ], 500);
                 }
 
-                $dataToInsert['cotizacion_file_url'] = $fileUrl;
+                $dataToInsert['cotizacion_file_url'] = $storedPath;
                 $dataToInsert['id_contenedor'] = $request->id_contenedor;
                 $dataToInsert['id_usuario'] = Auth::id();
                 $dataToInsert['uuid'] = Str::uuid();
@@ -1106,7 +1014,7 @@ class CotizacionController extends Controller
 
                 if (!$cotizacionModel) {
                     DB::rollBack();
-                    Storage::delete($fileUrl);
+                    $this->objectStorage()->delete($storedPath);
                     return response()->json([
                         'status' => 'error',
                         'success' => false,
@@ -1152,7 +1060,7 @@ class CotizacionController extends Controller
                     } catch (\Exception $e) {
                         Log::error('Error al insertar proveedores: ' . $e->getMessage());
                         DB::rollBack();
-                        Storage::delete($fileUrl);
+                        $this->objectStorage()->delete($storedPath);
                         return response()->json([
                             'status' => 'error',
                             'success' => false,
@@ -1200,8 +1108,8 @@ class CotizacionController extends Controller
                 // En caso de cualquier error, hacer rollback y limpiar archivos
                 DB::rollBack();
 
-                if (isset($fileUrl)) {
-                    Storage::delete($fileUrl);
+                if (isset($storedPath)) {
+                    $this->objectStorage()->delete($storedPath);
                 }
 
                 // Limpiar archivo temporal
@@ -1745,23 +1653,23 @@ class CotizacionController extends Controller
                 try {
                   
                     $oldFileUrl = $cotizacion->cotizacion_file_url;
-                    if ($oldFileUrl) {
-                        $path = parse_url($oldFileUrl, PHP_URL_PATH) ?: $oldFileUrl;
-                        if (strpos($path, 'templates/') === false && strpos($path, 'agentecompra') !== false) {
-                            $oldStoragePath = str_replace('/storage/', 'public/', $path);
-                            Storage::delete($oldStoragePath);
+                    if ($oldFileUrl && !filter_var($oldFileUrl, FILTER_VALIDATE_URL)) {
+                        $oldPath = $this->objectStorage()->normalizeRelativePath($oldFileUrl);
+                        if ($oldPath && strpos($oldPath, 'templates/') === false && strpos($oldPath, 'agentecompra') !== false) {
+                            $this->objectStorage()->delete($oldPath);
                         }
                     }
 
-                    // Subir nuevo archivo
                     $fileName = time() . '_' . $file['name'];
-                    $fileUrl = Storage::putFileAs('public/agentecompra', $file['tmp_name'], $fileName);
-
-                    if ($fileUrl) {
-                        $fileUrl = Storage::url($fileUrl);
-                        $fileUrl = route('storage.file', ['path' => str_replace('public/', '', $fileUrl)]);
-                        $dataToInsert['cotizacion_file_url'] = $fileUrl;
-                    }
+                    $uploadedFile = new \Illuminate\Http\UploadedFile(
+                        $file['tmp_name'],
+                        $file['name'],
+                        $file['type'] ?? null,
+                        null,
+                        true
+                    );
+                    $storedPath = $this->storageStoreUpload($uploadedFile, 'assets/images/agentecompra', $fileName);
+                    $dataToInsert['cotizacion_file_url'] = $storedPath;
                 } catch (\Exception $e) {
                     Log::warning('Error al actualizar archivo, continuando con datos del Excel: ' . $e->getMessage());
                 }
@@ -2374,12 +2282,22 @@ class CotizacionController extends Controller
 
             CotizacionProveedor::where('id_cotizacion', $idCotizacion)
                 ->update(['id_contenedor' => $idContenedorDestino]);
-            $contenedorDestino=Contenedor::find($idContenedorDestino);
+            $contenedorDestino = Contenedor::find($idContenedorDestino);
+            $telefono = preg_replace('/\s+/', '', (string) ($cotizacion->telefono ?? ''));
+            $phone = $telefono !== '' ? $telefono . '@c.us' : '';
             $message = "Hola @nombrecliente, segun lo conversado estamos pasando su carga para el consolidado @contenedorDestino.
                 Le estaré informando cualquier avance 🫡.";
             $message = str_replace('@nombrecliente', $cotizacion->nombre, $message);
             $message = str_replace('@contenedorDestino', '#' . $contenedorDestino->carga, $message);
-            $this->sendMessage($message, null, 3);
+            if ($phone !== '') {
+                $this->sendMessage(
+                    $message,
+                    $phone,
+                    3,
+                    'consolidado',
+                    CoordinacionWhatsappPayload::generalCliente($phone, $message, $message)
+                );
+            }
             DB::commit();
             return true;
         } catch (Exception $e) {
@@ -2417,10 +2335,11 @@ class CotizacionController extends Controller
             }
         }
 
-        // 3. Storage de Laravel
-        if (Storage::exists($fileUrl)) {
-            Log::error('Leyendo archivo desde storage: ' . $fileUrl);
-            $content = Storage::get($fileUrl);
+        $relative = $this->objectStorage()->normalizeRelativePath($fileUrl);
+        if ($relative && $this->objectStorage()->exists($relative)) {
+            $local = $this->storageLocalPath($relative);
+            Log::error('Leyendo archivo desde object storage: ' . $local);
+            $content = file_get_contents($local);
             if ($content !== false) {
                 Log::error('Archivo leído exitosamente, tamaño: ' . strlen($content) . ' bytes');
                 return $content;
@@ -2963,8 +2882,8 @@ class CotizacionController extends Controller
                             $oldPath = parse_url($oldContract, PHP_URL_PATH) ?: $oldContract;
                             $oldPath = preg_replace('#^/storage/#', '', $oldPath);
                             $oldPath = ltrim($oldPath, '/');
-                            if (!empty($oldPath)) {
-                                Storage::disk('public')->delete($oldPath);
+                            if (!empty($oldPath) && $this->objectStorage()->exists($oldPath)) {
+                                $this->objectStorage()->delete($oldPath);
                             }
                         }
                     } catch (Exception $e) {
@@ -2975,15 +2894,11 @@ class CotizacionController extends Controller
                     $filename = 'contrato_cotizacion_' . $cotizacion->id . '_' . time() . '_' . $safeName . '.pdf';
                     $storageRelative = 'contratos/' . $filename;
 
-                    Storage::disk('public')->put($storageRelative, $pdfContent);
-
-                    $publicUrl = Storage::url('public/' . $storageRelative);
-                    // Convertir URL de Storage a ruta con CORS habilitado
-                    $publicUrl = route('storage.file', ['path' => $storageRelative]);
+                    $this->storagePutContents($storageRelative, $pdfContent);
 
                     try {
-                        $cotizacion->update(['cotizacion_contrato_url' => $publicUrl]);
-                        Log::info('Contrato guardado en storage: ' . $publicUrl);
+                        $cotizacion->update(['cotizacion_contrato_url' => $storageRelative]);
+                        Log::info('Contrato guardado en storage: ' . $storageRelative);
                     } catch (Exception $e) {
                         Log::error('No se pudo actualizar cotizacion_contrato_url: ' . $e->getMessage());
                     }

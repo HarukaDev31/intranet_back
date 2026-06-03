@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Models\CargaConsolidada\Cotizacion;
 use App\Models\CargaConsolidada\Contenedor;
 use App\Models\CargaConsolidada\Comprobante;
+use App\Contracts\ObjectStorageConnectorInterface;
 use App\Traits\WhatsappTrait;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -64,17 +65,18 @@ class SendContabilidadDetraccionesJob implements ShouldQueue
                 return;
             }
 
+            $storage = app(ObjectStorageConnectorInterface::class);
             $enviados = 0;
             foreach ($comprobantes as $comp) {
                 if (!$comp->constancia || empty($comp->constancia->file_path)) {
                     continue;
                 }
-                $filePath = storage_path('app/' . $comp->constancia->file_path);
-                if (!file_exists($filePath)) {
-                    Log::warning('SendContabilidadDetraccionesJob: constancia no encontrada', ['path' => $filePath]);
+                if (!$storage->exists($comp->constancia->file_path)) {
+                    Log::warning('SendContabilidadDetraccionesJob: constancia no encontrada', ['path' => $comp->constancia->file_path]);
                     continue;
                 }
-                $mimeType = mime_content_type($filePath) ?: 'application/pdf';
+                $filePath = $storage->localPath($comp->constancia->file_path);
+                $mimeType = $storage->mimeType($comp->constancia->file_path) ?: 'application/pdf';
                 $this->sendMedia($filePath, $mimeType, $message, $numeroWhatsapp, 0, 'administracion', $comp->constancia->file_name);
                 $message = '';
                 $enviados++;

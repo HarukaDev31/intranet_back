@@ -2387,7 +2387,7 @@ class SoporteTiService
                     ? $this->formatearFechaCorta(Carbon::parse($mq->fecha_entrega))
                     : null,
                 'aprobada' => (bool) $mq->aprobada,
-                'url_preview' => $mq->url_preview,
+                'url_preview' => $this->generateImageUrl($mq->url_preview ?: $mq->ruta_archivo),
             );
         }
 
@@ -2397,7 +2397,7 @@ class SoporteTiService
                     'id' => (int) $ev->id,
                     'tipo' => $ev->tipo,
                     'texto' => $ev->texto,
-                    'url' => $ev->url,
+                    'url' => $this->generateImageUrl($ev->url),
                     'nombre' => $ev->nombre,
                     'tamano' => $ev->tamano,
                     'mime' => $ev->mime,
@@ -2429,7 +2429,7 @@ class SoporteTiService
             }
             $imagenUrl = null;
             if ($origen->imagenes && $origen->imagenes->count() > 0) {
-                $imagenUrl = $origen->imagenes->first()->url;
+                $imagenUrl = $this->generateImageUrl($origen->imagenes->first()->url);
             }
             $reply = array(
                 'id' => (int) $origen->id,
@@ -2444,7 +2444,7 @@ class SoporteTiService
         if ($m->relationLoaded('imagenes')) {
             foreach ($m->imagenes as $img) {
                 $imagenes[] = array(
-                    'url' => $img->url,
+                    'url' => $this->generateImageUrl($img->url),
                     'nombre' => $img->nombre,
                     'tamano' => $img->tamano,
                 );

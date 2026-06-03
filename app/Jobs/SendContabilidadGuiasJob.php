@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Models\CargaConsolidada\Cotizacion;
 use App\Models\CargaConsolidada\Contenedor;
 use App\Models\CargaConsolidada\GuiaRemision;
+use App\Contracts\ObjectStorageConnectorInterface;
 use App\Traits\WhatsappTrait;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -60,13 +61,15 @@ class SendContabilidadGuiasJob implements ShouldQueue
                 return;
             }
 
+            $storage = app(ObjectStorageConnectorInterface::class);
+
             foreach ($guias as $guia) {
-                $filePath = storage_path('app/' . $guia->file_path);
-                if (!file_exists($filePath)) {
-                    Log::warning('SendContabilidadGuiasJob: archivo no encontrado', ['path' => $filePath]);
+                if (!$storage->exists($guia->file_path)) {
+                    Log::warning('SendContabilidadGuiasJob: archivo no encontrado', ['path' => $guia->file_path]);
                     continue;
                 }
-                $mimeType = mime_content_type($filePath) ?: 'application/pdf';
+                $filePath = $storage->localPath($guia->file_path);
+                $mimeType = $storage->mimeType($guia->file_path) ?: 'application/pdf';
                 $this->sendMedia($filePath, $mimeType, $message, $numeroWhatsapp, 0, 'administracion', $guia->file_name);
                 $message = '';
             }

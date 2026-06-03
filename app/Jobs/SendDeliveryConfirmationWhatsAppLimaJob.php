@@ -7,6 +7,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use App\Support\WhatsApp\CoordinacionWhatsappPayload;
 use App\Traits\WhatsappTrait;
 use App\Models\CargaConsolidada\ConsolidadoDeliveryFormLima;
 use App\Models\CargaConsolidada\Contenedor;
@@ -71,7 +72,29 @@ class SendDeliveryConfirmationWhatsAppLimaJob implements ShouldQueue
             $notificacion = LimaRecojoNotificacionService::datosVistaCorreo($deliveryForm, $carga, $user);
             $mensaje = $notificacion['whatsapp'];
 
-            $resultado = $this->sendMessage($mensaje, $telefono);
+            if (config('meta_whatsapp.coordinacion_enabled')) {
+                $fechaHora = trim(
+                    ($notificacion['fechaTextual'] ?? '') . ' · ' . ($notificacion['horaRecojo'] ?? '') . ' hrs',
+                    ' ·'
+                );
+                $resultado = $this->queueCoordinacionWhatsApp(CoordinacionWhatsappPayload::confirmLima(
+                    $telefono,
+                    [
+                        'primer_nombre' => $notificacion['primerNombre'],
+                        'carga' => (string) $carga,
+                        'pick_name' => $notificacion['pickName'],
+                        'pick_dni' => $notificacion['pickDoc'],
+                        'pick_phone' => $notificacion['pickPhone'],
+                        'fecha_hora_recojo' => $fechaHora,
+                        'direccion' => $notificacion['direccion'],
+                        'referencia' => $notificacion['referencia'],
+                        'maps_url' => $notificacion['mapsUrl'],
+                    ],
+                    $mensaje
+                ));
+            } else {
+                $resultado = $this->sendMessage($mensaje, $telefono);
+            }
 
             if ($user && $user->email) {
                 $email=$this->sendMailTo($user->email, new \App\Mail\DeliveryConfirmationLimaMail(

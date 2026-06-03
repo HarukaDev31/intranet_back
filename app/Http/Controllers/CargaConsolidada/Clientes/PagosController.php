@@ -11,10 +11,13 @@ use Tymon\JWTAuth\Facades\JWTAuth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
-use Illuminate\Support\Facades\Storage;
+use App\Traits\FileTrait;
+use App\Traits\UsesObjectStorage;
 
 class PagosController extends Controller
 {
+    use FileTrait;
+    use UsesObjectStorage;
     private $table_contenedor_cotizacion = "contenedor_consolidado_cotizacion";
     private $table_contenedor_tipo_cliente = "contenedor_consolidado_tipo_cliente";
     private $table_pagos_concept = "cotizacion_coordinacion_pagos_concept";
@@ -234,7 +237,7 @@ class PagosController extends Controller
             if ($request->hasFile('voucher')) {
                 $file = $request->file('voucher');
                 $fileName = time() . '_' . $file->getClientOriginalName();
-                $voucherUrl = $file->storeAs('cargaconsolidada/pagos', $fileName, 'public');
+                $voucherUrl = $this->storageStoreUpload($file, 'cargaconsolidada/pagos', $fileName);
             }
 
             // Verificar si la cotización tiene cotizacion_final_url
@@ -357,10 +360,7 @@ class PagosController extends Controller
                     if (strpos($ruta, 'public/') !== false) {
                         $ruta = str_replace('public/', '', $ruta);
                     }
-                    // Usar disco public
-                    if (Storage::disk('public')->exists($ruta)) {
-                        Storage::disk('public')->delete($ruta);
-                    }
+                    $this->objectStorage()->delete($ruta);
                 }
             } catch (\Exception $e) {
                 Log::warning('No se pudo eliminar voucher del storage: ' . $e->getMessage());
@@ -413,21 +413,6 @@ class PagosController extends Controller
             return response()->json(['success' => false, 'message' => 'Error al eliminar el pago: ' . $e->getMessage()], 500);
         }
     }
-    public function generateImageUrl($ruta)
-    {
-        Log::info('Ruta: ' . $ruta);
-        if (empty($ruta)) {
-            return null;
-        }
-        if(strpos($ruta, 'http') === 0){
-            return $ruta;
-        }
-       
-        Log::info('Ruta: ' . $ruta);
-        // Generar URL completa desde storage
-        return Storage::disk('public')->url($ruta);
-    }
-
     /**
      * Revertir estado de proveedores cuando se eliminan todos los pagos
      */

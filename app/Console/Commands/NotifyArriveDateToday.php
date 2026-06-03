@@ -7,6 +7,7 @@ use App\Models\CargaConsolidada\CotizacionProveedor;
 use App\Models\CargaConsolidada\Cotizacion;
 use Carbon\Carbon;
 use App\Http\Controllers\CargaConsolidada\CotizacionProveedorController;
+use App\Support\WhatsApp\CoordinacionWhatsappPayload;
 use Illuminate\Support\Facades\Log;
 class NotifyArriveDateToday extends Command
 {
@@ -68,9 +69,20 @@ class NotifyArriveDateToday extends Command
                 $providerCode = $prov->code_supplier ?? $prov->supplier_code ?? '';
                 $telefono = $cotizacion->telefono ?? '';
                 $mensaje = "Hola 👋 {$clienteNombre} la carga de tu proveedor {$providerCode} aun no llega a nuestro almacen de China, ¿tienes alguna noticia por parte de tu proveedor?";
+                $telefonoFmt = $this->formatPhoneNumber($telefono);
 
-                // The controller uses sendMessage via trait; instantiate controller and call sendMessage
-                $resultado = $controller->sendMessage($mensaje, $this->formatPhoneNumber($telefono));
+                $resultado = $controller->sendMessage(
+                    $mensaje,
+                    $telefonoFmt,
+                    0,
+                    'consolidado',
+                    CoordinacionWhatsappPayload::proveedorLlegadaChina(
+                        $telefonoFmt,
+                        (string) $clienteNombre,
+                        (string) $providerCode,
+                        $mensaje
+                    )
+                );
                 $this->info('Enviado a proveedor id=' . $prov->id . ' resultado: ' . json_encode($resultado));
                 $count++;
             } catch (\Exception $e) {

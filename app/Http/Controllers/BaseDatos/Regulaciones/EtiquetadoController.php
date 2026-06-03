@@ -3,10 +3,11 @@
 namespace App\Http\Controllers\BaseDatos\Regulaciones;
 
 use App\Http\Controllers\Controller;
+use App\Traits\FileTrait;
+use App\Traits\UsesObjectStorage;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Support\Facades\Storage;
 use App\Models\BaseDatos\ProductoRegulacionEtiquetado;
 use App\Models\BaseDatos\ProductoRegulacionEtiquetadoMedia;
 use App\Models\BaseDatos\EntidadReguladora;
@@ -14,6 +15,8 @@ use App\Models\BaseDatos\Regulaciones\ProductoRubro;
 
 class EtiquetadoController extends Controller
 {
+    use FileTrait;
+    use UsesObjectStorage;
     /**
      * @OA\Get(
      *     path="/regulaciones/etiquetado",
@@ -104,30 +107,6 @@ class EtiquetadoController extends Controller
             ], 500);
         }
     }
-    private function generateImageUrl($ruta)
-    {
-        if (empty($ruta)) {
-            return null;
-        }
-        
-        // Si ya es una URL completa, devolverla tal como está
-        if (filter_var($ruta, FILTER_VALIDATE_URL)) {
-            return $ruta;
-        }
-        
-        // Limpiar la ruta de barras iniciales para evitar doble slash
-        $ruta = ltrim($ruta, '/');
-        
-        // Construir URL manualmente para evitar problemas con Storage::url()
-        $baseUrl = config('app.url');
-        $storagePath = '/storage';
-        
-        // Asegurar que no haya doble slash
-        $baseUrl = rtrim($baseUrl, '/');
-        $storagePath = ltrim($storagePath, '/');
-        $ruta = ltrim($ruta, '/');
-        return $baseUrl . '/' . $storagePath . '/' . $ruta;
-    }
     /**
      * Crear nueva regulación de etiquetado o actualizar existente
      */
@@ -214,8 +193,8 @@ class EtiquetadoController extends Controller
 
                         if ($media) {
                             // Eliminar archivo físico
-                            if (Storage::disk('public')->exists($media->ruta)) {
-                                Storage::disk('public')->delete($media->ruta);
+                            if ($this->objectStorage()->exists($media->ruta)) {
+                                $this->objectStorage()->delete($media->ruta);
                                 Log::info('Archivo eliminado del storage:', ['ruta' => $media->ruta]);
                             }
 
@@ -235,7 +214,7 @@ class EtiquetadoController extends Controller
                     foreach ($request->file('imagenes') as $imagen) {
                         if ($imagen->isValid()) {
                             $filename = time() . '_' . uniqid() . '.' . $imagen->getClientOriginalExtension();
-                            $path = $imagen->storeAs('regulaciones/etiquetado', $filename, 'public');
+                            $path = $this->storageStoreUpload($imagen, 'regulaciones/etiquetado', $filename);
 
                             ProductoRegulacionEtiquetadoMedia::create([
                                 'id_regulacion' => $etiquetado->id,
@@ -261,8 +240,8 @@ class EtiquetadoController extends Controller
                     // Eliminar todas las imágenes existentes
                     $existingMedia = ProductoRegulacionEtiquetadoMedia::where('id_regulacion', $etiquetado->id)->get();
                     foreach ($existingMedia as $media) {
-                        if (Storage::disk('public')->exists($media->ruta)) {
-                            Storage::disk('public')->delete($media->ruta);
+                        if ($this->objectStorage()->exists($media->ruta)) {
+                            $this->objectStorage()->delete($media->ruta);
                         }
                         $media->delete();
                     }
@@ -274,7 +253,7 @@ class EtiquetadoController extends Controller
                         foreach ($request->file('imagenes') as $imagen) {
                             if ($imagen->isValid()) {
                                 $filename = time() . '_' . uniqid() . '.' . $imagen->getClientOriginalExtension();
-                                $path = $imagen->storeAs('regulaciones/etiquetado', $filename, 'public');
+                                $path = $this->storageStoreUpload($imagen, 'regulaciones/etiquetado', $filename);
 
                                 ProductoRegulacionEtiquetadoMedia::create([
                                     'id_regulacion' => $etiquetado->id,
@@ -315,7 +294,7 @@ class EtiquetadoController extends Controller
                             $filename = time() . '_' . uniqid() . '.' . $imagen->getClientOriginalExtension();
 
                             // Guardar archivo en storage
-                            $path = $imagen->storeAs('regulaciones/etiquetado', $filename, 'public');
+                            $path = $this->storageStoreUpload($imagen, 'regulaciones/etiquetado', $filename);
 
                             // Crear registro en la tabla de media
                             ProductoRegulacionEtiquetadoMedia::create([
@@ -438,7 +417,7 @@ class EtiquetadoController extends Controller
                 foreach ($request->file('imagenes') as $imagen) {
                     if ($imagen->isValid()) {
                         $filename = time() . '_' . uniqid() . '.' . $imagen->getClientOriginalExtension();
-                        $path = $imagen->storeAs('regulaciones/etiquetado', $filename, 'public');
+                        $path = $this->storageStoreUpload($imagen, 'regulaciones/etiquetado', $filename);
 
                         ProductoRegulacionEtiquetadoMedia::create([
                             'id_rubro' => $etiquetado->id_rubro,
@@ -488,8 +467,8 @@ class EtiquetadoController extends Controller
 
             // Eliminar archivos físicos
             foreach ($etiquetado->media as $media) {
-                if (Storage::disk('public')->exists($media->ruta)) {
-                    Storage::disk('public')->delete($media->ruta);
+                if ($this->objectStorage()->exists($media->ruta)) {
+                    $this->objectStorage()->delete($media->ruta);
                 }
             }
 
@@ -541,8 +520,8 @@ class EtiquetadoController extends Controller
             }
 
             // Eliminar archivo físico
-            if (Storage::disk('public')->exists($media->ruta)) {
-                Storage::disk('public')->delete($media->ruta);
+            if ($this->objectStorage()->exists($media->ruta)) {
+                $this->objectStorage()->delete($media->ruta);
             }
 
             // Eliminar registro

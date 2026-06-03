@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
+use App\Traits\UsesObjectStorage;
 use App\Traits\WhatsappTrait;
 
 /**
@@ -30,7 +31,7 @@ use App\Traits\WhatsappTrait;
  */
 class SendConstanciaCurso implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, WhatsappTrait;
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, UsesObjectStorage, WhatsappTrait;
 
     private $phoneNumberId;
     private $pedidoCurso;
@@ -211,21 +212,13 @@ class SendConstanciaCurso implements ShouldQueue
             $storagePath = 'Cursos/constancias';
             $relativeFilePath = $storagePath . '/' . $fileName;
             
-            // SAVE IN STORAGE APP PUBLIC para que funcione con generateImageUrl
-            $pdfPath = storage_path('app/public/' . $relativeFilePath);
-            
-            // Asegurar que el directorio existe
-            $directoryPath = dirname($pdfPath);
-            if (! file_exists($directoryPath)) {
-                mkdir($directoryPath, 0755, true);
-            }
-
             //set dpi 150
             $dompdf->set_option('dpi', 150);
             $dompdf->setPaper('letter', 'landscape');
             // Renderizar y guardar el PDF
             $dompdf->render();
-            file_put_contents($pdfPath, $dompdf->output());
+            $this->storagePutContents($relativeFilePath, $dompdf->output());
+            $pdfPath = $this->storageLocalPath($relativeFilePath);
 
             Log::info('PDF generado exitosamente', [
                 'path'   => $pdfPath,

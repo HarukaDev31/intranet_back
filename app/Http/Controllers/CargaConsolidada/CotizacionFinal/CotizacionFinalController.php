@@ -11,6 +11,7 @@ use App\Models\Notificacion;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use App\Traits\WhatsappTrait;
+use App\Support\WhatsApp\CoordinacionWhatsappPayload;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use PhpOffice\PhpSpreadsheet\IOFactory;
@@ -28,12 +29,13 @@ use Dompdf\Dompdf;
 use Dompdf\Options;
 use Tymon\JWTAuth\Facades\JWTAuth;
 use App\Traits\FileTrait;
+use App\Traits\UsesObjectStorage;
 use App\Jobs\SendReminderPagoWhatsAppJob;
 use App\Services\CargaConsolidada\CotizacionFinal\PlantillaFinalBatchService;
 
 class CotizacionFinalController extends Controller
 {
-    use WhatsappTrait, FileTrait;
+    use WhatsappTrait, FileTrait, UsesObjectStorage;
     private $table_cliente = 'entidad';
     private $table_usuario = 'usuario';
     private $table = "carga_consolidada_contenedor";
@@ -393,11 +395,13 @@ class CotizacionFinalController extends Controller
             // Procesar URL y obtener contenido
             $originalUrl = $cotizacion->cotizacion_final_url;
 
-            // Intentar diferentes ubicaciones
-            $possiblePaths = [];
-
-            // Nueva ubicaciÃ³n: storage/app/public/CargaConsolidada/cotizacionfinal/{idContenedor}
-            $possiblePaths[] = storage_path('app/public/' . $originalUrl);
+            $objectPath = $this->tryStorageLocalPath($originalUrl);
+            if ($objectPath !== null) {
+                $possiblePaths = [$objectPath];
+            } else {
+                $possiblePaths = [];
+                $possiblePaths[] = storage_path('app/public/' . $originalUrl);
+            }
 
             // Procesar ruta de la DB con generateImageUrl
             $generatedUrl = $this->generateImageUrl($originalUrl);
@@ -1158,17 +1162,72 @@ class CotizacionFinalController extends Controller
                     "✅Total: $" . number_format($total, 2) . "\n" .
                     "Pronto le aviso nuevos avances, que tengan buen dia \n" .
                     "Último día de pago: " . date('d/m/Y', strtotime($fechaArribo)) . "\n";
-                $this->sendMessage($message);
+                $phone = (string) $this->phoneNumberId;
+                $serviciosExtrasLine = $serviciosExtraFinal > 0
+                    ? '☑️Servicios extras: $' . number_format($serviciosExtraFinal, 2) . "\n"
+                    : '';
+                $this->sendMessage(
+                    $message,
+                    $phone,
+                    0,
+                    'consolidado',
+                    CoordinacionWhatsappPayload::consolidadoCotizacionFinal(
+                        $phone,
+                        (string) $carga,
+                        (string) $nombre,
+                        number_format($logisticaFinal, 2, '.', ''),
+                        number_format($impuestosFinal, 2, '.', ''),
+                        $serviciosExtrasLine,
+                        number_format($total, 2, '.', ''),
+                        date('d/m/Y', strtotime($fechaArribo)),
+                        $message
+                    )
+                );
                 $pathCotizacionFinalPDF = $this->getBoletaForSend($request->idCotizacion);
                 Log::info('pathCotizacionFinalPDF: ' . $pathCotizacionFinalPDF);
-                $this->sendMedia($pathCotizacionFinalPDF, null, null, null, 3);
-                $message = "💰*Resumen de Pago*\n" .
+                if ($pathCotizacionFinalPDF) {
+                    $pdfCaption = 'Cotización final de importación';
+                    $this->sendMedia(
+                        $pathCotizacionFinalPDF,
+                        'application/pdf',
+                        $pdfCaption,
+                        $phone,
+                        3,
+                        'consolidado',
+                        basename($pathCotizacionFinalPDF),
+                        CoordinacionWhatsappPayload::consolidadoCotizacionFinalPdf($phone, $pathCotizacionFinalPDF, $pdfCaption, 3)
+                    );
+                }
+                $messageResumen = "💰*Resumen de Pago*\n" .
                     "✅Cotización final: $" . number_format($total, 2) . "\n" .
                     "✅Adelanto: $" . number_format($totalPagos, 2) . "\n" .
                     "✅ *Pendiente de pago: $" . number_format($totalAPagar, 2) . "*\n";
-                $this->sendMessage($message, null, 5);
+                $this->sendMessage(
+                    $messageResumen,
+                    $phone,
+                    5,
+                    'consolidado',
+                    CoordinacionWhatsappPayload::consolidadoResumenPago(
+                        $phone,
+                        number_format($total, 2, '.', ''),
+                        number_format($totalPagos, 2, '.', ''),
+                        number_format($totalAPagar, 2, '.', ''),
+                        $messageResumen,
+                        5
+                    )
+                );
                 $pagosUrl = public_path('assets/images/pagos-full.jpg');
-                $this->sendMedia($pagosUrl, 'image/jpg', null, null, 10);
+                $captionPagos = 'Números de cuenta';
+                $this->sendMedia(
+                    $pagosUrl,
+                    'image/jpg',
+                    $captionPagos,
+                    $phone,
+                    10,
+                    'consolidado',
+                    'Numeros_de_cuenta.jpg',
+                    CoordinacionWhatsappPayload::consolidadoPagosImg($phone, $pagosUrl, $captionPagos, 10)
+                );
             }
             if ($request->estado == 'AJUSTADO') {
                 $cotizacion = Cotizacion::find($request->idCotizacion);
@@ -1246,14 +1305,18 @@ class CotizacionFinalController extends Controller
                 return $tempFile;
             }
 
-            // Si es una ruta local, probar diferentes ubicaciones
+            $objectPath = $this->tryStorageLocalPath($fileUrl);
+            if ($objectPath !== null) {
+                return $objectPath;
+            }
+
             $possiblePaths = [
                 storage_path('app/public/' . $fileUrl),
                 storage_path($fileUrl),
                 public_path($fileUrl),
                 storage_path('app/' . $fileUrl),
                 base_path($fileUrl),
-                $fileUrl // ruta tal cual
+                $fileUrl
             ];
 
             foreach ($possiblePaths as $path) {
@@ -1458,7 +1521,7 @@ class CotizacionFinalController extends Controller
             if ($request->hasFile('voucher')) {
                 $file = $request->file('voucher');
                 $fileName = time() . '_' . $file->getClientOriginalName();
-                $voucherUrl = $file->storeAs('cargaconsolidada/pagos', $fileName, 'public');
+                $voucherUrl = $this->storageStoreUpload($file, 'cargaconsolidada/pagos', $fileName);
             }
 
             // Verificar si la cotizaciÃ³n tiene cotizacion_final_url
@@ -1579,7 +1642,11 @@ class CotizacionFinalController extends Controller
         try {
             $idContenedor = $request->idContenedor;
             $file = $request->file;
-            $path = $file->storeAs('cargaconsolidada/cotizacionfinal/' . $idContenedor, 'factura_general' . time() . '.xlsx');
+            $path = $this->storageStoreUpload(
+                $file,
+                'cargaconsolidada/cotizacionfinal/' . $idContenedor,
+                'factura_general' . time() . '.xlsx'
+            );
             $contenedor = Contenedor::find($idContenedor);
             $contenedor->factura_general_url = $path;
             $contenedor->save();
@@ -1648,18 +1715,17 @@ class CotizacionFinalController extends Controller
             // Guardar archivo en storage/public
             $fileName = time() . '_cotizacion_final_' . $idCotizacion . '.' . $fileExt;
             $relativeDirectory = 'cotizacion_final/' . $idContenedor;
-            $storedPath = $file->storeAs($relativeDirectory, $fileName, 'public');
+            $storedPath = $this->storageStoreUpload($file, $relativeDirectory, $fileName);
             $dbPath = $storedPath;
 
-            // Leer desde el archivo guardado
-            $fullStoredPath = storage_path('app/public/' . $storedPath);
+            $fullStoredPath = $this->storageLocalPath($storedPath);
             Log::info('Intentando leer Excel desde: ' . $fullStoredPath);
             $spreadsheet = IOFactory::load($fullStoredPath);
 
             $parsed = $this->parseCotizacionFinalExcelUploadValues($spreadsheet);
             if ($parsed === null) {
                 try {
-                    Storage::disk('public')->delete($dbPath);
+                    $this->objectStorage()->delete($dbPath);
                 } catch (\Exception $_) {
                 }
                 Log::error('No se encontraron en la hoja 1 las filas SERVICIO DE IMPORTACIÓN e IMPUESTOS (columna B). Verifique que sea el Excel de cotización final del sistema.');
@@ -1688,7 +1754,7 @@ class CotizacionFinalController extends Controller
             if ($monto_final === null || $impuestos_final === null || $logistica_final === null) {
                 // borrar archivo almacenado
                 try {
-                    Storage::disk('public')->delete($dbPath);
+                    $this->objectStorage()->delete($dbPath);
                 } catch (\Exception $_) {
                 }
                 Log::warning('Extraccion obligatoria fallÃ³ (monto/impuestos/logistica) al subir cotizacion final. Archivo eliminado: ' . $dbPath);
@@ -2767,13 +2833,9 @@ class CotizacionFinalController extends Controller
             // Obtener la ruta del archivo
             $fileUrl = $cotizacion->cotizacion_final_url;
 
-            // Intentar diferentes ubicaciones
-            $possiblePaths = [];
+            $objectPath = $this->tryStorageLocalPath($fileUrl);
+            $possiblePaths = $objectPath !== null ? [$objectPath] : [storage_path('app/public/' . $fileUrl)];
 
-            // Nueva ubicaciÃ³n: storage/app/public/CargaConsolidada/cotizacionfinal/{idContenedor}
-            $possiblePaths[] = storage_path('app/public/' . $fileUrl);
-
-            // UbicaciÃ³n legacy: public/assets/downloads
             if (strpos($fileUrl, 'http') === 0) {
                 $pathParts = parse_url($fileUrl);
                 $possiblePaths[] = storage_path('app/public' . $pathParts['path']);
@@ -2835,11 +2897,10 @@ class CotizacionFinalController extends Controller
             // Normalizar: quitar prefijo "storage/" o "/" para tener ruta relativa bajo storage/app/public
             $relativePath = preg_replace('#^storage/#', '', ltrim($cotizacionFinalUrl, '/'));
 
-            // Intentar diferentes ubicaciones
-            $possiblePaths = [];
-
-            // 1) storage/app/public (ruta fÃ­sica)
-            $possiblePaths[] = storage_path('app/public/' . $relativePath);
+            $objectPath = $this->tryStorageLocalPath($relativePath);
+            $possiblePaths = $objectPath !== null
+                ? [$objectPath]
+                : [storage_path('app/public/' . $relativePath)];
             // 2) public/storage (symlink a storage/app/public; coincide con URL /storage/...)
             $possiblePaths[] = public_path('storage/' . $relativePath);
 
@@ -5335,15 +5396,8 @@ class CotizacionFinalController extends Controller
             $timestamp = date('YmdHis');
             $excelFileName = 'Cotizacion' . ($data['cliente']['nombre'] ?? 'Cliente') . '_' . $timestamp . '.xlsx';
 
-            // Crear directorio si no existe
-            $directory = public_path('storage/cotizacion_final/' . $idContenedor);
-            if (!file_exists($directory)) {
-                mkdir($directory, 0777, true);
-            }
-
-            // La ruta para la BD no debe incluir 'storage/' porque Storage::disk('public')->url() ya lo agrega
             $excelFilePath = 'cotizacion_final/' . $idContenedor . '/' . $excelFileName;
-            $fullPath = public_path('storage/' . $excelFilePath);
+            $tempExcelPath = tempnam(sys_get_temp_dir(), 'cot_fin_');
 
             $objPHPExcel->setActiveSheetIndex(0);
 
@@ -5395,7 +5449,9 @@ class CotizacionFinalController extends Controller
             $logisticaCalculada = ($cbmTotalProductos < 1.00) ? $tarifaValue : ($cbmTotalProductos * $tarifaValue);
             $logistica = is_numeric($logisticaCalculada) ? $logisticaCalculada : $logistica;
 
-            $objWriter->save($fullPath);
+            $objWriter->save($tempExcelPath);
+            $this->storagePutContents($excelFilePath, (string) file_get_contents($tempExcelPath));
+            @unlink($tempExcelPath);
             $fob = $this->getMainSheetFobFinalAmount($objPHPExcel->getSheet(0));
             $recargosDescuentosFinal = ($extrasCalc['recargos'] ?? 0)-($extrasCalc['descuento'] ?? 0);
             return [    
@@ -6168,5 +6224,22 @@ class CotizacionFinalController extends Controller
         } catch (\Exception $e) {
             Log::warning('Error al obtener informaciÃ³n de plantilla: ' . $e->getMessage());
         }
+    }
+
+    private function tryStorageLocalPath(?string $relativePath): ?string
+    {
+        if (empty($relativePath) || filter_var($relativePath, FILTER_VALIDATE_URL)) {
+            return null;
+        }
+        try {
+            $normalized = $this->objectStorage()->normalizeRelativePath($relativePath);
+            if ($normalized && $this->objectStorage()->exists($normalized)) {
+                return $this->storageLocalPath($normalized);
+            }
+        } catch (\Throwable $e) {
+            Log::debug('tryStorageLocalPath: ' . $e->getMessage(), ['path' => $relativePath]);
+        }
+
+        return null;
     }
 }

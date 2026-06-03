@@ -3,11 +3,12 @@
 namespace App\Http\Controllers\BaseDatos\Regulaciones;
 
 use App\Http\Controllers\Controller;
+use App\Traits\FileTrait;
+use App\Traits\UsesObjectStorage;
 use Illuminate\Http\Request;
 use App\Models\BaseDatos\ProductoRegulacionPermiso;
 use App\Models\BaseDatos\ProductoRegulacionPermisoMedia;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use App\Models\BaseDatos\EntidadReguladora;
 use App\Models\BaseDatos\Regulaciones\ProductoRubro;
@@ -15,6 +16,8 @@ use App\Models\BaseDatos\Regulaciones\ProductoRubro;
 
 class PermisoController extends Controller
 {
+    use FileTrait;
+    use UsesObjectStorage;
     /**
      * @OA\Get(
      *     path="/regulaciones/permisos",
@@ -218,8 +221,8 @@ class PermisoController extends Controller
                             
                         if ($media) {
                             // Eliminar archivo físico
-                            if (Storage::disk('public')->exists($media->ruta)) {
-                                Storage::disk('public')->delete($media->ruta);
+                            if ($this->objectStorage()->exists($media->ruta)) {
+                                $this->objectStorage()->delete($media->ruta);
                                 Log::info('Archivo eliminado del storage:', ['ruta' => $media->ruta]);
                             }
                             
@@ -239,7 +242,7 @@ class PermisoController extends Controller
                     foreach ($request->file('documentos') as $documento) {
                         if ($documento->isValid()) {
                             $filename = time() . '_' . uniqid() . '.' . $documento->getClientOriginalExtension();
-                            $path = $documento->storeAs('regulaciones/permisos', $filename, 'public');
+                            $path = $this->storageStoreUpload($documento, 'regulaciones/permisos', $filename);
                             
                             ProductoRegulacionPermisoMedia::create([
                                 'id_regulacion' => $permiso->id,
@@ -265,8 +268,8 @@ class PermisoController extends Controller
                     // Eliminar todos los documentos existentes
                     $existingMedia = ProductoRegulacionPermisoMedia::where('id_regulacion', $permiso->id)->get();
                     foreach ($existingMedia as $media) {
-                        if (Storage::disk('public')->exists($media->ruta)) {
-                            Storage::disk('public')->delete($media->ruta);
+                        if ($this->objectStorage()->exists($media->ruta)) {
+                            $this->objectStorage()->delete($media->ruta);
                         }
                         $media->delete();
                     }
@@ -278,7 +281,7 @@ class PermisoController extends Controller
                         foreach ($request->file('documentos') as $documento) {
                             if ($documento->isValid()) {
                                 $filename = time() . '_' . uniqid() . '.' . $documento->getClientOriginalExtension();
-                                $path = $documento->storeAs('regulaciones/permisos', $filename, 'public');
+                                $path = $this->storageStoreUpload($documento, 'regulaciones/permisos', $filename);
                                 
                                 ProductoRegulacionPermisoMedia::create([
                                     'id_regulacion' => $permiso->id,
@@ -323,7 +326,7 @@ class PermisoController extends Controller
                             $filename = time() . '_' . uniqid() . '.' . $documento->getClientOriginalExtension();
                             
                             // Guardar archivo en storage
-                            $path = $documento->storeAs('regulaciones/permisos', $filename, 'public');
+                            $path = $this->storageStoreUpload($documento, 'regulaciones/permisos', $filename);
                             
                             // Crear registro en la tabla de media
                             ProductoRegulacionPermisoMedia::create([
@@ -466,7 +469,7 @@ class PermisoController extends Controller
                 foreach ($request->file('documentos') as $documento) {
                     if ($documento->isValid()) {
                         $filename = time() . '_' . uniqid() . '.' . $documento->getClientOriginalExtension();
-                        $path = $documento->storeAs('regulaciones/permisos', $filename, 'public');
+                        $path = $this->storageStoreUpload($documento, 'regulaciones/permisos', $filename);
                         
                         ProductoRegulacionPermisoMedia::create([
                             'id_regulacion' => $permiso->id,
@@ -513,8 +516,8 @@ class PermisoController extends Controller
 
             // Eliminar archivos físicos
             foreach ($permiso->media as $media) {
-                if (Storage::disk('public')->exists($media->ruta)) {
-                    Storage::disk('public')->delete($media->ruta);
+                if ($this->objectStorage()->exists($media->ruta)) {
+                    $this->objectStorage()->delete($media->ruta);
                 }
             }
 
@@ -556,8 +559,8 @@ class PermisoController extends Controller
             }
 
             // Eliminar archivo físico
-            if (Storage::disk('public')->exists($media->ruta)) {
-                Storage::disk('public')->delete($media->ruta);
+            if ($this->objectStorage()->exists($media->ruta)) {
+                $this->objectStorage()->delete($media->ruta);
             }
 
             // Eliminar registro

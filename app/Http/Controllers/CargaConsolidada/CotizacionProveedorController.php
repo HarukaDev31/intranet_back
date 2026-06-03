@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 use Tymon\JWTAuth\Facades\JWTAuth;
 use Carbon\Carbon;
+use App\Traits\UsesObjectStorage;
 use App\Traits\WhatsappTrait;
 use App\Models\ContenedorCotizacionProveedor;
 use App\Jobs\SendInspectionMediaJob;
@@ -31,6 +32,8 @@ use Exception;
 use App\Models\CargaConsolidada\Contenedor;
 use Illuminate\Support\Str;
 use App\Traits\UserGroupsTrait;
+use App\Traits\FileTrait;
+use App\Support\WhatsApp\CoordinacionWhatsappPayload;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Exports\EmbarqueExport;
 use App\Jobs\SendRotuladoJob;
@@ -50,8 +53,10 @@ use App\Models\Notificacion;
  */
 class CotizacionProveedorController extends Controller
 {
+    use UsesObjectStorage;
     use WhatsappTrait;
     use UserGroupsTrait;
+    use FileTrait;
     const DOCUMENTATION_PATH = 'documentation';
     const INSPECTION_PATH = 'inspection';
     private $providerOrderStatus = [
@@ -534,21 +539,36 @@ class CotizacionProveedorController extends Controller
                     $mensaje .= "----------------------------------------------------------\n";
                 }
                 $mensaje .= "\nContacta al vendedor y sube los datos faltantes.";
-                // en la siguiente url: https://datosprovedor.probusiness.pe/uuid
-                $url = env('APP_URL_DATOS_PROVEEDOR') . '/' . $uuid;
+                $url = CoordinacionWhatsappPayload::buildDatosProveedorUrl($uuid);
 
                 $mensaje .= "\nIngresar aquí: " . $url;
                 $tipoMensaje = "guardar1";
+                $metaPayload = CoordinacionWhatsappPayload::proveedorDatosGuardadoPendiente(
+                    (string) $telefono,
+                    CoordinacionWhatsappPayload::formatCodigosProveedoresPendientesForMeta($proveedoresPendientes),
+                    $url,
+                    $mensaje
+                );
             } else {
                 // Guardar2: Todos los proveedores completos
                 $mensaje = "Se registró exitosamente los datos de tu proveedor.\n";
                 $mensaje .= "Gracias por ayudarnos a hacer mejor nuestro trabajo, el equipo de China se contactará pronto con tu proveedor.";
 
                 $tipoMensaje = "guardar2";
+                $metaPayload = CoordinacionWhatsappPayload::proveedorDatosGuardadoCompleto(
+                    (string) $telefono,
+                    $mensaje
+                );
             }
 
             // Enviar mensaje de WhatsApp
-            $resultadoWhatsApp = $this->sendMessage($mensaje, $telefono);
+            $resultadoWhatsApp = $this->sendMessage(
+                $mensaje,
+                $telefono,
+                0,
+                'consolidado',
+                $metaPayload
+            );
 
             Log::info('Mensaje de WhatsApp enviado para actualización de proveedores', [
                 'cotizacion_id' => $cotizacion->id,
@@ -877,13 +897,20 @@ class CotizacionProveedorController extends Controller
             if (count($providersHasSended) == 0) {
                 $this->sendWelcome($carga);
             } elseif (count($providersHasSended) > 0 && count($providersHasNoSended) > 0) {
-                $this->sendMessage("Hola 🙋🏻‍♀, te escribe el área de coordinación de Probusiness. 
+                $nuevoMsg = "Hola 🙋🏻‍♀, te escribe el área de coordinación de Probusiness. 
         
 📢 Añadiste un nuevo proveedor en el *Consolidado #${carga}*
 
 *Rotulado: 👇🏼*  
 Tienes que indicarle a tu proveedor que las cajas máster 📦 cuenten con un rotulado para 
-identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro almacén.");
+identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro almacén.";
+                $this->sendMessage(
+                    $nuevoMsg,
+                    $this->phoneNumberId,
+                    0,
+                    'consolidado',
+                    CoordinacionWhatsappPayload::rotuladoNuevoProveedor((string) $this->phoneNumberId, (string) $carga, $nuevoMsg)
+                );
             }
 
             // Configurar ZIP
@@ -1014,9 +1041,21 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                     Log::info("Archivo añadido al ZIP: Rotulado_{$supplierCode}.pdf");
 
                     // Enviar documento al proveedor
+                    $rotCaption = "Producto: {$products}\nCódigo de proveedor: {$supplierCode}";
                     $this->sendDataItem(
-                        "Producto: {$products}\nCódigo de proveedor: {$supplierCode}",
-                        $tempFilePath
+                        $rotCaption,
+                        $tempFilePath,
+                        $this->phoneNumberId,
+                        $sleepSendMedia,
+                        "Rotulado_{$supplierCode}.pdf",
+                        CoordinacionWhatsappPayload::rotuladoPdfProducto(
+                            (string) $this->phoneNumberId,
+                            (string) $products,
+                            (string) $supplierCode,
+                            $tempFilePath,
+                            $rotCaption,
+                            $sleepSendMedia
+                        )
                     );
 
                     Log::info('Documento enviado por WhatsApp para proveedor: ' . $supplierCode);
@@ -1050,11 +1089,21 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
             // Enviar imagen de dirección
             $direccionUrl = public_path('assets/images/Direccion.jpg');
             $sleepSendMedia += 3;
-            $this->sendMedia($direccionUrl, 'image/jpg', '🏽Dile a tu proveedor que envíe la carga a nuestro almacén en China', null, $sleepSendMedia);
+            $dirCaption = '🏽Dile a tu proveedor que envíe la carga a nuestro almacén en China';
+            $this->sendMedia(
+                $direccionUrl,
+                'image/jpg',
+                $dirCaption,
+                $this->phoneNumberId,
+                $sleepSendMedia,
+                'consolidado',
+                'Direccion_almacen_China.jpeg',
+                CoordinacionWhatsappPayload::rotuladoAlmacenChinaImg((string) $this->phoneNumberId, $direccionUrl, $dirCaption, $sleepSendMedia)
+            );
 
             // Enviar mensaje adicional
             $sleepSendMedia += 3;
-            $this->sendMessage("También necesito los datos de tu proveedor para comunicarnos y recibir tu carga.
+            $datosMsg = "También necesito los datos de tu proveedor para comunicarnos y recibir tu carga.
 
 ➡ *Datos del proveedor: (Usted lo llena)*
 
@@ -1062,7 +1111,14 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
 ☑ Nombre del vendedor:
 ☑ Celular del vendedor:
 
-Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda me escribes. 🫡", null, $sleepSendMedia);
+Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda me escribes. 🫡";
+            $this->sendMessage(
+                $datosMsg,
+                $this->phoneNumberId,
+                $sleepSendMedia,
+                'consolidado',
+                CoordinacionWhatsappPayload::rotuladoDatosProveedor((string) $this->phoneNumberId, $datosMsg, $sleepSendMedia)
+            );
 
             // Verificar que el ZIP se generó correctamente
             if (!file_exists($zipFileName)) {
@@ -1385,7 +1441,13 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
 
                     $telefono = preg_replace('/\s+/', '', $telefono);
                     $this->phoneNumberId = $telefono ? $telefono . '@c.us' : '';
-                    $this->sendMessage($message);
+                    $this->sendMessage(
+                        $message,
+                        $this->phoneNumberId,
+                        0,
+                        'consolidado',
+                        CoordinacionWhatsappPayload::generalCliente((string) $this->phoneNumberId, $message, $message)
+                    );
 
                     // Disparar evento de proveedor contactado en China
                     try {
@@ -1655,7 +1717,13 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                 $message .= "Total diferencia: " . $totalDiferencia;
                 $message .= "\n📦 La variación de CBM se actualizará en la cotización Final.";
                 if ($cotizacion->send_alert_difference_cbm_status == 'PENDING') {
-                    $response = $this->sendMessage($message);
+                    $response = $this->sendMessage(
+                        $message,
+                        $this->phoneNumberId,
+                        0,
+                        'consolidado',
+                        CoordinacionWhatsappPayload::generalCliente((string) $this->phoneNumberId, $message, $message)
+                    );
                     if ($response && isset($response['status']) && $response['status'] === true) {
                         Log::info('sendAlertDifferenceCbmMessage sent: ' . $message);
                         $cotizacion->send_alert_difference_cbm_status = 'SENDED';
@@ -2027,7 +2095,15 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                 ->where('send_status', 'SENDED')
                 ->count();
             // Enviar archivos de inspección (el mensaje se envía una sola vez dentro de esta función)
-            $sentFiles = $this->sendInspectionFiles($inspectionFiles, $inspectionMessage, $telefono, $proveedor->code_supplier);
+            $sentFiles = $this->sendInspectionFiles(
+                $inspectionFiles,
+                $inspectionMessage,
+                $telefono,
+                $proveedor->code_supplier,
+                (string) $cotizacion->nombre,
+                (string) $qtyBox,
+                $inspeccionViewUrl
+            );
             $usuarioActual = JWTAuth::parseToken()->authenticate();
             $cotizacion = Cotizacion::find($idCotizacion);
             $proveedor = CotizacionProveedor::find($idProveedor);
@@ -2042,7 +2118,17 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                 }
                 $pagosUrl = public_path('assets/images/pagos-full.jpg');
 
-                $this->sendMedia($pagosUrl, 'image/jpg', null, $telefono, 15, 'consolidado', 'Numeros_de_cuenta.jpg');
+                $captionPagos = 'Números de cuenta para pago';
+                $this->sendMedia(
+                    $pagosUrl,
+                    'image/jpg',
+                    $captionPagos,
+                    $telefono,
+                    15,
+                    'consolidado',
+                    'Numeros_de_cuenta.jpg',
+                    CoordinacionWhatsappPayload::consolidadoPagosImg((string) $telefono, $pagosUrl, $captionPagos, 15)
+                );
             } else {
                 return $this->jsonResponse(true, 'Proceso de inspección completado correctamente', [
                     'proveedors_with_files_sended' => $proveedorsWithFilesSended,
@@ -2139,8 +2225,15 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
     /**
      * Enviar archivos de inspección
      */
-    private function sendInspectionFiles($inspectionFiles, $message, $telefono, $codeSupplier = null)
-    {
+    private function sendInspectionFiles(
+        $inspectionFiles,
+        $message,
+        $telefono,
+        $codeSupplier = null,
+        ?string $nombreCliente = null,
+        ?string $cantidadCajas = null,
+        ?string $linkInspeccion = null
+    ) {
         $sentFiles = ['images' => 0, 'videos' => 0];
 
         // Contar total de archivos a enviar
@@ -2148,7 +2241,15 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
 
         // Solo enviar mensaje si hay archivos para enviar
         if ($totalFiles > 0) {
-            $this->sendMessage($message, $telefono);
+            $metaLlegada = CoordinacionWhatsappPayload::inspeccionLlegada(
+                (string) $telefono,
+                (string) ($nombreCliente ?? ''),
+                (string) ($codeSupplier ?? ''),
+                (string) ($cantidadCajas ?? ''),
+                (string) ($linkInspeccion ?? ''),
+                $message
+            );
+            $this->sendMessage($message, $telefono, 0, 'consolidado', $metaLlegada);
         }
 
         // Enviar imágenes sin mensaje adicional
@@ -2193,17 +2294,23 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
 
         // Mensaje con código del proveedor (como en SendInspectionMediaJob)
         $messageToSend = $codeSupplier ?? '';
+        $localPath = $this->storageLocalPath($file->file_path);
+        $caption = '📦 Inspección — proveedor ' . ($codeSupplier ?? '') . ' 📦';
+        $isVideo = is_string($file->file_type) && strpos($file->file_type, 'video/') === 0;
+        $meta = $isVideo
+            ? CoordinacionWhatsappPayload::inspeccionVideo((string) $telefono, (string) $codeSupplier, $localPath, $caption)
+            : CoordinacionWhatsappPayload::inspeccionImagen((string) $telefono, (string) $codeSupplier, $localPath, $caption);
 
         // Usar sendMediaInspectionToController para enviar con URL pública
-        // Este método internamente genera la URL pública desde la ruta relativa
         $response = $this->sendMediaInspectionToController(
-            $file->file_path,  // Ruta relativa almacenada en BD (ej: 'inspection/archivo.jpg')
+            $file->file_path,
             $file->file_type,
             $messageToSend,
             $telefono,
-            0,  // Sin sleep (como en SendInspectionMediaJob)
+            0,
             $file->id,
-            $fileName
+            $fileName,
+            $meta
         );
 
         // Verificar que la respuesta sea exitosa antes de actualizar el estado
@@ -2375,7 +2482,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
             $telefono = '51912705923@c.us'; // Número de prueba
 
             foreach ($inspecciones as $inspeccion) {
-                $fileSystemPath = storage_path('app/public/' . $inspeccion->file_path);
+                $fileSystemPath = $this->storageLocalPath($inspeccion->file_path);
 
                 Log::info('Probando envío de archivo', [
                     'id' => $inspeccion->id,
@@ -2472,64 +2579,6 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                 'error' => $e->getMessage()
             ], 500);
         }
-    }
-    private function generateImageUrl($ruta)
-    {
-        if (empty($ruta)) {
-            return null;
-        }
-
-        // Si ya es una URL completa, verificar si tiene doble storage y corregirlo
-        if (filter_var($ruta, FILTER_VALIDATE_URL)) {
-            // Corregir URLs con doble storage
-            if (strpos($ruta, '/storage//storage/') !== false) {
-                $ruta = str_replace('/storage//storage/', '/storage/', $ruta);
-            }
-            return $ruta;
-        }
-
-        // Limpiar la ruta de barras iniciales para evitar doble slash
-        $ruta = ltrim($ruta, '/');
-
-        // Corregir rutas con doble storage
-        if (strpos($ruta, 'storage//storage/') !== false) {
-            $ruta = str_replace('storage//storage/', 'storage/', $ruta);
-        }
-
-        // Si la ruta ya contiene 'storage/', no agregar otro 'storage/'
-        if (strpos($ruta, 'storage/') === 0) {
-            $baseUrl = config('app.url');
-            return rtrim($baseUrl, '/') . '/' . $ruta;
-        }
-
-        // Si la ruta empieza con 'contratos/', usar ruta con CORS para desarrollo
-        if (strpos($ruta, 'contratos/') === 0) {
-            $baseUrl = config('app.url');
-            // En desarrollo, usar /files/ para que pase por el FileController con CORS
-            if (config('app.env') === 'local') {
-                return rtrim($baseUrl, '/') . '/files/' . $ruta;
-            }
-            // En producción, usar /storage/ directamente
-            return rtrim($baseUrl, '/') . '/storage/' . $ruta;
-        }
-
-        // Si la ruta empieza con 'public/', remover 'public/' y agregar 'storage/'
-        if (strpos($ruta, 'public/') === 0) {
-            $ruta = substr($ruta, 7); // Remover 'public/'
-            $baseUrl = config('app.url');
-            return rtrim($baseUrl, '/') . '/storage/' . $ruta;
-        }
-
-        // Construir URL manualmente para evitar problemas con Storage::url()
-        $baseUrl = config('app.url');
-        $storagePath = 'storage/';
-
-        // Asegurar que no haya doble slash
-        $baseUrl = rtrim($baseUrl, '/');
-        $storagePath = ltrim($storagePath, '/');
-        $ruta = ltrim($ruta, '/');
-
-        return $baseUrl . '/' . $storagePath . $ruta;
     }
 
     /**
@@ -2628,21 +2677,12 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
             foreach ($files as $file) {
                 if ($file->isValid()) {
                     $filename = time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
-                    $path = $file->storeAs(self::INSPECTION_PATH, $filename, 'public');
+                    $path = $this->storageStoreUpload($file, self::INSPECTION_PATH, $filename);
 
-                    // Normalizar la ruta: asegurar que no tenga 'public/' al inicio
-                    // storeAs con disco 'public' devuelve la ruta relativa al disco (ej: 'inspection/filename.mp4')
-                    $path = ltrim($path, '/');
-                    if (strpos($path, 'public/') === 0) {
-                        $path = substr($path, 7); // Remover 'public/' si existe
-                    }
-
-                    // Log detallado para debug (igual que en DocumentacionController)
                     Log::info('Archivo de inspección guardado:', [
                         'original_name' => $file->getClientOriginalName(),
                         'stored_path' => $path,
-                        'full_storage_path' => storage_path('app/public/' . $path),
-                        'exists' => Storage::disk('public')->exists($path),
+                        'exists' => $this->objectStorage()->exists($path),
                         'inspection_path_const' => self::INSPECTION_PATH
                     ]);
 
@@ -2747,7 +2787,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                     $filename = time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
 
                     // Guardar archivo en storage
-                    $path = $file->storeAs(self::DOCUMENTATION_PATH, $filename, 'public');
+                    $path = $this->storageStoreUpload($file, self::DOCUMENTATION_PATH, $filename);
 
                     // Crear registro en la base de datos
                     $documentacion = new AlmacenDocumentacion();
@@ -2987,31 +3027,21 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                 return $this->downloadExternalMedia($filePath);
             }
 
-            // Si no es URL, intentar como ruta local
-            $possiblePaths = [
-                // Ruta directa si ya es absoluta
-                $filePath,
-                // Ruta en storage/app/public
-                storage_path('app/public/' . $filePath),
-                // Ruta en public
-                public_path($filePath),
-                // Ruta relativa desde storage
-                storage_path($filePath),
-                // Limpiar posibles barras dobles y probar
-                storage_path('app/public/' . ltrim($filePath, '/')),
-                public_path(ltrim($filePath, '/'))
-            ];
-
-            foreach ($possiblePaths as $path) {
-                if (file_exists($path)) {
-                    Log::info("Archivo encontrado en: " . $path);
-                    return $path;
-                }
+            $relative = $this->objectStorage()->normalizeRelativePath($filePath);
+            if ($relative && $this->objectStorage()->exists($relative)) {
+                $local = $this->storageLocalPath($relative);
+                Log::info('Archivo encontrado en object storage: ' . $local);
+                return $local;
             }
 
-            Log::error("Archivo no encontrado en ninguna ruta", [
+            if (file_exists($filePath)) {
+                Log::info('Archivo encontrado en ruta absoluta: ' . $filePath);
+                return $filePath;
+            }
+
+            Log::error('Archivo no encontrado en ninguna ruta', [
                 'file_path' => $filePath,
-                'attempted_paths' => $possiblePaths
+                'normalized' => $relative
             ]);
 
             return false;
@@ -3619,12 +3649,6 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                     'message' => 'Archivo inválido'
                 ], 400);
             }
-            // Crear directorio si no existe
-            $contratosDir = public_path('storage/contratos');
-            if (!file_exists($contratosDir)) {
-                mkdir($contratosDir, 0755, true);
-            }
-
             // Verificar si es una imagen para generar contrato con firma
             $mimeType = $signedFile->getMimeType();
             $isImage = in_array($mimeType, ['image/png', 'image/jpeg', 'image/jpg', 'image/gif']);
@@ -3632,12 +3656,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
             if ($isImage) {
                 // Generar contrato completo con firma
                 $pdfFilename = $uuid . '_signed_contract.pdf';
-                $pdfPath = $contratosDir . '/' . $pdfFilename;
-
-                // Eliminar archivo anterior si existe
-                if (file_exists($pdfPath)) {
-                    unlink($pdfPath);
-                }
+                $relativePath = 'contratos/' . $pdfFilename;
 
                 // Obtener información del contenedor para el contrato
                 $contenedor = \App\Models\CargaConsolidada\Contenedor::find($cotizacion->id_contenedor);
@@ -3685,25 +3704,15 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                 Log::info('Renderizado PDF firmado completado en ' . round($duration, 2) . 's para cotizacion ' . $cotizacion->id);
 
                 $pdfContent = $dompdf->output();
-
-                // Guardar PDF
-                file_put_contents($pdfPath, $pdfContent);
-
-                // Usar el nombre del PDF
+                $this->storagePutContents($relativePath, $pdfContent);
                 $filename = $pdfFilename;
-                $relativePath = 'contratos/' . $filename;
             } else {
-                // Si ya es PDF, mover directamente
                 $filename = $uuid . '_signed_contract.pdf';
-                $filePath = $contratosDir . '/' . $filename;
-
-                // Eliminar archivo anterior si existe
-                if (file_exists($filePath)) {
-                    unlink($filePath);
-                }
-
-                $signedFile->move($contratosDir, $filename);
-                $relativePath = 'contratos/' . $filename;
+                $relativePath = $this->storageStoreUpload(
+                    $signedFile,
+                    'contratos',
+                    $filename
+                );
             }
 
             // Guardar ruta relativa en la base de datos
@@ -3716,8 +3725,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
 
             $message = 'Hola ' . $cotizacion->nombre . ', te envío el contrato de servicio firmado.';
 
-            // Usar la ruta correcta del archivo (PDF generado o archivo movido)
-            $finalFilePath = $contratosDir . '/' . $filename;
+            $finalFilePath = $this->storageLocalPath($relativePath);
             $fileName = 'contrato_' . $cotizacion->cod_contract . '.pdf';
             $this->sendMedia($finalFilePath, 'application/pdf', $message, $telefono, 10, 'ventas', $fileName);
 

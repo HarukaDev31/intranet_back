@@ -4,6 +4,7 @@ namespace App\Http\Controllers\CargaConsolidada\Clientes;
 
 use App\Http\Controllers\Controller;
 use App\Traits\UserGroupsTrait;
+use App\Traits\FileTrait;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use App\Models\CargaConsolidada\Cotizacion;
@@ -16,6 +17,7 @@ use App\Services\CargaConsolidada\Clientes\GeneralService;
 use App\Services\CargaConsolidada\Clientes\GeneralExportService;
 use App\Models\CargaConsolidada\CotizacionProveedor;
 use App\Traits\WhatsappTrait;
+use App\Support\WhatsApp\CoordinacionWhatsappPayload;
 use App\Models\CargaConsolidada\Contenedor;
 use App\Models\CargaConsolidada\ConsolidadoCotizacionAduanaTramite;
 use App\Jobs\SolicitarDocumentosWhatsAppJob;
@@ -23,6 +25,7 @@ use App\Jobs\SolicitarDocumentosWhatsAppJob;
 class GeneralController extends Controller
 {
     use WhatsappTrait;
+    use FileTrait;
     private $table_contenedor_cotizacion = "contenedor_consolidado_cotizacion";
     private $table_contenedor_cotizacion_proveedores = "contenedor_consolidado_cotizacion_proveedores";
     private $table_contenedor_consolidado_cotizacion_coordinacion_pagos = "contenedor_consolidado_cotizacion_coordinacion_pagos";
@@ -237,6 +240,7 @@ class GeneralController extends Controller
                     'factura_comercial',
                     'packing_list',
                     'excel_confirmacion',
+                    'excel_confirmacion_drive_link',
                     'invoice_status',
                     'packing_status',
                     'excel_conf_status',
@@ -290,6 +294,7 @@ class GeneralController extends Controller
                             'factura_comercial' => $this->generateImageUrl($p->factura_comercial),
                             'packing_list' => $this->generateImageUrl($p->packing_list),
                             'excel_confirmacion' => $this->generateImageUrl($p->excel_confirmacion),
+                            'excel_confirmacion_drive_link' => $p->excel_confirmacion_drive_link,
                             // Devolver status de documentos
                             'invoice_status' => $p->invoice_status,
                             'packing_status' => $p->packing_status,
@@ -858,7 +863,8 @@ class GeneralController extends Controller
             $cargoVal = $cargoRow->carga ?? '';
             $cargaCode = is_numeric($cargoVal) ? str_pad((string) $cargoVal, 2, '0', STR_PAD_LEFT) : $cargoVal;
 
-            SolicitarDocumentosWhatsAppJob::dispatch((int) $idCotizacion, $proveedores, (bool) $validateMaxDate);
+            $domain = WhatsappTrait::getCurrentRequestDomain() ?? 'localhost';
+            SolicitarDocumentosWhatsAppJob::dispatch((int) $idCotizacion, $proveedores, (bool) $validateMaxDate, $domain);
 
             return response()->json([
                 'success' => true,
@@ -910,7 +916,7 @@ class GeneralController extends Controller
 
             // Obtener información de la cotización
             $cot = DB::table('contenedor_consolidado_cotizacion')
-                ->select('nombre', 'telefono')
+                ->select('nombre', 'telefono', 'id_contenedor')
                 ->where('id', $idCotizacion)
                 ->whereNull('deleted_at')
                 ->first();
@@ -927,15 +933,14 @@ class GeneralController extends Controller
             $telefono = preg_replace('/\s+/', '', $telefono);
             $telefono = $telefono ? $telefono . '@c.us' : '';
 
-            // Mapa de documentos a nombres legibles
-            $documentosMap = [
-                'commercial_invoice' => 'Commercial Invoice 📄',
-                'packing_list' => 'Packing List 📦.',
-                'excel_confirmacion' => 'Excel de confirmacion 📄'
-            ];
+            $cargaRaw = DB::table('carga_consolidada_contenedor')
+                ->where('id', $cot->id_contenedor)
+                ->value('carga');
+            $cargaCode = is_numeric($cargaRaw)
+                ? str_pad((string) $cargaRaw, 2, '0', STR_PAD_LEFT)
+                : (string) ($cargaRaw ?? '');
 
-            // Construir el mensaje
-            $mensaje = "Hola {$nombreCliente} estamos esperando nos envies los documentos de tu importación, a continuacion detallo los que faltan:\n\n";
+            $proveedoresPendientes = [];
 
             foreach ($proveedores as $prov) {
                 $idProveedor = $prov['id'] ?? null;
@@ -945,28 +950,46 @@ class GeneralController extends Controller
                     continue;
                 }
 
-                // Obtener el código del proveedor
                 $proveedor = CotizacionProveedor::where('id', $idProveedor)->first();
                 if (!$proveedor) {
                     Log::warning('Proveedor no encontrado: ' . $idProveedor);
                     continue;
                 }
 
-                $codeSupplier = $proveedor->code_supplier ?? "Proveedor #{$idProveedor}";
-                $mensaje .= "Proveedor: {$codeSupplier}\n";
-
-                // Agregar documentos faltantes
-                foreach ($documentos as $doc) {
-                    $nombreDocumento = $documentosMap[$doc] ?? ucwords(str_replace('_', ' ', $doc));
-                    $mensaje .= "{$nombreDocumento}\n";
-                }
-                $mensaje .= "\n";
+                $proveedoresPendientes[] = [
+                    'code' => (string) ($proveedor->code_supplier ?? "Proveedor #{$idProveedor}"),
+                    'documentos' => $documentos,
+                ];
             }
 
-            $mensaje .= "Si no tenemos tus documentos a tiempo aduana puede aplicarte multas o inmovilización de tus productos.";
+            if ($proveedoresPendientes === []) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No hay proveedores con documentos pendientes válidos'
+                ], 422);
+            }
 
-            // Enviar mensaje por WhatsApp
-            $response = $this->sendMessage($mensaje, $telefono, 5);
+            if ($this->shouldRouteCoordinacionToMeta('consolidado')) {
+                $steps = CoordinacionWhatsappPayload::docsRecordatorioSteps(
+                    (string) $telefono,
+                    (string) $nombreCliente,
+                    $cargaCode,
+                    $proveedoresPendientes
+                );
+
+                $response = ['status' => true, 'queued' => true];
+                foreach ($steps as $step) {
+                    $response = $this->queueCoordinacionWhatsApp($step);
+                }
+            } else {
+                $legacyMessage = CoordinacionWhatsappPayload::docsRecordatorioLegacyMessage(
+                    (string) $nombreCliente,
+                    $cargaCode,
+                    $proveedoresPendientes
+                );
+                $response = $this->sendMessage($legacyMessage, $telefono, 5, 'consolidado');
+            }
+
             Log::info('Respuesta de WhatsApp recordatorios: ' . json_encode($response));
 
             return response()->json([
@@ -975,7 +998,11 @@ class GeneralController extends Controller
                 'payload' => [
                     'id_cotizacion' => $idCotizacion,
                     'nombre_cliente' => $nombreCliente,
-                    'text' => $mensaje
+                    'carga' => $cargaCode,
+                    'proveedores' => $proveedoresPendientes,
+                    'templates' => $this->shouldRouteCoordinacionToMeta('consolidado')
+                        ? ['pb_docs_recordatorio_intro_v1', 'pb_docs_recordatorio_proveedor_v1', 'pb_docs_recordatorio_aviso_v1']
+                        : null,
                 ]
             ]);
         }catch (\Exception $e) {
@@ -987,66 +1014,4 @@ class GeneralController extends Controller
         }
     }
 
-    /**
-     * Generate full URL for image/file paths
-     * Copied from CotizacionController for consistency
-     */
-    public function generateImageUrl($ruta)
-    {
-        if (empty($ruta)) {
-            return null;
-        }
-
-        // Si ya es una URL completa, verificar si tiene doble storage y corregirlo
-        if (filter_var($ruta, FILTER_VALIDATE_URL)) {
-            // Corregir URLs con doble storage
-            if (strpos($ruta, '/storage//storage/') !== false) {
-                $ruta = str_replace('/storage//storage/', '/storage/', $ruta);
-            }
-            return $ruta;
-        }
-
-        // Limpiar la ruta de barras iniciales para evitar doble slash
-        $ruta = ltrim($ruta, '/');
-
-        // Corregir rutas con doble storage
-        if (strpos($ruta, 'storage//storage/') !== false) {
-            $ruta = str_replace('storage//storage/', 'storage/', $ruta);
-        }
-
-        // Si la ruta ya contiene 'storage/', no agregar otro 'storage/'
-        if (strpos($ruta, 'storage/') === 0) {
-            $baseUrl = config('app.url');
-            return rtrim($baseUrl, '/') . '/' . $ruta;
-        }
-
-        // Si la ruta empieza con 'contratos/', usar ruta con CORS para desarrollo
-        if (strpos($ruta, 'contratos/') === 0) {
-            $baseUrl = config('app.url');
-            // En desarrollo, usar /files/ para que pase por el FileController con CORS
-            if (config('app.env') === 'local') {
-                return rtrim($baseUrl, '/') . '/files/' . $ruta;
-            }
-            // En producción, usar /storage/ directamente
-            return rtrim($baseUrl, '/') . '/storage/' . $ruta;
-        }
-
-        // Si la ruta empieza con 'public/', remover 'public/' y agregar 'storage/'
-        if (strpos($ruta, 'public/') === 0) {
-            $ruta = substr($ruta, 7); // Remover 'public/'
-            $baseUrl = config('app.url');
-            return rtrim($baseUrl, '/') . '/storage/' . $ruta;
-        }
-
-        // Construir URL manualmente para evitar problemas con Storage::url()
-        $baseUrl = config('app.url');
-        $storagePath = 'storage/';
-
-        // Asegurar que no haya doble slash
-        $baseUrl = rtrim($baseUrl, '/');
-        $storagePath = ltrim($storagePath, '/');
-        $ruta = ltrim($ruta, '/');
-
-        return $baseUrl . '/' . $storagePath . $ruta;
-    }
 }

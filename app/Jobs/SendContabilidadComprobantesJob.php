@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Models\CargaConsolidada\Cotizacion;
 use App\Models\CargaConsolidada\Contenedor;
 use App\Models\CargaConsolidada\Comprobante;
+use App\Contracts\ObjectStorageConnectorInterface;
 use App\Traits\WhatsappTrait;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -63,13 +64,15 @@ class SendContabilidadComprobantesJob implements ShouldQueue
                 return;
             }
 
+            $storage = app(ObjectStorageConnectorInterface::class);
+
             foreach ($comprobantes as $comp) {
-                $filePath = storage_path('app/' . $comp->file_path);
-                if (!file_exists($filePath)) {
-                    Log::warning('SendContabilidadComprobantesJob: archivo no encontrado', ['path' => $filePath]);
+                if (!$storage->exists($comp->file_path)) {
+                    Log::warning('SendContabilidadComprobantesJob: archivo no encontrado', ['path' => $comp->file_path]);
                     continue;
                 }
-                $mimeType = mime_content_type($filePath) ?: 'application/pdf';
+                $filePath = $storage->localPath($comp->file_path);
+                $mimeType = $storage->mimeType($comp->file_path) ?: 'application/pdf';
                 $this->sendMedia($filePath, $mimeType, $message, $numeroWhatsapp, 0, 'administracion', $comp->file_name);
                 $message = ''; // Solo el primer archivo lleva el caption
             }

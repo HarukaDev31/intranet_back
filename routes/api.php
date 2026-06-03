@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Route;
 use App\Models\BaseDatos\Clientes\Cliente;
 use App\Http\Controllers\Api\BitrixWebhookController;
 use App\Http\Controllers\Api\EvolutionWebhookController;
+use App\Http\Controllers\Google\GoogleDriveOAuthController;
 use App\Http\Controllers\CargaConsolidada\FacturaGuiaController;
 
 /*
@@ -20,6 +21,12 @@ use App\Http\Controllers\CargaConsolidada\FacturaGuiaController;
 
 Route::post('/bitrix/webhook', [BitrixWebhookController::class, 'handle']);
 Route::post('/evolution/webhook', [EvolutionWebhookController::class, 'handle']);
+
+// OAuth Google Drive (configuración única — Excel confirmación)
+Route::prefix('google/drive/oauth')->group(function () {
+    Route::get('/authorize', [GoogleDriveOAuthController::class, 'authorizeRedirect']);
+    Route::get('/callback', [GoogleDriveOAuthController::class, 'callback']);
+});
 
 /*
 |--------------------------------------------------------------------------

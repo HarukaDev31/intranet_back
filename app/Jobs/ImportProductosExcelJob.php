@@ -7,15 +7,15 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use App\Traits\UsesObjectStorage;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Storage;
 use App\Models\BaseDatos\ProductoImportadoExcel;
 use App\Models\ImportProducto;
 use App\Events\ImportacionExcelCompleted;
 
 class ImportProductosExcelJob implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, UsesObjectStorage;
 
     protected $filePath;
     protected $idImportProducto;
@@ -392,23 +392,19 @@ class ImportProductosExcelJob implements ShouldQueue
                             if (file_exists($imagePath)) {
                                 $imageData = file_get_contents($imagePath);
                                 if ($imageData !== false) {
-                                    // Crear directorio si no existe (misma estructura que Excel: imports/productos)
-                                    $path = storage_path('app/public/imports/productos/');
-                                    if (!is_dir($path)) {
-                                        mkdir($path, 0777, true);
-                                    }
-
                                     // Obtener extensión original o usar jpg por defecto
                                     $extension = pathinfo($extractedPart, PATHINFO_EXTENSION);
                                     $extension = $extension ? $extension : 'jpg';
 
                                     $filename = 'imports/productos/' . uniqid() . '.' . $extension;
-                                    $fullPath = storage_path('app/public/' . $filename);
 
-                                    if (file_put_contents($fullPath, $imageData)) {
+                                    try {
+                                        $this->storagePutContents($filename, $imageData);
                                         $foto = $filename;
                                         Log::info("Imagen guardada desde fila $coordinate: " . $foto);
                                         return $foto;
+                                    } catch (\Throwable $uploadError) {
+                                        Log::warning('No se pudo subir imagen de producto: ' . $uploadError->getMessage());
                                     }
                                 }
                             }

@@ -7,14 +7,15 @@ use App\Http\Controllers\CargaConsolidada\CotizacionFinal\CotizacionFinalControl
 use App\Jobs\GenerateMassiveExcelPayrollsJob;
 use App\Models\CargaConsolidada\ConsolidadoPlantillaFinalBatch;
 use Illuminate\Http\UploadedFile;
+use App\Traits\UsesObjectStorage;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Storage;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use ZipArchive;
 
 class PlantillaFinalBatchService
 {
+    use UsesObjectStorage;
     /** @var CotizacionFinalController */
     protected $cotizacionFinalController;
 
@@ -28,10 +29,10 @@ class PlantillaFinalBatchService
         $idContenedor = (int) $idContenedor;
         $clientesExcel = $this->countClientsInExcel($file);
 
-        $plantillaRelative = $file->storeAs(
+        $plantillaRelative = $this->storageStoreUpload(
+            $file,
             'plantillas-finales/uploads',
-            $idContenedor . '_' . time() . '_' . uniqid() . '_' . $file->getClientOriginalName(),
-            'public'
+            $idContenedor . '_' . time() . '_' . uniqid() . '_' . $file->getClientOriginalName()
         );
 
         $zipRelative = 'plantillas-finales/zips/' . $idContenedor . '_' . time() . '_' . uniqid() . '.zip';
@@ -139,11 +140,11 @@ class PlantillaFinalBatchService
     public function resolveStoragePath($relativePath)
     {
         $relativePath = ltrim((string) $relativePath, '/');
-        $full = storage_path('app/public/' . $relativePath);
-        if (!file_exists($full)) {
+        if (!$this->objectStorage()->exists($relativePath)) {
             throw new \InvalidArgumentException('Archivo no encontrado.');
         }
-        return $full;
+
+        return $this->storageLocalPath($relativePath);
     }
 
     protected function mapBatchForApi(ConsolidadoPlantillaFinalBatch $batch)
@@ -164,7 +165,7 @@ class PlantillaFinalBatchService
             'zip_path' => $batch->zip_path,
             'nombre_plantilla' => $batch->nombre_plantilla,
             'has_plantilla' => !empty($batch->plantilla_url),
-            'has_zip' => !empty($batch->zip_path) && file_exists(storage_path('app/public/' . $batch->zip_path)),
+            'has_zip' => !empty($batch->zip_path) && $this->objectStorage()->exists($batch->zip_path),
             'mensaje_error' => $batch->mensaje_error,
             'created_at' => $batch->created_at ? $batch->created_at->toIso8601String() : null,
         ];
@@ -202,12 +203,12 @@ class PlantillaFinalBatchService
 
         $idContainer = (int) $batch->id_contenedor;
         $excelFullPath = $this->resolveStoragePath($batch->plantilla_url);
-        $zipFullPath = storage_path('app/public/' . ltrim($batch->zip_path, '/'));
-
-        $zipDir = dirname($zipFullPath);
-        if (!file_exists($zipDir)) {
-            mkdir($zipDir, 0755, true);
+        $zipRelative = ltrim($batch->zip_path, '/');
+        $tempDir = storage_path('app/temp');
+        if (!is_dir($tempDir)) {
+            mkdir($tempDir, 0755, true);
         }
+        $zipFullPath = $tempDir . DIRECTORY_SEPARATOR . basename($zipRelative);
         if (file_exists($zipFullPath)) {
             unlink($zipFullPath);
         }
@@ -366,7 +367,7 @@ class PlantillaFinalBatchService
                     continue;
                 }
 
-                $fullExcelPath = public_path('storage/' . $genResult['excel_file_path']);
+                $fullExcelPath = $this->storageLocalPath((string) $genResult['excel_file_path']);
                 if (file_exists($fullExcelPath)) {
                     if (!$zip->addFile($fullExcelPath, $genResult['excel_file_name'])) {
                         Log::warning('PlantillaFinalBatchService: Excel generado pero no se pudo agregar al ZIP', [
@@ -411,6 +412,9 @@ class PlantillaFinalBatchService
         if (!file_exists($zipFullPath) || filesize($zipFullPath) === 0) {
             throw new \Exception('El archivo ZIP no se generó correctamente');
         }
+
+        $this->storagePutContents($zipRelative, file_get_contents($zipFullPath));
+        @unlink($zipFullPath);
 
         return [
             'completados' => $processedCount,

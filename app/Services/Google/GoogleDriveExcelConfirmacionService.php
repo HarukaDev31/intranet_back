@@ -1,0 +1,283 @@
+<?php
+
+namespace App\Services\Google;
+
+use Google\Client as GoogleClient;
+use Google\Service\Drive;
+use Google\Service\Drive\DriveFile;
+use Google\Service\Drive\Permission;
+use Illuminate\Support\Facades\Log;
+
+/**
+ * Sube Excel de confirmación a Google Drive (carpetas por consolidado / cliente / proveedor).
+ *
+ * Modo oauth (recomendado Gmail): cuenta de usuario con refresh token.
+ * Modo service_account: Shared drive o carpeta compartida con SA (Workspace).
+ */
+class GoogleDriveExcelConfirmacionService
+{
+    /** @var Drive|null */
+    private $drive;
+
+    /** @var bool */
+    private $usesOAuth = false;
+
+    /** @var string */
+    private $rootFolderId;
+
+    /** @var string */
+    private $sharedDriveId;
+
+    /** @var GoogleDriveOAuthCredentials */
+    private $oauthCredentials;
+
+    public function __construct(GoogleDriveOAuthCredentials $oauthCredentials)
+    {
+        $this->oauthCredentials = $oauthCredentials;
+        $this->rootFolderId = trim((string) config('google.drive_excel_confirmacion_root_folder_id', ''));
+        $this->sharedDriveId = trim((string) config('google.drive_excel_confirmacion_shared_drive_id', ''));
+    }
+
+    public function isConfigured(): bool
+    {
+        if ($this->rootFolderId === '') {
+            return false;
+        }
+
+        if ($this->shouldUseOAuth()) {
+            return $this->oauthCredentials->isConfigured();
+        }
+
+        $credentials = config('google.service.file');
+
+        return (bool) config('google.service.enable', false)
+            && is_string($credentials)
+            && is_file($credentials);
+    }
+
+    /**
+     * @return string|null URL pública view?usp=sharing
+     */
+    public function uploadForProveedor(
+        string $cargaCode,
+        string $nombreCliente,
+        string $codeSupplier,
+        string $localPath,
+        string $fileName
+    ): ?string {
+        if (!$this->isConfigured() || !is_file($localPath)) {
+            return null;
+        }
+
+        try {
+            $this->bootDrive();
+
+            $consolidadoFolderId = $this->ensureFolder($this->rootFolderId, 'Consolidado-' . $this->sanitizeName($cargaCode));
+            $clienteFolderId = $this->ensureFolder($consolidadoFolderId, $this->sanitizeName($nombreCliente));
+            $proveedorFolderId = $this->ensureFolder($clienteFolderId, $this->sanitizeName($codeSupplier));
+
+            return $this->uploadOrReplace($proveedorFolderId, $localPath, $fileName);
+        } catch (\Throwable $e) {
+            Log::error('GoogleDriveExcelConfirmacionService: fallo al subir Excel', [
+                'auth' => $this->usesOAuth ? 'oauth' : 'service_account',
+                'carga' => $cargaCode,
+                'proveedor' => $codeSupplier,
+                'file' => $fileName,
+                'error' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
+    }
+
+    private function shouldUseOAuth(): bool
+    {
+        $mode = strtolower(trim((string) config('google.drive_excel_auth_mode', 'oauth')));
+
+        if ($mode === 'service_account') {
+            return false;
+        }
+
+        if ($mode === 'oauth') {
+            return true;
+        }
+
+        // auto: OAuth si hay credenciales OAuth; si no, service account
+        if ($this->oauthCredentials->isConfigured()) {
+            return true;
+        }
+
+        return false;
+    }
+
+    private function bootDrive(): void
+    {
+        if ($this->drive !== null) {
+            return;
+        }
+
+        $this->usesOAuth = $this->shouldUseOAuth();
+
+        if ($this->usesOAuth) {
+            $client = $this->oauthCredentials->createAuthenticatedClient();
+        } else {
+            $client = new GoogleClient();
+            $client->setAuthConfig(config('google.service.file'));
+            $client->addScope(Drive::DRIVE);
+        }
+
+        $this->drive = new Drive($client);
+    }
+
+    private function ensureFolder(string $parentId, string $name): string
+    {
+        $existingId = $this->findFolderId($parentId, $name);
+        if ($existingId !== null) {
+            return $existingId;
+        }
+
+        $meta = new DriveFile([
+            'name' => $name,
+            'mimeType' => 'application/vnd.google-apps.folder',
+            'parents' => [$parentId],
+        ]);
+
+        $folder = $this->drive->files->create($meta, $this->driveWriteParams(['fields' => 'id']));
+
+        return (string) $folder->getId();
+    }
+
+    private function findFolderId(string $parentId, string $name): ?string
+    {
+        $results = $this->drive->files->listFiles(array_merge($this->driveListParams(), [
+            'q' => $this->buildNameInParentQuery($name, $parentId, 'application/vnd.google-apps.folder'),
+            'fields' => 'files(id)',
+            'pageSize' => 1,
+        ]));
+
+        $files = $results->getFiles();
+
+        return !empty($files) ? (string) $files[0]->getId() : null;
+    }
+
+    private function uploadOrReplace(string $folderId, string $localPath, string $fileName): string
+    {
+        $mime = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+        $content = file_get_contents($localPath);
+        if ($content === false) {
+            throw new \RuntimeException('No se pudo leer el archivo local: ' . $localPath);
+        }
+
+        $existingId = $this->findFileId($folderId, $fileName);
+
+        if ($existingId !== null) {
+            $meta = new DriveFile(['name' => $fileName]);
+            $file = $this->drive->files->update($existingId, $meta, $this->driveWriteParams([
+                'data' => $content,
+                'mimeType' => $mime,
+                'uploadType' => 'multipart',
+                'fields' => 'id',
+            ]));
+            $fileId = (string) $file->getId();
+        } else {
+            $meta = new DriveFile([
+                'name' => $fileName,
+                'parents' => [$folderId],
+            ]);
+            $file = $this->drive->files->create($meta, $this->driveWriteParams([
+                'data' => $content,
+                'mimeType' => $mime,
+                'uploadType' => 'multipart',
+                'fields' => 'id',
+            ]));
+            $fileId = (string) $file->getId();
+        }
+
+        $this->ensureAnyoneReader($fileId);
+
+        return 'https://drive.google.com/file/d/' . $fileId . '/view?usp=sharing';
+    }
+
+    private function findFileId(string $folderId, string $fileName): ?string
+    {
+        $results = $this->drive->files->listFiles(array_merge($this->driveListParams(), [
+            'q' => $this->buildNameInParentQuery($fileName, $folderId, null),
+            'fields' => 'files(id)',
+            'pageSize' => 1,
+        ]));
+
+        $files = $results->getFiles();
+
+        return !empty($files) ? (string) $files[0]->getId() : null;
+    }
+
+    private function buildNameInParentQuery(string $name, string $parentId, ?string $mimeType): string
+    {
+        $escapedName = str_replace("'", "\\'", $name);
+        $query = sprintf("name='%s' and '%s' in parents and trashed=false", $escapedName, $parentId);
+
+        if ($mimeType !== null) {
+            $query .= " and mimeType='{$mimeType}'";
+        }
+
+        return $query;
+    }
+
+    private function ensureAnyoneReader(string $fileId): void
+    {
+        try {
+            $permission = new Permission([
+                'type' => 'anyone',
+                'role' => 'reader',
+            ]);
+            $this->drive->permissions->create($fileId, $permission, $this->driveWriteParams());
+        } catch (\Throwable $e) {
+            Log::debug('GoogleDriveExcelConfirmacionService: permiso Drive', [
+                'file_id' => $fileId,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $extra
+     * @return array<string, mixed>
+     */
+    private function driveWriteParams(array $extra = []): array
+    {
+        $params = $extra;
+
+        if (!$this->usesOAuth || $this->sharedDriveId !== '') {
+            $params['supportsAllDrives'] = true;
+        }
+
+        return $params;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function driveListParams(): array
+    {
+        $params = [];
+
+        if (!$this->usesOAuth || $this->sharedDriveId !== '') {
+            $params['supportsAllDrives'] = true;
+            $params['includeItemsFromAllDrives'] = true;
+        }
+
+        if ($this->sharedDriveId !== '') {
+            $params['driveId'] = $this->sharedDriveId;
+            $params['corpora'] = 'drive';
+        }
+
+        return $params;
+    }
+
+    private function sanitizeName(string $name): string
+    {
+        $name = preg_replace('/[\/\\\\:*?"<>|]/', '-', trim($name));
+
+        return $name !== '' ? $name : 'sin-nombre';
+    }
+}

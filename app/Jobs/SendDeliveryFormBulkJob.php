@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Models\CargaConsolidada\Contenedor;
 use App\Services\Delivery\DeliveryFormLinkCoordinationNotifier;
+use App\Support\WhatsApp\CoordinacionWhatsappPayload;
 use App\Traits\WhatsappTrait;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -127,35 +128,66 @@ class SendDeliveryFormBulkJob implements ShouldQueue
                     $telefono = '51' . $telefono;
                 }
                 $numeroWhatsapp = $telefono . '@c.us';
+                $nombreCliente = trim((string) ($row->nombre_cliente ?? '')) !== ''
+                    ? trim((string) $row->nombre_cliente)
+                    : 'cliente';
+                $cargaStr = (string) $contenedor->carga;
+                $linkForm = $this->buildFormularioEntregaUrl((int) $row->id_contenedor, $typeForm);
 
-                $resultPrincipal = $this->sendMessage($messagePrincipal, $numeroWhatsapp);
-                if (!$resultPrincipal['status']) {
-                    Log::warning('SendDeliveryFormBulkJob: error enviando WhatsApp', [
-                        'id_cotizacion' => $idCotizacion,
-                        'tipo_mensaje' => 'principal',
-                        'response' => isset($resultPrincipal['response']) ? $resultPrincipal['response'] : null,
-                    ]);
-                    continue;
+                if (config('meta_whatsapp.coordinacion_enabled')) {
+                    $payloadPrincipal = $typeForm === 1
+                        ? CoordinacionWhatsappPayload::entregaLinkLima(
+                            $numeroWhatsapp,
+                            $cargaStr,
+                            $nombreCliente,
+                            $linkForm,
+                            $messagePrincipal
+                        )
+                        : CoordinacionWhatsappPayload::entregaLinkProvincia(
+                            $numeroWhatsapp,
+                            $cargaStr,
+                            $nombreCliente,
+                            $linkForm,
+                            $messagePrincipal
+                        );
+                    $resultPrincipal = $this->queueCoordinacionWhatsApp($payloadPrincipal);
+
+                    $payloadSecundario = $typeForm === 1
+                        ? CoordinacionWhatsappPayload::entregaReglasLima($numeroWhatsapp, $messageSecundario, 5)
+                        : (intval($cargaStr) >= 5
+                            ? CoordinacionWhatsappPayload::entregaReglasProvinciaFleteFinal($numeroWhatsapp, $messageSecundario, 5)
+                            : CoordinacionWhatsappPayload::entregaReglasProvinciaFleteCotiza($numeroWhatsapp, $messageSecundario, 5));
+                    $resultSecundario = $this->queueCoordinacionWhatsApp($payloadSecundario);
+                } else {
+                    $resultPrincipal = $this->sendMessage($messagePrincipal, $numeroWhatsapp);
+                    if (!$resultPrincipal['status']) {
+                        Log::warning('SendDeliveryFormBulkJob: error enviando WhatsApp', [
+                            'id_cotizacion' => $idCotizacion,
+                            'tipo_mensaje' => 'principal',
+                            'response' => isset($resultPrincipal['response']) ? $resultPrincipal['response'] : null,
+                        ]);
+                        continue;
+                    }
+
+                    $resultSecundario = $this->sendMessage($messageSecundario, $numeroWhatsapp, 5);
+                    if (!$resultSecundario['status']) {
+                        Log::warning('SendDeliveryFormBulkJob: error enviando WhatsApp', [
+                            'id_cotizacion' => $idCotizacion,
+                            'tipo_mensaje' => 'secundario',
+                            'response' => isset($resultSecundario['response']) ? $resultSecundario['response'] : null,
+                        ]);
+                    }
                 }
 
                 (new DeliveryFormLinkCoordinationNotifier())->notify(
                     $messagePrincipal,
                     $messageSecundario,
-                    trim((string) ($row->nombre_cliente ?? '')) !== '' ? trim((string) $row->nombre_cliente) : 'cliente',
-                    (string) $contenedor->carga,
+                    $nombreCliente,
+                    $cargaStr,
                     $idCotizacion,
                     $telefono,
                     $typeForm
                 );
-
-                $resultSecundario = $this->sendMessage($messageSecundario, $numeroWhatsapp,5);
-                if (!$resultSecundario['status']) {
-                    Log::warning('SendDeliveryFormBulkJob: error enviando WhatsApp', [
-                        'id_cotizacion' => $idCotizacion,
-                        'tipo_mensaje' => 'secundario',
-                        'response' => isset($resultSecundario['response']) ? $resultSecundario['response'] : null,
-                    ]);
-                }
             } catch (\Throwable $e) {
                 Log::error('SendDeliveryFormBulkJob: excepción por cotización', [
                     'id_cotizacion' => $idCotizacion,

@@ -16,6 +16,7 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
+use App\Contracts\ObjectStorageConnectorInterface;
 use Illuminate\Support\Facades\Storage;
 
 /**
@@ -91,17 +92,12 @@ class ProcessSoporteTiChatAdjuntosJob implements ShouldQueue
 
             $base = basename($localPath);
             $publicRel = 'soporte-ti/' . $this->solicitudId . '/chat/' . $base;
-            $read = Storage::disk('local')->readStream($localPath);
-            if ($read === false) {
+            $contents = Storage::disk('local')->get($localPath);
+            if ($contents === null || $contents === '') {
                 continue;
             }
-            Storage::disk('public')->writeStream($publicRel, $read);
-            if (is_resource($read)) {
-                fclose($read);
-            }
+            app(ObjectStorageConnectorInterface::class)->putContents($publicRel, $contents);
             Storage::disk('local')->delete($localPath);
-
-            $url = Storage::disk('public')->url($publicRel);
             $bytes = isset($meta['tamano_bytes']) ? (int) $meta['tamano_bytes'] : 0;
             $tamano = $bytes > 1048576
                 ? round($bytes / 1048576, 1) . ' MB'
@@ -111,7 +107,7 @@ class ProcessSoporteTiChatAdjuntosJob implements ShouldQueue
 
             SoporteTiMensajeImagen::create(array(
                 'mensaje_id' => $mensaje->id,
-                'url' => $url,
+                'url' => $publicRel,
                 'nombre' => $nombre,
                 'tamano' => $tamano,
                 'orden' => $orden++,

@@ -8,13 +8,15 @@ class AddConversationIdToWhatsappMessagesTable extends Migration
 {
     public function up()
     {
+        if (!Schema::hasTable('whatsapp_messages')) {
         Schema::table('whatsapp_messages', function (Blueprint $table) {
             $table->unsignedBigInteger('conversation_id')->nullable()->after('id')->index();
             $table->foreign('conversation_id')
                 ->references('id')
                 ->on('copiloto_conversaciones')
                 ->onDelete('cascade');
-        });
+            });
+        }
     }
 
     public function down()

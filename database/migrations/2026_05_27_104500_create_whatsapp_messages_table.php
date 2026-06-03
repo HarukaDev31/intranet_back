@@ -8,6 +8,7 @@ class CreateWhatsappMessagesTable extends Migration
 {
     public function up()
     {
+        if (!Schema::hasTable('whatsapp_messages')) {
         Schema::create('whatsapp_messages', function (Blueprint $table) {
             $table->bigIncrements('id');
             $table->string('phone', 20)->index();
@@ -21,7 +22,9 @@ class CreateWhatsappMessagesTable extends Migration
             $table->timestamps();
 
             $table->index(['phone', 'sent_at'], 'idx_whatsapp_phone_sent_at');
-        });
+            });
+        
+        }
     }
 
     public function down()

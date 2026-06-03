@@ -64,7 +64,28 @@ return [
         ],
         'mysql_local' => [
             'driver' => 'mysql',
-            'host' => env('DB_HOST_LOCAL', 'localhost'),
+            // En WSL, 127.0.0.1 apunta a Linux, no a MySQL de XAMPP en Windows.
+            'host' => (static function () {
+                if ($wslHost = env('DB_HOST_LOCAL_WSL')) {
+                    return $wslHost;
+                }
+
+                $host = env('DB_HOST_LOCAL', '127.0.0.1');
+
+                if (
+                    PHP_OS_FAMILY === 'Linux'
+                    && is_readable('/proc/version')
+                    && stripos((string) file_get_contents('/proc/version'), 'Microsoft') !== false
+                    && in_array($host, ['127.0.0.1', 'localhost'], true)
+                ) {
+                    $route = @shell_exec('ip route show default 2>/dev/null');
+                    if ($route && preg_match('/default via ([\d.]+)/', $route, $matches)) {
+                        return $matches[1];
+                    }
+                }
+
+                return $host;
+            })(),
             'database' => env('DB_DATABASE_LOCAL', 'db_probusiness_local'),
             'username' => env('DB_USERNAME_LOCAL', 'root'),
             'password' => env('DB_PASSWORD_LOCAL', ''),

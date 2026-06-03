@@ -3,16 +3,19 @@
 namespace App\Http\Controllers\BaseDatos\Regulaciones;
 
 use App\Http\Controllers\Controller;
+use App\Traits\FileTrait;
+use App\Traits\UsesObjectStorage;
 use Illuminate\Http\Request;
 use App\Models\BaseDatos\ProductoRegulacionDocumentoEspecial;
 use App\Models\BaseDatos\ProductoRegulacionDocumentoEspecialMedia;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use App\Models\BaseDatos\Regulaciones\ProductoRubro;
 
 class DocumentosEspecialesController extends Controller
 {
+    use FileTrait;
+    use UsesObjectStorage;
     /**
      * @OA\Get(
      *     path="/regulaciones/documentos-especiales",
@@ -103,20 +106,6 @@ class DocumentosEspecialesController extends Controller
             ], 500);
         }
     }
-    private function generateImageUrl($ruta)
-    {
-        if (empty($ruta)) {
-            return null;
-        }
-        
-        // Si ya es una URL completa, devolverla tal como está
-        if (filter_var($ruta, FILTER_VALIDATE_URL)) {
-            return $ruta;
-        }
-        
-        // Generar URL completa desde storage
-        return Storage::disk('public')->url($ruta);
-    }
     /**
      * Crear nueva regulación de documentos especiales o actualizar existente
      */
@@ -201,8 +190,8 @@ class DocumentosEspecialesController extends Controller
                             
                         if ($media) {
                             // Eliminar archivo físico
-                            if (Storage::disk('public')->exists($media->ruta)) {
-                                Storage::disk('public')->delete($media->ruta);
+                            if ($this->objectStorage()->exists($media->ruta)) {
+                                $this->objectStorage()->delete($media->ruta);
                                 Log::info('Archivo eliminado del storage:', ['ruta' => $media->ruta]);
                             }
                             
@@ -222,7 +211,7 @@ class DocumentosEspecialesController extends Controller
                     foreach ($request->file('documentos') as $documentoFile) {
                         if ($documentoFile->isValid()) {
                             $filename = time() . '_' . uniqid() . '.' . $documentoFile->getClientOriginalExtension();
-                            $path = $documentoFile->storeAs('regulaciones/documentos-especiales', $filename, 'public');
+                            $path = $this->storageStoreUpload($documentoFile, 'regulaciones/documentos-especiales', $filename);
                             
                             ProductoRegulacionDocumentoEspecialMedia::create([
                                 'id_regulacion' => $documento->id,
@@ -248,8 +237,8 @@ class DocumentosEspecialesController extends Controller
                     // Eliminar todos los documentos existentes
                     $existingMedia = ProductoRegulacionDocumentoEspecialMedia::where('id_regulacion', $documento->id)->get();
                     foreach ($existingMedia as $media) {
-                        if (Storage::disk('public')->exists($media->ruta)) {
-                            Storage::disk('public')->delete($media->ruta);
+                        if ($this->objectStorage()->exists($media->ruta)) {
+                            $this->objectStorage()->delete($media->ruta);
                         }
                         $media->delete();
                     }
@@ -261,7 +250,7 @@ class DocumentosEspecialesController extends Controller
                         foreach ($request->file('documentos') as $documentoFile) {
                             if ($documentoFile->isValid()) {
                                 $filename = time() . '_' . uniqid() . '.' . $documentoFile->getClientOriginalExtension();
-                                $path = $documentoFile->storeAs('regulaciones/documentos-especiales', $filename, 'public');
+                                $path = $this->storageStoreUpload($documentoFile, 'regulaciones/documentos-especiales', $filename);
                                 
                                 ProductoRegulacionDocumentoEspecialMedia::create([
                                     'id_regulacion' => $documento->id,
@@ -303,7 +292,7 @@ class DocumentosEspecialesController extends Controller
                             $filename = time() . '_' . uniqid() . '.' . $documentoFile->getClientOriginalExtension();
                             
                             // Guardar archivo en storage
-                            $path = $documentoFile->storeAs('regulaciones/documentos-especiales', $filename, 'public');
+                            $path = $this->storageStoreUpload($documentoFile, 'regulaciones/documentos-especiales', $filename);
                             
                             // Crear registro en la tabla de media
                             ProductoRegulacionDocumentoEspecialMedia::create([
@@ -428,7 +417,7 @@ class DocumentosEspecialesController extends Controller
                 foreach ($request->file('documentos') as $archivo) {
                     if ($archivo->isValid()) {
                         $filename = time() . '_' . uniqid() . '.' . $archivo->getClientOriginalExtension();
-                        $path = $archivo->storeAs('regulaciones/documentos-especiales', $filename, 'public');
+                        $path = $this->storageStoreUpload($archivo, 'regulaciones/documentos-especiales', $filename);
                         
                         ProductoRegulacionDocumentoEspecialMedia::create([
                             'id_rubro' => $documento->id_rubro,
@@ -479,8 +468,8 @@ class DocumentosEspecialesController extends Controller
 
             // Eliminar archivos físicos
             foreach ($documento->media as $media) {
-                if (Storage::disk('public')->exists($media->ruta)) {
-                    Storage::disk('public')->delete($media->ruta);
+                if ($this->objectStorage()->exists($media->ruta)) {
+                    $this->objectStorage()->delete($media->ruta);
                 }
             }
 
@@ -533,8 +522,8 @@ class DocumentosEspecialesController extends Controller
             }
 
             // Eliminar archivo físico
-            if (Storage::disk('public')->exists($media->ruta)) {
-                Storage::disk('public')->delete($media->ruta);
+            if ($this->objectStorage()->exists($media->ruta)) {
+                $this->objectStorage()->delete($media->ruta);
             }
 
             // Eliminar registro

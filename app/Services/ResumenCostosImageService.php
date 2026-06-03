@@ -2,14 +2,15 @@
 
 namespace App\Services;
 
+use App\Traits\UsesObjectStorage;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Storage;
 use Carbon\Carbon;
 use Spatie\Browsershot\Browsershot;
 use App\Models\CargaConsolidada\Contenedor;
 
 class ResumenCostosImageService
 {
+    use UsesObjectStorage;
     /**
      * Generar imagen del resumen de costos
      */
@@ -26,7 +27,7 @@ class ResumenCostosImageService
                 return [
                     'path' => $imagePath,
                     'filename' => basename($imagePath),
-                    'url' => Storage::url('resumen_costos/' . basename($imagePath))
+                    'url' => $this->objectStorage()->url('resumen_costos/' . basename($imagePath))
                 ];
             }
 
@@ -464,16 +465,15 @@ body {
     private function convertHTMLToImage($html, $calculadora)
     {
         try {
-            // Crear directorio si no existe
-            $directory = storage_path('app/public/resumen_costos');
-            if (!is_dir($directory)) {
-                mkdir($directory, 0755, true);
+            $tempDir = storage_path('app/temp');
+            if (!is_dir($tempDir)) {
+                mkdir($tempDir, 0755, true);
             }
 
             // Generar nombre de archivo único
             $timestamp = now()->format('Y_m_d_H_i_s');
             $filename = "RESUMEN_COSTOS_{$calculadora->nombre_cliente}_{$timestamp}.png";
-            $imagePath = $directory . '/' . $filename;
+            $imagePath = $tempDir . DIRECTORY_SEPARATOR . $filename;
 
             // Guardar HTML temporalmente
             $tempHtmlPath = tempnam(sys_get_temp_dir(), 'resumen_costos_') . '.html';
@@ -542,13 +542,18 @@ body {
             unlink($tempHtmlPath);
 
             if ($success && file_exists($imagePath)) {
+                $relativePath = 'resumen_costos/' . $filename;
+                $fileSize = filesize($imagePath);
+                $this->storagePutContents($relativePath, file_get_contents($imagePath));
+                @unlink($imagePath);
+                $localPath = $this->storageLocalPath($relativePath);
                 Log::info('Imagen del resumen de costos generada exitosamente', [
                     'calculadora_id' => $calculadora->id,
-                    'image_path' => $imagePath,
+                    'image_path' => $localPath,
                     'method' => $methodUsed,
-                    'file_size' => filesize($imagePath)
+                    'file_size' => $fileSize
                 ]);
-                return $imagePath;
+                return $localPath;
             }
 
             Log::error('No se pudo generar la imagen con ningún método', [

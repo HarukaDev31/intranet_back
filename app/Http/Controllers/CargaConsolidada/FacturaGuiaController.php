@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
 use App\Traits\FileTrait;
+use App\Traits\UsesObjectStorage;
 use App\Models\CargaConsolidada\ComprobanteForm;
 use App\Models\CargaConsolidada\ConsolidadoDeliveryFormLima;
 use App\Models\CargaConsolidada\ConsolidadoDeliveryFormProvince;
@@ -28,6 +29,7 @@ class FacturaGuiaController extends Controller
 {
     use WhatsappTrait;
     use FileTrait;
+    use UsesObjectStorage;
 
     /**
      * Genera una URL absoluta y firmada temporalmente para que el front solo la abra.
@@ -35,7 +37,7 @@ class FacturaGuiaController extends Controller
     private function absoluteSignedFileUrl(string $routeName, array $params, \DateTimeInterface $expiration): string
     {
         $url = URL::temporarySignedRoute($routeName, $expiration, $params);
-        if (!str_starts_with($url, 'http://') && !str_starts_with($url, 'https://')) {
+        if (strpos($url, 'http://') !== 0 && strpos($url, 'https://') !== 0) {
             $url = rtrim(config('app.url'), '/') . '/' . ltrim($url, '/');
         }
         return $url;
@@ -380,7 +382,7 @@ class FacturaGuiaController extends Controller
             $mimeType     = $file->getMimeType();
 
             $storedName = time() . '_' . uniqid() . '_' . $originalName;
-            $storedPath = $file->storeAs('cargaconsolidada/guiaremision/' . $idCotizacion, $storedName);
+            $storedPath = $this->objectStorage()->storeUploadedFile($file, 'cargaconsolidada/guiaremision/' . $idCotizacion, $storedName);
 
             // legacy: mantener último archivo en la cotización (compatibilidad)
             $cotizacion = Cotizacion::find($idCotizacion);
@@ -440,7 +442,7 @@ class FacturaGuiaController extends Controller
                 $mimeType     = $file->getMimeType();
 
                 $storedName = time() . '_' . uniqid() . '_' . $originalName;
-                $storedPath = $file->storeAs('cargaconsolidada/guiaremision/' . $idCotizacion, $storedName);
+                $storedPath = $this->objectStorage()->storeUploadedFile($file, 'cargaconsolidada/guiaremision/' . $idCotizacion, $storedName);
                 $lastStoredName = $storedName;
 
                 $guia = GuiaRemision::create([
@@ -489,7 +491,7 @@ class FacturaGuiaController extends Controller
                 return response()->json(['success' => false, 'message' => 'Guía no encontrada'], 404);
             }
             if (!empty($guia->file_path)) {
-                $path = storage_path('app/' . $guia->file_path);
+                $path = $this->objectStorage()->localPath( $guia->file_path);
                 if (file_exists($path)) unlink($path);
             }
             $guia->delete();
@@ -575,8 +577,9 @@ class FacturaGuiaController extends Controller
                     $fileSize = $file->getSize();
                     $mimeType = $file->getMimeType();
 
-                    // Guardar el archivo en el almacenamiento
-                    $storedPath = $file->storeAs(
+                    // Guardar el archivo en el almacenamiento (local o S3 según FILESYSTEM_UPLOAD_DISK)
+                    $storedPath = $this->objectStorage()->storeUploadedFile(
+                        $file,
                         'cargaconsolidada/facturacomercial/' . $idCotizacion,
                         $originalName
                     );
@@ -736,7 +739,7 @@ class FacturaGuiaController extends Controller
             }
 
             // Eliminar el archivo físico
-            $filePath = storage_path('app/' . $facturaComercial->file_path);
+            $filePath = $this->objectStorage()->localPath( $facturaComercial->file_path);
             if (file_exists($filePath)) {
                 unlink($filePath);
             }
@@ -840,7 +843,7 @@ class FacturaGuiaController extends Controller
         $guias = GuiaRemision::where('quotation_id', $cotizacion->id)->get();
         foreach ($guias as $g) {
             if (!empty($g->file_path)) {
-                $path = storage_path('app/' . $g->file_path);
+                $path = $this->objectStorage()->localPath( $g->file_path);
                 if (file_exists($path)) unlink($path);
             }
             $g->delete();
@@ -889,7 +892,9 @@ class FacturaGuiaController extends Controller
             }
 
             // Obtener la ruta del archivo
-            $filePath = storage_path('app/cargaconsolidada/facturacomercial/' . $idCotizacion . '/' . $cotizacion->factura_comercial);
+            $filePath = $this->objectStorage()->localPath(
+                'cargaconsolidada/facturacomercial/' . $idCotizacion . '/' . $cotizacion->factura_comercial
+            );
 
             if (!file_exists($filePath)) {
                 return response()->json([
@@ -1032,7 +1037,7 @@ class FacturaGuiaController extends Controller
             // Validar que la guía existe: preferir legacy field; si está vacío o no existe, usar la última guía registrada.
             $fileName = $cotizacion->guia_remision_url;
             $filePath = $fileName
-                ? storage_path('app/cargaconsolidada/guiaremision/' . $idCotizacion . '/' . $fileName)
+                ? $this->objectStorage()->localPath('cargaconsolidada/guiaremision/' . $idCotizacion . '/' . $fileName)
                 : null;
 
             if (!$filePath || !is_file($filePath)) {
@@ -1043,7 +1048,7 @@ class FacturaGuiaController extends Controller
                         'error' => 'No hay guía de remisión disponible para esta cotización'
                     ], 400);
                 }
-                $filePath = storage_path('app/' . $lastGuia->file_path);
+                $filePath = $this->objectStorage()->localPath( $lastGuia->file_path);
                 $fileName = $lastGuia->file_name ?? basename($lastGuia->file_path);
             }
 
@@ -1198,7 +1203,8 @@ Cualquier duda nos escribe.  ¡Gracias! */
             $fileSize     = $file->getSize();
             $mimeType     = $file->getMimeType();
 
-            $storedPath = $file->storeAs(
+            $storedPath = $this->objectStorage()->storeUploadedFile(
+                $file,
                 'cargaconsolidada/comprobantes/' . $idCotizacion,
                 $originalName
             );
@@ -1217,7 +1223,7 @@ Cualquier duda nos escribe.  ¡Gracias! */
 
             if (in_array($mimeType, $geminiSupportedMimes)) {
                 $gemini       = new GeminiService();
-                $filePath     = storage_path('app/' . $storedPath);
+                $filePath     = $this->objectStorage()->localPath( $storedPath);
                 $geminiResult = $gemini->extractFromComprobante($filePath, $mimeType);
 
                 if ($geminiResult['success']) {
@@ -1302,7 +1308,7 @@ Cualquier duda nos escribe.  ¡Gracias! */
 
                 // Evitar colisiones de nombres en batch
                 $storedName = time() . '_' . uniqid() . '_' . $originalName;
-                $storedPath = $file->storeAs('cargaconsolidada/comprobantes/' . $idCotizacion, $storedName);
+                $storedPath = $this->objectStorage()->storeUploadedFile($file, 'cargaconsolidada/comprobantes/' . $idCotizacion, $storedName);
 
                 $tipoComprobante        = null;
                 $valorComprobante       = null;
@@ -1318,7 +1324,7 @@ Cualquier duda nos escribe.  ¡Gracias! */
 
                 if (in_array($mimeType, $geminiSupportedMimes)) {
                     $gemini       = new GeminiService();
-                    $filePath     = storage_path('app/' . $storedPath);
+                    $filePath     = $this->objectStorage()->localPath( $storedPath);
                     $geminiResult = $gemini->extractFromComprobante($filePath, $mimeType);
 
                     if ($geminiResult['success']) {
@@ -1394,7 +1400,7 @@ Cualquier duda nos escribe.  ¡Gracias! */
             // Si ya existe una constancia previa para este comprobante, eliminarla
             $constanciaPrevia = Detraccion::where('comprobante_id', $comprobanteId)->first();
             if ($constanciaPrevia) {
-                $prevPath = storage_path('app/' . $constanciaPrevia->file_path);
+                $prevPath = $this->objectStorage()->localPath( $constanciaPrevia->file_path);
                 if (file_exists($prevPath)) {
                     unlink($prevPath);
                 }
@@ -1405,7 +1411,8 @@ Cualquier duda nos escribe.  ¡Gracias! */
             $fileSize     = $file->getSize();
             $mimeType     = $file->getMimeType();
 
-            $storedPath = $file->storeAs(
+            $storedPath = $this->objectStorage()->storeUploadedFile(
+                $file,
                 'cargaconsolidada/constancias/' . $comprobante->quotation_id,
                 $originalName
             );
@@ -1420,7 +1427,7 @@ Cualquier duda nos escribe.  ¡Gracias! */
 
             if (in_array($mimeType, $geminiSupportedMimes)) {
                 $gemini       = new GeminiService();
-                $filePath     = storage_path('app/' . $storedPath);
+                $filePath     = $this->objectStorage()->localPath( $storedPath);
                 $geminiResult = $gemini->extractFromConstancia($filePath, $mimeType);
 
                 if ($geminiResult['success']) {
@@ -1499,7 +1506,7 @@ Cualquier duda nos escribe.  ¡Gracias! */
                 // Eliminar constancia previa si existe
                 $constanciaPrevia = Detraccion::where('comprobante_id', $comprobanteId)->first();
                 if ($constanciaPrevia) {
-                    $prevPath = storage_path('app/' . $constanciaPrevia->file_path);
+                    $prevPath = $this->objectStorage()->localPath( $constanciaPrevia->file_path);
                     if (file_exists($prevPath)) {
                         unlink($prevPath);
                     }
@@ -1511,7 +1518,7 @@ Cualquier duda nos escribe.  ¡Gracias! */
                 $mimeType     = $file->getMimeType();
 
                 $storedName = time() . '_' . uniqid() . '_' . $originalName;
-                $storedPath = $file->storeAs('cargaconsolidada/constancias/' . $comprobante->quotation_id, $storedName);
+                $storedPath = $this->objectStorage()->storeUploadedFile($file, 'cargaconsolidada/constancias/' . $comprobante->quotation_id, $storedName);
 
                 $montoConstanciaSoles = null;
                 $extractedByAi        = false;
@@ -1523,7 +1530,7 @@ Cualquier duda nos escribe.  ¡Gracias! */
 
                 if (in_array($mimeType, $geminiSupportedMimes)) {
                     $gemini       = new GeminiService();
-                    $filePath     = storage_path('app/' . $storedPath);
+                    $filePath     = $this->objectStorage()->localPath( $storedPath);
                     $geminiResult = $gemini->extractFromConstancia($filePath, $mimeType);
 
                     if ($geminiResult['success']) {
@@ -1584,14 +1591,14 @@ Cualquier duda nos escribe.  ¡Gracias! */
             // Eliminar constancia de pago vinculada si existe
             $constancia = Detraccion::where('comprobante_id', $id)->first();
             if ($constancia) {
-                $constanciaPath = storage_path('app/' . $constancia->file_path);
+                $constanciaPath = $this->objectStorage()->localPath( $constancia->file_path);
                 if (file_exists($constanciaPath)) {
                     unlink($constanciaPath);
                 }
                 $constancia->delete();
             }
 
-            $filePath = storage_path('app/' . $comprobante->file_path);
+            $filePath = $this->objectStorage()->localPath( $comprobante->file_path);
             if (file_exists($filePath)) {
                 unlink($filePath);
             }
@@ -1618,7 +1625,7 @@ Cualquier duda nos escribe.  ¡Gracias! */
                 return response()->json(['success' => false, 'message' => 'Detracción no encontrada'], 404);
             }
 
-            $filePath = storage_path('app/' . $detraccion->file_path);
+            $filePath = $this->objectStorage()->localPath( $detraccion->file_path);
             if (file_exists($filePath)) {
                 unlink($filePath);
             }
@@ -1642,16 +1649,17 @@ Cualquier duda nos escribe.  ¡Gracias! */
         if (!$comprobante || empty($comprobante->file_path)) {
             abort(404, 'Comprobante no encontrado');
         }
-        $fullPath = storage_path('app/' . $comprobante->file_path);
-        if (!is_file($fullPath)) {
-            Log::warning('FacturaGuia: Archivo de comprobante no encontrado en disco', ['id' => $id, 'file_path' => $comprobante->file_path]);
+        if (!$this->objectStorage()->exists($comprobante->file_path)) {
+            Log::warning('FacturaGuia: Archivo de comprobante no encontrado', ['id' => $id, 'file_path' => $comprobante->file_path]);
             abort(404, 'Archivo no encontrado');
         }
-        $mime = $comprobante->mime_type ?: mime_content_type($fullPath);
-        return response()->file($fullPath, [
-            'Content-Type' => $mime,
-            'Content-Disposition' => 'inline; filename="' . basename($comprobante->file_path) . '"',
-        ]);
+
+        return $this->objectStorage()->fileResponse(
+            $comprobante->file_path,
+            $comprobante->mime_type,
+            'inline',
+            $comprobante->file_name ?? basename($comprobante->file_path)
+        );
     }
 
     /**
@@ -1664,16 +1672,17 @@ Cualquier duda nos escribe.  ¡Gracias! */
         if (!$factura || empty($factura->file_path)) {
             abort(404, 'Factura comercial no encontrada');
         }
-        $fullPath = storage_path('app/' . $factura->file_path);
-        if (!is_file($fullPath)) {
-            Log::warning('FacturaGuia: Archivo de factura comercial no encontrado en disco', ['id' => $id, 'file_path' => $factura->file_path]);
+        if (!$this->objectStorage()->exists($factura->file_path)) {
+            Log::warning('FacturaGuia: Archivo de factura comercial no encontrado', ['id' => $id, 'file_path' => $factura->file_path]);
             abort(404, 'Archivo no encontrado');
         }
-        $mime = $factura->mime_type ?: mime_content_type($fullPath);
-        return response()->file($fullPath, [
-            'Content-Type' => $mime,
-            'Content-Disposition' => 'inline; filename="' . basename($factura->file_path) . '"',
-        ]);
+
+        return $this->objectStorage()->fileResponse(
+            $factura->file_path,
+            $factura->mime_type,
+            'inline',
+            $factura->file_name ?? basename($factura->file_path)
+        );
     }
 
     /**
@@ -1686,16 +1695,17 @@ Cualquier duda nos escribe.  ¡Gracias! */
         if (!$detraccion || empty($detraccion->file_path)) {
             abort(404, 'Constancia no encontrada');
         }
-        $fullPath = storage_path('app/' . $detraccion->file_path);
-        if (!is_file($fullPath)) {
-            Log::warning('Archivo de constancia no encontrado en disco', ['id' => $id, 'file_path' => $detraccion->file_path]);
+        if (!$this->objectStorage()->exists($detraccion->file_path)) {
+            Log::warning('Archivo de constancia no encontrado', ['id' => $id, 'file_path' => $detraccion->file_path]);
             abort(404, 'Archivo no encontrado');
         }
-        $mime = $detraccion->mime_type ?: mime_content_type($fullPath);
-        return response()->file($fullPath, [
-            'Content-Type' => $mime,
-            'Content-Disposition' => 'inline; filename="' . basename($detraccion->file_path) . '"',
-        ]);
+
+        return $this->objectStorage()->fileResponse(
+            $detraccion->file_path,
+            $detraccion->mime_type,
+            'inline',
+            $detraccion->file_name ?? basename($detraccion->file_path)
+        );
     }
 
     /**
@@ -1708,16 +1718,17 @@ Cualquier duda nos escribe.  ¡Gracias! */
         if (!$guia || empty($guia->file_path)) {
             abort(404, 'Guía no encontrada');
         }
-        $fullPath = storage_path('app/' . $guia->file_path);
-        if (!is_file($fullPath)) {
-            Log::warning('FacturaGuia: Archivo de guía no encontrado en disco', ['id' => $id, 'file_path' => $guia->file_path]);
+        if (!$this->objectStorage()->exists($guia->file_path)) {
+            Log::warning('FacturaGuia: Archivo de guía no encontrado', ['id' => $id, 'file_path' => $guia->file_path]);
             abort(404, 'Archivo no encontrado');
         }
-        $mime = $guia->mime_type ?: mime_content_type($fullPath);
-        return response()->file($fullPath, [
-            'Content-Type' => $mime,
-            'Content-Disposition' => 'inline; filename="' . basename($guia->file_path) . '"',
-        ]);
+
+        return $this->objectStorage()->fileResponse(
+            $guia->file_path,
+            $guia->mime_type,
+            'inline',
+            $guia->file_name ?? basename($guia->file_path)
+        );
     }
 
     /**
@@ -2039,7 +2050,7 @@ Cualquier duda nos escribe.  ¡Gracias! */
                 if (empty($c->file_path)) {
                     continue;
                 }
-                $fullPath = storage_path('app/' . $c->file_path);
+                $fullPath = $this->objectStorage()->localPath( $c->file_path);
                 if (!is_file($fullPath)) {
                     $errores[] = $c->file_name ?? 'Comprobante';
                     continue;
@@ -2086,7 +2097,9 @@ Cualquier duda nos escribe.  ¡Gracias! */
             $guias = GuiaRemision::where('quotation_id', $idCotizacion)->orderBy('id')->get();
             $legacyPath = null;
             if ($guias->isEmpty() && !empty($cotizacion->guia_remision_url)) {
-                $legacyPath = storage_path('app/cargaconsolidada/guiaremision/' . $idCotizacion . '/' . $cotizacion->guia_remision_url);
+                $legacyPath = $this->objectStorage()->localPath(
+                    'cargaconsolidada/guiaremision/' . $idCotizacion . '/' . $cotizacion->guia_remision_url
+                );
                 if (!is_file($legacyPath)) {
                     $legacyPath = null;
                 }
@@ -2120,7 +2133,7 @@ Cualquier duda nos escribe.  ¡Gracias! */
                     if (empty($g->file_path)) {
                         continue;
                     }
-                    $fullPath = storage_path('app/' . $g->file_path);
+                    $fullPath = $this->objectStorage()->localPath( $g->file_path);
                     if (!is_file($fullPath)) {
                         continue;
                     }
@@ -2186,7 +2199,7 @@ Cualquier duda nos escribe.  ¡Gracias! */
 
             $enviados = 0;
             foreach ($constancias as $idx => $det) {
-                $fullPath = storage_path('app/' . $det->file_path);
+                $fullPath = $this->objectStorage()->localPath( $det->file_path);
                 if (!is_file($fullPath)) {
                     continue;
                 }

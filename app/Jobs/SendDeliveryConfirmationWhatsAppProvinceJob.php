@@ -7,6 +7,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use App\Support\WhatsApp\CoordinacionWhatsappPayload;
 use App\Traits\WhatsappTrait;
 use App\Traits\DatabaseConnectionTrait;
 use App\Models\CargaConsolidada\ConsolidadoDeliveryFormProvince;
@@ -95,8 +96,28 @@ class SendDeliveryConfirmationWhatsAppProvinceJob implements ShouldQueue
             $notificacion = ProvinciaEntregaNotificacionService::datosVistaCorreo($deliveryForm, $carga, $user);
             $mensaje = $notificacion['whatsapp'];
 
-            // Enviar el mensaje de WhatsApp
-            $resultado = $this->sendMessage($mensaje, $telefono);
+            if (config('meta_whatsapp.coordinacion_enabled')) {
+                $direccion = $notificacion['direccionEntrega'] ?? '—';
+                $resultado = $this->queueCoordinacionWhatsApp(CoordinacionWhatsappPayload::confirmProvincia(
+                    $telefono,
+                    [
+                        'primer_nombre' => $notificacion['primerNombre'],
+                        'carga' => (string) $carga,
+                        'destinatario' => $notificacion['nombreDestinatario'],
+                        'doc_label' => $notificacion['tipoDocumento'],
+                        'doc_numero' => $notificacion['numeroDocumento'],
+                        'celular' => $notificacion['celularDestinatario'],
+                        'agencia' => $notificacion['nombreAgencia'],
+                        'ruc_agencia' => $notificacion['rucAgencia'],
+                        'destino' => $notificacion['destinoLinea'],
+                        'entrega_en' => $notificacion['entregaEn'],
+                        'direccion' => $direccion,
+                    ],
+                    $mensaje
+                ));
+            } else {
+                $resultado = $this->sendMessage($mensaje, $telefono);
+            }
             $this->sendMailTo($user->email, new \App\Mail\DeliveryConfirmationProvinceMail(
                 $deliveryForm,
                 $cotizacion,

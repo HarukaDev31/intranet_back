@@ -21,6 +21,7 @@ class CotizacionProveedor extends Model
         'valor_doc',
         'factura_comercial',
         'excel_confirmacion',
+        'excel_confirmacion_drive_link',
         'packing_list',
         'qty_box_china',
         'qty_pallet_china',

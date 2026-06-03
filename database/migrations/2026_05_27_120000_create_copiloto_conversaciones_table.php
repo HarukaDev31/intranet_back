@@ -8,6 +8,7 @@ class CreateCopilotoConversacionesTable extends Migration
 {
     public function up()
     {
+        if (!Schema::hasTable('copiloto_conversaciones')) {
         Schema::create('copiloto_conversaciones', function (Blueprint $table) {
             $table->bigIncrements('id');
             $table->string('thread_key', 64)->unique();
@@ -20,7 +21,8 @@ class CreateCopilotoConversacionesTable extends Migration
             $table->enum('last_direction', ['in', 'out'])->nullable();
             $table->unsignedInteger('messages_count')->default(0);
             $table->timestamps();
-        });
+            });
+        }
     }
 
     public function down()

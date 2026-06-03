@@ -3,9 +3,10 @@
 namespace App\Http\Controllers\CargaConsolidada;
 
 use App\Http\Controllers\Controller;
+use App\Traits\FileTrait;
+use App\Traits\UsesObjectStorage;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 use Tymon\JWTAuth\Facades\JWTAuth;
 use App\Models\CargaConsolidada\Cotizacion;
 use App\Models\CargaConsolidada\CotizacionCotizadorDocumento;
@@ -18,6 +19,8 @@ use App\Models\CargaConsolidada\CotizacionProveedor;
  */
 class CotizacionCotizadorDocumentacionController extends Controller
 {
+    use FileTrait;
+    use UsesObjectStorage;
     /**
      * Obtiene la documentación completa de una cotización (vista cotizador).
      */
@@ -178,8 +181,8 @@ class CotizacionCotizadorDocumentacionController extends Controller
             if (!$doc) {
                 return response()->json(['success' => false, 'message' => 'Documento no encontrado'], 404);
             }
-            if ($doc->file_url && Storage::disk('public')->exists($doc->file_url)) {
-                Storage::disk('public')->delete($doc->file_url);
+            if ($doc->file_url && $this->objectStorage()->exists($doc->file_url)) {
+                $this->objectStorage()->delete($doc->file_url);
             }
             $doc->delete();
             return response()->json([
@@ -268,8 +271,8 @@ class CotizacionCotizadorDocumentacionController extends Controller
             if (!$doc) {
                 return response()->json(['success' => false, 'message' => 'Documento no encontrado'], 404);
             }
-            if ($doc->file_url && Storage::disk('public')->exists($doc->file_url)) {
-                Storage::disk('public')->delete($doc->file_url);
+            if ($doc->file_url && $this->objectStorage()->exists($doc->file_url)) {
+                $this->objectStorage()->delete($doc->file_url);
             }
             $doc->delete();
             return response()->json([
@@ -305,8 +308,8 @@ class CotizacionCotizadorDocumentacionController extends Controller
                 if (!empty($documentIds)) {
                     $docs = CotizacionCotizadorDocumento::whereIn('id', $documentIds)->get();
                     foreach ($docs as $doc) {
-                        if ($doc->file_url && Storage::disk('public')->exists($doc->file_url)) {
-                            Storage::disk('public')->delete($doc->file_url);
+                        if ($doc->file_url && $this->objectStorage()->exists($doc->file_url)) {
+                            $this->objectStorage()->delete($doc->file_url);
                         }
                     }
                     CotizacionCotizadorDocumento::whereIn('id', $documentIds)->delete();
@@ -314,8 +317,8 @@ class CotizacionCotizadorDocumentacionController extends Controller
                 if (!empty($proveedorDocumentIds)) {
                     $docs = CotizacionCotizadorProveedorDocumento::whereIn('id', $proveedorDocumentIds)->get();
                     foreach ($docs as $doc) {
-                        if ($doc->file_url && Storage::disk('public')->exists($doc->file_url)) {
-                            Storage::disk('public')->delete($doc->file_url);
+                        if ($doc->file_url && $this->objectStorage()->exists($doc->file_url)) {
+                            $this->objectStorage()->delete($doc->file_url);
                         }
                     }
                     CotizacionCotizadorProveedorDocumento::whereIn('id', $proveedorDocumentIds)->delete();
@@ -374,8 +377,8 @@ class CotizacionCotizadorDocumentacionController extends Controller
                     $docs = CotizacionCotizadorDocumento::where('id_cotizacion', $idCotizacion)
                         ->whereIn('id', $documentIdsToDelete)->get();
                     foreach ($docs as $doc) {
-                        if ($doc->file_url && Storage::disk('public')->exists($doc->file_url)) {
-                            Storage::disk('public')->delete($doc->file_url);
+                        if ($doc->file_url && $this->objectStorage()->exists($doc->file_url)) {
+                            $this->objectStorage()->delete($doc->file_url);
                         }
                     }
                     CotizacionCotizadorDocumento::whereIn('id', $documentIdsToDelete)->delete();
@@ -384,8 +387,8 @@ class CotizacionCotizadorDocumentacionController extends Controller
                     $docs = CotizacionCotizadorProveedorDocumento::where('id_cotizacion', $idCotizacion)
                         ->whereIn('id', $proveedorIdsToDelete)->get();
                     foreach ($docs as $doc) {
-                        if ($doc->file_url && Storage::disk('public')->exists($doc->file_url)) {
-                            Storage::disk('public')->delete($doc->file_url);
+                        if ($doc->file_url && $this->objectStorage()->exists($doc->file_url)) {
+                            $this->objectStorage()->delete($doc->file_url);
                         }
                     }
                     CotizacionCotizadorProveedorDocumento::whereIn('id', $proveedorIdsToDelete)->delete();
@@ -482,20 +485,6 @@ class CotizacionCotizadorDocumentacionController extends Controller
         }
         $filename = time() . '_' . uniqid() . '.' . $ext;
         $path = 'assets/images/agentecompra/';
-        return $file->storeAs($path, $filename, 'public') ?: null;
-    }
-
-    private function generateImageUrl(?string $ruta): ?string
-    {
-        if (empty($ruta)) {
-            return null;
-        }
-        if (filter_var($ruta, FILTER_VALIDATE_URL)) {
-            return $ruta;
-        }
-        $ruta = ltrim($ruta, '/');
-        $baseUrl = rtrim(config('app.url'), '/');
-        $storagePath = 'storage';
-        return $baseUrl . '/' . $storagePath . '/' . $ruta;
+        return $this->storageStoreUpload($file, $path, $filename);
     }
 }

@@ -13,11 +13,14 @@ use App\Models\CargaConsolidada\Contenedor;
 use App\Models\ImportProducto;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 use App\Jobs\ImportProductosExcelJob;
+use App\Traits\FileTrait;
+use App\Traits\UsesObjectStorage;
 
 class ProductosController extends Controller
 {
+    use FileTrait;
+    use UsesObjectStorage;
     /**
      * @OA\Get(
      *     path="/productos",
@@ -302,7 +305,11 @@ class ProductosController extends Controller
             $fullTempPath = storage_path('app/' . $tempPath);
             // Sanitizar nombre: reemplazar # y otros caracteres que rompen URLs
             $safeFilename = preg_replace('/[#?&=]/', '_', $file->getClientOriginalName());
-            $filePath = $file->storeAs('imports/productos', time() . '_' . uniqid() . '_' . $safeFilename, 'public');
+            $filePath = $this->storageStoreUpload(
+                $file,
+                'imports/productos',
+                time() . '_' . uniqid() . '_' . $safeFilename
+            );
 
             // Crear registro de importación
             $importProducto = ImportProducto::create([
@@ -583,10 +590,9 @@ class ProductosController extends Controller
             }
 
             // Eliminar archivo físico asociado a la importación (guardado en disco public: storage/app/public/)
-            $filePath = storage_path('app/public/' . $importProducto->ruta_archivo);
-            if (!empty($importProducto->ruta_archivo) && file_exists($filePath)) {
+            if (!empty($importProducto->ruta_archivo) && $this->objectStorage()->exists($importProducto->ruta_archivo)) {
                 try {
-                    unlink($filePath);
+                    $this->objectStorage()->delete($importProducto->ruta_archivo);
                 } catch (\Exception $e) {
                     Log::warning('No se pudo eliminar el archivo físico de la importación: ' . $e->getMessage());
                 }
@@ -678,7 +684,7 @@ class ProductosController extends Controller
             $extension = $file->getClientOriginalExtension();
             $filename = time() . '_' . $id . '_' . $safeFilename . '.' . $extension;
 
-            $filePath = $file->storeAs('productos/fotos', $filename, 'public');
+            $filePath = $this->storageStoreUpload($file, 'productos/fotos', $filename);
 
             $producto->foto = $filePath;
             $producto->save();

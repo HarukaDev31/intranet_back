@@ -13,6 +13,9 @@ use Dompdf\Dompdf;
 use Dompdf\Options;
 use App\Models\CargaConsolidada\CotizacionProveedor;
 use App\Models\CargaConsolidada\Cotizacion;
+use App\Support\WhatsApp\CoordinacionMediaLink;
+use App\Support\WhatsApp\CoordinacionWhatsappPayload;
+use App\Traits\UsesObjectStorage;
 use App\Traits\WhatsappTrait;
 use App\Traits\DatabaseConnectionTrait;
 use App\Traits\GoogleSheetsHelper;
@@ -36,7 +39,7 @@ use App\Models\CargaConsolidada\Contenedor;
 
 class SendRotuladoJob implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, WhatsappTrait, DatabaseConnectionTrait, GoogleSheetsHelper, MailTrait;
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, UsesObjectStorage, WhatsappTrait, DatabaseConnectionTrait, GoogleSheetsHelper, MailTrait;
 
     protected $cliente;
     protected $carga;
@@ -44,6 +47,9 @@ class SendRotuladoJob implements ShouldQueue
     protected $idCotizacion;
     protected $total_movilidad_personal;
     protected $domain;
+
+    /** @var int|null */
+    protected $whatsappCoordinacionBatchId;
 
     /** @var array<int, array{title: string|null, body: string}> */
     protected $coordinationSections = [];
@@ -54,14 +60,40 @@ class SendRotuladoJob implements ShouldQueue
     /**
      * Create a new job instance.
      */
-    public function __construct($cliente, $carga, $proveedores, $idCotizacion, $total_movilidad_personal, $domain = null)
-    {
+    public function __construct(
+        $cliente,
+        $carga,
+        $proveedores,
+        $idCotizacion,
+        $total_movilidad_personal,
+        $domain = null,
+        $whatsappCoordinacionBatchId = null
+    ) {
         $this->cliente = $cliente;
         $this->carga = $carga;
         $this->proveedores = $proveedores;
         $this->idCotizacion = $idCotizacion;
         $this->total_movilidad_personal = $total_movilidad_personal;
         $this->domain = $domain;
+        $this->whatsappCoordinacionBatchId = $whatsappCoordinacionBatchId !== null
+            ? (int) $whatsappCoordinacionBatchId
+            : null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $meta
+     * @return array<string, mixed>
+     */
+    private function withBatchStep(array $meta, string $stepKey, string $label): array
+    {
+        if ($this->whatsappCoordinacionBatchId === null) {
+            return $meta;
+        }
+
+        $meta['_batch_step'] = $stepKey;
+        $meta['_batch_label'] = $label;
+
+        return $meta;
     }
 
     /**
@@ -92,6 +124,25 @@ class SendRotuladoJob implements ShouldQueue
                 Log::info('Teléfono configurado: ' . $this->phoneNumberId);
             } else {
                 Log::warning('No se encontró la cotización con ID: ' . $this->idCotizacion);
+            }
+
+            if (
+                $this->whatsappCoordinacionBatchId === null
+                && config('meta_whatsapp.coordinacion_enabled')
+                && $this->phoneNumberId
+            ) {
+                $phoneE164 = preg_replace('/[^0-9]/', '', (string) $this->phoneNumberId);
+                $batch = app(\App\Services\WhatsApp\WhatsAppCoordinacionBatchService::class)->create('rotulado', [
+                    'id_cotizacion' => $this->idCotizacion,
+                    'cliente' => $this->cliente,
+                    'carga' => (string) $this->carga,
+                    'phone_e164' => $phoneE164,
+                ]);
+                $this->whatsappCoordinacionBatchId = (int) $batch->id;
+            }
+
+            if ($this->whatsappCoordinacionBatchId !== null) {
+                $this->setWhatsAppCoordinacionBatchId($this->whatsappCoordinacionBatchId);
             }
 
             // Asegurar que $proveedores sea un array
@@ -153,9 +204,18 @@ class SendRotuladoJob implements ShouldQueue
             // Si hay proveedores con force_send = 1, enviar mensaje de bienvenida completo
             if (count($providersHasSended) == 0 || $hasForceSend) {
                 Log::info('Enviando mensaje de bienvenida - no hay proveedores enviados previamente o hay proveedores con force_send');
-                $result = $this->sendWelcome($this->carga);
+                $welcomeText = WhatsappTrait::buildWelcomeRotuladoMessageText($this->carga);
+                if (config('meta_whatsapp.coordinacion_enabled') && $this->phoneNumberId) {
+                    $result = $this->queueCoordinacionWhatsApp(
+                        CoordinacionWhatsappPayload::welcomeRotulado($this->phoneNumberId, (string) $this->carga, $welcomeText),
+                        'rotulado_bienvenida',
+                        'Bienvenida rotulado — carga ' . $this->carga
+                    );
+                } else {
+                    $result = $this->sendWelcome($this->carga);
+                }
                 Log::info('Resultado del envío de bienvenida: ' . json_encode($result));
-                $this->addCoordinationSection(null, WhatsappTrait::buildWelcomeRotuladoMessageText($this->carga));
+                $this->addCoordinationSection(null, $welcomeText);
             } elseif (count($providersHasSended) > 0 && count($providersHasNoSended) > 0) {
                 $nuevoProveedorMsg = "Hola 🙋🏻‍♀, te escribe el área de coordinación de Probusiness. 
         
@@ -164,7 +224,19 @@ class SendRotuladoJob implements ShouldQueue
 *Rotulado: 👇🏼*  
 Tienes que indicarle a tu proveedor que las cajas máster 📦 cuenten con un rotulado para 
 identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro almacén.";
-                $this->sendMessage($nuevoProveedorMsg);
+                if (config('meta_whatsapp.coordinacion_enabled') && $this->phoneNumberId) {
+                    $this->queueCoordinacionWhatsApp(
+                        CoordinacionWhatsappPayload::rotuladoNuevoProveedor(
+                            $this->phoneNumberId,
+                            (string) $this->carga,
+                            $nuevoProveedorMsg
+                        ),
+                        'rotulado_nuevo_proveedor',
+                        'Aviso nuevo proveedor — carga ' . $this->carga
+                    );
+                } else {
+                    $this->sendMessage($nuevoProveedorMsg);
+                }
                 $this->addCoordinationSection(null, $nuevoProveedorMsg);
             }
 
@@ -253,12 +325,27 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
 
                     // PASO 1: Enviar rotulado PDF del proveedor
                     $sleepSendMedia += 1;
+                    $metaRotulado = $this->withBatchStep(
+                        CoordinacionWhatsappPayload::rotuladoPdfProducto(
+                            (string) $this->phoneNumberId,
+                            (string) $products,
+                            (string) $supplierCode,
+                            $tempFileForSend,
+                            $rotuladoCaption,
+                            $sleepSendMedia
+                        ),
+                        'rotulado_pdf_' . $supplierCode,
+                        'PDF rotulado — proveedor ' . $supplierCode
+                    );
                     $this->sendMedia(
                         $tempFileForSend,
                         'application/pdf',
                         $rotuladoCaption,
-                        null,
-                        $sleepSendMedia
+                        $this->phoneNumberId,
+                        $sleepSendMedia,
+                        'consolidado',
+                        $fileName,
+                        $metaRotulado
                     );
 
                     // PASO 2: Enviar archivo adicional por tipo (si aplica)
@@ -328,13 +415,32 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                 $this->addCoordinationAttachment($direccionUrl, 'Direccion_almacen_China.jpeg', 'image/jpeg');
             }
             $sleepSendMedia += 3;
-            $this->sendMedia($direccionUrl, 'image/jpg', $direccionCaption, null, $sleepSendMedia);
+            $metaDireccion = $this->withBatchStep(
+                CoordinacionWhatsappPayload::rotuladoAlmacenChinaImg(
+                    (string) $this->phoneNumberId,
+                    $direccionUrl,
+                    $direccionCaption,
+                    $sleepSendMedia
+                ),
+                'rotulado_direccion_almacen',
+                'Imagen dirección almacén China'
+            );
+            $this->sendMedia(
+                $direccionUrl,
+                'image/jpg',
+                $direccionCaption,
+                $this->phoneNumberId,
+                $sleepSendMedia,
+                'consolidado',
+                'Direccion_almacen_China.jpeg',
+                $metaDireccion
+            );
 
             // PASO 4: Enviar mensaje con URL (después de todos los proveedores)
             $sleepSendMedia += 6;
             $cotizacion = Cotizacion::where('id', $this->idCotizacion)->first();
             $uuid = $cotizacion->uuid;
-            $url = env('APP_URL_DATOS_PROVEEDOR') . '/' . $uuid;
+            $url = CoordinacionWhatsappPayload::buildDatosProveedorUrl($uuid);
             $message = "También necesito que ingrese al enlace y coloques los datos de tu proveedor x por favor 🫡
 Ingresar aquí: " . $url."\n\n";
             //get all providers from db with not have supplier_phone or supplier
@@ -356,9 +462,29 @@ Ingresar aquí: " . $url."\n\n";
                 }
             }
             $this->addCoordinationSection(null, $message);
-            $this->sendMessage($message, null, $sleepSendMedia);
+            $listaProveedoresMeta = CoordinacionWhatsappPayload::formatListaProveedoresForMeta($providers);
+            $metaDatos = $this->withBatchStep(
+                CoordinacionWhatsappPayload::rotuladoDatosProveedorLink(
+                    (string) $this->phoneNumberId,
+                    $url,
+                    $listaProveedoresMeta,
+                    $message,
+                    $sleepSendMedia
+                ),
+                'rotulado_datos_proveedor',
+                'Enlace datos proveedor'
+            );
+            $this->sendMessage($message, $this->phoneNumberId, $sleepSendMedia, 'consolidado', $metaDatos);
 
             $this->sendCoordinationRotuladoEmail($cotizacionInfo ? $cotizacionInfo->telefono : null);
+
+            if ($this->whatsappCoordinacionBatchId !== null) {
+                $laravelBatchId = $this->dispatchWhatsAppCoordinacionBatch();
+                Log::info('SendRotuladoJob: batch WhatsApp despachado', [
+                    'batch_id' => $this->whatsappCoordinacionBatchId,
+                    'laravel_batch_id' => $laravelBatchId,
+                ]);
+            }
 
             Log::info('SendRotuladoJob completado exitosamente');
         } catch (\Exception $e) {
@@ -425,24 +551,27 @@ Ingresar aquí: " . $url."\n\n";
      */
     private function getRotuladoPdfPath($tipoRotulado)
     {
-        $basePath = storage_path('app/public/templates/rotulado');
-
         switch ($tipoRotulado) {
-            case 'rotulado':
-                return $basePath . '/rotulado.pdf';
             case 'calzado':
-                return $basePath . '/calzado.pdf';
+                $fileName = 'calzado.pdf';
+                break;
             case 'ropa':
-                return $basePath . '/ropa.pdf';
+                $fileName = 'ropa.pdf';
+                break;
             case 'ropa_interior':
-                return $basePath . '/ropa_interior.pdf';
+                $fileName = 'ropa_interior.pdf';
+                break;
             case 'maquinaria':
-                return $basePath . '/maquinaria.pdf';
+                $fileName = 'maquinaria.pdf';
+                break;
             case 'movilidad_personal':
-                return $basePath . '/movilidad_personal.pdf';
+                $fileName = 'movilidad_personal.pdf';
+                break;
             default:
-                return $basePath . '/rotulado.pdf';
+                $fileName = 'rotulado.pdf';
         }
+
+        return $this->storageLocalPath('templates/rotulado/' . $fileName);
     }
 
     /**
@@ -653,7 +782,18 @@ Ingresar aquí: " . $url."\n\n";
         if (file_exists($calzadoPdfPath)) {
             $this->addCoordinationSection(null, $message);
             $this->addCoordinationAttachment($calzadoPdfPath, 'calzado_ejemplo.pdf', 'application/pdf');
-            $this->sendMedia($calzadoPdfPath, 'application/pdf', $message, null, $sleepSendMedia);
+            $meta = $this->withBatchStep(
+                CoordinacionWhatsappPayload::rotuladoEtiquetaCalzado(
+                    (string) $this->phoneNumberId,
+                    (string) $supplierCode,
+                    $calzadoPdfPath,
+                    $message,
+                    $sleepSendMedia
+                ),
+                'rotulado_etiqueta_calzado_' . $supplierCode,
+                'Etiqueta calzado — ' . $supplierCode
+            );
+            $this->sendMedia($calzadoPdfPath, 'application/pdf', $message, $this->phoneNumberId, $sleepSendMedia, 'consolidado', 'calzado_ejemplo.pdf', $meta);
         } else {
             Log::warning('No se encontró PDF específico para calzado: ' . $calzadoPdfPath);
         }
@@ -671,7 +811,18 @@ Ingresar aquí: " . $url."\n\n";
         if (file_exists($ropaPdfPath)) {
             $this->addCoordinationSection(null, $message);
             $this->addCoordinationAttachment($ropaPdfPath, 'ropa_ejemplo.pdf', 'application/pdf');
-            $this->sendMedia($ropaPdfPath, 'application/pdf', $message, null, $sleepSendMedia);
+            $meta = $this->withBatchStep(
+                CoordinacionWhatsappPayload::rotuladoEtiquetaRopa(
+                    (string) $this->phoneNumberId,
+                    (string) $supplierCode,
+                    $ropaPdfPath,
+                    $message,
+                    $sleepSendMedia
+                ),
+                'rotulado_etiqueta_ropa_' . $supplierCode,
+                'Etiqueta ropa — ' . $supplierCode
+            );
+            $this->sendMedia($ropaPdfPath, 'application/pdf', $message, $this->phoneNumberId, $sleepSendMedia, 'consolidado', 'ropa_ejemplo.pdf', $meta);
         } else {
             Log::warning('No se encontró PDF específico para ropa: ' . $ropaPdfPath);
         }
@@ -689,7 +840,18 @@ Ingresar aquí: " . $url."\n\n";
         if (file_exists($ropaInteriorPdfPath)) {
             $this->addCoordinationSection(null, $message);
             $this->addCoordinationAttachment($ropaInteriorPdfPath, 'ropa_interior_ejemplo.pdf', 'application/pdf');
-            $this->sendMedia($ropaInteriorPdfPath, 'application/pdf', $message, null, $sleepSendMedia);
+            $meta = $this->withBatchStep(
+                CoordinacionWhatsappPayload::rotuladoEtiquetaRopaInterior(
+                    (string) $this->phoneNumberId,
+                    (string) $supplierCode,
+                    $ropaInteriorPdfPath,
+                    $message,
+                    $sleepSendMedia
+                ),
+                'rotulado_etiqueta_ropa_interior_' . $supplierCode,
+                'Etiqueta ropa interior — ' . $supplierCode
+            );
+            $this->sendMedia($ropaInteriorPdfPath, 'application/pdf', $message, $this->phoneNumberId, $sleepSendMedia, 'consolidado', 'ropa_interior_ejemplo.pdf', $meta);
         } else {
             Log::warning('No se encontró PDF específico para ropa interior: ' . $ropaInteriorPdfPath);
         }
@@ -707,7 +869,18 @@ Ingresar aquí: " . $url."\n\n";
         if (file_exists($maquinariaPdfPath)) {
             $this->addCoordinationSection(null, $message);
             $this->addCoordinationAttachment($maquinariaPdfPath, 'maquinaria_ejemplo.pdf', 'application/pdf');
-            $this->sendMedia($maquinariaPdfPath, 'application/pdf', $message, null, $sleepSendMedia);
+            $meta = $this->withBatchStep(
+                CoordinacionWhatsappPayload::rotuladoEtiquetaMaquinaria(
+                    (string) $this->phoneNumberId,
+                    (string) $supplierCode,
+                    $maquinariaPdfPath,
+                    $message,
+                    $sleepSendMedia
+                ),
+                'rotulado_etiqueta_maquinaria_' . $supplierCode,
+                'Etiqueta maquinaria — ' . $supplierCode
+            );
+            $this->sendMedia($maquinariaPdfPath, 'application/pdf', $message, $this->phoneNumberId, $sleepSendMedia, 'consolidado', 'maquinaria_ejemplo.pdf', $meta);
         } else {
             Log::warning('No se encontró PDF específico para maquinaria: ' . $maquinariaPdfPath);
         }
@@ -800,23 +973,52 @@ Por lo tanto, dile a tu proveedor #{$supplierCode} que le ponga la etiqueta.
                 $this->addCoordinationAttachment($movilidadPersonalPath, 'movilidad_personal_ejemplo.pdf', 'application/pdf');
             }
 
-            if (file_exists($excelPath)) {
-                $this->sendMedia($movilidadPersonalPath, 'application/pdf', $message, null, $sleepSendMedia);
-
+            if (file_exists($movilidadPersonalPath)) {
+                $metaMov = $this->withBatchStep(
+                    CoordinacionWhatsappPayload::rotuladoPdfProducto(
+                        (string) $this->phoneNumberId,
+                        'Movilidad Personal',
+                        (string) $supplierCode,
+                        $movilidadPersonalPath,
+                        $message,
+                        $sleepSendMedia
+                    ),
+                    'rotulado_movilidad_pdf_' . $supplierCode,
+                    'PDF movilidad personal — ' . $supplierCode
+                );
+                $this->sendMedia(
+                    $movilidadPersonalPath,
+                    'application/pdf',
+                    $message,
+                    $this->phoneNumberId,
+                    $sleepSendMedia,
+                    'consolidado',
+                    'movilidad_personal_ejemplo.pdf',
+                    $metaMov
+                );
                 Log::info('Archivo MOVILIDAD PERSONAL enviado por WhatsApp exitosamente');
-            } else {
-                Log::error('No se pudo crear el archivo VIM: ' . $excelPath);
             }
             if (file_exists($excelPath)) {
-                $vinMessage = "👆🏼Le adjuntamos la lista de códigos vins que deben ir grabados en los vehículos de movilidad personal.";
+                $vinMessage = "👆🏼 Le adjuntamos la lista de códigos VIN que deben ir grabados en los vehículos de movilidad personal.\n\nDescárgala aquí: {{link}} 📋";
+                $linkVin = CoordinacionMediaLink::uploadLocalFile($excelPath, 'temp/vin/' . basename($excelPath));
+                if ($linkVin !== null) {
+                    $vinMessage = str_replace('{{link}}', $linkVin, $vinMessage);
+                }
                 $this->addCoordinationSection(null, $vinMessage);
                 $this->addCoordinationAttachment(
                     $excelPath,
                     'vin_movilidad.xlsx',
                     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
                 );
-                $this->sendMedia($excelPath, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', $vinMessage, null, $sleepSendMedia, 'consolidado', 'vin_movilidad.xlsx');
-                Log::info('Archivo VIM enviado por WhatsApp exitosamente');
+                $metaVin = $linkVin !== null
+                    ? $this->withBatchStep(
+                        CoordinacionWhatsappPayload::rotuladoVinLink((string) $this->phoneNumberId, $linkVin, $vinMessage, $sleepSendMedia),
+                        'rotulado_vin_' . $supplierCode,
+                        'Lista códigos VIN — ' . $supplierCode
+                    )
+                    : null;
+                $this->sendMessage($vinMessage, $this->phoneNumberId, $sleepSendMedia, 'consolidado', $metaVin);
+                Log::info('Enlace VIN enviado por WhatsApp');
             } else {
                 Log::error('No se pudo crear el archivo VIM: ' . $excelPath);
             }

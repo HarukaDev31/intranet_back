@@ -14,13 +14,15 @@ use Illuminate\Support\Facades\Storage;
 use App\Models\CargaConsolidada\CotizacionProveedor;
 use App\Models\CargaConsolidada\Cotizacion;
 use App\Models\CargaConsolidada\AlmacenInspection;
+use App\Support\WhatsApp\CoordinacionWhatsappPayload;
+use App\Traits\UsesObjectStorage;
 use App\Traits\WhatsappTrait;
 use App\Traits\DatabaseConnectionTrait;
 use Carbon\Carbon;
 
 class SendInspectionMediaJob implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, WhatsappTrait, DatabaseConnectionTrait;
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, UsesObjectStorage, WhatsappTrait, DatabaseConnectionTrait;
 
     protected $idProveedor;
     protected $idCotizacion;
@@ -188,7 +190,15 @@ class SendInspectionMediaJob implements ShouldQueue
                 '📦 Tu carga llegó a nuestro almacén de Yiwu, te comparto las fotos y videos. ' . "\n\n" .
                 '🔗 Ver inspección: ' . $inspeccionLink;
 
-            $this->sendMessage($message, $telefono);
+            $metaLlegada = CoordinacionWhatsappPayload::inspeccionLlegada(
+                $telefono,
+                (string) $cliente,
+                (string) $proveedor->code_supplier,
+                (string) $qtyBox,
+                $inspeccionLink,
+                $message
+            );
+            $this->sendMessage($message, $telefono, 0, 'consolidado', $metaLlegada);
             Log::info("Mensaje principal enviado", ['telefono' => $telefono]);
 
 
@@ -202,9 +212,19 @@ class SendInspectionMediaJob implements ShouldQueue
                 $publicUrl = $this->generatePublicUrl($image->file_path);
                 
                 if ($publicUrl) {
-                    // Mensaje con código del proveedor
-                    $message = $codeSupplier;
-                    $this->sendMediaInspectionToController($image->file_path, $image->file_type, $message, $telefono, 0, $image->id);
+                    $caption = '📦 Inspección — proveedor ' . $codeSupplier . ' 📦';
+                    $localPath = $this->storageLocalPath($image->file_path);
+                    $meta = CoordinacionWhatsappPayload::inspeccionImagen($telefono, (string) $codeSupplier, $localPath, $caption);
+                    $this->sendMediaInspectionToController(
+                        $image->file_path,
+                        $image->file_type,
+                        $codeSupplier,
+                        $telefono,
+                        0,
+                        $image->id,
+                        null,
+                        $meta
+                    );
                     $imagenesEnviadas++;
                     Log::info('Imagen enviada con URL', [
                         'file_path' => $image->file_path,
@@ -223,9 +243,19 @@ class SendInspectionMediaJob implements ShouldQueue
                 $publicUrl = $this->generatePublicUrl($video->file_path);
                 
                 if ($publicUrl) {
-                    // Mensaje con código del proveedor
-                    $message = $codeSupplier;
-                    $this->sendMediaInspectionToController($video->file_path, $video->file_type, $message, $telefono, 0, $video->id);
+                    $caption = '📦 Inspección — proveedor ' . $codeSupplier . ' 📦';
+                    $localPath = $this->storageLocalPath($video->file_path);
+                    $meta = CoordinacionWhatsappPayload::inspeccionVideo($telefono, (string) $codeSupplier, $localPath, $caption);
+                    $this->sendMediaInspectionToController(
+                        $video->file_path,
+                        $video->file_type,
+                        $codeSupplier,
+                        $telefono,
+                        0,
+                        $video->id,
+                        null,
+                        $meta
+                    );
                     $videosEnviados++;
                     Log::info('Video enviado con URL', [
                         'file_path' => $video->file_path,

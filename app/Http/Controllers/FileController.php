@@ -2,13 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Traits\UsesObjectStorage;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
 
 class FileController extends Controller
 {
+    use UsesObjectStorage;
     /**
      * @OA\Get(
      *     path="/files/{path}",
@@ -29,23 +30,16 @@ class FileController extends Controller
             // Normalizar dobles barras y barras iniciales
             $path = preg_replace('#/+#', '/', trim($path, '/'));
 
-            $possiblePaths = [
-                storage_path('app/public/' . $path),
-                public_path('storage/' . $path),
-                public_path($path),
-            ];
-            
-            $filePath = null;
-            foreach ($possiblePaths as $possiblePath) {
-                if (file_exists($possiblePath)) {
-                    $filePath = $possiblePath;
-                    break;
-                }
-            }
-            
-            if (!$filePath) {
+            if (!$this->objectStorage()->exists($path)) {
                 abort(404, 'Archivo no encontrado');
             }
+
+            $publicUrl = $this->objectStorage()->url($path);
+            if ($publicUrl !== null && config('object_storage.cdn_base_url') !== '') {
+                return redirect()->away($publicUrl);
+            }
+
+            $filePath = $this->storageLocalPath($path);
             
             // CORS
             $origin = request()->header('origin');

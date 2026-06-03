@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Models\ViaticoRetribucion;
+use App\Traits\UsesObjectStorage;
 use App\Traits\WhatsappTrait;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -10,7 +11,6 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Storage;
 
 /**
  * Envía por WhatsApp el mensaje y el comprobante de una retribución.
@@ -18,7 +18,7 @@ use Illuminate\Support\Facades\Storage;
  */
 class SendViaticoWhatsappNotificationJob implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, WhatsappTrait;
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, UsesObjectStorage, WhatsappTrait;
 
     public $message;
     public $userId;
@@ -60,14 +60,13 @@ class SendViaticoWhatsappNotificationJob implements ShouldQueue
                     $pathToUse = $m[1];
                 }
                 $pathNormalized = str_replace('\\', '/', trim($pathToUse));
-                $fullPath = storage_path('app/public/' . $pathNormalized);
-
-                if (!file_exists($fullPath)) {
-                    $fullPath = public_path('storage/' . $pathNormalized);
+                if (strpos($pathNormalized, 'public/') === 0) {
+                    $pathNormalized = substr($pathNormalized, 7);
                 }
-                if (!file_exists($fullPath) && method_exists(Storage::disk('public'), 'path')) {
-                    $fullPath = Storage::disk('public')->path($pathToUse);
+                if (strpos($pathNormalized, 'storage/') === 0) {
+                    $pathNormalized = substr($pathNormalized, 8);
                 }
+                $fullPath = $this->storageLocalPath($pathNormalized);
                 if (file_exists($fullPath) && is_readable($fullPath)) {
                     $mime = mime_content_type($fullPath) ?: 'application/octet-stream';
                     if ($mime === 'application/octet-stream') {
@@ -85,8 +84,6 @@ class SendViaticoWhatsappNotificationJob implements ShouldQueue
                         'path' => $this->paymentReceiptPath,
                         'pathToUse' => $pathToUse,
                         'fullPath' => $fullPath,
-                        'storage_app_public' => storage_path('app/public'),
-                        'public_storage' => public_path('storage')
                     ]);
                 }
             }

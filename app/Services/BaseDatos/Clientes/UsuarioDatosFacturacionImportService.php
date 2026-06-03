@@ -7,21 +7,22 @@ use App\Helpers\UserLookupHelper;
 use App\Jobs\ImportUsuarioDatosFacturacionExcelJob;
 use App\Models\ImportUsuarioDatosFacturacion;
 use App\Models\UsuarioDatosFacturacion;
+use App\Traits\UsesObjectStorage;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Storage;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 
 class UsuarioDatosFacturacionImportService
 {
+    use UsesObjectStorage;
     public function enqueueImport($file, $usuarioId = null)
     {
         $usuarioId = $this->resolveValidUsuarioId($usuarioId);
 
-        $storedPath = $file->storeAs(
+        $storedPath = $this->storageStoreUpload(
+            $file,
             'imports/usuario-datos-facturacion',
-            time() . '_' . uniqid() . '_' . $file->getClientOriginalName(),
-            'public'
+            time() . '_' . uniqid() . '_' . $file->getClientOriginalName()
         );
 
         $import = ImportUsuarioDatosFacturacion::create([
@@ -86,8 +87,7 @@ class UsuarioDatosFacturacionImportService
             'estadisticas' => $stats,
         ]);
 
-        $fullPath = storage_path('app/public/' . $import->ruta_archivo);
-        if (!file_exists($fullPath)) {
+        if (!$this->objectStorage()->exists($import->ruta_archivo)) {
             $stats['errores'] = 1;
             $stats['detalles'][] = 'Archivo no encontrado en storage.';
             $import->update([
@@ -97,6 +97,8 @@ class UsuarioDatosFacturacionImportService
             $this->dispatchImportFinishedNotificationEvent($import, 'ERROR', 'No se pudo procesar la importacion: archivo no encontrado.', $stats);
             return;
         }
+
+        $fullPath = $this->storageLocalPath($import->ruta_archivo);
 
         try {
             $spreadsheet = IOFactory::load($fullPath);
@@ -390,7 +392,7 @@ class UsuarioDatosFacturacionImportService
             return $path;
         }
 
-        return Storage::disk('public')->url($path);
+        return $this->objectStorage()->url($path);
     }
 
     private function dispatchImportFinishedNotificationEvent(

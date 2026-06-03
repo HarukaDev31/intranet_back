@@ -2,12 +2,43 @@
 
 namespace App\Traits;
 
+use App\Jobs\WhatsApp\SendCoordinacionWhatsAppJob;
+use App\Services\WhatsApp\MetaWhatsAppCoordinacionService;
+use App\Services\WhatsApp\WhatsAppCoordinacionBatchService;
+use App\Support\WhatsApp\CoordinacionWhatsappPayload;
+use App\Support\WhatsApp\WhatsappEnvironmentPhone;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
 
 trait WhatsappTrait
 {
     private $phoneNumberId = null;
+
+    /** @var int|null Batch activo (rotulado u otros flujos Meta). */
+    protected $whatsappCoordinacionBatchId = null;
+
+    public function setWhatsAppCoordinacionBatchId(?int $batchId): void
+    {
+        $this->whatsappCoordinacionBatchId = $batchId;
+    }
+
+    public function getWhatsAppCoordinacionBatchId(): ?int
+    {
+        return $this->whatsappCoordinacionBatchId;
+    }
+
+    /**
+     * Despacha los jobs Meta agrupados en Bus::batch (tras encolar todos los ítems).
+     */
+    protected function dispatchWhatsAppCoordinacionBatch(): ?string
+    {
+        if ($this->whatsappCoordinacionBatchId === null) {
+            return null;
+        }
+
+        return app(WhatsAppCoordinacionBatchService::class)
+            ->dispatchBuffered($this->whatsappCoordinacionBatchId);
+    }
     
     /**
      * Mapeo inverso de conexión de BD a dominio del frontend
@@ -132,42 +163,31 @@ trait WhatsappTrait
         }
     }
 
+    /**
+     * Misma lógica que _callApi: localhost / QA / FORCE_SEND_DEFAULT_NUMBER → DEFAULT_WHATSAPP_NUMBER.
+     */
+    protected function shouldUseDefaultWhatsAppNumber(): bool
+    {
+        return WhatsappEnvironmentPhone::shouldUseDefaultNumber($this->getRequestDomain());
+    }
+
+    /**
+     * @param  string|null  $phoneNumberId  Formato legacy 51999999999@c.us
+     */
+    protected function resolvePhoneNumberForWhatsApp(?string $phoneNumberId): ?string
+    {
+        return WhatsappEnvironmentPhone::resolve($phoneNumberId, $this->getRequestDomain());
+    }
+
     private function _callApi($endpoint, $data)
     {
         try {
             $url = 'https://redis.probusiness.pe/api/whatsapp' . $endpoint;
-            
-            // Obtener dominio desde donde se hace la petición
-            $domain = $this->getRequestDomain();
-            $defaultWhatsapNumber = env('DEFAULT_WHATSAPP_NUMBER', '51912705923@c.us');
-            Log::info('Domain: ' . $domain);
-            // Validar dominio similar a DatabaseSelectionMiddleware
-            // Si es localhost, desarrollo o QA, usar número por defecto
-            $domainsForDefaultNumber = ['localhost', '127.0.0.1', 'qaintranet.probusiness.pe'];
-            $shouldUseDefaultNumber = false;
-            
-            if ($domain) {
-                foreach ($domainsForDefaultNumber as $allowedDomain) {
-                    if (strpos($domain, $allowedDomain) !== false || $domain === $allowedDomain) {
-                        $shouldUseDefaultNumber = true;
-                        break;
-                    }
-                }
-            }
-            
-            if ($shouldUseDefaultNumber) {
-                $data['phoneNumberId'] = $defaultWhatsapNumber;
-                Log::info('Dominio detectado para usar número por defecto', [
-                    'domain' => $domain,
-                    'phoneNumberId' => $defaultWhatsapNumber
-                ]);
-            }
-            if (env('FORCE_SEND_DEFAULT_NUMBER', false)) {
-                $data['phoneNumberId'] = $defaultWhatsapNumber;
-                Log::info('Forzado a usar número por defecto', [
-                    'domain' => $domain,
-                    'phoneNumberId' => $defaultWhatsapNumber
-                ]);
+
+            Log::info('Domain: ' . $this->getRequestDomain());
+
+            if (isset($data['phoneNumberId'])) {
+                $data['phoneNumberId'] = $this->resolvePhoneNumberForWhatsApp($data['phoneNumberId']);
             }
             $ch = curl_init();
             curl_setopt($ch, CURLOPT_URL, $url);
@@ -244,19 +264,44 @@ trait WhatsappTrait
 
     public function sendWelcome($carga, $phoneNumberId = null, $sleep = 0): array
     {
-        $phoneNumberId = $phoneNumberId ? $phoneNumberId : $this->phoneNumberId;
+        $phoneNumberId = $this->resolvePhoneNumberForWhatsApp($phoneNumberId ? $phoneNumberId : $this->phoneNumberId);
+
+        if ($this->shouldRouteCoordinacionToMeta('consolidado') && $phoneNumberId) {
+            $welcomeText = self::buildWelcomeRotuladoMessageText($carga);
+
+            return $this->queueCoordinacionWhatsApp(
+                CoordinacionWhatsappPayload::welcomeRotulado((string) $phoneNumberId, (string) $carga, $welcomeText, $sleep)
+            );
+        }
+
         return $this->_callApi('/welcomeV2', [
             'carga' => $carga,
             'phoneNumberId' => $phoneNumberId,
-            'sleep' => $sleep
+            'sleep' => $sleep,
         ]);
     }
 
-    public function sendDataItem($message, $filePath, $phoneNumberId = null, $sleep = 0, $fileName = null): array
+    /**
+     * @param  array<string, mixed>|null  $meta
+     */
+    public function sendDataItem($message, $filePath, $phoneNumberId = null, $sleep = 0, $fileName = null, $meta = null): array
     {
         try {
-            $phoneNumberId = $phoneNumberId ? $phoneNumberId : $this->phoneNumberId;
-            
+            $phoneNumberId = $this->resolvePhoneNumberForWhatsApp($phoneNumberId ? $phoneNumberId : $this->phoneNumberId);
+
+            if ($this->shouldRouteCoordinacionToMeta('consolidado')) {
+                return $this->sendMedia(
+                    $filePath,
+                    'application/pdf',
+                    $message,
+                    $phoneNumberId,
+                    $sleep,
+                    'consolidado',
+                    $fileName ?? basename($filePath),
+                    $meta
+                );
+            }
+
             if (!file_exists($filePath)) {
                 Log::error('Error al enviar data item: El archivo no existe: ' . $filePath);
                 return ['status' => false, 'response' => ['error' => 'Archivo no encontrado']];
@@ -319,11 +364,30 @@ trait WhatsappTrait
      *   Nota: para rutas dedicadas sin fromNumber (inspecciones, bienvenida,
      *   cursos) usa sendMediaInspection(), sendWelcome() o sendMessageCurso().
      *
+     * @param  array<string, mixed>|null  $meta  Payload Meta (template, body_parameters, bitrix_message). Ver CoordinacionWhatsappPayload.
      * @return array ['status' => bool, 'response' => array]
      */
-    public function sendMessage($message, $phoneNumberId = null, $sleep = 0, $fromNumber = 'consolidado'): array
+    public function sendMessage($message, $phoneNumberId = null, $sleep = 0, $fromNumber = 'consolidado', $meta = null): array
     {
-        $phoneNumberId = $phoneNumberId ? $phoneNumberId : $this->phoneNumberId;
+        $phoneNumberId = $this->resolvePhoneNumberForWhatsApp($phoneNumberId ? $phoneNumberId : $this->phoneNumberId);
+
+        if ($this->shouldRouteCoordinacionToMeta($fromNumber)) {
+            if (is_array($meta) && !empty($meta['template'])) {
+                $meta['bitrix_message'] = $meta['bitrix_message'] ?? $message;
+                $meta['phone'] = $meta['phone'] ?? $phoneNumberId;
+                $meta['sleep'] = $meta['sleep'] ?? $sleep;
+
+                return $this->queueCoordinacionWhatsApp($meta);
+            }
+            if (config('meta_whatsapp.legacy_fallback', true)) {
+                return $this->queueCoordinacionWhatsApp([
+                    'type' => 'legacy_message',
+                    'message' => $message,
+                    'phone' => $phoneNumberId,
+                    'sleep' => $sleep,
+                ]);
+            }
+        }
 
         return $this->_callApi('/messageV2', [
             'message' => $message,
@@ -378,12 +442,42 @@ trait WhatsappTrait
      *
      * @param string|null $fileName      Nombre del archivo que verá el destinatario.
      *                                   Si es null, usa basename($filePath).
+     * @param  array<string, mixed>|null  $meta  Plantilla Meta con header document/image (template, body_parameters, header).
      * @return array|false Respuesta de la API o false en caso de error.
      */
-    public function sendMedia($filePath, $mimeType = null, $message = null, $phoneNumberId = null, $sleep = 0, $fromNumber = 'consolidado', $fileName = null)
+    public function sendMedia($filePath, $mimeType = null, $message = null, $phoneNumberId = null, $sleep = 0, $fromNumber = 'consolidado', $fileName = null, $meta = null)
     {
         try {
-            $phoneNumberId = $phoneNumberId ? $phoneNumberId : $this->phoneNumberId;
+            $phoneNumberId = $this->resolvePhoneNumberForWhatsApp($phoneNumberId ? $phoneNumberId : $this->phoneNumberId);
+
+            if ($this->shouldRouteCoordinacionToMeta($fromNumber)) {
+                if (is_array($meta) && !empty($meta['template'])) {
+                    $meta['phone'] = $meta['phone'] ?? $phoneNumberId;
+                    $meta['sleep'] = $meta['sleep'] ?? $sleep;
+                    $meta['bitrix_message'] = $meta['bitrix_message'] ?? (string) ($message ?? '');
+                    if (empty($meta['header'])) {
+                        $meta['header'] = [
+                            'type' => is_string($mimeType) && strpos($mimeType, 'image/') === 0 ? 'image' : 'document',
+                            'path' => $filePath,
+                            'filename' => $fileName ?? basename($filePath),
+                            'mimeType' => $mimeType,
+                        ];
+                    }
+
+                    return $this->queueCoordinacionWhatsApp($meta);
+                }
+                if (config('meta_whatsapp.legacy_fallback', true)) {
+                    return $this->queueCoordinacionWhatsApp([
+                        'type' => 'legacy_media',
+                        'path' => $filePath,
+                        'mimeType' => $mimeType,
+                        'caption' => $message,
+                        'fileName' => $fileName ?? basename($filePath),
+                        'phone' => $phoneNumberId,
+                        'sleep' => $sleep,
+                    ]);
+                }
+            }
 
             // Verificar que el archivo existe
             if (!file_exists($filePath)) {
@@ -422,11 +516,29 @@ trait WhatsappTrait
             return false;
         }
     }
-    public function sendMediaInspection($filePath, $mimeType = null, $message = null, $phoneNumberId = null, $sleep = 0, $inspection_id = null,$fileName=null)
+    public function sendMediaInspection($filePath, $mimeType = null, $message = null, $phoneNumberId = null, $sleep = 0, $inspection_id = null, $fileName = null, $meta = null)
     {
         try {
-            $phoneNumberId = $phoneNumberId ? $phoneNumberId : $this->phoneNumberId;
-            
+            $phoneNumberId = $this->resolvePhoneNumberForWhatsApp($phoneNumberId ? $phoneNumberId : $this->phoneNumberId);
+
+            if ($this->shouldRouteCoordinacionToMeta('consolidado') && is_array($meta) && !empty($meta['template'])) {
+                $meta['phone'] = $meta['phone'] ?? $phoneNumberId;
+                $meta['sleep'] = $meta['sleep'] ?? $sleep;
+                $meta['bitrix_message'] = $meta['bitrix_message'] ?? (string) ($message ?? '');
+                if (empty($meta['header']) && $filePath !== '') {
+                    $meta['header'] = [
+                        'type' => is_string($mimeType) && strpos($mimeType, 'video/') === 0 ? 'video' : (
+                            is_string($mimeType) && strpos($mimeType, 'image/') === 0 ? 'image' : 'document'
+                        ),
+                        'path' => $filePath,
+                        'filename' => $fileName ?? basename($filePath),
+                        'mimeType' => $mimeType,
+                    ];
+                }
+
+                return $this->queueCoordinacionWhatsApp($meta);
+            }
+
             if (!file_exists($filePath)) {
                 Log::error('Error al enviar media de inspección: El archivo no existe: ' . $filePath);
                 return false;
@@ -492,11 +604,32 @@ trait WhatsappTrait
      * @param string|null $fileName Nombre del archivo
      * @return array|false Respuesta del controlador o false en caso de error
      */
-    public function sendMediaInspectionToController($filePath, $mimeType = null, $message = null, $phoneNumberId = null, $sleep = 0, $inspection_id = null, $fileName = null)
+    public function sendMediaInspectionToController($filePath, $mimeType = null, $message = null, $phoneNumberId = null, $sleep = 0, $inspection_id = null, $fileName = null, $meta = null)
     {
         try {
-            $phoneNumberId = $phoneNumberId ? $phoneNumberId : $this->phoneNumberId;
-            
+            $phoneNumberId = $this->resolvePhoneNumberForWhatsApp($phoneNumberId ? $phoneNumberId : $this->phoneNumberId);
+
+            if ($this->shouldRouteCoordinacionToMeta('consolidado') && is_array($meta) && !empty($meta['template'])) {
+                $meta['phone'] = $meta['phone'] ?? $phoneNumberId;
+                $meta['sleep'] = $meta['sleep'] ?? $sleep;
+                $meta['bitrix_message'] = $meta['bitrix_message'] ?? (string) ($message ?? '');
+                if (empty($meta['header'])) {
+                    $mediaPath = is_string($filePath) && $filePath !== '' ? $filePath : '';
+                    if ($mediaPath !== '') {
+                        $meta['header'] = [
+                            'type' => is_string($mimeType) && strpos($mimeType, 'video/') === 0 ? 'video' : (
+                                is_string($mimeType) && strpos($mimeType, 'image/') === 0 ? 'image' : 'document'
+                            ),
+                            'path' => $mediaPath,
+                            'filename' => $fileName ?? basename($mediaPath),
+                            'mimeType' => $mimeType,
+                        ];
+                    }
+                }
+
+                return $this->queueCoordinacionWhatsApp($meta);
+            }
+
             // Validar que inspection_id esté presente
             if ($inspection_id === null) {
                 Log::error('Error al enviar media de inspección al controlador: inspection_id es requerido');
@@ -547,69 +680,94 @@ trait WhatsappTrait
     private function generatePublicUrlFromPath($filePath)
     {
         try {
-            // Si ya es una URL completa, devolverla tal como está
-            if (filter_var($filePath, FILTER_VALIDATE_URL)) {
-                return $filePath;
-            }
-
-            // Limpiar la ruta de barras iniciales para evitar doble slash
-            $ruta = ltrim($filePath, '/');
-
-            // Si es una ruta absoluta del sistema, convertirla a ruta relativa
-            if (strpos($filePath, storage_path('app/public')) === 0) {
-                // Es una ruta absoluta en storage/app/public
-                $ruta = str_replace(storage_path('app/public'), '', $filePath);
-                $ruta = ltrim($ruta, '/\\');
-            } elseif (strpos($filePath, public_path('storage')) === 0) {
-                // Es una ruta absoluta en public/storage
-                $ruta = str_replace(public_path('storage'), '', $filePath);
-                $ruta = ltrim($ruta, '/\\');
-            }
-
-            // Limpiar la ruta
-            $ruta = str_replace('\\', '/', $ruta);
-            $ruta = ltrim($ruta, '/');
-
-            // Corregir rutas con doble storage
-            if (strpos($ruta, 'storage//storage/') !== false) {
-                $ruta = str_replace('storage//storage/', 'storage/', $ruta);
-            }
-
-            // Si la ruta ya contiene 'storage/', no agregar otro 'storage/'
-            if (strpos($ruta, 'storage/') === 0) {
-                $baseUrl = config('app.url');
-                $publicUrl = rtrim($baseUrl, '/') . '/' . $ruta;
-            } elseif (strpos($ruta, 'public/') === 0) {
-                // Si la ruta empieza con 'public/', remover 'public/' y agregar 'storage/'
-                $ruta = substr($ruta, 7); // Remover 'public/'
-                $baseUrl = config('app.url');
-                $publicUrl = rtrim($baseUrl, '/') . '/storage/' . $ruta;
-            } else {
-                // Construir URL manualmente (igual que generateImageUrl en CotizacionProveedorController)
-                $baseUrl = config('app.url');
-                $storagePath = 'storage/';
-
-                // Asegurar que no haya doble slash
-                $baseUrl = rtrim($baseUrl, '/');
-                $storagePath = ltrim($storagePath, '/');
-                $ruta = ltrim($ruta, '/');
-
-                $publicUrl = $baseUrl . '/' . $storagePath . $ruta;
-            }
-
-            Log::info("URL pública generada desde ruta", [
-                'file_path' => $filePath,
-                'relative_path' => $ruta,
-                'public_url' => $publicUrl
-            ]);
-
-            return $publicUrl;
+            return app(\App\Contracts\ObjectStorageConnectorInterface::class)->url($filePath);
         } catch (\Exception $e) {
-            Log::error("Error al generar URL pública desde ruta: " . $e->getMessage(), [
+            Log::error('Error al generar URL pública desde ruta: ' . $e->getMessage(), [
                 'file_path' => $filePath,
-                'trace' => $e->getTraceAsString()
             ]);
+
             return null;
         }
+    }
+
+    /**
+     * ¿Enrutar sendMessage/sendMedia de coordinación al job Meta + Bitrix?
+     */
+    protected function shouldRouteCoordinacionToMeta(string $fromNumber): bool
+    {
+        if ($fromNumber !== 'consolidado') {
+            return false;
+        }
+
+        return (bool) config('meta_whatsapp.coordinacion_enabled', false);
+    }
+
+    /**
+     * Encola envío coordinación (Meta template + registro Bitrix). Usar desde Jobs.
+     *
+     * @param  array<string, mixed>  $payload
+     * @return array{status: bool, queued: bool}
+     */
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    public function queueCoordinacionWhatsApp(array $payload, ?string $stepKey = null, ?string $label = null): array
+    {
+        if (isset($payload['_batch_step'], $payload['_batch_label'])) {
+            $stepKey = (string) $payload['_batch_step'];
+            $label = (string) $payload['_batch_label'];
+            unset($payload['_batch_step']);
+        }
+
+        if (!empty($payload['phone'])) {
+            $payload['phone'] = $this->resolvePhoneNumberForWhatsApp((string) $payload['phone']);
+        }
+
+        if (empty($payload['_domain'])) {
+            if (property_exists($this, 'domain') && !empty($this->domain)) {
+                $payload['_domain'] = (string) $this->domain;
+            } else {
+                $domain = $this->getRequestDomain();
+                if ($domain !== null && $domain !== '') {
+                    $payload['_domain'] = $domain;
+                }
+            }
+        }
+
+        if ($this->whatsappCoordinacionBatchId !== null) {
+            $stepKey = $stepKey ?? (string) ($payload['template'] ?? $payload['type'] ?? 'mensaje');
+            $label = $label ?? (string) ($payload['template'] ?? 'Mensaje coordinación');
+
+            app(WhatsAppCoordinacionBatchService::class)->enqueueItem(
+                $this->whatsappCoordinacionBatchId,
+                $stepKey,
+                $label,
+                $payload
+            );
+
+            return [
+                'status' => true,
+                'queued' => true,
+                'batch_id' => $this->whatsappCoordinacionBatchId,
+            ];
+        }
+
+        SendCoordinacionWhatsAppJob::dispatch($payload);
+
+        return [
+            'status' => true,
+            'queued' => true,
+        ];
+    }
+
+    /**
+     * Procesamiento síncrono (pruebas o casos puntuales).
+     *
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    public function processCoordinacionWhatsApp(array $payload): array
+    {
+        return app(MetaWhatsAppCoordinacionService::class)->process($payload);
     }
 }

@@ -3,14 +3,17 @@
 namespace App\Http\Controllers\CargaConsolidada;
 
 use App\Http\Controllers\Controller;
+use App\Traits\FileTrait;
+use App\Traits\UsesObjectStorage;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use App\Models\CargaConsolidada\Contenedor;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
 
 class AduanaController extends Controller
 {
+    use FileTrait;
+    use UsesObjectStorage;
     /**
      * @OA\Get(
      *     path="/carga-consolidada/contenedores/{idContenedor}/aduana",
@@ -70,34 +73,6 @@ class AduanaController extends Controller
             'message' => 'Formulario de aduana encontrado correctamente'
         ]);
     }
-    private function generateImageUrl($ruta)
-    {
-        if (empty($ruta)) {
-            return null;
-        }
-
-        // Si ya es una URL completa, devolverla tal como está
-        if (filter_var($ruta, FILTER_VALIDATE_URL)) {
-            return $ruta;
-        }
-
-        // Limpiar la ruta de barras iniciales para evitar doble slash
-        $ruta = ltrim($ruta, '/');
-
-        // Construir URL manualmente para evitar problemas con Storage::url()
-        $baseUrl = config('app.url');
-        $storagePath = '/storage/';
-
-        // Asegurar que no haya doble slash
-        $baseUrl = rtrim($baseUrl, '/');
-        $storagePath = ltrim($storagePath, '/');
-        $ruta = ltrim($ruta, '/');
-        
-        // Codificar toda la ruta incluyendo el nombre del archivo para caracteres especiales como #
-        $rutaEncoded = rawurlencode($ruta);
-        
-        return $baseUrl . '/' . $storagePath . '/' . $rutaEncoded;
-    }
     /**
      * @OA\Post(
      *     path="/carga-consolidada/contenedor/aduana",
@@ -133,7 +108,11 @@ class AduanaController extends Controller
 
             if ($files) {
                 foreach ($files as $file) {
-                    $filePath = $file->storeAs('cargaconsolidada/aduana/' . $idContenedor, $file->getClientOriginalName(),'public');
+                    $filePath = $this->storageStoreUpload(
+                        $file,
+                        'cargaconsolidada/aduana/' . $idContenedor,
+                        $file->getClientOriginalName()
+                    );
                     $fileName = $file->getClientOriginalName();
                     //use query builder
                     DB::table('carga_consolidada_aduana_files')->insert([
@@ -147,7 +126,11 @@ class AduanaController extends Controller
             }
             if ($impuestos_pagados) {
                 foreach ($impuestos_pagados as $impuestos_pagado) {
-                    $filePath = $impuestos_pagado->storeAs('cargaconsolidada/aduana/' . $idContenedor, $impuestos_pagado->getClientOriginalName(),'public');
+                    $filePath = $this->storageStoreUpload(
+                        $impuestos_pagado,
+                        'cargaconsolidada/aduana/' . $idContenedor,
+                        $impuestos_pagado->getClientOriginalName()
+                    );
                     $fileName = $impuestos_pagado->getClientOriginalName();
                     DB::table('carga_consolidada_aduana_files')->insert([
                         'id_contenedor' => $idContenedor,
@@ -199,7 +182,9 @@ class AduanaController extends Controller
     {
         $file = DB::table('carga_consolidada_aduana_files')->where('id', $idFile)->first();
         DB::table('carga_consolidada_aduana_files')->where('id', $idFile)->delete();
-        Storage::disk('public')->delete($file->file_path);
+        if ($file && !empty($file->file_path)) {
+            $this->objectStorage()->delete($file->file_path);
+        }
         return response()->json([
             'success' => true,
             'message' => 'Archivo eliminado correctamente'

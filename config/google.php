@@ -68,4 +68,34 @@ return [
     'post_spreadsheet_id' => env('POST_SPREADSHEET_ID'),
     'post_sheet_id'       => env('POST_SHEET_ID'),
     'post_sheet_status_doc_id' => env('POST_SHEET_STATUS_DOC_ID'),
+
+    /*
+    | Excel confirmación en Drive: oauth (Gmail / My Drive) | service_account (Workspace) | auto
+    */
+    'drive_excel_auth_mode' => env('GOOGLE_DRIVE_EXCEL_AUTH_MODE', 'oauth'),
+
+    /*
+    | OAuth de usuario para subir Excel (cuenta dueña de la carpeta raíz).
+    | Ver docs/GOOGLE_DRIVE_EXCEL_OAUTH.md
+    */
+    'drive_oauth' => [
+        'enabled' => env('GOOGLE_DRIVE_OAUTH_ENABLED', true),
+        'client_id' => env('GOOGLE_CLIENT_ID', ''),
+        'client_secret' => env('GOOGLE_CLIENT_SECRET', ''),
+        'redirect_uri' => env(
+            'GOOGLE_DRIVE_OAUTH_REDIRECT_URI',
+            rtrim((string) env('APP_URL', 'http://localhost:8001'), '/') . '/api/google/drive/oauth/callback'
+        ),
+        'token_file' => env('GOOGLE_DRIVE_OAUTH_TOKEN_FILE', 'google-drive-oauth-token.json'),
+        'refresh_token' => env('GOOGLE_DRIVE_OAUTH_REFRESH_TOKEN', ''),
+    ],
+
+    /*
+    | Carpeta raíz en Drive para Excel de confirmación.
+    | Estructura: {root}/Consolidado-{carga}/{cliente}/{codigo_proveedor}/excel_confirmacion_*.xlsx
+    */
+    'drive_excel_confirmacion_root_folder_id' => env('GOOGLE_DRIVE_EXCEL_CONFIRMACION_ROOT_FOLDER_ID', ''),
+
+    /** ID del Shared drive (unidad compartida). Opcional; solo con service_account en Workspace. */
+    'drive_excel_confirmacion_shared_drive_id' => env('GOOGLE_DRIVE_EXCEL_CONFIRMACION_SHARED_DRIVE_ID', ''),
 ];

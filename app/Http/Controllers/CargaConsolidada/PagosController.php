@@ -22,10 +22,12 @@ use App\Models\TipoDocumentoIdentidad;
 use App\Models\Campana;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
+use App\Traits\UsesObjectStorage;
 use App\Traits\WhatsappTrait;
 
 class PagosController extends Controller
 {
+    use UsesObjectStorage;
     use WhatsappTrait;
     /**
      * @OA\Get(
@@ -531,8 +533,7 @@ class PagosController extends Controller
             $ruta = substr($ruta, 8); // remove "storage/"
         }
 
-        $absoluteUrl = rtrim(config('app.url'), '/') . '/storage/' . ltrim($ruta, '/');
-        return $this->encodeUrlPath($absoluteUrl);
+        return $this->encodeUrlPath($this->objectStorage()->url($ruta));
     }
 
     /**

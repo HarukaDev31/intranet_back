@@ -5,6 +5,7 @@ namespace App\Http\Controllers\CargaConsolidada;
 use App\Http\Controllers\Controller;
 use App\Models\CargaConsolidada\BoletinQuimicoCotizacionItem;
 use App\Traits\FileTrait;
+use App\Traits\UsesObjectStorage;
 use App\Models\CargaConsolidada\Contenedor;
 use App\Models\CargaConsolidada\Cotizacion;
 use App\Models\CargaConsolidada\CotizacionProveedorItem;
@@ -17,7 +18,7 @@ use Tymon\JWTAuth\Facades\JWTAuth;
 
 class BoletinQuimicoController extends Controller
 {
-    use FileTrait;
+    use FileTrait, UsesObjectStorage;
     /**
      * Listado para DataTable agrupado por cotización: una fila por cotización con items como subarray.
      * GET api/carga-consolidada/boletin-quimico
@@ -337,8 +338,12 @@ class BoletinQuimicoController extends Controller
 
             $voucherUrl = null;
             if ($request->hasFile('voucher') && $request->file('voucher')->isValid()) {
-                $path = $request->file('voucher')->store('boletin-quimico/vouchers', 'public');
-                $voucherUrl = $path; // Se guarda ruta relativa al disco; generateImageUrl() devuelve URL absoluta en respuestas
+                $file = $request->file('voucher');
+                $voucherUrl = $this->storageStoreUpload(
+                    $file,
+                    'boletin-quimico/vouchers',
+                    time() . '_' . $file->getClientOriginalName()
+                );
             }
 
             $pago = PagoBoletinQuimico::create([

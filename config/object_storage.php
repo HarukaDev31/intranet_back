@@ -32,4 +32,18 @@ return [
     /** Prefijo dentro del bucket (ej. probusiness/production) — también en filesystems.disks.s3.root */
     's3_prefix' => env('AWS_UPLOAD_PREFIX', ''),
 
+    /*
+    |--------------------------------------------------------------------------
+    | CDN público (CloudFront, etc.)
+    |--------------------------------------------------------------------------
+    | URLs de API / storage legacy → https://cdn.probusiness.pe/...
+    */
+    'cdn_base_url' => rtrim((string) env('OBJECT_STORAGE_CDN_URL', env('AWS_CDN_URL', '')), '/'),
+
+    /** Si true, la URL CDN incluye AWS_UPLOAD_PREFIX antes de la ruta relativa de BD */
+    'cdn_include_s3_prefix' => env('OBJECT_STORAGE_CDN_INCLUDE_PREFIX', true),
+
+    /** Usar CDN cuando FILESYSTEM_UPLOAD_DISK=s3 (aunque el objeto aún esté solo en disco legacy) */
+    'cdn_when_upload_disk_s3' => env('OBJECT_STORAGE_CDN_WHEN_S3', true),
+
 ];

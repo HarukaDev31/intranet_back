@@ -3,11 +3,14 @@
 namespace App\Services\CalculadoraImportacion;
 
 use App\Services\ResumenCostosImageService;
+use App\Support\WhatsApp\CoordinacionWhatsappPayload;
+use App\Traits\UsesObjectStorage;
 use App\Traits\WhatsappTrait;
 use Illuminate\Support\Facades\Log;
 
 class CalculadoraImportacionWhatsappService
 {
+    use UsesObjectStorage;
     use WhatsappTrait;
 
     public function sendCotizacionSequence(?string $whatsappCliente, $calculadora): void
@@ -24,6 +27,60 @@ class CalculadoraImportacionWhatsappService
             $phoneNumberId = $this->formatWhatsAppNumber($whatsappCliente);
 
             $primerMensaje = "Bien, Te envío la cotización de tu importación, en el documento podrás ver el detalle de los costos.\n\n⚠️ Nota: Leer Términos y Condiciones.\n\n🎥 Video Explicativo:\n▶️ https://youtu.be/H7U-_5wCWd4";
+            $tercerMensaje = "📊 Aquí te paso el resumen de cuánto te saldría cada modelo y el total de inversión\n\n💰 El primer pago es el SERVICIO DE IMPORTACIÓN y se realiza antes del zarpe de buque 🚢";
+            $captionResumen = '📊 Resumen detallado de costos y pagos';
+
+            if ($this->shouldRouteCoordinacionToMeta('consolidado')) {
+                $this->queueCoordinacionWhatsApp(
+                    CoordinacionWhatsappPayload::calcIntro($phoneNumberId, $primerMensaje, 2)
+                );
+
+                if (!empty($calculadora->url_cotizacion_pdf)) {
+                    $pdfPath = $this->getPdfPathFromUrl($calculadora->url_cotizacion_pdf);
+                    if ($pdfPath && file_exists($pdfPath)) {
+                        $this->queueCoordinacionWhatsApp(
+                            CoordinacionWhatsappPayload::calcPdf(
+                                $phoneNumberId,
+                                $pdfPath,
+                                'Cotización de importación — Calculadora Pro Business.',
+                                basename($pdfPath),
+                                3
+                            )
+                        );
+                    } else {
+                        Log::warning('No se pudo enviar PDF: archivo no encontrado', [
+                            'calculadora_id' => $calculadora->id ?? null,
+                            'url' => $calculadora->url_cotizacion_pdf,
+                            'path' => $pdfPath,
+                        ]);
+                    }
+                }
+
+                $this->queueCoordinacionWhatsApp(
+                    CoordinacionWhatsappPayload::calcResumenTexto($phoneNumberId, $tercerMensaje, 2)
+                );
+
+                $resumenCostosService = new ResumenCostosImageService();
+                $imagenResumen = $resumenCostosService->generateResumenCostosImage($calculadora);
+
+                if ($imagenResumen) {
+                    $this->queueCoordinacionWhatsApp(
+                        CoordinacionWhatsappPayload::calcResumenImg(
+                            $phoneNumberId,
+                            $imagenResumen['path'],
+                            $captionResumen,
+                            4
+                        )
+                    );
+                } else {
+                    Log::warning('No se pudo generar la imagen del resumen de costos', [
+                        'calculadora_id' => $calculadora->id ?? null,
+                    ]);
+                }
+
+                return;
+            }
+
             $this->sendMessage($primerMensaje, $phoneNumberId, 2);
 
             if (!empty($calculadora->url_cotizacion_pdf)) {
@@ -39,14 +96,13 @@ class CalculadoraImportacionWhatsappService
                 }
             }
 
-            $tercerMensaje = "📊 Aquí te paso el resumen de cuánto te saldría cada modelo y el total de inversión\n\n💰 El primer pago es el SERVICIO DE IMPORTACIÓN y se realiza antes del zarpe de buque 🚢";
             $this->sendMessage($tercerMensaje, $phoneNumberId, 2);
 
             $resumenCostosService = new ResumenCostosImageService();
             $imagenResumen = $resumenCostosService->generateResumenCostosImage($calculadora);
 
             if ($imagenResumen) {
-                $this->sendMedia($imagenResumen['path'], 'image/png', '📊 Resumen detallado de costos y pagos', $phoneNumberId, 4);
+                $this->sendMedia($imagenResumen['path'], 'image/png', $captionResumen, $phoneNumberId, 4);
             } else {
                 Log::warning('No se pudo generar la imagen del resumen de costos', [
                     'calculadora_id' => $calculadora->id ?? null,
@@ -86,19 +142,31 @@ class CalculadoraImportacionWhatsappService
                     $path = substr($path, 9);
                 }
 
-                return storage_path('app/public/' . $path);
+                $path = ltrim($path, '/');
+                if ($this->objectStorage()->exists($path)) {
+                    return $this->storageLocalPath($path);
+                }
             }
 
             if (strpos($url, '/storage/') === 0) {
-                $path = substr($url, 9);
-                return storage_path('app/public/' . $path);
+                $path = ltrim(substr($url, 9), '/');
+                if ($this->objectStorage()->exists($path)) {
+                    return $this->storageLocalPath($path);
+                }
             }
 
-            return storage_path('app/public/boletas/' . $url);
+            $relative = ltrim($url, '/');
+            if (strpos($relative, 'boletas/') !== 0) {
+                $relative = 'boletas/' . $relative;
+            }
+            if ($this->objectStorage()->exists($relative)) {
+                return $this->storageLocalPath($relative);
+            }
+
+            return null;
         } catch (\Exception $e) {
             Log::error('Error al obtener ruta del PDF: ' . $e->getMessage(), ['url' => $url]);
             return null;
         }
     }
 }
-
