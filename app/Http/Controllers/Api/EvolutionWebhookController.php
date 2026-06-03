@@ -19,6 +19,13 @@ class EvolutionWebhookController extends Controller
 
     public function handle(Request $request)
     {
+        if (!filter_var(env('COPILOTO_EVOLUTION_WEBHOOK_ENABLED', false), FILTER_VALIDATE_BOOLEAN)) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Evolution webhook deshabilitado (reservado Copiloto ventas).',
+            ]);
+        }
+
         $payload = $request->all();
 
         Log::info('Evolution webhook recibido', [

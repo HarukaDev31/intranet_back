@@ -1,0 +1,274 @@
+<?php
+
+namespace App\Services\WhatsappInbox;
+
+use App\Models\Grupo;
+use App\Models\Usuario;
+use App\Models\WhatsappInbox\WaInboxConversation;
+use App\Models\WhatsappInbox\WaInboxSession;
+use Carbon\Carbon;
+
+class WhatsappInboxConversationService
+{
+    /** @var WhatsappInboxSessionService */
+    protected $sessionService;
+
+    /** @var WhatsappInboxWindowService */
+    protected $windowService;
+
+    public function __construct(
+        WhatsappInboxSessionService $sessionService,
+        WhatsappInboxWindowService $windowService
+    ) {
+        $this->sessionService = $sessionService;
+        $this->windowService = $windowService;
+    }
+
+    /**
+     * @param  array<string, mixed>  $params
+     * @return array<string, mixed>
+     */
+    public function listConversations(array $params = [])
+    {
+        $session = $this->sessionService->ensureDefaultSession();
+        $perPage = max(1, min(100, (int) ($params['per_page'] ?? 30)));
+        $search = trim((string) ($params['search'] ?? ''));
+        $filter = trim((string) ($params['filter'] ?? 'todas'));
+        $userId = isset($params['auth_user_id']) ? (int) $params['auth_user_id'] : 0;
+
+        $query = WaInboxConversation::query()
+            ->where('session_id', $session->id)
+            ->orderByDesc('last_message_at')
+            ->orderByDesc('id');
+
+        if ($search !== '') {
+            $query->where(function ($q) use ($search) {
+                $q->where('contact_name', 'like', '%' . $search . '%')
+                    ->orWhere('phone_e164', 'like', '%' . $search . '%');
+            });
+        }
+
+        if ($filter === 'sin-asignar') {
+            $query->whereNull('assigned_user_id');
+        } elseif ($filter === 'mis' && $userId > 0) {
+            $query->where('assigned_user_id', $userId);
+        } elseif ($filter === 'cerradas') {
+            $query->where('status', 'closed');
+        }
+
+        $paginated = $query->paginate($perPage);
+        $rows = [];
+        foreach ($paginated->items() as $conv) {
+            $rows[] = $this->formatConversation($conv);
+        }
+
+        return [
+            'success' => true,
+            'data' => $rows,
+            'pagination' => [
+                'current_page' => $paginated->currentPage(),
+                'last_page' => $paginated->lastPage(),
+                'per_page' => $paginated->perPage(),
+                'total' => $paginated->total(),
+            ],
+        ];
+    }
+
+    /**
+     * @param  WaInboxConversation  $conversation
+     * @return array<string, mixed>
+     */
+    public function formatConversation(WaInboxConversation $conversation)
+    {
+        $window = $this->windowService->computeWindowState($conversation);
+        $name = trim((string) $conversation->contact_name);
+        if ($name === '') {
+            $name = $conversation->phone_e164;
+        }
+
+        $assignedName = null;
+        if ($conversation->assigned_user_id) {
+            $u = Usuario::query()->find($conversation->assigned_user_id);
+            $assignedName = $u ? ($u->No_Nombres_Apellidos ?: $u->No_Usuario) : null;
+        }
+
+        $initials = $this->initials($name);
+        $timeLabel = $conversation->last_message_at
+            ? Carbon::parse($conversation->last_message_at)->format('H:i')
+            : '';
+
+        return [
+            'id' => (int) $conversation->id,
+            'contact_name' => $name,
+            'phone_display' => $this->formatPhoneDisplay($conversation->phone_e164),
+            'phone_e164' => $conversation->phone_e164,
+            'initials' => $initials,
+            'last_message_preview' => $conversation->last_message_preview,
+            'last_message_at' => $conversation->last_message_at,
+            'last_message_time_label' => $timeLabel,
+            'unread_count' => (int) $conversation->unread_count,
+            'assigned_user_id' => $conversation->assigned_user_id,
+            'assigned_user_name' => $assignedName,
+            'window_state' => $window['state'],
+            'window_label' => $window['label'],
+            'window_expires_at' => $window['expires_at'],
+            'can_send_text' => $window['can_send_text'],
+            'channel_label' => $conversation->channel_label,
+            'status' => $conversation->status,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function getAssignableUsers()
+    {
+        $grupo = Grupo::query()->where('No_Grupo', Usuario::ROL_COORDINACION)->first();
+        if (!$grupo) {
+            return ['success' => true, 'data' => []];
+        }
+
+        $users = Usuario::query()
+            ->where('ID_Grupo', $grupo->ID_Grupo)
+            ->where('Nu_Estado', 1)
+            ->orderBy('No_Nombres_Apellidos')
+            ->get(['ID_Usuario', 'No_Nombres_Apellidos', 'No_Usuario']);
+
+        $rows = [];
+        foreach ($users as $u) {
+            $rows[] = [
+                'id' => (int) $u->ID_Usuario,
+                'name' => $u->No_Nombres_Apellidos ?: $u->No_Usuario,
+            ];
+        }
+
+        return ['success' => true, 'data' => $rows];
+    }
+
+    /**
+     * @param  int  $conversationId
+     * @param  int  $userId
+     * @return array<string, mixed>
+     */
+    public function assign($conversationId, $userId)
+    {
+        $conversation = WaInboxConversation::query()->findOrFail($conversationId);
+        $conversation->assigned_user_id = $userId > 0 ? $userId : null;
+        $conversation->assigned_at = $userId > 0 ? now() : null;
+        $conversation->save();
+
+        return [
+            'success' => true,
+            'data' => $this->formatConversation($conversation->fresh()),
+        ];
+    }
+
+    /**
+     * @param  int  $conversationId
+     * @return array<string, mixed>
+     */
+    public function markRead($conversationId)
+    {
+        $conversation = WaInboxConversation::query()->findOrFail($conversationId);
+        $conversation->unread_count = 0;
+        $conversation->save();
+
+        return ['success' => true, 'data' => $this->formatConversation($conversation)];
+    }
+
+    /**
+     * @param  WaInboxSession  $session
+     * @param  string  $phoneE164
+     * @param  string|null  $waContactId
+     * @param  string|null  $contactName
+     * @return WaInboxConversation
+     */
+    public function findOrCreateConversation(WaInboxSession $session, $phoneE164, $waContactId = null, $contactName = null)
+    {
+        $phoneE164 = $this->normalizePhoneE164($phoneE164);
+        $conversation = WaInboxConversation::query()
+            ->where('session_id', $session->id)
+            ->where('phone_e164', $phoneE164)
+            ->first();
+
+        if ($conversation) {
+            if ($waContactId && empty($conversation->wa_contact_id)) {
+                $conversation->wa_contact_id = $waContactId;
+            }
+            if ($contactName && empty($conversation->contact_name)) {
+                $conversation->contact_name = $contactName;
+            }
+            $conversation->save();
+
+            return $conversation;
+        }
+
+        return WaInboxConversation::create([
+            'session_id' => $session->id,
+            'wa_contact_id' => $waContactId,
+            'phone_e164' => $phoneE164,
+            'contact_name' => $contactName,
+            'channel_label' => 'Coordinación',
+            'status' => 'open',
+        ]);
+    }
+
+    public function refreshHeader(WaInboxConversation $conversation, $preview, $direction, $sentAt, $fromCustomer = false)
+    {
+        $sentAt = $sentAt instanceof Carbon ? $sentAt : Carbon::parse($sentAt);
+        $current = $conversation->last_message_at;
+
+        if (!$current || $sentAt >= Carbon::parse($current)) {
+            $conversation->last_message_at = $sentAt;
+            $conversation->last_message_preview = mb_substr(trim((string) $preview), 0, 500);
+            $conversation->last_direction = $direction === 'out' ? 'out' : 'in';
+        }
+
+        if ($fromCustomer) {
+            $conversation->last_customer_message_at = $sentAt;
+            $conversation->window_expires_at = $sentAt->copy()->addHours(24);
+            if ($direction === 'in') {
+                $conversation->unread_count = (int) $conversation->unread_count + 1;
+            }
+            $conversation->status = 'open';
+        }
+
+        $conversation->save();
+    }
+
+    public function normalizePhoneE164($phone)
+    {
+        $digits = preg_replace('/\D+/', '', (string) $phone);
+        if ($digits === '') {
+            return '';
+        }
+
+        return $digits;
+    }
+
+    private function formatPhoneDisplay($phoneE164)
+    {
+        $d = preg_replace('/\D+/', '', (string) $phoneE164);
+        if (strlen($d) === 11 && substr($d, 0, 2) === '51') {
+            return '+51 ' . substr($d, 2, 3) . ' ' . substr($d, 5, 3) . ' ' . substr($d, 8);
+        }
+
+        return '+' . $d;
+    }
+
+    private function initials($name)
+    {
+        $parts = preg_split('/\s+/', trim((string) $name));
+        $letters = '';
+        foreach ($parts as $p) {
+            if ($p !== '') {
+                $letters .= mb_strtoupper(mb_substr($p, 0, 1));
+            }
+            if (mb_strlen($letters) >= 2) {
+                break;
+            }
+        }
+
+        return $letters !== '' ? $letters : '?';
+    }
+}

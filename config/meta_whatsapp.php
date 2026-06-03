@@ -16,7 +16,25 @@ return [
     'phone_number_id' => env('META_WHATSAPP_PHONE_NUMBER_ID', '1062249786981832'),
     'access_token' => env('META_WHATSAPP_ACCESS_TOKEN'),
 
+    /** App Secret — firma POST webhook (X-Hub-Signature-256). */
+    'app_secret' => env('META_WHATSAPP_APP_SECRET'),
+
+    /** Verify Token — GET hub challenge al suscribir webhook en Meta. */
+    'webhook_verify_token' => env('META_WHATSAPP_WEBHOOK_VERIFY_TOKEN'),
+
+    /** WABA ID opcional para listar plantillas vía Graph. */
+    'waba_id' => env('META_WHATSAPP_WABA_ID'),
+
     'default_language' => env('META_WHATSAPP_LANGUAGE', 'es_PE'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | WhatsApp Inbox (intranet coordinación)
+    |--------------------------------------------------------------------------
+    */
+    'inbox_queue' => env('META_WHATSAPP_INBOX_QUEUE', env('META_WHATSAPP_QUEUE', 'notificaciones')),
+    'inbox_display_number' => env('META_WHATSAPP_INBOX_DISPLAY_NUMBER', ''),
+    'inbox_alert_phone' => env('WA_INBOX_ALERT_PHONE', ''),
 
     /*
     |--------------------------------------------------------------------------

@@ -22,6 +22,9 @@ use App\Http\Controllers\CargaConsolidada\FacturaGuiaController;
 Route::post('/bitrix/webhook', [BitrixWebhookController::class, 'handle']);
 Route::post('/evolution/webhook', [EvolutionWebhookController::class, 'handle']);
 
+// WhatsApp Inbox — Meta coordinación (webhook público + API rol Coordinación)
+require __DIR__.'/modules/whatsapp-inbox.php';
+
 // OAuth Google Drive (configuración única — Excel confirmación)
 Route::prefix('google/drive/oauth')->group(function () {
     Route::get('/authorize', [GoogleDriveOAuthController::class, 'authorizeRedirect']);
