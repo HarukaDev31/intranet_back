@@ -5,7 +5,8 @@
     "keywords": ["framework", "laravel"],
     "license": "MIT",
     "require": {
-        "php": "^7.3",
+        "php": "^7.4|^8.0",
+        "aws/aws-sdk-php": "^3.337.3 <3.369",
         "barryvdh/laravel-snappy": "^1.0",
         "beyondcode/laravel-websockets": "^1.14",
         "darkaonline/l5-swagger": "^8.6",
@@ -17,7 +18,9 @@
         "laravel/horizon": "^5.22",
         "laravel/sanctum": "^2.11",
         "laravel/tinker": "^2.5",
+        "league/flysystem-aws-s3-v3": "^1.0",
         "maatwebsite/excel": "^3.1",
+        "predis/predis": "1.1",
         "rap2hpoutre/laravel-log-viewer": "^2.5",
         "revolution/laravel-google-sheets": "5.8.1",
         "setasign/fpdi": "^2.6",
@@ -72,7 +75,12 @@
         "optimize-autoloader": true,
         "preferred-install": "dist",
         "sort-packages": true,
-        "platform-check": false
+        "platform-check": false,
+        "platform": {
+            "php": "7.4.33",
+            "ext-pcntl": "7.4",
+            "ext-posix": "7.4"
+        }
     },
     "minimum-stability": "dev",
     "prefer-stable": true
