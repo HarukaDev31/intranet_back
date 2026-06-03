@@ -134,12 +134,34 @@ class WhatsappInboxSendService
         $header = isset($params['_header']) && is_array($params['_header']) ? $params['_header'] : null;
         unset($params['_header']);
         $bodyParams = $this->metaService->normalizeBodyParameters($params);
-        $header = CoordinacionMediaLink::prepareHeader($header);
 
-        if ($header === null && $this->paramsHadHeaderMedia($templateParams)) {
+        /** @var WhatsappInboxTemplateService $templateService */
+        $templateService = app(WhatsappInboxTemplateService::class);
+        $requiredHeaderFormat = $templateService->getTemplateHeaderFormat($templateName);
+
+        if ($requiredHeaderFormat !== null && $header === null) {
             return [
                 'success' => false,
-                'error' => 'No se pudo preparar el archivo del encabezado para Meta',
+                'error' => 'Falta el archivo del encabezado requerido por la plantilla',
+            ];
+        }
+
+        if (is_array($header)) {
+            if ($requiredHeaderFormat === 'DOCUMENT') {
+                $header['type'] = 'document';
+            } elseif ($requiredHeaderFormat === 'IMAGE') {
+                $header['type'] = 'image';
+            } elseif ($requiredHeaderFormat === 'VIDEO') {
+                $header['type'] = 'video';
+            }
+        }
+
+        $header = CoordinacionMediaLink::prepareHeader($header);
+
+        if ($header === null && ($requiredHeaderFormat !== null || $this->paramsHadHeaderMedia($templateParams))) {
+            return [
+                'success' => false,
+                'error' => 'No se pudo preparar el archivo del encabezado para Meta (URL pública)',
             ];
         }
 
@@ -148,7 +170,8 @@ class WhatsappInboxSendService
             $templateName,
             (string) config('meta_whatsapp.default_language', 'es_PE'),
             $bodyParams,
-            $header
+            $header,
+            $requiredHeaderFormat !== null
         );
 
         if (!empty($result['status'])) {

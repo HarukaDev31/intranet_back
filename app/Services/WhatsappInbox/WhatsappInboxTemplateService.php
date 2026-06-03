@@ -9,6 +9,15 @@ use Illuminate\Support\Facades\Log;
 class WhatsappInboxTemplateService
 {
     /**
+     * Plantillas conocidas con encabezado DOCUMENT (por si el caché no trae components).
+     *
+     * @var array<int, string>
+     */
+    private $knownDocumentHeaderTemplates = [
+        'pb_docs_consideraciones_doc_v1',
+    ];
+
+    /**
      * Plantillas frecuentes (fallback si no hay WABA_ID o falla Graph).
      *
      * @return array<int, array<string, mixed>>
@@ -44,8 +53,40 @@ class WhatsappInboxTemplateService
      * @param  string  $templateName
      * @return bool
      */
+    /**
+     * DOCUMENT | IMAGE | VIDEO | null
+     *
+     * @param  string  $templateName
+     * @return string|null
+     */
+    public function getTemplateHeaderFormat($templateName)
+    {
+        $list = $this->listTemplates();
+        $templates = isset($list['data']) && is_array($list['data']) ? $list['data'] : [];
+
+        foreach ($templates as $tpl) {
+            if (!is_array($tpl) || ($tpl['name'] ?? '') !== $templateName) {
+                continue;
+            }
+            $format = strtoupper((string) ($tpl['header_format'] ?? ''));
+            if (in_array($format, ['DOCUMENT', 'IMAGE', 'VIDEO'], true)) {
+                return $format;
+            }
+        }
+
+        if (in_array($templateName, $this->knownDocumentHeaderTemplates, true)) {
+            return 'DOCUMENT';
+        }
+
+        return null;
+    }
+
     public function templateRequiresHeaderMedia($templateName)
     {
+        if ($this->getTemplateHeaderFormat($templateName) !== null) {
+            return true;
+        }
+
         $list = $this->listTemplates();
         $templates = isset($list['data']) && is_array($list['data']) ? $list['data'] : [];
 
@@ -69,7 +110,7 @@ class WhatsappInboxTemplateService
      */
     public function listTemplates()
     {
-        $cacheKey = 'wa_inbox_meta_templates_v1';
+        $cacheKey = 'wa_inbox_meta_templates_v2';
 
         $templates = Cache::remember($cacheKey, 3600, function () {
             return $this->fetchFromMetaOrDefault();
@@ -137,6 +178,7 @@ class WhatsappInboxTemplateService
                     'text' => $parsed['text'],
                     'params' => $parsed['params'],
                     'param_defs' => $parsed['param_defs'],
+                    'header_format' => $parsed['header_format'],
                 ];
             }
 
@@ -154,13 +196,14 @@ class WhatsappInboxTemplateService
 
     /**
      * @param  array<int, array<string, mixed>>  $components
-     * @return array{text: string, params: array<int, string>, param_defs: array<int, array<string, mixed>>}
+     * @return array{text: string, params: array<int, string>, param_defs: array<int, array<string, mixed>>, header_format: string|null}
      */
     private function parseTemplateComponents(array $components)
     {
         $bodyText = '';
         $params = [];
         $paramDefs = [];
+        $headerFormat = null;
 
         foreach ($components as $comp) {
             if (!is_array($comp)) {
@@ -171,11 +214,16 @@ class WhatsappInboxTemplateService
             if ($type === 'HEADER') {
                 $format = strtoupper((string) ($comp['format'] ?? 'TEXT'));
                 if (in_array($format, ['DOCUMENT', 'IMAGE', 'VIDEO'], true)) {
+                    $headerFormat = $format;
+                    $label = 'Archivo de encabezado';
+                    if ($format === 'DOCUMENT') {
+                        $label = 'PDF de encabezado (requerido)';
+                    }
                     $paramDefs[] = [
                         'name' => 'header_media',
                         'type' => 'file',
                         'file_kind' => strtolower($format),
-                        'label' => 'Archivo de encabezado',
+                        'label' => $label,
                     ];
                 }
                 continue;
@@ -202,6 +250,7 @@ class WhatsappInboxTemplateService
             'text' => $bodyText,
             'params' => $params,
             'param_defs' => $paramDefs,
+            'header_format' => $headerFormat,
         ];
     }
 

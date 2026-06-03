@@ -158,16 +158,28 @@ class WhatsappInboxController extends Controller
             $user = JWTAuth::parseToken()->authenticate();
             $userId = $user ? (int) $user->getIdUsuario() : null;
 
+            $headerFormat = $this->templateService->getTemplateHeaderFormat($templateName);
             $requiresHeaderMedia = $this->templateService->templateRequiresHeaderMedia($templateName)
                 || count($request->allFiles()) > 0;
 
             $header = null;
             if ($requiresHeaderMedia) {
-                $header = $this->resolveTemplateHeaderFromRequest($request);
-                if ($header === null) {
+                if ($headerFormat !== null && count($request->allFiles()) === 0) {
                     return response()->json([
                         'success' => false,
-                        'message' => 'No se pudo subir el archivo a S3. Revisa la configuración de almacenamiento.',
+                        'message' => 'Esta plantilla requiere un archivo en el encabezado (PDF para documentos).',
+                    ], 422);
+                }
+
+                $header = $this->resolveTemplateHeaderFromRequest($request, $templateName);
+                if ($header === null) {
+                    $message = $headerFormat === 'DOCUMENT'
+                        ? 'No se pudo subir el PDF a S3. Esta plantilla exige un PDF en el encabezado.'
+                        : 'No se pudo subir el archivo a S3. Revisa la configuración de almacenamiento.';
+
+                    return response()->json([
+                        'success' => false,
+                        'message' => $message,
                     ], 422);
                 }
                 $params['_header'] = $header;
@@ -303,7 +315,12 @@ class WhatsappInboxController extends Controller
      * @param  \Illuminate\Http\Request  $request
      * @return array<string, mixed>|null
      */
-    private function resolveTemplateHeaderFromRequest(Request $request)
+    /**
+     * @param  \Illuminate\Http\Request  $request
+     * @param  string  $templateName
+     * @return array<string, mixed>|null
+     */
+    private function resolveTemplateHeaderFromRequest(Request $request, $templateName = '')
     {
         $file = $request->file('header_media');
         if (!$file || !$file->isValid()) {
@@ -320,8 +337,27 @@ class WhatsappInboxController extends Controller
             return null;
         }
 
+        $headerFormat = $this->templateService->getTemplateHeaderFormat($templateName);
+        if ($headerFormat === 'DOCUMENT') {
+            $ext = strtolower((string) $file->getClientOriginalExtension());
+            if ($ext !== 'pdf') {
+                Log::warning('WhatsappInbox: plantilla DOCUMENT requiere PDF', [
+                    'template' => $templateName,
+                    'extension' => $ext,
+                ]);
+
+                return null;
+            }
+        }
+
         $kind = strtolower((string) $request->input('header_file_kind', ''));
-        if (!in_array($kind, ['document', 'image', 'video'], true)) {
+        if ($headerFormat === 'DOCUMENT') {
+            $kind = 'document';
+        } elseif ($headerFormat === 'IMAGE') {
+            $kind = 'image';
+        } elseif ($headerFormat === 'VIDEO') {
+            $kind = 'video';
+        } elseif (!in_array($kind, ['document', 'image', 'video'], true)) {
             $kind = $this->guessHeaderKindFromFile($file);
         }
 

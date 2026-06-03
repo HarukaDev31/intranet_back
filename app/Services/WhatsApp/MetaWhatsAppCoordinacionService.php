@@ -307,18 +307,32 @@ class MetaWhatsAppCoordinacionService
         string $templateName,
         string $languageCode,
         array $bodyParameters,
-        ?array $header = null
+        ?array $header = null,
+        bool $requiresHeaderComponent = false
     ): array {
         $phoneNumberId = (string) config('meta_whatsapp.phone_number_id');
         $version = (string) config('meta_whatsapp.graph_api_version', 'v19.0');
         $url = "https://graph.facebook.com/{$version}/{$phoneNumberId}/messages";
 
         $components = [];
+        $headerComponent = null;
         if (is_array($header) && !empty($header['type'])) {
             $headerComponent = $this->buildHeaderComponent($header);
             if ($headerComponent !== null) {
                 $components[] = $headerComponent;
             }
+        }
+
+        if ($requiresHeaderComponent && $headerComponent === null) {
+            Log::error('MetaWhatsAppCoordinacion: encabezado requerido no construido', [
+                'template' => $templateName,
+                'header' => $header,
+            ]);
+
+            return [
+                'status' => false,
+                'error' => 'Encabezado multimedia inválido (Meta esperaba DOCUMENT/IMAGE/VIDEO)',
+            ];
         }
         if ($bodyParameters !== []) {
             $components[] = [

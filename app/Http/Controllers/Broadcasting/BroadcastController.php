@@ -72,6 +72,8 @@ class BroadcastController extends Controller
                 return response()->json(['message' => 'Unauthorized'], 401);
             }
 
+            $user->loadMissing('grupo');
+
             Log::info('User data', [
                 'user_id' => $user->ID_Usuario,
                 'grupo' => $user->grupo ? $user->grupo->No_Grupo : 'Sin grupo'
@@ -128,7 +130,10 @@ class BroadcastController extends Controller
             if (isset($this->CHANNELS[$channelName])) {
                 $requiredRole = $this->CHANNELS[$channelName];
                 
-                if (!$user->grupo || $user->grupo->No_Grupo !== $requiredRole) {
+                if (
+                    !$user->grupo
+                    || trim((string) $user->grupo->No_Grupo) !== trim((string) $requiredRole)
+                ) {
                     Log::error('User not authorized for channel', [
                         'user_id' => $user->ID_Usuario,
                         'channel' => $channelName,
