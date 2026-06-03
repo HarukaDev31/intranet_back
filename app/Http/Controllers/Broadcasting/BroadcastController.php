@@ -23,6 +23,7 @@ class BroadcastController extends Controller
         'private-Cotizador-notifications' => 'Cotizador',
         'private-Documentacion-notifications' => 'Documentacion',
         'private-Coordinacion-notifications' => 'Coordinación',
+        'private-whatsapp-inbox.coordinacion' => 'Coordinación',
         'private-ContenedorAlmacen-notifications' => 'ContenedorAlmacen',
         'private-CatalogoChina-notifications' => 'CatalogoChina',
         'private-Administracion-notifications' => 'Administración',
