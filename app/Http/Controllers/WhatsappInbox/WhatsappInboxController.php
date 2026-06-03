@@ -148,7 +148,7 @@ class WhatsappInboxController extends Controller
                     $kind = $uploader->guessKindFromFile($file);
                 }
                 $uploadError = '';
-                $uploaded = $uploader->uploadFromFile($file, $kind, $uploadError);
+                $uploaded = $uploader->uploadFromFile($file, $kind, $uploadError, (int) $conversation->id);
                 if ($uploaded === null) {
                     return response()->json([
                         'success' => false,

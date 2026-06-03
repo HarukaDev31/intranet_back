@@ -5,6 +5,7 @@ namespace App\Services\WhatsappInbox;
 use App\Models\WhatsappInbox\WaInboxMessage;
 use App\Support\WhatsApp\CoordinacionMediaLink;
 use App\Support\WhatsApp\WaInboxLog;
+use App\Support\WhatsApp\WaInboxMime;
 use App\Support\WhatsApp\WhatsappEnvironmentPhone;
 
 /**
@@ -153,6 +154,12 @@ class WhatsappInboxOutboundRecorder
 
         $userId = isset($context['user_id']) ? (int) $context['user_id'] : null;
         $preview = $mediaUrl !== null ? '[Plantilla con archivo]' : mb_substr($bodyPreview, 0, 200);
+
+        if ($mediaUrl !== null && $mediaUrl !== '') {
+            $storedPath = CoordinacionMediaLink::storagePathForDatabase($mediaUrl);
+            $mediaUrl = $storedPath !== null ? $storedPath : $mediaUrl;
+        }
+        $mediaMime = WaInboxMime::normalizeForStorage($mediaMime);
 
         $message = WaInboxMessage::create([
             'conversation_id' => $conversation->id,

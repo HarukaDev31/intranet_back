@@ -132,20 +132,15 @@ class CoordinacionMediaLink
      */
     public static function urlForDisplay($pathOrUrl)
     {
-        $directUrl = self::stringOrNullUrl($pathOrUrl);
-        if ($directUrl !== null && self::isPresignedOrDirectObjectUrl($directUrl)) {
-            return $directUrl;
-        }
-
         $resolved = self::resolveStoragePath($pathOrUrl);
         if ($resolved === null) {
-            return $directUrl;
+            return self::stringOrNullUrl($pathOrUrl);
         }
 
         try {
             $storage = app(ObjectStorageConnectorInterface::class);
             if (!$storage->exists($resolved)) {
-                return $directUrl;
+                return self::stringOrNullUrl($pathOrUrl);
             }
 
             if (method_exists($storage, 'metaPresignedUrl') && self::shouldUsePresignedForDisplay($resolved)) {
@@ -167,7 +162,32 @@ class CoordinacionMediaLink
             ]);
         }
 
-        return $directUrl;
+        return self::stringOrNullUrl($pathOrUrl);
+    }
+
+    /**
+     * Clave S3 para media enviada en ventana abierta (chat manual).
+     *
+     * @param  int  $conversationId
+     * @param  string  $kind  image|video|document|audio
+     * @param  string  $originalFilename
+     * @return string
+     */
+    public static function buildInboxConversationStorageKey($conversationId, $kind, $originalFilename)
+    {
+        $conversationId = (int) $conversationId;
+        $kind = strtolower(preg_replace('/[^a-z]/', '', (string) $kind));
+        if ($kind === '') {
+            $kind = 'document';
+        }
+
+        $name = preg_replace('/[^a-zA-Z0-9._-]/', '_', (string) $originalFilename);
+        if ($name === '') {
+            $name = 'media.bin';
+        }
+
+        return 'whatsapp-meta/inbox/conversations/' . $conversationId . '/' . $kind . '/'
+            . Str::uuid() . '_' . $name;
     }
 
     /**
@@ -283,6 +303,14 @@ class CoordinacionMediaLink
             return ltrim(str_replace('\\', '/', $pathOrUrl), '/');
         }
 
+        $parsedPath = parse_url($pathOrUrl, PHP_URL_PATH);
+        if (is_string($parsedPath) && $parsedPath !== '') {
+            $decoded = rawurldecode(ltrim($parsedPath, '/'));
+            if ($decoded !== '') {
+                return ltrim(str_replace('\\', '/', $decoded), '/');
+            }
+        }
+
         try {
             $storage = app(ObjectStorageConnectorInterface::class);
             $relative = $storage->normalizeRelativePath($pathOrUrl);
@@ -291,6 +319,24 @@ class CoordinacionMediaLink
         } catch (\Throwable $e) {
             return null;
         }
+    }
+
+    /**
+     * Solo ruta relativa en object storage (nunca URL firmada ni CDN).
+     *
+     * @param  string|null  $pathOrUrl
+     * @return string|null
+     */
+    public static function storagePathForDatabase($pathOrUrl)
+    {
+        $resolved = self::resolveStoragePath($pathOrUrl);
+        if ($resolved !== null && $resolved !== '') {
+            return $resolved;
+        }
+
+        $trimmed = trim((string) $pathOrUrl);
+
+        return $trimmed !== '' && !filter_var($trimmed, FILTER_VALIDATE_URL) ? ltrim(str_replace('\\', '/', $trimmed), '/') : null;
     }
 
     /**

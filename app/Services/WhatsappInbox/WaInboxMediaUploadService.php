@@ -4,10 +4,10 @@ namespace App\Services\WhatsappInbox;
 
 use App\Support\WhatsApp\CoordinacionMediaLink;
 use App\Support\WhatsApp\WaInboxLog;
+use App\Support\WhatsApp\WaInboxMime;
 use App\Support\WhatsApp\WaInboxVideoTranscoder;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
 
 class WaInboxMediaUploadService
 {
@@ -15,11 +15,19 @@ class WaInboxMediaUploadService
      * @param  UploadedFile  $file
      * @param  string  $kind  image|video|document|audio
      * @param  string  $errorMessage
-     * @return array{type: string, link: string, path: string, filename: string, mime: string}|null
+     * @param  int  $conversationId
+     * @return array{type: string, path: string, filename: string, mime: string}|null
      */
-    public function uploadFromFile(UploadedFile $file, $kind, &$errorMessage = '')
+    public function uploadFromFile(UploadedFile $file, $kind, &$errorMessage = '', $conversationId = 0)
     {
         $errorMessage = '';
+        $conversationId = (int) $conversationId;
+        if ($conversationId <= 0) {
+            $errorMessage = 'Conversación no válida para subir el archivo.';
+
+            return null;
+        }
+
         $kind = strtolower(trim((string) $kind));
         if (!in_array($kind, ['image', 'video', 'document', 'audio'], true)) {
             $kind = $this->guessKindFromFile($file);
@@ -41,8 +49,11 @@ class WaInboxMediaUploadService
             }
         }
 
-        $storageKey = CoordinacionMediaLink::META_TEMP_PREFIX . '/inbox/outbound/'
-            . Str::uuid() . '_' . preg_replace('/[^a-zA-Z0-9._-]/', '_', $file->getClientOriginalName());
+        $storageKey = CoordinacionMediaLink::buildInboxConversationStorageKey(
+            $conversationId,
+            $kind,
+            $file->getClientOriginalName()
+        );
 
         $localRelative = $file->store('temp/wa-inbox-uploads', 'local');
         if ($localRelative === false) {
@@ -77,7 +88,7 @@ class WaInboxMediaUploadService
             }
         }
 
-        $url = CoordinacionMediaLink::uploadLocalFile($uploadPath, $storageKey);
+        $uploadedUrl = CoordinacionMediaLink::uploadLocalFile($uploadPath, $storageKey);
 
         try {
             Storage::disk('local')->delete($localRelative);
@@ -88,28 +99,32 @@ class WaInboxMediaUploadService
             // ignorar limpieza
         }
 
-        if ($url === null || $url === '') {
+        if ($uploadedUrl === null || $uploadedUrl === '') {
             WaInboxLog::error('waInboxMediaUpload.s3_failed', [
                 'kind' => $kind,
                 'name' => $file->getClientOriginalName(),
+                'conversation_id' => $conversationId,
             ]);
             $errorMessage = 'No se pudo subir el archivo a S3.';
 
             return null;
         }
 
+        $mime = $kind === 'video' ? 'video/mp4' : (string) $file->getMimeType();
+        $mime = WaInboxMime::normalizeForStorage($mime);
+
         WaInboxLog::info('waInboxMediaUpload.ok', [
             'kind' => $kind,
             'storage_key' => $storageKey,
+            'conversation_id' => $conversationId,
             'size_bytes' => $file->getSize(),
         ]);
 
         return [
             'type' => $kind,
-            'link' => $url,
             'path' => $storageKey,
             'filename' => $uploadFilename,
-            'mime' => (string) $file->getMimeType(),
+            'mime' => $mime,
         ];
     }
 

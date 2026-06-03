@@ -3,6 +3,7 @@
 namespace App\Services\WhatsappInbox;
 
 use App\Support\WhatsApp\CoordinacionMediaLink;
+use App\Support\WhatsApp\WaInboxMime;
 use App\Events\WhatsappInbox\WaInboxMessageCreated;
 use App\Events\WhatsappInbox\WaInboxMessageStatusUpdated;
 use Illuminate\Broadcasting\BroadcastException;
@@ -326,6 +327,12 @@ class WhatsappInboxMessageService
                 ? '[' . $messageType . '] ' . mb_substr(trim((string) $body), 0, 200)
                 : mb_substr(trim((string) $body), 0, 500));
 
+        if ($mediaUrl !== null && $mediaUrl !== '') {
+            $storedPath = CoordinacionMediaLink::storagePathForDatabase($mediaUrl);
+            $mediaUrl = $storedPath !== null ? $storedPath : $mediaUrl;
+        }
+        $mediaMime = WaInboxMime::normalizeForStorage($mediaMime);
+
         $message = WaInboxMessage::create([
             'conversation_id' => $conversation->id,
             'session_id' => $conversation->session_id,
@@ -430,6 +437,12 @@ class WhatsappInboxMessageService
         }
 
         $preview = $mediaUrl !== null ? '[Plantilla con archivo]' : '[Template enviado]';
+        if ($mediaUrl !== null && $mediaUrl !== '') {
+            $storedPath = CoordinacionMediaLink::storagePathForDatabase($mediaUrl);
+            $mediaUrl = $storedPath !== null ? $storedPath : $mediaUrl;
+        }
+        $mediaMime = WaInboxMime::normalizeForStorage($mediaMime);
+
         $message = WaInboxMessage::create([
             'conversation_id' => $conversation->id,
             'session_id' => $conversation->session_id,
