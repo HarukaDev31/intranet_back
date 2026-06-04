@@ -12,31 +12,36 @@ trait FileTrait
      */
     public function cdnStorageUrl(?string $ruta): ?string
     {
-        if ($ruta === null || $ruta === '') {
+        if ($ruta === null || trim($ruta) === '') {
             return null;
         }
 
-        if (filter_var($ruta, FILTER_VALIDATE_URL)) {
-            if (stripos($ruta, 'cdn.') !== false) {
-                return $ruta;
-            }
+        $storage = app(ObjectStorageConnectorInterface::class);
 
-            $ruta = app(ObjectStorageConnectorInterface::class)->normalizeRelativePath($ruta);
-            if ($ruta === null) {
-                return null;
-            }
+        if (filter_var($ruta, FILTER_VALIDATE_URL) && stripos($ruta, 'cdn.') !== false) {
+            return $ruta;
         }
 
-        $ruta = ltrim(str_replace('\\', '/', $ruta), '/');
+        $normalized = $storage->normalizeRelativePath($ruta);
+        if ($normalized === null || $normalized === '') {
+            return null;
+        }
+
         $prefix = trim((string) config('object_storage.s3_prefix', ''), '/');
-
-        if ($prefix !== '' && stripos($ruta, $prefix . '/') !== 0) {
-            $ruta = $prefix . '/' . $ruta;
+        if ($prefix === '' && (string) config('object_storage.upload_disk') === 's3') {
+            $prefix = trim((string) env('AWS_UPLOAD_PREFIX', 'probusiness'), '/');
         }
 
-        $base = rtrim((string) config('object_storage.cdn_base_url', 'https://cdn.probusiness.pe'), '/');
+        if ($prefix !== '' && stripos($normalized, $prefix . '/') !== 0) {
+            $normalized = $prefix . '/' . $normalized;
+        }
 
-        return $base . '/' . $ruta;
+        $base = rtrim((string) config('object_storage.cdn_base_url', ''), '/');
+        if ($base === '') {
+            $base = 'https://cdn.probusiness.pe';
+        }
+
+        return $base . '/' . $normalized;
     }
 
     public function generateImageUrl($ruta)

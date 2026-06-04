@@ -46,14 +46,20 @@ class SolicitarDocumentosEmailJob implements ShouldQueue
     public function handle(): void
     {
         try {
-            $this->sendMailTo(
-                env('COORDINATION_EMAIL'),
+            $recipients = $this->coordinationEmails();
+            if ($recipients === []) {
+                Log::warning('SolicitarDocumentosEmailJob: COORDINATION_EMAIL no configurado; se omite correo');
+
+                return;
+            }
+
+            $this->sendMailToCoordination(
                 new SolicitarDocumentosMail($this->clienteNombre, $this->cargaCode, $this->steps, $this->clienteTelefono)
             );
 
             Log::info('SolicitarDocumentosEmailJob: email enviado', [
                 'id_cotizacion' => $this->idCotizacion,
-                'correo' => env('COORDINATION_EMAIL'),
+                'correos' => $recipients,
             ]);
         } catch (\Throwable $e) {
             Log::error('SolicitarDocumentosEmailJob error: ' . $e->getMessage(), [

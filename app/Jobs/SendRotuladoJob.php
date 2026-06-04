@@ -1454,8 +1454,8 @@ Por lo tanto, dile a tu proveedor #{$supplierCode} que le ponga la etiqueta.
 
     protected function sendCoordinationRotuladoEmail(?string $telefonoCliente): void
     {
-        $to = trim((string) env('COORDINATION_EMAIL', ''));
-        if ($to === '') {
+        $recipients = $this->coordinationEmails();
+        if ($recipients === []) {
             Log::warning('SendRotuladoJob: COORDINATION_EMAIL no configurado; se omite correo a coordinación');
 
             return;
@@ -1466,8 +1466,7 @@ Por lo tanto, dile a tu proveedor #{$supplierCode} que le ponga la etiqueta.
         }
 
         try {
-            $this->sendMailTo(
-                $to,
+            $this->sendMailToCoordination(
                 new RotuladoCoordinationMail(
                     (string) $this->cliente,
                     $this->carga,
@@ -1477,7 +1476,7 @@ Por lo tanto, dile a tu proveedor #{$supplierCode} que le ponga la etiqueta.
                     array_values($this->coordinationAttachments)
                 )
             );
-            Log::info('SendRotuladoJob: correo de rotulado enviado a coordinación', ['to' => $to]);
+            Log::info('SendRotuladoJob: correo de rotulado enviado a coordinación', ['to' => $recipients]);
         } catch (\Throwable $e) {
             Log::error('SendRotuladoJob: error enviando correo a coordinación: ' . $e->getMessage());
         }

@@ -7,7 +7,7 @@ use App\Traits\MailTrait;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Envía a COORDINATION_EMAIL una copia del mensaje de link de formulario de entrega (Lima/Provincia).
+ * Envía a COORDINATION_EMAIL y COORDINATION_EMAIL_2 una copia del mensaje de link de formulario de entrega (Lima/Provincia).
  */
 class DeliveryFormLinkCoordinationNotifier
 {
@@ -22,8 +22,8 @@ class DeliveryFormLinkCoordinationNotifier
         ?string $telefonoCliente,
         ?int $typeForm
     ): void {
-        $to = trim((string) env('COORDINATION_EMAIL', ''));
-        if ($to === '') {
+        $recipients = $this->coordinationEmails();
+        if ($recipients === []) {
             Log::warning('DeliveryFormLinkCoordinationNotifier: COORDINATION_EMAIL no configurado; se omite correo a coordinación');
 
             return;
@@ -45,8 +45,7 @@ class DeliveryFormLinkCoordinationNotifier
         }
 
         try {
-            $this->sendMailTo(
-                $to,
+            $this->sendMailToCoordination(
                 new DeliveryFormLinkCoordinationMail(
                     $nombreCliente,
                     $carga,
@@ -58,7 +57,7 @@ class DeliveryFormLinkCoordinationNotifier
             );
 
             Log::info('DeliveryFormLinkCoordinationNotifier: correo enviado a coordinación', [
-                'to' => $to,
+                'to' => $recipients,
                 'id_cotizacion' => $idCotizacion,
                 'destino' => $destino,
             ]);

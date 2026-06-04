@@ -21,6 +21,46 @@ trait MailTrait
     }
 
     /**
+     * Destinatarios de coordinación (COORDINATION_EMAIL y COORDINATION_EMAIL_2).
+     *
+     * @return string[]
+     */
+    protected function coordinationEmails(): array
+    {
+        $emails = [];
+
+        foreach (['COORDINATION_EMAIL', 'COORDINATION_EMAIL_2'] as $key) {
+            $email = trim((string) env($key, ''));
+            if ($email !== '' && !in_array($email, $emails, true)) {
+                $emails[] = $email;
+            }
+        }
+
+        return $emails;
+    }
+
+    /**
+     * Envía a todos los correos de coordinación configurados en un solo envío.
+     */
+    protected function sendMailToCoordination(Mailable $mailable): void
+    {
+        $recipients = [];
+
+        foreach ($this->coordinationEmails() as $intended) {
+            $to = $this->localMailTo($intended);
+            if ($to !== null && $to !== '' && !in_array($to, $recipients, true)) {
+                $recipients[] = $to;
+            }
+        }
+
+        if ($recipients === []) {
+            return;
+        }
+
+        Mail::to($recipients)->send($mailable);
+    }
+
+    /**
      * Destinatario efectivo según dominio (Origin/Referer o BD, como WhatsappTrait) y entorno.
      */
     protected function localMailTo(?string $intended): ?string
