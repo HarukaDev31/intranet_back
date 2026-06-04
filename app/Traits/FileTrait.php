@@ -28,12 +28,8 @@ trait FileTrait
         }
 
         $prefix = trim((string) config('object_storage.s3_prefix', ''), '/');
-        if ($prefix === '' && (string) config('object_storage.upload_disk') === 's3') {
-            $prefix = trim((string) env('AWS_UPLOAD_PREFIX', 'probusiness'), '/');
-        }
-
-        if ($prefix !== '' && stripos($normalized, $prefix . '/') !== 0) {
-            $normalized = $prefix . '/' . $normalized;
+        if ($prefix !== '' && stripos($normalized, $prefix . '/') === 0) {
+            $normalized = substr($normalized, strlen($prefix) + 1);
         }
 
         $base = rtrim((string) config('object_storage.cdn_base_url', ''), '/');
@@ -41,7 +37,12 @@ trait FileTrait
             $base = 'https://cdn.probusiness.pe';
         }
 
-        return $base . '/' . $normalized;
+        $includePrefix = filter_var(config('object_storage.cdn_include_s3_prefix', true), FILTER_VALIDATE_BOOLEAN);
+        if ($includePrefix && $prefix !== '') {
+            $normalized = $prefix . '/' . ltrim($normalized, '/');
+        }
+
+        return $base . '/' . ltrim($normalized, '/');
     }
 
     public function generateImageUrl($ruta)
