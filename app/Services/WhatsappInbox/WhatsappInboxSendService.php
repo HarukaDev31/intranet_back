@@ -351,7 +351,9 @@ class WhatsappInboxSendService
             ];
         }
 
-        if (is_array($header)) {
+        if ($requiredHeaderFormat === null) {
+            $header = null;
+        } elseif (is_array($header)) {
             if ($requiredHeaderFormat === 'DOCUMENT') {
                 $header['type'] = 'document';
             } elseif ($requiredHeaderFormat === 'IMAGE') {

@@ -507,12 +507,16 @@ trait WhatsappTrait
                         $meta['chat_preview'] = $message;
                     }
                     if (empty($meta['header'])) {
-                        $meta['header'] = [
-                            'type' => is_string($mimeType) && strpos($mimeType, 'image/') === 0 ? 'image' : 'document',
-                            'path' => $filePath,
-                            'filename' => $fileName ?? basename($filePath),
-                            'mimeType' => $mimeType,
-                        ];
+                        /** @var WhatsappInboxTemplateService $templateService */
+                        $templateService = app(\App\Services\WhatsappInbox\WhatsappInboxTemplateService::class);
+                        if ($templateService->getTemplateHeaderFormat((string) $meta['template']) !== null) {
+                            $meta['header'] = [
+                                'type' => is_string($mimeType) && strpos($mimeType, 'image/') === 0 ? 'image' : 'document',
+                                'path' => $filePath,
+                                'filename' => $fileName ?? basename($filePath),
+                                'mimeType' => $mimeType,
+                            ];
+                        }
                     }
 
                     return $this->queueCoordinacionWhatsApp($meta);

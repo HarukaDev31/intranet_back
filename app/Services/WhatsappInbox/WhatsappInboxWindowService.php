@@ -56,4 +56,27 @@ class WhatsappInboxWindowService
             'can_send_text' => true,
         ];
     }
+
+    /**
+     * Ventana de servicio Meta (24 h desde el último mensaje del cliente).
+     * Requiere conversación existente en wa_inbox_conversations.
+     */
+    public function isWindowOpenForPhone(string $phoneE164, int $sessionId): bool
+    {
+        $phoneE164 = preg_replace('/\D+/', '', $phoneE164);
+        if ($phoneE164 === '' || $sessionId <= 0) {
+            return false;
+        }
+
+        $conversation = WaInboxConversation::query()
+            ->where('session_id', $sessionId)
+            ->where('phone_e164', $phoneE164)
+            ->first();
+
+        if (!$conversation) {
+            return false;
+        }
+
+        return (bool) ($this->computeWindowState($conversation)['can_send_text'] ?? false);
+    }
 }

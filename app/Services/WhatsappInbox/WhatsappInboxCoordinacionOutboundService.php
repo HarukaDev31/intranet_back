@@ -29,16 +29,21 @@ class WhatsappInboxCoordinacionOutboundService
     /** @var WhatsappInboxTemplateService */
     protected $templateService;
 
+    /** @var WhatsappInboxWindowService */
+    protected $windowService;
+
     public function __construct(
         WhatsappInboxSessionService $sessionService,
         WhatsappInboxConversationService $conversationService,
         WhatsappInboxMessageService $messageService,
-        WhatsappInboxTemplateService $templateService
+        WhatsappInboxTemplateService $templateService,
+        WhatsappInboxWindowService $windowService
     ) {
         $this->sessionService = $sessionService;
         $this->conversationService = $conversationService;
         $this->messageService = $messageService;
         $this->templateService = $templateService;
+        $this->windowService = $windowService;
     }
 
     /**
@@ -86,9 +91,18 @@ class WhatsappInboxCoordinacionOutboundService
             return ['status' => false, 'error' => 'Sin enlace Google Drive válido para Excel de confirmación'];
         }
 
+        $sessionMessageResult = $this->tryProcessTemplateAsSessionMessage($payload);
+        if ($sessionMessageResult !== null) {
+            return $sessionMessageResult;
+        }
+
+        $templateRequiresHeader = $this->templateService->templateRequiresHeaderMedia($templateName);
         $rawHeader = isset($payload['header']) && is_array($payload['header']) ? $payload['header'] : null;
-        $header = CoordinacionMediaLink::prepareHeader($rawHeader);
-        if ($rawHeader !== null && !empty($rawHeader['type']) && $header === null) {
+        $header = $templateRequiresHeader
+            ? CoordinacionMediaLink::prepareHeader($rawHeader)
+            : null;
+
+        if ($templateRequiresHeader && $rawHeader !== null && !empty($rawHeader['type']) && $header === null) {
             WaInboxLog::error('inboxCoordinacion.template_header_upload_failed', [
                 'template' => $templateName,
                 'path' => $rawHeader['path'] ?? null,
@@ -118,8 +132,7 @@ class WhatsappInboxCoordinacionOutboundService
         );
 
         $userId = isset($payload['sent_by_user_id']) ? (int) $payload['sent_by_user_id'] : null;
-        $requiresHeader = $this->templateService->templateRequiresHeaderMedia($templateName)
-            || $header !== null;
+        $requiresHeader = $templateRequiresHeader && $header !== null;
 
         WaInboxLog::info('inboxCoordinacion.template', [
             'conversation_id' => (int) $conversation->id,
@@ -218,16 +231,22 @@ class WhatsappInboxCoordinacionOutboundService
 
         $phone = $this->normalizePhoneE164((string) ($payload['phone'] ?? ''));
         $path = (string) ($payload['path'] ?? '');
-        if ($phone === '' || $path === '' || !is_readable($path)) {
+        $localPath = $this->resolveLegacyMediaLocalPath($path);
+        if ($phone === '' || $localPath === null) {
+            WaInboxLog::error('inboxCoordinacion.legacy_media_unreadable', [
+                'phone_e164' => $phone,
+                'path' => $path,
+            ]);
+
             return ['status' => false, 'error' => 'Teléfono inválido o archivo no legible'];
         }
 
         $mime = (string) ($payload['mimeType'] ?? '');
         $kind = strpos($mime, 'image/') === 0 ? 'image' : (strpos($mime, 'video/') === 0 ? 'video' : 'document');
         $storageKey = CoordinacionMediaLink::META_TEMP_PREFIX . '/inbox/legacy/'
-            . date('Y/m/d') . '/' . basename($path);
+            . date('Y/m/d') . '/' . basename($localPath);
 
-        $url = CoordinacionMediaLink::uploadLocalFile($path, $storageKey);
+        $url = CoordinacionMediaLink::uploadLocalFile($localPath, $storageKey);
         if ($url === null || $url === '') {
             return ['status' => false, 'error' => 'No se pudo subir el archivo a S3'];
         }
@@ -241,7 +260,7 @@ class WhatsappInboxCoordinacionOutboundService
         );
 
         $caption = trim((string) ($payload['caption'] ?? ''));
-        $filename = (string) ($payload['fileName'] ?? basename($path));
+        $filename = (string) ($payload['fileName'] ?? basename($localPath));
         $templateParams = ['_media_filename' => $filename];
 
         $message = $this->messageService->createOutboundPending(
@@ -317,6 +336,173 @@ class WhatsappInboxCoordinacionOutboundService
         }
 
         return 'Cliente ' . substr($phoneE164, -4);
+    }
+
+    /**
+     * Con ventana abierta: texto de plantilla + adjuntos como mensajes de sesión (sin costo de template).
+     *
+     * @param  array<string, mixed>  $payload
+     * @return array{status: bool, error?: string, inbox_message_id?: int}|null  null = usar plantilla Meta
+     */
+    private function tryProcessTemplateAsSessionMessage(array $payload)
+    {
+        if (!config('meta_whatsapp.coordinacion_session_message_when_window_open', true)) {
+            return null;
+        }
+
+        $phone = $this->normalizePhoneE164((string) ($payload['phone'] ?? ''));
+        $templateName = (string) ($payload['template'] ?? '');
+        if ($phone === '' || $templateName === '') {
+            return null;
+        }
+
+        $session = $this->sessionService->ensureDefaultSession();
+        if (!$this->windowService->isWindowOpenForPhone($phone, (int) $session->id)) {
+            return null;
+        }
+
+        $rawHeader = isset($payload['header']) && is_array($payload['header']) ? $payload['header'] : null;
+        $header = CoordinacionMediaLink::prepareHeader($rawHeader);
+
+        $templateParams = $this->buildTemplateParams($payload, null);
+        $fallbackPreview = trim((string) ($payload['chat_preview'] ?? $payload['bitrix_message'] ?? ''));
+        $text = trim($this->templateService->resolvePreviewText(
+            $templateName,
+            $templateParams,
+            $fallbackPreview !== '' ? $fallbackPreview : null
+        ));
+
+        if ($text === '' && $header === null) {
+            return null;
+        }
+
+        WaInboxLog::info('inboxCoordinacion.template_downgraded_to_session', [
+            'template' => $templateName,
+            'phone_e164' => $phone,
+            'has_media' => $header !== null,
+            'text_length' => strlen($text),
+        ]);
+
+        $lastMessageId = null;
+        $basePayload = $this->sessionMessagePayloadBase($payload, $phone);
+
+        if ($text !== '') {
+            $result = $this->processLegacyMessage(array_merge($basePayload, [
+                'type' => 'legacy_message',
+                'message' => $text,
+            ]));
+            if (empty($result['status'])) {
+                return $result;
+            }
+            $lastMessageId = isset($result['inbox_message_id']) ? (int) $result['inbox_message_id'] : null;
+        }
+
+        if ($header !== null && !empty($header['path'])) {
+            $mime = trim((string) ($header['mimeType'] ?? ''));
+            if ($mime === '') {
+                $type = strtolower((string) ($header['type'] ?? 'document'));
+                if ($type === 'image') {
+                    $mime = 'image/jpeg';
+                } elseif ($type === 'video') {
+                    $mime = 'video/mp4';
+                } else {
+                    $mime = 'application/pdf';
+                }
+            }
+
+            $result = $this->processLegacyMedia(array_merge($basePayload, [
+                'type' => 'legacy_media',
+                'path' => (string) $header['path'],
+                'mimeType' => $mime,
+                'caption' => '',
+                'fileName' => (string) ($header['filename'] ?? basename((string) $header['path'])),
+            ]));
+            if (empty($result['status'])) {
+                return $result;
+            }
+            $lastMessageId = isset($result['inbox_message_id']) ? (int) $result['inbox_message_id'] : $lastMessageId;
+        }
+
+        if ($lastMessageId === null) {
+            return null;
+        }
+
+        return [
+            'status' => true,
+            'inbox_message_id' => $lastMessageId,
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @param  string  $phoneE164
+     * @return array<string, mixed>
+     */
+    private function sessionMessagePayloadBase(array $payload, $phoneE164)
+    {
+        $base = [
+            'phone' => $phoneE164,
+        ];
+
+        if (!empty($payload['_domain'])) {
+            $base['_domain'] = $payload['_domain'];
+        }
+        if (!empty($payload['contact_name'])) {
+            $base['contact_name'] = $payload['contact_name'];
+        }
+        if (!empty($payload['chat_preview'])) {
+            $base['chat_preview'] = $payload['chat_preview'];
+        }
+        if (!empty($payload['bitrix_message'])) {
+            $base['bitrix_message'] = $payload['bitrix_message'];
+        }
+        if (!empty($payload['_coordinacion_batch_id'])) {
+            $base['_coordinacion_batch_id'] = $payload['_coordinacion_batch_id'];
+        }
+
+        return $base;
+    }
+
+    /**
+     * @param  string  $path  Ruta absoluta local o clave relativa en object storage
+     * @return string|null
+     */
+    private function resolveLegacyMediaLocalPath($path)
+    {
+        $path = trim((string) $path);
+        if ($path === '') {
+            return null;
+        }
+
+        if (is_file($path) && is_readable($path)) {
+            return $path;
+        }
+
+        $resolved = CoordinacionMediaLink::resolveStoragePath($path);
+        if ($resolved !== null) {
+            try {
+                $storage = app(\App\Contracts\ObjectStorageConnectorInterface::class);
+                if ($storage->exists($resolved)) {
+                    $local = $storage->localPath($resolved);
+
+                    return is_file($local) && is_readable($local) ? $local : null;
+                }
+            } catch (\Throwable $e) {
+                WaInboxLog::warning('inboxCoordinacion.legacy_media_storage_resolve', [
+                    'path' => $path,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        $relative = ltrim(str_replace('\\', '/', $path), '/');
+        foreach ([storage_path('app/' . $relative), storage_path($relative), public_path($relative)] as $candidate) {
+            if (is_file($candidate) && is_readable($candidate)) {
+                return $candidate;
+            }
+        }
+
+        return null;
     }
 
     /**

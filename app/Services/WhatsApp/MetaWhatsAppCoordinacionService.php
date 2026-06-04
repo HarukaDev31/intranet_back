@@ -106,7 +106,7 @@ class MetaWhatsAppCoordinacionService
 
         $components = [];
         $headerComponent = null;
-        if (is_array($header) && !empty($header['type'])) {
+        if ($requiresHeaderComponent && is_array($header) && !empty($header['type'])) {
             $headerComponent = $this->buildHeaderComponent($header);
             if ($headerComponent !== null) {
                 $components[] = $headerComponent;

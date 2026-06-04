@@ -84,6 +84,16 @@ return [
     'inbox_display_number' => env('META_WHATSAPP_INBOX_DISPLAY_NUMBER', ''),
     'inbox_alert_phone' => env('WA_INBOX_ALERT_PHONE', ''),
 
+    /**
+     * Si la ventana de 24 h está abierta, enviar el texto/media de la plantilla como
+     * mensaje de sesión (text/document/image) en lugar de template de Meta → ahorro de costo.
+     * Si la ventana está cerrada, se usa la plantilla normalmente.
+     */
+    'coordinacion_session_message_when_window_open' => filter_var(
+        env('META_WHATSAPP_SESSION_WHEN_WINDOW_OPEN', true),
+        FILTER_VALIDATE_BOOLEAN
+    ),
+
     'queue' => env('META_WHATSAPP_QUEUE', 'notificaciones'),
 
     /** Valor enviado a Meta cuando un parámetro de plantilla llega vacío (Meta rechaza text sin valor). */
