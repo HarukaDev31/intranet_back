@@ -6,6 +6,7 @@ use App\Jobs\WaCopiloto\AnalyzeWaCopilotoInboundMessageJob;
 use App\Services\WaCopiloto\WaCopilotoMessageAnalysisService;
 use App\Support\WhatsApp\CoordinacionMediaLink;
 use App\Support\WhatsApp\WaCopilotoMime;
+use App\Support\WhatsApp\WaJsonUtf8;
 use App\Events\WaCopiloto\WaCopilotoMessageCreated;
 use App\Events\WaCopiloto\WaCopilotoMessageStatusUpdated;
 use Illuminate\Broadcasting\BroadcastException;
@@ -110,7 +111,7 @@ class WaCopilotoMessageService
             }
         }
 
-        return [
+        return WaJsonUtf8::sanitize([
             'id' => (int) $message->id,
             'direction' => $message->direction,
             'body' => $message->body,
@@ -128,7 +129,7 @@ class WaCopilotoMessageService
             'media_size_bytes' => $mediaSizeBytes,
             'reply_to_meta_message_id' => $replyToMetaId,
             'insights' => $insights,
-        ];
+        ]);
     }
 
     /**
@@ -237,6 +238,9 @@ class WaCopilotoMessageService
         $phoneE164 = $this->conversationService->normalizePhoneE164($from);
         $waId = $from;
         $contactName = isset($contacts[$waId]) ? $contacts[$waId] : null;
+        if ($contactName !== null && $contactName !== '') {
+            $contactName = WaJsonUtf8::sanitizeString((string) $contactName);
+        }
 
         $conversation = $this->conversationService->findOrCreateConversation(
             $session,
@@ -289,6 +293,8 @@ class WaCopilotoMessageService
         } else {
             $body = '[' . $type . ']';
         }
+
+        $body = WaJsonUtf8::sanitizeString((string) $body);
 
         $timestamp = isset($msg['timestamp']) ? (int) $msg['timestamp'] : time();
         $sentAt = Carbon::createFromTimestamp($timestamp);

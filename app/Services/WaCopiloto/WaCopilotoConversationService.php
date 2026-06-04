@@ -7,6 +7,7 @@ use App\Models\Usuario;
 use App\Models\WaCopiloto\WaCopilotoConversation;
 use App\Models\WaCopiloto\WaCopilotoMessage;
 use App\Models\WaCopiloto\WaCopilotoSession;
+use App\Support\WhatsApp\WaJsonUtf8;
 use Carbon\Carbon;
 
 class WaCopilotoConversationService
@@ -89,7 +90,7 @@ class WaCopilotoConversationService
             }
         }
 
-        return [
+        return WaJsonUtf8::sanitize([
             'success' => true,
             'data' => $rows,
             'pagination' => [
@@ -99,7 +100,7 @@ class WaCopilotoConversationService
                 'total' => $paginated->total() + $pendingAdded,
                 'pending_contacts' => $pendingAdded,
             ],
-        ];
+        ]);
     }
 
     /**
@@ -109,7 +110,7 @@ class WaCopilotoConversationService
     public function formatConversation(WaCopilotoConversation $conversation)
     {
         $window = $this->windowService->computeWindowState($conversation);
-        $name = trim((string) $conversation->contact_name);
+        $name = WaJsonUtf8::sanitizeString(trim((string) $conversation->contact_name));
         if ($name === '') {
             $name = $conversation->phone_e164;
         }
@@ -117,7 +118,9 @@ class WaCopilotoConversationService
         $assignedName = null;
         if ($conversation->assigned_user_id) {
             $u = Usuario::query()->find($conversation->assigned_user_id);
-            $assignedName = $u ? ($u->No_Nombres_Apellidos ?: $u->No_Usuario) : null;
+            $assignedName = $u
+                ? WaJsonUtf8::sanitizeString((string) ($u->No_Nombres_Apellidos ?: $u->No_Usuario))
+                : null;
         }
 
         $initials = $this->initials($name);
@@ -131,7 +134,7 @@ class WaCopilotoConversationService
             'phone_display' => $this->formatPhoneDisplay($conversation->phone_e164),
             'phone_e164' => $conversation->phone_e164,
             'initials' => $initials,
-            'last_message_preview' => $conversation->last_message_preview,
+            'last_message_preview' => WaJsonUtf8::sanitizeString((string) $conversation->last_message_preview),
             'last_message_at' => $conversation->last_message_at,
             'last_message_time_label' => $timeLabel,
             'last_direction' => $conversation->last_direction,
@@ -149,7 +152,7 @@ class WaCopilotoConversationService
             'window_label' => $window['label'],
             'window_expires_at' => $window['expires_at'],
             'can_send_text' => $window['can_send_text'],
-            'channel_label' => $conversation->channel_label,
+            'channel_label' => WaJsonUtf8::sanitizeString((string) $conversation->channel_label),
             'status' => $conversation->status,
         ];
     }
@@ -363,6 +366,9 @@ class WaCopilotoConversationService
     public function findOrCreateConversation(WaCopilotoSession $session, $phoneE164, $waContactId = null, $contactName = null)
     {
         $phoneE164 = $this->normalizePhoneE164($phoneE164);
+        if ($contactName !== null && $contactName !== '') {
+            $contactName = WaJsonUtf8::sanitizeString(trim((string) $contactName));
+        }
         $conversation = WaCopilotoConversation::query()
             ->where('session_id', $session->id)
             ->where('phone_e164', $phoneE164)
@@ -488,7 +494,11 @@ class WaCopilotoConversationService
 
         if (!$current || $sentAt >= Carbon::parse($current)) {
             $conversation->last_message_at = $sentAt;
-            $conversation->last_message_preview = mb_substr(trim((string) $preview), 0, 500);
+            $conversation->last_message_preview = mb_substr(
+                WaJsonUtf8::sanitizeString(trim((string) $preview)),
+                0,
+                500
+            );
             $conversation->last_direction = $direction === 'out' ? 'out' : 'in';
 
             if (is_array($meta)) {

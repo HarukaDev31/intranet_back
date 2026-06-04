@@ -10,6 +10,7 @@ use App\Models\WhatsappInbox\WaInboxSession;
 use App\Services\WaCopiloto\WaCopilotoConversationService;
 use App\Services\WaCopiloto\WaCopilotoSessionService;
 use App\Services\WhatsappInbox\WhatsappInboxSessionService;
+use App\Support\WhatsApp\WaJsonUtf8;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -305,7 +306,7 @@ class WaContactService
     public function upsertContact($phoneE164, $contactName, $source = 'manual', $inboxConversationId = null, $origin = null)
     {
         $phoneE164 = $this->normalizePhoneE164($phoneE164);
-        $name = trim((string) $contactName);
+        $name = WaJsonUtf8::sanitizeString(trim((string) $contactName));
         if ($name === '') {
             $name = $phoneE164;
         }
@@ -369,7 +370,7 @@ class WaContactService
      */
     public function formatPendingConversation(WaContact $contact, WaCopilotoSession $session)
     {
-        $name = trim((string) $contact->contact_name);
+        $name = WaJsonUtf8::sanitizeString(trim((string) $contact->contact_name));
         if ($name === '') {
             $name = $contact->phone_e164;
         }
@@ -380,7 +381,7 @@ class WaContactService
                 ? ($session->label ?: 'Ventas')
                 : ucfirst(str_replace('_', ' ', (string) $contact->source)));
 
-        return [
+        return WaJsonUtf8::sanitize([
             'id' => 0,
             'contact_id' => (int) $contact->id,
             'pending_contact' => true,
@@ -407,7 +408,7 @@ class WaContactService
             'can_send_text' => false,
             'channel_label' => $sourceLabel,
             'status' => 'open',
-        ] + $this->originPayload($contact);
+        ] + $this->originPayload($contact));
     }
 
     /**
