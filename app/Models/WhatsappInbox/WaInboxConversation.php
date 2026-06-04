@@ -23,6 +23,9 @@ class WaInboxConversation extends Model
         'window_expires_at',
         'last_message_preview',
         'last_message_at',
+        'last_message_id',
+        'last_message_type',
+        'last_message_delivery_status',
         'last_direction',
     ];
 

@@ -5,6 +5,7 @@ namespace App\Services\WhatsappInbox;
 use App\Models\Grupo;
 use App\Models\Usuario;
 use App\Models\WhatsappInbox\WaInboxConversation;
+use App\Models\WhatsappInbox\WaInboxMessage;
 use App\Models\WhatsappInbox\WaInboxSession;
 use Carbon\Carbon;
 
@@ -106,6 +107,14 @@ class WhatsappInboxConversationService
             'last_message_preview' => $conversation->last_message_preview,
             'last_message_at' => $conversation->last_message_at,
             'last_message_time_label' => $timeLabel,
+            'last_direction' => $conversation->last_direction,
+            'last_message_type' => $conversation->last_message_type,
+            'last_message_delivery_status' => $conversation->last_direction === 'out'
+                ? $conversation->last_message_delivery_status
+                : null,
+            'last_message_id' => $conversation->last_message_id
+                ? (int) $conversation->last_message_id
+                : null,
             'unread_count' => (int) $conversation->unread_count,
             'assigned_user_id' => $conversation->assigned_user_id,
             'assigned_user_name' => $assignedName,
@@ -334,8 +343,81 @@ class WhatsappInboxConversationService
         ]);
     }
 
-    public function refreshHeader(WaInboxConversation $conversation, $preview, $direction, $sentAt, $fromCustomer = false)
+    /**
+     * @param  string  $messageType
+     * @param  string|null  $body
+     * @param  string|null  $mediaFilename
+     * @return string
+     */
+    public function buildLastMessagePreview($messageType, $body = null, $mediaFilename = null)
     {
+        $type = strtolower(trim((string) $messageType));
+        if ($type === 'image') {
+            return 'Foto';
+        }
+        if ($type === 'sticker') {
+            return 'Sticker';
+        }
+        if ($type === 'video') {
+            return 'Video';
+        }
+        if ($type === 'audio') {
+            return 'Audio';
+        }
+        if ($type === 'document') {
+            $name = trim((string) $mediaFilename);
+            if ($name === '') {
+                $name = trim((string) $body);
+            }
+            if ($name !== '' && strpos($name, '[') !== 0) {
+                return mb_strlen($name) > 80 ? mb_substr($name, 0, 80) . '…' : $name;
+            }
+
+            return 'Documento';
+        }
+        if ($type === 'template') {
+            return 'Plantilla';
+        }
+
+        $text = trim((string) $body);
+        if ($text !== '' && strpos($text, '[') !== 0) {
+            return mb_substr($text, 0, 500);
+        }
+
+        return 'Mensaje';
+    }
+
+    /**
+     * @param  WaInboxMessage  $message
+     */
+    public function refreshHeaderFromMessage(WaInboxConversation $conversation, WaInboxMessage $message, $fromCustomer = false)
+    {
+        $direction = $message->direction === 'out' ? 'out' : 'in';
+        $filename = null;
+        if (is_array($message->template_params) && !empty($message->template_params['_media_filename'])) {
+            $filename = (string) $message->template_params['_media_filename'];
+        }
+        $preview = $this->buildLastMessagePreview($message->message_type, $message->body, $filename);
+        $sentAt = $message->sent_at ? $message->sent_at : now();
+
+        $this->refreshHeader($conversation, $preview, $direction, $sentAt, $fromCustomer, [
+            'message_id' => (int) $message->id,
+            'message_type' => (string) $message->message_type,
+            'delivery_status' => $direction === 'out' ? (string) $message->delivery_status : null,
+        ]);
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $meta
+     */
+    public function refreshHeader(
+        WaInboxConversation $conversation,
+        $preview,
+        $direction,
+        $sentAt,
+        $fromCustomer = false,
+        $meta = null
+    ) {
         $sentAt = $sentAt instanceof Carbon ? $sentAt : Carbon::parse($sentAt);
         $current = $conversation->last_message_at;
 
@@ -343,6 +425,20 @@ class WhatsappInboxConversationService
             $conversation->last_message_at = $sentAt;
             $conversation->last_message_preview = mb_substr(trim((string) $preview), 0, 500);
             $conversation->last_direction = $direction === 'out' ? 'out' : 'in';
+
+            if (is_array($meta)) {
+                if (!empty($meta['message_id'])) {
+                    $conversation->last_message_id = (int) $meta['message_id'];
+                }
+                if (!empty($meta['message_type'])) {
+                    $conversation->last_message_type = (string) $meta['message_type'];
+                }
+                if ($direction === 'out' && !empty($meta['delivery_status'])) {
+                    $conversation->last_message_delivery_status = (string) $meta['delivery_status'];
+                } else {
+                    $conversation->last_message_delivery_status = null;
+                }
+            }
         }
 
         if ($fromCustomer) {
@@ -354,6 +450,26 @@ class WhatsappInboxConversationService
             $conversation->status = 'open';
         }
 
+        $conversation->save();
+    }
+
+    /**
+     * Actualiza el estado en sidebar si el mensaje sigue siendo el último saliente.
+     *
+     * @param  WaInboxMessage  $message
+     */
+    public function syncLastMessageDeliveryStatus(WaInboxMessage $message)
+    {
+        $conversation = WaInboxConversation::query()->find($message->conversation_id);
+        if (!$conversation || $conversation->last_direction !== 'out') {
+            return;
+        }
+
+        if ((int) $conversation->last_message_id !== (int) $message->id) {
+            return;
+        }
+
+        $conversation->last_message_delivery_status = (string) $message->delivery_status;
         $conversation->save();
     }
 

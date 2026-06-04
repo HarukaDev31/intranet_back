@@ -160,7 +160,7 @@ class WhatsappInboxOutboundRecorder
             'sent_by_user_id' => $userId > 0 ? $userId : null,
         ]);
 
-        $this->conversationService->refreshHeader($conversation, $preview, 'out', now(), false);
+        $this->conversationService->refreshHeaderFromMessage($conversation, $message, false);
         $this->messageService->broadcastMessageCreated($message, $conversation);
 
         WaInboxLog::info('outboundRecorder.template_recorded', [

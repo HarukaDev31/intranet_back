@@ -209,7 +209,7 @@ class WhatsappInboxMessageService
         }
 
         $type = isset($msg['type']) ? (string) $msg['type'] : 'text';
-        $messageType = $type === 'sticker' ? 'image' : $type;
+        $messageType = $type;
         $body = '';
         $mediaUrl = null;
         $mediaMime = null;
@@ -265,7 +265,7 @@ class WhatsappInboxMessageService
             'sent_at' => $sentAt,
         ]);
 
-        $this->conversationService->refreshHeader($conversation, $body, 'in', $sentAt, true);
+        $this->conversationService->refreshHeaderFromMessage($conversation, $message, true);
         $this->broadcastMessageCreated($message, $conversation);
     }
 
@@ -346,6 +346,7 @@ class WhatsappInboxMessageService
         }
 
         $message->save();
+        $this->conversationService->syncLastMessageDeliveryStatus($message);
         $this->broadcastMessageStatusUpdated($message);
     }
 
@@ -405,7 +406,7 @@ class WhatsappInboxMessageService
             'sent_by_user_id' => $userId,
         ]);
 
-        $this->conversationService->refreshHeader($conversation, $preview, 'out', now(), false);
+        $this->conversationService->refreshHeaderFromMessage($conversation, $message, false);
         $this->broadcastMessageCreated($message, $conversation);
 
         WaInboxLog::info('createOutboundPending', [
@@ -504,7 +505,7 @@ class WhatsappInboxMessageService
             'sent_by_user_id' => $userId,
         ]);
 
-        $this->conversationService->refreshHeader($conversation, $preview, 'out', now(), false);
+        $this->conversationService->refreshHeaderFromMessage($conversation, $message, false);
         $this->broadcastMessageCreated($message, $conversation);
 
         return ['success' => true, 'message' => $message];
@@ -525,17 +526,7 @@ class WhatsappInboxMessageService
             return;
         }
 
-        $preview = $last->message_type === 'template'
-            ? '[Template enviado]'
-            : mb_substr(trim((string) $last->body), 0, 500);
-
-        $this->conversationService->refreshHeader(
-            $conversation,
-            $preview,
-            (string) $last->direction,
-            $last->sent_at,
-            false
-        );
+        $this->conversationService->refreshHeaderFromMessage($conversation, $last, false);
     }
 
     /**
