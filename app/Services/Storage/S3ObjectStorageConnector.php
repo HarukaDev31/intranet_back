@@ -681,7 +681,7 @@ class S3ObjectStorageConnector implements ObjectStorageConnectorInterface
         $base = $this->cdnBaseUrl();
         $prefix = trim(str_replace('\\', '/', (string) config('object_storage.s3_prefix', '')), '/');
 
-        if (config('object_storage.cdn_include_s3_prefix', true) && $prefix !== '') {
+        if (filter_var(config('object_storage.cdn_include_s3_prefix', false), FILTER_VALIDATE_BOOLEAN) && $prefix !== '') {
             return $base . '/' . $prefix . '/' . $relativePath;
         }
 

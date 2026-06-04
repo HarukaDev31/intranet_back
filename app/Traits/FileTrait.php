@@ -18,15 +18,22 @@ trait FileTrait
 
         $storage = app(ObjectStorageConnectorInterface::class);
 
-        if (filter_var($ruta, FILTER_VALIDATE_URL) && stripos($ruta, 'cdn.') !== false) {
-            return $ruta;
+        if (filter_var($ruta, FILTER_VALIDATE_URL)) {
+            $path = parse_url($ruta, PHP_URL_PATH);
+            $normalized = $storage->normalizeRelativePath(is_string($path) && $path !== '' ? $path : $ruta);
+        } else {
+            $normalized = $storage->normalizeRelativePath($ruta);
         }
 
-        $normalized = $storage->normalizeRelativePath($ruta);
         if ($normalized === null || $normalized === '') {
             return null;
         }
 
+        return $this->buildCdnPublicUrl($normalized);
+    }
+
+    protected function buildCdnPublicUrl(string $normalized): string
+    {
         $prefix = trim((string) config('object_storage.s3_prefix', ''), '/');
         if ($prefix !== '' && stripos($normalized, $prefix . '/') === 0) {
             $normalized = substr($normalized, strlen($prefix) + 1);
@@ -37,7 +44,7 @@ trait FileTrait
             $base = 'https://cdn.probusiness.pe';
         }
 
-        $includePrefix = filter_var(config('object_storage.cdn_include_s3_prefix', true), FILTER_VALIDATE_BOOLEAN);
+        $includePrefix = filter_var(config('object_storage.cdn_include_s3_prefix', false), FILTER_VALIDATE_BOOLEAN);
         if ($includePrefix && $prefix !== '') {
             $normalized = $prefix . '/' . ltrim($normalized, '/');
         }
