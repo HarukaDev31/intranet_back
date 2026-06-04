@@ -1,16 +1,17 @@
 <?php
 
-namespace App\Http\Controllers\WhatsappInbox;
+namespace App\Http\Controllers\WaCopiloto;
 
 use App\Http\Controllers\Controller;
-use App\Support\WhatsApp\MetaWhatsappWebhookRouter;
-use App\Support\WhatsApp\WaInboxJobContext;
+use App\Jobs\WaCopiloto\ProcessWaCopilotoInboundJob;
+use App\Models\WaCopiloto\WaCopilotoWebhookLog;
+use App\Support\WhatsApp\WaCopilotoJobContext;
 use Illuminate\Http\Request;
 
-class MetaInboxWebhookController extends Controller
+class MetaCopilotoWebhookController extends Controller
 {
     /**
-     * GET — verificación hub Meta.
+     * GET — verificación hub Meta (Copiloto / ventas).
      *
      * @param  \Illuminate\Http\Request  $request
      * @return mixed
@@ -21,7 +22,12 @@ class MetaInboxWebhookController extends Controller
         $token = $request->query('hub_verify_token');
         $challenge = $request->query('hub_challenge');
 
-        if ($mode === 'subscribe' && $token === config('meta_whatsapp.webhook_verify_token')) {
+        $expected = (string) config('meta_whatsapp_copiloto.webhook_verify_token');
+        if ($expected === '') {
+            $expected = (string) config('meta_whatsapp.webhook_verify_token');
+        }
+
+        if ($mode === 'subscribe' && $token === $expected) {
             return response($challenge, 200)->header('Content-Type', 'text/plain');
         }
 
@@ -29,7 +35,7 @@ class MetaInboxWebhookController extends Controller
     }
 
     /**
-     * POST — eventos Meta.
+     * POST — eventos Meta para números Copiloto.
      *
      * @param  \Illuminate\Http\Request  $request
      * @return \Illuminate\Http\JsonResponse
@@ -41,7 +47,12 @@ class MetaInboxWebhookController extends Controller
         }
 
         $payload = $request->all();
-        MetaWhatsappWebhookRouter::dispatch($payload, WaInboxJobContext::resolveJobDomain());
+        $log = WaCopilotoWebhookLog::create([
+            'payload' => $payload,
+            'processed_at' => null,
+        ]);
+
+        ProcessWaCopilotoInboundJob::dispatch($log->id, WaCopilotoJobContext::resolveJobDomain());
 
         return response()->json(['success' => true]);
     }
@@ -52,7 +63,10 @@ class MetaInboxWebhookController extends Controller
      */
     private function isValidSignature(Request $request)
     {
-        $secret = (string) config('meta_whatsapp.app_secret');
+        $secret = (string) config('meta_whatsapp_copiloto.app_secret');
+        if ($secret === '') {
+            $secret = (string) config('meta_whatsapp.app_secret');
+        }
         if ($secret === '') {
             return app()->environment('local');
         }

@@ -50,6 +50,18 @@ Broadcast::channel('Coordinacion-notifications', function ($user) {
 Broadcast::channel('whatsapp-inbox.coordinacion', function ($user) {
     return $user->grupo && $user->grupo->No_Grupo === Usuario::ROL_COORDINACION;
 });
+
+// WhatsApp Copiloto ventas — tiempo real del chat Meta (número ventas)
+Broadcast::channel('whatsapp-copiloto.ventas', function ($user) {
+    if (!$user || !$user->grupo) {
+        return false;
+    }
+    $grupo = $user->grupo->No_Grupo;
+    if ($grupo === Usuario::ROL_COTIZADOR || $grupo === Usuario::ROL_ADMINISTRACION || $grupo === Usuario::ROL_GERENCIA) {
+        return true;
+    }
+    return (int) $user->getIdUsuario() === 28791;
+});
 Broadcast::channel('Administracion-notifications', function ($user) {
     return $user->grupo && $user->grupo->No_Grupo === Usuario::ROL_ADMINISTRACION;
 });

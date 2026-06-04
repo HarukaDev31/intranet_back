@@ -133,6 +133,89 @@ class GeminiService
         return $this->extractFromComprobante($filePath, $mimeType);
     }
 
+    /**
+     * Genera y parsea JSON desde un prompt de texto (sin archivo adjunto).
+     *
+     * @param  string  $prompt
+     * @param  int  $maxOutputTokens
+     * @param  float  $temperature
+     * @return array{success: bool, data: array|null, error: string|null}
+     */
+    public function analyzeTextAsJson($prompt, $maxOutputTokens = 2048, $temperature = 0.2)
+    {
+        $apiKey = env('GEMINI_API_KEY');
+
+        if (!$apiKey) {
+            Log::error('GeminiService: GEMINI_API_KEY no configurado en .env');
+            return ['success' => false, 'data' => null, 'error' => 'GEMINI_API_KEY no configurado'];
+        }
+
+        $payload = [
+            'contents' => [
+                [
+                    'parts' => [
+                        ['text' => (string) $prompt],
+                    ],
+                ],
+            ],
+            'generationConfig' => [
+                'temperature' => (float) $temperature,
+                'maxOutputTokens' => (int) $maxOutputTokens,
+                'responseMimeType' => 'application/json',
+            ],
+        ];
+
+        $url = self::getApiUrl() . '?key=' . $apiKey;
+
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
+        curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 90);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 15);
+
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curlError = curl_error($ch);
+        curl_close($ch);
+
+        if ($curlError) {
+            Log::error('GeminiService analyzeTextAsJson: cURL error', ['error' => $curlError]);
+            return ['success' => false, 'data' => null, 'error' => 'Error de conexión: ' . $curlError];
+        }
+
+        if ($httpCode !== 200) {
+            Log::error('GeminiService analyzeTextAsJson: HTTP ' . $httpCode, ['response' => $response]);
+            return ['success' => false, 'data' => null, 'error' => 'Error de API Gemini (HTTP ' . $httpCode . ')'];
+        }
+
+        $decoded = json_decode($response, true);
+        if (!$decoded) {
+            return ['success' => false, 'data' => null, 'error' => 'Respuesta inválida de Gemini'];
+        }
+
+        $textContent = '';
+        $parts = isset($decoded['candidates'][0]['content']['parts']) ? $decoded['candidates'][0]['content']['parts'] : [];
+        foreach ($parts as $part) {
+            if (!empty($part['text'])) {
+                $textContent .= $part['text'];
+            }
+        }
+
+        $textContent = preg_replace('/```(?:json)?\s*/', '', trim($textContent));
+        $jsonString = self::extractJsonFromText($textContent);
+        $extracted = $jsonString !== null ? json_decode($jsonString, true) : null;
+
+        if (!$extracted || !is_array($extracted)) {
+            Log::warning('GeminiService analyzeTextAsJson: JSON inválido', ['text' => $textContent]);
+            return ['success' => false, 'data' => null, 'error' => 'No se pudo parsear el JSON de Gemini'];
+        }
+
+        return ['success' => true, 'data' => $extracted, 'error' => null];
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
     // Privados
     // ─────────────────────────────────────────────────────────────────────────

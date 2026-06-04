@@ -25,6 +25,9 @@ Route::post('/evolution/webhook', [EvolutionWebhookController::class, 'handle'])
 // WhatsApp Inbox — Meta coordinación (webhook público + API rol Coordinación)
 require __DIR__.'/modules/whatsapp-inbox.php';
 
+// WhatsApp Copiloto — Meta ventas (webhook público + API rol Cotizador/Jefe Ventas)
+require __DIR__.'/modules/wa-copiloto.php';
+
 // OAuth Google Drive (configuración única — Excel confirmación)
 Route::prefix('google/drive/oauth')->group(function () {
     Route::get('/authorize', [GoogleDriveOAuthController::class, 'authorizeRedirect']);

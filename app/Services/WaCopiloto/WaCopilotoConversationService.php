@@ -1,26 +1,25 @@
 <?php
 
-namespace App\Services\WhatsappInbox;
+namespace App\Services\WaCopiloto;
 
 use App\Models\Grupo;
 use App\Models\Usuario;
-use App\Models\WhatsappInbox\WaInboxConversation;
-use App\Models\WhatsappInbox\WaInboxMessage;
-use App\Models\WhatsappInbox\WaInboxSession;
-use App\Services\WhatsApp\WaContactService;
+use App\Models\WaCopiloto\WaCopilotoConversation;
+use App\Models\WaCopiloto\WaCopilotoMessage;
+use App\Models\WaCopiloto\WaCopilotoSession;
 use Carbon\Carbon;
 
-class WhatsappInboxConversationService
+class WaCopilotoConversationService
 {
-    /** @var WhatsappInboxSessionService */
+    /** @var WaCopilotoSessionService */
     protected $sessionService;
 
-    /** @var WhatsappInboxWindowService */
+    /** @var WaCopilotoWindowService */
     protected $windowService;
 
     public function __construct(
-        WhatsappInboxSessionService $sessionService,
-        WhatsappInboxWindowService $windowService
+        WaCopilotoSessionService $sessionService,
+        WaCopilotoWindowService $windowService
     ) {
         $this->sessionService = $sessionService;
         $this->windowService = $windowService;
@@ -38,7 +37,7 @@ class WhatsappInboxConversationService
         $filter = trim((string) ($params['filter'] ?? 'todas'));
         $userId = isset($params['auth_user_id']) ? (int) $params['auth_user_id'] : 0;
 
-        $query = WaInboxConversation::query()
+        $query = WaCopilotoConversation::query()
             ->where('session_id', $session->id)
             ->orderByDesc('last_message_at')
             ->orderByDesc('id');
@@ -64,6 +63,32 @@ class WhatsappInboxConversationService
             $rows[] = $this->formatConversation($conv);
         }
 
+        $includeRaw = isset($params['include_contacts'])
+            ? $params['include_contacts']
+            : (isset($params['include_registry']) ? $params['include_registry'] : true);
+        $includeContacts = filter_var($includeRaw, FILTER_VALIDATE_BOOLEAN);
+        $pendingAdded = 0;
+
+        if ($paginated->currentPage() === 1 && $includeContacts) {
+            /** @var \App\Services\WhatsApp\WaContactService $contactService */
+            $contactService = app(\App\Services\WhatsApp\WaContactService::class);
+            $existingPhones = [];
+            foreach ($rows as $row) {
+                if (!empty($row['phone_e164'])) {
+                    $existingPhones[(string) $row['phone_e164']] = true;
+                }
+            }
+            foreach ($contactService->listPendingAsConversations($session, $search, 500) as $pending) {
+                $phone = (string) ($pending['phone_e164'] ?? '');
+                if ($phone === '' || isset($existingPhones[$phone])) {
+                    continue;
+                }
+                $rows[] = $pending;
+                $existingPhones[$phone] = true;
+                $pendingAdded++;
+            }
+        }
+
         return [
             'success' => true,
             'data' => $rows,
@@ -71,16 +96,17 @@ class WhatsappInboxConversationService
                 'current_page' => $paginated->currentPage(),
                 'last_page' => $paginated->lastPage(),
                 'per_page' => $paginated->perPage(),
-                'total' => $paginated->total(),
+                'total' => $paginated->total() + $pendingAdded,
+                'pending_contacts' => $pendingAdded,
             ],
         ];
     }
 
     /**
-     * @param  WaInboxConversation  $conversation
+     * @param  WaCopilotoConversation  $conversation
      * @return array<string, mixed>
      */
-    public function formatConversation(WaInboxConversation $conversation)
+    public function formatConversation(WaCopilotoConversation $conversation)
     {
         $window = $this->windowService->computeWindowState($conversation);
         $name = trim((string) $conversation->contact_name);
@@ -133,7 +159,7 @@ class WhatsappInboxConversationService
      */
     public function getAssignableUsers()
     {
-        $grupo = Grupo::query()->where('No_Grupo', Usuario::ROL_COORDINACION)->first();
+        $grupo = Grupo::query()->where('No_Grupo', Usuario::ROL_COTIZADOR)->first();
         if (!$grupo) {
             return ['success' => true, 'data' => []];
         }
@@ -162,7 +188,7 @@ class WhatsappInboxConversationService
      */
     public function assign($conversationId, $userId)
     {
-        $conversation = WaInboxConversation::query()->findOrFail($conversationId);
+        $conversation = WaCopilotoConversation::query()->findOrFail($conversationId);
         $conversation->assigned_user_id = $userId > 0 ? $userId : null;
         $conversation->assigned_at = $userId > 0 ? now() : null;
         $conversation->save();
@@ -179,7 +205,7 @@ class WhatsappInboxConversationService
      */
     public function markRead($conversationId)
     {
-        $conversation = WaInboxConversation::query()->findOrFail($conversationId);
+        $conversation = WaCopilotoConversation::query()->findOrFail($conversationId);
         $conversation->unread_count = 0;
         $conversation->save();
 
@@ -208,7 +234,7 @@ class WhatsappInboxConversationService
             ];
         }
 
-        $conversation = WaInboxConversation::query()->findOrFail($conversationId);
+        $conversation = WaCopilotoConversation::query()->findOrFail($conversationId);
         $conversation->contact_name = $name;
         $conversation->save();
 
@@ -220,14 +246,15 @@ class WhatsappInboxConversationService
     }
 
     /**
-     * Registra un contacto manual en wa_inbox_conversations (sesión activa).
+     * Registra un contacto manual en wa_copiloto_conversations (sesión activa).
      *
      * @param  array<string, mixed>  $params  phone, contact_name, assigned_user_id (opcional)
      * @return array<string, mixed>
      */
     public function createManualContact(array $params = [])
     {
-        $session = $this->sessionService->ensureDefaultSession();
+        $sessionSlug = isset($params['session_slug']) ? $params['session_slug'] : null;
+        $session = $this->sessionService->ensureDefaultSession($sessionSlug);
         $phoneE164 = $this->normalizePhoneE164(isset($params['phone']) ? $params['phone'] : '');
         if ($phoneE164 === '' || strlen($phoneE164) < 10 || strlen($phoneE164) > 15) {
             return [
@@ -260,7 +287,21 @@ class WhatsappInboxConversationService
             }
         }
 
-        $existing = WaInboxConversation::query()
+        /** @var \App\Services\WhatsApp\WaContactService $contactService */
+        $contactService = app(\App\Services\WhatsApp\WaContactService::class);
+        $directoryContactId = isset($params['contact_id']) ? (int) $params['contact_id'] : 0;
+        if ($directoryContactId <= 0) {
+            $directoryContact = $contactService->upsertContact(
+                $phoneE164,
+                $contactName,
+                'manual',
+                null,
+                $contactService->originFromCopilotoSession($session)
+            );
+            $directoryContactId = (int) $directoryContact->id;
+        }
+
+        $existing = WaCopilotoConversation::query()
             ->where('session_id', $session->id)
             ->where('phone_e164', $phoneE164)
             ->first();
@@ -276,6 +317,10 @@ class WhatsappInboxConversationService
                 $existing->assigned_at = now();
                 $dirty = true;
             }
+            if (!$existing->contact_id && $directoryContactId > 0) {
+                $existing->contact_id = $directoryContactId;
+                $dirty = true;
+            }
             if ($dirty) {
                 $existing->save();
             }
@@ -283,23 +328,22 @@ class WhatsappInboxConversationService
             return [
                 'success' => true,
                 'created' => false,
-                'message' => 'Este número ya está registrado en el inbox.',
+                'message' => 'Este número ya está registrado en esta línea.',
                 'data' => $this->formatConversation($existing->fresh()),
             ];
         }
 
-        $conversation = WaInboxConversation::create([
+        $conversation = WaCopilotoConversation::create([
             'session_id' => $session->id,
+            'contact_id' => $directoryContactId > 0 ? $directoryContactId : null,
             'wa_contact_id' => null,
             'phone_e164' => $phoneE164,
             'contact_name' => $contactName,
-            'channel_label' => 'Coordinación',
+            'channel_label' => $session->label ?: 'Copiloto',
             'status' => 'open',
             'assigned_user_id' => $assignedUserId > 0 ? $assignedUserId : null,
             'assigned_at' => $assignedUserId > 0 ? now() : null,
         ]);
-
-        $this->registerContactDirectory($conversation);
 
         return [
             'success' => true,
@@ -310,16 +354,16 @@ class WhatsappInboxConversationService
     }
 
     /**
-     * @param  WaInboxSession  $session
+     * @param  WaCopilotoSession  $session
      * @param  string  $phoneE164
      * @param  string|null  $waContactId
      * @param  string|null  $contactName
-     * @return WaInboxConversation
+     * @return WaCopilotoConversation
      */
-    public function findOrCreateConversation(WaInboxSession $session, $phoneE164, $waContactId = null, $contactName = null)
+    public function findOrCreateConversation(WaCopilotoSession $session, $phoneE164, $waContactId = null, $contactName = null)
     {
         $phoneE164 = $this->normalizePhoneE164($phoneE164);
-        $conversation = WaInboxConversation::query()
+        $conversation = WaCopilotoConversation::query()
             ->where('session_id', $session->id)
             ->where('phone_e164', $phoneE164)
             ->first();
@@ -338,12 +382,12 @@ class WhatsappInboxConversationService
             return $conversation;
         }
 
-        $conversation = WaInboxConversation::create([
+        $conversation = WaCopilotoConversation::create([
             'session_id' => $session->id,
             'wa_contact_id' => $waContactId,
             'phone_e164' => $phoneE164,
             'contact_name' => $contactName,
-            'channel_label' => 'Coordinación',
+            'channel_label' => $session->label ?: 'Copiloto',
             'status' => 'open',
         ]);
 
@@ -353,14 +397,14 @@ class WhatsappInboxConversationService
     }
 
     /**
-     * Registra el teléfono en el directorio global wa_contacts.
+     * Sincroniza wa_contacts (directorio global) desde una conversación Copiloto.
      */
-    private function registerContactDirectory(WaInboxConversation $conversation): void
+    private function registerContactDirectory(WaCopilotoConversation $conversation): void
     {
         try {
-            app(WaContactService::class)->registerFromInboxConversation($conversation);
+            app(\App\Services\WhatsApp\WaContactService::class)->registerFromCopilotoConversation($conversation);
         } catch (\Throwable $e) {
-            // No bloquear el inbox de coordinación si el directorio no está disponible.
+            // No bloquear el chat de ventas si falla el directorio.
         }
     }
 
@@ -409,9 +453,9 @@ class WhatsappInboxConversationService
     }
 
     /**
-     * @param  WaInboxMessage  $message
+     * @param  WaCopilotoMessage  $message
      */
-    public function refreshHeaderFromMessage(WaInboxConversation $conversation, WaInboxMessage $message, $fromCustomer = false)
+    public function refreshHeaderFromMessage(WaCopilotoConversation $conversation, WaCopilotoMessage $message, $fromCustomer = false)
     {
         $direction = $message->direction === 'out' ? 'out' : 'in';
         $filename = null;
@@ -432,7 +476,7 @@ class WhatsappInboxConversationService
      * @param  array<string, mixed>|null  $meta
      */
     public function refreshHeader(
-        WaInboxConversation $conversation,
+        WaCopilotoConversation $conversation,
         $preview,
         $direction,
         $sentAt,
@@ -477,11 +521,11 @@ class WhatsappInboxConversationService
     /**
      * Actualiza el estado en sidebar si el mensaje sigue siendo el último saliente.
      *
-     * @param  WaInboxMessage  $message
+     * @param  WaCopilotoMessage  $message
      */
-    public function syncLastMessageDeliveryStatus(WaInboxMessage $message)
+    public function syncLastMessageDeliveryStatus(WaCopilotoMessage $message)
     {
-        $conversation = WaInboxConversation::query()->find($message->conversation_id);
+        $conversation = WaCopilotoConversation::query()->find($message->conversation_id);
         if (!$conversation || $conversation->last_direction !== 'out') {
             return;
         }
