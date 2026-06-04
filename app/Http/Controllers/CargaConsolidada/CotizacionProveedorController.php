@@ -3621,6 +3621,62 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
             ]
         ]);
     }
+
+    /**
+     * Sirve el PDF del contrato (sin depender del CDN / CORS del navegador).
+     */
+    public function streamServiceContractPdf($uuid)
+    {
+        $cotizacion = Cotizacion::where('uuid', $uuid)->first();
+        if (!$cotizacion) {
+            return response()->json(['success' => false, 'message' => 'Cotización no encontrada'], 404);
+        }
+
+        $dbPath = $cotizacion->cotizacion_contrato_firmado_url ?: $cotizacion->cotizacion_contrato_url;
+        if (empty($dbPath)) {
+            return response()->json(['success' => false, 'message' => 'Contrato no disponible'], 404);
+        }
+
+        $uploadPath = $this->storageUploadPathFromDb($dbPath);
+        if ($uploadPath === null || $uploadPath === '') {
+            return response()->json(['success' => false, 'message' => 'Ruta de contrato inválida'], 404);
+        }
+
+        if (!$this->objectStorage()->exists($uploadPath)) {
+            return response()->json(['success' => false, 'message' => 'Archivo de contrato no encontrado'], 404);
+        }
+
+        $stream = $this->objectStorage()->readStream($uploadPath);
+        if ($stream === false || $stream === null) {
+            return response()->json(['success' => false, 'message' => 'No se pudo leer el contrato'], 500);
+        }
+
+        $origin = request()->header('origin');
+        $allowedOrigin = '*';
+        if ($origin && (
+            preg_match('#^https?://(.*\.)?probusiness\.pe(:\d+)?$#i', $origin)
+            || preg_match('#^http://localhost(:\d+)?$#i', $origin)
+        )) {
+            $allowedOrigin = $origin;
+        }
+
+        $filename = 'contrato_' . ($cotizacion->cod_contract ?: $uuid) . '.pdf';
+
+        return response()->stream(function () use ($stream) {
+            fpassthru($stream);
+            if (is_resource($stream)) {
+                fclose($stream);
+            }
+        }, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="' . $filename . '"',
+            'Access-Control-Allow-Origin' => $allowedOrigin,
+            'Access-Control-Allow-Methods' => 'GET, OPTIONS',
+            'Access-Control-Allow-Headers' => 'Content-Type, Authorization, Range',
+            'Cache-Control' => 'private, max-age=3600',
+        ]);
+    }
+
     public function signServiceContract($uuid, Request $request)
     {
         try {

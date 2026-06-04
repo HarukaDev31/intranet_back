@@ -45,7 +45,11 @@ trait FileTrait
         }
 
         $includePrefix = filter_var(config('object_storage.cdn_include_s3_prefix', false), FILTER_VALIDATE_BOOLEAN);
-        if ($includePrefix && $prefix !== '') {
+        // Contratos en CDN público: .../contratos/archivo.pdf (sin prefijo S3 en la URL)
+        $isPublicContratoPath = stripos($normalized, 'contratos/') === 0
+            || stripos($normalized, 'contratos\\') === 0;
+
+        if ($includePrefix && $prefix !== '' && !$isPublicContratoPath) {
             $normalized = $prefix . '/' . ltrim($normalized, '/');
         }
 
