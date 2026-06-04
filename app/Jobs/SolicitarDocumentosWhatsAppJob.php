@@ -70,8 +70,8 @@ class SolicitarDocumentosWhatsAppJob implements ShouldQueue
                 return;
             }
 
-            $telefono = preg_replace('/\s+/', '', $cot->telefono ?? '');
-            $telefono = $telefono !== '' ? $telefono . '@c.us' : '';
+            $telefonoCliente = preg_replace('/\s+/', '', $cot->telefono ?? '');
+            $telefono = $telefonoCliente !== '' ? $telefonoCliente . '@c.us' : '';
 
             if ($telefono === '') {
                 Log::warning('SolicitarDocumentosWhatsAppJob: sin teléfono', ['id_cotizacion' => $this->idCotizacion]);
@@ -244,7 +244,8 @@ class SolicitarDocumentosWhatsAppJob implements ShouldQueue
                 $this->idCotizacion,
                 $clienteNombre,
                 $cargaCode,
-                $steps
+                $steps,
+                $telefonoCliente
             );
         } catch (\Throwable $e) {
             Log::error('SolicitarDocumentosWhatsAppJob error: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);

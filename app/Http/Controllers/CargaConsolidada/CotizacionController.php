@@ -303,9 +303,9 @@ class CotizacionController extends Controller
                     'estado' => $cotizacion->estado,
                     'estado_cliente' => $cotizacion->name,
                     'estado_cotizador' => $cotizacion->estado_cotizador,
-                    'cotizacion_contrato_autosigned_url' => $cotizacion->cotizacion_contrato_autosigned_url ? $this->generateImageUrl($cotizacion->cotizacion_contrato_autosigned_url) : null,
-                    'cotizacion_contrato_firmado_url' => $cotizacion->cotizacion_contrato_firmado_url ? $this->generateImageUrl($cotizacion->cotizacion_contrato_firmado_url) : null,
-                    'cotizacion_contrato_url' => $cotizacion->cotizacion_contrato_url ? $this->generateImageUrl($cotizacion->cotizacion_contrato_url) : null,
+                    'cotizacion_contrato_autosigned_url' => $this->cdnStorageUrl($cotizacion->cotizacion_contrato_autosigned_url),
+                    'cotizacion_contrato_firmado_url' => $this->cdnStorageUrl($cotizacion->cotizacion_contrato_firmado_url),
+                    'cotizacion_contrato_url' => $this->cdnStorageUrl($cotizacion->cotizacion_contrato_url),
                     'cod_contract' => $cotizacion->cod_contract,
                     'monto' => $cotizacion->monto,
                     'monto_final' => $cotizacion->monto_final,
@@ -2894,11 +2894,14 @@ class CotizacionController extends Controller
                     $filename = 'contrato_cotizacion_' . $cotizacion->id . '_' . time() . '_' . $safeName . '.pdf';
                     $storageRelative = 'contratos/' . $filename;
 
-                    $this->storagePutContents($storageRelative, $pdfContent);
+                    $cdnDbPath = $this->storagePutContentsForCdn($storageRelative, $pdfContent);
 
                     try {
-                        $cotizacion->update(['cotizacion_contrato_url' => $storageRelative]);
-                        Log::info('Contrato guardado en storage: ' . $storageRelative);
+                        $cotizacion->update(['cotizacion_contrato_url' => $cdnDbPath]);
+                        Log::info('Contrato guardado en storage', [
+                            'upload_path' => $storageRelative,
+                            'cdn_db_path' => $cdnDbPath,
+                        ]);
                     } catch (Exception $e) {
                         Log::error('No se pudo actualizar cotizacion_contrato_url: ' . $e->getMessage());
                     }

@@ -85,6 +85,9 @@
         <p class="title">Solicitud de documentación</p>
         <p class="subtitle">
             Consolidado #{{ $cargaCode }} — Hola {{ $clienteNombre }}, te compartimos la misma información enviada por WhatsApp.
+            @if(!empty($clienteTelefono))
+                <br>Teléfono del cliente: {{ $clienteTelefono }}
+            @endif
         </p>
 
         @foreach($steps as $step)

@@ -24,17 +24,21 @@ class SolicitarDocumentosEmailJob implements ShouldQueue
     /** @var string */
     protected $cargaCode;
 
+    /** @var string */
+    protected $clienteTelefono;
+
     /** @var array */
     protected $steps;
 
     /**
      * @param  array<int, array<string, mixed>>  $steps
      */
-    public function __construct(int $idCotizacion, string $clienteNombre, string $cargaCode, array $steps)
+    public function __construct(int $idCotizacion, string $clienteNombre, string $cargaCode, array $steps, string $clienteTelefono = '')
     {
         $this->idCotizacion = $idCotizacion;
         $this->clienteNombre = $clienteNombre;
         $this->cargaCode = $cargaCode;
+        $this->clienteTelefono = $clienteTelefono;
         $this->steps = $steps;
         $this->onQueue('notificaciones');
     }
@@ -44,7 +48,7 @@ class SolicitarDocumentosEmailJob implements ShouldQueue
         try {
             $this->sendMailTo(
                 env('COORDINATION_EMAIL'),
-                new SolicitarDocumentosMail($this->clienteNombre, $this->cargaCode, $this->steps)
+                new SolicitarDocumentosMail($this->clienteNombre, $this->cargaCode, $this->steps, $this->clienteTelefono)
             );
 
             Log::info('SolicitarDocumentosEmailJob: email enviado', [

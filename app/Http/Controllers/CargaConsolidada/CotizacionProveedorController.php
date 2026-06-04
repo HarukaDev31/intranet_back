@@ -3614,8 +3614,8 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
             'success' => true,
             'message' => 'Contrato de servicio no firmado',
             'data' => [
-                'cotizacion_contrato_url' => $this->generateImageUrl($cotizacion->cotizacion_contrato_url),
-                'cotizacion_contrato_firmado_url' => $this->generateImageUrl($cotizacion->cotizacion_contrato_firmado_url),
+                'cotizacion_contrato_url' => $this->cdnStorageUrl($cotizacion->cotizacion_contrato_url),
+                'cotizacion_contrato_firmado_url' => $this->cdnStorageUrl($cotizacion->cotizacion_contrato_firmado_url),
                 'uuid' => $cotizacion->uuid,
                 'cod_contrato' => $cotizacion->cod_contract
             ]
@@ -3704,19 +3704,25 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                 Log::info('Renderizado PDF firmado completado en ' . round($duration, 2) . 's para cotizacion ' . $cotizacion->id);
 
                 $pdfContent = $dompdf->output();
-                $this->storagePutContents($relativePath, $pdfContent);
+
+                if ($pdfContent === '' || $pdfContent === false) {
+                    throw new \RuntimeException('DomPDF no generó el contrato firmado');
+                }
+
+                $uploadPath = $relativePath;
+                $cdnDbPath = $this->storagePutContentsForCdn($uploadPath, $pdfContent);
                 $filename = $pdfFilename;
             } else {
                 $filename = $uuid . '_signed_contract.pdf';
-                $relativePath = $this->storageStoreUpload(
+                $uploadPath = $this->storageStoreUpload(
                     $signedFile,
                     'contratos',
                     $filename
                 );
+                $cdnDbPath = $this->storageFinalizeCdnPath($uploadPath);
             }
 
-            // Guardar ruta relativa en la base de datos
-            $cotizacion->cotizacion_contrato_firmado_url = $relativePath;
+            $cotizacion->cotizacion_contrato_firmado_url = $cdnDbPath;
             $cotizacion->save();
             // Enviar mensaje de WhatsApp con el contrato firmado
             $telefono = $cotizacion->telefono;
@@ -3725,7 +3731,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
 
             $message = 'Hola ' . $cotizacion->nombre . ', te envío el contrato de servicio firmado.';
 
-            $finalFilePath = $this->storageLocalPath($relativePath);
+            $finalFilePath = $this->storageLocalPath($uploadPath);
             $fileName = 'contrato_' . $cotizacion->cod_contract . '.pdf';
             $this->sendMedia($finalFilePath, 'application/pdf', $message, $telefono, 10, 'ventas', $fileName);
 
@@ -3735,7 +3741,8 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                 'cotizacion_id' => $cotizacion->id,
                 'mime_type' => $mimeType,
                 'is_image' => $isImage,
-                'relative_path' => $relativePath,
+                'upload_path' => $uploadPath,
+                'cdn_db_path' => $cdnDbPath,
                 'final_file_path' => $finalFilePath
             ]);
 
@@ -3743,7 +3750,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                 'success' => true,
                 'message' => 'Contrato de servicio firmado correctamente',
                 'data' => [
-                    'signed_contract_url' => $this->generateImageUrl($relativePath)
+                    'signed_contract_url' => $this->cdnStorageUrl($cdnDbPath)
                 ]
             ]);
         } catch (\Exception $e) {

@@ -16,16 +16,20 @@ class SolicitarDocumentosMail extends Mailable
     /** @var string */
     public $cargaCode;
 
+    /** @var string */
+    public $clienteTelefono;
+
     /** @var array<int, array<string, mixed>> */
     public $steps;
 
     /**
      * @param  array<int, array<string, mixed>>  $steps  Bloques en orden: type=text|file
      */
-    public function __construct(string $clienteNombre, string $cargaCode, array $steps)
+    public function __construct(string $clienteNombre, string $cargaCode, array $steps, string $clienteTelefono = '')
     {
         $this->clienteNombre = $clienteNombre;
         $this->cargaCode = $cargaCode;
+        $this->clienteTelefono = $clienteTelefono;
         $this->steps = $steps;
     }
 
@@ -35,6 +39,7 @@ class SolicitarDocumentosMail extends Mailable
             ->view('emails.solicitar_documentos')
             ->with([
                 'clienteNombre' => $this->clienteNombre,
+                'clienteTelefono' => $this->clienteTelefono,
                 'cargaCode' => $this->cargaCode,
                 'steps' => $this->steps,
             ]);

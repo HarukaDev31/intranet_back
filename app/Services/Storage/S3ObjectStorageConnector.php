@@ -94,14 +94,40 @@ class S3ObjectStorageConnector implements ObjectStorageConnectorInterface
     public function put(string $relativePath, $contents): bool
     {
         $relativePath = ltrim($relativePath, '/');
+        $disk = $this->uploadDisk();
 
-        return Storage::disk($this->uploadDisk())->put($relativePath, $contents);
+        try {
+            $ok = Storage::disk($disk)->put($relativePath, $contents);
+        } catch (\Throwable $e) {
+            Log::error('S3ObjectStorageConnector: put falló', [
+                'disk' => $disk,
+                'path' => $relativePath,
+                'error' => $e->getMessage(),
+            ]);
+
+            throw new RuntimeException(
+                'No se pudo subir el archivo (' . $disk . '): ' . $e->getMessage(),
+                0,
+                $e
+            );
+        }
+
+        if ($ok === false) {
+            Log::error('S3ObjectStorageConnector: put devolvió false', [
+                'disk' => $disk,
+                'path' => $relativePath,
+            ]);
+
+            throw new RuntimeException('No se pudo subir el archivo (' . $disk . '): ' . $relativePath);
+        }
+
+        return true;
     }
 
     public function exists(string $relativePath): bool
     {
-        if ($relativePath === '' || filter_var($relativePath, FILTER_VALIDATE_URL)) {
-            return filter_var($relativePath, FILTER_VALIDATE_URL) !== false;
+        if ($relativePath === '') {
+            return false;
         }
 
         $relativePath = $this->normalizeRelativePath($relativePath);
@@ -156,20 +182,15 @@ class S3ObjectStorageConnector implements ObjectStorageConnectorInterface
             return null;
         }
 
-        $cdnUrl = $this->cdnUrlForRelativePath($relativePath);
-        if ($cdnUrl !== null) {
-            return $cdnUrl;
-        }
-
         $disk = $this->diskForPath($relativePath);
 
         if ($disk === null) {
-            return $this->legacyAppStorageUrl($relativePath);
+            return null;
         }
 
         if ($disk === 's3') {
-            if ($this->cdnBaseUrl() !== '') {
-                return $this->buildCdnUrl($relativePath);
+            if ($this->shouldServeViaCdn()) {
+                return $this->buildCdnUrl($this->cdnRelativePath($relativePath));
             }
 
             try {
@@ -185,7 +206,7 @@ class S3ObjectStorageConnector implements ObjectStorageConnectorInterface
         }
 
         if ($disk === 'public') {
-            if ($this->cdnBaseUrl() !== '' && $this->uploadDisk() === 's3') {
+            if ($this->shouldServeViaCdn()) {
                 return $this->buildCdnUrl($relativePath);
             }
 
@@ -202,11 +223,6 @@ class S3ObjectStorageConnector implements ObjectStorageConnectorInterface
             throw new RuntimeException('Ruta de archivo inválida.');
         }
 
-        $cdnUrl = $this->cdnUrlForRelativePath($relativePath);
-        if ($cdnUrl !== null) {
-            return $cdnUrl;
-        }
-
         $disk = $this->diskForPath($relativePath);
 
         if ($disk === null) {
@@ -216,12 +232,8 @@ class S3ObjectStorageConnector implements ObjectStorageConnectorInterface
         $minutes = $minutes ?? (int) config('object_storage.signed_url_minutes', 120);
 
         if ($disk === 's3') {
-            if ($this->cdnBaseUrl() !== '') {
-                $cdnRelative = isset($this->bareS3Keys[$relativePath])
-                    ? $this->bareS3Keys[$relativePath]
-                    : $relativePath;
-
-                return $this->buildCdnUrl($cdnRelative);
+            if ($this->shouldServeViaCdn()) {
+                return $this->buildCdnUrl($this->cdnRelativePath($relativePath));
             }
 
             if (isset($this->bareS3Keys[$relativePath])) {
@@ -369,7 +381,7 @@ class S3ObjectStorageConnector implements ObjectStorageConnectorInterface
 
     public function diskForPath(string $relativePath): ?string
     {
-        if ($relativePath === '' || filter_var($relativePath, FILTER_VALIDATE_URL)) {
+        if ($relativePath === '') {
             return null;
         }
 
@@ -643,17 +655,24 @@ class S3ObjectStorageConnector implements ObjectStorageConnectorInterface
         return rtrim((string) config('object_storage.cdn_base_url', ''), '/');
     }
 
-    private function cdnUrlForRelativePath(string $relativePath): ?string
+    private function shouldServeViaCdn(): bool
     {
         if ($this->cdnBaseUrl() === '') {
-            return null;
+            return false;
         }
 
         if (config('object_storage.cdn_when_upload_disk_s3', true) && $this->uploadDisk() !== 's3') {
-            return null;
+            return false;
         }
 
-        return $this->buildCdnUrl($relativePath);
+        return true;
+    }
+
+    private function cdnRelativePath(string $relativePath): string
+    {
+        return isset($this->bareS3Keys[$relativePath])
+            ? $this->bareS3Keys[$relativePath]
+            : $relativePath;
     }
 
     private function buildCdnUrl(string $relativePath): string
