@@ -552,6 +552,32 @@ class WaCopilotoConversationService
         return $digits;
     }
 
+    /**
+     * @param  string  $phone
+     * @return bool
+     */
+    public function isPhoneAllowedForCopilotoAnalysis($phone)
+    {
+        $raw = trim((string) config('meta_whatsapp_copiloto.analysis_allowed_phones', '51912705923'));
+        if ($raw === '' || $raw === '*' || strtolower($raw) === 'all') {
+            return true;
+        }
+
+        $target = $this->normalizePhoneE164($phone);
+        if ($target === '') {
+            return false;
+        }
+
+        foreach (explode(',', $raw) as $entry) {
+            $allowed = $this->normalizePhoneE164(trim($entry));
+            if ($allowed !== '' && $allowed === $target) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private function formatPhoneDisplay($phoneE164)
     {
         $d = preg_replace('/\D+/', '', (string) $phoneE164);

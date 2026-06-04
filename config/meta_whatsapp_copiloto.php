@@ -110,4 +110,10 @@ return [
 
     'analysis_context_messages' => (int) env('META_WHATSAPP_COPILOTO_ANALYSIS_CONTEXT_MESSAGES', 12),
 
+    /**
+     * Teléfonos permitidos para análisis IA (CSV, E.164 sin +). Use * o all para todos.
+     * Ej: 51912705923 o 51912705923,51999888777
+     */
+    'analysis_allowed_phones' => env('META_WHATSAPP_COPILOTO_ANALYSIS_ALLOWED_PHONES', '51912705923'),
+
 ];

@@ -16,9 +16,13 @@ class WaCopilotoMessageAnalysisService
     /** @var GeminiService */
     protected $gemini;
 
-    public function __construct(GeminiService $gemini)
+    /** @var WaCopilotoConversationService */
+    protected $conversationService;
+
+    public function __construct(GeminiService $gemini, WaCopilotoConversationService $conversationService)
     {
         $this->gemini = $gemini;
+        $this->conversationService = $conversationService;
     }
 
     /**
@@ -40,6 +44,15 @@ class WaCopilotoMessageAnalysisService
 
         $conversation = $message->conversation;
         if (!$conversation) {
+            return null;
+        }
+
+        if (!$this->conversationService->isPhoneAllowedForCopilotoAnalysis((string) $conversation->phone_e164)) {
+            WaCopilotoLog::info('analysis.skipped_phone_not_allowed', [
+                'message_id' => (int) $message->id,
+                'phone_e164' => (string) $conversation->phone_e164,
+            ]);
+
             return null;
         }
 

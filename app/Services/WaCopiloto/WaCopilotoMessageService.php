@@ -310,7 +310,10 @@ class WaCopilotoMessageService
         $this->conversationService->refreshHeaderFromMessage($conversation, $message, true);
         $this->broadcastMessageCreated($message, $conversation);
 
-        if (config('meta_whatsapp_copiloto.analysis_enabled', true)) {
+        if (
+            config('meta_whatsapp_copiloto.analysis_enabled', true)
+            && $this->conversationService->isPhoneAllowedForCopilotoAnalysis($phoneE164)
+        ) {
             AnalyzeWaCopilotoInboundMessageJob::dispatch(
                 (int) $message->id,
                 WaCopilotoJobContext::resolveJobDomain()
