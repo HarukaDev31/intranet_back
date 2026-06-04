@@ -41,7 +41,7 @@ return [
     'cdn_base_url' => rtrim((string) env('OBJECT_STORAGE_CDN_URL', env('AWS_CDN_URL', '')), '/'),
 
     /** Si true, la URL CDN incluye AWS_UPLOAD_PREFIX antes de la ruta relativa de BD */
-    'cdn_include_s3_prefix' => env('OBJECT_STORAGE_CDN_INCLUDE_PREFIX', true),
+    'cdn_include_s3_prefix' => env('OBJECT_STORAGE_CDN_INCLUDE_PREFIX', false),
 
     /** Usar CDN cuando FILESYSTEM_UPLOAD_DISK=s3 (aunque el objeto aún esté solo en disco legacy) */
     'cdn_when_upload_disk_s3' => env('OBJECT_STORAGE_CDN_WHEN_S3', true),
