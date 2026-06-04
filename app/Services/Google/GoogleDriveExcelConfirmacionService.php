@@ -56,7 +56,7 @@ class GoogleDriveExcelConfirmacionService
     }
 
     /**
-     * @return string|null URL pública view?usp=sharing
+     * @return string|null URL pública edit?usp=sharing
      */
     public function uploadForProveedor(
         string $cargaCode,
@@ -193,9 +193,9 @@ class GoogleDriveExcelConfirmacionService
             $fileId = (string) $file->getId();
         }
 
-        $this->ensureAnyoneReader($fileId);
+        $this->ensureAnyoneWriter($fileId);
 
-        return 'https://drive.google.com/file/d/' . $fileId . '/view?usp=sharing';
+        return 'https://drive.google.com/file/d/' . $fileId . '/edit?usp=sharing';
     }
 
     private function findFileId(string $folderId, string $fileName): ?string
@@ -223,16 +223,36 @@ class GoogleDriveExcelConfirmacionService
         return $query;
     }
 
-    private function ensureAnyoneReader(string $fileId): void
+    private function ensureAnyoneWriter(string $fileId): void
     {
         try {
+            $list = $this->drive->permissions->listPermissions(
+                $fileId,
+                array_merge($this->driveWriteParams(), ['fields' => 'permissions(id,type,role)'])
+            );
+
+            foreach ($list->getPermissions() as $perm) {
+                if ($perm->getType() === 'anyone') {
+                    if ($perm->getRole() !== 'writer') {
+                        $this->drive->permissions->update(
+                            $fileId,
+                            (string) $perm->getId(),
+                            new Permission(['role' => 'writer']),
+                            $this->driveWriteParams()
+                        );
+                    }
+
+                    return;
+                }
+            }
+
             $permission = new Permission([
                 'type' => 'anyone',
-                'role' => 'reader',
+                'role' => 'writer',
             ]);
             $this->drive->permissions->create($fileId, $permission, $this->driveWriteParams());
         } catch (\Throwable $e) {
-            Log::debug('GoogleDriveExcelConfirmacionService: permiso Drive', [
+            Log::debug('GoogleDriveExcelConfirmacionService: permiso Drive editable', [
                 'file_id' => $fileId,
                 'error' => $e->getMessage(),
             ]);
