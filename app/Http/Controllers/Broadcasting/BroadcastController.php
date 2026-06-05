@@ -24,6 +24,7 @@ class BroadcastController extends Controller
         'private-Documentacion-notifications' => 'Documentacion',
         'private-Coordinacion-notifications' => 'Coordinación',
         'private-whatsapp-inbox.coordinacion' => 'Coordinación',
+        'private-whatsapp-copiloto.ventas' => '__wa_copiloto_ventas__',
         'private-ContenedorAlmacen-notifications' => 'ContenedorAlmacen',
         'private-CatalogoChina-notifications' => 'CatalogoChina',
         'private-Administracion-notifications' => 'Administración',
@@ -129,7 +130,20 @@ class BroadcastController extends Controller
             // Verificar si el canal está en nuestra lista de canales configurados (por rol)
             if (isset($this->CHANNELS[$channelName])) {
                 $requiredRole = $this->CHANNELS[$channelName];
-                
+
+                if ($requiredRole === '__wa_copiloto_ventas__') {
+                    if (!$this->usuarioPuedeAccederWaCopilotoVentas($user)) {
+                        Log::error('User not authorized for wa-copiloto channel', [
+                            'user_id' => $user->ID_Usuario,
+                            'channel' => $channelName,
+                            'user_grupo' => $user->grupo ? $user->grupo->No_Grupo : 'Sin grupo',
+                        ]);
+                        return response()->json(['message' => 'No autorizado para este canal'], 403);
+                    }
+
+                    return response()->json($this->pusherAuthPayload($request, $channelName));
+                }
+
                 if (
                     !$user->grupo
                     || trim((string) $user->grupo->No_Grupo) !== trim((string) $requiredRole)
@@ -143,16 +157,7 @@ class BroadcastController extends Controller
                     return response()->json(['message' => 'No autorizado para este canal'], 403);
                 }
 
-                // Generar la firma de autenticación manualmente
-                $signature = hash_hmac(
-                    'sha256',
-                    $request->socket_id . ':' . $channelName,
-                    config('broadcasting.connections.pusher.secret')
-                );
-
-                return response()->json([
-                    'auth' => config('broadcasting.connections.pusher.key') . ':' . $signature
-                ]);
+                return response()->json($this->pusherAuthPayload($request, $channelName));
             }
 
             // Para otros canales, usar el método estándar de Laravel
@@ -190,6 +195,57 @@ class BroadcastController extends Controller
     /**
      * Misma regla que SoporteTiService: PM/Soporte ven todas; resto solo sus solicitudes.
      *
+     * @param \App\Models\Usuario $user
+     * @param string $chatUuid
+     * @return bool
+     */
+    /**
+     * Misma regla que routes/channels.php → whatsapp-copiloto.ventas
+     *
+     * @param \App\Models\Usuario $user
+     * @return bool
+     */
+    protected function usuarioPuedeAccederWaCopilotoVentas($user)
+    {
+        if (!$user) {
+            return false;
+        }
+
+        if (!$user->grupo) {
+            return (int) $user->getIdUsuario() === 28791;
+        }
+
+        $grupo = $user->grupo->No_Grupo;
+        if (
+            $grupo === Usuario::ROL_COTIZADOR
+            || $grupo === Usuario::ROL_ADMINISTRACION
+            || $grupo === Usuario::ROL_GERENCIA
+        ) {
+            return true;
+        }
+
+        return (int) $user->getIdUsuario() === 28791;
+    }
+
+    /**
+     * @param \Illuminate\Http\Request $request
+     * @param string $channelName
+     * @return array<string, string>
+     */
+    protected function pusherAuthPayload(Request $request, $channelName)
+    {
+        $signature = hash_hmac(
+            'sha256',
+            $request->socket_id . ':' . $channelName,
+            config('broadcasting.connections.pusher.secret')
+        );
+
+        return [
+            'auth' => config('broadcasting.connections.pusher.key') . ':' . $signature,
+        ];
+    }
+
+    /**
      * @param \App\Models\Usuario $user
      * @param string $chatUuid
      * @return bool
