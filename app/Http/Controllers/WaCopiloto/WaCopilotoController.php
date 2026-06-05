@@ -11,7 +11,7 @@ use App\Services\WaCopiloto\WaCopilotoMessageService;
 use App\Services\WaCopiloto\WaCopilotoSessionService;
 use App\Services\WaCopiloto\WaCopilotoTemplateService;
 use App\Services\WaCopiloto\WaCopilotoMediaUploadService;
-use App\Services\WaCopiloto\WaCopilotoWindowService;
+use App\Services\WaCopiloto\WaCopilotoSuggestionUsageService;
 use App\Support\WhatsApp\CoordinacionMediaLink;
 use App\Support\WhatsApp\WaCopilotoJobContext;
 use App\Support\WhatsApp\WaCopilotoLog;
@@ -762,5 +762,42 @@ class WaCopilotoController extends Controller
         }
 
         return 'document';
+    }
+
+    public function suggestionUsages(Request $request, $id)
+    {
+        try {
+            $service = app(WaCopilotoSuggestionUsageService::class);
+
+            return response()->json(
+                $service->listForConversation((int) $id, (int) $request->query('limit', 30))
+            );
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al listar historial: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function recordSuggestionUsage(Request $request, $id)
+    {
+        try {
+            $user = JWTAuth::parseToken()->authenticate();
+            $userId = $user ? (int) $user->getIdUsuario() : null;
+            $service = app(WaCopilotoSuggestionUsageService::class);
+            $result = $service->record((int) $id, $request->all(), $userId);
+
+            if (empty($result['success'])) {
+                return response()->json($result, 422);
+            }
+
+            return response()->json($result);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al registrar sugerencia: ' . $e->getMessage(),
+            ], 500);
+        }
     }
 }

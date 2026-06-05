@@ -102,7 +102,8 @@ class CopilotoService
     {
         $ficha = CopilotoFicha::query()
             ->where('phone', $phone)
-            ->orderByDesc('created_at')
+            ->orderByDesc('updated_at')
+            ->orderByDesc('id')
             ->first();
 
         return [

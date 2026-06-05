@@ -29,6 +29,8 @@ Route::group([
     Route::patch('/conversations/{id}/assign', [WaCopilotoController::class, 'assign']);
     Route::patch('/conversations/{id}/contact-name', [WaCopilotoController::class, 'renameContact']);
     Route::patch('/conversations/{id}/read', [WaCopilotoController::class, 'markRead']);
+    Route::get('/conversations/{id}/suggestion-usages', [WaCopilotoController::class, 'suggestionUsages']);
+    Route::post('/conversations/{id}/suggestion-usages', [WaCopilotoController::class, 'recordSuggestionUsage']);
     Route::get('/templates', [WaCopilotoController::class, 'templates']);
     Route::get('/users/assignable', [WaCopilotoController::class, 'assignableUsers']);
 });

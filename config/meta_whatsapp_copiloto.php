@@ -108,7 +108,35 @@ return [
 
     'analysis_queue' => env('META_WHATSAPP_COPILOTO_ANALYSIS_QUEUE', env('META_WHATSAPP_COPILOTO_QUEUE', env('META_WHATSAPP_QUEUE', 'notificaciones'))),
 
+    /** @deprecated Use analysis_context_days + analysis_recent_messages */
     'analysis_context_messages' => (int) env('META_WHATSAPP_COPILOTO_ANALYSIS_CONTEXT_MESSAGES', 12),
+
+    /** Ventana temporal del chat incluido en el prompt (días). */
+    'analysis_context_days' => (int) env('META_WHATSAPP_COPILOTO_ANALYSIS_CONTEXT_DAYS', 14),
+
+    /** Mensajes recientes enviados casi completos al prompt. */
+    'analysis_recent_messages' => (int) env('META_WHATSAPP_COPILOTO_ANALYSIS_RECENT_MESSAGES', 8),
+
+    /** Mensajes más antiguos (dentro de la ventana) comprimidos a 1 línea c/u. */
+    'analysis_compact_messages' => (int) env('META_WHATSAPP_COPILOTO_ANALYSIS_COMPACT_MESSAGES', 6),
+
+    /** Tope aproximado de caracteres del bloque de contexto (sin contar meta/ficha). */
+    'analysis_max_context_chars' => (int) env('META_WHATSAPP_COPILOTO_ANALYSIS_MAX_CONTEXT_CHARS', 3200),
+
+    /** Máximo por línea de mensaje en contexto reciente. */
+    'analysis_max_line_chars' => (int) env('META_WHATSAPP_COPILOTO_ANALYSIS_MAX_LINE_CHARS', 260),
+
+    /** Resumen acumulado reutilizable entre análisis (chars). */
+    'analysis_summary_max_chars' => (int) env('META_WHATSAPP_COPILOTO_ANALYSIS_SUMMARY_MAX_CHARS', 320),
+
+    /** Peso EMA del puntaje nuevo vs histórico (0.15–0.75). */
+    'analysis_lead_score_ema_alpha' => (float) env('META_WHATSAPP_COPILOTO_ANALYSIS_LEAD_SCORE_EMA_ALPHA', 0.4),
+
+    /** Días sin mensaje del cliente antes de aplicar decaimiento al puntaje. */
+    'analysis_score_decay_after_days' => (int) env('META_WHATSAPP_COPILOTO_ANALYSIS_SCORE_DECAY_AFTER_DAYS', 7),
+
+    /** Tokens máximos de salida Gemini por análisis. */
+    'analysis_gemini_max_output_tokens' => (int) env('META_WHATSAPP_COPILOTO_ANALYSIS_GEMINI_MAX_OUTPUT_TOKENS', 1024),
 
     /**
      * Teléfonos permitidos para análisis IA (CSV, E.164 sin +). Use * o all para todos.

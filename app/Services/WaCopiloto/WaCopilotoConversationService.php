@@ -2,6 +2,7 @@
 
 namespace App\Services\WaCopiloto;
 
+use App\Models\Copiloto\CopilotoFicha;
 use App\Models\Grupo;
 use App\Models\Usuario;
 use App\Models\WaCopiloto\WaCopilotoConversation;
@@ -59,9 +60,18 @@ class WaCopilotoConversationService
         }
 
         $paginated = $query->paginate($perPage);
+        $items = $paginated->items();
+        $phonesNeedingFallback = [];
+        foreach ($items as $conv) {
+            if ($conv->ai_temperatura === null) {
+                $phonesNeedingFallback[] = (string) $conv->phone_e164;
+            }
+        }
+        $fichaTemperaturaByPhone = $this->loadLatestFichaTemperaturas($phonesNeedingFallback);
+
         $rows = [];
-        foreach ($paginated->items() as $conv) {
-            $rows[] = $this->formatConversation($conv);
+        foreach ($items as $conv) {
+            $rows[] = $this->formatConversation($conv, $fichaTemperaturaByPhone);
         }
 
         $includeRaw = isset($params['include_contacts'])
@@ -105,9 +115,10 @@ class WaCopilotoConversationService
 
     /**
      * @param  WaCopilotoConversation  $conversation
+     * @param  array<string, int>  $fichaTemperaturaByPhone
      * @return array<string, mixed>
      */
-    public function formatConversation(WaCopilotoConversation $conversation)
+    public function formatConversation(WaCopilotoConversation $conversation, array $fichaTemperaturaByPhone = [])
     {
         $window = $this->windowService->computeWindowState($conversation);
         $name = WaJsonUtf8::sanitizeString(trim((string) $conversation->contact_name));
@@ -127,6 +138,7 @@ class WaCopilotoConversationService
         $timeLabel = $conversation->last_message_at
             ? Carbon::parse($conversation->last_message_at)->format('H:i')
             : '';
+        $temperatura = $this->resolveConversationTemperatura($conversation, $fichaTemperaturaByPhone);
 
         return [
             'id' => (int) $conversation->id,
@@ -154,7 +166,56 @@ class WaCopilotoConversationService
             'can_send_text' => $window['can_send_text'],
             'channel_label' => WaJsonUtf8::sanitizeString((string) $conversation->channel_label),
             'status' => $conversation->status,
+            'temperatura' => $temperatura,
+            'ai_temperatura_at' => $conversation->ai_temperatura_at,
         ];
+    }
+
+    /**
+     * @param  WaCopilotoConversation  $conversation
+     * @param  array<string, int>  $fichaTemperaturaByPhone
+     * @return int|null
+     */
+    protected function resolveConversationTemperatura(WaCopilotoConversation $conversation, array $fichaTemperaturaByPhone = [])
+    {
+        if ($conversation->ai_temperatura !== null) {
+            return max(0, min(100, (int) $conversation->ai_temperatura));
+        }
+
+        $phone = (string) $conversation->phone_e164;
+        if ($phone !== '' && isset($fichaTemperaturaByPhone[$phone])) {
+            return max(0, min(100, (int) $fichaTemperaturaByPhone[$phone]));
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  array<int, string>  $phones
+     * @return array<string, int>
+     */
+    protected function loadLatestFichaTemperaturas(array $phones)
+    {
+        $phones = array_values(array_unique(array_filter(array_map('strval', $phones))));
+        if (empty($phones)) {
+            return [];
+        }
+
+        $rows = CopilotoFicha::query()
+            ->whereIn('phone', $phones)
+            ->orderByDesc('updated_at')
+            ->orderByDesc('id')
+            ->get(['phone', 'temperatura']);
+
+        $map = [];
+        foreach ($rows as $row) {
+            $phone = (string) $row->phone;
+            if ($phone !== '' && !isset($map[$phone])) {
+                $map[$phone] = (int) $row->temperatura;
+            }
+        }
+
+        return $map;
     }
 
     /**

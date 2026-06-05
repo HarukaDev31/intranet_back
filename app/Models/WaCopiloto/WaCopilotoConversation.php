@@ -28,6 +28,10 @@ class WaCopilotoConversation extends Model
         'last_message_type',
         'last_message_delivery_status',
         'last_direction',
+        'ai_context_summary',
+        'ai_summary_through_message_id',
+        'ai_temperatura',
+        'ai_temperatura_at',
     ];
 
     protected $casts = [
@@ -35,7 +39,10 @@ class WaCopilotoConversation extends Model
         'last_customer_message_at' => 'datetime',
         'window_expires_at' => 'datetime',
         'last_message_at' => 'datetime',
+        'ai_temperatura_at' => 'datetime',
         'unread_count' => 'integer',
+        'ai_temperatura' => 'integer',
+        'ai_summary_through_message_id' => 'integer',
     ];
 
     public function session()

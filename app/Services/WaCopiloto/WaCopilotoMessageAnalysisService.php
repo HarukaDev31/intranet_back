@@ -19,10 +19,17 @@ class WaCopilotoMessageAnalysisService
     /** @var WaCopilotoConversationService */
     protected $conversationService;
 
-    public function __construct(GeminiService $gemini, WaCopilotoConversationService $conversationService)
-    {
+    /** @var WaCopilotoConversationContextService */
+    protected $contextService;
+
+    public function __construct(
+        GeminiService $gemini,
+        WaCopilotoConversationService $conversationService,
+        WaCopilotoConversationContextService $contextService
+    ) {
         $this->gemini = $gemini;
         $this->conversationService = $conversationService;
+        $this->contextService = $contextService;
     }
 
     /**
@@ -64,16 +71,16 @@ class WaCopilotoMessageAnalysisService
             return null;
         }
 
-        $contextLimit = max(4, min(30, (int) config('meta_whatsapp_copiloto.analysis_context_messages', 12)));
-        $contextLines = $this->buildConversationContext((int) $conversation->id, (int) $message->id, $contextLimit);
+        $context = $this->contextService->buildForAnalysis($conversation, (int) $message->id);
 
         $contactName = trim((string) $conversation->contact_name);
         if ($contactName === '') {
             $contactName = (string) $conversation->phone_e164;
         }
 
-        $prompt = $this->buildPrompt($contactName, $contextLines, $body, (string) $message->message_type);
-        $gemini = $this->gemini->analyzeTextAsJson($prompt, 2048, 0.25);
+        $prompt = $this->buildPrompt($contactName, $context, $body, (string) $message->message_type);
+        $maxTokens = max(512, min(4096, (int) config('meta_whatsapp_copiloto.analysis_gemini_max_output_tokens', 1024)));
+        $gemini = $this->gemini->analyzeTextAsJson($prompt, $maxTokens, 0.25);
 
         if (empty($gemini['success']) || !is_array($gemini['data'])) {
             WaCopilotoLog::warning('analysis.gemini_failed', [
@@ -91,15 +98,34 @@ class WaCopilotoMessageAnalysisService
         }
 
         $phone = (string) $conversation->phone_e164;
-        $temperaturaLead = $this->clampScore(isset($parsed['temperatura_lead']) ? $parsed['temperatura_lead'] : null);
         $temperaturaMensaje = $this->clampScore(isset($parsed['temperatura_mensaje']) ? $parsed['temperatura_mensaje'] : null);
+        $geminiLead = $this->clampScore(isset($parsed['temperatura_lead']) ? $parsed['temperatura_lead'] : null);
+        $temperaturaLead = $this->contextService->blendLeadScore(
+            $context['previous_lead_score'],
+            $geminiLead,
+            $temperaturaMensaje,
+            isset($context['stats']['hours_since_last_inbound']) ? $context['stats']['hours_since_last_inbound'] : null
+        );
         $nivel = $this->resolveNivel(isset($parsed['nivel']) ? $parsed['nivel'] : null, $temperaturaLead);
         $senales = $this->normalizeSignals(isset($parsed['senales']) ? $parsed['senales'] : []);
         $objecion = trim((string) ($parsed['objecion'] ?? ''));
         $sugerencia = trim((string) ($parsed['sugerencia_principal'] ?? $parsed['sugerencia'] ?? ''));
+        $resumenContexto = trim((string) ($parsed['resumen_contexto'] ?? ''));
 
         $savedInsights = [];
-        DB::transaction(function () use ($message, $conversation, $phone, $items, &$savedInsights) {
+        DB::transaction(function () use (
+            $message,
+            $conversation,
+            $phone,
+            $items,
+            $temperaturaLead,
+            $nivel,
+            $senales,
+            $objecion,
+            $sugerencia,
+            $resumenContexto,
+            &$savedInsights
+        ) {
             $sort = 0;
             foreach ($items as $item) {
                 $row = WaCopilotoMessageInsight::create([
@@ -114,31 +140,42 @@ class WaCopilotoMessageAnalysisService
                 ]);
                 $savedInsights[] = $this->formatInsight($row);
             }
+
+            $sugerenciaCorta = $sugerencia;
+            if (mb_strlen($sugerenciaCorta) > 255) {
+                $sugerenciaCorta = mb_substr($sugerenciaCorta, 0, 252) . '…';
+            }
+
+            $ficha = CopilotoFicha::updateOrCreate(
+                ['phone' => $phone],
+                [
+                    'temperatura' => (int) $temperaturaLead,
+                    'nivel' => $nivel,
+                    'senales' => $senales,
+                    'objecion' => $objecion !== '' ? $objecion : null,
+                    'sugerencia' => $sugerencia !== '' ? $sugerencia : null,
+                    'sugerencia_corta' => $sugerenciaCorta !== '' ? $sugerenciaCorta : null,
+                ]
+            );
+
+            $this->contextService->persistConversationAiState(
+                $conversation,
+                (int) $temperaturaLead,
+                $resumenContexto,
+                (int) $message->id
+            );
         });
 
-        $sugerenciaCorta = $sugerencia;
-        if (mb_strlen($sugerenciaCorta) > 255) {
-            $sugerenciaCorta = mb_substr($sugerenciaCorta, 0, 252) . '…';
-        }
+        $ficha = CopilotoFicha::query()->where('phone', $phone)->first();
 
-        $ficha = CopilotoFicha::create([
-            'phone' => $phone,
-            'temperatura' => $temperaturaLead !== null ? $temperaturaLead : 0,
-            'nivel' => $nivel,
+        $fichaPayload = [
+            'temperatura' => (int) $temperaturaLead,
+            'nivel' => (string) $nivel,
             'senales' => $senales,
             'objecion' => $objecion !== '' ? $objecion : null,
             'sugerencia' => $sugerencia !== '' ? $sugerencia : null,
-            'sugerencia_corta' => $sugerenciaCorta !== '' ? $sugerenciaCorta : null,
-        ]);
-
-        $fichaPayload = [
-            'temperatura' => (int) $ficha->temperatura,
-            'nivel' => (string) $ficha->nivel,
-            'senales' => is_array($ficha->senales) ? $ficha->senales : [],
-            'objecion' => $ficha->objecion,
-            'sugerencia' => $ficha->sugerencia,
-            'sugerencia_corta' => $ficha->sugerencia_corta,
-            'accion_sugerida' => $ficha->sugerencia_corta ?: $ficha->sugerencia,
+            'sugerencia_corta' => $ficha ? $ficha->sugerencia_corta : null,
+            'accion_sugerida' => $ficha && $ficha->sugerencia_corta ? $ficha->sugerencia_corta : $sugerencia,
             'motivo' => $objecion !== '' ? $objecion : (count($senales) ? implode(' · ', array_slice($senales, 0, 2)) : null),
         ];
 
@@ -188,61 +225,45 @@ class WaCopilotoMessageAnalysisService
     }
 
     /**
-     * @param  int  $conversationId
-     * @param  int  $currentMessageId
-     * @param  int  $limit
-     * @return array<int, string>
-     */
-    protected function buildConversationContext($conversationId, $currentMessageId, $limit)
-    {
-        $messages = WaCopilotoMessage::query()
-            ->where('conversation_id', (int) $conversationId)
-            ->where('id', '<=', (int) $currentMessageId)
-            ->orderByDesc('sent_at')
-            ->orderByDesc('id')
-            ->limit($limit)
-            ->get(['direction', 'body', 'message_type', 'sent_at'])
-            ->reverse()
-            ->values();
-
-        $lines = [];
-        foreach ($messages as $msg) {
-            $who = $msg->direction === 'in' ? 'Cliente' : 'Asesor';
-            $text = trim((string) $msg->body);
-            if ($text === '') {
-                $text = '[' . (string) $msg->message_type . ']';
-            }
-            $lines[] = $who . ': ' . $text;
-        }
-
-        return $lines;
-    }
-
-    /**
      * @param  string  $contactName
-     * @param  array<int, string>  $contextLines
+     * @param  array<string, mixed>  $context
      * @param  string  $latestBody
      * @param  string  $messageType
      * @return string
      */
-    protected function buildPrompt($contactName, array $contextLines, $latestBody, $messageType)
+    protected function buildPrompt($contactName, array $context, $latestBody, $messageType)
     {
-        $context = implode("\n", $contextLines);
+        $parts = [];
+        $parts[] = 'Meta: ' . (string) $context['meta'];
+        $parts[] = (string) $context['previous_ficha'];
+
+        if (!empty($context['rolling_summary'])) {
+            $parts[] = 'Resumen previo del hilo: ' . (string) $context['rolling_summary'];
+        }
+        if (!empty($context['compact_block'])) {
+            $parts[] = "Mensajes anteriores (comprimidos):\n" . (string) $context['compact_block'];
+        }
+        if (!empty($context['recent_block'])) {
+            $parts[] = "Mensajes recientes:\n" . (string) $context['recent_block'];
+        }
+
+        $contextBlock = implode("\n\n", $parts);
 
         return 'Eres analista comercial de Probusiness (importaciones desde China / carga consolidada Perú). '
-            . 'Analiza el último mensaje del cliente y el contexto del chat. '
+            . 'Analiza el último mensaje del cliente usando el contexto del chat (ventana temporal acotada). '
             . 'Responde ÚNICAMENTE JSON válido con esta estructura: '
             . '{"temperatura_mensaje":0-100,"temperatura_lead":0-100,"nivel":"caliente|tibio|enfriando|frio",'
             . '"senales":["texto corto"],"objecion":"texto o null","sugerencia_principal":"texto accionable",'
+            . '"resumen_contexto":"máx 280 chars, estado del lead y temas clave del hilo para próximos análisis",'
             . '"items":[{"tipo":"temperatura|comentario|sugerencia","etiqueta":"texto","texto":"texto","puntaje":0-100|null}]}. '
-            . 'Reglas: items debe tener AL MENOS 2 entradas y puede tener varias de cada tipo; '
-            . 'incluye al menos una sugerencia concreta de respuesta para el asesor; '
-            . 'temperatura_mensaje mide solo el último mensaje; temperatura_lead mide el lead global; '
-            . 'textos en español, breves y útiles para ventas. '
+            . 'Reglas: items debe tener AL MENOS 2 entradas; incluye al menos una sugerencia concreta; '
+            . 'temperatura_mensaje = solo el último mensaje; temperatura_lead = estimación global del lead en la ventana; '
+            . 'resumen_contexto debe ser denso y reutilizable (sin repetir mensajes literales); '
+            . 'textos en español, breves. '
             . 'Contacto: ' . $contactName . '. '
-            . 'Tipo último mensaje: ' . $messageType . '. '
-            . 'Contexto reciente:\n' . $context . "\n"
-            . 'Último mensaje a analizar:\n' . $latestBody;
+            . 'Tipo último mensaje: ' . $messageType . ".\n\n"
+            . $contextBlock . "\n\n"
+            . 'Último mensaje a analizar (prioridad máxima):\n' . $latestBody;
     }
 
     /**
