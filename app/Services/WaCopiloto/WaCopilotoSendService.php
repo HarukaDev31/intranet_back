@@ -177,6 +177,8 @@ class WaCopilotoSendService
             $json = $response->json();
             WaCopilotoLog::error('sendText.meta_http_error', [
                 'phone_e164' => $phoneE164,
+                'phone_number_id' => $phoneNumberId,
+                'token_source' => env('META_WHATSAPP_COPILOTO_ACCESS_TOKEN') ? 'copiloto_env' : 'inbox_fallback',
                 'status' => $response->status(),
                 'body' => WaCopilotoLog::sanitizePayload(is_array($json) ? $json : $response->body()),
             ]);
