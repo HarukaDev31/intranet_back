@@ -132,27 +132,25 @@ php artisan storage:migrate-local-to-s3 --force
 php artisan storage:migrate-local-to-s3 --limit=100
 ```
 
-### Cargo de entrega: quitar prefijo `probusiness/` en S3
+### Cargo de entrega: local → S3
 
-Si los PDFs quedaron en `probusiness/entregas/cargo_entrega/...` pero la CDN espera `entregas/cargo_entrega/...` en la raíz:
+Sube PDFs desde `storage/app`, `storage/app/public` o `public/` a `entregas/cargo_entrega/...` en la **raíz del bucket** (misma ruta que en BD).
 
 ```bash
-# Simular
-php artisan storage:migrate-cargo-entrega-s3-root --dry-run
+# Simular (rutas desde BD)
+php artisan storage:migrate-cargo-entrega-to-s3 --dry-run
 
-# Copiar a raíz (mantener origen)
-php artisan storage:migrate-cargo-entrega-s3-root
+# Subir
+php artisan storage:migrate-cargo-entrega-to-s3
 
-# Mover (copiar y borrar origen)
-php artisan storage:migrate-cargo-entrega-s3-root --delete-source
+# Subir y borrar archivo local
+php artisan storage:migrate-cargo-entrega-to-s3 --delete-source
 
-# Incluir objetos en S3 no referenciados en BD
-php artisan storage:migrate-cargo-entrega-s3-root --scan-s3 --delete-source
+# Incluir todos los PDFs bajo entregas/cargo_entrega/ en disco
+php artisan storage:migrate-cargo-entrega-to-s3 --scan-local --delete-source
 ```
 
-Opciones: `--prefix=probusiness`, `--force`, `--limit=N`.
-
-Los objetos quedan en el bucket en `{ruta_bd}` (ej. `entregas/cargo_entrega/160/archivo.pdf`) cuando `AWS_UPLOAD_PREFIX` está vacío. **No hay que cambiar rutas en BD.**
+Opciones: `--force`, `--limit=N`. Dejar `AWS_UPLOAD_PREFIX` vacío en prod.
 
 ## CDN (`cdn.probusiness.pe`)
 

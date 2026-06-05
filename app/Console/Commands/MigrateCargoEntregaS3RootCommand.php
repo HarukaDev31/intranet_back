@@ -7,18 +7,20 @@ use Aws\S3\S3Client;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use RecursiveDirectoryIterator;
+use RecursiveIteratorIterator;
+use SplFileInfo;
 
 class MigrateCargoEntregaS3RootCommand extends Command
 {
-    protected $signature = 'storage:migrate-cargo-entrega-s3-root
-        {--dry-run : Simular sin copiar}
-        {--delete-source : Borrar objeto origen tras copiar (mover)}
-        {--prefix=probusiness : Prefijo legacy en el bucket (ej. probusiness)}
-        {--force : Sobrescribir si ya existe en la raíz del bucket}
-        {--scan-s3 : Incluir PDFs en S3 bajo el prefijo legacy aunque no estén en BD}
-        {--limit=0 : Máximo de objetos a procesar (0 = sin límite)}';
+    protected $signature = 'storage:migrate-cargo-entrega-to-s3
+        {--dry-run : Simular sin subir}
+        {--delete-source : Borrar archivo local tras subir a S3}
+        {--force : Sobrescribir si ya existe en S3}
+        {--scan-local : Incluir PDFs en disco bajo entregas/cargo_entrega/ aunque no estén en BD}
+        {--limit=0 : Máximo de archivos a procesar (0 = sin límite)}';
 
-    protected $description = 'Mueve PDFs de cargo de entrega de {prefix}/entregas/... a entregas/... en la raíz del bucket S3';
+    protected $description = 'Sube PDFs de cargo de entrega desde disco local a entregas/cargo_entrega/... en la raíz del bucket S3';
 
     /** @var ObjectStorageConnectorInterface */
     private $storage;
@@ -32,15 +34,17 @@ class MigrateCargoEntregaS3RootCommand extends Command
     /** @var array<string, bool> */
     private $seenRelative = [];
 
-    private int $moved = 0;
+    /** @var int */
+    private $uploaded = 0;
 
-    private int $skippedAlreadyRoot = 0;
+    /** @var int */
+    private $skippedAlreadyS3 = 0;
 
-    private int $skippedMissing = 0;
+    /** @var int */
+    private $skippedMissingLocal = 0;
 
-    private int $skippedExists = 0;
-
-    private int $failed = 0;
+    /** @var int */
+    private $failed = 0;
 
     public function handle(ObjectStorageConnectorInterface $storage): int
     {
@@ -69,21 +73,25 @@ class MigrateCargoEntregaS3RootCommand extends Command
             return self::FAILURE;
         }
 
-        $legacyPrefix = trim((string) $this->option('prefix'), '/');
         $dryRun = (bool) $this->option('dry-run');
         $deleteSource = (bool) $this->option('delete-source');
         $force = (bool) $this->option('force');
         $limit = max(0, (int) $this->option('limit'));
 
-        $this->info('Migración cargo entrega → raíz S3');
+        $s3Prefix = trim((string) config('object_storage.s3_prefix', ''), '/');
+
+        $this->info('Migración local → S3 (cargo de entrega)');
         $this->line('Bucket: ' . $this->bucket);
-        $this->line('Prefijo origen: ' . ($legacyPrefix !== '' ? $legacyPrefix . '/' : '(ninguno)'));
-        $this->line('Destino: entregas/cargo_entrega/... (raíz del bucket)');
+        $this->line('Clave S3 destino: entregas/cargo_entrega/... (raíz del bucket)');
+        $this->line('Orígenes locales: storage/app, storage/app/public, public/');
+        if ($s3Prefix !== '') {
+            $this->warn('AWS_UPLOAD_PREFIX=' . $s3Prefix . ' — este comando sube a la raíz del bucket; deja el prefijo vacío para nuevas subidas.');
+        }
         if ($dryRun) {
-            $this->warn('Modo dry-run: no se modificará S3.');
+            $this->warn('Modo dry-run: no se modificará S3 ni archivos locales.');
         }
 
-        $relativePaths = $this->collectRelativePaths($legacyPrefix);
+        $relativePaths = $this->collectRelativePaths();
 
         if ($relativePaths === []) {
             $this->warn('No se encontraron rutas candidatas.');
@@ -91,7 +99,7 @@ class MigrateCargoEntregaS3RootCommand extends Command
             return self::SUCCESS;
         }
 
-        $this->info('Objetos candidatos: ' . count($relativePaths));
+        $this->info('Archivos candidatos: ' . count($relativePaths));
 
         $processed = 0;
         foreach ($relativePaths as $relative) {
@@ -99,7 +107,7 @@ class MigrateCargoEntregaS3RootCommand extends Command
                 break;
             }
 
-            $this->migrateOne($relative, $legacyPrefix, $dryRun, $deleteSource, $force);
+            $this->uploadOne($relative, $dryRun, $deleteSource, $force);
             $processed++;
         }
 
@@ -107,17 +115,12 @@ class MigrateCargoEntregaS3RootCommand extends Command
         $this->table(
             ['Métrica', 'Cantidad'],
             [
-                ['Copiados / movidos a raíz', $this->moved],
-                ['Ya en raíz (omitidos)', $this->skippedAlreadyRoot],
-                ['Destino existía (omitidos)', $this->skippedExists],
-                ['Origen no encontrado', $this->skippedMissing],
+                ['Subidos a S3', $this->uploaded],
+                ['Ya en S3 (omitidos)', $this->skippedAlreadyS3],
+                ['No encontrados en local', $this->skippedMissingLocal],
                 ['Errores', $this->failed],
             ]
         );
-
-        if (!$dryRun && $this->moved > 0) {
-            $this->line('Recuerda dejar AWS_UPLOAD_PREFIX vacío en prod para nuevas subidas.');
-        }
 
         return $this->failed > 0 ? self::FAILURE : self::SUCCESS;
     }
@@ -125,19 +128,20 @@ class MigrateCargoEntregaS3RootCommand extends Command
     /**
      * @return string[]
      */
-    private function collectRelativePaths(string $legacyPrefix): array
+    private function collectRelativePaths(): array
     {
         $paths = [];
 
         $rows = DB::table('contenedor_consolidado_cotizacion')
             ->whereNull('deleted_at')
             ->where(function ($q) {
-                $q->whereNotNull('cargo_entrega_pdf_url')
-                    ->where('cargo_entrega_pdf_url', '!=', '')
-                    ->orWhere(function ($q2) {
-                        $q2->whereNotNull('cargo_entrega_pdf_firmado_url')
-                            ->where('cargo_entrega_pdf_firmado_url', '!=', '');
-                    });
+                $q->where(function ($q1) {
+                    $q1->whereNotNull('cargo_entrega_pdf_url')
+                        ->where('cargo_entrega_pdf_url', '!=', '');
+                })->orWhere(function ($q2) {
+                    $q2->whereNotNull('cargo_entrega_pdf_firmado_url')
+                        ->where('cargo_entrega_pdf_firmado_url', '!=', '');
+                });
             })
             ->get(['cargo_entrega_pdf_url', 'cargo_entrega_pdf_firmado_url']);
 
@@ -150,31 +154,36 @@ class MigrateCargoEntregaS3RootCommand extends Command
             }
         }
 
-        if ((bool) $this->option('scan-s3') && $legacyPrefix !== '') {
-            $scanPrefix = $legacyPrefix . '/entregas/cargo_entrega/';
-            $this->line('Escaneando S3: ' . $scanPrefix);
+        if ((bool) $this->option('scan-local')) {
+            foreach ($this->localScanRoots() as $root) {
+                if (!is_dir($root)) {
+                    continue;
+                }
 
-            try {
-                $paginator = $this->s3->getPaginator('ListObjectsV2', [
-                    'Bucket' => $this->bucket,
-                    'Prefix' => $scanPrefix,
-                ]);
+                $this->line('Escaneando local: ' . $root);
 
-                foreach ($paginator as $page) {
-                    foreach ($page['Contents'] ?? [] as $object) {
-                        $key = (string) ($object['Key'] ?? '');
-                        if ($key === '' || substr($key, -1) === '/') {
-                            continue;
-                        }
+                $iterator = new RecursiveIteratorIterator(
+                    new RecursiveDirectoryIterator($root, RecursiveDirectoryIterator::SKIP_DOTS)
+                );
 
-                        $relative = $this->stripLegacyPrefixFromKey($key, $legacyPrefix);
-                        if ($relative !== null) {
-                            $paths[] = $relative;
-                        }
+                /** @var SplFileInfo $fileInfo */
+                foreach ($iterator as $fileInfo) {
+                    if (!$fileInfo->isFile() || strtolower($fileInfo->getExtension()) !== 'pdf') {
+                        continue;
+                    }
+
+                    $absolute = str_replace('\\', '/', $fileInfo->getPathname());
+                    $rootNorm = rtrim(str_replace('\\', '/', $root), '/');
+                    if (stripos($absolute, $rootNorm . '/') !== 0) {
+                        continue;
+                    }
+
+                    $relative = ltrim(substr($absolute, strlen($rootNorm)), '/');
+                    $normalized = $this->normalizeCargoPath($relative);
+                    if ($normalized !== null) {
+                        $paths[] = $normalized;
                     }
                 }
-            } catch (\Throwable $e) {
-                $this->warn('No se pudo listar S3: ' . $e->getMessage());
             }
         }
 
@@ -191,119 +200,96 @@ class MigrateCargoEntregaS3RootCommand extends Command
         return $unique;
     }
 
-    private function migrateOne(
-        string $relative,
-        string $legacyPrefix,
-        bool $dryRun,
-        bool $deleteSource,
-        bool $force
-    ): void {
+    /**
+     * @return string[]
+     */
+    private function localScanRoots(): array
+    {
+        return [
+            storage_path('app/public/entregas/cargo_entrega'),
+            storage_path('app/entregas/cargo_entrega'),
+            public_path('entregas/cargo_entrega'),
+            public_path('storage/entregas/cargo_entrega'),
+        ];
+    }
+
+    private function uploadOne(string $relative, bool $dryRun, bool $deleteSource, bool $force): void
+    {
         $destKey = ltrim($relative, '/');
 
         if (strpos($destKey, 'entregas/cargo_entrega/') !== 0) {
-            $this->line("  omitido (ruta no es cargo entrega): {$destKey}");
+            return;
+        }
+
+        if ($this->objectExistsAtBucketRoot($destKey) && !$force) {
+            $this->line("  ya en S3: {$destKey}");
+            $this->skippedAlreadyS3++;
 
             return;
         }
 
-        $sourceKey = $this->resolveSourceKey($destKey, $legacyPrefix);
-
-        if ($sourceKey === null) {
-            if ($this->objectExists($destKey)) {
-                $this->skippedAlreadyRoot++;
-
-                return;
-            }
-
-            $this->warn("  origen no encontrado: {$destKey}");
-            $this->skippedMissing++;
+        $localPath = $this->resolveLocalPath($destKey);
+        if ($localPath === null) {
+            $this->warn("  no en local: {$destKey}");
+            $this->skippedMissingLocal++;
 
             return;
         }
 
-        if ($sourceKey === $destKey) {
-            $this->skippedAlreadyRoot++;
-
-            return;
-        }
-
-        if ($this->objectExists($destKey) && !$force) {
-            $this->line("  destino ya existe: {$destKey}");
-            $this->skippedExists++;
-
-            return;
-        }
-
-        $action = $deleteSource ? 'mover' : 'copiar';
-        $this->line("  {$action}: {$sourceKey} → {$destKey}");
+        $this->line('  subir: ' . $localPath . ' → s3://' . $this->bucket . '/' . $destKey);
 
         if ($dryRun) {
-            $this->moved++;
+            $this->uploaded++;
 
             return;
         }
 
         try {
-            $this->s3->copyObject([
-                'Bucket' => $this->bucket,
-                'CopySource' => $this->bucket . '/' . str_replace('%2F', '/', rawurlencode($sourceKey)),
-                'Key' => $destKey,
-            ]);
-
-            if ($deleteSource) {
-                $this->s3->deleteObject([
-                    'Bucket' => $this->bucket,
-                    'Key' => $sourceKey,
-                ]);
+            $stream = fopen($localPath, 'rb');
+            if ($stream === false) {
+                throw new \RuntimeException('No se pudo abrir: ' . $localPath);
             }
 
-            $this->moved++;
+            $this->s3->putObject([
+                'Bucket' => $this->bucket,
+                'Key' => $destKey,
+                'Body' => $stream,
+                'ContentType' => 'application/pdf',
+            ]);
+
+            if (is_resource($stream)) {
+                fclose($stream);
+            }
+
+            if ($deleteSource && !@unlink($localPath)) {
+                $this->warn("  subido pero no se pudo borrar local: {$localPath}");
+            }
+
+            $this->uploaded++;
         } catch (\Throwable $e) {
             $this->error("  error en {$destKey}: " . $e->getMessage());
             $this->failed++;
         }
     }
 
-    private function resolveSourceKey(string $destKey, string $legacyPrefix): ?string
+    private function resolveLocalPath(string $relative): ?string
     {
-        if ($this->objectExists($destKey)) {
-            return $destKey;
-        }
+        $relative = ltrim(str_replace('\\', '/', $relative), '/');
 
-        foreach ($this->sourceKeyCandidates($destKey, $legacyPrefix) as $candidate) {
-            if ($candidate !== $destKey && $this->objectExists($candidate)) {
-                return $candidate;
+        $candidates = [
+            storage_path('app/public/' . $relative),
+            storage_path('app/' . $relative),
+            public_path('storage/' . $relative),
+            public_path($relative),
+        ];
+
+        foreach ($candidates as $path) {
+            if (is_file($path)) {
+                return $path;
             }
         }
 
         return null;
-    }
-
-    /**
-     * @return string[]
-     */
-    private function sourceKeyCandidates(string $relativePath, string $legacyPrefix): array
-    {
-        $relativePath = ltrim($relativePath, '/');
-        $candidates = [];
-
-        if ($legacyPrefix !== '') {
-            $candidates[] = $legacyPrefix . '/' . $relativePath;
-        }
-
-        $envPrefix = trim((string) config('object_storage.s3_prefix', ''), '/');
-        if ($envPrefix !== '') {
-            $candidates[] = $envPrefix . '/' . $relativePath;
-        }
-
-        $diskRoot = trim(str_replace('\\', '/', (string) config('filesystems.disks.s3.root', '')), '/');
-        if ($diskRoot !== '') {
-            $candidates[] = $diskRoot . '/' . $relativePath;
-        }
-
-        $candidates[] = $relativePath;
-
-        return array_values(array_unique($candidates));
     }
 
     private function normalizeCargoPath(string $path): ?string
@@ -325,21 +311,8 @@ class MigrateCargoEntregaS3RootCommand extends Command
         return $normalized;
     }
 
-    private function stripLegacyPrefixFromKey(string $key, string $legacyPrefix): ?string
-    {
-        $key = ltrim(str_replace('\\', '/', $key), '/');
-        $prefix = trim($legacyPrefix, '/') . '/';
-
-        if ($prefix !== '/' && stripos($key, $prefix) === 0) {
-            $relative = substr($key, strlen($prefix));
-
-            return strpos($relative, 'entregas/cargo_entrega/') === 0 ? $relative : null;
-        }
-
-        return strpos($key, 'entregas/cargo_entrega/') === 0 ? $key : null;
-    }
-
-    private function objectExists(string $key): bool
+    /** Existe en la raíz del bucket (sin AWS_UPLOAD_PREFIX del disco Laravel). */
+    private function objectExistsAtBucketRoot(string $key): bool
     {
         try {
             return $this->s3->doesObjectExist($this->bucket, ltrim($key, '/'));
