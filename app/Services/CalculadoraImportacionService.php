@@ -19,6 +19,7 @@ use App\Models\CalculadoraTarifasConsolidado;
 use App\Services\CalculadoraImportacion\CalculadoraImportacionExcelService;
 use App\Services\CalculadoraImportacion\CalculadoraImportacionCotizacionSyncService;
 use App\Services\CalculadoraImportacion\CodeSupplierHelper;
+use App\Support\Storage\StoragePathSanitizer;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 
@@ -57,6 +58,14 @@ class CalculadoraImportacionService
         }
 
         return $this->objectStorage()->url($relative);
+    }
+
+    private function buildCotizacionInicialStorageFileName(string $clienteNombre, string $extension): string
+    {
+        $timestamp = now()->format('Y_m_d_H_i_s');
+        $rawName = 'COTIZACION_INICIAL_' . trim($clienteNombre) . '_' . $timestamp . '.' . ltrim($extension, '.');
+
+        return StoragePathSanitizer::fileName($rawName);
     }
 
     /** Tarifas extra por ítem según rango de CBM (reglas de negocio calculadora) */
@@ -1668,8 +1677,10 @@ class CalculadoraImportacionService
             $sheetResumen->setCellValue('J41','=J38');
 
 
-            $timestamp = now()->format('Y_m_d_H_i_s');
-            $fileName = "COTIZACION_INICIAL_{$data['clienteInfo']['nombre']}_{$timestamp}.xlsx";
+            $fileName = $this->buildCotizacionInicialStorageFileName(
+                (string) ($data['clienteInfo']['nombre'] ?? ''),
+                'xlsx'
+            );
             $tempFile = storage_path('app/temp/' . $fileName);
             $tempDir = dirname($tempFile);
             if (!is_dir($tempDir)) {
@@ -1690,8 +1701,10 @@ class CalculadoraImportacionService
                     return $this->respuestaCotizacionInicialVacia();
                 }
 
-                $relativeTemplate = 'templates/' . $fileName;
-                $this->storagePutContents($relativeTemplate, file_get_contents($tempFile));
+                $relativeTemplate = $this->storagePutContents(
+                    'templates/' . $fileName,
+                    file_get_contents($tempFile)
+                );
                 @unlink($tempFile);
 
                 $boletaInfo = null;
@@ -2399,16 +2412,16 @@ class CalculadoraImportacionService
             $dompdf->setPaper('A4', 'portrait');
             $dompdf->render();
 
-            // Guardar PDF en storage
-            $timestamp = now()->format('Y_m_d_H_i_s');
-            $pdfFileName = "COTIZACION_INICIAL_{$clienteInfo['nombre']}_{$timestamp}.pdf";
-            $relativeBoleta = 'boletas/' . $pdfFileName;
-            $this->storagePutContents($relativeBoleta, $dompdf->output());
+            $pdfFileName = $this->buildCotizacionInicialStorageFileName(
+                (string) ($clienteInfo['nombre'] ?? ''),
+                'pdf'
+            );
+            $relativeBoleta = $this->storagePutContents('boletas/' . $pdfFileName, $dompdf->output());
             $pdfPath = $this->storageLocalPath($relativeBoleta);
 
             return [
                 'path' => $pdfPath,
-                'filename' => $pdfFileName,
+                'filename' => basename($relativeBoleta),
                 'relative_path' => $relativeBoleta,
                 'url' => $relativeBoleta,
             ];

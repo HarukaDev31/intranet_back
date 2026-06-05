@@ -3,6 +3,7 @@
 namespace App\Services\Storage;
 
 use App\Contracts\ObjectStorageConnectorInterface;
+use App\Support\Storage\StoragePathSanitizer;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -31,7 +32,8 @@ class S3ObjectStorageConnector implements ObjectStorageConnectorInterface
 
     public function storeUploadedFile(UploadedFile $file, string $directory, string $filename): string
     {
-        $directory = trim($directory, '/');
+        $directory = StoragePathSanitizer::relativePath(trim($directory, '/'));
+        $filename = StoragePathSanitizer::fileName($filename);
         $stored = $file->storeAs($directory, $filename, ['disk' => $this->uploadDisk()]);
 
         if ($stored === false || $stored === '') {
@@ -45,6 +47,11 @@ class S3ObjectStorageConnector implements ObjectStorageConnectorInterface
     {
         $relativePath = $this->normalizeRelativePath($relativePath);
         if ($relativePath === null || $relativePath === '') {
+            throw new RuntimeException('Ruta relativa inválida para guardar archivo.');
+        }
+
+        $relativePath = StoragePathSanitizer::relativePath($relativePath);
+        if ($relativePath === '') {
             throw new RuntimeException('Ruta relativa inválida para guardar archivo.');
         }
 
@@ -93,7 +100,11 @@ class S3ObjectStorageConnector implements ObjectStorageConnectorInterface
 
     public function put(string $relativePath, $contents): bool
     {
-        $relativePath = ltrim($relativePath, '/');
+        $relativePath = StoragePathSanitizer::relativePath(ltrim($relativePath, '/'));
+        if ($relativePath === '') {
+            throw new RuntimeException('Ruta relativa inválida para guardar archivo.');
+        }
+
         $disk = $this->uploadDisk();
 
         try {
