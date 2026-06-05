@@ -150,7 +150,7 @@ class WaCopilotoSendService
         if ($token === '') {
             WaCopilotoLog::error('sendText.missing_token', ['phone_e164' => $phoneE164]);
 
-            return ['success' => false, 'error' => 'META_WHATSAPP_COPILOTO_ACCESS_TOKEN no configurado'];
+            return ['success' => false, 'error' => 'META_WHATSAPP_ACCESS_TOKEN no configurado'];
         }
 
         $phoneNumberId = trim((string) ($phoneNumberId ?: config('meta_whatsapp_copiloto.phone_number_id')));
@@ -178,7 +178,7 @@ class WaCopilotoSendService
             WaCopilotoLog::error('sendText.meta_http_error', [
                 'phone_e164' => $phoneE164,
                 'phone_number_id' => $phoneNumberId,
-                'token_source' => env('META_WHATSAPP_COPILOTO_ACCESS_TOKEN') ? 'copiloto_env' : 'inbox_fallback',
+                'token_source' => env('META_WHATSAPP_ACCESS_TOKEN') ? 'inbox_env' : 'copiloto_env',
                 'status' => $response->status(),
                 'body' => WaCopilotoLog::sanitizePayload(is_array($json) ? $json : $response->body()),
             ]);
@@ -221,7 +221,7 @@ class WaCopilotoSendService
 
         $token = (string) config('meta_whatsapp_copiloto.access_token');
         if ($token === '') {
-            return ['success' => false, 'error' => 'META_WHATSAPP_COPILOTO_ACCESS_TOKEN no configurado'];
+            return ['success' => false, 'error' => 'META_WHATSAPP_ACCESS_TOKEN no configurado'];
         }
 
         $phoneNumberId = trim((string) ($phoneNumberId ?: $this->resolvePhoneNumberId($message)));

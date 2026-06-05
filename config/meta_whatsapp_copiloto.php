@@ -9,7 +9,11 @@ return [
     /** Número Meta principal de Copiloto / ventas. */
     'phone_number_id' => env('META_WHATSAPP_COPILOTO_PHONE_NUMBER_ID', ''),
 
-    'access_token' => env('META_WHATSAPP_COPILOTO_ACCESS_TOKEN', env('META_WHATSAPP_ACCESS_TOKEN')),
+    /**
+     * Token Graph API. Por defecto comparte META_WHATSAPP_ACCESS_TOKEN (inbox/coordinación).
+     * META_WHATSAPP_COPILOTO_ACCESS_TOKEN solo si Copiloto usa un token distinto.
+     */
+    'access_token' => env('META_WHATSAPP_ACCESS_TOKEN', env('META_WHATSAPP_COPILOTO_ACCESS_TOKEN', '')),
 
     'app_secret' => env('META_WHATSAPP_COPILOTO_APP_SECRET', env('META_WHATSAPP_APP_SECRET')),
 
