@@ -1061,9 +1061,9 @@ class AuthController extends Controller
 
             // Si hay menús asignados específicamente al usuario 28911 (vía su registro en `grupo_usuario`),
             // esos menús deben ocultarse a todos los demás usuarios del mismo grupo.
-            // Los menús marcados específicamente para uno o varios usuarios (ej. 28911, 28791)
+            // Los menús marcados específicamente para uno o varios usuarios (ej. 28911, 28791, 29151, 29450)
             // deben permanecer exclusivos y ocultos para el resto de usuarios del mismo grupo.
-            $exclusiveUserIds = [28911, 28791];
+            $exclusiveUserIds = [28911, 28791, 29151, 29450];
 
             if (!in_array($idUsuario, $exclusiveUserIds, true)) {
                 // Regla de negocio: el menú "Cotizador" debe ser visible SOLO para usuarios especiales.
