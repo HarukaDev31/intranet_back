@@ -4497,10 +4497,12 @@ Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, 
             $pdfUrl = $generated;
         }
 
-        $baseUrl = rtrim(config('app.url'), '/');
         $pdfUrlForApi = $row->cargo_entrega_pdf_firmado_url ?? $row->cargo_entrega_pdf_url;
-        // Usar /files/ para que pase por FileController con CORS (igual que otros archivos)
-        $fullUrl = $baseUrl . '/files/' . ltrim($pdfUrlForApi, '/');
+        $fullUrl = $this->generateImageUrl($pdfUrlForApi);
+        if ($fullUrl === null || $fullUrl === '') {
+            $baseUrl = rtrim(config('app.url'), '/');
+            $fullUrl = $baseUrl . '/files/' . ltrim($pdfUrlForApi, '/');
+        }
 
         return response()->json([
             'success' => true,

@@ -4,12 +4,13 @@ namespace App\Http\Controllers;
 
 use App\Traits\UsesObjectStorage;
 use Illuminate\Http\Request;
-use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Log;
+use Symfony\Component\HttpFoundation\Response;
 
 class FileController extends Controller
 {
     use UsesObjectStorage;
+
     /**
      * @OA\Get(
      *     path="/files/{path}",
@@ -25,47 +26,43 @@ class FileController extends Controller
     public function serveFile($path)
     {
         try {
-            // Decodificar path (viene codificado para soportar #, espacios, etc.)
             $path = rawurldecode($path);
-            // Normalizar dobles barras y barras iniciales
             $path = preg_replace('#/+#', '/', trim($path, '/'));
 
             if (!$this->objectStorage()->exists($path)) {
                 abort(404, 'Archivo no encontrado');
             }
 
-            $publicUrl = $this->objectStorage()->url($path);
-            if ($publicUrl !== null && config('object_storage.cdn_base_url') !== '') {
-                return redirect()->away($publicUrl);
-            }
+            $response = $this->objectStorage()->fileResponse($path, null, 'inline');
 
-            $filePath = $this->storageLocalPath($path);
-            
-            // CORS
-            $origin = request()->header('origin');
-            $allowedOrigin = '*';
-            
-            if ($origin) {
-                if (preg_match('#^https?://(.*\.)?probusiness\.pe(:\d+)?$#i', $origin) ||
-                    preg_match('#^http://localhost(:\d+)?$#i', $origin)) {
-                    $allowedOrigin = $origin;
-                }
-            }
-            
-            $response = response()->file($filePath, [
-                'Content-Type' => mime_content_type($filePath),
-                'Access-Control-Allow-Origin' => $allowedOrigin,
-                'Access-Control-Allow-Methods' => 'GET, OPTIONS',
-                'Access-Control-Allow-Headers' => 'Content-Type, Authorization, Range',
-                'Access-Control-Allow-Credentials' => 'true',
-                'Cache-Control' => 'public, max-age=3600',
-            ]);
-            
-            return $response;
-            
+            return $this->withCorsHeaders($response);
         } catch (\Exception $e) {
-            Log::error('Error: ' . $e->getMessage());
+            Log::error('FileController: serveFile', [
+                'path' => $path ?? null,
+                'error' => $e->getMessage(),
+            ]);
             abort(500);
         }
+    }
+
+    private function withCorsHeaders(Response $response): Response
+    {
+        $origin = request()->header('origin');
+        $allowedOrigin = '*';
+
+        if ($origin) {
+            if (preg_match('#^https?://(.*\.)?probusiness\.pe(:\d+)?$#i', $origin) ||
+                preg_match('#^http://localhost(:\d+)?$#i', $origin)) {
+                $allowedOrigin = $origin;
+            }
+        }
+
+        $response->headers->set('Access-Control-Allow-Origin', $allowedOrigin);
+        $response->headers->set('Access-Control-Allow-Methods', 'GET, OPTIONS');
+        $response->headers->set('Access-Control-Allow-Headers', 'Content-Type, Authorization, Range');
+        $response->headers->set('Access-Control-Allow-Credentials', 'true');
+        $response->headers->set('Cache-Control', 'public, max-age=3600');
+
+        return $response;
     }
 }

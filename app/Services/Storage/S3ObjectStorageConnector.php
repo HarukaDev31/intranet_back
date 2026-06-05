@@ -514,6 +514,14 @@ class S3ObjectStorageConnector implements ObjectStorageConnectorInterface
 
         $candidates = [$relativePath];
 
+        $prefix = trim((string) config('object_storage.s3_prefix', ''), '/');
+        if ($prefix !== '' && stripos($relativePath, $prefix . '/') !== 0) {
+            $candidates[] = $prefix . '/' . $relativePath;
+        } elseif ($prefix === '' && stripos($relativePath, 'probusiness/') !== 0) {
+            // Legacy: objetos subidos cuando AWS_UPLOAD_PREFIX=probusiness
+            $candidates[] = 'probusiness/' . $relativePath;
+        }
+
         // Bucket probusiness-intranet: objetos en templates/..., no probusiness-intranet/templates/...
         if (preg_match('#^probusiness-intranet/#i', $relativePath)) {
             $stripped = preg_replace('#^probusiness-intranet/#i', '', $relativePath);
@@ -663,6 +671,19 @@ class S3ObjectStorageConnector implements ObjectStorageConnectorInterface
 
         if (config('object_storage.cdn_when_upload_disk_s3', true) && $this->uploadDisk() !== 's3') {
             return false;
+        }
+
+        /*
+         * CDN sin prefijo (OBJECT_STORAGE_CDN_INCLUDE_PREFIX=false) sirve rutas en la raíz
+         * del bucket: entregas/..., cargaconsolidada/...
+         * Si AWS_UPLOAD_PREFIX está definido, el objeto real queda en probusiness/entregas/...
+         * y la URL CDN (sin prefijo) no lo encuentra → usar URL firmada S3.
+         */
+        if (!filter_var(config('object_storage.cdn_include_s3_prefix', false), FILTER_VALIDATE_BOOLEAN)) {
+            $prefix = trim((string) config('object_storage.s3_prefix', ''), '/');
+            if ($prefix !== '') {
+                return false;
+            }
         }
 
         return true;

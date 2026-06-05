@@ -16,8 +16,12 @@ AWS_ACCESS_KEY_ID=
 AWS_SECRET_ACCESS_KEY=
 AWS_DEFAULT_REGION=us-east-1
 AWS_BUCKET=tu-bucket
-AWS_UPLOAD_PREFIX=probusiness/production
+AWS_UPLOAD_PREFIX=
 AWS_URL=
+OBJECT_STORAGE_CDN_URL=https://cdn.probusiness.pe
+# false = CDN sirve entregas/... en la raíz del bucket (requiere AWS_UPLOAD_PREFIX vacío)
+OBJECT_STORAGE_CDN_INCLUDE_PREFIX=false
+OBJECT_STORAGE_CDN_WHEN_S3=true
 AWS_SIGNED_URL_MINUTES=120
 AWS_SERVE_VIA_SIGNED_REDIRECT=true
 ```
@@ -128,27 +132,48 @@ php artisan storage:migrate-local-to-s3 --force
 php artisan storage:migrate-local-to-s3 --limit=100
 ```
 
-Los objetos quedan en el bucket bajo `AWS_UPLOAD_PREFIX` + `{ruta_bd}` (ej. `probusiness/production/cargaconsolidada/pagos/archivo.pdf`). **No hay que cambiar rutas en BD.**
+### Cargo de entrega: quitar prefijo `probusiness/` en S3
+
+Si los PDFs quedaron en `probusiness/entregas/cargo_entrega/...` pero la CDN espera `entregas/cargo_entrega/...` en la raíz:
+
+```bash
+# Simular
+php artisan storage:migrate-cargo-entrega-s3-root --dry-run
+
+# Copiar a raíz (mantener origen)
+php artisan storage:migrate-cargo-entrega-s3-root
+
+# Mover (copiar y borrar origen)
+php artisan storage:migrate-cargo-entrega-s3-root --delete-source
+
+# Incluir objetos en S3 no referenciados en BD
+php artisan storage:migrate-cargo-entrega-s3-root --scan-s3 --delete-source
+```
+
+Opciones: `--prefix=probusiness`, `--force`, `--limit=N`.
+
+Los objetos quedan en el bucket en `{ruta_bd}` (ej. `entregas/cargo_entrega/160/archivo.pdf`) cuando `AWS_UPLOAD_PREFIX` está vacío. **No hay que cambiar rutas en BD.**
 
 ## CDN (`cdn.probusiness.pe`)
 
-Cuando `FILESYSTEM_UPLOAD_DISK=s3`, las URLs públicas de la API dejan de ser `{APP_URL}/storage/...` y pasan al CDN:
+Cuando `FILESYSTEM_UPLOAD_DISK=s3`, las URLs públicas de la API usan el CDN:
 
 ```env
 OBJECT_STORAGE_CDN_URL=https://cdn.probusiness.pe
-OBJECT_STORAGE_CDN_INCLUDE_PREFIX=true
+AWS_UPLOAD_PREFIX=
+OBJECT_STORAGE_CDN_INCLUDE_PREFIX=false
 OBJECT_STORAGE_CDN_WHEN_S3=true
 ```
 
 Ejemplo:
 
-| En BD | URL API |
-|-------|---------|
-| `documentation/1779860347_6a16837b6376c.xlsx` | `https://cdn.probusiness.pe/probusiness/production/documentation/1779860347_6a16837b6376c.xlsx` |
+| En BD | Clave S3 | URL CDN |
+|-------|----------|---------|
+| `entregas/cargo_entrega/160/CARGO_ENTREGA_X.pdf` | `entregas/cargo_entrega/160/CARGO_ENTREGA_X.pdf` | `https://cdn.probusiness.pe/entregas/cargo_entrega/160/CARGO_ENTREGA_X.pdf` |
+
+Si `AWS_UPLOAD_PREFIX=probusiness` (legacy), el objeto queda en `probusiness/entregas/...` pero la CDN apunta a `entregas/...` → **404**. Dejar el prefijo vacío en prod o migrar objetos a la raíz del bucket.
 
 También reescribe URLs legacy guardadas en BD como `http://localhost:8001/storage/documentation/...`.
-
-Si el CDN sirve **sin** el prefijo S3 en la URL, usa `OBJECT_STORAGE_CDN_INCLUDE_PREFIX=false`.
 
 En local sin CDN: dejar `OBJECT_STORAGE_CDN_URL` vacío → sigue `{APP_URL}/storage/...`.
 
