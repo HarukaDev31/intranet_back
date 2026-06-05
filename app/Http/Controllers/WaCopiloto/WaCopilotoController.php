@@ -12,6 +12,7 @@ use App\Services\WaCopiloto\WaCopilotoSessionService;
 use App\Services\WaCopiloto\WaCopilotoTemplateService;
 use App\Services\WaCopiloto\WaCopilotoMediaUploadService;
 use App\Services\WaCopiloto\WaCopilotoSuggestionUsageService;
+use App\Services\WaCopiloto\WaCopilotoWindowService;
 use App\Support\WhatsApp\CoordinacionMediaLink;
 use App\Support\WhatsApp\WaCopilotoJobContext;
 use App\Support\WhatsApp\WaCopilotoLog;
