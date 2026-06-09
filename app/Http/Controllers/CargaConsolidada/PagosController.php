@@ -533,15 +533,23 @@ class PagosController extends Controller
             $ruta = substr($ruta, 8); // remove "storage/"
         }
 
-        return $this->encodeUrlPath($this->objectStorage()->url($ruta));
+        $url = $this->objectStorage()->url($ruta);
+        if ($url === null || $url === '') {
+            return null;
+        }
+
+        return $this->encodeUrlPath($url);
     }
 
     /**
      * Codifica de forma segura el path de una URL para soportar caracteres especiales
      * como "#" dentro de nombres de archivo.
      */
-    private function encodeUrlPath(string $url): string
+    private function encodeUrlPath(?string $url): ?string
     {
+        if ($url === null || trim($url) === '') {
+            return null;
+        }
         $parts = parse_url($url);
         if ($parts === false) {
             return str_replace('#', '%23', $url);
