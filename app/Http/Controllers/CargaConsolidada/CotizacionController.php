@@ -371,16 +371,30 @@ class CotizacionController extends Controller
                     AND deleted_at IS NULL
                 ) as cbm_total_peru'),
                 DB::raw('(
-                    SELECT ROUND(COALESCE(SUM(
-                        COALESCE(cccp_imo.cbm_total, cccp_imo.cbm_total, 0)
-                    ), 0), 2)
-                    FROM contenedor_consolidado_cotizacion_proveedores AS cccp_imo
-                    INNER JOIN contenedor_consolidado_cotizacion AS cci_imo
-                        ON cci_imo.id = cccp_imo.id_cotizacion
-                        AND cci_imo.deleted_at IS NULL
-                        AND cci_imo.estado_cotizador = "CONFIRMADO"
-                        AND cci_imo.es_imo = 1
-                    WHERE cccp_imo.id_contenedor = ' . (int) $idContenedor . '
+                    SELECT ROUND(COALESCE(SUM(cip.cbm), 0), 2)
+                    FROM calculadora_importacion AS ci
+                    INNER JOIN calculadora_importacion_proveedores AS cip
+                        ON ci.id = cip.id_calculadora_importacion
+                    INNER JOIN contenedor_consolidado_cotizacion AS cci
+                        ON cci.id = ci.id_cotizacion
+                        AND cci.deleted_at IS NULL
+                        AND cci.estado_cotizador = "CONFIRMADO"
+                    WHERE ci.es_imo = 1
+                    AND EXISTS (
+                        SELECT 1
+                        FROM contenedor_consolidado_cotizacion_proveedores AS cccp_chk
+                        WHERE cccp_chk.id_cotizacion = cci.id
+                        AND cccp_chk.id_contenedor = ' . (int) $idContenedor . '
+                    )
+                    AND (
+                        cip.id_proveedor IS NULL
+                        OR EXISTS (
+                            SELECT 1
+                            FROM contenedor_consolidado_cotizacion_proveedores AS cccp_prov
+                            WHERE cccp_prov.id = cip.id_proveedor
+                            AND cccp_prov.id_contenedor = ' . (int) $idContenedor . '
+                        )
+                    )
                 ) as cbm_total_imo'),
                 DB::raw('(
                     SELECT COALESCE(SUM(volumen), 0)
