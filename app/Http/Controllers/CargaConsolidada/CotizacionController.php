@@ -371,13 +371,28 @@ class CotizacionController extends Controller
                     AND deleted_at IS NULL
                 ) as cbm_total_peru'),
                 DB::raw('(
-                    SELECT ROUND(COALESCE(SUM(cip.cbm), 0), 2)
-                    FROM calculadora_importacion AS ci
-                    INNER JOIN calculadora_importacion_proveedores AS cip ON ci.id = cip.id_calculadora_importacion
-                    INNER JOIN contenedor_consolidado_cotizacion AS cci ON cci.id = ci.id_cotizacion AND cci.deleted_at IS NULL
-                    WHERE ci.id_carga_consolidada_contenedor = ' . (int) $idContenedor . '
-                    AND ci.es_imo = 1
-                    AND cci.estado_cotizador = "CONFIRMADO"
+                    SELECT ROUND(COALESCE(SUM(
+                        COALESCE(NULLIF(cip.cbm, 0), cccp_imo.cbm_total_china, cccp_imo.cbm_total, 0)
+                    ), 0), 2)
+                    FROM contenedor_consolidado_cotizacion_proveedores AS cccp_imo
+                    INNER JOIN contenedor_consolidado_cotizacion AS cci_imo
+                        ON cci_imo.id = cccp_imo.id_cotizacion
+                        AND cci_imo.deleted_at IS NULL
+                        AND cci_imo.estado_cotizador = "CONFIRMADO"
+                    LEFT JOIN calculadora_importacion AS ci_imo
+                        ON ci_imo.id_cotizacion = cci_imo.id
+                        AND ci_imo.es_imo = 1
+                    LEFT JOIN calculadora_importacion_proveedores AS cip
+                        ON cip.id_calculadora_importacion = ci_imo.id
+                        AND (
+                            (cip.id_proveedor IS NOT NULL AND cip.id_proveedor = cccp_imo.id)
+                            OR (
+                                NULLIF(TRIM(cip.code_supplier), "") IS NOT NULL
+                                AND cip.code_supplier = cccp_imo.code_supplier
+                            )
+                        )
+                    WHERE cccp_imo.id_contenedor = ' . (int) $idContenedor . '
+                    AND (cci_imo.es_imo = 1 OR ci_imo.id IS NOT NULL)
                 ) as cbm_total_imo'),
                 DB::raw('(
                     SELECT COALESCE(SUM(volumen), 0)
