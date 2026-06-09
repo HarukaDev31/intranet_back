@@ -3,6 +3,7 @@
 namespace App\Support\WhatsApp;
 
 use App\Contracts\ObjectStorageConnectorInterface;
+use App\Support\Storage\StoragePathSanitizer;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -204,7 +205,12 @@ class CoordinacionMediaLink
         try {
             $storage = app(ObjectStorageConnectorInterface::class);
             if (!$storage->exists($resolved)) {
-                return self::stringOrNullUrl($pathOrUrl);
+                $sanitized = StoragePathSanitizer::relativePath($resolved);
+                if ($sanitized !== '' && $sanitized !== $resolved && $storage->exists($sanitized)) {
+                    $resolved = $sanitized;
+                } else {
+                    return self::stringOrNullUrl($pathOrUrl);
+                }
             }
 
             if (method_exists($storage, 'metaPresignedUrl') && self::shouldUsePresignedForDisplay($resolved)) {

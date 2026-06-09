@@ -102,7 +102,7 @@ class WaCopilotoInboundMediaService
             );
 
             $storage = app(ObjectStorageConnectorInterface::class);
-            $storage->putContents(ltrim($storageKey, '/'), $contents);
+            $storageKey = $storage->putContents(ltrim($storageKey, '/'), $contents);
 
             $body = $parsed['caption'];
             if ($body === '' && $parsed['kind'] === 'document') {

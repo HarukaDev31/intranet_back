@@ -58,7 +58,7 @@ class StoragePathSanitizer
         $base = preg_replace('/[\x00-\x1F\x7F<>:"\/\\\\|?*]/', '', $base);
         $base = preg_replace('/[^A-Za-z0-9._\-]/', '_', $base);
         $base = preg_replace('/_+/', '_', $base);
-        $base = trim($base, '._-');
+        $base = rtrim(trim($base), '.');
 
         if ($base === '') {
             $base = 'file';
