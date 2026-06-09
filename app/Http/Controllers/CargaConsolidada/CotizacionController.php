@@ -372,7 +372,7 @@ class CotizacionController extends Controller
                 ) as cbm_total_peru'),
                 DB::raw('(
                     SELECT ROUND(COALESCE(SUM(
-                        COALESCE(cccp_imo.cbm_total_china, cccp_imo.cbm_total, 0)
+                        COALESCE(cccp_imo.cbm_total, cccp_imo.cbm_total, 0)
                     ), 0), 2)
                     FROM contenedor_consolidado_cotizacion_proveedores AS cccp_imo
                     INNER JOIN contenedor_consolidado_cotizacion AS cci_imo
