@@ -371,31 +371,33 @@ class CotizacionController extends Controller
                     AND deleted_at IS NULL
                 ) as cbm_total_peru'),
                 DB::raw('(
-                    SELECT ROUND(COALESCE(SUM(cip.cbm), 0), 2)
-                    FROM calculadora_importacion AS ci
-                    INNER JOIN calculadora_importacion_proveedores AS cip
-                        ON ci.id = cip.id_calculadora_importacion
-                    INNER JOIN contenedor_consolidado_cotizacion AS cci
-                        ON cci.id = ci.id_cotizacion
-                        AND cci.deleted_at IS NULL
-                        AND cci.estado_cotizador = "CONFIRMADO"
-                    WHERE ci.es_imo = 1
-                    AND (
-                        (
-                            cip.id_proveedor IS NOT NULL
-                            AND EXISTS (
-                                SELECT 1
-                                FROM contenedor_consolidado_cotizacion_proveedores AS cccp
-                                INNER JOIN contenedor_consolidado_cotizacion AS cc_p
-                                    ON cc_p.id = cccp.id_cotizacion
-                                    AND cc_p.deleted_at IS NULL
-                                WHERE cccp.id = cip.id_proveedor
-                                AND cccp.id_contenedor = ' . (int) $idContenedor . '
-                            )
+                    SELECT ROUND(COALESCE(SUM(
+                        IF(
+                            cc_imo.estado_cotizador = "CONFIRMADO",
+                            COALESCE(cccp_imo.cbm_total_china, cccp_imo.cbm_total, 0),
+                            0
                         )
-                        OR (
-                            cip.id_proveedor IS NULL
-                            AND ci.id_carga_consolidada_contenedor = ' . (int) $idContenedor . '
+                    ), 0), 2)
+                    FROM contenedor_consolidado_cotizacion_proveedores AS cccp_imo
+                    INNER JOIN contenedor_consolidado_cotizacion AS cc_imo
+                        ON cc_imo.id = cccp_imo.id_cotizacion
+                        AND cc_imo.deleted_at IS NULL
+                    WHERE cccp_imo.id_contenedor = ' . (int) $idContenedor . '
+                    AND (
+                        cc_imo.es_imo = 1
+                        OR EXISTS (
+                            SELECT 1
+                            FROM calculadora_importacion AS ci_imo
+                            WHERE ci_imo.id_cotizacion = cc_imo.id
+                            AND ci_imo.es_imo = 1
+                        )
+                        OR EXISTS (
+                            SELECT 1
+                            FROM calculadora_importacion_proveedores AS cip_imo
+                            INNER JOIN calculadora_importacion AS ci_prov
+                                ON ci_prov.id = cip_imo.id_calculadora_importacion
+                                AND ci_prov.es_imo = 1
+                            WHERE cip_imo.id_proveedor = cccp_imo.id
                         )
                     )
                 ) as cbm_total_imo'),
