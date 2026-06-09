@@ -381,14 +381,21 @@ class CotizacionController extends Controller
                         AND cci.estado_cotizador = "CONFIRMADO"
                     WHERE ci.es_imo = 1
                     AND (
-                        ci.id_carga_consolidada_contenedor = ' . (int) $idContenedor . '
-                        OR cip.id_proveedor IN (
-                            SELECT cccp.id
-                            FROM contenedor_consolidado_cotizacion_proveedores AS cccp
-                            INNER JOIN contenedor_consolidado_cotizacion AS cc_p
-                                ON cc_p.id = cccp.id_cotizacion
-                                AND cc_p.deleted_at IS NULL
-                            WHERE cccp.id_contenedor = ' . (int) $idContenedor . '
+                        (
+                            cip.id_proveedor IS NOT NULL
+                            AND EXISTS (
+                                SELECT 1
+                                FROM contenedor_consolidado_cotizacion_proveedores AS cccp
+                                INNER JOIN contenedor_consolidado_cotizacion AS cc_p
+                                    ON cc_p.id = cccp.id_cotizacion
+                                    AND cc_p.deleted_at IS NULL
+                                WHERE cccp.id = cip.id_proveedor
+                                AND cccp.id_contenedor = ' . (int) $idContenedor . '
+                            )
+                        )
+                        OR (
+                            cip.id_proveedor IS NULL
+                            AND ci.id_carga_consolidada_contenedor = ' . (int) $idContenedor . '
                         )
                     )
                 ) as cbm_total_imo'),
