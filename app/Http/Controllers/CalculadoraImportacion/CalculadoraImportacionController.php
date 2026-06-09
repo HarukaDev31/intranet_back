@@ -981,8 +981,9 @@ class CalculadoraImportacionController extends Controller
             // Duplicar la calculadora principal
             $newCalculadora = $calculadora->replicate();
             $newCalculadora->id_carga_consolidada_contenedor = null;
-            $newCalculadora->estado = 'PENDIENTE'; // Resetear estado
+            $newCalculadora->estado = 'PENDIENTE';
             $newCalculadora->id_cotizacion = null;
+            $newCalculadora->es_imo = (bool) $calculadora->es_imo;
             $newCalculadora->save();
 
             Log::info("Nueva calculadora creada con ID: {$newCalculadora->id}");
@@ -1132,6 +1133,7 @@ class CalculadoraImportacionController extends Controller
                         'cotizacion_file_url' => $calculadora->url_cotizacion,
                         'id_usuario' => $calculadora->id_usuario,
                         'from_calculator' => true,
+                        'es_imo' => (bool) ($calculadora->es_imo ?? false),
                     ]);
                     Log::info('cotizacion_file_url e id_usuario actualizados al pasar a COTIZADO', ['cotizacion_id' => $calculadora->id_cotizacion]);
 

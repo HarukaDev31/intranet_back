@@ -335,7 +335,9 @@ class CalculadoraImportacionService
                 'tarifa' => $data['tarifa']['tarifa'] ?? $calculadora->tarifa,
                 'tarifa_descuento' => $data['tarifaDescuento'] ?? $calculadora->tarifa_descuento,
                 'tc' => $tipoCambio,
-                'es_imo' => !empty($data['es_imo']),
+                'es_imo' => array_key_exists('es_imo', $data)
+                    ? !empty($data['es_imo'])
+                    : (bool) $calculadora->es_imo,
                 'usa_yuan' => !empty($data['usa_yuan']),
                 'tc_yuan_usado' => array_key_exists('tc_yuan_usado', $data) ? $data['tc_yuan_usado'] : $calculadora->tc_yuan_usado,
             ]);

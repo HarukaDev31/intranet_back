@@ -72,6 +72,110 @@ class CotizacionController extends Controller
     }
 
     /**
+     * Métricas de headers en 4 consultas indexables (evita JOIN masivo + docenas de subselects).
+     *
+     * @param  int  $idContenedor
+     * @param  int  $userId
+     * @return object|null
+     */
+    private function fetchContenedorHeadersMetrics($idContenedor, $userId)
+    {
+        $idContenedor = (int) $idContenedor;
+        $userId = (int) $userId;
+
+        $cotizacionEnContenedor = DB::selectOne(
+            'SELECT
+                COALESCE(SUM(CASE WHEN cc.estado_cotizador = ? THEN cc.volumen ELSE 0 END), 0) AS cbm_total_peru,
+                COALESCE(SUM(CASE WHEN cc.estado_cotizador = ? AND cc.id_usuario = ? THEN cc.volumen ELSE 0 END), 0) AS cbm_vendido,
+                COALESCE(SUM(CASE WHEN cc.estado_cotizador != ? AND cc.id_usuario = ? THEN cc.volumen ELSE 0 END), 0) AS cbm_pendiente
+            FROM contenedor_consolidado_cotizacion AS cc
+            WHERE cc.id_contenedor = ?
+              AND cc.deleted_at IS NULL',
+            ['CONFIRMADO', 'CONFIRMADO', $userId, 'CONFIRMADO', $userId, $idContenedor]
+        );
+
+        $imo = DB::selectOne(
+            'SELECT ROUND(COALESCE(SUM(cip.cbm), 0), 2) AS cbm_total_imo
+            FROM contenedor_consolidado_cotizacion AS cci
+            INNER JOIN calculadora_importacion AS ci
+                ON ci.id_cotizacion = cci.id
+                AND ci.es_imo = 1
+            INNER JOIN calculadora_importacion_proveedores AS cip
+                ON ci.id = cip.id_calculadora_importacion
+            WHERE cci.id_contenedor = ?
+              AND cci.deleted_at IS NULL
+              AND cci.estado_cotizador = ?',
+            [$idContenedor, 'CONFIRMADO']
+            );
+
+        $cotizacionConProveedor = DB::selectOne(
+            'SELECT
+                COALESCE(SUM(
+                    CASE
+                        WHEN cc.estado_cotizador = ?
+                            AND (cc.id_contenedor_pago = ? OR cc.id_contenedor_pago IS NULL)
+                        THEN cc.monto
+                        ELSE 0
+                    END
+                ), 0) AS total_logistica,
+                COALESCE(SUM(CASE WHEN cc.estado_cotizador = ? THEN cc.qty_item ELSE 0 END), 0) AS total_qty_items
+            FROM contenedor_consolidado_cotizacion AS cc
+            INNER JOIN (
+                SELECT DISTINCT id_cotizacion
+                FROM contenedor_consolidado_cotizacion_proveedores
+                WHERE id_contenedor = ?
+            ) AS p ON p.id_cotizacion = cc.id
+            WHERE cc.deleted_at IS NULL',
+            ['CONFIRMADO', $idContenedor, 'CONFIRMADO', $idContenedor]
+        );
+
+        $proveedores = DB::selectOne(
+            'SELECT
+                COALESCE(SUM(CASE WHEN cc.estado_cotizador = ? THEN cccp.cbm_total_china ELSE 0 END), 0) AS cbm_total_china,
+                COALESCE(SUM(
+                    CASE
+                        WHEN cccp.estados_proveedor = ? AND cc.id_usuario = ?
+                        THEN cccp.cbm_total_china
+                        ELSE 0
+                    END
+                ), 0) AS cbm_embarcado
+            FROM contenedor_consolidado_cotizacion_proveedores AS cccp
+            INNER JOIN contenedor_consolidado_cotizacion AS cc
+                ON cc.id = cccp.id_cotizacion
+                AND cc.deleted_at IS NULL
+            WHERE cccp.id_contenedor = ?',
+            ['CONFIRMADO', 'LOADED', $userId, $idContenedor]
+        );
+
+        $pagos = DB::selectOne(
+            'SELECT COALESCE(SUM(cccp.monto), 0) AS total_logistica_pagado
+            FROM contenedor_consolidado_cotizacion_coordinacion_pagos AS cccp
+            INNER JOIN cotizacion_coordinacion_pagos_concept AS pc
+                ON cccp.id_concept = pc.id
+                AND pc.name = ?
+            INNER JOIN contenedor_consolidado_cotizacion AS cc
+                ON cc.id = cccp.id_cotizacion
+                AND cc.id_contenedor = ?
+                AND cc.estado_cotizador = ?
+                AND cc.deleted_at IS NULL
+            WHERE cccp.id_contenedor = ?',
+            ['LOGISTICA', $idContenedor, 'CONFIRMADO', $idContenedor]
+        );
+
+        if (!$cotizacionEnContenedor && !$cotizacionConProveedor && !$proveedores && !$pagos && !$imo) {
+            return null;
+        }
+
+        return (object) array_merge(
+            (array) ($cotizacionEnContenedor ?? []),
+            (array) ($imo ?? []),
+            (array) ($cotizacionConProveedor ?? []),
+            (array) ($proveedores ?? []),
+            (array) ($pagos ?? [])
+        );
+    }
+
+    /**
      * @OA\Get(
      *     path="/carga-consolidada/contenedores/{idContenedor}/cotizaciones",
      *     tags={"Carga Consolidada"},
@@ -118,7 +222,7 @@ class CotizacionController extends Controller
     {
         try {
             $user = JWTAuth::parseToken()->authenticate();
-            $query = Cotizacion::with('calculadoraImportacion')
+            $query = Cotizacion::with(['calculadoraImportacion', 'tipoCliente'])
                 ->where('id_contenedor', $idContenedor)
                 ->whereNull('id_cliente_importacion')
                 ->where(function ($q) {
@@ -278,20 +382,14 @@ class CotizacionController extends Controller
                 ];
             }
 
+            $listaEmbarqueUrl = $this->cdnStorageUrl($files->lista_embarque_url);
+
             // Transformar los datos para la respuesta
-            $data = $results->map(function ($cotizacion) use ($files, $estadoPermisoPorCotizacion, $idTramitePorCotizacion) {
-                // Obtener url_cotizacion_pdf de calculadora_importacion si existe
-                $urlCotizacionPdf = null;
-                if ($cotizacion->id) {
-                    $calculadora = DB::table('calculadora_importacion')
-                        ->where('id_cotizacion', $cotizacion->id)
-                        ->select('url_cotizacion_pdf')
-                        ->first();
-                    if ($calculadora && $calculadora->url_cotizacion_pdf) {
-                        $urlCotizacionPdf = $this->generateImageUrl($calculadora->url_cotizacion_pdf);
-                    }
-                }
-                
+            $data = $results->map(function ($cotizacion) use ($files, $listaEmbarqueUrl, $estadoPermisoPorCotizacion, $idTramitePorCotizacion) {
+                $urlCotizacionPdf = $this->cdnStorageUrl(
+                    optional($cotizacion->calculadoraImportacion)->url_cotizacion_pdf
+                );
+
                 return [
                     'id' => $cotizacion->id,
                     'uuid' => $cotizacion->uuid,
@@ -315,11 +413,11 @@ class CotizacionController extends Controller
                     'tarifa' => $cotizacion->tarifa,
                     'qty_item' => $cotizacion->qty_item,
                     'fob' => $cotizacion->fob,
-                    'cotizacion_file_url' => $cotizacion->cotizacion_file_url ? $this->generateImageUrl($cotizacion->cotizacion_file_url) : null,
+                    'cotizacion_file_url' => $this->cdnStorageUrl($cotizacion->cotizacion_file_url),
                     'impuestos' => $cotizacion->impuestos,
-                    'tipo_cliente' => $cotizacion->tipoCliente->name,
+                    'tipo_cliente' => optional($cotizacion->tipoCliente)->name,
                     'bl_file_url' => $files->bl_file_url ? $files->bl_file_url : null,
-                    'lista_embarque_url' => $this->generateImageUrl($files->lista_embarque_url) ? $this->generateImageUrl($files->lista_embarque_url) : null,
+                    'lista_embarque_url' => $listaEmbarqueUrl,
                     'url_cotizacion_pdf' => $urlCotizacionPdf,
                     'from_calculator' => $cotizacion->from_calculator,
                     'cod_contract_calculator' => optional($cotizacion->calculadoraImportacion)->cod_cotizacion,
@@ -353,129 +451,12 @@ class CotizacionController extends Controller
     }
     public function getHeadersData($idContenedor)
     {
-        $userId = auth()->id();
+        $idContenedor = (int) $idContenedor;
+        $userId = (int) auth()->id();
         $user = JWTAuth::parseToken()->authenticate();
         $usergroup = $user->getNombreGrupo();
 
-        $headers = DB::table('contenedor_consolidado_cotizacion_proveedores as cccp')
-            ->join('contenedor_consolidado_cotizacion as cc', 'cccp.id_cotizacion', '=', 'cc.id')
-            ->where('cccp.id_contenedor', $idContenedor)
-            ->whereNull('cc.deleted_at')
-            ->select([
-                DB::raw('COALESCE(SUM(IF(cc.estado_cotizador = "CONFIRMADO", cccp.cbm_total_china, 0)), 0) as cbm_total_china'),
-                DB::raw('(
-                    SELECT COALESCE(SUM(volumen), 0)
-                    FROM contenedor_consolidado_cotizacion
-                    WHERE id_contenedor = ' . $idContenedor . '
-                    AND estado_cotizador = "CONFIRMADO"
-                    AND deleted_at IS NULL
-                ) as cbm_total_peru'),
-                DB::raw('(
-                    SELECT ROUND(COALESCE(SUM(
-                        IF(
-                            cc_imo.estado_cotizador = "CONFIRMADO",
-                            COALESCE(cccp_imo.cbm_total_china, cccp_imo.cbm_total, 0),
-                            0
-                        )
-                    ), 0), 2)
-                    FROM contenedor_consolidado_cotizacion_proveedores AS cccp_imo
-                    INNER JOIN contenedor_consolidado_cotizacion AS cc_imo
-                        ON cc_imo.id = cccp_imo.id_cotizacion
-                        AND cc_imo.deleted_at IS NULL
-                    WHERE cccp_imo.id_contenedor = ' . (int) $idContenedor . '
-                    AND (
-                        cc_imo.es_imo = 1
-                        OR EXISTS (
-                            SELECT 1
-                            FROM calculadora_importacion AS ci_imo
-                            WHERE ci_imo.id_cotizacion = cc_imo.id
-                            AND ci_imo.es_imo = 1
-                        )
-                        OR EXISTS (
-                            SELECT 1
-                            FROM calculadora_importacion_proveedores AS cip_imo
-                            INNER JOIN calculadora_importacion AS ci_prov
-                                ON ci_prov.id = cip_imo.id_calculadora_importacion
-                                AND ci_prov.es_imo = 1
-                            WHERE cip_imo.id_proveedor = cccp_imo.id
-                        )
-                    )
-                ) as cbm_total_imo'),
-                DB::raw('(
-                    SELECT COALESCE(SUM(volumen), 0)
-                    FROM contenedor_consolidado_cotizacion
-                    WHERE id_contenedor = ' . $idContenedor . '
-                    AND estado_cotizador = "CONFIRMADO"
-                    AND id_usuario = ' . $userId . '
-                    AND deleted_at IS NULL
-                ) as cbm_vendido'),
-                DB::raw('(
-                    SELECT COALESCE(SUM(volumen), 0)
-                    FROM contenedor_consolidado_cotizacion
-                    WHERE id_contenedor = ' . $idContenedor . '
-                    AND estado_cotizador != "CONFIRMADO"
-                    AND id_usuario = ' . $userId . '
-                    AND deleted_at IS NULL
-                ) as cbm_pendiente'),
-                DB::raw('(
-                    SELECT COALESCE(SUM(cccp.cbm_total_china), 0)
-                    FROM contenedor_consolidado_cotizacion_proveedores cccp
-                    JOIN contenedor_consolidado_cotizacion cc ON cccp.id_cotizacion = cc.id
-                    WHERE cccp.id_contenedor = ' . $idContenedor . '
-                    AND cccp.estados_proveedor = "LOADED"
-                    AND cc.id_usuario = ' . $userId . '
-                    AND cc.deleted_at IS NULL
-                ) as cbm_embarcado'),
-                DB::raw('(
-                    SELECT COALESCE(SUM(monto), 0)
-                    FROM contenedor_consolidado_cotizacion
-                    WHERE id IN (
-                        SELECT DISTINCT id_cotizacion
-                        FROM contenedor_consolidado_cotizacion_proveedores
-                        WHERE id_contenedor = ' . $idContenedor . '
-                    )
-                    AND estado_cotizador = "CONFIRMADO"
-                    AND (id_contenedor_pago =' . $idContenedor . ' OR id_contenedor_pago is null)
-                    AND deleted_at IS NULL
-
-                ) as total_logistica'),
-                DB::raw('(
-                    SELECT COALESCE(SUM(qty_item), 0)
-                    FROM contenedor_consolidado_cotizacion
-                    WHERE id IN (
-                        SELECT DISTINCT id_cotizacion
-                        FROM contenedor_consolidado_cotizacion_proveedores
-                        WHERE id_contenedor = ' . $idContenedor . '
-                    )
-                    AND estado_cotizador = "CONFIRMADO"
-                    AND deleted_at IS NULL
-                ) as total_qty_items'),
-                DB::raw('(
-                    SELECT COALESCE(SUM(monto), 0)
-                    FROM contenedor_consolidado_cotizacion_coordinacion_pagos cccp
-                    JOIN cotizacion_coordinacion_pagos_concept pc ON cccp.id_concept = pc.id
-                    WHERE cccp.id_contenedor = ' . $idContenedor . '
-                    AND cccp.id_cotizacion IN (
-                        SELECT id
-                        FROM contenedor_consolidado_cotizacion
-                        WHERE id_contenedor = ' . $idContenedor . '
-                        AND estado_cotizador = "CONFIRMADO"
-                        AND deleted_at IS NULL
-                    )
-                    AND pc.name = "LOGISTICA"
-                ) as total_logistica_pagado'),
-                DB::raw('(
-                    SELECT lista_embarque_url
-                    FROM carga_consolidada_contenedor
-                    WHERE id = ' . $idContenedor . '
-                ) as lista_embarque_url'),
-                DB::raw('(
-                    SELECT f_cierre
-                    FROM carga_consolidada_contenedor
-                    WHERE id = ' . $idContenedor . '
-                ) as f_cierre')
-            ])
-            ->first();
+        $headers = $this->fetchContenedorHeadersMetrics($idContenedor, $userId);
         // Preparar los headers
         $headersData = [
             'cbm_total_china' => [
@@ -679,7 +660,7 @@ class CotizacionController extends Controller
                 'data_pagos' => $headersDataPagos,
                 'carga' => $contenedor->carga,
                 'f_cierre' => $contenedor->fecha_cierre??$contenedor->f_cierre,
-                'lista_embarque_url' =>$this->generateImageUrl($contenedor->lista_embarque_url) ? $this->generateImageUrl($contenedor->lista_embarque_url) : null
+                'lista_embarque_url' => $this->cdnStorageUrl($contenedor->lista_embarque_url),
             ]);
         }
 
@@ -698,7 +679,7 @@ class CotizacionController extends Controller
             'data_pagos' => $headersDataPagos,
             'f_cierre' => $contenedor->fecha_cierre??$contenedor->f_cierre,
             'carga' => $contenedor->carga,
-            'lista_embarque_url' => $this->generateImageUrl($contenedor->lista_embarque_url) ? $this->generateImageUrl($contenedor->lista_embarque_url) : null
+            'lista_embarque_url' => $this->cdnStorageUrl($contenedor->lista_embarque_url),
         ]);
     }
     
