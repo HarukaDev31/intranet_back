@@ -13,18 +13,21 @@ class WaCopilotoSalesContextService
     /**
      * Bloque completo para inyectar en el prompt de análisis.
      */
-    public function buildKnowledgeBlock()
+    /**
+     * @param  bool  $includeWonExcerpts  Si false, solo reglas de negocio (fallback ante error Gemini).
+     */
+    public function buildKnowledgeBlock($includeWonExcerpts = true)
     {
-        if (!config('meta_whatsapp_copiloto.analysis_sales_context_enabled', true)) {
+        if (!$includeWonExcerpts || !config('meta_whatsapp_copiloto.analysis_sales_context_enabled', true)) {
             return self::businessRulesBlock();
         }
 
-        $cacheKey = 'wa_copiloto_sales_knowledge_v2';
+        $cacheKey = 'wa_copiloto_sales_knowledge_v3';
         $ttl = max(300, (int) config('meta_whatsapp_copiloto.analysis_sales_context_cache_ttl', 86400));
 
         return Cache::remember($cacheKey, $ttl, function () {
             $rules = self::businessRulesBlock();
-            $maxChars = max(8000, (int) config('meta_whatsapp_copiloto.analysis_sales_context_max_chars', 80000));
+            $maxChars = max(4000, (int) config('meta_whatsapp_copiloto.analysis_sales_context_max_chars', 18000));
             $budget = max(0, $maxChars - mb_strlen($rules) - 80);
             $excerpts = $this->loadWonExcerpts($budget);
 
@@ -33,7 +36,7 @@ class WaCopilotoSalesContextService
             }
 
             return $rules
-                . "\n\n--- CONVERSACIONES REALES CERRADAS (WON) — imita tono y respuestas del vendedor (V:) ---\n"
+                . "\n\n--- EJEMPLOS WON (V:=vendedor, C:=cliente) — imita tono, no copies literal ---\n"
                 . $excerpts;
         });
     }
@@ -168,12 +171,15 @@ RULES;
             return '';
         }
 
+        $maxSections = max(3, min(10, (int) config('meta_whatsapp_copiloto.analysis_sales_context_max_sections', 6)));
+        $maxSectionChars = max(600, min(3500, (int) config('meta_whatsapp_copiloto.analysis_sales_context_section_max_chars', 2000)));
+
         $picked = [];
         $usedChars = 0;
-        $step = max(1, (int) floor($total / 20));
+        $step = max(1, (int) floor($total / $maxSections));
 
-        for ($i = 0; $i < $total; $i += $step) {
-            $section = $sections[$i];
+        for ($i = 0; $i < $total && count($picked) < $maxSections; $i += $step) {
+            $section = $this->truncateText($sections[$i], $maxSectionChars);
             $len = mb_strlen($section) + 6;
             if ($usedChars + $len > $maxChars) {
                 break;
@@ -183,7 +189,7 @@ RULES;
         }
 
         if (empty($picked)) {
-            $picked[] = $this->truncateText($sections[0], $maxChars);
+            $picked[] = $this->truncateText($sections[0], min($maxChars, $maxSectionChars));
         }
 
         return implode("\n\n---\n\n", $picked);

@@ -141,13 +141,29 @@ class GeminiService
      * @param  float  $temperature
      * @return array{success: bool, data: array|null, error: string|null}
      */
-    public function analyzeTextAsJson($prompt, $maxOutputTokens = 2048, $temperature = 0.2)
+    /**
+     * @param  string  $prompt
+     * @param  int  $maxOutputTokens
+     * @param  float  $temperature
+     * @param  array<string, mixed>|null  $responseSchema  Schema Gemini (tipos OBJECT, STRING, etc.)
+     * @return array{success: bool, data: array|null, error: string|null, finish_reason: string|null}
+     */
+    public function analyzeTextAsJson($prompt, $maxOutputTokens = 2048, $temperature = 0.2, $responseSchema = null)
     {
         $apiKey = env('GEMINI_API_KEY');
 
         if (!$apiKey) {
             Log::error('GeminiService: GEMINI_API_KEY no configurado en .env');
-            return ['success' => false, 'data' => null, 'error' => 'GEMINI_API_KEY no configurado'];
+            return ['success' => false, 'data' => null, 'error' => 'GEMINI_API_KEY no configurado', 'finish_reason' => null];
+        }
+
+        $generationConfig = [
+            'temperature' => (float) $temperature,
+            'maxOutputTokens' => (int) $maxOutputTokens,
+            'responseMimeType' => 'application/json',
+        ];
+        if (is_array($responseSchema) && !empty($responseSchema)) {
+            $generationConfig['responseSchema'] = $responseSchema;
         }
 
         $payload = [
@@ -158,11 +174,7 @@ class GeminiService
                     ],
                 ],
             ],
-            'generationConfig' => [
-                'temperature' => (float) $temperature,
-                'maxOutputTokens' => (int) $maxOutputTokens,
-                'responseMimeType' => 'application/json',
-            ],
+            'generationConfig' => $generationConfig,
         ];
 
         $url = self::getApiUrl() . '?key=' . $apiKey;
@@ -183,21 +195,24 @@ class GeminiService
 
         if ($curlError) {
             Log::error('GeminiService analyzeTextAsJson: cURL error', ['error' => $curlError]);
-            return ['success' => false, 'data' => null, 'error' => 'Error de conexión: ' . $curlError];
+            return ['success' => false, 'data' => null, 'error' => 'Error de conexión: ' . $curlError, 'finish_reason' => null];
         }
 
         if ($httpCode !== 200) {
             Log::error('GeminiService analyzeTextAsJson: HTTP ' . $httpCode, ['response' => $response]);
-            return ['success' => false, 'data' => null, 'error' => 'Error de API Gemini (HTTP ' . $httpCode . ')'];
+            return ['success' => false, 'data' => null, 'error' => 'Error de API Gemini (HTTP ' . $httpCode . ')', 'finish_reason' => null];
         }
 
         $decoded = json_decode($response, true);
         if (!$decoded) {
-            return ['success' => false, 'data' => null, 'error' => 'Respuesta inválida de Gemini'];
+            return ['success' => false, 'data' => null, 'error' => 'Respuesta inválida de Gemini', 'finish_reason' => null];
         }
 
+        $candidate = isset($decoded['candidates'][0]) ? $decoded['candidates'][0] : [];
+        $finishReason = isset($candidate['finishReason']) ? (string) $candidate['finishReason'] : null;
+
         $textContent = '';
-        $parts = isset($decoded['candidates'][0]['content']['parts']) ? $decoded['candidates'][0]['content']['parts'] : [];
+        $parts = isset($candidate['content']['parts']) ? $candidate['content']['parts'] : [];
         foreach ($parts as $part) {
             if (!empty($part['text'])) {
                 $textContent .= $part['text'];
@@ -205,15 +220,49 @@ class GeminiService
         }
 
         $textContent = preg_replace('/```(?:json)?\s*/', '', trim($textContent));
-        $jsonString = self::extractJsonFromText($textContent);
-        $extracted = $jsonString !== null ? json_decode($jsonString, true) : null;
+        $extracted = self::parseJsonPayload($textContent);
 
         if (!$extracted || !is_array($extracted)) {
-            Log::warning('GeminiService analyzeTextAsJson: JSON inválido', ['text' => $textContent]);
-            return ['success' => false, 'data' => null, 'error' => 'No se pudo parsear el JSON de Gemini'];
+            Log::warning('GeminiService analyzeTextAsJson: JSON inválido', [
+                'finish_reason' => $finishReason,
+                'text_preview' => mb_substr($textContent, 0, 600),
+                'text_len' => mb_strlen($textContent),
+            ]);
+            $error = 'No se pudo parsear el JSON de Gemini';
+            if ($finishReason === 'MAX_TOKENS') {
+                $error = 'Respuesta Gemini truncada (MAX_TOKENS)';
+            }
+
+            return ['success' => false, 'data' => null, 'error' => $error, 'finish_reason' => $finishReason];
         }
 
-        return ['success' => true, 'data' => $extracted, 'error' => null];
+        return ['success' => true, 'data' => $extracted, 'error' => null, 'finish_reason' => $finishReason];
+    }
+
+    /**
+     * @param  string  $text
+     * @return array<string, mixed>|null
+     */
+    private static function parseJsonPayload($text)
+    {
+        $text = trim((string) $text);
+        if ($text === '') {
+            return null;
+        }
+
+        $direct = json_decode($text, true);
+        if (is_array($direct)) {
+            return $direct;
+        }
+
+        $jsonString = self::extractJsonFromText($text);
+        if ($jsonString === null) {
+            return null;
+        }
+
+        $extracted = json_decode($jsonString, true);
+
+        return is_array($extracted) ? $extracted : null;
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -346,9 +395,32 @@ class GeminiService
         }
 
         $depth = 0;
+        $inString = false;
+        $escape = false;
         $len = strlen($text);
+
         for ($i = $first; $i < $len; $i++) {
             $c = $text[$i];
+
+            if ($escape) {
+                $escape = false;
+                continue;
+            }
+
+            if ($inString) {
+                if ($c === '\\') {
+                    $escape = true;
+                } elseif ($c === '"') {
+                    $inString = false;
+                }
+                continue;
+            }
+
+            if ($c === '"') {
+                $inString = true;
+                continue;
+            }
+
             if ($c === '{') {
                 $depth++;
             } elseif ($c === '}') {

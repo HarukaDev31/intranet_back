@@ -17,7 +17,7 @@ class WaCopilotoImportSalesContextCommand extends Command
     public function handle()
     {
         if ($this->option('clear-cache')) {
-            Cache::forget('wa_copiloto_sales_knowledge_v2');
+            Cache::forget('wa_copiloto_sales_knowledge_v3');
             $this->info('Cache wa_copiloto_sales_knowledge_v2 limpiada.');
         }
 
@@ -44,7 +44,7 @@ class WaCopilotoImportSalesContextCommand extends Command
         }
 
         Storage::disk('local')->put($target, $contents);
-        Cache::forget('wa_copiloto_sales_knowledge_v2');
+        Cache::forget('wa_copiloto_sales_knowledge_v3');
 
         $bytes = strlen($contents);
         $lines = substr_count($contents, "\n") + 1;

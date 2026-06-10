@@ -140,7 +140,7 @@ return [
     'analysis_score_decay_after_days' => (int) env('META_WHATSAPP_COPILOTO_ANALYSIS_SCORE_DECAY_AFTER_DAYS', 7),
 
     /** Tokens máximos de salida Gemini por análisis. */
-    'analysis_gemini_max_output_tokens' => (int) env('META_WHATSAPP_COPILOTO_ANALYSIS_GEMINI_MAX_OUTPUT_TOKENS', 1024),
+    'analysis_gemini_max_output_tokens' => (int) env('META_WHATSAPP_COPILOTO_ANALYSIS_GEMINI_MAX_OUTPUT_TOKENS', 2048),
 
     /**
      * Teléfonos permitidos para análisis IA (CSV, E.164 sin +). Use * o all para todos.
@@ -158,7 +158,13 @@ return [
     'analysis_sales_context_path' => env('META_WHATSAPP_COPILOTO_ANALYSIS_SALES_CONTEXT_PATH', 'ventas_contexto.txt'),
 
     /** Tope de caracteres del bloque de conocimiento (reglas + excerpts WON). */
-    'analysis_sales_context_max_chars' => (int) env('META_WHATSAPP_COPILOTO_ANALYSIS_SALES_CONTEXT_MAX_CHARS', 80000),
+    'analysis_sales_context_max_chars' => (int) env('META_WHATSAPP_COPILOTO_ANALYSIS_SALES_CONTEXT_MAX_CHARS', 18000),
+
+    /** Cantidad máxima de ventas WON de ejemplo en el prompt. */
+    'analysis_sales_context_max_sections' => (int) env('META_WHATSAPP_COPILOTO_ANALYSIS_SALES_CONTEXT_MAX_SECTIONS', 6),
+
+    /** Máximo de caracteres por venta WON de ejemplo. */
+    'analysis_sales_context_section_max_chars' => (int) env('META_WHATSAPP_COPILOTO_ANALYSIS_SALES_CONTEXT_SECTION_MAX_CHARS', 2000),
 
     /** TTL cache del bloque de conocimiento (segundos). */
     'analysis_sales_context_cache_ttl' => (int) env('META_WHATSAPP_COPILOTO_ANALYSIS_SALES_CONTEXT_CACHE_TTL', 86400),

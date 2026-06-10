@@ -109,24 +109,42 @@ class WaCopilotoMessageAnalysisService
             $contactName = (string) $conversation->phone_e164;
         }
 
-        $prompt = $this->buildPrompt($contactName, $context, $body, (string) $message->message_type);
-        $maxTokens = max(512, min(4096, (int) config('meta_whatsapp_copiloto.analysis_gemini_max_output_tokens', 1024)));
+        $maxTokens = max(768, min(4096, (int) config('meta_whatsapp_copiloto.analysis_gemini_max_output_tokens', 2048)));
+        $schema = $this->geminiResponseSchema();
+        $gemini = null;
 
-        WaCopilotoLog::info('analysis.gemini_request', [
-            'message_id' => (int) $message->id,
-            'conversation_id' => (int) $conversation->id,
-            'phone_e164' => (string) $conversation->phone_e164,
-            'max_tokens' => $maxTokens,
-        ]);
+        foreach ([true, false] as $includeWon) {
+            $prompt = $this->buildPrompt($contactName, $context, $body, (string) $message->message_type, $includeWon);
 
-        $gemini = $this->gemini->analyzeTextAsJson($prompt, $maxTokens, 0.25);
+            WaCopilotoLog::info('analysis.gemini_request', [
+                'message_id' => (int) $message->id,
+                'conversation_id' => (int) $conversation->id,
+                'phone_e164' => (string) $conversation->phone_e164,
+                'max_tokens' => $maxTokens,
+                'prompt_chars' => mb_strlen($prompt),
+                'won_excerpts' => $includeWon,
+            ]);
 
-        if (empty($gemini['success']) || !is_array($gemini['data'])) {
+            $gemini = $this->gemini->analyzeTextAsJson($prompt, $maxTokens, 0.25, $schema);
+
+            if (!empty($gemini['success']) && is_array($gemini['data'])) {
+                break;
+            }
+
             WaCopilotoLog::warning('analysis.gemini_failed', [
                 'message_id' => (int) $message->id,
                 'error' => isset($gemini['error']) ? (string) $gemini['error'] : 'unknown',
+                'finish_reason' => isset($gemini['finish_reason']) ? (string) $gemini['finish_reason'] : null,
+                'won_excerpts' => $includeWon,
+                'will_retry_rules_only' => $includeWon,
             ]);
 
+            if (!$includeWon) {
+                return null;
+            }
+        }
+
+        if (empty($gemini['success']) || !is_array($gemini['data'])) {
             return null;
         }
 
@@ -383,7 +401,7 @@ class WaCopilotoMessageAnalysisService
      * @param  string  $messageType
      * @return string
      */
-    protected function buildPrompt($contactName, array $context, $latestBody, $messageType)
+    protected function buildPrompt($contactName, array $context, $latestBody, $messageType, $includeWonExcerpts = true)
     {
         $parts = [];
         $parts[] = 'Meta: ' . (string) $context['meta'];
@@ -400,32 +418,76 @@ class WaCopilotoMessageAnalysisService
         }
 
         $contextBlock = implode("\n\n", $parts);
-        $salesKnowledge = $this->salesContextService->buildKnowledgeBlock();
+        $salesKnowledge = $this->salesContextService->buildKnowledgeBlock($includeWonExcerpts);
 
         return 'Eres copiloto comercial de Probusiness (importaciones desde China / carga consolidada Perú). '
-            . 'Tu trabajo: analizar el último mensaje del cliente y sugerir la respuesta EXACTA que enviaría un vendedor exitoso, '
-            . 'basándote en las reglas de negocio y en el estilo de las conversaciones WON (V: = vendedor, C: = cliente). '
-            . 'Responde ÚNICAMENTE JSON válido con esta estructura: '
-            . '{"temperatura_mensaje":0-100,"temperatura_lead":0-100,"nivel":"caliente|tibio|enfriando|frio",'
-            . '"etapa":"calificacion|documentos|cotizacion|cierre|postventa",'
-            . '"intencion":"qué quiere el cliente en este mensaje",'
-            . '"alerta":"restricción o riesgo comercial, o null",'
-            . '"senales":["texto corto"],"objecion":"texto o null",'
-            . '"sugerencia_principal":"texto listo para copiar y enviar al cliente por WhatsApp (tono Probusiness)",'
-            . '"resumen_contexto":"máx 280 chars, estado del lead y temas clave del hilo para próximos análisis",'
-            . '"items":[{"tipo":"temperatura|comentario|sugerencia","etiqueta":"texto","texto":"texto","puntaje":0-100|null}]}. '
-            . 'Reglas: items debe tener AL MENOS 2 entradas; sugerencia_principal debe ser mensaje WhatsApp real (no metainstrucciones); '
-            . 'usa frases y políticas del bloque de conocimiento; no inventes montos ni fechas no presentes en el hilo; '
-            . 'si aplica confirmación, recuerda que debe decir "Si confirmo"; '
-            . 'temperatura_mensaje = solo el último mensaje; temperatura_lead = estimación global del lead; '
-            . 'textos en español. '
-            . 'Contacto: ' . $contactName . '. '
-            . 'Tipo último mensaje: ' . $messageType . ".\n\n"
-            . "=== CONOCIMIENTO DE NEGOCIO Y VENTAS WON ===\n"
+            . 'Analiza el último mensaje del cliente y sugiere la respuesta que enviaría un vendedor exitoso. '
+            . 'Usa las reglas de negocio y el estilo de los ejemplos WON (V:=vendedor, C:=cliente). '
+            . 'sugerencia_principal: mensaje WhatsApp corto listo para enviar (máx 500 caracteres). '
+            . 'resumen_contexto: máx 280 caracteres. items: al menos 2 entradas. '
+            . 'No inventes montos ni fechas que no estén en el hilo. '
+            . 'Confirmación formal: el cliente debe escribir "Si confirmo". '
+            . 'Contacto: ' . $contactName . '. Tipo último mensaje: ' . $messageType . ".\n\n"
+            . "=== CONOCIMIENTO DE NEGOCIO ===\n"
             . $salesKnowledge . "\n\n"
-            . "=== HILO ACTUAL (ventana temporal) ===\n"
+            . "=== HILO ACTUAL ===\n"
             . $contextBlock . "\n\n"
-            . 'Último mensaje a analizar (prioridad máxima):\n' . $latestBody;
+            . 'Último mensaje del cliente (prioridad máxima):\n' . $latestBody;
+    }
+
+    /**
+     * Schema estructurado para forzar JSON válido en Gemini.
+     *
+     * @return array<string, mixed>
+     */
+    protected function geminiResponseSchema()
+    {
+        return [
+            'type' => 'OBJECT',
+            'properties' => [
+                'temperatura_mensaje' => ['type' => 'INTEGER'],
+                'temperatura_lead' => ['type' => 'INTEGER'],
+                'nivel' => [
+                    'type' => 'STRING',
+                    'enum' => ['caliente', 'tibio', 'enfriando', 'frio'],
+                ],
+                'etapa' => [
+                    'type' => 'STRING',
+                    'enum' => ['calificacion', 'documentos', 'cotizacion', 'cierre', 'postventa'],
+                ],
+                'intencion' => ['type' => 'STRING'],
+                'alerta' => ['type' => 'STRING'],
+                'senales' => [
+                    'type' => 'ARRAY',
+                    'items' => ['type' => 'STRING'],
+                ],
+                'objecion' => ['type' => 'STRING'],
+                'sugerencia_principal' => ['type' => 'STRING'],
+                'resumen_contexto' => ['type' => 'STRING'],
+                'items' => [
+                    'type' => 'ARRAY',
+                    'items' => [
+                        'type' => 'OBJECT',
+                        'properties' => [
+                            'tipo' => ['type' => 'STRING'],
+                            'etiqueta' => ['type' => 'STRING'],
+                            'texto' => ['type' => 'STRING'],
+                            'puntaje' => ['type' => 'INTEGER'],
+                        ],
+                        'required' => ['tipo', 'texto'],
+                    ],
+                ],
+            ],
+            'required' => [
+                'temperatura_mensaje',
+                'temperatura_lead',
+                'nivel',
+                'etapa',
+                'sugerencia_principal',
+                'resumen_contexto',
+                'items',
+            ],
+        ];
     }
 
     /**
