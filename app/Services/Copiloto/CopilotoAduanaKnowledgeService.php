@@ -9,6 +9,7 @@ use App\Models\BaseDatos\ProductoRegulacionEtiquetado;
 use App\Models\BaseDatos\ProductoRegulacionPermiso;
 use App\Models\BaseDatos\Regulaciones\ProductoRubro;
 use App\Support\WhatsApp\WaJsonUtf8;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Búsqueda en base de datos de productos y regulaciones para Copiloto (UI + contexto IA).
@@ -32,12 +33,24 @@ class CopilotoAduanaKnowledgeService
     }
 
     $items = [];
-    $this->searchProductosImportados($terms, $items);
-    $this->searchRubros($terms, $items);
-    $this->searchPermisos($terms, $items);
-    $this->searchAntidumping($terms, $items);
-    $this->searchEtiquetado($terms, $items);
-    $this->searchDocumentosEspeciales($terms, $items);
+    $this->safeSearch('productos', function () use ($terms, &$items) {
+      $this->searchProductosImportados($terms, $items);
+    });
+    $this->safeSearch('rubros', function () use ($terms, &$items) {
+      $this->searchRubros($terms, $items);
+    });
+    $this->safeSearch('permisos', function () use ($terms, &$items) {
+      $this->searchPermisos($terms, $items);
+    });
+    $this->safeSearch('antidumping', function () use ($terms, &$items) {
+      $this->searchAntidumping($terms, $items);
+    });
+    $this->safeSearch('etiquetado', function () use ($terms, &$items) {
+      $this->searchEtiquetado($terms, $items);
+    });
+    $this->safeSearch('documentos_especiales', function () use ($terms, &$items) {
+      $this->searchDocumentosEspeciales($terms, $items);
+    });
 
     $items = $this->dedupeItems($items);
     $items = array_slice($items, 0, max(1, min(30, (int) $limit)));
@@ -187,14 +200,15 @@ class CopilotoAduanaKnowledgeService
    */
   protected function searchPermisos(array $terms, array &$items)
   {
-    $query = ProductoRegulacionPermiso::query()->with(['rubro', 'entidadReguladora']);
+    // bd_productos_regulaciones_permiso no tiene id_rubro; se vincula por entidad reguladora.
+    $query = ProductoRegulacionPermiso::query()->with(['entidadReguladora']);
     $query->where(function ($q) use ($terms) {
       foreach ($terms as $term) {
         $like = '%' . $term . '%';
         $q->orWhere('nombre', 'like', $like)
           ->orWhere('observaciones', 'like', $like)
-          ->orWhereHas('rubro', function ($rubro) use ($like) {
-            $rubro->where('nombre', 'like', $like);
+          ->orWhereHas('entidadReguladora', function ($entidad) use ($like) {
+            $entidad->where('nombre', 'like', $like);
           });
       }
     });
@@ -204,7 +218,7 @@ class CopilotoAduanaKnowledgeService
         'id' => (int) $row->id,
         'tipo' => 'permiso',
         'titulo' => (string) $row->nombre,
-        'rubro' => $row->rubro ? (string) $row->rubro->nombre : null,
+        'rubro' => null,
         'entidad' => $row->entidadReguladora ? (string) $row->entidadReguladora->nombre : null,
         'restriccion' => 'PERMISO',
         'detalle' => $this->joinParts([
@@ -310,6 +324,22 @@ class CopilotoAduanaKnowledgeService
         'detalle' => 'Requiere documentación especial',
         'observaciones' => $row->observaciones ? (string) $row->observaciones : null,
       ];
+    }
+  }
+
+  /**
+   * @param  string  $source
+   * @param  callable  $callback
+   */
+  protected function safeSearch($source, callable $callback)
+  {
+    try {
+      $callback();
+    } catch (\Throwable $e) {
+      Log::warning('[CopilotoAduana] search_failed', [
+        'source' => $source,
+        'error' => $e->getMessage(),
+      ]);
     }
   }
 
