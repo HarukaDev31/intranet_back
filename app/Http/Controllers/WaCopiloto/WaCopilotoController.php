@@ -7,6 +7,7 @@ use App\Jobs\WaCopiloto\SendWaCopilotoOutboundJob;
 use App\Models\WaCopiloto\WaCopilotoConversation;
 use App\Services\WhatsApp\WaContactService;
 use App\Services\WaCopiloto\WaCopilotoConversationService;
+use App\Services\WaCopiloto\WaCopilotoPipelineService;
 use App\Services\WaCopiloto\WaCopilotoMessageService;
 use App\Services\WaCopiloto\WaCopilotoSessionService;
 use App\Services\WaCopiloto\WaCopilotoTemplateService;
@@ -44,13 +45,17 @@ class WaCopilotoController extends Controller
     /** @var WaContactService */
     protected $contactService;
 
+    /** @var WaCopilotoPipelineService */
+    protected $pipelineService;
+
     public function __construct(
         WaCopilotoSessionService $sessionService,
         WaCopilotoConversationService $conversationService,
         WaCopilotoMessageService $messageService,
         WaCopilotoTemplateService $templateService,
         WaCopilotoWindowService $windowService,
-        WaContactService $contactService
+        WaContactService $contactService,
+        WaCopilotoPipelineService $pipelineService
     ) {
         $this->sessionService = $sessionService;
         $this->conversationService = $conversationService;
@@ -58,6 +63,7 @@ class WaCopilotoController extends Controller
         $this->templateService = $templateService;
         $this->windowService = $windowService;
         $this->contactService = $contactService;
+        $this->pipelineService = $pipelineService;
     }
 
     public function session(Request $request)
@@ -482,13 +488,144 @@ class WaCopilotoController extends Controller
     public function assign(Request $request, $id)
     {
         try {
+            $user = JWTAuth::parseToken()->authenticate();
             $userId = (int) $request->input('user_id', 0);
+            $changedBy = $user ? (int) $user->getIdUsuario() : 0;
 
-            return response()->json($this->conversationService->assign((int) $id, $userId));
+            return response()->json($this->conversationService->assign((int) $id, $userId, $changedBy));
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
                 'message' => 'Error al asignar: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function pipelineStages()
+    {
+        try {
+            return response()->json($this->pipelineService->listStages());
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al listar etapas: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function pipelineCreateStage(Request $request)
+    {
+        try {
+            $user = JWTAuth::parseToken()->authenticate();
+            $userId = $user ? (int) $user->getIdUsuario() : 0;
+            $result = $this->pipelineService->createProgressStage(
+                $request->input('label', ''),
+                $userId
+            );
+            $status = !empty($result['success']) ? 200 : 422;
+
+            return response()->json($result, $status);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al crear etapa: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function pipelineReorderStages(Request $request)
+    {
+        try {
+            $user = JWTAuth::parseToken()->authenticate();
+            $userId = $user ? (int) $user->getIdUsuario() : 0;
+            $ordered = $request->input('stage_ids', []);
+            if (!is_array($ordered)) {
+                $ordered = [];
+            }
+            $result = $this->pipelineService->reorderProgressStages($ordered, $userId);
+            $status = !empty($result['success']) ? 200 : 422;
+
+            return response()->json($result, $status);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al reordenar etapas: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function pipelineKanban(Request $request)
+    {
+        try {
+            $user = JWTAuth::parseToken()->authenticate();
+            $params = $request->all();
+            $params['auth_user_id'] = $user ? (int) $user->getIdUsuario() : 0;
+
+            return response()->json($this->pipelineService->getKanban($params));
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al cargar kanban: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function pipelineKpis(Request $request)
+    {
+        try {
+            $user = JWTAuth::parseToken()->authenticate();
+            $params = $request->all();
+            $params['auth_user_id'] = $user ? (int) $user->getIdUsuario() : 0;
+
+            return response()->json($this->pipelineService->getKpis($params));
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al cargar KPIs: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function pipelineTransition(Request $request, $id)
+    {
+        try {
+            $user = JWTAuth::parseToken()->authenticate();
+            $stageId = (int) $request->input('stage_id', 0);
+            $note = $request->input('note');
+            $userId = $user ? (int) $user->getIdUsuario() : 0;
+
+            $result = $this->pipelineService->transition((int) $id, $stageId, $userId, $note);
+            $status = !empty($result['success']) ? 200 : 422;
+
+            return response()->json($result, $status);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al cambiar etapa: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function pipelineAssignmentHistory($id)
+    {
+        try {
+            return response()->json($this->pipelineService->assignmentHistory((int) $id));
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al cargar asignaciones: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function pipelineTransitionHistory($id)
+    {
+        try {
+            return response()->json($this->pipelineService->transitionHistory((int) $id));
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al cargar historial de etapas: ' . $e->getMessage(),
             ], 500);
         }
     }

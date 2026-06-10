@@ -17,8 +17,9 @@ class WaCopilotoImportSalesContextCommand extends Command
     public function handle()
     {
         if ($this->option('clear-cache')) {
+            Cache::forget('wa_copiloto_sales_won_sections_v3');
             Cache::forget('wa_copiloto_sales_knowledge_v3');
-            $this->info('Cache wa_copiloto_sales_knowledge_v2 limpiada.');
+            $this->info('Cache de contexto de ventas WON limpiada.');
         }
 
         $target = (string) config('meta_whatsapp_copiloto.analysis_sales_context_path', 'ventas_contexto.txt');
@@ -44,6 +45,7 @@ class WaCopilotoImportSalesContextCommand extends Command
         }
 
         Storage::disk('local')->put($target, $contents);
+        Cache::forget('wa_copiloto_sales_won_sections_v3');
         Cache::forget('wa_copiloto_sales_knowledge_v3');
 
         $bytes = strlen($contents);

@@ -32,10 +32,13 @@ class WaCopilotoConversation extends Model
         'ai_summary_through_message_id',
         'ai_temperatura',
         'ai_temperatura_at',
+        'pipeline_stage_id',
+        'customer_initiated_at',
     ];
 
     protected $casts = [
         'assigned_at' => 'datetime',
+        'customer_initiated_at' => 'datetime',
         'last_customer_message_at' => 'datetime',
         'window_expires_at' => 'datetime',
         'last_message_at' => 'datetime',
@@ -53,5 +56,10 @@ class WaCopilotoConversation extends Model
     public function messages()
     {
         return $this->hasMany(WaCopilotoMessage::class, 'conversation_id');
+    }
+
+    public function pipelineStage()
+    {
+        return $this->belongsTo(WaCopilotoPipelineStage::class, 'pipeline_stage_id');
     }
 }

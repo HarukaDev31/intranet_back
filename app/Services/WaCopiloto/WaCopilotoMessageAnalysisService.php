@@ -226,6 +226,11 @@ class WaCopilotoMessageAnalysisService
         $alerta = trim((string) ($parsed['alerta'] ?? ''));
         $intencion = trim((string) ($parsed['intencion'] ?? ''));
 
+        $sugerenciaCorta = $sugerencia;
+        if (mb_strlen($sugerenciaCorta) > 255) {
+            $sugerenciaCorta = mb_substr($sugerenciaCorta, 0, 252) . '…';
+        }
+
         $savedInsights = [];
         try {
             DB::transaction(function () use (
@@ -238,6 +243,7 @@ class WaCopilotoMessageAnalysisService
                 $senales,
                 $objecion,
                 $sugerencia,
+                $sugerenciaCorta,
                 $etapa,
                 $alerta,
                 $intencion,
@@ -298,11 +304,6 @@ class WaCopilotoMessageAnalysisService
                     $savedInsights[] = $this->formatInsight($row);
                 }
 
-                $sugerenciaCorta = $sugerencia;
-                if (mb_strlen($sugerenciaCorta) > 255) {
-                    $sugerenciaCorta = mb_substr($sugerenciaCorta, 0, 252) . '…';
-                }
-
                 CopilotoFicha::updateOrCreate(
                     ['phone' => $phone],
                     [
@@ -313,6 +314,11 @@ class WaCopilotoMessageAnalysisService
                         'sugerencia' => $sugerencia !== '' ? $sugerencia : null,
                         'sugerencia_corta' => $sugerenciaCorta !== '' ? $sugerenciaCorta : null,
                     ]
+                );
+
+                app(WaCopilotoCacheService::class)->invalidateAfterFichaWrite(
+                    $phone,
+                    (int) $conversation->session_id
                 );
             });
         } catch (\Throwable $e) {
@@ -350,16 +356,14 @@ class WaCopilotoMessageAnalysisService
             ]);
         }
 
-        $ficha = CopilotoFicha::query()->where('phone', $phone)->first();
-
         $fichaPayload = [
             'temperatura' => (int) $temperaturaLead,
             'nivel' => (string) $nivel,
             'senales' => $senales,
             'objecion' => $objecion !== '' ? $objecion : null,
             'sugerencia' => $sugerencia !== '' ? $sugerencia : null,
-            'sugerencia_corta' => $ficha ? $ficha->sugerencia_corta : null,
-            'accion_sugerida' => $ficha && $ficha->sugerencia_corta ? $ficha->sugerencia_corta : $sugerencia,
+            'sugerencia_corta' => $sugerenciaCorta !== '' ? $sugerenciaCorta : null,
+            'accion_sugerida' => $sugerenciaCorta !== '' ? $sugerenciaCorta : $sugerencia,
             'motivo' => $objecion !== '' ? $objecion : (count($senales) ? implode(' · ', array_slice($senales, 0, 2)) : null),
         ];
 

@@ -202,4 +202,25 @@ return [
     /** TTL cache del perfil comercial por teléfono (segundos). */
     'analysis_cliente_comercial_context_cache_ttl' => (int) env('META_WHATSAPP_COPILOTO_ANALYSIS_CLIENTE_COMERCIAL_CONTEXT_CACHE_TTL', 600),
 
+    /** TTL cache búsqueda aduanera por términos (segundos). */
+    'analysis_aduana_context_cache_ttl' => (int) env('META_WHATSAPP_COPILOTO_ANALYSIS_ADUANA_CACHE_TTL', 1800),
+
+    /** TTL listado de conversaciones (segundos). */
+    'cache_ttl_list_seconds' => (int) env('META_WHATSAPP_COPILOTO_CACHE_TTL_LIST', 45),
+
+    /** TTL kanban pipeline (segundos). */
+    'cache_ttl_kanban_seconds' => (int) env('META_WHATSAPP_COPILOTO_CACHE_TTL_KANBAN', 45),
+
+    /** TTL KPIs pipeline (segundos). */
+    'cache_ttl_kpis_seconds' => (int) env('META_WHATSAPP_COPILOTO_CACHE_TTL_KPIS', 60),
+
+    /** TTL etapas pipeline (segundos). */
+    'cache_ttl_stages_seconds' => (int) env('META_WHATSAPP_COPILOTO_CACHE_TTL_STAGES', 3600),
+
+    /** TTL usuarios asignables (segundos). */
+    'cache_ttl_assignable_users_seconds' => (int) env('META_WHATSAPP_COPILOTO_CACHE_TTL_ASSIGNABLE', 300),
+
+    /** TTL mapa id→nombre de asesores (segundos). */
+    'cache_ttl_usuario_names_seconds' => (int) env('META_WHATSAPP_COPILOTO_CACHE_TTL_USUARIO_NAMES', 300),
+
 ];

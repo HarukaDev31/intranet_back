@@ -7,6 +7,7 @@ use App\Models\Grupo;
 use App\Models\Usuario;
 use App\Models\WaCopiloto\WaCopilotoConversation;
 use App\Models\WaCopiloto\WaCopilotoMessage;
+use App\Models\WaCopiloto\WaCopilotoPipelineStage;
 use App\Models\WaCopiloto\WaCopilotoSession;
 use App\Support\WhatsApp\WaJsonUtf8;
 use Carbon\Carbon;
@@ -19,12 +20,17 @@ class WaCopilotoConversationService
     /** @var WaCopilotoWindowService */
     protected $windowService;
 
+    /** @var WaCopilotoCacheService */
+    protected $cacheService;
+
     public function __construct(
         WaCopilotoSessionService $sessionService,
-        WaCopilotoWindowService $windowService
+        WaCopilotoWindowService $windowService,
+        WaCopilotoCacheService $cacheService
     ) {
         $this->sessionService = $sessionService;
         $this->windowService = $windowService;
+        $this->cacheService = $cacheService;
     }
 
     /**
@@ -34,10 +40,30 @@ class WaCopilotoConversationService
     public function listConversations(array $params = [])
     {
         $session = $this->sessionService->ensureDefaultSession();
+
+        return $this->cacheService->rememberConversationList(
+            (int) $session->id,
+            $this->conversationListCacheFilters($params),
+            function () use ($session, $params) {
+                return $this->buildConversationListResponse($session, $params);
+            }
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $params
+     * @return array<string, mixed>
+     */
+    protected function buildConversationListResponse(WaCopilotoSession $session, array $params = [])
+    {
         $perPage = max(1, min(100, (int) ($params['per_page'] ?? 30)));
         $search = trim((string) ($params['search'] ?? ''));
         $filter = trim((string) ($params['filter'] ?? 'todas'));
         $userId = isset($params['auth_user_id']) ? (int) $params['auth_user_id'] : 0;
+        $assignedUserId = isset($params['assigned_user_id']) ? (int) $params['assigned_user_id'] : 0;
+        $soloClienteInbound = array_key_exists('solo_cliente_inbound', $params)
+            ? filter_var($params['solo_cliente_inbound'], FILTER_VALIDATE_BOOLEAN)
+            : false;
 
         $query = WaCopilotoConversation::query()
             ->where('session_id', $session->id)
@@ -51,7 +77,13 @@ class WaCopilotoConversationService
             });
         }
 
-        if ($filter === 'sin-asignar') {
+        if ($soloClienteInbound) {
+            $query->whereNotNull('customer_initiated_at');
+        }
+
+        if ($assignedUserId > 0) {
+            $query->where('assigned_user_id', $assignedUserId);
+        } elseif ($filter === 'sin-asignar') {
             $query->whereNull('assigned_user_id');
         } elseif ($filter === 'mis' && $userId > 0) {
             $query->where('assigned_user_id', $userId);
@@ -62,22 +94,33 @@ class WaCopilotoConversationService
         $paginated = $query->paginate($perPage);
         $items = $paginated->items();
         $phonesNeedingFallback = [];
+        $assignedUserIds = [];
+        $stageIds = [];
         foreach ($items as $conv) {
             if ($conv->ai_temperatura === null) {
                 $phonesNeedingFallback[] = (string) $conv->phone_e164;
             }
+            if ($conv->assigned_user_id) {
+                $assignedUserIds[] = (int) $conv->assigned_user_id;
+            }
+            if ($conv->pipeline_stage_id) {
+                $stageIds[] = (int) $conv->pipeline_stage_id;
+            }
         }
         $fichaTemperaturaByPhone = $this->loadLatestFichaTemperaturas($phonesNeedingFallback);
+        $userNamesById = $this->cacheService->batchUserDisplayNames($assignedUserIds);
+        $stagesById = $this->loadPipelineStagesById($stageIds);
 
         $rows = [];
         foreach ($items as $conv) {
-            $rows[] = $this->formatConversation($conv, $fichaTemperaturaByPhone);
+            $this->attachPipelineStageRelation($conv, $stagesById);
+            $rows[] = $this->formatConversation($conv, $fichaTemperaturaByPhone, $userNamesById);
         }
 
         $includeRaw = isset($params['include_contacts'])
             ? $params['include_contacts']
             : (isset($params['include_registry']) ? $params['include_registry'] : true);
-        $includeContacts = filter_var($includeRaw, FILTER_VALIDATE_BOOLEAN);
+        $includeContacts = filter_var($includeRaw, FILTER_VALIDATE_BOOLEAN) && !$soloClienteInbound;
         $pendingAdded = 0;
 
         if ($paginated->currentPage() === 1 && $includeContacts) {
@@ -114,12 +157,40 @@ class WaCopilotoConversationService
     }
 
     /**
-     * @param  WaCopilotoConversation  $conversation
-     * @param  array<string, int>  $fichaTemperaturaByPhone
+     * @param  array<string, mixed>  $params
      * @return array<string, mixed>
      */
-    public function formatConversation(WaCopilotoConversation $conversation, array $fichaTemperaturaByPhone = [])
+    protected function conversationListCacheFilters(array $params)
     {
+        return [
+            'per_page' => (int) ($params['per_page'] ?? 30),
+            'page' => (int) ($params['page'] ?? 1),
+            'search' => trim((string) ($params['search'] ?? '')),
+            'filter' => trim((string) ($params['filter'] ?? 'todas')),
+            'auth_user_id' => isset($params['auth_user_id']) ? (int) $params['auth_user_id'] : 0,
+            'assigned_user_id' => isset($params['assigned_user_id']) ? (int) $params['assigned_user_id'] : 0,
+            'solo_cliente_inbound' => array_key_exists('solo_cliente_inbound', $params)
+                ? filter_var($params['solo_cliente_inbound'], FILTER_VALIDATE_BOOLEAN)
+                : false,
+            'include_contacts' => isset($params['include_contacts'])
+                ? filter_var($params['include_contacts'], FILTER_VALIDATE_BOOLEAN)
+                : (isset($params['include_registry'])
+                    ? filter_var($params['include_registry'], FILTER_VALIDATE_BOOLEAN)
+                    : true),
+        ];
+    }
+
+    /**
+     * @param  WaCopilotoConversation  $conversation
+     * @param  array<string, int>  $fichaTemperaturaByPhone
+     * @param  array<int, string>  $userNamesById
+     * @return array<string, mixed>
+     */
+    public function formatConversation(
+        WaCopilotoConversation $conversation,
+        array $fichaTemperaturaByPhone = [],
+        array $userNamesById = []
+    ) {
         $window = $this->windowService->computeWindowState($conversation);
         $name = WaJsonUtf8::sanitizeString(trim((string) $conversation->contact_name));
         if ($name === '') {
@@ -128,10 +199,15 @@ class WaCopilotoConversationService
 
         $assignedName = null;
         if ($conversation->assigned_user_id) {
-            $u = Usuario::query()->find($conversation->assigned_user_id);
-            $assignedName = $u
-                ? WaJsonUtf8::sanitizeString((string) ($u->No_Nombres_Apellidos ?: $u->No_Usuario))
-                : null;
+            $uid = (int) $conversation->assigned_user_id;
+            if (isset($userNamesById[$uid])) {
+                $assignedName = $userNamesById[$uid];
+            } else {
+                $u = Usuario::query()->find($uid);
+                $assignedName = $u
+                    ? WaJsonUtf8::sanitizeString((string) ($u->No_Nombres_Apellidos ?: $u->No_Usuario))
+                    : null;
+            }
         }
 
         $initials = $this->initials($name);
@@ -139,6 +215,11 @@ class WaCopilotoConversationService
             ? Carbon::parse($conversation->last_message_at)->format('H:i')
             : '';
         $temperatura = $this->resolveConversationTemperatura($conversation, $fichaTemperaturaByPhone);
+        $stage = $conversation->relationLoaded('pipelineStage')
+            ? $conversation->pipelineStage
+            : ($conversation->pipeline_stage_id
+                ? $conversation->pipelineStage()->first()
+                : null);
 
         return [
             'id' => (int) $conversation->id,
@@ -168,6 +249,11 @@ class WaCopilotoConversationService
             'status' => $conversation->status,
             'temperatura' => $temperatura,
             'ai_temperatura_at' => $conversation->ai_temperatura_at,
+            'customer_initiated_at' => $conversation->customer_initiated_at,
+            'pipeline_stage_id' => $conversation->pipeline_stage_id ? (int) $conversation->pipeline_stage_id : null,
+            'pipeline_stage_slug' => $stage ? (string) $stage->slug : null,
+            'pipeline_stage_label' => $stage ? WaJsonUtf8::sanitizeString((string) $stage->label) : null,
+            'pipeline_major' => $stage ? (string) $stage->major : null,
         ];
     }
 
@@ -223,26 +309,28 @@ class WaCopilotoConversationService
      */
     public function getAssignableUsers()
     {
-        $grupo = Grupo::query()->where('No_Grupo', Usuario::ROL_COTIZADOR)->first();
-        if (!$grupo) {
-            return ['success' => true, 'data' => []];
-        }
+        return $this->cacheService->rememberAssignableUsers(function () {
+            $grupo = Grupo::query()->where('No_Grupo', Usuario::ROL_COTIZADOR)->first();
+            if (!$grupo) {
+                return ['success' => true, 'data' => []];
+            }
 
-        $users = Usuario::query()
-            ->where('ID_Grupo', $grupo->ID_Grupo)
-            ->where('Nu_Estado', 1)
-            ->orderBy('No_Nombres_Apellidos')
-            ->get(['ID_Usuario', 'No_Nombres_Apellidos', 'No_Usuario']);
+            $users = Usuario::query()
+                ->where('ID_Grupo', $grupo->ID_Grupo)
+                ->where('Nu_Estado', 1)
+                ->orderBy('No_Nombres_Apellidos')
+                ->get(['ID_Usuario', 'No_Nombres_Apellidos', 'No_Usuario']);
 
-        $rows = [];
-        foreach ($users as $u) {
-            $rows[] = [
-                'id' => (int) $u->ID_Usuario,
-                'name' => $u->No_Nombres_Apellidos ?: $u->No_Usuario,
-            ];
-        }
+            $rows = [];
+            foreach ($users as $u) {
+                $rows[] = [
+                    'id' => (int) $u->ID_Usuario,
+                    'name' => $u->No_Nombres_Apellidos ?: $u->No_Usuario,
+                ];
+            }
 
-        return ['success' => true, 'data' => $rows];
+            return ['success' => true, 'data' => $rows];
+        });
     }
 
     /**
@@ -250,12 +338,26 @@ class WaCopilotoConversationService
      * @param  int  $userId
      * @return array<string, mixed>
      */
-    public function assign($conversationId, $userId)
+    public function assign($conversationId, $userId, $changedByUserId = 0)
     {
         $conversation = WaCopilotoConversation::query()->findOrFail($conversationId);
-        $conversation->assigned_user_id = $userId > 0 ? $userId : null;
-        $conversation->assigned_at = $userId > 0 ? now() : null;
+        $fromUserId = $conversation->assigned_user_id ? (int) $conversation->assigned_user_id : null;
+        $toUserId = $userId > 0 ? (int) $userId : null;
+
+        $conversation->assigned_user_id = $toUserId;
+        $conversation->assigned_at = $toUserId ? now() : null;
         $conversation->save();
+
+        if ($changedByUserId > 0) {
+            app(WaCopilotoPipelineService::class)->logAssignment(
+                $conversation,
+                $fromUserId,
+                $toUserId,
+                (int) $changedByUserId
+            );
+        }
+
+        $this->cacheService->invalidateSession((int) $conversation->session_id);
 
         return [
             'success' => true,
@@ -272,6 +374,8 @@ class WaCopilotoConversationService
         $conversation = WaCopilotoConversation::query()->findOrFail($conversationId);
         $conversation->unread_count = 0;
         $conversation->save();
+
+        $this->cacheService->invalidateSession((int) $conversation->session_id);
 
         return ['success' => true, 'data' => $this->formatConversation($conversation)];
     }
@@ -301,6 +405,8 @@ class WaCopilotoConversationService
         $conversation = WaCopilotoConversation::query()->findOrFail($conversationId);
         $conversation->contact_name = $name;
         $conversation->save();
+
+        $this->cacheService->invalidateSession((int) $conversation->session_id);
 
         return [
             'success' => true,
@@ -387,6 +493,7 @@ class WaCopilotoConversationService
             }
             if ($dirty) {
                 $existing->save();
+                $this->cacheService->invalidateSession((int) $session->id);
             }
 
             return [
@@ -408,6 +515,8 @@ class WaCopilotoConversationService
             'assigned_user_id' => $assignedUserId > 0 ? $assignedUserId : null,
             'assigned_at' => $assignedUserId > 0 ? now() : null,
         ]);
+        app(WaCopilotoPipelineService::class)->ensureDefaultStage($conversation);
+        $this->cacheService->invalidateSession((int) $session->id);
 
         return [
             'success' => true,
@@ -457,6 +566,7 @@ class WaCopilotoConversationService
             'channel_label' => $session->label ?: 'Copiloto',
             'status' => 'open',
         ]);
+        app(WaCopilotoPipelineService::class)->ensureDefaultStage($conversation);
 
         $this->registerContactDirectory($conversation);
 
@@ -532,11 +642,16 @@ class WaCopilotoConversationService
         $preview = $this->buildLastMessagePreview($message->message_type, $message->body, $filename);
         $sentAt = $message->sent_at ? $message->sent_at : now();
 
-        $this->refreshHeader($conversation, $preview, $direction, $sentAt, $fromCustomer, [
+        $meta = [
             'message_id' => (int) $message->id,
             'message_type' => (string) $message->message_type,
             'delivery_status' => $direction === 'out' ? (string) $message->delivery_status : null,
-        ]);
+        ];
+        if ($direction === 'out' && $message->sent_by_user_id) {
+            $meta['sender_user_id'] = (int) $message->sent_by_user_id;
+        }
+
+        $this->refreshHeader($conversation, $preview, $direction, $sentAt, $fromCustomer, $meta);
     }
 
     /**
@@ -584,9 +699,47 @@ class WaCopilotoConversationService
                 $conversation->unread_count = (int) $conversation->unread_count + 1;
             }
             $conversation->status = 'open';
+            app(WaCopilotoPipelineService::class)->onCustomerInbound($conversation, $sentAt);
+        } elseif ($direction === 'out') {
+            $authUserId = 0;
+            if (is_array($meta) && !empty($meta['sender_user_id'])) {
+                $authUserId = (int) $meta['sender_user_id'];
+            }
+            app(WaCopilotoPipelineService::class)->onAdvisorOutbound($conversation, $authUserId);
         }
 
         $conversation->save();
+        $this->cacheService->invalidateSession((int) $conversation->session_id);
+    }
+
+    /**
+     * @param  array<int>  $stageIds
+     * @return array<int, WaCopilotoPipelineStage>
+     */
+    protected function loadPipelineStagesById(array $stageIds)
+    {
+        $stageIds = array_values(array_unique(array_filter(array_map('intval', $stageIds))));
+        if (empty($stageIds)) {
+            return [];
+        }
+
+        return WaCopilotoPipelineStage::query()
+            ->whereIn('id', $stageIds)
+            ->get()
+            ->keyBy('id')
+            ->all();
+    }
+
+    /**
+     * @param  WaCopilotoConversation  $conversation
+     * @param  array<int, WaCopilotoPipelineStage>  $stagesById
+     */
+    protected function attachPipelineStageRelation(WaCopilotoConversation $conversation, array $stagesById)
+    {
+        $stageId = (int) $conversation->pipeline_stage_id;
+        if ($stageId > 0 && isset($stagesById[$stageId])) {
+            $conversation->setRelation('pipelineStage', $stagesById[$stageId]);
+        }
     }
 
     /**

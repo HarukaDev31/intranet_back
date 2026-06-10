@@ -88,14 +88,20 @@ class WaCopilotoConversationContextService
             $hoursSinceInbound !== null ? ' · último msg cliente hace ~' . $hoursSinceInbound . 'h' : ''
         );
 
+        $phone = (string) $conversation->phone_e164;
+        $latestFicha = $phone !== ''
+            ? CopilotoFicha::query()
+                ->where('phone', $phone)
+                ->orderByDesc('updated_at')
+                ->orderByDesc('id')
+                ->first(['temperatura', 'nivel', 'objecion'])
+            : null;
+
         $previousLeadScore = $conversation->ai_temperatura !== null
             ? (int) $conversation->ai_temperatura
-            : $this->latestFichaScore((string) $conversation->phone_e164);
+            : ($latestFicha ? (int) $latestFicha->temperatura : null);
 
-        $previousFicha = $this->formatPreviousFichaBlock(
-            (string) $conversation->phone_e164,
-            $previousLeadScore
-        );
+        $previousFicha = $this->formatPreviousFichaBlockFromModel($latestFicha, $previousLeadScore);
 
         $rollingSummary = trim((string) $conversation->ai_context_summary);
         if (mb_strlen($rollingSummary) > (int) config('meta_whatsapp_copiloto.analysis_summary_max_chars', 320)) {
@@ -207,6 +213,8 @@ class WaCopilotoConversationContextService
         }
 
         $conversation->save();
+
+        app(WaCopilotoCacheService::class)->invalidateSession((int) $conversation->session_id);
     }
 
     /**
@@ -235,14 +243,13 @@ class WaCopilotoConversationContextService
      * @param  int|null  $fallbackScore
      * @return string
      */
-    private function formatPreviousFichaBlock($phone, $fallbackScore)
+    /**
+     * @param  CopilotoFicha|null  $ficha
+     * @param  int|null  $fallbackScore
+     * @return string
+     */
+    private function formatPreviousFichaBlockFromModel($ficha, $fallbackScore)
     {
-        $ficha = CopilotoFicha::query()
-            ->where('phone', $phone)
-            ->orderByDesc('updated_at')
-            ->orderByDesc('id')
-            ->first();
-
         if (!$ficha && $fallbackScore === null) {
             return 'Ficha previa: sin historial IA.';
         }
@@ -261,21 +268,6 @@ class WaCopilotoConversationContextService
         }
 
         return 'Ficha previa: ' . implode(' · ', $parts);
-    }
-
-    /**
-     * @param  string  $phone
-     * @return int|null
-     */
-    private function latestFichaScore($phone)
-    {
-        $ficha = CopilotoFicha::query()
-            ->where('phone', $phone)
-            ->orderByDesc('updated_at')
-            ->orderByDesc('id')
-            ->first();
-
-        return $ficha ? (int) $ficha->temperatura : null;
     }
 
     /**

@@ -9,6 +9,7 @@ use App\Models\BaseDatos\ProductoRegulacionEtiquetado;
 use App\Models\BaseDatos\ProductoRegulacionPermiso;
 use App\Models\BaseDatos\Regulaciones\ProductoRubro;
 use App\Support\WhatsApp\WaJsonUtf8;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -32,34 +33,40 @@ class CopilotoAduanaKnowledgeService
       ];
     }
 
-    $items = [];
-    $this->safeSearch('productos', function () use ($terms, &$items) {
-      $this->searchProductosImportados($terms, $items);
-    });
-    $this->safeSearch('rubros', function () use ($terms, &$items) {
-      $this->searchRubros($terms, $items);
-    });
-    $this->safeSearch('permisos', function () use ($terms, &$items) {
-      $this->searchPermisos($terms, $items);
-    });
-    $this->safeSearch('antidumping', function () use ($terms, &$items) {
-      $this->searchAntidumping($terms, $items);
-    });
-    $this->safeSearch('etiquetado', function () use ($terms, &$items) {
-      $this->searchEtiquetado($terms, $items);
-    });
-    $this->safeSearch('documentos_especiales', function () use ($terms, &$items) {
-      $this->searchDocumentosEspeciales($terms, $items);
-    });
+    $limit = max(1, min(30, (int) $limit));
+    $ttl = max(300, (int) config('meta_whatsapp_copiloto.analysis_aduana_context_cache_ttl', 1800));
+    $cacheKey = 'wa_copiloto_aduana_search_v1_' . md5(implode('|', $terms) . '|' . $limit);
 
-    $items = $this->dedupeItems($items);
-    $items = array_slice($items, 0, max(1, min(30, (int) $limit)));
+    return Cache::remember($cacheKey, $ttl, function () use ($terms, $limit) {
+      $items = [];
+      $this->safeSearch('productos', function () use ($terms, &$items) {
+        $this->searchProductosImportados($terms, $items);
+      });
+      $this->safeSearch('rubros', function () use ($terms, &$items) {
+        $this->searchRubros($terms, $items);
+      });
+      $this->safeSearch('permisos', function () use ($terms, &$items) {
+        $this->searchPermisos($terms, $items);
+      });
+      $this->safeSearch('antidumping', function () use ($terms, &$items) {
+        $this->searchAntidumping($terms, $items);
+      });
+      $this->safeSearch('etiquetado', function () use ($terms, &$items) {
+        $this->searchEtiquetado($terms, $items);
+      });
+      $this->safeSearch('documentos_especiales', function () use ($terms, &$items) {
+        $this->searchDocumentosEspeciales($terms, $items);
+      });
 
-    return [
-      'terms' => $terms,
-      'items' => $items,
-      'knowledge_block' => $this->formatKnowledgeBlock($items),
-    ];
+      $items = $this->dedupeItems($items);
+      $items = array_slice($items, 0, $limit);
+
+      return [
+        'terms' => $terms,
+        'items' => $items,
+        'knowledge_block' => $this->formatKnowledgeBlock($items),
+      ];
+    });
   }
 
   /**

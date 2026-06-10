@@ -138,26 +138,54 @@ RULES;
             return '';
         }
 
-        $relativePath = (string) config('meta_whatsapp_copiloto.analysis_sales_context_path', 'ventas_contexto.txt');
-        if (!Storage::disk('local')->exists($relativePath)) {
-            return '';
-        }
-
-        $raw = Storage::disk('local')->get($relativePath);
-        if (!is_string($raw) || trim($raw) === '') {
-            return '';
-        }
-
-        $sections = $this->parseWonSections($raw);
+        $sections = $this->loadParsedWonSections();
         if (empty($sections)) {
-            return $this->truncateText($raw, $maxChars);
+            return '';
         }
 
-        if ($messageLower === '') {
-            return $this->sampleSections($sections, $maxChars);
-        }
+        $ttl = max(300, (int) config('meta_whatsapp_copiloto.analysis_sales_context_cache_ttl', 86400));
+        $excerptTtl = min(3600, $ttl);
+        $cacheKey = 'wa_copiloto_sales_won_excerpt_v3_' . md5($messageLower . '|' . $maxChars);
 
-        return $this->sampleRelevantSections($sections, $messageLower, $maxChars);
+        return Cache::remember($cacheKey, $excerptTtl, function () use ($sections, $messageLower, $maxChars) {
+            if ($messageLower === '') {
+                return $this->sampleSections($sections, $maxChars);
+            }
+
+            return $this->sampleRelevantSections($sections, $messageLower, $maxChars);
+        });
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    protected function loadParsedWonSections()
+    {
+        $ttl = max(300, (int) config('meta_whatsapp_copiloto.analysis_sales_context_cache_ttl', 86400));
+
+        return Cache::remember('wa_copiloto_sales_won_sections_v3', $ttl, function () {
+            $relativePath = (string) config('meta_whatsapp_copiloto.analysis_sales_context_path', 'ventas_contexto.txt');
+            if (!Storage::disk('local')->exists($relativePath)) {
+                return [];
+            }
+
+            $raw = Storage::disk('local')->get($relativePath);
+            if (!is_string($raw) || trim($raw) === '') {
+                return [];
+            }
+
+            $sections = $this->parseWonSections($raw);
+            if (!empty($sections)) {
+                return $sections;
+            }
+
+            $fallback = trim($raw);
+            if ($fallback === '') {
+                return [];
+            }
+
+            return [$fallback];
+        });
     }
 
     /**

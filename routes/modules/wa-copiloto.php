@@ -33,4 +33,12 @@ Route::group([
     Route::post('/conversations/{id}/suggestion-usages', [WaCopilotoController::class, 'recordSuggestionUsage']);
     Route::get('/templates', [WaCopilotoController::class, 'templates']);
     Route::get('/users/assignable', [WaCopilotoController::class, 'assignableUsers']);
+    Route::get('/pipeline/stages', [WaCopilotoController::class, 'pipelineStages']);
+    Route::post('/pipeline/stages', [WaCopilotoController::class, 'pipelineCreateStage']);
+    Route::patch('/pipeline/stages/reorder', [WaCopilotoController::class, 'pipelineReorderStages']);
+    Route::get('/pipeline/kanban', [WaCopilotoController::class, 'pipelineKanban']);
+    Route::get('/pipeline/kpis', [WaCopilotoController::class, 'pipelineKpis']);
+    Route::patch('/conversations/{id}/pipeline-stage', [WaCopilotoController::class, 'pipelineTransition']);
+    Route::get('/conversations/{id}/assignment-history', [WaCopilotoController::class, 'pipelineAssignmentHistory']);
+    Route::get('/conversations/{id}/pipeline-history', [WaCopilotoController::class, 'pipelineTransitionHistory']);
 });
