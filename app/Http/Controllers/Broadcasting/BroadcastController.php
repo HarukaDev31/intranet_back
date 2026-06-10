@@ -23,7 +23,7 @@ class BroadcastController extends Controller
         'private-Cotizador-notifications' => 'Cotizador',
         'private-Documentacion-notifications' => 'Documentacion',
         'private-Coordinacion-notifications' => 'Coordinación',
-        'private-whatsapp-inbox.coordinacion' => 'Coordinación',
+        'private-whatsapp-inbox.coordinacion' => '__wa_inbox__',
         'private-whatsapp-copiloto.ventas' => '__wa_copiloto_ventas__',
         'private-ContenedorAlmacen-notifications' => 'ContenedorAlmacen',
         'private-CatalogoChina-notifications' => 'CatalogoChina',
@@ -144,6 +144,19 @@ class BroadcastController extends Controller
                     return response()->json($this->pusherAuthPayload($request, $channelName));
                 }
 
+                if ($requiredRole === '__wa_inbox__') {
+                    if (!$this->usuarioPuedeAccederWhatsappInbox($user)) {
+                        Log::error('User not authorized for whatsapp-inbox channel', [
+                            'user_id' => $user->ID_Usuario,
+                            'channel' => $channelName,
+                            'user_grupo' => $user->grupo ? $user->grupo->No_Grupo : 'Sin grupo',
+                        ]);
+                        return response()->json(['message' => 'No autorizado para este canal'], 403);
+                    }
+
+                    return response()->json($this->pusherAuthPayload($request, $channelName));
+                }
+
                 if (
                     !$user->grupo
                     || trim((string) $user->grupo->No_Grupo) !== trim((string) $requiredRole)
@@ -225,6 +238,22 @@ class BroadcastController extends Controller
         }
 
         return (int) $user->getIdUsuario() === 28791;
+    }
+
+    /**
+     * @param \App\Models\Usuario $user
+     * @return bool
+     */
+    protected function usuarioPuedeAccederWhatsappInbox($user)
+    {
+        if (!$user || !$user->grupo) {
+            return false;
+        }
+
+        $grupo = $user->grupo->No_Grupo;
+
+        return $grupo === Usuario::ROL_COORDINACION
+            || $grupo === Usuario::ROL_CONTABILIDAD;
     }
 
     /**

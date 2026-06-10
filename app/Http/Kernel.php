@@ -75,6 +75,7 @@ class Kernel extends HttpKernel
         'landing.consolidado.form_token' => \App\Http\Middleware\VerifyLandingConsolidadoFormToken::class,
         'landing.curso.form_token' => \App\Http\Middleware\VerifyLandingCursoFormToken::class,
         'role.coordinacion' => \App\Http\Middleware\EnsureCoordinacionRole::class,
+        'role.whatsapp_inbox' => \App\Http\Middleware\EnsureWhatsappInboxAccess::class,
         'role.copiloto_wa' => \App\Http\Middleware\EnsureCopilotoWaAccess::class,
     ];
 }

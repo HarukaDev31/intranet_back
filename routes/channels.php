@@ -48,7 +48,13 @@ Broadcast::channel('Coordinacion-notifications', function ($user) {
 
 // WhatsApp Inbox coordinación — tiempo real del chat Meta
 Broadcast::channel('whatsapp-inbox.coordinacion', function ($user) {
-    return $user->grupo && $user->grupo->No_Grupo === Usuario::ROL_COORDINACION;
+    if (!$user || !$user->grupo) {
+        return false;
+    }
+    $grupo = $user->grupo->No_Grupo;
+
+    return $grupo === Usuario::ROL_COORDINACION
+        || $grupo === Usuario::ROL_CONTABILIDAD;
 });
 
 // WhatsApp Copiloto ventas — tiempo real del chat Meta (número ventas)
