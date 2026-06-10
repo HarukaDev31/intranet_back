@@ -45,17 +45,38 @@ class WaCopilotoMessageAnalysisService
      */
     public function analyzeInboundMessage($messageId)
     {
+        $dbConnection = DB::getDefaultConnection();
+
+        WaCopilotoLog::info('analysis.start', [
+            'message_id' => (int) $messageId,
+            'db_connection' => $dbConnection,
+        ]);
+
         $message = WaCopilotoMessage::query()->with('conversation')->find((int) $messageId);
         if (!$message || $message->direction !== 'in') {
+            WaCopilotoLog::info('analysis.skipped_message', [
+                'message_id' => (int) $messageId,
+                'found' => (bool) $message,
+                'direction' => $message ? (string) $message->direction : null,
+            ]);
+
             return null;
         }
 
         if (WaCopilotoMessageInsight::query()->where('message_id', (int) $message->id)->exists()) {
+            WaCopilotoLog::info('analysis.skipped_already_analyzed', [
+                'message_id' => (int) $message->id,
+            ]);
+
             return null;
         }
 
         $conversation = $message->conversation;
         if (!$conversation) {
+            WaCopilotoLog::warning('analysis.skipped_no_conversation', [
+                'message_id' => (int) $message->id,
+            ]);
+
             return null;
         }
 
@@ -73,6 +94,11 @@ class WaCopilotoMessageAnalysisService
             $body = '[' . (string) $message->message_type . ']';
         }
         if ($body === '') {
+            WaCopilotoLog::info('analysis.skipped_empty_body', [
+                'message_id' => (int) $message->id,
+                'message_type' => (string) $message->message_type,
+            ]);
+
             return null;
         }
 
@@ -85,6 +111,14 @@ class WaCopilotoMessageAnalysisService
 
         $prompt = $this->buildPrompt($contactName, $context, $body, (string) $message->message_type);
         $maxTokens = max(512, min(4096, (int) config('meta_whatsapp_copiloto.analysis_gemini_max_output_tokens', 1024)));
+
+        WaCopilotoLog::info('analysis.gemini_request', [
+            'message_id' => (int) $message->id,
+            'conversation_id' => (int) $conversation->id,
+            'phone_e164' => (string) $conversation->phone_e164,
+            'max_tokens' => $maxTokens,
+        ]);
+
         $gemini = $this->gemini->analyzeTextAsJson($prompt, $maxTokens, 0.25);
 
         if (empty($gemini['success']) || !is_array($gemini['data'])) {
@@ -99,8 +133,21 @@ class WaCopilotoMessageAnalysisService
         $parsed = $gemini['data'];
         $items = $this->normalizeInsightItems($parsed, $body);
         if (empty($items)) {
+            WaCopilotoLog::warning('analysis.empty_items_after_gemini', [
+                'message_id' => (int) $message->id,
+                'parsed_keys' => array_keys($parsed),
+                'body_preview' => mb_substr($body, 0, 120),
+            ]);
+
             return null;
         }
+
+        WaCopilotoLog::info('analysis.gemini_ok', [
+            'message_id' => (int) $message->id,
+            'items_count' => count($items),
+            'temperatura_mensaje' => isset($parsed['temperatura_mensaje']) ? $parsed['temperatura_mensaje'] : null,
+            'temperatura_lead' => isset($parsed['temperatura_lead']) ? $parsed['temperatura_lead'] : null,
+        ]);
 
         $phone = (string) $conversation->phone_e164;
         $temperaturaMensaje = $this->clampScore(isset($parsed['temperatura_mensaje']) ? $parsed['temperatura_mensaje'] : null);
@@ -121,101 +168,128 @@ class WaCopilotoMessageAnalysisService
         $intencion = trim((string) ($parsed['intencion'] ?? ''));
 
         $savedInsights = [];
-        DB::transaction(function () use (
-            $message,
-            $conversation,
-            $phone,
-            $items,
-            $temperaturaLead,
-            $nivel,
-            $senales,
-            $objecion,
-            $sugerencia,
-            $resumenContexto,
-            $etapa,
-            $alerta,
-            $intencion,
-            &$savedInsights
-        ) {
-            $sort = 0;
-            foreach ($items as $item) {
-                $row = WaCopilotoMessageInsight::create([
-                    'message_id' => (int) $message->id,
-                    'conversation_id' => (int) $conversation->id,
-                    'phone_e164' => $phone,
-                    'kind' => (string) $item['kind'],
-                    'label' => isset($item['label']) ? (string) $item['label'] : null,
-                    'body' => (string) $item['body'],
-                    'score' => isset($item['score']) ? (int) $item['score'] : null,
-                    'sort_order' => $sort++,
-                ]);
-                $savedInsights[] = $this->formatInsight($row);
-            }
+        try {
+            DB::transaction(function () use (
+                $message,
+                $conversation,
+                $phone,
+                $items,
+                $temperaturaLead,
+                $nivel,
+                $senales,
+                $objecion,
+                $sugerencia,
+                $etapa,
+                $alerta,
+                $intencion,
+                &$savedInsights
+            ) {
+                $sort = 0;
+                foreach ($items as $item) {
+                    $row = WaCopilotoMessageInsight::create([
+                        'message_id' => (int) $message->id,
+                        'conversation_id' => (int) $conversation->id,
+                        'phone_e164' => $phone,
+                        'kind' => (string) $item['kind'],
+                        'label' => $this->truncateInsightLabel(isset($item['label']) ? $item['label'] : null),
+                        'body' => (string) $item['body'],
+                        'score' => isset($item['score']) ? (int) $item['score'] : null,
+                        'sort_order' => $sort++,
+                    ]);
+                    $savedInsights[] = $this->formatInsight($row);
+                }
 
-            if ($etapa !== '') {
-                $row = WaCopilotoMessageInsight::create([
-                    'message_id' => (int) $message->id,
-                    'conversation_id' => (int) $conversation->id,
-                    'phone_e164' => $phone,
-                    'kind' => 'comentario',
-                    'label' => 'Etapa',
-                    'body' => $etapa,
-                    'score' => null,
-                    'sort_order' => $sort++,
-                ]);
-                $savedInsights[] = $this->formatInsight($row);
-            }
-            if ($intencion !== '') {
-                $row = WaCopilotoMessageInsight::create([
-                    'message_id' => (int) $message->id,
-                    'conversation_id' => (int) $conversation->id,
-                    'phone_e164' => $phone,
-                    'kind' => 'comentario',
-                    'label' => 'Intención del cliente',
-                    'body' => $intencion,
-                    'score' => null,
-                    'sort_order' => $sort++,
-                ]);
-                $savedInsights[] = $this->formatInsight($row);
-            }
-            if ($alerta !== '' && strtolower($alerta) !== 'null') {
-                $row = WaCopilotoMessageInsight::create([
-                    'message_id' => (int) $message->id,
-                    'conversation_id' => (int) $conversation->id,
-                    'phone_e164' => $phone,
-                    'kind' => 'comentario',
-                    'label' => 'Alerta',
-                    'body' => $alerta,
-                    'score' => null,
-                    'sort_order' => $sort++,
-                ]);
-                $savedInsights[] = $this->formatInsight($row);
-            }
+                if ($etapa !== '') {
+                    $row = WaCopilotoMessageInsight::create([
+                        'message_id' => (int) $message->id,
+                        'conversation_id' => (int) $conversation->id,
+                        'phone_e164' => $phone,
+                        'kind' => 'comentario',
+                        'label' => 'Etapa',
+                        'body' => $etapa,
+                        'score' => null,
+                        'sort_order' => $sort++,
+                    ]);
+                    $savedInsights[] = $this->formatInsight($row);
+                }
+                if ($intencion !== '') {
+                    $row = WaCopilotoMessageInsight::create([
+                        'message_id' => (int) $message->id,
+                        'conversation_id' => (int) $conversation->id,
+                        'phone_e164' => $phone,
+                        'kind' => 'comentario',
+                        'label' => 'Intención del cliente',
+                        'body' => $intencion,
+                        'score' => null,
+                        'sort_order' => $sort++,
+                    ]);
+                    $savedInsights[] = $this->formatInsight($row);
+                }
+                if ($alerta !== '' && strtolower($alerta) !== 'null') {
+                    $row = WaCopilotoMessageInsight::create([
+                        'message_id' => (int) $message->id,
+                        'conversation_id' => (int) $conversation->id,
+                        'phone_e164' => $phone,
+                        'kind' => 'comentario',
+                        'label' => 'Alerta',
+                        'body' => $alerta,
+                        'score' => null,
+                        'sort_order' => $sort++,
+                    ]);
+                    $savedInsights[] = $this->formatInsight($row);
+                }
 
-            $sugerenciaCorta = $sugerencia;
-            if (mb_strlen($sugerenciaCorta) > 255) {
-                $sugerenciaCorta = mb_substr($sugerenciaCorta, 0, 252) . '…';
-            }
+                $sugerenciaCorta = $sugerencia;
+                if (mb_strlen($sugerenciaCorta) > 255) {
+                    $sugerenciaCorta = mb_substr($sugerenciaCorta, 0, 252) . '…';
+                }
 
-            $ficha = CopilotoFicha::updateOrCreate(
-                ['phone' => $phone],
-                [
-                    'temperatura' => (int) $temperaturaLead,
-                    'nivel' => $nivel,
-                    'senales' => $senales,
-                    'objecion' => $objecion !== '' ? $objecion : null,
-                    'sugerencia' => $sugerencia !== '' ? $sugerencia : null,
-                    'sugerencia_corta' => $sugerenciaCorta !== '' ? $sugerenciaCorta : null,
-                ]
-            );
+                CopilotoFicha::updateOrCreate(
+                    ['phone' => $phone],
+                    [
+                        'temperatura' => (int) $temperaturaLead,
+                        'nivel' => $nivel,
+                        'senales' => $senales,
+                        'objecion' => $objecion !== '' ? $objecion : null,
+                        'sugerencia' => $sugerencia !== '' ? $sugerencia : null,
+                        'sugerencia_corta' => $sugerenciaCorta !== '' ? $sugerenciaCorta : null,
+                    ]
+                );
+            });
+        } catch (\Throwable $e) {
+            WaCopilotoLog::error('analysis.persist_failed', [
+                'message_id' => (int) $message->id,
+                'conversation_id' => (int) $conversation->id,
+                'phone_e164' => $phone,
+                'db_connection' => $dbConnection,
+                'error' => $e->getMessage(),
+            ]);
 
+            throw $e;
+        }
+
+        WaCopilotoLog::info('analysis.persist_ok', [
+            'message_id' => (int) $message->id,
+            'conversation_id' => (int) $conversation->id,
+            'insights_saved' => count($savedInsights),
+            'temperatura_lead' => $temperaturaLead,
+        ]);
+
+        try {
             $this->contextService->persistConversationAiState(
                 $conversation,
                 (int) $temperaturaLead,
                 $resumenContexto,
                 (int) $message->id
             );
-        });
+        } catch (\Throwable $e) {
+            WaCopilotoLog::warning('analysis.persistConversationAiState_failed', [
+                'message_id' => (int) $message->id,
+                'conversation_id' => (int) $conversation->id,
+                'db_connection' => $dbConnection,
+                'error' => $e->getMessage(),
+            ]);
+        }
 
         $ficha = CopilotoFicha::query()->where('phone', $phone)->first();
 
@@ -242,7 +316,34 @@ class WaCopilotoMessageAnalysisService
 
         $this->broadcastInsightsReady($payload);
 
+        WaCopilotoLog::info('analysis.complete', [
+            'message_id' => (int) $message->id,
+            'conversation_id' => (int) $conversation->id,
+            'insights_count' => count($savedInsights),
+            'temperatura_lead' => $temperaturaLead,
+        ]);
+
         return $payload;
+    }
+
+    /**
+     * @param  mixed  $label
+     * @return string|null
+     */
+    protected function truncateInsightLabel($label)
+    {
+        if ($label === null || $label === '') {
+            return null;
+        }
+        $text = trim((string) $label);
+        if ($text === '') {
+            return null;
+        }
+        if (mb_strlen($text) > 120) {
+            return mb_substr($text, 0, 117) . '…';
+        }
+
+        return $text;
     }
 
     /**
