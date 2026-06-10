@@ -253,7 +253,8 @@ class BroadcastController extends Controller
         $grupo = $user->grupo->No_Grupo;
 
         return $grupo === Usuario::ROL_COORDINACION
-            || $grupo === Usuario::ROL_CONTABILIDAD;
+            || $grupo === Usuario::ROL_CONTABILIDAD
+            || $grupo === Usuario::ROL_ADMINISTRACION;
     }
 
     /**

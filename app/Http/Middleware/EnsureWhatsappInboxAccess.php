@@ -35,6 +35,7 @@ class EnsureWhatsappInboxAccess
         $allowed = in_array($grupo, [
             Usuario::ROL_COORDINACION,
             Usuario::ROL_CONTABILIDAD,
+            Usuario::ROL_ADMINISTRACION,
         ], true);
 
         if (!$allowed) {

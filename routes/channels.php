@@ -54,7 +54,8 @@ Broadcast::channel('whatsapp-inbox.coordinacion', function ($user) {
     $grupo = $user->grupo->No_Grupo;
 
     return $grupo === Usuario::ROL_COORDINACION
-        || $grupo === Usuario::ROL_CONTABILIDAD;
+        || $grupo === Usuario::ROL_CONTABILIDAD
+        || $grupo === Usuario::ROL_ADMINISTRACION;
 });
 
 // WhatsApp Copiloto ventas — tiempo real del chat Meta (número ventas)
