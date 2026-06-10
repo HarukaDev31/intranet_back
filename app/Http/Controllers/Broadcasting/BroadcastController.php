@@ -105,6 +105,19 @@ class BroadcastController extends Controller
                 return response()->json(['message' => 'No autorizado para este canal'], 403);
             }
 
+            // Observaciones documentación expediente: private-coordinacion-documentacion-expediente.{idProveedor}
+            $docExpPrefix = 'private-coordinacion-documentacion-expediente.';
+            if (strpos($channelName, $docExpPrefix) === 0) {
+                if ($this->usuarioPuedeAccederDocumentacionExpedienteObservaciones($user)) {
+                    return response()->json($this->pusherAuthPayload($request, $channelName));
+                }
+                Log::error('User not authorized for documentacion expediente channel', [
+                    'user_id' => $user->ID_Usuario,
+                    'channel' => $channelName,
+                ]);
+                return response()->json(['message' => 'No autorizado para este canal'], 403);
+            }
+
             // Chat Soporte TI: private-soporte-ti.chat.{uuid}
             $soporteTiPrefix = 'private-soporte-ti.chat.';
             if (strpos($channelName, $soporteTiPrefix) === 0) {
@@ -255,6 +268,21 @@ class BroadcastController extends Controller
         return $grupo === Usuario::ROL_COORDINACION
             || $grupo === Usuario::ROL_CONTABILIDAD
             || $grupo === Usuario::ROL_ADMINISTRACION;
+    }
+
+    /**
+     * Canal dedicado de observaciones del expediente (no whatsapp-inbox).
+     *
+     * @param \App\Models\Usuario $user
+     * @return bool
+     */
+    protected function usuarioPuedeAccederDocumentacionExpedienteObservaciones($user)
+    {
+        if (!$user || !$user->grupo) {
+            return false;
+        }
+
+        return trim((string) $user->grupo->No_Grupo) === Usuario::ROL_COORDINACION;
     }
 
     /**

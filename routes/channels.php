@@ -46,6 +46,11 @@ Broadcast::channel('Coordinacion-notifications', function ($user) {
     return $user->grupo && $user->grupo->No_Grupo === Usuario::ROL_COORDINACION;
 });
 
+// Observaciones internas de documentación por proveedor — solo Coordinación
+Broadcast::channel('coordinacion-documentacion-expediente.{idProveedor}', function ($user) {
+    return $user->grupo && $user->grupo->No_Grupo === Usuario::ROL_COORDINACION;
+});
+
 // WhatsApp Inbox coordinación — tiempo real del chat Meta
 Broadcast::channel('whatsapp-inbox.coordinacion', function ($user) {
     if (!$user || !$user->grupo) {
