@@ -588,7 +588,7 @@ class WhatsappInboxController extends Controller
             }
         }
 
-        $url = CoordinacionMediaLink::uploadLocalFile($uploadPath, $storageKey);
+        $uploaded = CoordinacionMediaLink::uploadLocalFileToStorage($uploadPath, $storageKey);
 
         try {
             Storage::disk('local')->delete($localRelative);
@@ -599,7 +599,7 @@ class WhatsappInboxController extends Controller
             // ignorar limpieza local
         }
 
-        if ($url === null || $url === '') {
+        if ($uploaded === null || ($uploaded['path'] ?? '') === '') {
             WaInboxLog::error('resolveHeader.s3_upload_failed', [
                 'template' => $templateName,
                 'storage_key' => $storageKey,
@@ -610,11 +610,14 @@ class WhatsappInboxController extends Controller
             return null;
         }
 
+        $storedPath = (string) $uploaded['path'];
+        $url = ($uploaded['url'] ?? null) ?: CoordinacionMediaLink::urlForMetaSend($storedPath);
+
         WaInboxLog::info('resolveHeader.ok', [
             'template' => $templateName,
             'kind' => $kind,
             'header_format' => $headerFormat,
-            'storage_key' => $storageKey,
+            'storage_key' => $storedPath,
             'size_bytes' => $file->getSize(),
             'mime' => $file->getMimeType(),
         ]);
@@ -622,7 +625,7 @@ class WhatsappInboxController extends Controller
         return [
             'type' => $kind,
             'link' => $url,
-            'path' => $storageKey,
+            'path' => $storedPath,
             'filename' => $uploadFilename,
         ];
     }

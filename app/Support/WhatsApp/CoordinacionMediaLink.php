@@ -70,6 +70,28 @@ class CoordinacionMediaLink
 
     public static function uploadLocalFile(string $fullPath, string $storageRelative): ?string
     {
+        $result = self::uploadLocalFileToStorage($fullPath, $storageRelative);
+        if ($result === null) {
+            return null;
+        }
+
+        $url = $result['url'] ?? null;
+        if ($url !== null && $url !== '') {
+            return $url;
+        }
+
+        $path = (string) ($result['path'] ?? '');
+
+        return $path !== '' ? $path : null;
+    }
+
+    /**
+     * Sube un archivo local y devuelve la clave real en storage (post-sanitización) y URL si existe.
+     *
+     * @return array{path: string, url: ?string}|null
+     */
+    public static function uploadLocalFileToStorage(string $fullPath, string $storageRelative): ?array
+    {
         if (!is_file($fullPath)) {
             return null;
         }
@@ -82,9 +104,13 @@ class CoordinacionMediaLink
         try {
             $storage = app(ObjectStorageConnectorInterface::class);
             $relative = ltrim($storageRelative, '/');
-            $storage->putContents($relative, $contents);
+            $storedPath = $storage->putContents($relative, $contents);
+            $url = self::resolveUrlForStoredPath($storage, $storedPath);
 
-            return $storage->url($relative);
+            return [
+                'path' => $storedPath,
+                'url' => $url,
+            ];
         } catch (\Throwable $e) {
             Log::warning('CoordinacionMediaLink: fallo subida S3, probando fallback', [
                 'path' => $fullPath,
@@ -92,9 +118,45 @@ class CoordinacionMediaLink
                 'error' => $e->getMessage(),
             ]);
 
-            return self::uploadToPublicDisk($contents, $storageRelative)
+            $fallbackUrl = self::uploadToPublicDisk($contents, $storageRelative)
                 ?? self::fallbackPublicAssetUrl($fullPath);
+            if ($fallbackUrl === null || $fallbackUrl === '') {
+                return null;
+            }
+
+            $storedPath = StoragePathSanitizer::relativePath(ltrim($storageRelative, '/'));
+
+            return [
+                'path' => $storedPath !== '' ? $storedPath : ltrim($storageRelative, '/'),
+                'url' => $fallbackUrl,
+            ];
         }
+    }
+
+    /**
+     * @param  ObjectStorageConnectorInterface  $storage
+     * @param  string  $storedPath
+     * @return string|null
+     */
+    private static function resolveUrlForStoredPath($storage, string $storedPath): ?string
+    {
+        $url = $storage->url($storedPath);
+        if ($url !== null && $url !== '') {
+            return $url;
+        }
+
+        if (method_exists($storage, 'metaPresignedUrl')) {
+            try {
+                return $storage->metaPresignedUrl($storedPath);
+            } catch (\Throwable $e) {
+                Log::debug('CoordinacionMediaLink: metaPresignedUrl tras subida', [
+                    'path' => $storedPath,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -251,8 +313,8 @@ class CoordinacionMediaLink
             $kind = 'document';
         }
 
-        $name = preg_replace('/[^a-zA-Z0-9._-]/', '_', (string) $originalFilename);
-        if ($name === '') {
+        $name = StoragePathSanitizer::fileName((string) $originalFilename);
+        if ($name === '' || $name === 'file') {
             $name = 'media.bin';
         }
 
@@ -276,8 +338,8 @@ class CoordinacionMediaLink
             $kind = 'document';
         }
 
-        $name = preg_replace('/[^a-zA-Z0-9._-]/', '_', (string) $originalFilename);
-        if ($name === '') {
+        $name = StoragePathSanitizer::fileName((string) $originalFilename);
+        if ($name === '' || $name === 'file') {
             $name = 'media.bin';
         }
 
@@ -301,8 +363,8 @@ class CoordinacionMediaLink
             $kind = 'document';
         }
 
-        $name = preg_replace('/[^a-zA-Z0-9._-]/', '_', (string) $originalFilename);
-        if ($name === '') {
+        $name = StoragePathSanitizer::fileName((string) $originalFilename);
+        if ($name === '' || $name === 'file') {
             $name = 'media.bin';
         }
 
@@ -326,8 +388,8 @@ class CoordinacionMediaLink
             $kind = 'document';
         }
 
-        $name = preg_replace('/[^a-zA-Z0-9._-]/', '_', (string) $originalFilename);
-        if ($name === '') {
+        $name = StoragePathSanitizer::fileName((string) $originalFilename);
+        if ($name === '' || $name === 'file') {
             $name = 'media.bin';
         }
 
@@ -608,12 +670,12 @@ class CoordinacionMediaLink
             $localPath,
             isset($header['filename']) ? (string) $header['filename'] : null
         );
-        $uploaded = self::uploadLocalFile($localPath, $storageKey);
-        if ($uploaded === null || $uploaded === '') {
+        $uploaded = self::uploadLocalFileToStorage($localPath, $storageKey);
+        if ($uploaded === null || ($uploaded['path'] ?? '') === '') {
             return null;
         }
 
-        $header['path'] = ltrim($storageKey, '/');
+        $header['path'] = ltrim((string) $uploaded['path'], '/');
 
         return $header;
     }

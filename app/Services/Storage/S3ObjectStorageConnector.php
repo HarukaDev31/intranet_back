@@ -407,6 +407,16 @@ class S3ObjectStorageConnector implements ObjectStorageConnectorInterface
             }
         }
 
+        $sanitizedPath = StoragePathSanitizer::relativePath($relativePath);
+        if ($sanitizedPath !== '' && $sanitizedPath !== $relativePath) {
+            foreach ($this->disksToProbe() as $disk) {
+                if (Storage::disk($disk)->exists($sanitizedPath)) {
+                    return $disk;
+                }
+            }
+            $relativePath = $sanitizedPath;
+        }
+
         if ($this->uploadDisk() === 's3') {
             foreach ($this->bareBucketKeyCandidates($relativePath) as $bareKey) {
                 if ($this->existsAtBareBucketKey($bareKey)) {
