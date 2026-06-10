@@ -4,11 +4,14 @@ namespace App\Services\WhatsappInbox;
 
 use App\Models\Grupo;
 use App\Models\Usuario;
+use App\Events\WhatsappInbox\WaInboxConversationRead;
 use App\Models\WhatsappInbox\WaInboxConversation;
 use App\Models\WhatsappInbox\WaInboxMessage;
 use App\Models\WhatsappInbox\WaInboxSession;
 use App\Services\WhatsApp\WaContactService;
+use App\Support\WhatsApp\WaInboxLog;
 use Carbon\Carbon;
+use Illuminate\Broadcasting\BroadcastException;
 
 class WhatsappInboxConversationService
 {
@@ -183,7 +186,34 @@ class WhatsappInboxConversationService
         $conversation->unread_count = 0;
         $conversation->save();
 
-        return ['success' => true, 'data' => $this->formatConversation($conversation)];
+        $formatted = $this->formatConversation($conversation);
+        $this->broadcastConversationRead($formatted);
+
+        return ['success' => true, 'data' => $formatted];
+    }
+
+    /**
+     * @param  array<string, mixed>  $conversation
+     */
+    private function broadcastConversationRead(array $conversation)
+    {
+        if (!config('meta_whatsapp.inbox_broadcast_enabled', true)) {
+            return;
+        }
+
+        try {
+            event(new WaInboxConversationRead($conversation));
+        } catch (BroadcastException $e) {
+            WaInboxLog::warning('broadcastConversationRead.failed', [
+                'conversation_id' => isset($conversation['id']) ? (int) $conversation['id'] : 0,
+                'message' => $e->getMessage(),
+            ]);
+        } catch (\Exception $e) {
+            WaInboxLog::warning('broadcastConversationRead.failed', [
+                'conversation_id' => isset($conversation['id']) ? (int) $conversation['id'] : 0,
+                'message' => $e->getMessage(),
+            ]);
+        }
     }
 
     /**
