@@ -6,7 +6,6 @@ use App\Http\Middleware\EnsureCopilotoWaAccess;
 use App\Models\Usuario;
 use App\Models\WaCopiloto\WaCopilotoAssignmentLog;
 use App\Models\WaCopiloto\WaCopilotoConversation;
-use App\Models\WaCopiloto\WaCopilotoMessage;
 use App\Models\WaCopiloto\WaCopilotoPipelineStage;
 use App\Models\WaCopiloto\WaCopilotoSession;
 use App\Models\WaCopiloto\WaCopilotoPipelineTransition;
@@ -466,29 +465,18 @@ class WaCopilotoPipelineService
             $stage = $this->stageForConversation($conversation);
         }
 
-        if (!$stage || $stage->major !== 'nuevo') {
-            return;
-        }
-
-        $outboundCount = WaCopilotoMessage::query()
-            ->where('conversation_id', $conversation->id)
-            ->where('direction', 'out')
-            ->limit(2)
-            ->get(['id'])
-            ->count();
-
-        if ($outboundCount !== 1) {
+        if (!$stage || ($stage->slug !== 'nuevo' && $stage->major !== 'nuevo')) {
             return;
         }
 
         $contactado = $this->stageBySlug('contactado');
-        if ($contactado) {
+        if ($contactado && (int) $contactado->id !== (int) $stage->id) {
             $this->applyTransition(
                 $conversation,
                 $stage,
                 $contactado,
                 (int) $advisorUserId,
-                'Primer mensaje del asesor'
+                'Asesor contactó al lead'
             );
         }
     }

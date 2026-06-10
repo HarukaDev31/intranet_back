@@ -25,6 +25,7 @@ Route::group([
     Route::post('/conversations', [WaCopilotoController::class, 'storeConversation']);
     Route::get('/conversations/{id}/messages', [WaCopilotoController::class, 'messages']);
     Route::post('/conversations/{id}/messages', [WaCopilotoController::class, 'sendMessage']);
+    Route::post('/conversations/{id}/scheduled-messages', [WaCopilotoController::class, 'scheduleMessage']);
     Route::post('/conversations/{id}/templates', [WaCopilotoController::class, 'sendTemplate']);
     Route::patch('/conversations/{id}/assign', [WaCopilotoController::class, 'assign']);
     Route::patch('/conversations/{id}/contact-name', [WaCopilotoController::class, 'renameContact']);

@@ -12,8 +12,10 @@ use App\Services\WaCopiloto\WaCopilotoMessageService;
 use App\Services\WaCopiloto\WaCopilotoSessionService;
 use App\Services\WaCopiloto\WaCopilotoTemplateService;
 use App\Services\WaCopiloto\WaCopilotoMediaUploadService;
+use App\Services\WaCopiloto\WaCopilotoScheduledMessageService;
 use App\Services\WaCopiloto\WaCopilotoSuggestionUsageService;
 use App\Services\WaCopiloto\WaCopilotoWindowService;
+use Carbon\Carbon;
 use App\Support\WhatsApp\CoordinacionMediaLink;
 use App\Support\WhatsApp\WaCopilotoJobContext;
 use App\Support\WhatsApp\WaCopilotoLog;
@@ -281,6 +283,54 @@ class WaCopilotoController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Error al enviar: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function scheduleMessage(Request $request, $id)
+    {
+        try {
+            $text = trim((string) $request->input('message', ''));
+            $scheduledRaw = trim((string) $request->input('scheduled_at', ''));
+            if ($scheduledRaw === '') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Indica fecha y hora de envío.',
+                ], 422);
+            }
+
+            $conversation = WaCopilotoConversation::query()->findOrFail((int) $id);
+            $user = JWTAuth::parseToken()->authenticate();
+            $userId = $user ? (int) $user->getIdUsuario() : 0;
+
+            /** @var WaCopilotoScheduledMessageService $scheduledService */
+            $scheduledService = app(WaCopilotoScheduledMessageService::class);
+            $result = $scheduledService->schedule(
+                $conversation,
+                $userId,
+                $text,
+                Carbon::parse($scheduledRaw)
+            );
+
+            if (empty($result['success'])) {
+                return response()->json($result, 422);
+            }
+
+            WaCopilotoLog::info('scheduleMessage.created', [
+                'conversation_id' => (int) $conversation->id,
+                'scheduled_at' => $scheduledRaw,
+            ]);
+
+            return response()->json($result);
+        } catch (\Exception $e) {
+            WaCopilotoLog::error('scheduleMessage.exception', [
+                'conversation_id' => (int) $id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al programar: ' . $e->getMessage(),
             ], 500);
         }
     }
