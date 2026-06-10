@@ -91,6 +91,12 @@ class WhatsappInboxMessageService
             $replyToMetaId = $rid !== '' ? $rid : null;
         }
 
+        $reactionInboundEmoji = null;
+        if (isset($params['_reaction_in']['emoji'])) {
+            $emoji = trim((string) $params['_reaction_in']['emoji']);
+            $reactionInboundEmoji = $emoji !== '' ? $emoji : null;
+        }
+
         $mediaSizeBytes = null;
         if (isset($params['_media_size_bytes'])) {
             $mediaSizeBytes = (int) $params['_media_size_bytes'];
@@ -116,6 +122,7 @@ class WhatsappInboxMessageService
             'media_filename' => $mediaFilename !== '' ? $mediaFilename : null,
             'media_size_bytes' => $mediaSizeBytes,
             'reply_to_meta_message_id' => $replyToMetaId,
+            'reaction_inbound_emoji' => $reactionInboundEmoji,
         ];
     }
 
@@ -192,6 +199,14 @@ class WhatsappInboxMessageService
             return;
         }
 
+        $type = isset($msg['type']) ? (string) $msg['type'] : 'text';
+
+        if ($type === 'reaction') {
+            $this->persistInboundReaction($msg);
+
+            return;
+        }
+
         $phoneE164 = $this->conversationService->normalizePhoneE164($from);
         $waId = $from;
         $contactName = isset($contacts[$waId]) ? $contacts[$waId] : null;
@@ -208,7 +223,6 @@ class WhatsappInboxMessageService
             return;
         }
 
-        $type = isset($msg['type']) ? (string) $msg['type'] : 'text';
         $messageType = $type;
         $body = '';
         $mediaUrl = null;
@@ -251,6 +265,13 @@ class WhatsappInboxMessageService
         $timestamp = isset($msg['timestamp']) ? (int) $msg['timestamp'] : time();
         $sentAt = Carbon::createFromTimestamp($timestamp);
 
+        $contextParams = $this->extractInboundContextParams($msg);
+        if ($contextParams !== null) {
+            $templateParams = is_array($templateParams)
+                ? array_merge($templateParams, $contextParams)
+                : $contextParams;
+        }
+
         $message = WaInboxMessage::create([
             'conversation_id' => $conversation->id,
             'session_id' => $session->id,
@@ -267,6 +288,59 @@ class WhatsappInboxMessageService
 
         $this->conversationService->refreshHeaderFromMessage($conversation, $message, true);
         $this->broadcastMessageCreated($message, $conversation);
+    }
+
+    /**
+     * Reacción entrante: se guarda en el mensaje objetivo, no como fila aparte.
+     *
+     * @param  array<string, mixed>  $msg
+     */
+    private function persistInboundReaction(array $msg)
+    {
+        $reaction = isset($msg['reaction']) && is_array($msg['reaction']) ? $msg['reaction'] : [];
+        $targetMetaId = isset($reaction['message_id']) ? trim((string) $reaction['message_id']) : '';
+        if ($targetMetaId === '') {
+            return;
+        }
+
+        $target = WaInboxMessage::query()->where('meta_message_id', $targetMetaId)->first();
+        if (!$target) {
+            return;
+        }
+
+        $emoji = isset($reaction['emoji']) ? trim((string) $reaction['emoji']) : '';
+        $params = is_array($target->template_params) ? $target->template_params : [];
+
+        if ($emoji === '') {
+            unset($params['_reaction_in']);
+        } else {
+            $params['_reaction_in'] = [
+                'emoji' => $emoji,
+                'at' => isset($msg['timestamp']) ? (int) $msg['timestamp'] : time(),
+            ];
+        }
+
+        $target->template_params = $params;
+        $target->save();
+
+        $conversation = WaInboxConversation::query()->find($target->conversation_id);
+        if ($conversation) {
+            $this->broadcastMessageCreated($target, $conversation);
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $msg
+     * @return array<string, mixed>|null
+     */
+    private function extractInboundContextParams(array $msg)
+    {
+        $contextId = isset($msg['context']['id']) ? trim((string) $msg['context']['id']) : '';
+        if ($contextId === '') {
+            return null;
+        }
+
+        return ['_context' => ['message_id' => $contextId]];
     }
 
     /**
