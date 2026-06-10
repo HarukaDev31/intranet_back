@@ -18,27 +18,39 @@ class WaCopilotoSalesContextService
      */
     public function buildKnowledgeBlock($includeWonExcerpts = true)
     {
+        return $this->buildKnowledgeBlockForMessage('', '', $includeWonExcerpts);
+    }
+
+    /**
+     * Bloque de ventas contextual al mensaje (elige excerpts WON más relevantes).
+     *
+     * @param  string  $latestBody
+     * @param  string  $threadText
+     * @param  bool  $includeWonExcerpts
+     * @return string
+     */
+    public function buildKnowledgeBlockForMessage($latestBody = '', $threadText = '', $includeWonExcerpts = true)
+    {
+        $rules = self::businessRulesBlock();
+
         if (!$includeWonExcerpts || !config('meta_whatsapp_copiloto.analysis_sales_context_enabled', true)) {
-            return self::businessRulesBlock();
+            return $rules;
         }
 
-        $cacheKey = 'wa_copiloto_sales_knowledge_v3';
-        $ttl = max(300, (int) config('meta_whatsapp_copiloto.analysis_sales_context_cache_ttl', 86400));
+        $maxChars = max(4000, (int) config('meta_whatsapp_copiloto.analysis_sales_context_max_chars', 18000));
+        $budget = max(0, $maxChars - mb_strlen($rules) - 80);
+        $combined = mb_strtolower(trim($latestBody . "\n" . $threadText));
+        $excerpts = $combined !== ''
+            ? $this->loadWonExcerptsForMessage($combined, $budget)
+            : $this->loadWonExcerpts($budget);
 
-        return Cache::remember($cacheKey, $ttl, function () {
-            $rules = self::businessRulesBlock();
-            $maxChars = max(4000, (int) config('meta_whatsapp_copiloto.analysis_sales_context_max_chars', 18000));
-            $budget = max(0, $maxChars - mb_strlen($rules) - 80);
-            $excerpts = $this->loadWonExcerpts($budget);
+        if ($excerpts === '') {
+            return $rules;
+        }
 
-            if ($excerpts === '') {
-                return $rules;
-            }
-
-            return $rules
-                . "\n\n--- EJEMPLOS WON (V:=vendedor, C:=cliente) — imita tono, no copies literal ---\n"
-                . $excerpts;
-        });
+        return $rules
+            . "\n\n--- EJEMPLOS WON (V:=vendedor, C:=cliente) — imita tono y tácticas de cierre/urgencia, no copies literal ---\n"
+            . $excerpts;
     }
 
     public static function businessRulesBlock()
@@ -73,10 +85,13 @@ Fechas consolidado (formato habitual):
 - La fecha de salida del contenedor es tentativa; la fecha de entrega es la referencia firme.
 - Si el proveedor no llega al corte, la carga se rolea al siguiente consolidado.
 
-Confirmación y urgencia:
+Confirmación y urgencia (presión indirecta, estilo vendedor top):
 - "Revísala y, si estás dentro, confirmamos de una vez para asegurar tu espacio."
 - "No necesitas pagar nada ahora; cancelas cuando tu mercadería llegue a nuestro almacén."
-- "El contenedor está por cerrarse / espacio al X% — reserva con tiempo."
+- "El consolidado cierra el [fecha corte real] — si tu proveedor no llega a Yiwu antes, rola al siguiente."
+- "Reserva tu espacio hoy; muchos clientes confirman en esta etapa."
+- Cuando el cliente compara con DHL/courier: resalta gestión integral (aduana, permisos, volumen) sin despreciar su amigo; cierra con beneficio + siguiente paso concreto.
+- Cuando pregunta tiempos: usa fechas REALES del bloque CONSOLIDADOS ACTIVOS (corte → puerto → entrega Lima).
 
 Cliente antiguo:
 - Requiere 2 participaciones seguidas; a la tercera aplica tarifa cliente antiguo.
@@ -88,6 +103,7 @@ Items por volumen (carga total, aunque sean varios proveedores):
 - Ante dudas con varios ítems, consultar ANTES de comprar.
 
 Objeciones frecuentes y cómo responder:
+- "Está caro" / "sale más" → Ver PERFIL COMERCIAL: si RECURRENTE/ANTIGUO/PREMIUM, ofrecer recotizar con tarifa preferencial o descuento por fidelidad; si NUEVO, reforzar valor (aduana, permisos, sin costos ocultos) y revisar puntos de la cotización. No inventar monto de descuento sin dato en calculadora.
 - "¿Por qué subió el precio?" → Explicar recotización por volumen/medidas, tarifa cliente nuevo vs antiguo, o actualización de sistema.
 - "¿Puedo pagar con RUC empresa?" → Contrato lo firma la persona; facturación puede salir con RUC 20 si lo indica a facturación.
 - "¿Qué pasa si mi proveedor se demora?" → Se rolea al siguiente consolidado; no pierde la reserva.
@@ -105,6 +121,18 @@ RULES;
      * @return string
      */
     protected function loadWonExcerpts($maxChars)
+    {
+        return $this->loadWonExcerptsForMessage('', $maxChars);
+    }
+
+    /**
+     * Prioriza ventas WON cuyo contenido coincide con el mensaje del cliente.
+     *
+     * @param  string  $messageLower
+     * @param  int  $maxChars
+     * @return string
+     */
+    protected function loadWonExcerptsForMessage($messageLower, $maxChars)
     {
         if ($maxChars <= 0) {
             return '';
@@ -125,7 +153,11 @@ RULES;
             return $this->truncateText($raw, $maxChars);
         }
 
-        return $this->sampleSections($sections, $maxChars);
+        if ($messageLower === '') {
+            return $this->sampleSections($sections, $maxChars);
+        }
+
+        return $this->sampleRelevantSections($sections, $messageLower, $maxChars);
     }
 
     /**
@@ -193,6 +225,125 @@ RULES;
         }
 
         return implode("\n\n---\n\n", $picked);
+    }
+
+    /**
+     * @param  array<int, string>  $sections
+     * @param  string  $messageLower
+     * @param  int  $maxChars
+     * @return string
+     */
+    protected function sampleRelevantSections(array $sections, $messageLower, $maxChars)
+    {
+        $maxSections = max(3, min(10, (int) config('meta_whatsapp_copiloto.analysis_sales_context_max_sections', 6)));
+        $maxSectionChars = max(600, min(3500, (int) config('meta_whatsapp_copiloto.analysis_sales_context_section_max_chars', 2000)));
+
+        $scored = [];
+        foreach ($sections as $idx => $section) {
+            $scored[] = [
+                'idx' => $idx,
+                'score' => $this->scoreWonSection($section, $messageLower),
+                'text' => $section,
+            ];
+        }
+
+        usort($scored, function ($a, $b) {
+            if ($a['score'] === $b['score']) {
+                return $a['idx'] - $b['idx'];
+            }
+
+            return $b['score'] - $a['score'];
+        });
+
+        $picked = [];
+        $usedChars = 0;
+        $usedIdx = [];
+
+        foreach ($scored as $row) {
+            if (count($picked) >= $maxSections) {
+                break;
+            }
+            if ($row['score'] <= 0 && count($picked) >= 2) {
+                continue;
+            }
+
+            $section = $this->truncateText($row['text'], $maxSectionChars);
+            $len = mb_strlen($section) + 6;
+            if ($usedChars + $len > $maxChars) {
+                continue;
+            }
+
+            $picked[] = $section;
+            $usedIdx[$row['idx']] = true;
+            $usedChars += $len;
+        }
+
+        if (count($picked) < 2) {
+            foreach ($scored as $row) {
+                if (isset($usedIdx[$row['idx']])) {
+                    continue;
+                }
+                $section = $this->truncateText($row['text'], $maxSectionChars);
+                $len = mb_strlen($section) + 6;
+                if ($usedChars + $len > $maxChars) {
+                    break;
+                }
+                $picked[] = $section;
+                $usedIdx[$row['idx']] = true;
+                $usedChars += $len;
+                if (count($picked) >= $maxSections) {
+                    break;
+                }
+            }
+        }
+
+        if (empty($picked)) {
+            return $this->sampleSections($sections, $maxChars);
+        }
+
+        return implode("\n\n---\n\n", $picked);
+    }
+
+    /**
+     * @param  string  $section
+     * @param  string  $messageLower
+     * @return int
+     */
+    protected function scoreWonSection($section, $messageLower)
+    {
+        $haystack = mb_strtolower($section);
+        $score = 0;
+
+        $topicKeywords = [
+            'objecion' => ['dhl', 'courier', 'amigo', 'barato', 'caro', 'precio', 'por qué', 'porque', 'compar'],
+            'tiempo' => ['tiempo', 'demora', 'demoran', 'cuanto tarda', 'cuánto tarda', 'largo', 'dias', 'días', 'semanas', 'yiwu', 'lima'],
+            'cierre' => ['confirmo', 'confirmar', 'reserva', 'espacio', 'cierre', 'cerramos', 'asegurar'],
+            'documentos' => ['proforma', 'invoice', 'packing', 'packing list', 'documento', 'pdf'],
+            'marca' => ['marca', 'nike', 'logo', 'patent', 'autoriz'],
+            'cotizacion' => ['cotiz', 'cuanto sale', 'cuánto sale', 'costo', 'presupuesto', 'cbm', 'volumen', 'caro', 'cara', 'barato', 'descuento', 'precio'],
+        ];
+
+        foreach ($topicKeywords as $topic => $keywords) {
+            $topicHit = false;
+            foreach ($keywords as $keyword) {
+                if (mb_strpos($messageLower, $keyword) !== false) {
+                    $topicHit = true;
+                    $score += 3;
+                }
+                if (mb_strpos($haystack, $keyword) !== false) {
+                    $score += 2;
+                }
+            }
+            if ($topicHit && mb_strpos($haystack, $topic) !== false) {
+                $score += 2;
+            }
+        }
+
+        if (mb_strpos($haystack, 'v:') !== false && mb_strpos($haystack, 'c:') !== false) {
+            $score += 1;
+        }
+
+        return $score;
     }
 
     /**

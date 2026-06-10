@@ -181,4 +181,25 @@ return [
     /** Tope de caracteres del bloque aduanero en el prompt. */
     'analysis_aduana_context_max_chars' => (int) env('META_WHATSAPP_COPILOTO_ANALYSIS_ADUANA_CONTEXT_MAX_CHARS', 4500),
 
+    /** Inyectar próximos consolidados (f_cierre, entrega) en el análisis IA. */
+    'analysis_consolidado_context_enabled' => filter_var(
+        env('META_WHATSAPP_COPILOTO_ANALYSIS_CONSOLIDADO_CONTEXT_ENABLED', true),
+        FILTER_VALIDATE_BOOLEAN
+    ),
+
+    /** Cantidad de consolidados activos en el prompt. */
+    'analysis_consolidado_context_max_items' => (int) env('META_WHATSAPP_COPILOTO_ANALYSIS_CONSOLIDADO_CONTEXT_MAX_ITEMS', 3),
+
+    /** TTL cache del bloque de consolidados (segundos). */
+    'analysis_consolidado_context_cache_ttl' => (int) env('META_WHATSAPP_COPILOTO_ANALYSIS_CONSOLIDADO_CONTEXT_CACHE_TTL', 1800),
+
+    /** Inyectar perfil comercial (tipo cliente, tarifas, descuentos) en análisis IA. */
+    'analysis_cliente_comercial_context_enabled' => filter_var(
+        env('META_WHATSAPP_COPILOTO_ANALYSIS_CLIENTE_COMERCIAL_CONTEXT_ENABLED', true),
+        FILTER_VALIDATE_BOOLEAN
+    ),
+
+    /** TTL cache del perfil comercial por teléfono (segundos). */
+    'analysis_cliente_comercial_context_cache_ttl' => (int) env('META_WHATSAPP_COPILOTO_ANALYSIS_CLIENTE_COMERCIAL_CONTEXT_CACHE_TTL', 600),
+
 ];

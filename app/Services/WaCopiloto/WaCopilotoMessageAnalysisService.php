@@ -8,6 +8,7 @@ use App\Models\WaCopiloto\WaCopilotoMessage;
 use App\Models\WaCopiloto\WaCopilotoMessageInsight;
 use App\Services\CargaConsolidada\GeminiService;
 use App\Services\Copiloto\CopilotoAduanaKnowledgeService;
+use App\Services\Copiloto\CopilotoClienteComercialContextService;
 use App\Support\WhatsApp\WaCopilotoLog;
 use Illuminate\Broadcasting\BroadcastException;
 use Illuminate\Support\Facades\DB;
@@ -29,18 +30,28 @@ class WaCopilotoMessageAnalysisService
     /** @var CopilotoAduanaKnowledgeService */
     protected $aduanaKnowledgeService;
 
+    /** @var WaCopilotoConsolidadoContextService */
+    protected $consolidadoContextService;
+
+    /** @var CopilotoClienteComercialContextService */
+    protected $clienteComercialContextService;
+
     public function __construct(
         GeminiService $gemini,
         WaCopilotoConversationService $conversationService,
         WaCopilotoConversationContextService $contextService,
         WaCopilotoSalesContextService $salesContextService,
-        CopilotoAduanaKnowledgeService $aduanaKnowledgeService
+        CopilotoAduanaKnowledgeService $aduanaKnowledgeService,
+        WaCopilotoConsolidadoContextService $consolidadoContextService,
+        CopilotoClienteComercialContextService $clienteComercialContextService
     ) {
         $this->gemini = $gemini;
         $this->conversationService = $conversationService;
         $this->contextService = $contextService;
         $this->salesContextService = $salesContextService;
         $this->aduanaKnowledgeService = $aduanaKnowledgeService;
+        $this->consolidadoContextService = $consolidadoContextService;
+        $this->clienteComercialContextService = $clienteComercialContextService;
     }
 
     /**
@@ -109,6 +120,7 @@ class WaCopilotoMessageAnalysisService
         }
 
         $context = $this->contextService->buildForAnalysis($conversation, (int) $message->id);
+        $context['phone_e164'] = (string) $conversation->phone_e164;
 
         $contactName = trim((string) $conversation->contact_name);
         if ($contactName === '') {
@@ -446,24 +458,45 @@ class WaCopilotoMessageAnalysisService
             $parts[] = "Mensajes recientes:\n" . (string) $context['recent_block'];
         }
 
+        $threadText = (string) (($context['recent_block'] ?? '') . "\n" . ($context['compact_block'] ?? ''));
         $contextBlock = implode("\n\n", $parts);
-        $salesKnowledge = $this->salesContextService->buildKnowledgeBlock($includeWonExcerpts);
+        $salesKnowledge = $this->salesContextService->buildKnowledgeBlockForMessage(
+            (string) $latestBody,
+            $threadText,
+            $includeWonExcerpts
+        );
+        $consolidadoKnowledge = $this->consolidadoContextService->buildUpcomingBlock();
+        $clienteComercialKnowledge = $this->clienteComercialContextService->buildBlockForPhone(
+            (string) ($context['phone_e164'] ?? '')
+        );
         $aduanaKnowledge = $this->aduanaKnowledgeService->buildKnowledgeBlockForMessage(
             (string) $latestBody,
-            (string) (($context['recent_block'] ?? '') . "\n" . ($context['compact_block'] ?? ''))
+            $threadText
         );
 
         $prompt = 'Eres copiloto comercial de Probusiness (importaciones desde China / carga consolidada Perú). '
             . 'Analiza el último mensaje del cliente y sugiere la respuesta que enviaría un vendedor exitoso. '
-            . 'Usa las reglas de negocio y el estilo de los ejemplos WON (V:=vendedor, C:=cliente). '
+            . 'Usa las reglas de negocio y el estilo/tácticas de los ejemplos WON (V:=vendedor, C:=cliente). '
+            . 'En etapas documentos/cotizacion/cierre: aplica presión indirecta (urgencia suave, reservar espacio, corte próximo) como en los WON, sin ser agresivo. '
+            . 'Si el cliente objeta precio ("caro", "sale más"): usa PERFIL COMERCIAL (tipo cliente, tarifas, descuento) — ofrece recotizar con tarifa preferencial si es RECURRENTE/ANTIGUO/PREMIUM y menciona descuento por fidelidad sin inventar montos. '
             . 'sugerencia_principal: mensaje WhatsApp corto listo para enviar (máx 350 caracteres). '
             . 'resumen_contexto: máx 200 caracteres. senales: máximo 2. items: exactamente 2 entradas (1 sugerencia + 1 comentario). '
-            . 'No inventes montos ni fechas que no estén en el hilo. '
+            . 'No inventes montos totales en soles. Para tarifas USD/CBM usa SOLO PERFIL COMERCIAL. Para fechas de consolidado usa SOLO CONSOLIDADOS ACTIVOS. '
             . 'Si el producto mencionado aparece regulado en la base aduanera, indícalo en alerta y en la sugerencia. '
             . 'Confirmación formal: el cliente debe escribir "Si confirmo". '
             . 'Contacto: ' . $contactName . '. Tipo último mensaje: ' . $messageType . ".\n\n"
             . "=== CONOCIMIENTO DE NEGOCIO ===\n"
             . $salesKnowledge . "\n\n";
+
+        if ($clienteComercialKnowledge !== '') {
+            $prompt .= "=== PERFIL COMERCIAL CLIENTE ===\n"
+                . $clienteComercialKnowledge . "\n\n";
+        }
+
+        if ($consolidadoKnowledge !== '') {
+            $prompt .= "=== CONSOLIDADOS ACTIVOS (fechas reales) ===\n"
+                . $consolidadoKnowledge . "\n\n";
+        }
 
         if ($aduanaKnowledge !== '') {
             $prompt .= "=== BASE DE DATOS PRODUCTOS / REGULACIONES / PERMISOS ===\n"
