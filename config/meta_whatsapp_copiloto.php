@@ -140,7 +140,7 @@ return [
     'analysis_score_decay_after_days' => (int) env('META_WHATSAPP_COPILOTO_ANALYSIS_SCORE_DECAY_AFTER_DAYS', 7),
 
     /** Tokens máximos de salida Gemini por análisis. */
-    'analysis_gemini_max_output_tokens' => (int) env('META_WHATSAPP_COPILOTO_ANALYSIS_GEMINI_MAX_OUTPUT_TOKENS', 2048),
+    'analysis_gemini_max_output_tokens' => (int) env('META_WHATSAPP_COPILOTO_ANALYSIS_GEMINI_MAX_OUTPUT_TOKENS', 4096),
 
     /**
      * Teléfonos permitidos para análisis IA (CSV, E.164 sin +). Use * o all para todos.
@@ -168,5 +168,17 @@ return [
 
     /** TTL cache del bloque de conocimiento (segundos). */
     'analysis_sales_context_cache_ttl' => (int) env('META_WHATSAPP_COPILOTO_ANALYSIS_SALES_CONTEXT_CACHE_TTL', 86400),
+
+    /** Inyectar base de datos productos/regulaciones en el análisis IA. */
+    'analysis_aduana_context_enabled' => filter_var(
+        env('META_WHATSAPP_COPILOTO_ANALYSIS_ADUANA_CONTEXT_ENABLED', true),
+        FILTER_VALIDATE_BOOLEAN
+    ),
+
+    /** Máximo de ítems de BD aduanera en el prompt Gemini. */
+    'analysis_aduana_context_max_items' => (int) env('META_WHATSAPP_COPILOTO_ANALYSIS_ADUANA_CONTEXT_MAX_ITEMS', 12),
+
+    /** Tope de caracteres del bloque aduanero en el prompt. */
+    'analysis_aduana_context_max_chars' => (int) env('META_WHATSAPP_COPILOTO_ANALYSIS_ADUANA_CONTEXT_MAX_CHARS', 4500),
 
 ];

@@ -7,6 +7,7 @@ use App\Models\Copiloto\CopilotoFicha;
 use App\Models\WaCopiloto\WaCopilotoMessage;
 use App\Models\WaCopiloto\WaCopilotoMessageInsight;
 use App\Services\CargaConsolidada\GeminiService;
+use App\Services\Copiloto\CopilotoAduanaKnowledgeService;
 use App\Support\WhatsApp\WaCopilotoLog;
 use Illuminate\Broadcasting\BroadcastException;
 use Illuminate\Support\Facades\DB;
@@ -25,16 +26,21 @@ class WaCopilotoMessageAnalysisService
     /** @var WaCopilotoSalesContextService */
     protected $salesContextService;
 
+    /** @var CopilotoAduanaKnowledgeService */
+    protected $aduanaKnowledgeService;
+
     public function __construct(
         GeminiService $gemini,
         WaCopilotoConversationService $conversationService,
         WaCopilotoConversationContextService $contextService,
-        WaCopilotoSalesContextService $salesContextService
+        WaCopilotoSalesContextService $salesContextService,
+        CopilotoAduanaKnowledgeService $aduanaKnowledgeService
     ) {
         $this->gemini = $gemini;
         $this->conversationService = $conversationService;
         $this->contextService = $contextService;
         $this->salesContextService = $salesContextService;
+        $this->aduanaKnowledgeService = $aduanaKnowledgeService;
     }
 
     /**
@@ -109,35 +115,58 @@ class WaCopilotoMessageAnalysisService
             $contactName = (string) $conversation->phone_e164;
         }
 
-        $maxTokens = max(768, min(4096, (int) config('meta_whatsapp_copiloto.analysis_gemini_max_output_tokens', 2048)));
+        $baseTokens = max(1024, min(8192, (int) config('meta_whatsapp_copiloto.analysis_gemini_max_output_tokens', 4096)));
         $schema = $this->geminiResponseSchema();
         $gemini = null;
 
         foreach ([true, false] as $includeWon) {
             $prompt = $this->buildPrompt($contactName, $context, $body, (string) $message->message_type, $includeWon);
+            $tokenAttempts = [$baseTokens];
+            if ($baseTokens < 8192) {
+                $tokenAttempts[] = min(8192, max($baseTokens + 2048, 6144));
+            }
 
-            WaCopilotoLog::info('analysis.gemini_request', [
-                'message_id' => (int) $message->id,
-                'conversation_id' => (int) $conversation->id,
-                'phone_e164' => (string) $conversation->phone_e164,
-                'max_tokens' => $maxTokens,
-                'prompt_chars' => mb_strlen($prompt),
-                'won_excerpts' => $includeWon,
-            ]);
+            foreach ($tokenAttempts as $attemptIdx => $maxTokens) {
+                WaCopilotoLog::info('analysis.gemini_request', [
+                    'message_id' => (int) $message->id,
+                    'conversation_id' => (int) $conversation->id,
+                    'phone_e164' => (string) $conversation->phone_e164,
+                    'max_tokens' => $maxTokens,
+                    'prompt_chars' => mb_strlen($prompt),
+                    'won_excerpts' => $includeWon,
+                    'token_attempt' => $attemptIdx + 1,
+                ]);
 
-            $gemini = $this->gemini->analyzeTextAsJson($prompt, $maxTokens, 0.25, $schema);
+                $gemini = $this->gemini->analyzeTextAsJson($prompt, $maxTokens, 0.25, $schema);
+
+                if (!empty($gemini['success']) && is_array($gemini['data'])) {
+                    break 2;
+                }
+
+                $finishReason = isset($gemini['finish_reason']) ? (string) $gemini['finish_reason'] : null;
+                $isTruncated = $finishReason === 'MAX_TOKENS';
+                $hasMoreTokenAttempts = $attemptIdx < count($tokenAttempts) - 1;
+
+                WaCopilotoLog::warning('analysis.gemini_failed', [
+                    'message_id' => (int) $message->id,
+                    'error' => isset($gemini['error']) ? (string) $gemini['error'] : 'unknown',
+                    'finish_reason' => $finishReason,
+                    'won_excerpts' => $includeWon,
+                    'max_tokens' => $maxTokens,
+                    'will_retry_more_tokens' => $isTruncated && $hasMoreTokenAttempts,
+                    'will_retry_rules_only' => !$isTruncated && $includeWon,
+                ]);
+
+                if ($isTruncated && $hasMoreTokenAttempts) {
+                    continue;
+                }
+
+                break;
+            }
 
             if (!empty($gemini['success']) && is_array($gemini['data'])) {
                 break;
             }
-
-            WaCopilotoLog::warning('analysis.gemini_failed', [
-                'message_id' => (int) $message->id,
-                'error' => isset($gemini['error']) ? (string) $gemini['error'] : 'unknown',
-                'finish_reason' => isset($gemini['finish_reason']) ? (string) $gemini['finish_reason'] : null,
-                'won_excerpts' => $includeWon,
-                'will_retry_rules_only' => $includeWon,
-            ]);
 
             if (!$includeWon) {
                 return null;
@@ -419,20 +448,33 @@ class WaCopilotoMessageAnalysisService
 
         $contextBlock = implode("\n\n", $parts);
         $salesKnowledge = $this->salesContextService->buildKnowledgeBlock($includeWonExcerpts);
+        $aduanaKnowledge = $this->aduanaKnowledgeService->buildKnowledgeBlockForMessage(
+            (string) $latestBody,
+            (string) (($context['recent_block'] ?? '') . "\n" . ($context['compact_block'] ?? ''))
+        );
 
-        return 'Eres copiloto comercial de Probusiness (importaciones desde China / carga consolidada Perú). '
+        $prompt = 'Eres copiloto comercial de Probusiness (importaciones desde China / carga consolidada Perú). '
             . 'Analiza el último mensaje del cliente y sugiere la respuesta que enviaría un vendedor exitoso. '
             . 'Usa las reglas de negocio y el estilo de los ejemplos WON (V:=vendedor, C:=cliente). '
-            . 'sugerencia_principal: mensaje WhatsApp corto listo para enviar (máx 500 caracteres). '
-            . 'resumen_contexto: máx 280 caracteres. items: al menos 2 entradas. '
+            . 'sugerencia_principal: mensaje WhatsApp corto listo para enviar (máx 350 caracteres). '
+            . 'resumen_contexto: máx 200 caracteres. senales: máximo 2. items: exactamente 2 entradas (1 sugerencia + 1 comentario). '
             . 'No inventes montos ni fechas que no estén en el hilo. '
+            . 'Si el producto mencionado aparece regulado en la base aduanera, indícalo en alerta y en la sugerencia. '
             . 'Confirmación formal: el cliente debe escribir "Si confirmo". '
             . 'Contacto: ' . $contactName . '. Tipo último mensaje: ' . $messageType . ".\n\n"
             . "=== CONOCIMIENTO DE NEGOCIO ===\n"
-            . $salesKnowledge . "\n\n"
-            . "=== HILO ACTUAL ===\n"
+            . $salesKnowledge . "\n\n";
+
+        if ($aduanaKnowledge !== '') {
+            $prompt .= "=== BASE DE DATOS PRODUCTOS / REGULACIONES / PERMISOS ===\n"
+                . $aduanaKnowledge . "\n\n";
+        }
+
+        $prompt .= "=== HILO ACTUAL ===\n"
             . $contextBlock . "\n\n"
             . 'Último mensaje del cliente (prioridad máxima):\n' . $latestBody;
+
+        return $prompt;
     }
 
     /**

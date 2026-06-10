@@ -7,6 +7,7 @@ Route::group(['prefix' => 'copiloto', 'middleware' => 'jwt.auth'], function () {
     Route::get('/leads', [CopilotoController::class, 'leads']);
     Route::get('/conversacion/{phone}', [CopilotoController::class, 'conversacion']);
     Route::get('/ficha/{phone}', [CopilotoController::class, 'ficha']);
+    Route::get('/aduana', [CopilotoController::class, 'aduanaContext']);
     Route::post('/responder', [CopilotoController::class, 'responder']);
     Route::get('/sync/estado', [CopilotoController::class, 'syncEstado']);
 });

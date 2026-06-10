@@ -53,6 +53,21 @@ class CopilotoController extends Controller
         }
     }
 
+    public function aduanaContext(Request $request)
+    {
+        try {
+            $query = trim((string) $request->get('q', ''));
+            $limit = (int) $request->get('limit', 18);
+
+            return response()->json($this->copilotoService->getAduanaContext($query, $limit));
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al consultar regulaciones: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
     public function responder(Request $request)
     {
         return response()->json([

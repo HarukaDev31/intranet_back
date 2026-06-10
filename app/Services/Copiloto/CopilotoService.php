@@ -8,6 +8,20 @@ use App\Models\Copiloto\WhatsappMessage;
 
 class CopilotoService
 {
+    /** @var CopilotoLeadHistorialService */
+    protected $historialService;
+
+    /** @var CopilotoAduanaKnowledgeService */
+    protected $aduanaKnowledgeService;
+
+    public function __construct(
+        CopilotoLeadHistorialService $historialService,
+        CopilotoAduanaKnowledgeService $aduanaKnowledgeService
+    ) {
+        $this->historialService = $historialService;
+        $this->aduanaKnowledgeService = $aduanaKnowledgeService;
+    }
+
     public function getLeads(array $params = [])
     {
         $perPage = isset($params['per_page']) ? max(1, (int) $params['per_page']) : 20;
@@ -100,15 +114,38 @@ class CopilotoService
 
     public function getFicha($phone)
     {
+        $phoneKey = trim((string) $phone);
         $ficha = CopilotoFicha::query()
-            ->where('phone', $phone)
+            ->where('phone', $phoneKey)
             ->orderByDesc('updated_at')
             ->orderByDesc('id')
             ->first();
 
+        $historial = $this->historialService->buildForPhone($phoneKey);
+
+        $data = array_merge(
+            $ficha ? $ficha->toArray() : ['phone' => $phoneKey],
+            $historial
+        );
+
         return [
             'success' => true,
-            'data' => $ficha,
+            'data' => $data,
+        ];
+    }
+
+    /**
+     * @param  string  $query
+     * @param  int  $limit
+     * @return array<string, mixed>
+     */
+    public function getAduanaContext($query, $limit = 18)
+    {
+        $result = $this->aduanaKnowledgeService->searchForAdvisor($query, $limit);
+
+        return [
+            'success' => true,
+            'data' => $result,
         ];
     }
 }
