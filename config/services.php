@@ -34,6 +34,11 @@ return [
     | Bitrix24 (webhook entrante). Si BITRIX_WEBHOOK_URL está vacío, no se encolan jobs CRM.
     | Ejemplo: https://tudominio.bitrix24.com/rest/1/tu_codigo_webhook/
     */
+    'gemini' => [
+        'api_key' => env('GEMINI_API_KEY'),
+        'model' => env('GEMINI_MODEL', 'gemini-2.0-flash'),
+    ],
+
     'bitrix' => [
         'webhook_url' => env('BITRIX_WEBHOOK_URL'),
         'timeout' => (int) env('BITRIX_HTTP_TIMEOUT', 30),

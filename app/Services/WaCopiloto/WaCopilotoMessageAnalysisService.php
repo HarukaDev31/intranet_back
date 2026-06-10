@@ -22,14 +22,19 @@ class WaCopilotoMessageAnalysisService
     /** @var WaCopilotoConversationContextService */
     protected $contextService;
 
+    /** @var WaCopilotoSalesContextService */
+    protected $salesContextService;
+
     public function __construct(
         GeminiService $gemini,
         WaCopilotoConversationService $conversationService,
-        WaCopilotoConversationContextService $contextService
+        WaCopilotoConversationContextService $contextService,
+        WaCopilotoSalesContextService $salesContextService
     ) {
         $this->gemini = $gemini;
         $this->conversationService = $conversationService;
         $this->contextService = $contextService;
+        $this->salesContextService = $salesContextService;
     }
 
     /**
@@ -109,8 +114,11 @@ class WaCopilotoMessageAnalysisService
         $nivel = $this->resolveNivel(isset($parsed['nivel']) ? $parsed['nivel'] : null, $temperaturaLead);
         $senales = $this->normalizeSignals(isset($parsed['senales']) ? $parsed['senales'] : []);
         $objecion = trim((string) ($parsed['objecion'] ?? ''));
-        $sugerencia = trim((string) ($parsed['sugerencia_principal'] ?? $parsed['sugerencia'] ?? ''));
+        $sugerencia = trim((string) ($parsed['sugerencia_principal'] ?? $parsed['sugerencia'] ?? $parsed['respuesta'] ?? ''));
         $resumenContexto = trim((string) ($parsed['resumen_contexto'] ?? ''));
+        $etapa = trim((string) ($parsed['etapa'] ?? ''));
+        $alerta = trim((string) ($parsed['alerta'] ?? ''));
+        $intencion = trim((string) ($parsed['intencion'] ?? ''));
 
         $savedInsights = [];
         DB::transaction(function () use (
@@ -124,6 +132,9 @@ class WaCopilotoMessageAnalysisService
             $objecion,
             $sugerencia,
             $resumenContexto,
+            $etapa,
+            $alerta,
+            $intencion,
             &$savedInsights
         ) {
             $sort = 0;
@@ -136,6 +147,46 @@ class WaCopilotoMessageAnalysisService
                     'label' => isset($item['label']) ? (string) $item['label'] : null,
                     'body' => (string) $item['body'],
                     'score' => isset($item['score']) ? (int) $item['score'] : null,
+                    'sort_order' => $sort++,
+                ]);
+                $savedInsights[] = $this->formatInsight($row);
+            }
+
+            if ($etapa !== '') {
+                $row = WaCopilotoMessageInsight::create([
+                    'message_id' => (int) $message->id,
+                    'conversation_id' => (int) $conversation->id,
+                    'phone_e164' => $phone,
+                    'kind' => 'comentario',
+                    'label' => 'Etapa',
+                    'body' => $etapa,
+                    'score' => null,
+                    'sort_order' => $sort++,
+                ]);
+                $savedInsights[] = $this->formatInsight($row);
+            }
+            if ($intencion !== '') {
+                $row = WaCopilotoMessageInsight::create([
+                    'message_id' => (int) $message->id,
+                    'conversation_id' => (int) $conversation->id,
+                    'phone_e164' => $phone,
+                    'kind' => 'comentario',
+                    'label' => 'Intención del cliente',
+                    'body' => $intencion,
+                    'score' => null,
+                    'sort_order' => $sort++,
+                ]);
+                $savedInsights[] = $this->formatInsight($row);
+            }
+            if ($alerta !== '' && strtolower($alerta) !== 'null') {
+                $row = WaCopilotoMessageInsight::create([
+                    'message_id' => (int) $message->id,
+                    'conversation_id' => (int) $conversation->id,
+                    'phone_e164' => $phone,
+                    'kind' => 'comentario',
+                    'label' => 'Alerta',
+                    'body' => $alerta,
+                    'score' => null,
                     'sort_order' => $sort++,
                 ]);
                 $savedInsights[] = $this->formatInsight($row);
@@ -248,20 +299,30 @@ class WaCopilotoMessageAnalysisService
         }
 
         $contextBlock = implode("\n\n", $parts);
+        $salesKnowledge = $this->salesContextService->buildKnowledgeBlock();
 
-        return 'Eres analista comercial de Probusiness (importaciones desde China / carga consolidada Perú). '
-            . 'Analiza el último mensaje del cliente usando el contexto del chat (ventana temporal acotada). '
+        return 'Eres copiloto comercial de Probusiness (importaciones desde China / carga consolidada Perú). '
+            . 'Tu trabajo: analizar el último mensaje del cliente y sugerir la respuesta EXACTA que enviaría un vendedor exitoso, '
+            . 'basándote en las reglas de negocio y en el estilo de las conversaciones WON (V: = vendedor, C: = cliente). '
             . 'Responde ÚNICAMENTE JSON válido con esta estructura: '
             . '{"temperatura_mensaje":0-100,"temperatura_lead":0-100,"nivel":"caliente|tibio|enfriando|frio",'
-            . '"senales":["texto corto"],"objecion":"texto o null","sugerencia_principal":"texto accionable",'
+            . '"etapa":"calificacion|documentos|cotizacion|cierre|postventa",'
+            . '"intencion":"qué quiere el cliente en este mensaje",'
+            . '"alerta":"restricción o riesgo comercial, o null",'
+            . '"senales":["texto corto"],"objecion":"texto o null",'
+            . '"sugerencia_principal":"texto listo para copiar y enviar al cliente por WhatsApp (tono Probusiness)",'
             . '"resumen_contexto":"máx 280 chars, estado del lead y temas clave del hilo para próximos análisis",'
             . '"items":[{"tipo":"temperatura|comentario|sugerencia","etiqueta":"texto","texto":"texto","puntaje":0-100|null}]}. '
-            . 'Reglas: items debe tener AL MENOS 2 entradas; incluye al menos una sugerencia concreta; '
-            . 'temperatura_mensaje = solo el último mensaje; temperatura_lead = estimación global del lead en la ventana; '
-            . 'resumen_contexto debe ser denso y reutilizable (sin repetir mensajes literales); '
-            . 'textos en español, breves. '
+            . 'Reglas: items debe tener AL MENOS 2 entradas; sugerencia_principal debe ser mensaje WhatsApp real (no metainstrucciones); '
+            . 'usa frases y políticas del bloque de conocimiento; no inventes montos ni fechas no presentes en el hilo; '
+            . 'si aplica confirmación, recuerda que debe decir "Si confirmo"; '
+            . 'temperatura_mensaje = solo el último mensaje; temperatura_lead = estimación global del lead; '
+            . 'textos en español. '
             . 'Contacto: ' . $contactName . '. '
             . 'Tipo último mensaje: ' . $messageType . ".\n\n"
+            . "=== CONOCIMIENTO DE NEGOCIO Y VENTAS WON ===\n"
+            . $salesKnowledge . "\n\n"
+            . "=== HILO ACTUAL (ventana temporal) ===\n"
             . $contextBlock . "\n\n"
             . 'Último mensaje a analizar (prioridad máxima):\n' . $latestBody;
     }

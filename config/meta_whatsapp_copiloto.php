@@ -148,4 +148,19 @@ return [
      */
     'analysis_allowed_phones' => env('META_WHATSAPP_COPILOTO_ANALYSIS_ALLOWED_PHONES', '51912705923'),
 
+    /** Contexto de ventas WON para prompts Gemini (reglas + conversaciones cerradas). */
+    'analysis_sales_context_enabled' => filter_var(
+        env('META_WHATSAPP_COPILOTO_ANALYSIS_SALES_CONTEXT_ENABLED', true),
+        FILTER_VALIDATE_BOOLEAN
+    ),
+
+    /** Ruta relativa en disco local (storage/app). */
+    'analysis_sales_context_path' => env('META_WHATSAPP_COPILOTO_ANALYSIS_SALES_CONTEXT_PATH', 'ventas_contexto.txt'),
+
+    /** Tope de caracteres del bloque de conocimiento (reglas + excerpts WON). */
+    'analysis_sales_context_max_chars' => (int) env('META_WHATSAPP_COPILOTO_ANALYSIS_SALES_CONTEXT_MAX_CHARS', 80000),
+
+    /** TTL cache del bloque de conocimiento (segundos). */
+    'analysis_sales_context_cache_ttl' => (int) env('META_WHATSAPP_COPILOTO_ANALYSIS_SALES_CONTEXT_CACHE_TTL', 86400),
+
 ];

@@ -1184,7 +1184,6 @@ class CotizacionFinalController extends Controller
                     )
                 );
                 $pathCotizacionFinalPDF = $this->getBoletaForSend($request->idCotizacion);
-                Log::info('pathCotizacionFinalPDF: ' . $pathCotizacionFinalPDF);
                 if ($pathCotizacionFinalPDF) {
                     $pdfCaption = 'Cotización final de importación';
                     $this->sendMedia(
