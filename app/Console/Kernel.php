@@ -2,6 +2,8 @@
 
 namespace App\Console;
 
+use App\Services\CargaConsolidada\SeguimientoConsolidadoCorteConfig;
+use Carbon\Carbon;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Console\Kernel as ConsoleKernel;
 
@@ -35,6 +37,20 @@ class Kernel extends ConsoleKernel
         // INSPECCIONADO→RESERVADO si pagos LOGÍSTICA completan meta y contenedor.estado_china ≠ COMPLETADO (reintenta tras cambios de monto)
         $schedule->command('carga-consolidada:promote-inspeccionados-reservados-pagos')
             ->everyFiveMinutes()
+            ->withoutOverlapping();
+        // Excel seguimiento consolidado en Drive: sincronización de respaldo
+        $schedule->command('segimiento-consolidado:sync-linked')
+            ->everyFiveMinutes()
+            ->withoutOverlapping();
+        // Corte diario — hora desde system_configs (excel_seguimiento_hora_corte)
+        $schedule->command('segimiento-consolidado:corte-datos-proveedor')
+            ->everyMinute()
+            ->timezone(config('carga_consolidada.seguimiento_corte_timezone', 'America/Lima'))
+            ->when(function () {
+                $settings = SeguimientoConsolidadoCorteConfig::settings();
+
+                return Carbon::now($settings['timezone'])->format('H:i') === $settings['hora'];
+            })
             ->withoutOverlapping();
     }
 

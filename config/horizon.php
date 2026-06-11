@@ -87,6 +87,7 @@ return [
         'redis:default' => 120,
         'redis:soporte_ti' => 60,
         'redis:plantillas_finales' => 900,
+        'redis:carga_consolidada' => 600,
     ],
 
     /*
@@ -221,6 +222,16 @@ return [
             'nice' => 0,
             'timeout' => 180,
         ],
+        'supervisor-carga-consolidada' => [
+            'connection' => 'redis',
+            'queue' => ['carga_consolidada'],
+            'balance' => 'simple',
+            'maxProcesses' => 1,
+            'tries' => 2,
+            'nice' => 0,
+            'timeout' => 900,
+            'memory' => 512,
+        ],
     ],
 
     'environments' => [
@@ -301,6 +312,17 @@ return [
                 'balanceMaxShift' => 1,
                 'balanceCooldown' => 3,
             ],
+            'supervisor-carga-consolidada' => [
+                'connection' => 'redis',
+                'queue' => ['carga_consolidada'],
+                'balance' => 'simple',
+                'maxProcesses' => 1,
+                'maxTime' => 0,
+                'maxJobs' => 0,
+                'memory' => 512,
+                'tries' => 2,
+                'timeout' => 900,
+            ],
         ],
         'local' => [
 
@@ -323,6 +345,11 @@ return [
             ],
             'supervisor-soporte-ti' => [
                 'maxProcesses' => 2,
+            ],
+            'supervisor-carga-consolidada' => [
+                'maxProcesses' => 1,
+                'timeout' => 900,
+                'memory' => 512,
             ],
         ],
     ],

@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\DB;
 use App\Models\CargaConsolidada\Cotizacion;
 use App\Models\CargaConsolidada\CotizacionProveedor;
 use App\Models\Usuario;
+use App\Services\CargaConsolidada\SeguimientoConsolidadoDriveService;
 use Illuminate\Support\Facades\Log;
 use Exception;
 
@@ -493,6 +494,106 @@ class EmbarcadosController extends Controller
         return response()->json([
             'data' => $headers,
             'success' => true
+        ]);
+    }
+
+    /**
+     * Vincula el Excel de seguimiento al Google Drive del consolidado.
+     *
+     * @param Request $request
+     * @param int $idContenedor
+     * @param SeguimientoConsolidadoDriveService $driveService
+     */
+    public function vincularDriveSeguimiento(Request $request, $idContenedor, SeguimientoConsolidadoDriveService $driveService)
+    {
+        if (!$this->canManageDriveSeguimiento()) {
+            return response()->json(['success' => false, 'message' => 'No autorizado'], 403);
+        }
+
+        Log::info('[SeguimientoDrive] POST vincular-drive', [
+            'id_contenedor' => (int) $idContenedor,
+            'user_id' => auth()->id(),
+        ]);
+
+        $result = $driveService->queueVincular((int) $idContenedor);
+
+        if (!empty($result['success']) && !empty($result['queued'])) {
+            return response()->json($result, 202);
+        }
+
+        if (!empty($result['success'])) {
+            return response()->json($result, 200);
+        }
+
+        $httpStatus = 422;
+        if (!empty($result['data']['processing'])) {
+            $httpStatus = 409;
+        }
+
+        return response()->json($result, $httpStatus);
+    }
+
+    /**
+     * Solo cotizador que no sea jefe de ventas.
+     *
+     * @return bool
+     */
+    private function canManageDriveSeguimiento()
+    {
+        return SeguimientoConsolidadoDriveService::userCanManageDriveSeguimiento(auth()->user());
+    }
+
+    /**
+     * Configuración global Excel seguimiento Drive (hora de corte CONTACTAR).
+     *
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getSeguimientoDriveConfig()
+    {
+        if (!$this->canManageDriveSeguimiento()) {
+            return response()->json(['success' => false, 'message' => 'No autorizado'], 403);
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => \App\Services\CargaConsolidada\SeguimientoConsolidadoCorteConfig::toPublicArray(),
+        ]);
+    }
+
+    /**
+     * @param Request $request
+     * @param \App\Services\SystemConfigService $systemConfigService
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function updateSeguimientoDriveConfig(Request $request, \App\Services\SystemConfigService $systemConfigService)
+    {
+        if (!$this->canManageDriveSeguimiento()) {
+            return response()->json(['success' => false, 'message' => 'No autorizado'], 403);
+        }
+
+        $request->validate([
+            'hora_corte' => ['required', 'regex:/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/'],
+            'timezone' => ['nullable', 'string', 'max:64'],
+        ]);
+
+        $hora = trim((string) $request->input('hora_corte'));
+        $systemConfigService->set(
+            \App\Services\SystemConfigService::KEY_EXCEL_SEGUIMIENTO_HORA_CORTE,
+            $hora
+        );
+
+        $timezone = trim((string) $request->input('timezone', ''));
+        if ($timezone !== '') {
+            $systemConfigService->set(
+                \App\Services\SystemConfigService::KEY_EXCEL_SEGUIMIENTO_TIMEZONE,
+                $timezone
+            );
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Hora de corte actualizada.',
+            'data' => \App\Services\CargaConsolidada\SeguimientoConsolidadoCorteConfig::toPublicArray(),
         ]);
     }
 

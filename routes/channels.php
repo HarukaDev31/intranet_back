@@ -51,6 +51,22 @@ Broadcast::channel('coordinacion-documentacion-expediente.{idProveedor}', functi
     return $user->grupo && $user->grupo->No_Grupo === Usuario::ROL_COORDINACION;
 });
 
+// Vinculación Excel seguimiento consolidado → Drive (por contenedor)
+Broadcast::channel('carga-consolidada.seguimiento-drive.{idContenedor}', function ($user) {
+    if (!$user->grupo) {
+        return false;
+    }
+
+    $allowedRoles = [
+        Usuario::ROL_COTIZADOR,
+        Usuario::ROL_COORDINACION,
+        Usuario::ROL_ADMINISTRACION,
+        Usuario::ROL_JEFE_IMPORTACION,
+    ];
+
+    return in_array($user->grupo->No_Grupo, $allowedRoles, true);
+});
+
 // WhatsApp Inbox coordinación — tiempo real del chat Meta
 Broadcast::channel('whatsapp-inbox.coordinacion', function ($user) {
     if (!$user || !$user->grupo) {

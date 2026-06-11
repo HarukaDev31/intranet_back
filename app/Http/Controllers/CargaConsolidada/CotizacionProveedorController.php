@@ -44,6 +44,7 @@ use App\Events\CotizacionChinaContacted;
 use App\Events\CotizacionChinaReceived;
 use App\Events\CotizacionChinaInspected;
 use App\Models\Notificacion;
+use App\Services\CargaConsolidada\SeguimientoConsolidadoDriveService;
 
 /**
  * @OA\Tag(
@@ -781,6 +782,9 @@ class CotizacionProveedorController extends Controller
 
             // Llamada al manejador de actualización de cotización
             $data = $this->handlerUpdateCotizacionProveedor($estado, $idProveedor, $idCotizacion);
+
+            app(SeguimientoConsolidadoDriveService::class)
+                ->queueSyncIfLinkedFromEstadoChange((int) $idContenedor, (string) $estado);
 
             return response()->json([
                 'success' => true,

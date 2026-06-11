@@ -4,6 +4,7 @@ namespace App\Observers\CargaConsolidada;
 
 use App\Models\CargaConsolidada\Cotizacion;
 use App\Models\CalculadoraImportacion;
+use App\Services\CargaConsolidada\SeguimientoConsolidadoDriveService;
 
 class CotizacionObserver
 {
@@ -22,6 +23,10 @@ class CotizacionObserver
                 CalculadoraImportacion::where('id_cotizacion', $cotizacion->id)
                     ->update(['estado' => CalculadoraImportacion::ESTADO_COTIZADO]);
             }
+        }
+
+        if (!empty($cotizacion->id_contenedor)) {
+            app(SeguimientoConsolidadoDriveService::class)->queueSyncIfLinked((int) $cotizacion->id_contenedor);
         }
     }
 }

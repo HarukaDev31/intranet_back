@@ -3,7 +3,9 @@
 namespace App\Providers;
 
 use App\Models\CargaConsolidada\Cotizacion;
+use App\Models\CargaConsolidada\CotizacionProveedor;
 use App\Observers\CargaConsolidada\CotizacionObserver;
+use App\Observers\CargaConsolidada\CotizacionProveedorObserver;
 use App\Support\Database\WslLocalDatabaseConnection;
 use Illuminate\Support\ServiceProvider;
 
@@ -36,5 +38,6 @@ class AppServiceProvider extends ServiceProvider
 
         // Registrar observer para sincronizar estados entre Cotizacion y CalculadoraImportacion
         Cotizacion::observe(CotizacionObserver::class);
+        CotizacionProveedor::observe(CotizacionProveedorObserver::class);
     }
 }

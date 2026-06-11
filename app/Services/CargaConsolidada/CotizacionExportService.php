@@ -6,6 +6,9 @@ use App\Models\CargaConsolidada\Cotizacion;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Style\Alignment;
+use PhpOffice\PhpSpreadsheet\Style\Border;
+use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use Carbon\Carbon;
 use App\Models\CargaConsolidada\CotizacionProveedor;
@@ -17,32 +20,82 @@ class CotizacionExportService
 {
     use FileTrait;
 
+    private const COLOR_HEADER_GREY = 'FFD9D9D9';
+    private const COLOR_HEADER_GREEN = 'FF92D050';
+    private const COLOR_HEADER_ORANGE = 'FFFFC000';
+
     protected $cotizacionService;
     public function __construct(CotizacionService $cotizacionService)
     {
         $this->cotizacionService = $cotizacionService;
     }
 
+    /**
+     * Construye el spreadsheet de cotizaciones (hoja activa) sin descargar.
+     *
+     * @param Request $request
+     * @param int|string $idContenedor
+     * @return Spreadsheet
+     */
+    public function buildCotizacionesSpreadsheet(Request $request, $idContenedor, $lightweight = false)
+    {
+        $startedAt = microtime(true);
+        $datosExport = $this->obtenerDatosParaExportar($request, $idContenedor, $lightweight);
+        Log::info('[SeguimientoDrive] Hoja Cotizaciones: datos obtenidos', [
+            'id_contenedor' => (int) $idContenedor,
+            'filas' => count($datosExport),
+            'ms' => (int) round((microtime(true) - $startedAt) * 1000),
+        ]);
+
+        $spreadsheet = new Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Cotizaciones');
+
+        if ($lightweight) {
+            $fillStartedAt = microtime(true);
+            $this->configurarEncabezadosSeguimiento($sheet);
+            $info = $this->llenarDatosExcelSeguimiento($sheet, $datosExport);
+            Log::info('[SeguimientoDrive] Hoja Cotizaciones: celdas escritas', [
+                'id_contenedor' => (int) $idContenedor,
+                'ms' => (int) round((microtime(true) - $fillStartedAt) * 1000),
+            ]);
+
+            $formatStartedAt = microtime(true);
+            $this->aplicarFormatoExcelSeguimiento($sheet, $info);
+            Log::info('[SeguimientoDrive] Hoja Cotizaciones: formato aplicado', [
+                'id_contenedor' => (int) $idContenedor,
+                'ms' => (int) round((microtime(true) - $formatStartedAt) * 1000),
+                'total_ms' => (int) round((microtime(true) - $startedAt) * 1000),
+            ]);
+
+            return $spreadsheet;
+        }
+
+        $this->configurarEncabezados($sheet);
+
+        $fillStartedAt = microtime(true);
+        $info = $this->llenarDatosExcel($sheet, $datosExport);
+        Log::info('[SeguimientoDrive] Hoja Cotizaciones: celdas escritas', [
+            'id_contenedor' => (int) $idContenedor,
+            'ms' => (int) round((microtime(true) - $fillStartedAt) * 1000),
+        ]);
+
+        $formatStartedAt = microtime(true);
+        $this->aplicarFormatoExcel($sheet, $info, $lightweight);
+        Log::info('[SeguimientoDrive] Hoja Cotizaciones: formato aplicado', [
+            'id_contenedor' => (int) $idContenedor,
+            'ms' => (int) round((microtime(true) - $formatStartedAt) * 1000),
+            'total_ms' => (int) round((microtime(true) - $startedAt) * 1000),
+        ]);
+
+        return $spreadsheet;
+    }
+
     //Exportar a Excel
     public function exportarCotizacion(Request $request, $query = null)
     {
         try{
-            // Obtener datos filtrados
-            $datosExport = $this->obtenerDatosParaExportar($request, $query);
-
-            //Crea el archivo Excel
-            $spreadsheet = new Spreadsheet();
-            $sheet = $spreadsheet->getActiveSheet();
-
-
-            //Configura los encabezados
-            $this->configurarEncabezados($sheet);
-
-            //Llena los datos
-            $info = $this->llenarDatosExcel($sheet, $datosExport);
-
-            //Aplica formato y estilos
-            $this->aplicarFormatoExcel($sheet, $info);
+            $spreadsheet = $this->buildCotizacionesSpreadsheet($request, $query);
 
             //Genera el archivo Excel
             return $this->generarDescargaExcel($spreadsheet);
@@ -57,8 +110,11 @@ class CotizacionExportService
     }
 
     //Obtiene los datos filtrados para la exportación
-    private function obtenerDatosParaExportar(Request $request, $id)
+    private function obtenerDatosParaExportar(Request $request, $id, $lightweight = false)
     {
+        if ($lightweight) {
+            return $this->obtenerFilasSeguimientoHoja1($request, $id);
+        }
 
         // Filtrar por contenedor
         $query = Cotizacion::withTrashed()
@@ -120,8 +176,8 @@ class CotizacionExportService
         $sortOrder = $request->input('sort_order', 'asc');
         $query->orderBy($sortField, $sortOrder);
 
-        // Cargar relaciones necesarias
-        $cotizaciones = $query->get();
+        // Cargar relaciones necesarias (evita N+1 en tipoCliente)
+        $cotizaciones = $query->with('tipoCliente')->get();
 
         $datosExport = [];
         $index = 1;
@@ -150,12 +206,269 @@ class CotizacionExportService
                 'logistica' => $cotizacion->monto ?? '',
                 'impuesto' => $cotizacion->impuestos ?? '',
                 'tarifa' => $cotizacion->tarifa ?? '',
-                'cotizacion' => $this->generateImageUrl($cotizacion->cotizacion_file_url ?? ''),
+                'cotizacion' => $lightweight
+                    ? $this->buildCotizacionCdnUrl($cotizacion->cotizacion_file_url ?? '')
+                    : ($this->generateImageUrl($cotizacion->cotizacion_file_url ?? '') ?? ''),
                 'estado' => $cotizacion->estado_cotizador ?? 'PENDIENTE',
             ];
         }
 
         return $datosExport;
+    }
+
+    /**
+     * Hoja 1 seguimiento Drive: una fila por proveedor, columnas cliente mergeadas.
+     *
+     * @param Request $request
+     * @param int|string $idContenedor
+     * @return array<int, array<string, mixed>>
+     */
+    private function obtenerFilasSeguimientoHoja1(Request $request, $idContenedor)
+    {
+        $contenedor = Contenedor::find($idContenedor);
+        $carga = $contenedor ? (string) $contenedor->carga : '';
+
+        $query = DB::table('contenedor_consolidado_cotizacion as C')
+            ->leftJoin('contenedor_consolidado_cotizacion_proveedores as P', function ($join) {
+                $join->on('P.id_cotizacion', '=', 'C.id');
+            })
+            ->leftJoin('usuario as U', 'U.ID_Usuario', '=', 'C.id_usuario')
+            ->where('C.id_contenedor', $idContenedor)
+            ->whereNull('C.deleted_at')
+            ->whereNull('C.id_cliente_importacion');
+
+        if ($request->has('estado_coordinacion') && $request->estado_coordinacion !== 'todos') {
+            $query->where('P.estados', $request->estado_coordinacion);
+        }
+
+        if ($request->has('estado_china') && $request->estado_china !== 'todos') {
+            $query->where('P.estados_proveedor', $request->estado_china);
+        }
+
+        if ($request->has('tipo_cliente') && $request->tipo_cliente !== 'todos') {
+            $query->where('C.id_tipo_cliente', $request->tipo_cliente);
+        }
+
+        $sortField = $request->input('sort_by', 'C.id');
+        $sortOrder = $request->input('sort_order', 'asc');
+        if ($sortField === 'id') {
+            $sortField = 'C.id';
+        }
+        $query->orderBy($sortField, $sortOrder)->orderBy('P.id', 'asc');
+
+        $rows = $query->select([
+            'C.id as id_cotizacion',
+            'P.id as id_proveedor',
+            'U.No_Nombres_Apellidos as asesor',
+            'C.nombre as nombre_cliente',
+            'C.telefono as whatsapp',
+            'C.estado_cotizador',
+            'P.code_supplier',
+            'P.cbm_total as volumen',
+            'P.cbm_total_china as volumen_china',
+            'P.estados_proveedor as estado_china',
+        ])->get();
+
+        $result = [];
+        $seenCotizaciones = [];
+
+        foreach ($rows as $row) {
+            $idCotizacion = (int) $row->id_cotizacion;
+            $seenCotizaciones[$idCotizacion] = true;
+
+            $result[] = $this->buildSeguimientoHoja1Row(
+                $carga,
+                $row,
+                $row->id_proveedor !== null ? $row : null
+            );
+        }
+
+        // Cotizaciones sin proveedor
+        $sinProveedor = DB::table('contenedor_consolidado_cotizacion as C')
+            ->leftJoin('usuario as U', 'U.ID_Usuario', '=', 'C.id_usuario')
+            ->where('C.id_contenedor', $idContenedor)
+            ->whereNull('C.deleted_at')
+            ->whereNull('C.id_cliente_importacion')
+            ->whereNotIn('C.id', array_keys($seenCotizaciones))
+            ->select([
+                'C.id as id_cotizacion',
+                'U.No_Nombres_Apellidos as asesor',
+                'C.nombre as nombre_cliente',
+                'C.telefono as whatsapp',
+                'C.estado_cotizador',
+            ])
+            ->orderBy('C.id', 'asc')
+            ->get();
+
+        foreach ($sinProveedor as $row) {
+            $result[] = $this->buildSeguimientoHoja1Row($carga, $row, null);
+        }
+
+        return $result;
+    }
+
+    /**
+     * @param string $carga
+     * @param object $cotizacionRow
+     * @param object|null $proveedorRow
+     * @return array<string, mixed>
+     */
+    private function buildSeguimientoHoja1Row($carga, $cotizacionRow, $proveedorRow)
+    {
+        return [
+            'id_cotizacion' => (int) $cotizacionRow->id_cotizacion,
+            'carga' => $carga,
+            'asesor' => $cotizacionRow->asesor ?? '',
+            'nombre_cliente' => $cotizacionRow->nombre_cliente ?? '',
+            'whatsapp' => $cotizacionRow->whatsapp ?? '',
+            'code_supplier' => $proveedorRow->code_supplier ?? '',
+            'volumen' => $proveedorRow !== null && is_numeric($proveedorRow->volumen)
+                ? round((float) $proveedorRow->volumen, 2)
+                : '',
+            'volumen_china' => $proveedorRow !== null && is_numeric($proveedorRow->volumen_china)
+                ? round((float) $proveedorRow->volumen_china, 2)
+                : '',
+            'estado' => $cotizacionRow->estado_cotizador ?? 'PENDIENTE',
+            'estado_china' => $proveedorRow !== null ? ($proveedorRow->estado_china ?? '') : '',
+            'notas' => '',
+        ];
+    }
+
+    /**
+     * @param \PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $sheet
+     */
+    private function configurarEncabezadosSeguimiento($sheet)
+    {
+        $headers = [
+            'B1' => ['Carga', self::COLOR_HEADER_GREY],
+            'C1' => ['Asesor', self::COLOR_HEADER_GREY],
+            'D1' => ['Nombre Cliente', self::COLOR_HEADER_GREY],
+            'E1' => ['Whatsapp', self::COLOR_HEADER_GREY],
+            'F1' => ['Code supplier', self::COLOR_HEADER_GREEN],
+            'G1' => ['Volumen', self::COLOR_HEADER_GREEN],
+            'H1' => ['Volumen China', self::COLOR_HEADER_GREY],
+            'I1' => ['Estado', self::COLOR_HEADER_ORANGE],
+            'J1' => ['Estado China', self::COLOR_HEADER_GREEN],
+            'K1' => ['Notas', self::COLOR_HEADER_GREEN],
+        ];
+
+        foreach ($headers as $cell => [$label, $color]) {
+            $sheet->setCellValue($cell, $label);
+            $sheet->getStyle($cell)->getFont()->setBold(true);
+            $sheet->getStyle($cell)->getAlignment()
+                ->setHorizontal(Alignment::HORIZONTAL_CENTER)
+                ->setVertical(Alignment::VERTICAL_CENTER);
+            $sheet->getStyle($cell)->getFill()
+                ->setFillType(Fill::FILL_SOLID)
+                ->getStartColor()
+                ->setARGB($color);
+        }
+    }
+
+    /**
+     * @param \PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $sheet
+     * @param array<int, array<string, mixed>> $datosExport
+     * @return array<string, mixed>
+     */
+    private function llenarDatosExcelSeguimiento($sheet, array $datosExport)
+    {
+        $row = 2;
+        $mergeGroups = [];
+        $currentCotizacion = null;
+        $groupStartRow = 2;
+
+        foreach ($datosExport as $data) {
+            $idCotizacion = (int) ($data['id_cotizacion'] ?? 0);
+
+            if ($currentCotizacion !== null && $idCotizacion !== $currentCotizacion) {
+                $mergeGroups[] = [
+                    'start' => $groupStartRow,
+                    'end' => $row - 1,
+                ];
+                $groupStartRow = $row;
+            }
+
+            $currentCotizacion = $idCotizacion;
+
+            $sheet->setCellValue('B' . $row, $data['carga'] ?? '');
+            $sheet->setCellValue('C' . $row, $data['asesor'] ?? '');
+            $sheet->setCellValue('D' . $row, $data['nombre_cliente'] ?? '');
+            $sheet->setCellValue('E' . $row, $data['whatsapp'] ?? '');
+            $sheet->setCellValue('F' . $row, $data['code_supplier'] ?? '');
+            $sheet->setCellValue('G' . $row, $data['volumen'] ?? '');
+            $sheet->setCellValue('H' . $row, $data['volumen_china'] ?? '');
+            $sheet->setCellValue('I' . $row, $data['estado'] ?? '');
+            $sheet->setCellValue('J' . $row, $data['estado_china'] ?? '');
+            $sheet->setCellValue('K' . $row, $data['notas'] ?? '');
+
+            $row++;
+        }
+
+        if ($currentCotizacion !== null) {
+            $mergeGroups[] = [
+                'start' => $groupStartRow,
+                'end' => $row - 1,
+            ];
+        }
+
+        foreach ($mergeGroups as $group) {
+            if ($group['end'] <= $group['start']) {
+                continue;
+            }
+
+            foreach (['B', 'C', 'D', 'E', 'I'] as $col) {
+                $range = $col . $group['start'] . ':' . $col . $group['end'];
+                $sheet->mergeCells($range);
+                $sheet->getStyle($range)->getAlignment()
+                    ->setVertical(Alignment::VERTICAL_CENTER)
+                    ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+            }
+        }
+
+        return [
+            'lastRow' => max(1, $row - 1),
+            'totalRows' => count($datosExport),
+        ];
+    }
+
+    /**
+     * @param \PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $sheet
+     * @param array<string, mixed> $info
+     */
+    private function aplicarFormatoExcelSeguimiento($sheet, array $info)
+    {
+        $lastRow = (int) ($info['lastRow'] ?? 1);
+        if ($lastRow < 2) {
+            return;
+        }
+
+        $columnWidths = [
+            'B' => 8,
+            'C' => 14,
+            'D' => 28,
+            'E' => 14,
+            'F' => 14,
+            'G' => 10,
+            'H' => 12,
+            'I' => 14,
+            'J' => 14,
+            'K' => 18,
+        ];
+
+        foreach ($columnWidths as $col => $width) {
+            $sheet->getColumnDimension($col)->setWidth($width);
+        }
+
+        $dataRange = 'B1:K' . $lastRow;
+        $sheet->getStyle($dataRange)->getBorders()->getAllBorders()
+            ->setBorderStyle(Border::BORDER_THIN);
+        $sheet->getStyle('B2:K' . $lastRow)->getAlignment()
+            ->setVertical(Alignment::VERTICAL_CENTER)
+            ->setWrapText(true);
+        $sheet->getStyle('B2:E' . $lastRow)->getAlignment()
+            ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        $sheet->getStyle('I2:I' . $lastRow)->getAlignment()
+            ->setHorizontal(Alignment::HORIZONTAL_CENTER);
     }
 
     //Genera el archivo Excel y lo prepara para descarga
@@ -304,6 +617,35 @@ class CotizacionExportService
     }
 
     /**
+     * URL de cotización para Excel en Drive: solo concatena CDN (sin S3 ni generateImageUrl).
+     *
+     * @param mixed $ruta
+     * @return string
+     */
+    private function buildCotizacionCdnUrl($ruta)
+    {
+        if ($ruta === null || trim((string) $ruta) === '') {
+            return '';
+        }
+
+        $ruta = trim((string) $ruta);
+
+        if (filter_var($ruta, FILTER_VALIDATE_URL)) {
+            return $ruta;
+        }
+
+        $path = str_replace('\\', '/', $ruta);
+        $path = preg_replace('#^public/#i', '', $path);
+        $path = ltrim($path, '/');
+
+        if ($path === '') {
+            return '';
+        }
+
+        return $this->buildCdnPublicUrl($path);
+    }
+
+    /**
      * Construye el COD: carga + fecha (dmy con año de 2 dígitos) + primeras 3 letras del nombre en mayúsculas
      */
     private function buildCod($contenedor, $cotizacion)
@@ -328,7 +670,7 @@ class CotizacionExportService
     /**
      * Aplica formato y estilos al Excel
      */
-    private function aplicarFormatoExcel($sheet, $info)
+    private function aplicarFormatoExcel($sheet, $info, $lightweight = false)
     {
         $lastRow = $info['lastRow'];
         $totalRows = $info['totalRows'];
@@ -382,9 +724,11 @@ class CotizacionExportService
         // Formato de fecha para las columnas de fecha
         $sheet->getStyle("G4:K{$lastRow}")->getNumberFormat()->setFormatCode('yyyy-mm-dd');
 
-        // Ajuste automático de ancho de columnas
-        foreach (range('B', 'Y') as $columnID) {
-            $sheet->getColumnDimension($columnID)->setAutoSize(true);
+        // Ajuste automático de ancho (muy costoso en PhpSpreadsheet; omitir en sync Drive)
+        if (!$lightweight) {
+            foreach (range('B', 'Y') as $columnID) {
+                $sheet->getColumnDimension($columnID)->setAutoSize(true);
+            }
         }
     }
 }

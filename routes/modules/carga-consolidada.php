@@ -117,6 +117,9 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
             Route::get('/general/{idContenedor}', [GeneralController::class, 'index']);
             Route::post('/general/estado-cliente', [GeneralController::class, 'updateEstadoCliente']);
             Route::post('/general/status-cliente-doc', [GeneralController::class, 'updateStatusCliente']);
+            Route::get('/embarcados/seguimiento-drive/config', [EmbarcadosController::class, 'getSeguimientoDriveConfig']);
+            Route::put('/embarcados/seguimiento-drive/config', [EmbarcadosController::class, 'updateSeguimientoDriveConfig']);
+            Route::post('/embarcados/{idContenedor}/vincular-drive', [EmbarcadosController::class, 'vincularDriveSeguimiento']);
             Route::get('/embarcados/{idContenedor}', [EmbarcadosController::class, 'getEmbarcados']);
             Route::post('embarcados/{idProveedor}/factura-comercial', [EmbarcadosController::class, 'uploadFacturaComercial']);
             Route::post('embarcados/{idProveedor}/packing-list', [EmbarcadosController::class, 'uploadPackingList']);

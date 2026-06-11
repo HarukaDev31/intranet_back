@@ -186,6 +186,29 @@ class BroadcastController extends Controller
                 return response()->json($this->pusherAuthPayload($request, $channelName));
             }
 
+            // Canal seguimiento Drive por contenedor
+            $seguimientoPrefix = 'private-carga-consolidada.seguimiento-drive.';
+            if (strpos($channelName, $seguimientoPrefix) === 0) {
+                $allowedRoles = [
+                    Usuario::ROL_COTIZADOR,
+                    Usuario::ROL_COORDINACION,
+                    Usuario::ROL_ADMINISTRACION,
+                    Usuario::ROL_JEFE_IMPORTACION,
+                ];
+
+                if ($user->grupo && in_array($user->grupo->No_Grupo, $allowedRoles, true)) {
+                    return response()->json($this->pusherAuthPayload($request, $channelName));
+                }
+
+                Log::error('User not authorized for seguimiento-drive channel', [
+                    'user_id' => $user->ID_Usuario,
+                    'channel' => $channelName,
+                    'user_grupo' => $user->grupo ? $user->grupo->No_Grupo : 'Sin grupo',
+                ]);
+
+                return response()->json(['message' => 'No autorizado para este canal'], 403);
+            }
+
             // Para otros canales, usar el método estándar de Laravel
             $response = Broadcast::auth($request);
 

@@ -34,8 +34,16 @@ class GoogleDriveExcelConfirmacionService
     public function __construct(GoogleDriveOAuthCredentials $oauthCredentials)
     {
         $this->oauthCredentials = $oauthCredentials;
-        $this->rootFolderId = trim((string) config('google.drive_excel_confirmacion_root_folder_id', ''));
+        $this->rootFolderId = $this->resolveRootFolderId();
         $this->sharedDriveId = trim((string) config('google.drive_excel_confirmacion_shared_drive_id', ''));
+    }
+
+    /**
+     * @return string
+     */
+    protected function resolveRootFolderId()
+    {
+        return trim((string) config('google.drive_excel_confirmacion_root_folder_id', ''));
     }
 
     public function isConfigured(): bool
@@ -110,7 +118,7 @@ class GoogleDriveExcelConfirmacionService
         return false;
     }
 
-    private function bootDrive(): void
+    protected function bootDrive(): void
     {
         if ($this->drive !== null) {
             return;
@@ -129,7 +137,7 @@ class GoogleDriveExcelConfirmacionService
         $this->drive = new Drive($client);
     }
 
-    private function ensureFolder(string $parentId, string $name): string
+    protected function ensureFolder(string $parentId, string $name): string
     {
         $existingId = $this->findFolderId($parentId, $name);
         if ($existingId !== null) {
@@ -160,7 +168,7 @@ class GoogleDriveExcelConfirmacionService
         return !empty($files) ? (string) $files[0]->getId() : null;
     }
 
-    private function uploadOrReplace(string $folderId, string $localPath, string $fileName): string
+    protected function uploadOrReplace(string $folderId, string $localPath, string $fileName): string
     {
         $mime = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
         $content = file_get_contents($localPath);
@@ -294,7 +302,7 @@ class GoogleDriveExcelConfirmacionService
         return $params;
     }
 
-    private function sanitizeName(string $name): string
+    protected function sanitizeName(string $name): string
     {
         $name = preg_replace('/[\/\\\\:*?"<>|]/', '-', trim($name));
 

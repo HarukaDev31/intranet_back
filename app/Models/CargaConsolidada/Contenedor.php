@@ -58,7 +58,15 @@ class Contenedor extends Model
         'fecha_documentacion_max',
         'f_inicio',
         'limite_cbm_imo',
+        'excel_seguimiento_drive_file_id',
+        'excel_seguimiento_drive_link',
+        'excel_seguimiento_vinculado_at',
+        'excel_seguimiento_file_name',
+        'excel_seguimiento_link_status',
+        'excel_seguimiento_link_error',
     ];
+
+    /** @see \App\Enums\CargaConsolidada\ExcelSeguimientoLinkStatus */
 
     /**
      * Los atributos que deben ser convertidos a tipos nativos.

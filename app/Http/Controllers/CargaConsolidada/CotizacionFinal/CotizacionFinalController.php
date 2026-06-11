@@ -66,7 +66,7 @@ class CotizacionFinalController extends Controller
     private $table_contenedor_almacen_inspection = "contenedor_consolidado_almacen_inspection";
     private $table_conteneodr_proveedor_estados_tracking = "contenedor_proveedor_estados_tracking";
     private $roleCotizador = "Cotizador";
-    private $roleCoordinacion = "CoordinaciÃ³n";
+    private $roleCoordinacion = "Coordinación";
     private $roleContenedorAlmacen = "ContenedorAlmacen";
     private $roleCatalogoChina = "CatalogoChina";
     private $rolesChina = ["CatalogoChina", "ContenedorAlmacen"];
@@ -84,7 +84,7 @@ class CotizacionFinalController extends Controller
     /**
      * @OA\Get(
      *     path="/carga-consolidada/contenedores/{idContenedor}/cotizaciones-finales",
-     *     tags={"CotizaciÃ³n Final"},
+     *     tags={"Cotización Final"},
      *     summary="Obtener cotizaciones finales",
      *     description="Obtiene las cotizaciones finales de un contenedor especÃ­fico",
      *     operationId="getContenedorCotizacionesFinales",
@@ -245,7 +245,7 @@ class CotizacionFinalController extends Controller
     }
 
     /**
-     * Obtiene las cotizaciones finales con documentaciÃ³n y pagos para un contenedor
+     * Obtiene las cotizaciones finales con documentación y pagos para un contenedor
      */
     public function getCotizacionFinalDocumentacionPagos(Request $request, $idContenedor)
     {
@@ -370,7 +370,7 @@ class CotizacionFinalController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Error al obtener cotizaciones con documentaciÃ³n y pagos: ' . $e->getMessage()
+                'message' => 'Error al obtener cotizaciones con documentación y pagos: ' . $e->getMessage()
             ], 500);
         }
     }
@@ -380,7 +380,7 @@ class CotizacionFinalController extends Controller
     private function getBoletaForSend($idCotizacion)
     {
         try {
-            // Obtener URL de cotizaciÃ³n final
+            // Obtener URL de cotización final
             $cotizacion = DB::table('contenedor_consolidado_cotizacion')
                 ->select('cotizacion_final_url')
                 ->where('id', $idCotizacion)
@@ -388,7 +388,7 @@ class CotizacionFinalController extends Controller
                 ->first();
 
             if (!$cotizacion || !$cotizacion->cotizacion_final_url) {
-                Log::error('CotizaciÃ³n final no encontrada o sin URL', ['id_cotizacion' => $idCotizacion]);
+                Log::error('Cotización final no encontrada o sin URL', ['id_cotizacion' => $idCotizacion]);
                 return false;
             }
 
@@ -446,8 +446,8 @@ class CotizacionFinalController extends Controller
 
 
             if ($fileContent === false) {
-                Log::error('No se pudo leer el archivo de cotizaciÃ³n final');
-                throw new \Exception("No se pudo leer el archivo Excel desde ninguna ubicaciÃ³n.");
+                Log::error('No se pudo leer el archivo de cotización final');
+                throw new \Exception("No se pudo leer el archivo Excel desde ninguna ubicación.");
             }
 
             // Crear archivo temporal
@@ -531,19 +531,19 @@ class CotizacionFinalController extends Controller
                 return false;
             }
 
-            Log::info("Ejecutando peticiÃ³n cURL...");
+            Log::info("Ejecutando petición cURL...");
 
-            // Ejecutar la peticiÃ³n
+            // Ejecutar la petición
             $fileContent = curl_exec($ch);
 
-            // Obtener informaciÃ³n de la peticiÃ³n
+            // Obtener información de la petición
             $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
             $error = curl_error($ch);
             $contentType = curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
             $totalTime = curl_getinfo($ch, CURLINFO_TOTAL_TIME);
             $downloadSize = curl_getinfo($ch, CURLINFO_SIZE_DOWNLOAD);
 
-            Log::info("InformaciÃ³n de cURL", [
+            Log::info("Información de cURL", [
                 'http_code' => $httpCode,
                 'content_type' => $contentType,
                 'total_time' => $totalTime,
@@ -553,9 +553,9 @@ class CotizacionFinalController extends Controller
 
             curl_close($ch);
 
-            // Verificar si hubo error en la ejecuciÃ³n
+            // Verificar si hubo error en la ejecución
             if ($fileContent === false) {
-                Log::error("curl_exec retornÃ³ false", ['curl_error' => $error]);
+                Log::error("curl_exec retornó false", ['curl_error' => $error]);
                 return false;
             }
 
@@ -565,9 +565,9 @@ class CotizacionFinalController extends Controller
                 return false;
             }
 
-            // Verificar cÃ³digo HTTP
+            // Verificar código HTTP
             if ($httpCode !== 200) {
-                Log::error("Error HTTP al descargar archivo. CÃ³digo: " . $httpCode, [
+                Log::error("Error HTTP al descargar archivo. Código: " . $httpCode, [
                     'url' => $url,
                     'content_type' => $contentType
                 ]);
@@ -601,7 +601,7 @@ class CotizacionFinalController extends Controller
             Log::info("=== FIN downloadFileFromUrl EXITOSO ===");
             return $fileContent;
         } catch (\Exception $e) {
-            Log::error("ExcepciÃ³n al descargar archivo desde URL: " . $e->getMessage(), [
+            Log::error("Excepción al descargar archivo desde URL: " . $e->getMessage(), [
                 'url' => $url,
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
@@ -626,7 +626,7 @@ class CotizacionFinalController extends Controller
             if (!$contenedor || !$contenedor->factura_general_url) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'No se encontrÃ³ la factura general'
+                    'message' => 'No se encontró la factura general'
                 ], 404);
             }
 
@@ -657,7 +657,7 @@ class CotizacionFinalController extends Controller
             $plantillaPath = public_path('assets/templates/PLANTILLA_GENERAL.xlsx');
 
             if (!file_exists($plantillaPath)) {
-                throw new \Exception('No se encontrÃ³ la plantilla general');
+                throw new \Exception('No se encontró la plantilla general');
             }
 
             // Cargar archivos Excel
@@ -724,7 +724,7 @@ class CotizacionFinalController extends Controller
                     }
                 }
 
-                // Obtener informaciÃ³n del cliente - manejar tanto celdas mergeadas como individuales
+                // Obtener información del cliente - manejar tanto celdas mergeadas como individuales
                 $clientName = '';
                 $clientType = '';
                 $currentRow = $startRow;
@@ -939,7 +939,7 @@ class CotizacionFinalController extends Controller
             ->getNumberFormat()
             ->setFormatCode(\PhpOffice\PhpSpreadsheet\Style\NumberFormat::FORMAT_PERCENTAGE_00);
 
-        // FÃ³rmula de suma para columna P con estilo
+        // Fórmula de suma para columna P con estilo
         $sheet->setCellValue('P' . $lastRow, '=SUM(P2:P' . ($lastRow - 1) . ')');
         $totalRowStyle = [
             'font' => [
@@ -963,7 +963,7 @@ class CotizacionFinalController extends Controller
      */
     private function isNameMatch($fullName, $partialName)
     {
-        // VerificaciÃ³n inicial
+        // Verificación inicial
         if (empty($fullName) || empty($partialName)) {
             return false;
         }
@@ -971,12 +971,12 @@ class CotizacionFinalController extends Controller
         $fullName = $this->normalizeString($fullName);
         $partialName = $this->normalizeString($partialName);
 
-        // Verificar que normalizeString no devolviÃ³ cadenas vacÃ­as
+        // Verificar que normalizeString no devolvió cadenas vacÃ­as
         if (empty($fullName) || empty($partialName)) {
             return false;
         }
 
-        // ComparaciÃ³n exacta - la Ãºnica forma vÃ¡lida de match
+        // Comparación exacta - la Ãºnica forma vÃ¡lida de match
         if ($fullName === $partialName) {
             return true;
         }
@@ -1028,7 +1028,7 @@ class CotizacionFinalController extends Controller
             'Ã¯' => 'i',
             'Ã®' => 'i',
             'Ä«' => 'i',
-            'Ã³' => 'o',
+            'ó' => 'o',
             'Ã²' => 'o',
             'Ã¶' => 'o',
             'Ã´' => 'o',
@@ -1077,9 +1077,9 @@ class CotizacionFinalController extends Controller
     /**
      * @OA\Put(
      *     path="/carga-consolidada/contenedor/cotizacion-final/general/update-estado",
-     *     tags={"CotizaciÃ³n Final"},
-     *     summary="Actualizar estado de cotizaciÃ³n final",
-     *     description="Cambia el estado de una cotizaciÃ³n final",
+     *     tags={"Cotización Final"},
+     *     summary="Actualizar estado de cotización final",
+     *     description="Cambia el estado de una cotización final",
      *     operationId="updateEstadoCotizacionFinal",
      *     security={{"bearerAuth":{}}},
      *     @OA\RequestBody(
@@ -1124,7 +1124,7 @@ class CotizacionFinalController extends Controller
                     ->first();
 
                 if (!$cotizacion) {
-                    throw new \Exception('CotizaciÃ³n no encontrada');
+                    throw new \Exception('Cotización no encontrada');
                 }
                 $telefono = preg_replace('/\s+/', '', $cotizacion->telefono);
                 $phoneNumberId = $telefono ? $telefono . '@c.us' : '';
@@ -1240,13 +1240,13 @@ class CotizacionFinalController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Error al actualizar estado de cotizaciÃ³n final: ' . $e->getMessage()
+                'message' => 'Error al actualizar estado de cotización final: ' . $e->getMessage()
             ], 500);
         }
     }
 
     /**
-     * Enviar recordatorio de pago por WhatsApp al cliente para una cotizaciÃ³n final.
+     * Enviar recordatorio de pago por WhatsApp al cliente para una cotización final.
      * Body (opcional): { "sleep": <segundos de espera entre llamadas> }
      */
     public function sendReminderPago(Request $request, $idCotizacion)
@@ -1256,7 +1256,7 @@ class CotizacionFinalController extends Controller
                 ->where('id', (int) $idCotizacion)
                 ->exists();
             if (!$exists) {
-                return response()->json(['message' => 'CotizaciÃ³n no encontrada', 'success' => false], 404);
+                return response()->json(['message' => 'Cotización no encontrada', 'success' => false], 404);
             }
 
             $sleep = $request->input('sleep', 0);
@@ -1324,7 +1324,7 @@ class CotizacionFinalController extends Controller
                 }
             }
 
-            throw new \Exception("No se encontrÃ³ el archivo en ninguna ubicaciÃ³n: " . $fileUrl);
+            throw new \Exception("No se encontró el archivo en ninguna ubicación: " . $fileUrl);
         } catch (\Exception $e) {
             Log::error('Error en getLocalPath: ' . $e->getMessage(), [
                 'fileUrl' => $fileUrl,
@@ -1465,7 +1465,7 @@ class CotizacionFinalController extends Controller
                 ],
             ]);
         } catch (\Exception $e) {
-            Log::error('Error al obtener cargos extra de cotizaciÃ³n final: ' . $e->getMessage());
+            Log::error('Error al obtener cargos extra de cotización final: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
                 'message' => 'Error al obtener cargos extra: ' . $e->getMessage(),
@@ -1476,9 +1476,9 @@ class CotizacionFinalController extends Controller
     /**
      * @OA\Post(
      *     path="/carga-consolidada/contenedor/cotizacion-final/pagos",
-     *     tags={"CotizaciÃ³n Final"},
-     *     summary="Registrar pago de cotizaciÃ³n final",
-     *     description="Guarda un nuevo pago para una cotizaciÃ³n final",
+     *     tags={"Cotización Final"},
+     *     summary="Registrar pago de cotización final",
+     *     description="Guarda un nuevo pago para una cotización final",
      *     operationId="storeCotizacionFinalPago",
      *     security={{"bearerAuth":{}}},
      *     @OA\RequestBody(
@@ -1523,7 +1523,7 @@ class CotizacionFinalController extends Controller
                 $voucherUrl = $this->storageStoreUpload($file, 'cargaconsolidada/pagos', $fileName);
             }
 
-            // Verificar si la cotizaciÃ³n tiene cotizacion_final_url
+            // Verificar si la cotización tiene cotizacion_final_url
             $cotizacion = DB::table($this->table_contenedor_cotizacion)
                 ->select('cotizacion_final_url')
                 ->where('id', $request->idCotizacion)
@@ -1588,7 +1588,7 @@ class CotizacionFinalController extends Controller
                         ]
                     ]);
                 }
-                // Sincronizar estado de la cotizaciÃ³n a partir de los pagos (LOGISTICA / IMPUESTOS)
+                // Sincronizar estado de la cotización a partir de los pagos (LOGISTICA / IMPUESTOS)
                 try {
                     app()->make(\App\Http\Controllers\CargaConsolidada\PagosController::class)
                         ->syncEstadoCotizacionFromPayments($request->idCotizacion, false);
@@ -1617,7 +1617,7 @@ class CotizacionFinalController extends Controller
     /**
      * @OA\Post(
      *     path="/carga-consolidada/contenedor/cotizacion-final/general/upload-factura-comercial",
-     *     tags={"CotizaciÃ³n Final"},
+     *     tags={"Cotización Final"},
      *     summary="Subir factura comercial",
      *     description="Sube una factura comercial general para un contenedor",
      *     operationId="uploadFacturaComercialCF",
@@ -1666,9 +1666,9 @@ class CotizacionFinalController extends Controller
     /**
      * @OA\Post(
      *     path="/carga-consolidada/contenedor/cotizacion-final/general/upload-cotizacion-final/{idCotizacion}",
-     *     tags={"CotizaciÃ³n Final"},
-     *     summary="Subir cotizaciÃ³n final",
-     *     description="Sube un archivo Excel de cotizaciÃ³n final para una cotizaciÃ³n especÃ­fica",
+     *     tags={"Cotización Final"},
+     *     summary="Subir cotización final",
+     *     description="Sube un archivo Excel de cotización final para una cotización especÃ­fica",
      *     operationId="uploadCotizacionFinalFile",
      *     security={{"bearerAuth":{}}},
      *     @OA\Parameter(name="idCotizacion", in="path", required=true, @OA\Schema(type="integer")),
@@ -1682,10 +1682,10 @@ class CotizacionFinalController extends Controller
      *         )
      *     ),
      *     @OA\Response(response=200, description="Archivo subido exitosamente"),
-     *     @OA\Response(response=404, description="CotizaciÃ³n no encontrada")
+     *     @OA\Response(response=404, description="Cotización no encontrada")
      * )
      *
-     * Subir una cotizaciÃ³n final a partir de un archivo (Excel) para una cotizaciÃ³n especÃ­fica.
+     * Subir una cotización final a partir de un archivo (Excel) para una cotización especÃ­fica.
      * Campos esperados: file (xlsx/xls), idCotizacion (int)
      */
     public function uploadCotizacionFinalFile(Request $request, $idCotizacion)
@@ -1705,7 +1705,7 @@ class CotizacionFinalController extends Controller
             if (! $cotizacion) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'CotizaciÃ³n no encontrada'
+                    'message' => 'Cotización no encontrada'
                 ], 404);
             }
 
@@ -1734,7 +1734,7 @@ class CotizacionFinalController extends Controller
                 ], 422);
             }
 
-            Log::info('CotizaciÃ³n final upload: valores extraÃ­dos', [
+            Log::info('Cotización final upload: valores extraÃ­dos', [
                 'id_cotizacion' => $idCotizacion,
                 'layout' => $parsed['layout'] ?? 'unknown',
                 'row_map' => $parsed['row_map'] ?? [],
@@ -1756,10 +1756,10 @@ class CotizacionFinalController extends Controller
                     $this->objectStorage()->delete($dbPath);
                 } catch (\Exception $_) {
                 }
-                Log::warning('Extraccion obligatoria fallÃ³ (monto/impuestos/logistica) al subir cotizacion final. Archivo eliminado: ' . $dbPath);
+                Log::warning('Extraccion obligatoria falló (monto/impuestos/logistica) al subir cotizacion final. Archivo eliminado: ' . $dbPath);
                 return response()->json([
                     'success' => false,
-                    'message' => 'No se pudieron extraer los campos obligatorios (monto, impuestos, logÃ­stica) del Excel. La cotizaciÃ³n final no fue guardada.'
+                    'message' => 'No se pudieron extraer los campos obligatorios (monto, impuestos, logÃ­stica) del Excel. La cotización final no fue guardada.'
                 ], 422);
             }
 
@@ -1783,7 +1783,7 @@ class CotizacionFinalController extends Controller
                 DB::table($this->table_contenedor_cotizacion)
                     ->where('id', $idCotizacion)
                     ->update($updateData);
-                Log::info('CotizaciÃ³n final actualizada', ['id' => $idCotizacion, 'update' => $updateData]);
+                Log::info('Cotización final actualizada', ['id' => $idCotizacion, 'update' => $updateData]);
             } catch (\Exception $dbError) {
                 Log::error('Error al actualizar cotizacion final: ' . $dbError->getMessage(), ['id' => $idCotizacion, 'update' => $updateData]);
                 if (strpos($dbError->getMessage(), 'Out of range value') !== false) {
@@ -1796,32 +1796,32 @@ class CotizacionFinalController extends Controller
                         DB::table($this->table_contenedor_cotizacion)
                             ->where('id', $idCotizacion)
                             ->update($limited);
-                        Log::info('CotizaciÃ³n final actualizada con valores limitados', ['id' => $idCotizacion]);
+                        Log::info('Cotización final actualizada con valores limitados', ['id' => $idCotizacion]);
                     } catch (\Exception $retryErr) {
                         Log::error('Fallo persistente al actualizar cotizacion final: ' . $retryErr->getMessage(), ['id' => $idCotizacion]);
                         return response()->json([
                             'success' => false,
-                            'message' => 'Error al actualizar la cotizaciÃ³n final en la base de datos.'
+                            'message' => 'Error al actualizar la cotización final en la base de datos.'
                         ], 500);
                     }
                 } else {
                     return response()->json([
                         'success' => false,
-                        'message' => 'Error al actualizar la cotizaciÃ³n final en la base de datos.'
+                        'message' => 'Error al actualizar la cotización final en la base de datos.'
                     ], 500);
                 }
             }
 
             return response()->json([
                 'success' => true,
-                'message' => 'CotizaciÃ³n final subida y registrada correctamente',
+                'message' => 'Cotización final subida y registrada correctamente',
                 'data' => $updateData
             ]);
         } catch (\Exception $e) {
             Log::error('Error en uploadCotizacionFinalFile: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
-                'message' => 'Error al subir cotizaciÃ³n final: ' . $e->getMessage()
+                'message' => 'Error al subir cotización final: ' . $e->getMessage()
             ], 500);
         }
     }
@@ -1867,7 +1867,7 @@ class CotizacionFinalController extends Controller
     /**
      * @OA\Options(
      *     path="/carga-consolidada/contenedor/cotizacion-final/general/upload-plantilla-final",
-     *     tags={"CotizaciÃ³n Final"},
+     *     tags={"Cotización Final"},
      *     summary="Options CORS",
      *     description="Maneja peticiones OPTIONS para CORS",
      *     @OA\Response(response=200, description="OK")
@@ -1886,7 +1886,7 @@ class CotizacionFinalController extends Controller
     /**
      * @OA\Post(
      *     path="/carga-consolidada/contenedor/cotizacion-final/general/upload-plantilla-final",
-     *     tags={"CotizaciÃ³n Final"},
+     *     tags={"Cotización Final"},
      *     summary="Generar Excel masivo",
      *     description="Genera Excel masivo de cotizaciones para mÃºltiples clientes",
      *     operationId="generateMassiveExcelPayrolls",
@@ -1910,7 +1910,7 @@ class CotizacionFinalController extends Controller
     public function generateMassiveExcelPayrolls(Request $request)
     {
         try {
-            Log::info('upload-plantilla-final: encolando generaciÃ³n', [
+            Log::info('upload-plantilla-final: encolando generación', [
                 'idContenedor' => $request->input('idContenedor'),
                 'has_file' => $request->hasFile('file'),
             ]);
@@ -1935,7 +1935,7 @@ class CotizacionFinalController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'GeneraciÃ³n encolada. Se notificarÃ¡ cuando finalice.',
+                'message' => 'Generación encolada. Se notificarÃ¡ cuando finalice.',
                 'data' => $result,
             ])->header('Access-Control-Allow-Origin', '*')
                 ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
@@ -1947,7 +1947,7 @@ class CotizacionFinalController extends Controller
 
             return response()->json([
                 'success' => false,
-                'message' => 'Error al encolar generaciÃ³n: ' . $e->getMessage(),
+                'message' => 'Error al encolar generación: ' . $e->getMessage(),
             ], 500);
         }
     }
@@ -2000,7 +2000,7 @@ class CotizacionFinalController extends Controller
             // Obtener todas las celdas combinadas
             $mergedCells = $worksheet->getMergeCells();
 
-            // FunciÃ³n para obtener el valor real de una celda (considerando combinadas)
+            // Función para obtener el valor real de una celda (considerando combinadas)
             $getCellValue = function ($col, $row) use ($worksheet, $mergedCells) {
                 $cellAddress = $col . $row;
                 $cellValue = trim($worksheet->getCell($cellAddress)->getValue());
@@ -2036,12 +2036,12 @@ class CotizacionFinalController extends Controller
                 return $cellValue;
             };
 
-            // FunciÃ³n para verificar si una fila pertenece a un cliente especÃ­fico
+            // Función para verificar si una fila pertenece a un cliente especÃ­fico
             $getClientRowRange = function ($startRow) use ($worksheet, $getCellValue, $highestRow) {
                 $endRow = $startRow;
                 $clientName = $getCellValue('A', $startRow);
 
-                // Buscar hasta dÃ³nde se extiende este cliente
+                // Buscar hasta dónde se extiende este cliente
                 for ($row = $startRow + 1; $row <= $highestRow; $row++) {
                     $nextClientName = $getCellValue('A', $row);
                     if (!empty($nextClientName) && $nextClientName !== $clientName) {
@@ -2266,7 +2266,7 @@ class CotizacionFinalController extends Controller
     }
 
     /**
-     * Configura la secciÃ³n de tributos
+     * Configura la sección de tributos
      */
     private function configureTributosSection($objPHPExcel, $InitialColumn, $InitialColumnLetter, $borders, $grayColor)
     {
@@ -2318,7 +2318,7 @@ class CotizacionFinalController extends Controller
     }
 
     /**
-     * Configura la secciÃ³n de costos destino
+     * Configura la sección de costos destino
      */
     private function configureCostosDestinoSection($objPHPExcel, $InitialColumn, $InitialColumnLetter, $borders, $grayColor)
     {
@@ -2351,7 +2351,7 @@ class CotizacionFinalController extends Controller
 
    
     /**
-     * Genera cotizaciÃ³n individual
+     * Genera cotización individual
      */
     public function generateIndividualCotizacion(Request $request, $idContenedor)
     {
@@ -2369,7 +2369,7 @@ class CotizacionFinalController extends Controller
             $templatePath = public_path('assets/templates/Boleta_Template.xlsx');
             if (!file_exists($templatePath)) {
                 Log::error('Plantilla no encontrada: ' . $templatePath);
-                throw new \Exception('Plantilla de cotizaciÃ³n no encontrada');
+                throw new \Exception('Plantilla de cotización no encontrada');
             }
             $objPHPExcel = IOFactory::load($templatePath);
 
@@ -2394,14 +2394,14 @@ class CotizacionFinalController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'CotizaciÃ³n individual generada correctamente',
+                'message' => 'Cotización individual generada correctamente',
                 'data' => $result
             ]);
         } catch (\Exception $e) {
             Log::error('Error en generateIndividualCotizacion: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
-                'message' => 'Error al generar cotizaciÃ³n individual: ' . $e->getMessage()
+                'message' => 'Error al generar cotización individual: ' . $e->getMessage()
             ], 500);
         }
     }
@@ -2436,12 +2436,12 @@ class CotizacionFinalController extends Controller
     /**
      * @OA\Get(
      *     path="/carga-consolidada/contenedor/cotizacion-final/general/check-temp-directory",
-     *     tags={"CotizaciÃ³n Final"},
+     *     tags={"Cotización Final"},
      *     summary="Verificar directorio temporal",
      *     description="Verifica el directorio temporal y permisos del sistema",
      *     operationId="checkTempDirectory",
      *     security={{"bearerAuth":{}}},
-     *     @OA\Response(response=200, description="InformaciÃ³n del directorio"),
+     *     @OA\Response(response=200, description="Información del directorio"),
      *     @OA\Response(response=500, description="Error interno")
      * )
      *
@@ -2518,8 +2518,8 @@ class CotizacionFinalController extends Controller
     /**
      * @OA\Get(
      *     path="/carga-consolidada/contenedor/cotizacion-final/general/{idContenedor}/headers",
-     *     tags={"CotizaciÃ³n Final"},
-     *     summary="Obtener headers de cotizaciÃ³n final",
+     *     tags={"Cotización Final"},
+     *     summary="Obtener headers de cotización final",
      *     description="Obtiene los totales y mÃ©tricas de cotizaciones finales de un contenedor",
      *     operationId="getCotizacionFinalHeaders",
      *     security={{"bearerAuth":{}}},
@@ -2539,7 +2539,7 @@ class CotizacionFinalController extends Controller
             // Consulta principal con mÃºltiples subconsultas
             $result = DB::table($this->table_contenedor_cotizacion_proveedores . ' as cccp')
                 ->select([
-                    // CBM Total China con condiciÃ³n de estado
+                    // CBM Total China con condición de estado
                     DB::raw('COALESCE(SUM(IF(cc.estado_cotizador = "CONFIRMADO", cccp.cbm_total_china, 0)), 0) as cbm_total_china'),
 
                     // CBM Total PerÃº (todos los CONFIRMADO)
@@ -2750,24 +2750,24 @@ class CotizacionFinalController extends Controller
     /**
      * @OA\Delete(
      *     path="/carga-consolidada/contenedor/cotizacion-final/general/delete-cotizacion-final-file/{idCotizacion}",
-     *     tags={"CotizaciÃ³n Final"},
-     *     summary="Eliminar archivo de cotizaciÃ³n final",
-     *     description="Elimina el archivo de cotizaciÃ³n final de una cotizaciÃ³n",
+     *     tags={"Cotización Final"},
+     *     summary="Eliminar archivo de cotización final",
+     *     description="Elimina el archivo de cotización final de una cotización",
      *     operationId="deleteCotizacionFinalFile",
      *     security={{"bearerAuth":{}}},
      *     @OA\Parameter(name="idCotizacion", in="path", required=true, @OA\Schema(type="integer")),
      *     @OA\Response(response=200, description="Archivo eliminado exitosamente"),
-     *     @OA\Response(response=404, description="CotizaciÃ³n no encontrada")
+     *     @OA\Response(response=404, description="Cotización no encontrada")
      * )
      */
     public function deleteCotizacionFinalFile($idCotizacionFinal)
     {
         try {
-            // Buscar la cotizaciÃ³n por ID
+            // Buscar la cotización por ID
             $cotizacion = Cotizacion::find($idCotizacionFinal);
 
             if (!$cotizacion) {
-                Log::error('Error en deleteCotizacionFinalFile: CotizaciÃ³n no encontrada con ID: ' . $idCotizacionFinal);
+                Log::error('Error en deleteCotizacionFinalFile: Cotización no encontrada con ID: ' . $idCotizacionFinal);
                 return false;
             }
 
@@ -2783,13 +2783,13 @@ class CotizacionFinalController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'CotizaciÃ³n final eliminada correctamente'
+                'message' => 'Cotización final eliminada correctamente'
             ]);
         } catch (\Exception $e) {
             Log::error('Error en deleteCotizacionFinalFile: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
-                'message' => 'Error al eliminar cotizaciÃ³n final: ' . $e->getMessage()
+                'message' => 'Error al eliminar cotización final: ' . $e->getMessage()
             ], 500);
         }
     }
@@ -2797,35 +2797,35 @@ class CotizacionFinalController extends Controller
     /**
      * @OA\Get(
      *     path="/carga-consolidada/contenedor/cotizacion-final/general/download-cotizacion-excel/{idCotizacion}",
-     *     tags={"CotizaciÃ³n Final"},
-     *     summary="Descargar Excel de cotizaciÃ³n final",
-     *     description="Descarga el archivo Excel de cotizaciÃ³n final individual",
+     *     tags={"Cotización Final"},
+     *     summary="Descargar Excel de cotización final",
+     *     description="Descarga el archivo Excel de cotización final individual",
      *     operationId="downloadCotizacionFinalExcel",
      *     security={{"bearerAuth":{}}},
      *     @OA\Parameter(name="idCotizacion", in="path", required=true, @OA\Schema(type="integer")),
      *     @OA\Response(response=200, description="Archivo Excel descargado"),
-     *     @OA\Response(response=404, description="CotizaciÃ³n o archivo no encontrado")
+     *     @OA\Response(response=404, description="Cotización o archivo no encontrado")
      * )
      *
-     * Descarga el archivo Excel de cotizaciÃ³n final individual
+     * Descarga el archivo Excel de cotización final individual
      */
     public function downloadCotizacionFinalExcel($idCotizacion)
     {
         try {
-            // Buscar la cotizaciÃ³n por ID
+            // Buscar la cotización por ID
             $cotizacion = Cotizacion::find($idCotizacion);
 
             if (!$cotizacion) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'CotizaciÃ³n no encontrada'
+                    'message' => 'Cotización no encontrada'
                 ], 404);
             }
 
             if (!$cotizacion->cotizacion_final_url) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'No se encontrÃ³ archivo de cotizaciÃ³n final'
+                    'message' => 'No se encontró archivo de cotización final'
                 ], 404);
             }
 
@@ -2855,7 +2855,7 @@ class CotizacionFinalController extends Controller
 
             // Verificar que el archivo existe
             if (!$filePath || !file_exists($filePath)) {
-                Log::error('Archivo de cotizaciÃ³n final no encontrado');
+                Log::error('Archivo de cotización final no encontrado');
                 return response()->json([
                     'success' => false,
                     'message' => 'Archivo no encontrado en el servidor'
@@ -2871,22 +2871,22 @@ class CotizacionFinalController extends Controller
             Log::error('Error en downloadCotizacionFinalExcel: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
-                'message' => 'Error al descargar cotizaciÃ³n final: ' . $e->getMessage()
+                'message' => 'Error al descargar cotización final: ' . $e->getMessage()
             ], 500);
         }
     }
 
     public function downloadCotizacionFinalPdf($idCotizacionFinal)
     {
-        // Obtener la URL de cotizaciÃ³n final y generar boleta
+        // Obtener la URL de cotización final y generar boleta
         try {
             $cotizacion = Cotizacion::find($idCotizacionFinal);
 
             if (!$cotizacion || !$cotizacion->cotizacion_final_url) {
-                Log::error('Error en downloadBoleta: CotizaciÃ³n no encontrada o sin archivo final con ID: ' . $idCotizacionFinal);
+                Log::error('Error en downloadBoleta: Cotización no encontrada o sin archivo final con ID: ' . $idCotizacionFinal);
                 return response()->json([
                     'success' => false,
-                    'message' => 'CotizaciÃ³n no encontrada o sin archivo final'
+                    'message' => 'Cotización no encontrada o sin archivo final'
                 ], 404);
             }
 
@@ -2903,7 +2903,7 @@ class CotizacionFinalController extends Controller
             // 2) public/storage (symlink a storage/app/public; coincide con URL /storage/...)
             $possiblePaths[] = public_path('storage/' . $relativePath);
 
-            // UbicaciÃ³n legacy
+            // Ubicación legacy
             if (strpos($cotizacionFinalUrl, 'http') === 0) {
                 $fileUrl = str_replace(' ', '%20', $cotizacionFinalUrl);
                 $possiblePaths[] = $fileUrl;
@@ -2928,8 +2928,8 @@ class CotizacionFinalController extends Controller
             }
 
             if ($fileContent === false) {
-                Log::error('No se pudo leer el archivo de cotizaciÃ³n final para PDF');
-                throw new \Exception("No se pudo leer el archivo Excel desde ninguna ubicaciÃ³n.");
+                Log::error('No se pudo leer el archivo de cotización final para PDF');
+                throw new \Exception("No se pudo leer el archivo Excel desde ninguna ubicación.");
             }
 
             $tempFile = tempnam(sys_get_temp_dir(), 'cotizacion_') . '.xlsx';
@@ -3034,7 +3034,7 @@ class CotizacionFinalController extends Controller
     }
 
     /**
-     * Filas de servicios extra en hoja 1 (columna B) que deben sumarse a logÃ­stica al subir cotizaciÃ³n final.
+     * Filas de servicios extra en hoja 1 (columna B) que deben sumarse a logÃ­stica al subir cotización final.
      */
     private function mainSheetColumnBLabelMatchesLogisticaServicioExtra(string $label): bool
     {
@@ -3083,7 +3083,7 @@ class CotizacionFinalController extends Controller
         }
 
         if ($rowsMatched !== []) {
-            Log::info('Upload cotizaciÃ³n final: servicios extra sumados a logÃ­stica', [
+            Log::info('Upload cotización final: servicios extra sumados a logÃ­stica', [
                 'filas' => $rowsMatched,
                 'total_servicios_extra' => round($sum, 2),
             ]);
@@ -3203,7 +3203,7 @@ class CotizacionFinalController extends Controller
     }
 
     /**
-     * Excel v2 (Boleta_Template): montos en K14â€“K33; cliente en C8. Excel tipo calculadora: J14â€“J43 y B8.
+     * Excel v2 (Boleta_Template): montos en K14:“K33; cliente en C8. Excel tipo calculadora: J14:“J43 y B8.
      */
     private function boletaFinalIsLegacyMainSheetKLayout($sheet): bool
     {
@@ -3223,7 +3223,7 @@ class CotizacionFinalController extends Controller
             $k14Calc = $sheet->getCell('K14')->getCalculatedValue();
             $k14HasAmount = is_numeric($k14Calc) && (float) $k14Calc > 0;
 
-            // Generado por getFinalCotizacionExcelv2: fÃ³rmulas en K14 o valores ya calculados + bloque tributos B20â€“B24.
+            // Generado por getFinalCotizacionExcelv2: fórmulas en K14 o valores ya calculados + bloque tributos B20:“B24.
             if ($hasTributosBlock && ($kFormula || $k14HasAmount) && !$jFormula) {
                 return true;
             }
@@ -3272,7 +3272,7 @@ class CotizacionFinalController extends Controller
     /**
      * Calcula el MAX del % AD VALOREM leyendo directamente la fila 26 de la hoja de cÃ¡lculos ('2').
      * Es la fuente de la verdad cuando J20 (=MAX('2'!C26:X26)) trae un valor en cachÃ© stale o
-     * cuando alguien sobrescribiÃ³ manualmente J20/I20 en la hoja 1.
+     * cuando alguien sobrescribió manualmente J20/I20 en la hoja 1.
      */
     private function boletaFinalGetAdValoremMaxPercentFromCalcSheet(
         \PhpOffice\PhpSpreadsheet\Spreadsheet $spreadsheet
@@ -3353,7 +3353,7 @@ class CotizacionFinalController extends Controller
     }
 
     /**
-     * Suma de servicios extra de la cotizaciÃ³n:
+     * Suma de servicios extra de la cotización:
      * MONTACARGA + DELIVERY + (BQ + SANCIONES)
      */
     private function getDeliveryServiciosExtrasByCotizacion(int $idCotizacion): float
@@ -3466,7 +3466,7 @@ class CotizacionFinalController extends Controller
 
     /**
      * HTML listo para DomPDF: PLANTILLA_COTIZACION_FINAL.html.
-     * Soporta hoja 1 tipo calculadora (J14â€“J43, B8, Ã­tems fila 38) y legacy v2 (K14â€“K33, C8, Ã­tems fila 48).
+     * Soporta hoja 1 tipo calculadora (J14:“J43, B8, Ã­tems fila 38) y legacy v2 (K14:“K33, C8, Ã­tems fila 48).
      */
     private function buildCotizacionFinalBoletaFilledHtml(Spreadsheet $spreadsheet): string
     {
@@ -3537,11 +3537,11 @@ class CotizacionFinalController extends Controller
                 $legacyTotalTributos = round($subtotalTrib + $percepcionTrib, 2);
             }
 
-            // En el flujo de cotizaciÃ³n final (Excel masivo) el % AD VALOREM estÃ¡ en J20
+            // En el flujo de cotización final (Excel masivo) el % AD VALOREM estÃ¡ en J20
             // (=MAX('2'!C26:X26)). I20 estÃ¡ vacÃ­o en este flujo. Para que el PDF cuadre
             // con el Excel:
             //   1) Calculamos el MAX directo desde la hoja '2' (fuente de la verdad: no
-            //      depende del cachÃ© de la fÃ³rmula de J20 ni de que J20 haya sido
+            //      depende del cachÃ© de la fórmula de J20 ni de que J20 haya sido
             //      sobrescrito manualmente).
             //   2) Si por algÃºn motivo la hoja '2' no existe / estÃ¡ vacÃ­a, caemos a J20.
             //   3) Si J20 tambiÃ©n es 0, caemos a I20 (templates antiguos).
@@ -3875,10 +3875,10 @@ class CotizacionFinalController extends Controller
                 ->header('Content-Disposition', 'attachment; filename="Cotizacion.pdf"')
                 ->header('Content-Length', strlen($pdfContent));
         } catch (\PhpOffice\PhpSpreadsheet\Exception $e) {
-            Log::error("Error en la fÃ³rmula de la celda: " . $e->getMessage());
+            Log::error("Error en la fórmula de la celda: " . $e->getMessage());
             throw $e;
         } catch (\Exception $e) {
-            Log::error('ExcepciÃ³n descargarBoleta: ' . $e->getMessage());
+            Log::error('Excepción descargarBoleta: ' . $e->getMessage());
             throw $e;
         }
     }
@@ -3906,10 +3906,10 @@ class CotizacionFinalController extends Controller
 
             return $tempFile;
         } catch (\PhpOffice\PhpSpreadsheet\Exception $e) {
-            Log::error("Error en la fÃ³rmula de la celda: " . $e->getMessage());
+            Log::error("Error en la fórmula de la celda: " . $e->getMessage());
             throw $e;
         } catch (\Exception $e) {
-            Log::error('ExcepciÃ³n generateBoletaForSend: ' . $e->getMessage());
+            Log::error('Excepción generateBoletaForSend: ' . $e->getMessage());
             throw $e;
         }
     }
@@ -3923,7 +3923,7 @@ class CotizacionFinalController extends Controller
             $newSheet->insertNewRowBefore($newRow);
         }
 
-        // Combinar celdas de descripciÃ³n
+        // Combinar celdas de descripción
         $newSheet->mergeCells('F' . $newRow . ':M' . $newRow);
 
         // Copiar datos
@@ -3964,7 +3964,7 @@ class CotizacionFinalController extends Controller
     }
 
     /**
-     * Configura los productos en la hoja principal (filas base 48â€“51; antidumping B23/K23 bajo IPM; subtotal K24; percepciÃ³n K25; total tributos K26)
+     * Configura los productos en la hoja principal (filas base 48:“51; antidumping B23/K23 bajo IPM; subtotal K24; percepción K25; total tributos K26)
      */
     private function configureProductsInMainSheet($objPHPExcel, $data, $antidumpingSum)
     {
@@ -4160,13 +4160,13 @@ class CotizacionFinalController extends Controller
         Log::info('FOB: ' . $fob . ', LogÃ­stica: ' . $logistica . ', Impuestos: ' . $impuestos . ', Monto Final: ' . $montoFinal);
 
         try {
-            // Forzar recÃ¡lculo de fÃ³rmulas
+            // Forzar recÃ¡lculo de fórmulas
             $objPHPExcel->getActiveSheet()->getParent()->getCalculationEngine()->flushInstance();
             $objPHPExcel->setActiveSheetIndex(0);
             $objPHPExcel->getActiveSheet()->calculateColumnWidths();
 
             // Hoja principal sin fila insertada por antidumping: FOB K29, logÃ­stica K30, impuestos K31
-            Log::info('Actualizando valores en hoja principal (mapa fijo K29â€“K31)');
+            Log::info('Actualizando valores en hoja principal (mapa fijo K29:“K31)');
             if ($fob > 0) {
                 $sheet1->setCellValue('K29', $fob);
                 Log::info('K29 (FOB) actualizado: ' . $fob);
@@ -4239,7 +4239,7 @@ class CotizacionFinalController extends Controller
 
         $usdFmt = '_-[$$-en-US]* #,##0.00_-;[Red]-[$$-en-US]* #,##0.00_-;_-[$$-en-US]* "-"??_-;_-@_-';
 
-        // Reservar la nueva fila de recargos y correr todo lo inferior una posiciÃ³n.
+        // Reservar la nueva fila de recargos y correr todo lo inferior una posición.
 
         $this->applyBoletaDeliveryServicioOneRow($sheet, $rowMonta, $monta, $usdFmt);
         $this->applyBoletaDeliveryServicioOneRow($sheet, $rowDeliv, $deliv, $usdFmt);
@@ -4252,7 +4252,7 @@ class CotizacionFinalController extends Controller
     }
 
     /**
-     * Obtiene agregados de proveedores LOADED para la cotizaciÃ³n:
+     * Obtiene agregados de proveedores LOADED para la cotización:
      * - total_qty_bultos_china: SUM(qty_box_china + qty_pallet_china)
      * - total_peso_china: SUM(peso_china)
      * - total_proveedores_loaded: COUNT(*)
@@ -4310,7 +4310,7 @@ class CotizacionFinalController extends Controller
     }
 
     /**
-     * Tras renombrar la hoja de cÃ¡lculos, las fÃ³rmulas de la hoja principal pueden seguir citando el nombre anterior (p. ej. '3'! â†’ '2'!).
+     * Tras renombrar la hoja de cÃ¡lculos, las fórmulas de la hoja principal pueden seguir citando el nombre anterior (p. ej. '3'! â†’ '2'!).
      */
     private function normalizeMainSheetFormulasCalcSheetName(\PhpOffice\PhpSpreadsheet\Spreadsheet $spreadsheet, string $fromTitle, string $toTitle): void
     {
@@ -4333,7 +4333,7 @@ class CotizacionFinalController extends Controller
 
     /**
      * MIGRACIÃ“N COMPLETA del mÃ©todo getFinalCotizacionExcelv2 de CodeIgniter
-     * Este mÃ©todo reemplaza la implementaciÃ³n actual con toda la lÃ³gica de CodeIgniter
+     * Este mÃ©todo reemplaza la implementación actual con toda la lógica de CodeIgniter
      * IMPORTANTE: Recibe $objPHPExcel como primer parÃ¡metro (igual que el original)
      */
     public function getFinalCotizacionExcelv2($objPHPExcel, $data, $idContenedor)
@@ -4799,7 +4799,7 @@ class CotizacionFinalController extends Controller
                 $InitialColumn++;
             }
 
-            // Continue with final columns styling (alineado a lÃ³gica de cotizaciÃ³n inicial)
+            // Continue with final columns styling (alineado a lógica de cotización inicial)
             $objPHPExcel->getActiveSheet()->getStyle($InitialColumn . $rowValorExw)->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_CURRENCY_USD_SIMPLE);
             $objPHPExcel->getActiveSheet()->getStyle($InitialColumn . $rowValorExw)->getFont()->setBold(true);
             $objPHPExcel->setActiveSheetIndex(2)->setCellValue($InitialColumn . $rowValorExwValoracion, "=SUM(C{$rowValorExwValoracion}:" . $InitialColumnLetter . "{$rowValorExwValoracion})");
@@ -5091,7 +5091,7 @@ class CotizacionFinalController extends Controller
                     '_-[$$-en-US]* #,##0.00_-;[Red]-[$$-en-US]* #,##0.00_-;_-[$$-en-US]* "-"??_-;_-@_-'
                 );
                 $sheet0->setCellValue('L36', 'USD');
-                // TOTAL del bloque servicio (fila 38): subtotal fila 34 + recargos 36 âˆ’ descuento 37 (tras el insert, la plantilla suele desplazar la fÃ³rmula mal).
+                // TOTAL del bloque servicio (fila 38): subtotal fila 34 + recargos 36 âˆ’ descuento 37 (tras el insert, la plantilla suele desplazar la fórmula mal).
                 $sheet0->setCellValue('K38', '=K34+K36-K37');
                 $sheet0->getStyle('K38')->getNumberFormat()->setFormatCode(
                     '_-[$$-en-US]* #,##0.00_-;[Red]-[$$-en-US]* #,##0.00_-;_-[$$-en-US]* "-"??_-;_-@_-'
@@ -5203,7 +5203,7 @@ class CotizacionFinalController extends Controller
                 $objPHPExcel->getActiveSheet()->mergeCells('G' . $row . ':H' . $row);
                 $objPHPExcel->getActiveSheet()->mergeCells('K' . $row . ':L' . $row);
 
-                // Aplicar estilos de fuente y alineaciÃ³n
+                // Aplicar estilos de fuente y alineación
                 $columnsToApply = ['B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K'];
                 foreach ($columnsToApply as $column) {
                     $objPHPExcel->getActiveSheet()->getStyle($column . $row)->getFont()->setName('Calibri');
@@ -5372,7 +5372,7 @@ class CotizacionFinalController extends Controller
 
             // remove page 2
             $objPHPExcel->removeSheetByIndex(1);
-            // La hoja de cÃ¡lculos pasa a Ã­ndice 1 y debe llamarse '2' (fÃ³rmulas de la hoja 0 se citaban como '3'! durante el armado)
+            // La hoja de cÃ¡lculos pasa a Ã­ndice 1 y debe llamarse '2' (fórmulas de la hoja 0 se citaban como '3'! durante el armado)
             $objPHPExcel->setActiveSheetIndex(1);
             $objPHPExcel->getActiveSheet()->setTitle('2');
             $this->normalizeMainSheetFormulasCalcSheetName($objPHPExcel, '3', '2');
@@ -5400,7 +5400,7 @@ class CotizacionFinalController extends Controller
 
             $objPHPExcel->setActiveSheetIndex(0);
 
-            // Obtener valores despuÃ©s del recÃ¡lculo con validaciÃ³n
+            // Obtener valores despuÃ©s del recÃ¡lculo con validación
             $sheet1 = $objPHPExcel->getActiveSheet();
 
             try {
@@ -5476,7 +5476,7 @@ class CotizacionFinalController extends Controller
                 "cotizacion_final_url" => $excelFilePath
             ];
         } catch (\Exception $e) {
-            echo 'ExcepciÃ³n capturada: ',  $e->getMessage(), "\n";
+            echo 'Excepción capturada: ',  $e->getMessage(), "\n";
             Log::error('Error en getFinalCotizacionExcelv2: ' . $e->getMessage());
             Log::error('Trace: ' . $e->getTraceAsString());
             Log::error('Line: ' . $e->getLine());
@@ -5486,7 +5486,7 @@ class CotizacionFinalController extends Controller
     }
 
     /**
-     * Configura la hoja de tributos con toda la lÃ³gica migrada
+     * Configura la hoja de tributos con toda la lógica migrada
      */
     private function setupTributosSheetModern($spreadsheet, $sheet, $data, $idContenedor)
     {
@@ -5553,7 +5553,7 @@ class CotizacionFinalController extends Controller
 
         $sheet->getColumnDimension('B')->setAutoSize(true);
 
-        // Procesar productos y configurar fÃ³rmulas
+        // Procesar productos y configurar fórmulas
         $this->processProductsInTributosSheet($sheet, $data, $borders, $blueColor, $yellowColor);
 
         // Configurar secciones adicionales
@@ -5612,12 +5612,12 @@ class CotizacionFinalController extends Controller
             $antidumpingSum += $antidumping * $cantidad;
         }
 
-        // Configurar columna total y fÃ³rmulas complejas
+        // Configurar columna total y fórmulas complejas
         $this->setupTotalColumnAndFormulas($sheet, $data, $productos, $pesoTotal, $tarifaValue, $blueColor);
     }
 
     /**
-     * Configura la columna total y las fÃ³rmulas complejas
+     * Configura la columna total y las fórmulas complejas
      */
     private function setupTotalColumnAndFormulas($sheet, $data, $productos, $pesoTotal, $tarifaValue, $blueColor)
     {
@@ -5640,7 +5640,7 @@ class CotizacionFinalController extends Controller
         }
 
         // Configurar CBM y totales bÃ¡sicos
-        // IMPORTANTE: Usar el CBM del primer producto (como en la versiÃ³n original)
+        // IMPORTANTE: Usar el CBM del primer producto (como en la versión original)
         $cbmPrimerProducto = isset($productos[0]['cbm']) && is_numeric($productos[0]['cbm'])
             ? (float)$productos[0]['cbm'] : 0;
         $sheet->setCellValue($totalColumn . '7', $cbmPrimerProducto);
@@ -5663,17 +5663,17 @@ class CotizacionFinalController extends Controller
         $sheet->setCellValue($tipoClienteCellValue, $data['cliente']['tipo_cliente']);
         $sheet->setCellValue($tarifaCellValue, $tarifaValue);
 
-        // Configurar fÃ³rmulas principales
+        // Configurar fórmulas principales
         $CBMTotal = $totalColumn . "7";
         $sheet->setCellValue($totalColumn . '14', "=IF($CBMTotal<1, $tarifaCellValue*0.6, $tarifaCellValue*0.6*$CBMTotal)");
         $sheet->setCellValue($totalColumn . '40', "=IF($CBMTotal<1, $tarifaCellValue*0.4, $tarifaCellValue*0.4*$CBMTotal)");
 
-        // Configurar fÃ³rmulas complejas para cada producto
+        // Configurar fórmulas complejas para cada producto
         $this->setupComplexFormulasForProducts($sheet, $data['cliente']['productos'], $totalColumn);
     }
 
     /**
-     * Configura fÃ³rmulas complejas para cada producto
+     * Configura fórmulas complejas para cada producto
      */
     private function setupComplexFormulasForProducts($sheet, $productos, $totalColumn)
     {
@@ -5684,7 +5684,7 @@ class CotizacionFinalController extends Controller
         foreach ($productos as $index => $producto) {
             $column = $this->incrementColumn($InitialColumn, $index);
 
-            // FÃ³rmulas de distribuciÃ³n y cÃ¡lculos
+            // Fórmulas de distribución y cÃ¡lculos
             $sheet->setCellValue($column . '13', "=" . $column . '11/' . $totalColumn . '11');
             $sheet->getStyle($column . '13')->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_PERCENTAGE_00);
 
@@ -5751,7 +5751,7 @@ class CotizacionFinalController extends Controller
         $sheet->setCellValue($AdValoremCell, "=MAX(" . $column . "19," . $column . "18)*" . $column . "27");
         $sheet->getStyle($AdValoremCell)->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_CURRENCY_USD_SIMPLE);
 
-        // IGV, IPM, PercepciÃ³n
+        // IGV, IPM, Percepción
         $sheet->setCellValue($column . '29', "=" . (16 / 100) . "*(" . "MAX(" . $column . "19," . $column . "18)+" . $AdValoremCell . ")");
         $sheet->getStyle($column . '29')->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_CURRENCY_USD_SIMPLE);
 
@@ -5774,7 +5774,7 @@ class CotizacionFinalController extends Controller
         $totalColumn = $this->incrementColumn('C', count($productos));
         $lastProductColumn = $this->incrementColumn('C', count($productos) - 1);
 
-        // SecciÃ³n de tributos aplicables
+        // Sección de tributos aplicables
         $sheet->mergeCells('B23:E23');
         $sheet->setCellValue('B23', 'Tributos Aplicables');
         $sheet->getStyle('B23')->getFill()->setFillType(Fill::FILL_SOLID);
@@ -5795,7 +5795,7 @@ class CotizacionFinalController extends Controller
             $sheet->setCellValue($cell, $label);
         }
 
-        // SecciÃ³n de costos destinos
+        // Sección de costos destinos
         $sheet->mergeCells('B37:E37');
         $sheet->setCellValue('B37', 'Costos Destinos');
         $sheet->getStyle('B37')->getFill()->setFillType(Fill::FILL_SOLID);
@@ -5861,7 +5861,7 @@ class CotizacionFinalController extends Controller
     {
         $spreadsheet->setActiveSheetIndex(0); // Activar hoja principal
 
-        // Configurar informaciÃ³n bÃ¡sica del cliente
+        // Configurar información bÃ¡sica del cliente
         $sheet->mergeCells('C8:C9');
         $sheet->getStyle('C8')->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
         $sheet->getStyle('C8')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
@@ -5881,7 +5881,7 @@ class CotizacionFinalController extends Controller
         $sheet->setCellValue('I11', "CBM");
         $sheet->getStyle('J11')->getNumberFormat()->setFormatCode('#,##0.00');
 
-        // Configurar referencias y fÃ³rmulas principales
+        // Configurar referencias y fórmulas principales
         $this->setupMainSheetFormulas($sheet, $data);
 
         // Configurar productos en la hoja principal
@@ -5892,7 +5892,7 @@ class CotizacionFinalController extends Controller
     }
 
     /**
-     * Configura las fÃ³rmulas principales en la hoja principal
+     * Configura las fórmulas principales en la hoja principal
      */
     private function setupMainSheetFormulas($sheet, $data)
     {
@@ -5917,7 +5917,7 @@ class CotizacionFinalController extends Controller
             $antidumpingSum += $antidumping * $cantidad;
         }
 
-        // Tributos: Ad Valorem, ISC, IGV, IPM (K20â€“K23); ANTIDUMPING debajo de IPM en K24 (sin insertar fila)
+        // Tributos: Ad Valorem, ISC, IGV, IPM (K20:“K23); ANTIDUMPING debajo de IPM en K24 (sin insertar fila)
         $sheet->setCellValue('K20', "='2'!" . $columnaIndex . "28"); // Ad Valorem
         $sheet->setCellValue('K21', "='2'!" . $columnaIndex . "30"); // ISC (valor)
         $sheet->setCellValue('K22', "='2'!" . $columnaIndex . "31"); // IGV
@@ -5936,8 +5936,8 @@ class CotizacionFinalController extends Controller
         $sheet->setCellValue('B25', 'SUB TOTAL');
         $sheet->setCellValue('K25', '=SUM(K20:K24)');
         $sheet->setCellValue('B26', 'PERCEPCION');
-        $sheet->setCellValue('K26', "='2'!" . $columnaIndex . "33"); // PercepciÃ³n
-        $sheet->setCellValue('K27', '=K25+K26'); // Total tributos (alineado con cotizaciÃ³n final v2 / boleta)
+        $sheet->setCellValue('K26', "='2'!" . $columnaIndex . "33"); // Percepción
+        $sheet->setCellValue('K27', '=K25+K26'); // Total tributos (alineado con cotización final v2 / boleta)
 
         // Calcular tarifa
         $tarifaValue = $this->calculateTarifaByTipoCliente(
@@ -5948,12 +5948,12 @@ class CotizacionFinalController extends Controller
 
         $sheet->setCellValue('K29', "=K14"); // FOB
         $sheet->setCellValue('K30', "=IF(J11<1, " . $tarifaValue . ", " . $tarifaValue . "*J11)"); // LogÃ­stica
-        $sheet->setCellValue('K31', '=K27'); // Impuestos totales (subtotal + percepciÃ³n)
+        $sheet->setCellValue('K31', '=K27'); // Impuestos totales (subtotal + percepción)
         $sheet->setCellValue('K32', '=K29+K30+K31'); // Total final
     }
 
     /**
-     * Configura los productos en la hoja principal (filas base 48â€“51)
+     * Configura los productos en la hoja principal (filas base 48:“51)
      */
     private function setupProductsInMainSheetModern($sheet, $data)
     {
@@ -6188,13 +6188,13 @@ class CotizacionFinalController extends Controller
     }
 
     /**
-     * Registra informaciÃ³n sobre la plantilla cargada para debugging
+     * Registra información sobre la plantilla cargada para debugging
      */
     private function logTemplateInfo($spreadsheet)
     {
         try {
             $sheetCount = $spreadsheet->getSheetCount();
-            Log::info('InformaciÃ³n de plantilla cargada:');
+            Log::info('Información de plantilla cargada:');
             Log::info('- Total de hojas: ' . $sheetCount);
 
             for ($i = 0; $i < $sheetCount; $i++) {
@@ -6221,7 +6221,7 @@ class CotizacionFinalController extends Controller
                 }
             }
         } catch (\Exception $e) {
-            Log::warning('Error al obtener informaciÃ³n de plantilla: ' . $e->getMessage());
+            Log::warning('Error al obtener información de plantilla: ' . $e->getMessage());
         }
     }
 
