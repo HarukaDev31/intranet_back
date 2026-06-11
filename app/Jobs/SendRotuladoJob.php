@@ -437,14 +437,9 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                 $metaDireccion
             );
 
-            // PASO 4: Enviar mensaje con URL (después de todos los proveedores)
+            // PASO 4: Recordatorio datos proveedor (sin enlace al formulario)
             $sleepSendMedia += 6;
-            $cotizacion = Cotizacion::where('id', $this->idCotizacion)->first();
-            $uuid = $cotizacion->uuid;
-            $url = CoordinacionWhatsappPayload::buildDatosProveedorUrl($uuid);
-            $message = "También necesito que ingrese al enlace y coloques los datos de tu proveedor x por favor 🫡
-Ingresar aquí: " . $url."\n\n";
-            //get all providers from db with not have supplier_phone or supplier
+            $message = "También necesito que me envíes los datos de tu proveedor x por favor 🫡\n\n";
             $providers = CotizacionProveedor::where('id_cotizacion', $this->idCotizacion)
                 ->where(function ($query) {
                     $query->where('supplier_phone', null)
@@ -463,17 +458,14 @@ Ingresar aquí: " . $url."\n\n";
                 }
             }
             $this->addCoordinationSection(null, $message);
-            $listaProveedoresMeta = CoordinacionWhatsappPayload::formatListaProveedoresForMeta($providers);
             $metaDatos = $this->withBatchStep(
-                CoordinacionWhatsappPayload::rotuladoDatosProveedorLink(
+                CoordinacionWhatsappPayload::rotuladoDatosProveedor(
                     (string) $this->phoneNumberId,
-                    $url,
-                    $listaProveedoresMeta,
                     $message,
                     $sleepSendMedia
                 ),
                 'rotulado_datos_proveedor',
-                'Enlace datos proveedor'
+                'Recordatorio datos proveedor'
             );
             $this->sendMessage($message, $this->phoneNumberId, $sleepSendMedia, 'consolidado', $metaDatos);
 

@@ -540,14 +540,10 @@ class CotizacionProveedorController extends Controller
                     $mensaje .= "----------------------------------------------------------\n";
                 }
                 $mensaje .= "\nContacta al vendedor y sube los datos faltantes.";
-                $url = CoordinacionWhatsappPayload::buildDatosProveedorUrl($uuid);
-
-                $mensaje .= "\nIngresar aquí: " . $url;
                 $tipoMensaje = "guardar1";
-                $metaPayload = CoordinacionWhatsappPayload::proveedorDatosGuardadoPendiente(
+                $metaPayload = CoordinacionWhatsappPayload::proveedorInspeccionManual(
                     (string) $telefono,
-                    CoordinacionWhatsappPayload::formatCodigosProveedoresPendientesForMeta($proveedoresPendientes),
-                    $url,
+                    $mensaje,
                     $mensaje
                 );
             } else {

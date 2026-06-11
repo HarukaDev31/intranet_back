@@ -46,17 +46,13 @@ class SendRecordatorioDatosProveedorJob implements ShouldQueue
                 return;
             }
 
-            $uuid = $cotizacion->uuid;
             $nombreCliente = $cotizacion->nombre;
-            $url = CoordinacionWhatsappPayload::buildDatosProveedorUrl($uuid);
             $listaProveedores = '';
-            $proveedorModels = [];
 
             foreach ($this->proveedores as $proveedorId) {
                 $proveedor = CotizacionProveedor::find($proveedorId);
 
                 if ($proveedor) {
-                    $proveedorModels[] = $proveedor;
                     $listaProveedores .= "Nombre del vendedor: " . $proveedor->supplier . "\n";
                     $listaProveedores .= "Número o WeChat: " . $proveedor->supplier_phone . "\n";
                     $listaProveedores .= "Codigo proveedor: " . $proveedor->code_supplier . "\n";
@@ -64,11 +60,8 @@ class SendRecordatorioDatosProveedorJob implements ShouldQueue
                 }
             }
 
-            $listaProveedoresMeta = CoordinacionWhatsappPayload::formatListaProveedoresForMeta($proveedorModels);
-
-            $bitrix = "Hola {$nombreCliente} necesitamos los datos de tu proveedor para que nuestro equipo de China se encarge de recibir tu carga.\n\n"
-                . "Por favor ingresa al enlace y coloca los datos del proveedor.\n\n"
-                . "Ingresar aquí: {$url}\n\n"
+            $bitrix = "Hola {$nombreCliente} necesitamos los datos de tu proveedor para que nuestro equipo de China se encargue de recibir tu carga.\n\n"
+                . "Por favor contacta al vendedor y envía los datos del proveedor.\n\n"
                 . $listaProveedores
                 . "Quedo atenta.";
 
@@ -81,11 +74,9 @@ class SendRecordatorioDatosProveedorJob implements ShouldQueue
                 $this->phoneNumberId,
                 0,
                 'consolidado',
-                CoordinacionWhatsappPayload::proveedorDatosLink(
+                CoordinacionWhatsappPayload::proveedorInspeccionManual(
                     (string) $this->phoneNumberId,
-                    (string) $nombreCliente,
-                    $url,
-                    $listaProveedoresMeta,
+                    $bitrix,
                     $bitrix
                 )
             );
