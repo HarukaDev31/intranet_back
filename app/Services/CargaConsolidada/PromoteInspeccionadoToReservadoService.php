@@ -13,7 +13,8 @@ use Illuminate\Support\Facades\Log;
  * INSPECCIONADO→RESERVADO solo en flujo calculadora + cotización inicial (Excel en cotizacion_file_url),
  * no en cotización final (cotizacion_final_url / módulo Cotización Final).
  *
- * Estado proveedor vs estado cliente (`estado_cliente`) son independientes: la promoción no usa estado_cliente.
+ * Al promover proveedores INSPECCIONADO→RESERVADO, también actualiza `estado_cliente` a RESERVADO
+ * (solo si aún es null o NO RESERVADO, sin retroceder estados posteriores).
  * No promueve si el contenedor asociado (`id_contenedor`) tiene `estado_china` = COMPLETADO (ya embarcado / cerrado).
  *
  * @see \App\Http\Controllers\CargaConsolidada\PagosController::syncEstadoCotizacionFromPayments (allí sigue LOGISTICA+IMPUESTOS; aquí solo logística)
@@ -131,9 +132,17 @@ class PromoteInspeccionadoToReservadoService
             ->update(['estados' => 'RESERVADO']);
 
         if ($updated > 0) {
+            $estadoClienteUpdated = DB::table('contenedor_consolidado_cotizacion')
+                ->where('id', $idCotizacion)
+                ->where(function ($query) {
+                    $query->whereNull('estado_cliente');
+                })
+                ->update(['estado_cliente' => 'RESERVADO']);
+
             Log::info('[Pagos][Calculadora inicial] INSPECCIONADO→RESERVADO por pago LOGÍSTICA completo', [
                 'id_cotizacion' => $idCotizacion,
                 'proveedores_actualizados' => $updated,
+                'estado_cliente_actualizado' => $estadoClienteUpdated > 0,
             ]);
         }
 
