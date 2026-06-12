@@ -7,12 +7,12 @@ use Illuminate\Console\Command;
 
 class SeguimientoConsolidadoResetDriveCommand extends Command
 {
-    protected $signature = 'segimiento-consolidado:reset-drive
-                            {idContenedor? : ID del consolidado (omitir con --all)}
-                            {--all : Reset de todos los vinculados y purga archivos en carpeta raíz Drive}
-                            {--keep-historico : Conservar cortes CONTACTAR y row_sync}
-                            {--no-revincular : No encolar vincular al terminar}
-                            {--force : Ejecutar sin confirmación}';
+    protected $signature = 'segimiento-consolidado:reset-drive'
+        . ' {--contenedor= : ID del consolidado (omitir con --all)}'
+        . ' {--all : Reset de todos los vinculados y purga archivos en carpeta raíz Drive}'
+        . ' {--keep-historico : Conservar cortes CONTACTAR y row_sync}'
+        . ' {--no-revincular : No encolar vincular al terminar}'
+        . ' {--force : Ejecutar sin confirmación}';
 
     protected $description = 'Borra Excel seguimiento en Drive, limpia vínculos en BD y re-vincula elegibles';
 
@@ -22,17 +22,18 @@ class SeguimientoConsolidadoResetDriveCommand extends Command
      */
     public function handle(SeguimientoConsolidadoDriveService $service)
     {
-        $idContenedor = $this->argument('idContenedor');
+        $contenedorOpt = $this->option('contenedor');
+        $idContenedor = ($contenedorOpt !== null && $contenedorOpt !== '') ? (int) $contenedorOpt : null;
         $all = (bool) $this->option('all');
 
         if (!$all && $idContenedor === null) {
-            $this->error('Indique idContenedor o use --all.');
+            $this->error('Indique --contenedor=ID o use --all.');
 
             return 1;
         }
 
         if ($all && $idContenedor !== null) {
-            $this->error('Use idContenedor o --all, no ambos.');
+            $this->error('Use --contenedor=ID o --all, no ambos.');
 
             return 1;
         }
@@ -62,7 +63,7 @@ class SeguimientoConsolidadoResetDriveCommand extends Command
         }
 
         $result = $service->resetSeguimientoDrive(
-            $idContenedor !== null ? (int) $idContenedor : null,
+            $idContenedor,
             $all,
             (bool) $this->option('keep-historico'),
             !$this->option('no-revincular')
