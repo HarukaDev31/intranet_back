@@ -21,6 +21,7 @@ class SeguimientoConsolidadoSyncLinkedCommand extends Command
     {
         $ids = DB::table('carga_consolidada_contenedor')
             ->whereNotNull('excel_seguimiento_drive_link')
+            ->whereNotNull('f_inicio')
             ->where(function ($q) {
                 $q->whereNull('excel_seguimiento_link_status')
                     ->orWhereNotIn('excel_seguimiento_link_status', [

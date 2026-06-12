@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\CargaConsolidada\Contenedor;
 use App\Services\CargaConsolidada\SeguimientoConsolidadoDriveService;
+use App\Services\CargaConsolidada\SeguimientoConsolidadoVincularEligibility;
 use Illuminate\Console\Command;
 
 class SeguimientoConsolidadoRegenerarCommand extends Command
@@ -25,6 +26,16 @@ class SeguimientoConsolidadoRegenerarCommand extends Command
 
         if (!$contenedor) {
             $this->error('Consolidado no encontrado.');
+
+            return 1;
+        }
+
+        if (!SeguimientoConsolidadoVincularEligibility::puedeOperarSeguimientoDrive($contenedor)) {
+            $this->error(
+                SeguimientoConsolidadoVincularEligibility::tieneFInicio($contenedor)
+                    ? 'Consolidado fuera de alcance: ' . SeguimientoConsolidadoVincularEligibility::describeRegla($contenedor)
+                    : SeguimientoConsolidadoVincularEligibility::mensajeSinFInicio()
+            );
 
             return 1;
         }

@@ -63,6 +63,10 @@ class SeguimientoConsolidadoDriveService
             return ['success' => false, 'message' => 'Consolidado no encontrado'];
         }
 
+        if (!SeguimientoConsolidadoVincularEligibility::tieneFInicio($contenedor)) {
+            return ['success' => true, 'data' => null];
+        }
+
         return [
             'success' => true,
             'data' => $this->formatStatusData($contenedor),
@@ -129,6 +133,20 @@ class SeguimientoConsolidadoDriveService
             ]);
 
             return ['success' => false, 'message' => 'Consolidado no encontrado'];
+        }
+
+        if (!SeguimientoConsolidadoVincularEligibility::puedeOperarSeguimientoDrive($contenedor)) {
+            $message = SeguimientoConsolidadoVincularEligibility::tieneFInicio($contenedor)
+                ? 'Consolidado fuera de alcance para Excel seguimiento Drive.'
+                : SeguimientoConsolidadoVincularEligibility::mensajeSinFInicio();
+
+            $this->log('info', 'Vincular rechazado: no elegible', [
+                'id_contenedor' => (int) $idContenedor,
+                'carga' => $contenedor->carga,
+                'f_inicio' => $contenedor->f_inicio,
+            ]);
+
+            return ['success' => false, 'message' => $message];
         }
 
         if (ExcelSeguimientoLinkStatus::isProcessing($contenedor->excel_seguimiento_link_status)) {
@@ -221,6 +239,20 @@ class SeguimientoConsolidadoDriveService
     {
         $idContenedor = (int) $idContenedor;
 
+        $contenedor = Contenedor::find($idContenedor);
+        if (!$contenedor || !SeguimientoConsolidadoVincularEligibility::puedeOperarSeguimientoDrive($contenedor)) {
+            $this->log('warning', 'Vincular job omitido: no elegible', [
+                'id_contenedor' => $idContenedor,
+            ]);
+
+            return [
+                'success' => false,
+                'message' => $contenedor && !SeguimientoConsolidadoVincularEligibility::tieneFInicio($contenedor)
+                    ? SeguimientoConsolidadoVincularEligibility::mensajeSinFInicio()
+                    : 'Consolidado no elegible para Excel seguimiento Drive.',
+            ];
+        }
+
         $this->log('info', 'Vincular iniciado (job)', ['id_contenedor' => $idContenedor]);
 
         DB::table('carga_consolidada_contenedor')
@@ -280,6 +312,14 @@ class SeguimientoConsolidadoDriveService
             ]);
 
             return ['success' => false, 'message' => 'El consolidado no está vinculado a Drive'];
+        }
+
+        if (!SeguimientoConsolidadoVincularEligibility::puedeOperarSeguimientoDrive($contenedor)) {
+            $this->log('debug', 'Sync omitido: sin f_inicio o fuera de alcance', [
+                'id_contenedor' => (int) $idContenedor,
+            ]);
+
+            return ['success' => false, 'message' => SeguimientoConsolidadoVincularEligibility::mensajeSinFInicio()];
         }
 
         if (ExcelSeguimientoLinkStatus::isProcessing($contenedor->excel_seguimiento_link_status)) {
@@ -417,10 +457,19 @@ class SeguimientoConsolidadoDriveService
 
         $row = DB::table('carga_consolidada_contenedor')
             ->where('id', $idContenedor)
-            ->select(['excel_seguimiento_drive_link', 'excel_seguimiento_link_status'])
+            ->select(['excel_seguimiento_drive_link', 'excel_seguimiento_link_status', 'f_inicio'])
             ->first();
 
         if (!$row || empty($row->excel_seguimiento_drive_link)) {
+            return;
+        }
+
+        if (empty($row->f_inicio)) {
+            return;
+        }
+
+        $contenedor = Contenedor::find($idContenedor);
+        if (!$contenedor || !SeguimientoConsolidadoVincularEligibility::puedeOperarSeguimientoDrive($contenedor)) {
             return;
         }
 
@@ -466,6 +515,7 @@ class SeguimientoConsolidadoDriveService
 
         $query = DB::table('carga_consolidada_contenedor')
             ->whereNotNull('excel_seguimiento_drive_link')
+            ->whereNotNull('f_inicio')
             ->select('id');
 
         if ($idContenedor !== null) {

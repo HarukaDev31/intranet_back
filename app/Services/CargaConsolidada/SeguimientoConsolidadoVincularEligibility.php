@@ -11,7 +11,7 @@ use Illuminate\Support\Collection;
  * Auto-vinculación Excel seguimiento → Drive.
  *
  * Regla: consolidados #11-2026 en adelante (2026 ≥11; años posteriores desde #1).
- * Año: YEAR(f_inicio). Número: campo carga.
+ * Requiere f_inicio (excluye importados en otro flujo).
  */
 class SeguimientoConsolidadoVincularEligibility
 {
@@ -21,15 +21,32 @@ class SeguimientoConsolidadoVincularEligibility
 
     /**
      * @param Contenedor $contenedor
+     * @return bool
+     */
+    public static function tieneFInicio(Contenedor $contenedor)
+    {
+        return !empty($contenedor->f_inicio);
+    }
+
+    /**
+     * @return string
+     */
+    public static function mensajeSinFInicio()
+    {
+        return 'Consolidado sin f_inicio (importado en otro flujo); no aplica Excel seguimiento Drive.';
+    }
+
+    /**
+     * @param Contenedor $contenedor
      * @return int
      */
     public static function resolveAnioContenedor(Contenedor $contenedor)
     {
-        if (!empty($contenedor->f_inicio)) {
-            return (int) Carbon::parse($contenedor->f_inicio)->format('Y');
+        if (empty($contenedor->f_inicio)) {
+            return 0;
         }
 
-        return (int) date('Y');
+        return (int) Carbon::parse($contenedor->f_inicio)->format('Y');
     }
 
     /**
@@ -66,6 +83,10 @@ class SeguimientoConsolidadoVincularEligibility
      */
     public static function cumpleUmbralCarga(Contenedor $contenedor)
     {
+        if (!self::tieneFInicio($contenedor)) {
+            return false;
+        }
+
         if (trim((string) $contenedor->carga) === '') {
             return false;
         }
@@ -86,6 +107,10 @@ class SeguimientoConsolidadoVincularEligibility
      */
     public static function puedeVincular(Contenedor $contenedor)
     {
+        if (!self::tieneFInicio($contenedor)) {
+            return false;
+        }
+
         if (!empty($contenedor->excel_seguimiento_drive_link)) {
             return false;
         }
@@ -98,6 +123,17 @@ class SeguimientoConsolidadoVincularEligibility
     }
 
     /**
+     * Vincular, regenerar y sync automático (requiere f_inicio + umbral de carga).
+     *
+     * @param Contenedor $contenedor
+     * @return bool
+     */
+    public static function puedeOperarSeguimientoDrive(Contenedor $contenedor)
+    {
+        return self::tieneFInicio($contenedor) && self::cumpleUmbralCarga($contenedor);
+    }
+
+    /**
      * @return Collection<int, Contenedor>
      */
     public static function contenedoresPendientesVincular()
@@ -105,6 +141,7 @@ class SeguimientoConsolidadoVincularEligibility
         $candidatos = Contenedor::query()
             ->whereNotNull('carga')
             ->where('carga', '!=', '')
+            ->whereNotNull('f_inicio')
             ->where(function ($q) {
                 $q->whereNull('excel_seguimiento_drive_link')
                     ->orWhere('excel_seguimiento_drive_link', '');
@@ -116,10 +153,7 @@ class SeguimientoConsolidadoVincularEligibility
                         ExcelSeguimientoLinkStatus::PROCESSING,
                     ]);
             })
-            ->where(function ($q) {
-                $q->whereYear('f_inicio', '>=', self::ANIO_INICIO)
-                    ->orWhereNull('f_inicio');
-            })
+            ->whereYear('f_inicio', '>=', self::ANIO_INICIO)
             ->orderByRaw('YEAR(f_inicio) ASC, CAST(carga AS UNSIGNED) ASC')
             ->get();
 
@@ -134,6 +168,10 @@ class SeguimientoConsolidadoVincularEligibility
      */
     public static function describeRegla(Contenedor $contenedor)
     {
+        if (!self::tieneFInicio($contenedor)) {
+            return 'Sin f_inicio (importado; excluido de seguimiento Drive)';
+        }
+
         $anio = self::resolveAnioContenedor($contenedor);
         $min = self::minCargaParaAnio($anio);
         $num = self::resolveNumeroCarga($contenedor);

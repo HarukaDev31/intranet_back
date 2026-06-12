@@ -66,14 +66,18 @@ class SeguimientoConsolidadoVincularCommand extends Command
             return 1;
         }
 
-        if (!empty($contenedor->excel_seguimiento_drive_link)) {
-            $this->error('Ya está vinculado. Use segimiento-consolidado:regenerar para crear un nuevo Excel.');
+        if (!SeguimientoConsolidadoVincularEligibility::puedeOperarSeguimientoDrive($contenedor)) {
+            $this->error(
+                SeguimientoConsolidadoVincularEligibility::tieneFInicio($contenedor)
+                    ? 'No cumple la regla de vinculación: ' . SeguimientoConsolidadoVincularEligibility::describeRegla($contenedor)
+                    : SeguimientoConsolidadoVincularEligibility::mensajeSinFInicio()
+            );
 
             return 1;
         }
 
-        if (!SeguimientoConsolidadoVincularEligibility::cumpleUmbralCarga($contenedor)) {
-            $this->error('No cumple la regla de vinculación: ' . SeguimientoConsolidadoVincularEligibility::describeRegla($contenedor));
+        if (!empty($contenedor->excel_seguimiento_drive_link)) {
+            $this->error('Ya está vinculado. Use segimiento-consolidado:regenerar para crear un nuevo Excel.');
 
             return 1;
         }

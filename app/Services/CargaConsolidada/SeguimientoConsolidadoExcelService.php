@@ -3,6 +3,7 @@
 namespace App\Services\CargaConsolidada;
 
 use App\Models\CargaConsolidada\Contenedor;
+use App\Models\CargaConsolidada\PagoConcept;
 use App\Services\CargaConsolidada\SeguimientoConsolidadoCorteConfig;
 use App\Services\CargaConsolidada\SeguimientoConsolidadoRowSyncService;
 use Carbon\Carbon;
@@ -145,8 +146,8 @@ class SeguimientoConsolidadoExcelService
             ? null
             : $periodoAbierto['inicio'];
 
-        $reservadoHistorico = $this->loadCotizacionesConReservadoHistorico($idContenedor);
-        $groups = $this->classifyRows($rows, $contactarDesde, $reservadoHistorico);
+        $cotizacionesConPago = $this->loadCotizacionesConPagoAsociado($idContenedor);
+        $groups = $this->classifyRows($rows, $contactarDesde, $cotizacionesConPago);
         $this->rowSyncService->applyUltimaActualizacion($idContenedor, $groups);
 
         $this->log('info', 'Hoja Seguimiento: datos clasificados', [
@@ -265,10 +266,10 @@ class SeguimientoConsolidadoExcelService
     /**
      * @param array<int, array<string, mixed>> $rows
      * @param Carbon|null $contactarDesde Inicio del periodo CONTACTAR abierto (null = último corte).
-     * @param array<int, true> $reservadoHistorico id_cotizacion => true si alguna vez tuvo RESERVADO en tracking
+     * @param array<int, true> $cotizacionesConPago id_cotizacion => true si tiene al menos un pago asociado
      * @return array<string, array<int, array<string, mixed>>>
      */
-    private function classifyRows(array $rows, Carbon $contactarDesde = null, array $reservadoHistorico = [])
+    private function classifyRows(array $rows, Carbon $contactarDesde = null, array $cotizacionesConPago = [])
     {
         $yiwu = [];
         $recibir = [];
@@ -342,7 +343,7 @@ class SeguimientoConsolidadoExcelService
                 'cliente' => $base['cliente'],
                 'cbm_yiwu' => $group['cbm_yiwu'],
                 'tipo_carga' => $todosEnYiwu ? 'C' : 'P',
-                'estado_pago' => $this->resolveEstadoPagoYiwu($idCotizacion, $reservadoHistorico),
+                'estado_pago' => $this->resolveEstadoPagoYiwu($idCotizacion, $cotizacionesConPago),
             ];
         }
 
@@ -432,24 +433,22 @@ class SeguimientoConsolidadoExcelService
     }
 
     /**
-     * Cotizaciones que en algún momento tuvieron RESERVADO en tracking (no usa estado_cliente progresivo).
+     * Cotizaciones del consolidado con al menos un pago (LOGÍSTICA o IMPUESTOS).
      *
      * @param int $idContenedor
      * @return array<int, true>
      */
-    private function loadCotizacionesConReservadoHistorico($idContenedor)
+    private function loadCotizacionesConPagoAsociado($idContenedor)
     {
-        $trackingTable = $this->resolveTrackingTable();
-        if (!$trackingTable) {
-            return [];
-        }
-
-        $ids = DB::table($trackingTable)
-            ->join('contenedor_consolidado_cotizacion_proveedores as P', 'P.id', '=', $trackingTable . '.id_proveedor')
-            ->where('P.id_contenedor', $idContenedor)
-            ->where($trackingTable . '.estado', 'RESERVADO')
+        $ids = DB::table('contenedor_consolidado_cotizacion_coordinacion_pagos as p')
+            ->join('contenedor_consolidado_cotizacion as c', 'c.id', '=', 'p.id_cotizacion')
+            ->where('c.id_contenedor', $idContenedor)
+            ->whereIn('p.id_concept', [
+                PagoConcept::CONCEPT_PAGO_LOGISTICA,
+                PagoConcept::CONCEPT_PAGO_IMPUESTOS,
+            ])
             ->distinct()
-            ->pluck($trackingTable . '.id_cotizacion');
+            ->pluck('p.id_cotizacion');
 
         $map = [];
         foreach ($ids as $id) {
@@ -460,15 +459,15 @@ class SeguimientoConsolidadoExcelService
     }
 
     /**
-     * ESTADO PAGO en YIWU: RESERVADO si la cotización tuvo RESERVADO en tracking alguna vez.
+     * ESTADO PAGO en YIWU: RESERVADO si la cotización tiene al menos un pago asociado.
      *
      * @param int $idCotizacion
-     * @param array<int, true> $reservadoHistorico
+     * @param array<int, true> $cotizacionesConPago
      * @return string
      */
-    private function resolveEstadoPagoYiwu($idCotizacion, array $reservadoHistorico)
+    private function resolveEstadoPagoYiwu($idCotizacion, array $cotizacionesConPago)
     {
-        if ($idCotizacion > 0 && isset($reservadoHistorico[$idCotizacion])) {
+        if ($idCotizacion > 0 && isset($cotizacionesConPago[$idCotizacion])) {
             return 'RESERVADO';
         }
 
