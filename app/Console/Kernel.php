@@ -38,6 +38,10 @@ class Kernel extends ConsoleKernel
         $schedule->command('carga-consolidada:promote-inspeccionados-reservados-pagos')
             ->everyFiveMinutes()
             ->withoutOverlapping();
+        // Excel seguimiento consolidado en Drive: auto-vincular #11-2026 en adelante
+        $schedule->command('segimiento-consolidado:vincular')
+            ->everyFiveMinutes()
+            ->withoutOverlapping();
         // Excel seguimiento consolidado en Drive: sincronización de respaldo
         $schedule->command('segimiento-consolidado:sync-linked')
             ->everyFiveMinutes()

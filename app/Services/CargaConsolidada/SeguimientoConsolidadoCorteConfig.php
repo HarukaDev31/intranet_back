@@ -4,6 +4,8 @@ namespace App\Services\CargaConsolidada;
 
 use App\Services\SystemConfigService;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Hora de corte configurable para bloques históricos de CARGA POR CONTACTAR.
@@ -129,6 +131,54 @@ class SeguimientoConsolidadoCorteConfig
     }
 
     /**
+     * Inicio del día calendario actual (primera vinculación: CONTACTAR solo desde hoy).
+     *
+     * @param Carbon|null $now
+     * @return Carbon
+     */
+    public static function inicioDiaHoy(Carbon $now = null)
+    {
+        $settings = self::settings();
+        $now = ($now ?: Carbon::now($settings['timezone']))->copy()->timezone($settings['timezone']);
+
+        return $now->copy()->startOfDay();
+    }
+
+    /**
+     * Periodo CONTACTAR abierto en la primera creación del Excel (desde 00:00 de hoy).
+     *
+     * @param Carbon|null $now
+     * @return array{inicio: Carbon, fin: Carbon, hora: string, timezone: string}
+     */
+    public static function periodoContactarDesdeInicioDia(Carbon $now = null)
+    {
+        $settings = self::settings();
+        $fin = ($now ?: Carbon::now($settings['timezone']))->copy()->timezone($settings['timezone']);
+
+        return [
+            'inicio' => self::inicioDiaHoy($fin),
+            'fin' => $fin,
+            'hora' => $settings['hora'],
+            'timezone' => $settings['timezone'],
+        ];
+    }
+
+    /**
+     * @param int $idContenedor
+     * @return bool
+     */
+    public static function contenedorTieneHistoricoContactar($idContenedor)
+    {
+        if (!Schema::hasTable('contenedor_seguimiento_corte_periodos')) {
+            return false;
+        }
+
+        return DB::table('contenedor_seguimiento_corte_periodos')
+            ->where('id_contenedor', (int) $idContenedor)
+            ->exists();
+    }
+
+    /**
      * Fin del periodo CONTACTAR recién cerrado (si ya pasó la hora de corte hoy).
      *
      * @param Carbon|null $now
@@ -162,6 +212,25 @@ class SeguimientoConsolidadoCorteConfig
             . ' ('
             . $settings['timezone']
             . ') | CONTACTAR: histórico congelado arriba, periodo abierto al final ('
+            . $abierto['inicio']->format('d/m/Y H:i')
+            . ' → ahora)';
+    }
+
+    /**
+     * Texto de configuración cuando aún no hay cortes históricos (primera vinculación).
+     *
+     * @return string
+     */
+    public static function excelConfigLabelPrimeraVez()
+    {
+        $settings = self::settings();
+        $abierto = self::periodoContactarDesdeInicioDia();
+
+        return 'Hora de corte: '
+            . $settings['hora']
+            . ' ('
+            . $settings['timezone']
+            . ') | CONTACTAR: solo ingresos desde hoy ('
             . $abierto['inicio']->format('d/m/Y H:i')
             . ' → ahora)';
     }

@@ -101,7 +101,7 @@ return [
 
     /*
     | Carpeta raíz en Drive para Excel de seguimiento consolidado (cotizaciones).
-    | Estructura: {root}/{numero_consolidado}/cotizaciones_#{carga}_{fecha}.xlsx
+    | Estructura: {root}/{mes}/cotizaciones_#{carga}_{fecha}.xlsx
     */
     'drive_excel_seguimiento_consolidado_root_folder_id' => env('EXCEL_SEGUIMIENTO_CONSOLIDADO_ID', ''),
 ];

@@ -136,10 +136,17 @@ class SeguimientoConsolidadoExcelService
         $carga = $contenedor ? (string) $contenedor->carga : '';
         $rows = $this->fetchProveedoresSeguimiento($idContenedor, $carga);
         $this->enrichFechasDatosProveedor($idContenedor, $rows);
-        $groups = $this->classifyRows($rows);
-        $this->rowSyncService->applyUltimaActualizacion($idContenedor, $groups);
 
-        $periodoAbierto = SeguimientoConsolidadoCorteConfig::periodoContactarAbierto();
+        $tieneHistoricoContactar = SeguimientoConsolidadoCorteConfig::contenedorTieneHistoricoContactar($idContenedor);
+        $periodoAbierto = $tieneHistoricoContactar
+            ? SeguimientoConsolidadoCorteConfig::periodoContactarAbierto()
+            : SeguimientoConsolidadoCorteConfig::periodoContactarDesdeInicioDia();
+        $contactarDesde = $tieneHistoricoContactar
+            ? null
+            : $periodoAbierto['inicio'];
+
+        $groups = $this->classifyRows($rows, $contactarDesde);
+        $this->rowSyncService->applyUltimaActualizacion($idContenedor, $groups);
 
         $this->log('info', 'Hoja Seguimiento: datos clasificados', [
             'id_contenedor' => (int) $idContenedor,
@@ -150,6 +157,7 @@ class SeguimientoConsolidadoExcelService
             'contactar_abierto' => count($groups['contactar']),
             'corte_hora' => $periodoAbierto['hora'],
             'contactar_desde' => $periodoAbierto['inicio']->toDateTimeString(),
+            'primera_vinculacion_contactar' => !$tieneHistoricoContactar,
         ]);
 
         $configRow = 1;
@@ -157,7 +165,10 @@ class SeguimientoConsolidadoExcelService
         $headerRow = 4;
         $dataStartRow = 5;
 
-        $this->writeConfigSection($sheet, $configRow);
+        $configLabel = $tieneHistoricoContactar
+            ? SeguimientoConsolidadoCorteConfig::excelConfigLabel()
+            : SeguimientoConsolidadoCorteConfig::excelConfigLabelPrimeraVez();
+        $this->writeConfigSection($sheet, $configRow, $configLabel);
 
         $this->writeTableTitle($sheet, self::COL_YIWU, $titleRow, 'CARGA EN YIWU', self::COLOR_YIWU, self::TABLE_WIDTH_SYNC);
         $this->writeTableTitle($sheet, self::COL_RECIBIR, $titleRow, 'CARGA POR RECIBIR', self::COLOR_RECIBIR, self::TABLE_WIDTH_SYNC);
@@ -222,11 +233,11 @@ class SeguimientoConsolidadoExcelService
      * @param Worksheet $sheet
      * @param int $row
      */
-    private function writeConfigSection(Worksheet $sheet, $row)
+    private function writeConfigSection(Worksheet $sheet, $row, $label)
     {
         $range = 'B' . $row . ':W' . $row;
         $sheet->mergeCells($range);
-        $sheet->setCellValue('B' . $row, SeguimientoConsolidadoCorteConfig::excelConfigLabel());
+        $sheet->setCellValue('B' . $row, $label);
         $this->applyFill($sheet, $range, self::COLOR_CONFIG, true);
         $sheet->getStyle($range)->getAlignment()
             ->setHorizontal(Alignment::HORIZONTAL_LEFT)
@@ -252,9 +263,10 @@ class SeguimientoConsolidadoExcelService
 
     /**
      * @param array<int, array<string, mixed>> $rows
+     * @param Carbon|null $contactarDesde Inicio del periodo CONTACTAR abierto (null = último corte).
      * @return array<string, array<int, array<string, mixed>>>
      */
-    private function classifyRows(array $rows)
+    private function classifyRows(array $rows, Carbon $contactarDesde = null)
     {
         $yiwu = [];
         $recibir = [];
@@ -288,7 +300,7 @@ class SeguimientoConsolidadoExcelService
 
             // Contactar abierto: DATOS PROVEEDOR sin fecha, ingresados desde el último corte.
             if ($estadoCoord === 'DATOS PROVEEDOR' && !$this->hasFechaLlegada($row)) {
-                if ($this->isContactarPeriodoAbierto($row)) {
+                if ($this->isContactarPeriodoAbierto($row, $contactarDesde)) {
                     $contactar[] = $row;
                 }
                 continue;
@@ -354,11 +366,12 @@ class SeguimientoConsolidadoExcelService
      * Periodo CONTACTAR abierto: ingreso >= último corte.
      *
      * @param array<string, mixed> $row
+     * @param Carbon|null $contactarDesde
      * @return bool
      */
-    private function isContactarPeriodoAbierto(array $row)
+    private function isContactarPeriodoAbierto(array $row, Carbon $contactarDesde = null)
     {
-        $inicio = SeguimientoConsolidadoCorteConfig::ultimoCorteFin();
+        $inicio = $contactarDesde ?: SeguimientoConsolidadoCorteConfig::ultimoCorteFin();
         $fecha = $this->parseFechaDatosProveedor($row['fecha_datos_proveedor'] ?? null);
 
         if ($fecha === null) {
@@ -839,6 +852,10 @@ class SeguimientoConsolidadoExcelService
      */
     private function resolveContactarPeriodosCerrados($idContenedor, $carga, array $rows)
     {
+        if (!SeguimientoConsolidadoCorteConfig::contenedorTieneHistoricoContactar($idContenedor)) {
+            return [];
+        }
+
         $settings = SeguimientoConsolidadoCorteConfig::settings();
         $timezone = $settings['timezone'];
         $bloques = [];

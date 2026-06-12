@@ -682,24 +682,7 @@ class CotizacionController extends Controller
             'f_cierre' => $contenedor->fecha_cierre??$contenedor->f_cierre,
             'carga' => $contenedor->carga,
             'lista_embarque_url' => $this->cdnStorageUrl($contenedor->lista_embarque_url),
-            'excel_seguimiento_drive' => $this->excelSeguimientoDrivePayload($idContenedor, $user),
         ]);
-    }
-
-    /**
-     * @param int $idContenedor
-     * @param \App\Models\Usuario $user
-     * @return array<string, mixed>|null
-     */
-    private function excelSeguimientoDrivePayload($idContenedor, $user)
-    {
-        if (!SeguimientoConsolidadoDriveService::userCanManageDriveSeguimiento($user)) {
-            return null;
-        }
-
-        $status = app(SeguimientoConsolidadoDriveService::class)->getStatus((int) $idContenedor);
-
-        return !empty($status['success']) ? ($status['data'] ?? null) : null;
     }
     
     /**

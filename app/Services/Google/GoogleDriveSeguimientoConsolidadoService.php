@@ -6,7 +6,7 @@ use Illuminate\Support\Facades\Log;
 
 /**
  * Sube el Excel de seguimiento consolidado a Google Drive.
- * Estructura: {EXCEL_SEGUIMIENTO_CONSOLIDADO_ID}/{numero_consolidado}/cotizaciones_#{carga}_{fecha}.xlsx
+ * Estructura: {EXCEL_SEGUIMIENTO_CONSOLIDADO_ID}/{mes}/cotizaciones_#{carga}_{fecha}.xlsx
  */
 class GoogleDriveSeguimientoConsolidadoService extends GoogleDriveExcelConfirmacionService
 {
@@ -21,11 +21,11 @@ class GoogleDriveSeguimientoConsolidadoService extends GoogleDriveExcelConfirmac
     /**
      * @return string|null URL pública edit?usp=sharing
      */
-    public function uploadForConsolidado($cargaCode, $localPath, $fileName)
+    public function uploadForConsolidado($mesFolder, $localPath, $fileName)
     {
         if (!$this->isConfigured() || !is_file($localPath)) {
             Log::warning('[SeguimientoDrive] Subida omitida: Drive no configurado o archivo inexistente', [
-                'carga' => $cargaCode,
+                'mes_folder' => $mesFolder,
                 'file' => $fileName,
                 'configured' => $this->isConfigured(),
                 'file_exists' => is_file($localPath),
@@ -36,31 +36,31 @@ class GoogleDriveSeguimientoConsolidadoService extends GoogleDriveExcelConfirmac
 
         try {
             Log::info('[SeguimientoDrive] Subiendo Excel a Drive', [
-                'carga' => $cargaCode,
+                'mes_folder' => $mesFolder,
                 'file' => $fileName,
                 'size_bytes' => filesize($localPath),
             ]);
 
             $this->bootDrive();
 
-            $consolidadoFolderId = $this->ensureFolder(
+            $mesFolderId = $this->ensureFolder(
                 $this->getRootFolderId(),
-                $this->sanitizeName((string) $cargaCode)
+                $this->sanitizeName((string) $mesFolder)
             );
 
-            $driveLink = $this->uploadOrReplace($consolidadoFolderId, $localPath, $fileName);
+            $driveLink = $this->uploadOrReplace($mesFolderId, $localPath, $fileName);
 
-            Log::info('[SeguimientoDrive] Excel subido a carpeta consolidado', [
-                'carga' => $cargaCode,
+            Log::info('[SeguimientoDrive] Excel subido a carpeta del mes', [
+                'mes_folder' => $mesFolder,
                 'file' => $fileName,
-                'folder_id' => $consolidadoFolderId,
+                'folder_id' => $mesFolderId,
                 'drive_link' => $driveLink,
             ]);
 
             return $driveLink;
         } catch (\Throwable $e) {
             Log::error('[SeguimientoDrive] Fallo al subir Excel', [
-                'carga' => $cargaCode,
+                'mes_folder' => $mesFolder,
                 'file' => $fileName,
                 'error' => $e->getMessage(),
             ]);

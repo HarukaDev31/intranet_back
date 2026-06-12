@@ -177,6 +177,40 @@ class SeguimientoConsolidadoDriveService
     }
 
     /**
+     * Encola vinculación inicial para consolidados elegibles sin Excel en Drive (cron).
+     *
+     * @return array{encolados: int, total: int, ids: int[]}
+     */
+    public function queueVincularPendientes()
+    {
+        $pendientes = SeguimientoConsolidadoVincularEligibility::contenedoresPendientesVincular();
+        $encolados = 0;
+        $ids = [];
+
+        foreach ($pendientes as $contenedor) {
+            $result = $this->queueVincular((int) $contenedor->id);
+            if (empty($result['success'])) {
+                continue;
+            }
+
+            $encolados++;
+            $ids[] = (int) $contenedor->id;
+        }
+
+        $this->log('info', 'Auto-vincular pendientes', [
+            'total_elegibles' => $pendientes->count(),
+            'encolados' => $encolados,
+            'ids' => $ids,
+        ]);
+
+        return [
+            'encolados' => $encolados,
+            'total' => $pendientes->count(),
+            'ids' => $ids,
+        ];
+    }
+
+    /**
      * Ejecuta la vinculación (solo desde job).
      *
      * @param int $idContenedor
@@ -590,8 +624,10 @@ class SeguimientoConsolidadoDriveService
                 'size_bytes' => is_file($tmpPath) ? filesize($tmpPath) : null,
             ]);
 
+            $mesFolder = $this->resolveMesDriveFolder($contenedor);
+
             $driveLink = $this->driveService->uploadForConsolidado(
-                (string) $contenedor->carga,
+                $mesFolder,
                 $tmpPath,
                 $fileName
             );
@@ -612,6 +648,7 @@ class SeguimientoConsolidadoDriveService
 
             $this->log('info', 'Excel subido a Drive', [
                 'id_contenedor' => $idContenedor,
+                'mes_folder' => $mesFolder,
                 'file_name' => $fileName,
                 'file_id' => $fileId,
                 'drive_link' => $driveLink,
@@ -649,6 +686,27 @@ class SeguimientoConsolidadoDriveService
                 @unlink($tmpPath);
             }
         }
+    }
+
+    /**
+     * Carpeta en Drive según el campo mes del consolidado (p. ej. «Enero»).
+     *
+     * @param Contenedor $contenedor
+     * @return string
+     */
+    private function resolveMesDriveFolder(Contenedor $contenedor)
+    {
+        $mes = trim((string) $contenedor->mes);
+        if ($mes === '') {
+            return 'Sin-mes';
+        }
+
+        $upper = strtoupper($mes);
+        if (isset(Contenedor::MESES[$upper])) {
+            return Contenedor::MESES[$upper];
+        }
+
+        return $mes;
     }
 
     /**
