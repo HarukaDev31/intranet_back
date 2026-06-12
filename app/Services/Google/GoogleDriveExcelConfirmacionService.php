@@ -308,4 +308,95 @@ class GoogleDriveExcelConfirmacionService
 
         return $name !== '' ? $name : 'sin-nombre';
     }
+
+    /**
+     * @param string $fileId
+     * @return bool
+     */
+    protected function deleteDriveFileById($fileId)
+    {
+        $this->bootDrive();
+
+        try {
+            $this->drive->files->delete((string) $fileId, $this->driveWriteParams());
+
+            return true;
+        } catch (\Throwable $e) {
+            if ($this->isDriveNotFoundError($e)) {
+                return true;
+            }
+
+            throw $e;
+        }
+    }
+
+    /**
+     * @param string $parentId
+     * @param string|null $mimeType
+     * @return array<int, array{id: string, name: string, mimeType: string|null}>
+     */
+    protected function listDriveChildren($parentId, $mimeType = null)
+    {
+        $this->bootDrive();
+
+        $items = [];
+        $pageToken = null;
+
+        do {
+            $params = array_merge($this->driveListParams(), [
+                'q' => $this->buildParentQuery($parentId, $mimeType),
+                'fields' => 'nextPageToken, files(id, name, mimeType)',
+                'pageSize' => 200,
+            ]);
+
+            if ($pageToken !== null) {
+                $params['pageToken'] = $pageToken;
+            }
+
+            $results = $this->drive->files->listFiles($params);
+
+            foreach ($results->getFiles() as $file) {
+                $items[] = [
+                    'id' => (string) $file->getId(),
+                    'name' => (string) $file->getName(),
+                    'mimeType' => $file->getMimeType(),
+                ];
+            }
+
+            $pageToken = $results->getNextPageToken();
+        } while ($pageToken !== null);
+
+        return $items;
+    }
+
+    /**
+     * @param string $parentId
+     * @param string|null $mimeType
+     * @return string
+     */
+    protected function buildParentQuery($parentId, $mimeType = null)
+    {
+        $query = sprintf("'%s' in parents and trashed=false", $parentId);
+
+        if ($mimeType !== null) {
+            $query .= " and mimeType='{$mimeType}'";
+        }
+
+        return $query;
+    }
+
+    /**
+     * @param \Throwable $e
+     * @return bool
+     */
+    protected function isDriveNotFoundError(\Throwable $e)
+    {
+        if ((int) $e->getCode() === 404) {
+            return true;
+        }
+
+        $message = strtolower($e->getMessage());
+
+        return strpos($message, 'not found') !== false || strpos($message, 'file not found') !== false;
+    }
 }

@@ -76,4 +76,91 @@ class GoogleDriveSeguimientoConsolidadoService extends GoogleDriveExcelConfirmac
     {
         return $this->resolveRootFolderId();
     }
+
+    /**
+     * Elimina un archivo de Drive por ID (404 = OK).
+     *
+     * @param string $fileId
+     * @return bool
+     */
+    public function deleteFileById($fileId)
+    {
+        if (!$this->isConfigured() || trim((string) $fileId) === '') {
+            return false;
+        }
+
+        try {
+            return $this->deleteDriveFileById((string) $fileId);
+        } catch (\Throwable $e) {
+            Log::warning('[SeguimientoDrive] No se pudo borrar archivo Drive', [
+                'file_id' => $fileId,
+                'error' => $e->getMessage(),
+            ]);
+
+            return false;
+        }
+    }
+
+    /**
+     * Borra todos los archivos bajo la carpeta raíz de seguimiento (subcarpetas por mes).
+     *
+     * @return array{deleted: int, errors: string[]}
+     */
+    public function purgeSeguimientoRoot()
+    {
+        if (!$this->isConfigured()) {
+            return ['deleted' => 0, 'errors' => ['Google Drive no configurado']];
+        }
+
+        $rootId = $this->getRootFolderId();
+        if ($rootId === '') {
+            return ['deleted' => 0, 'errors' => ['Carpeta raíz EXCEL_SEGUIMIENTO_CONSOLIDADO_ID vacía']];
+        }
+
+        $deleted = 0;
+        $errors = [];
+
+        try {
+            $deleted += $this->purgeFilesInFolder($rootId, $errors);
+
+            foreach ($this->listDriveChildren($rootId, 'application/vnd.google-apps.folder') as $folder) {
+                $deleted += $this->purgeFilesInFolder($folder['id'], $errors);
+            }
+        } catch (\Throwable $e) {
+            $errors[] = $e->getMessage();
+        }
+
+        Log::info('[SeguimientoDrive] Purga carpeta raíz completada', [
+            'root_id' => $rootId,
+            'deleted' => $deleted,
+            'errors' => count($errors),
+        ]);
+
+        return ['deleted' => $deleted, 'errors' => $errors];
+    }
+
+    /**
+     * @param string $folderId
+     * @param array<int, string> $errors
+     * @return int
+     */
+    private function purgeFilesInFolder($folderId, array &$errors)
+    {
+        $deleted = 0;
+
+        foreach ($this->listDriveChildren($folderId) as $item) {
+            if (($item['mimeType'] ?? '') === 'application/vnd.google-apps.folder') {
+                continue;
+            }
+
+            try {
+                $this->deleteDriveFileById($item['id']);
+                $deleted++;
+            } catch (\Throwable $e) {
+                $errors[] = ($item['name'] ?? $item['id']) . ': ' . $e->getMessage();
+            }
+        }
+
+        return $deleted;
+    }
 }

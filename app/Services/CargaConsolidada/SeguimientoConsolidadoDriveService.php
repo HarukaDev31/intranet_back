@@ -738,6 +738,182 @@ class SeguimientoConsolidadoDriveService
     }
 
     /**
+     * Reset: borra Excel en Drive, limpia BD y opcionalmente re-encola vincular.
+     *
+     * @param int|null $idContenedor
+     * @param bool $all Todos los vinculados + purga carpeta raíz Drive
+     * @param bool $keepHistorico Conservar cortes CONTACTAR y row_sync
+     * @param bool $revincular Encolar vincular al finalizar
+     * @return array<string, mixed>
+     */
+    public function resetSeguimientoDrive($idContenedor = null, $all = false, $keepHistorico = false, $revincular = true)
+    {
+        if (!$all && ($idContenedor === null || (int) $idContenedor <= 0)) {
+            return [
+                'success' => false,
+                'message' => 'Indique idContenedor o use --all.',
+            ];
+        }
+
+        if (!$this->driveService->isConfigured()) {
+            return [
+                'success' => false,
+                'message' => 'Google Drive no está configurado para seguimiento consolidado.',
+            ];
+        }
+
+        $query = DB::table('carga_consolidada_contenedor');
+
+        if ($all) {
+            $query->whereNotNull('excel_seguimiento_drive_link')
+                ->where('excel_seguimiento_drive_link', '!=', '');
+        } else {
+            $query->where('id', (int) $idContenedor);
+        }
+
+        $contenedores = $query->get(['id', 'carga', 'excel_seguimiento_drive_file_id']);
+
+        if ($contenedores->isEmpty()) {
+            return [
+                'success' => false,
+                'message' => $all
+                    ? 'No hay consolidados vinculados a Drive.'
+                    : 'Consolidado no encontrado o sin vínculo Drive.',
+            ];
+        }
+
+        $ids = $contenedores->pluck('id')->map(function ($id) {
+            return (int) $id;
+        })->all();
+
+        $fileIds = $contenedores->pluck('excel_seguimiento_drive_file_id')
+            ->filter(function ($fileId) {
+                return trim((string) $fileId) !== '';
+            })
+            ->unique()
+            ->values();
+
+        $driveDeleted = 0;
+        $driveErrors = [];
+
+        foreach ($fileIds as $fileId) {
+            if ($this->driveService->deleteFileById((string) $fileId)) {
+                $driveDeleted++;
+            } else {
+                $driveErrors[] = 'No se pudo borrar file_id ' . $fileId;
+            }
+        }
+
+        $purged = ['deleted' => 0, 'errors' => []];
+        if ($all) {
+            $purged = $this->driveService->purgeSeguimientoRoot();
+        }
+
+        $this->clearSeguimientoLinkFields($ids);
+
+        if (!$keepHistorico) {
+            $this->clearSeguimientoHistorico($all ? null : (int) $idContenedor);
+        }
+
+        $encolados = 0;
+        $revincularIds = [];
+
+        if ($revincular) {
+            if ($all) {
+                $queueResult = $this->queueVincularPendientes();
+                $encolados = (int) ($queueResult['encolados'] ?? 0);
+                $revincularIds = $queueResult['ids'] ?? [];
+            } else {
+                $contenedor = Contenedor::find((int) $idContenedor);
+                if ($contenedor && SeguimientoConsolidadoVincularEligibility::puedeVincular($contenedor)) {
+                    $result = $this->queueVincular((int) $idContenedor);
+                    if (!empty($result['success'])) {
+                        $encolados = 1;
+                        $revincularIds = [(int) $idContenedor];
+                    }
+                }
+            }
+        }
+
+        $this->log('info', 'Reset seguimiento Drive completado', [
+            'all' => $all,
+            'ids' => $ids,
+            'drive_deleted_by_id' => $driveDeleted,
+            'drive_purged' => $purged['deleted'],
+            'keep_historico' => $keepHistorico,
+            'revincular_encolados' => $encolados,
+        ]);
+
+        return [
+            'success' => true,
+            'message' => 'Reset de Excel seguimiento en Drive completado.',
+            'contenedores' => count($ids),
+            'ids' => $ids,
+            'drive_deleted_by_id' => $driveDeleted,
+            'drive_purged' => (int) $purged['deleted'],
+            'drive_errors' => array_merge($driveErrors, $purged['errors']),
+            'historico_limpiado' => !$keepHistorico,
+            'revincular_encolados' => $encolados,
+            'revincular_ids' => $revincularIds,
+        ];
+    }
+
+    /**
+     * @param array<int, int> $ids
+     */
+    private function clearSeguimientoLinkFields(array $ids)
+    {
+        if (empty($ids)) {
+            return;
+        }
+
+        DB::table('carga_consolidada_contenedor')
+            ->whereIn('id', $ids)
+            ->update([
+                'excel_seguimiento_drive_file_id' => null,
+                'excel_seguimiento_drive_link' => null,
+                'excel_seguimiento_vinculado_at' => null,
+                'excel_seguimiento_file_name' => null,
+                'excel_seguimiento_link_status' => null,
+                'excel_seguimiento_link_error' => null,
+            ]);
+    }
+
+    /**
+     * @param int|null $idContenedor null = todos los contenedores
+     */
+    private function clearSeguimientoHistorico($idContenedor = null)
+    {
+        if ($idContenedor !== null && $idContenedor > 0) {
+            if (Schema::hasTable('contenedor_seguimiento_corte_periodos')) {
+                DB::table('contenedor_seguimiento_corte_periodos')
+                    ->where('id_contenedor', (int) $idContenedor)
+                    ->delete();
+            }
+
+            if (Schema::hasTable('contenedor_seguimiento_row_sync')) {
+                DB::table('contenedor_seguimiento_row_sync')
+                    ->where('id_contenedor', (int) $idContenedor)
+                    ->delete();
+            }
+
+            return;
+        }
+
+        if (Schema::hasTable('contenedor_seguimiento_corte_clientes')) {
+            DB::table('contenedor_seguimiento_corte_clientes')->delete();
+        }
+
+        if (Schema::hasTable('contenedor_seguimiento_corte_periodos')) {
+            DB::table('contenedor_seguimiento_corte_periodos')->delete();
+        }
+
+        if (Schema::hasTable('contenedor_seguimiento_row_sync')) {
+            DB::table('contenedor_seguimiento_row_sync')->delete();
+        }
+    }
+
+    /**
      * @param string $level
      * @param string $message
      * @param array<string, mixed> $context
