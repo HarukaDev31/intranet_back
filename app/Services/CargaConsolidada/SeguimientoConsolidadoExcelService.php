@@ -145,7 +145,8 @@ class SeguimientoConsolidadoExcelService
             ? null
             : $periodoAbierto['inicio'];
 
-        $groups = $this->classifyRows($rows, $contactarDesde);
+        $reservadoHistorico = $this->loadCotizacionesConReservadoHistorico($idContenedor);
+        $groups = $this->classifyRows($rows, $contactarDesde, $reservadoHistorico);
         $this->rowSyncService->applyUltimaActualizacion($idContenedor, $groups);
 
         $this->log('info', 'Hoja Seguimiento: datos clasificados', [
@@ -264,9 +265,10 @@ class SeguimientoConsolidadoExcelService
     /**
      * @param array<int, array<string, mixed>> $rows
      * @param Carbon|null $contactarDesde Inicio del periodo CONTACTAR abierto (null = último corte).
+     * @param array<int, true> $reservadoHistorico id_cotizacion => true si alguna vez tuvo RESERVADO en tracking
      * @return array<string, array<int, array<string, mixed>>>
      */
-    private function classifyRows(array $rows, Carbon $contactarDesde = null)
+    private function classifyRows(array $rows, Carbon $contactarDesde = null, array $reservadoHistorico = [])
     {
         $yiwu = [];
         $recibir = [];
@@ -332,14 +334,15 @@ class SeguimientoConsolidadoExcelService
             }
 
             $base = $group['base'];
+            $idCotizacion = (int) ($base['id_cotizacion'] ?? 0);
             $yiwu[] = [
-                'id_cotizacion' => (int) ($base['id_cotizacion'] ?? 0),
+                'id_cotizacion' => $idCotizacion,
                 'cons' => $base['cons'],
                 'vendedor' => $base['vendedor'],
                 'cliente' => $base['cliente'],
                 'cbm_yiwu' => $group['cbm_yiwu'],
                 'tipo_carga' => $todosEnYiwu ? 'C' : 'P',
-                'estado_pago' => $base['estado_pago'],
+                'estado_pago' => $this->resolveEstadoPagoYiwu($idCotizacion, $reservadoHistorico),
             ];
         }
 
@@ -426,6 +429,50 @@ class SeguimientoConsolidadoExcelService
                 $rows[$index]['fecha_datos_proveedor'] = $fechas[$idProveedor];
             }
         }
+    }
+
+    /**
+     * Cotizaciones que en algún momento tuvieron RESERVADO en tracking (no usa estado_cliente progresivo).
+     *
+     * @param int $idContenedor
+     * @return array<int, true>
+     */
+    private function loadCotizacionesConReservadoHistorico($idContenedor)
+    {
+        $trackingTable = $this->resolveTrackingTable();
+        if (!$trackingTable) {
+            return [];
+        }
+
+        $ids = DB::table($trackingTable)
+            ->join('contenedor_consolidado_cotizacion_proveedores as P', 'P.id', '=', $trackingTable . '.id_proveedor')
+            ->where('P.id_contenedor', $idContenedor)
+            ->where($trackingTable . '.estado', 'RESERVADO')
+            ->distinct()
+            ->pluck($trackingTable . '.id_cotizacion');
+
+        $map = [];
+        foreach ($ids as $id) {
+            $map[(int) $id] = true;
+        }
+
+        return $map;
+    }
+
+    /**
+     * ESTADO PAGO en YIWU: RESERVADO si la cotización tuvo RESERVADO en tracking alguna vez.
+     *
+     * @param int $idCotizacion
+     * @param array<int, true> $reservadoHistorico
+     * @return string
+     */
+    private function resolveEstadoPagoYiwu($idCotizacion, array $reservadoHistorico)
+    {
+        if ($idCotizacion > 0 && isset($reservadoHistorico[$idCotizacion])) {
+            return 'RESERVADO';
+        }
+
+        return 'NO RESERVADO';
     }
 
     /**
