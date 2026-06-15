@@ -38,11 +38,11 @@ class UploadMissingCotizacionFinalStorageCommand extends Command
     /** @var array<string, string> */
     private $localIndex = [];
 
-    /** @var array<int, array<string, string>> */
+    /** @var array<int, string> id_cotizacion => absolute path */
     private $zipExtractByCotizacionId = [];
 
-    /** @var array<string, string> */
-    private $zipExtractByBasename = [];
+    /** @var array<string, string> "{contenedor}:{cliente_normalizado}" => absolute path */
+    private $clienteIndex = [];
 
     /** @var int */
     private $uploaded = 0;
@@ -88,12 +88,12 @@ class UploadMissingCotizacionFinalStorageCommand extends Command
 
         if ($fromTemp) {
             $this->buildTempIndex();
-            $this->line('Índice temp: ' . count($this->tempIndex) . ' archivos .xlsx');
+            $this->line('Índice temp: ' . count($this->tempIndex) . ' claves basename');
         }
 
         if ($fromLocal) {
             $this->buildLocalIndex();
-            $this->line('Índice local cotizacion_final: ' . count($this->localIndex) . ' archivos .xlsx');
+            $this->line('Índice local cotizacion_final: ' . count($this->localIndex) . ' claves basename');
         }
 
         if ($fromZips) {
@@ -101,8 +101,8 @@ class UploadMissingCotizacionFinalStorageCommand extends Command
             foreach ($contenedorIds as $contenedorId) {
                 $this->indexBatchZipsForContenedor($contenedorId);
             }
-            $this->line('Índice batch-zips: ' . count($this->zipExtractByCotizacionId) . ' cotizaciones / '
-                . count($this->zipExtractByBasename) . ' por nombre');
+            $this->line('Índice batch-zips: ' . count($this->zipExtractByCotizacionId) . ' por id_cotizacion');
+            $this->line('Índice por cliente: ' . count($this->clienteIndex) . ' claves contenedor+cliente');
         }
 
         $dryRun = (bool) $this->option('dry-run');
@@ -249,8 +249,7 @@ class UploadMissingCotizacionFinalStorageCommand extends Command
 
     private function buildTempIndex(): void
     {
-        $root = storage_path('app/temp');
-        $this->indexDirectory($root, $this->tempIndex);
+        $this->indexDirectory(storage_path('app/temp'), $this->tempIndex);
     }
 
     private function buildLocalIndex(): void
@@ -261,9 +260,9 @@ class UploadMissingCotizacionFinalStorageCommand extends Command
     }
 
     /**
-     * @param array<string, string> $index
+     * @param array<string, string> $basenameIndex
      */
-    private function indexDirectory(string $root, array &$index): void
+    private function indexDirectory(string $root, array &$basenameIndex): void
     {
         if (!is_dir($root)) {
             return;
@@ -284,8 +283,57 @@ class UploadMissingCotizacionFinalStorageCommand extends Command
                 continue;
             }
 
-            $this->registerBasenameIndex($index, $name, $fileInfo->getPathname());
+            $this->registerBasenameIndex($basenameIndex, $name, $fileInfo->getPathname());
+            $this->registerClienteIndex($name, $fileInfo->getPathname(), $this->extractContenedorFromPath($fileInfo->getPathname()));
         }
+    }
+
+    private function registerClienteIndex(string $basename, string $absolutePath, ?int $idContenedor = null): void
+    {
+        $clienteKey = $this->clienteKeyFromCotizacionFilename($basename);
+        if ($clienteKey === null) {
+            return;
+        }
+
+        if ($idContenedor !== null && $idContenedor > 0) {
+            $this->clienteIndex[$idContenedor . ':' . $clienteKey] = $absolutePath;
+        }
+
+        if (!isset($this->clienteIndex['0:' . $clienteKey])) {
+            $this->clienteIndex['0:' . $clienteKey] = $absolutePath;
+        }
+    }
+
+    private function normalizeClienteKey(string $name): string
+    {
+        $name = preg_replace('/[\s\x{00A0}]+/u', '_', trim($name));
+        $name = preg_replace('/_+/', '_', $name);
+
+        return strtolower(preg_replace('/[^a-z0-9_]/', '_', $name));
+    }
+
+    private function clienteKeyFromCotizacionFilename(string $basename): ?string
+    {
+        if (!preg_match('/^Cotizacion(.+)_(\d{14})\.xlsx$/i', $basename, $matches)) {
+            return null;
+        }
+
+        return $this->normalizeClienteKey($matches[1]);
+    }
+
+    private function clienteMatchKey(int $idContenedor, string $nombre): string
+    {
+        return $idContenedor . ':' . $this->normalizeClienteKey($nombre);
+    }
+
+    private function extractContenedorFromPath(string $absolutePath): ?int
+    {
+        $normalized = str_replace('\\', '/', $absolutePath);
+        if (preg_match('#/cotizacion_final/(\d+)/#', $normalized, $m)) {
+            return (int) $m[1];
+        }
+
+        return null;
     }
 
     /**
@@ -358,14 +406,11 @@ class UploadMissingCotizacionFinalStorageCommand extends Command
                 }
 
                 $idCotizacion = $this->matchCotizacionIdFromDetalle($exitosos, $basename);
-                if ($idCotizacion > 0) {
-                    if (!isset($this->zipExtractByCotizacionId[$idCotizacion])) {
-                        $this->zipExtractByCotizacionId[$idCotizacion] = [];
-                    }
-                    $this->registerBasenameIndex($this->zipExtractByCotizacionId[$idCotizacion], $basename, $tmpXlsx);
-                } else {
-                    $this->registerBasenameIndex($this->zipExtractByBasename, $basename, $tmpXlsx);
+                if ($idCotizacion > 0 && !isset($this->zipExtractByCotizacionId[$idCotizacion])) {
+                    $this->zipExtractByCotizacionId[$idCotizacion] = $tmpXlsx;
                 }
+
+                $this->registerClienteIndex($basename, $tmpXlsx, $idContenedor);
             }
 
             $zip->close();
@@ -387,6 +432,13 @@ class UploadMissingCotizacionFinalStorageCommand extends Command
 
             $archivo = isset($item['archivo']) ? strtolower((string) $item['archivo']) : '';
             if ($archivo === $basenameLower || $archivo === $sanitizedLower) {
+                return (int) ($item['id_cotizacion'] ?? 0);
+            }
+
+            $nombre = isset($item['nombre']) ? (string) $item['nombre'] : '';
+            $fileClienteKey = $this->clienteKeyFromCotizacionFilename($basename);
+            if ($fileClienteKey !== null && $nombre !== ''
+                && $this->normalizeClienteKey($nombre) === $fileClienteKey) {
                 return (int) ($item['id_cotizacion'] ?? 0);
             }
         }
@@ -463,11 +515,25 @@ class UploadMissingCotizacionFinalStorageCommand extends Command
             if (isset($this->tempIndex[$key])) {
                 return $this->tempIndex[$key];
             }
-            if (isset($this->zipExtractByCotizacionId[$row['id']][$key])) {
-                return $this->zipExtractByCotizacionId[$row['id']][$key];
-            }
-            if (isset($this->zipExtractByBasename[$key])) {
-                return $this->zipExtractByBasename[$key];
+        }
+
+        if (isset($this->zipExtractByCotizacionId[$row['id']])) {
+            return $this->zipExtractByCotizacionId[$row['id']];
+        }
+
+        $clienteKeys = [
+            $this->clienteMatchKey($row['id_contenedor'], $row['nombre']),
+            $this->clienteMatchKey($row['id_contenedor'], basename($row['cotizacion_final_url'], '.xlsx')),
+        ];
+        $fileClienteKey = $this->clienteKeyFromCotizacionFilename($basename);
+        if ($fileClienteKey !== null) {
+            $clienteKeys[] = $row['id_contenedor'] . ':' . $fileClienteKey;
+            $clienteKeys[] = '0:' . $fileClienteKey;
+        }
+
+        foreach (array_unique($clienteKeys) as $clienteKey) {
+            if (isset($this->clienteIndex[$clienteKey])) {
+                return $this->clienteIndex[$clienteKey];
             }
         }
 
