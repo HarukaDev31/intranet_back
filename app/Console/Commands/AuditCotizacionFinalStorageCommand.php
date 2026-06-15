@@ -13,7 +13,9 @@ class AuditCotizacionFinalStorageCommand extends Command
                             {idContenedor?}
                             {--all : Auditar todas las cotizaciones con cotizacion_final_url}
                             {--limit=0 : Máximo de filas a procesar (0 = sin límite)}
-                            {--details : Listar cada cotización con su estado}';
+                            {--details : Listar cada cotización con su estado}
+                            {--by-contenedor : Resumen de faltantes agrupado por contenedor}
+                            {--export-missing= : Exportar MISSING a CSV (ruta del archivo)}';
 
     protected $description = 'Audita cotizacion_final_url en BD vs archivos en S3 y disco local legacy';
 
@@ -28,6 +30,12 @@ class AuditCotizacionFinalStorageCommand extends Command
         'pending_local' => 0,
         'missing' => 0,
     ];
+
+    /** @var array<int, int> */
+    private $missingByContenedor = [];
+
+    /** @var array<int, array<string, mixed>> */
+    private $missingRows = [];
 
     public function handle(ObjectStorageConnectorInterface $storage): int
     {
@@ -88,6 +96,47 @@ class AuditCotizacionFinalStorageCommand extends Command
             $this->comment('Migrar pendientes: php artisan storage:migrate-local-to-s3 --subdir=cotizacion_final');
         }
 
+        if ($this->stats['missing'] > 0) {
+            $this->line('');
+            $this->warn('Hay cotizaciones con ruta en BD pero sin archivo. Regenerar con upload-plantilla-final por contenedor.');
+        }
+
+        if ((bool) $this->option('by-contenedor') && $this->missingByContenedor !== []) {
+            $this->newLine();
+            $this->info('Faltantes por contenedor (top 30):');
+            arsort($this->missingByContenedor);
+            $rows = [];
+            $i = 0;
+            foreach ($this->missingByContenedor as $contenedorId => $count) {
+                $rows[] = [$contenedorId, $count];
+                if (++$i >= 30) {
+                    break;
+                }
+            }
+            $this->table(['id_contenedor', 'missing'], $rows);
+        }
+
+        $exportPath = (string) $this->option('export-missing');
+        if ($exportPath !== '' && $this->missingRows !== []) {
+            $handle = fopen($exportPath, 'wb');
+            if ($handle === false) {
+                $this->error('No se pudo escribir: ' . $exportPath);
+
+                return self::FAILURE;
+            }
+            fputcsv($handle, ['id_cotizacion', 'id_contenedor', 'nombre', 'cotizacion_final_url']);
+            foreach ($this->missingRows as $missingRow) {
+                fputcsv($handle, [
+                    $missingRow['id'],
+                    $missingRow['id_contenedor'],
+                    $missingRow['nombre'],
+                    $missingRow['cotizacion_final_url'],
+                ]);
+            }
+            fclose($handle);
+            $this->info('Exportados ' . count($this->missingRows) . ' MISSING → ' . $exportPath);
+        }
+
         return self::SUCCESS;
     }
 
@@ -127,6 +176,14 @@ class AuditCotizacionFinalStorageCommand extends Command
         } else {
             $status = 'MISSING';
             $this->stats['missing']++;
+            $contenedorId = (int) $row->id_contenedor;
+            $this->missingByContenedor[$contenedorId] = ($this->missingByContenedor[$contenedorId] ?? 0) + 1;
+            $this->missingRows[] = [
+                'id' => (int) $row->id,
+                'id_contenedor' => $contenedorId,
+                'nombre' => (string) $row->nombre,
+                'cotizacion_final_url' => $dbPath,
+            ];
         }
 
         if (!$details) {

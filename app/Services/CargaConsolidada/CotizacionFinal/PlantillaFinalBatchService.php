@@ -202,6 +202,13 @@ class PlantillaFinalBatchService
         ini_set('memory_limit', '2048M');
 
         $idContainer = (int) $batch->id_contenedor;
+        Log::info('PlantillaFinalBatchService: inicio generación masiva', [
+            'batch_id' => $batch->id,
+            'id_contenedor' => $idContainer,
+            'upload_disk' => config('object_storage.upload_disk'),
+            's3_bucket' => config('filesystems.disks.s3.bucket'),
+        ]);
+
         $excelFullPath = $this->resolveStoragePath($batch->plantilla_url);
         $zipRelative = ltrim($batch->zip_path, '/');
         $tempDir = storage_path('app/temp');
@@ -349,6 +356,14 @@ class PlantillaFinalBatchService
                         'motivo' => 'No se pudo generar el Excel de cotización final',
                     ];
                     continue;
+                }
+
+                $excelStoragePath = (string) $genResult['excel_file_path'];
+                if (!$this->objectStorage()->exists($excelStoragePath)) {
+                    throw new \RuntimeException(
+                        'Excel generado no encontrado en almacenamiento ('
+                        . config('object_storage.upload_disk') . '): ' . $excelStoragePath
+                    );
                 }
 
                 $idCotizacion = (int) ($value['id'] ?? 0);

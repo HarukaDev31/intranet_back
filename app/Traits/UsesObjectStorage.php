@@ -20,7 +20,13 @@ trait UsesObjectStorage
 
     protected function storagePutContents(string $relativePath, string $contents): string
     {
-        return $this->objectStorage()->putContents($relativePath, $contents);
+        $stored = $this->objectStorage()->putContents($relativePath, $contents);
+
+        if ($this->objectStorage()->uploadDisk() === 's3' && !$this->objectStorage()->existsOnS3($stored)) {
+            throw new \RuntimeException('El archivo no quedó guardado en S3: ' . $stored);
+        }
+
+        return $stored;
     }
 
     /**

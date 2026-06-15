@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Contracts\ObjectStorageConnectorInterface;
+use App\Support\Storage\StoragePathSanitizer;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Storage;
 use RecursiveDirectoryIterator;
@@ -197,7 +198,7 @@ class MigrateLocalStorageToS3Command extends Command
      */
     private function processFile(array $file, bool $dryRun, bool $force): void
     {
-        $relative = $file['relative'];
+        $relative = StoragePathSanitizer::relativePath($file['relative']);
 
         try {
             if (!$force && Storage::disk('s3')->exists($relative)) {

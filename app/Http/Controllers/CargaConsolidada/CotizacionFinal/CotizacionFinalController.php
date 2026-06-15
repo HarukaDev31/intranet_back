@@ -5449,7 +5449,7 @@ class CotizacionFinalController extends Controller
             $logistica = is_numeric($logisticaCalculada) ? $logisticaCalculada : $logistica;
 
             $objWriter->save($tempExcelPath);
-            $this->storagePutContents($excelFilePath, (string) file_get_contents($tempExcelPath));
+            $storedPath = $this->storagePutContents($excelFilePath, (string) file_get_contents($tempExcelPath));
             @unlink($tempExcelPath);
             $fob = $this->getMainSheetFobFinalAmount($objPHPExcel->getSheet(0));
             $recargosDescuentosFinal = ($extrasCalc['recargos'] ?? 0)-($extrasCalc['descuento'] ?? 0);
@@ -5472,8 +5472,8 @@ class CotizacionFinalController extends Controller
                 'peso_final' => is_numeric($pesoTotal) ? $pesoTotal : 0,
                 'estado' => 'PENDIENTE',
                 "excel_file_name" => $excelFileName,
-                "excel_file_path" => $excelFilePath,
-                "cotizacion_final_url" => $excelFilePath
+                "excel_file_path" => $storedPath,
+                "cotizacion_final_url" => $storedPath
             ];
         } catch (\Exception $e) {
             echo 'Excepción capturada: ',  $e->getMessage(), "\n";
