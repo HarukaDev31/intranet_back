@@ -209,7 +209,7 @@ class CotizacionFinalController extends Controller
                     'estado_cotizacion_final' => $this->cleanUtf8String($row->estado_cotizacion_final),
                     'pagado_verificado' => $pagado_verificado,
                     'id_cotizacion' => $row->id_cotizacion,
-                    'cotizacion_final_url' => $this->generateImageUrl($row->cotizacion_final_url),
+                    'cotizacion_final_url' => $this->cdnStorageUrl($row->cotizacion_final_url),
                     'pagos' => $pagos,
                     'cotizacion_contrato_firmado_url' => $row->cotizacion_contrato_firmado_url ? $this->generateImageUrl($row->cotizacion_contrato_firmado_url) : null,
                     'cod_contract' => $row->cod_contract,
