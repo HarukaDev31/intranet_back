@@ -3,6 +3,7 @@
 namespace App\Traits;
 
 use App\Contracts\ObjectStorageConnectorInterface;
+use App\Support\Storage\StoragePathSanitizer;
 
 trait FileTrait
 {
@@ -53,7 +54,7 @@ trait FileTrait
             $normalized = $prefix . '/' . ltrim($normalized, '/');
         }
 
-        return $base . '/' . ltrim($normalized, '/');
+        return $base . '/' . StoragePathSanitizer::relativePath(ltrim($normalized, '/'));
     }
 
     public function generateImageUrl($ruta)

@@ -95,6 +95,8 @@ class S3ObjectStorageConnector implements ObjectStorageConnectorInterface
             }
         }
 
+        $path = StoragePathSanitizer::relativePath($path);
+
         return $path === '' ? null : $path;
     }
 
@@ -719,7 +721,7 @@ class S3ObjectStorageConnector implements ObjectStorageConnectorInterface
 
     private function buildCdnUrl(string $relativePath): string
     {
-        $relativePath = ltrim(str_replace('\\', '/', $relativePath), '/');
+        $relativePath = StoragePathSanitizer::relativePath(ltrim(str_replace('\\', '/', $relativePath), '/'));
         $base = $this->cdnBaseUrl();
         $prefix = trim(str_replace('\\', '/', (string) config('object_storage.s3_prefix', '')), '/');
 
