@@ -76,6 +76,37 @@ class DocumentacionController extends Controller
     private $aNewCotizacion = "new-cotizacion";
     private $cambioEstadoProveedor = "cambio-estado-proveedor";
     private $table_contenedor_cotizacion_final = "contenedor_consolidado_cotizacion_final";
+
+    /**
+     * Normaliza rutas de BD (p. ej. doble slash) y devuelve URL CDN pública.
+     *
+     * @param string|null $path
+     * @return string|null
+     */
+    protected function resolveDocumentationPublicUrl($path)
+    {
+        if ($path === null || trim((string) $path) === '') {
+            return null;
+        }
+
+        return $this->generateImageUrl($path);
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $files
+     * @return array<int, array<string, mixed>>
+     */
+    protected function mapDocumentationFilesPublicUrls(array $files)
+    {
+        foreach ($files as $index => $fileRow) {
+            if (!empty($fileRow['file_url'])) {
+                $files[$index]['file_url'] = $this->resolveDocumentationPublicUrl($fileRow['file_url']);
+            }
+        }
+
+        return $files;
+    }
+
     /**
      * @OA\Get(
      *     path="/carga-consolidada/contenedores/{id}/documentacion/folders",
@@ -103,6 +134,7 @@ class DocumentacionController extends Controller
             // Obtener la URL de la lista de embarque del contenedor
             $contenedor = Contenedor::find($id);
             $listaEmbarqueUrl = $contenedor ? $contenedor->lista_embarque_url : null;
+            $listaEmbarquePublicUrl = $this->resolveDocumentationPublicUrl($listaEmbarqueUrl);
 
             // Obtener las carpetas con sus archivos usando Eloquent
             $folders = DocumentacionFolder::with(['files' => function ($query) use ($id) {
@@ -117,13 +149,13 @@ class DocumentacionController extends Controller
             foreach ($folders as $folder) {
                 $folderData = $folder->toArray();
 
-                // Agregar la URL de lista de embarque
-                $folderData['lista_embarque_url'] = $listaEmbarqueUrl;
-                Log::info('lista_embarque_url: ' . $listaEmbarqueUrl);
-                Log::info('folder->id: ' . $folder->id);
-                // Si el folder id es 1, establecer file_url con la URL de lista de embarque
+                $folderData['lista_embarque_url'] = $listaEmbarquePublicUrl;
+                if (!empty($folderData['files']) && is_array($folderData['files'])) {
+                    $folderData['files'] = $this->mapDocumentationFilesPublicUrls($folderData['files']);
+                }
+
                 if ($folder->id == 1) {
-                    $folderData['file_url'] = $this->generateImageUrl($listaEmbarqueUrl);
+                    $folderData['file_url'] = $listaEmbarquePublicUrl;
                 }
                 
                 // Procesar los archivos de la carpeta
@@ -133,14 +165,13 @@ class DocumentacionController extends Controller
                             'id' => $folder->id,
                             'id_file' => $file->id,
                             'type' => $file->file_type,
-                            'lista_embarque_url' => $listaEmbarqueUrl
+                            'lista_embarque_url' => $listaEmbarquePublicUrl
                         ];
                         if ($folder->id == 1) {
-                            $fileData['file_url'] = $this->generateImageUrl($listaEmbarqueUrl);
-                        }else{
-                            $fileData['file_url'] = $this->generateImageUrl($file->file_url);
+                            $fileData['file_url'] = $listaEmbarquePublicUrl;
+                        } else {
+                            $fileData['file_url'] = $this->resolveDocumentationPublicUrl($file->file_url);
                         }
-                      
 
                         // Combinar datos de la carpeta con datos del archivo
                         $result[] = array_merge($folderData, $fileData);
@@ -150,7 +181,7 @@ class DocumentacionController extends Controller
                     $folderData['id_file'] = null;
                     $folderData['file_url'] = null;
                     if ($folder->id == 1) {
-                        $folderData['file_url'] = $this->generateImageUrl($listaEmbarqueUrl);
+                        $folderData['file_url'] = $listaEmbarquePublicUrl;
                     }
                     $folderData['type'] = null;
                     $result[] = $folderData;
