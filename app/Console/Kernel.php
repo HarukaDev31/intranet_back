@@ -38,6 +38,10 @@ class Kernel extends ConsoleKernel
         $schedule->command('carga-consolidada:promote-inspeccionados-reservados-pagos')
             ->everyFiveMinutes()
             ->withoutOverlapping();
+        // R/NC/WAIT → INSPECTION si ya hay archivos en contenedor_consolidado_almacen_inspection
+        $schedule->command('proveedores:promote-inspection-from-almacen')
+            ->everyFiveMinutes()
+            ->withoutOverlapping();
         // Excel seguimiento consolidado en Drive: auto-vincular #11-2026 en adelante
         $schedule->command('segimiento-consolidado:vincular')
             ->everyFiveMinutes()
