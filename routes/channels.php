@@ -69,14 +69,7 @@ Broadcast::channel('carga-consolidada.seguimiento-drive.{idContenedor}', functio
 
 // WhatsApp Inbox coordinación — tiempo real del chat Meta
 Broadcast::channel('whatsapp-inbox.coordinacion', function ($user) {
-    if (!$user || !$user->grupo) {
-        return false;
-    }
-    $grupo = $user->grupo->No_Grupo;
-
-    return $grupo === Usuario::ROL_COORDINACION
-        || $grupo === Usuario::ROL_CONTABILIDAD
-        || $grupo === Usuario::ROL_ADMINISTRACION;
+    return $user instanceof Usuario && $user->puedeAccederWhatsappInbox();
 });
 
 // WhatsApp Copiloto ventas — tiempo real del chat Meta (número ventas)

@@ -179,4 +179,35 @@ class Usuario extends Authenticatable implements JWTSubject
     {
         return $this->grupo ? $this->grupo->Nu_Tipo_Privilegio_Acceso : null;
     }
+
+    /**
+     * Roles con acceso al módulo WhatsApp Inbox (API + canal Pusher).
+     *
+     * @return string[]
+     */
+    public static function rolesConAccesoWhatsappInbox()
+    {
+        return [
+            self::ROL_COORDINACION,
+            self::ROL_CONTABILIDAD,
+            self::ROL_ADMINISTRACION,
+            self::ROL_JEFE_IMPORTACION,
+        ];
+    }
+
+    /**
+     * @return bool
+     */
+    public function puedeAccederWhatsappInbox()
+    {
+        if (!$this->grupo) {
+            return false;
+        }
+
+        return in_array(
+            trim((string) $this->grupo->No_Grupo),
+            self::rolesConAccesoWhatsappInbox(),
+            true
+        );
+    }
 }

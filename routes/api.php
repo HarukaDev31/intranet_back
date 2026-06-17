@@ -22,7 +22,7 @@ use App\Http\Controllers\CargaConsolidada\FacturaGuiaController;
 Route::post('/bitrix/webhook', [BitrixWebhookController::class, 'handle']);
 Route::post('/evolution/webhook', [EvolutionWebhookController::class, 'handle']);
 
-// WhatsApp Inbox — Meta coordinación (webhook público + API rol Coordinación)
+// WhatsApp Inbox — Meta coordinación (webhook público + API roles con acceso inbox)
 require __DIR__.'/modules/whatsapp-inbox.php';
 
 // WhatsApp Copiloto — Meta ventas (webhook público + API rol Cotizador/Jefe Ventas)

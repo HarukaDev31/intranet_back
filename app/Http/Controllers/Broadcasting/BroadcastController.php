@@ -282,15 +282,7 @@ class BroadcastController extends Controller
      */
     protected function usuarioPuedeAccederWhatsappInbox($user)
     {
-        if (!$user || !$user->grupo) {
-            return false;
-        }
-
-        $grupo = $user->grupo->No_Grupo;
-
-        return $grupo === Usuario::ROL_COORDINACION
-            || $grupo === Usuario::ROL_CONTABILIDAD
-            || $grupo === Usuario::ROL_ADMINISTRACION;
+        return $user instanceof Usuario && $user->puedeAccederWhatsappInbox();
     }
 
     /**

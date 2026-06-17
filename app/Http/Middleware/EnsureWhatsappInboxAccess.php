@@ -2,7 +2,6 @@
 
 namespace App\Http\Middleware;
 
-use App\Models\Usuario;
 use Closure;
 use Tymon\JWTAuth\Facades\JWTAuth;
 
@@ -31,14 +30,7 @@ class EnsureWhatsappInboxAccess
             ], 401);
         }
 
-        $grupo = $user->getNombreGrupo();
-        $allowed = in_array($grupo, [
-            Usuario::ROL_COORDINACION,
-            Usuario::ROL_CONTABILIDAD,
-            Usuario::ROL_ADMINISTRACION,
-        ], true);
-
-        if (!$allowed) {
+        if (!$user->puedeAccederWhatsappInbox()) {
             return response()->json([
                 'success' => false,
                 'message' => 'Acceso restringido al WhatsApp Inbox',
