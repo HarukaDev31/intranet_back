@@ -396,7 +396,7 @@ class SeguimientoConsolidadoExcelService
         }
 
         try {
-            return Carbon::parse($value)->timezone('America/Lima');
+            return SeguimientoConsolidadoDateFormatter::parseUtcToLima($value);
         } catch (\Exception $e) {
             return null;
         }
@@ -1171,7 +1171,7 @@ class SeguimientoConsolidadoExcelService
         }
 
         try {
-            return Carbon::parse($value)->timezone('America/Lima')->format('j-M');
+            return SeguimientoConsolidadoDateFormatter::formatCalendarDate($value);
         } catch (\Exception $e) {
             return (string) $value;
         }

@@ -151,7 +151,7 @@ class SeguimientoConsolidadoRowSyncService
         }
 
         try {
-            return Carbon::parse($value)->timezone('America/Lima')->format('d/m/Y H:i');
+            return SeguimientoConsolidadoDateFormatter::formatLimaLocalTimestamp($value);
         } catch (\Exception $e) {
             return (string) $value;
         }
