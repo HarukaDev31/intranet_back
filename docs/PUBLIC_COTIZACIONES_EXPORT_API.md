@@ -150,6 +150,7 @@ Accept: application/json
 | HTTP | Body | Causa |
 |------|------|-------|
 | 401 | `{ "message": "No autorizado." }` | Token ausente o incorrecto |
+| 429 | `{ "message": "Too Many Attempts." }` | Superaste el límite de peticiones por minuto (30/min por IP, configurable en el servidor) |
 | 500 | `{ "message": "..." }` | Error del servidor |
 | 503 | `{ "message": "Integración de terceros no configurada." }` | API no habilitada en el servidor |
 
@@ -160,3 +161,5 @@ Accept: application/json
 - El token es **solo lectura**: no permite crear, editar ni eliminar datos.
 - No compartas el token en repositorios públicos ni en el frontend.
 - Si recibes `401`, verifica que el header sea exactamente `Authorization: Bearer {token}` (con espacio después de Bearer).
+- Las respuestas se cachean **10 minutos** por contenedor y combinación de filtros. Las peticiones repetidas dentro de ese plazo responden más rápido.
+- Límite de **30 peticiones por minuto por IP** (configurable con `THIRD_PARTY_COTIZACION_EXPORT_RATE_LIMIT`). Si lo superas, recibirás HTTP **429**.

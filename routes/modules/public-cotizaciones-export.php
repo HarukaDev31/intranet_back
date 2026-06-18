@@ -9,6 +9,6 @@ use App\Http\Controllers\CargaConsolidada\CotizacionController;
 */
 Route::prefix('public')->group(function () {
     Route::get('carga-consolidada/contenedor/cotizaciones/{idContenedor}/exportar', [CotizacionController::class, 'exportarCotizacionJson'])
-        ->middleware('third_party.token_access')
+        ->middleware(['third_party.token_access', 'throttle:third-party.cotizaciones-export'])
         ->name('public.carga-consolidada.cotizaciones.exportar-json');
 });

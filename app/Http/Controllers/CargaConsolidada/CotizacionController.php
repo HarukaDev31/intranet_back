@@ -14,6 +14,7 @@ use App\Models\CargaConsolidada\Contenedor;
 use App\Models\CargaConsolidada\ConsolidadoCotizacionAduanaTramite;
 use App\Services\CargaConsolidada\CotizacionService;
 use App\Services\CargaConsolidada\CotizacionExportService;
+use App\Services\CargaConsolidada\ThirdPartyCotizacionExportCacheService;
 use App\Services\CargaConsolidada\SeguimientoConsolidadoDriveService;
 use App\Models\Usuario;
 use App\Models\Notificacion;
@@ -36,13 +37,16 @@ class CotizacionController extends Controller
 {
     protected $cotizacionService;
     protected $cotizacionExportService;
+    protected $thirdPartyCotizacionExportCacheService;
 
     public function __construct(
         CotizacionService $cotizacionService,
-        CotizacionExportService $cotizacionExportService
+        CotizacionExportService $cotizacionExportService,
+        ThirdPartyCotizacionExportCacheService $thirdPartyCotizacionExportCacheService
     ) {
         $this->cotizacionService = $cotizacionService;
         $this->cotizacionExportService = $cotizacionExportService;
+        $this->thirdPartyCotizacionExportCacheService = $thirdPartyCotizacionExportCacheService;
     }
 
     use UserGroupsTrait, WhatsappTrait, FileTrait, UsesObjectStorage;
@@ -3532,13 +3536,15 @@ class CotizacionController extends Controller
     public function exportarCotizacionJson(Request $request, $idContenedor)
     {
         try {
-            $datos = $this->cotizacionExportService->obtenerDatosCotizacionJson($request, $idContenedor);
+            $payload = $this->thirdPartyCotizacionExportCacheService->rememberResponse(
+                (int) $idContenedor,
+                $request,
+                fn () => [
+                    'data' => $this->cotizacionExportService->obtenerDatosCotizacionJson($request, $idContenedor),
+                ]
+            );
 
-            return response()->json([
-                'success' => true,
-                'data' => $datos,
-                'total' => count($datos),
-            ]);
+            return response()->json($payload);
         } catch (\Exception $e) {
             Log::error('Error en exportarCotizacionJson: ' . $e->getMessage());
             return response()->json(['message' => $e->getMessage()], 500);
