@@ -93,12 +93,128 @@ class CotizacionExportService
 
     /**
      * Devuelve los mismos datos que alimentan la exportación Excel, en formato array.
+     * Ruta optimizada para el endpoint público JSON (1 query, URLs CDN sin S3).
      *
      * @return array<int, array<string, mixed>>
      */
     public function obtenerDatosCotizacionJson(Request $request, $idContenedor): array
     {
-        return $this->obtenerDatosParaExportar($request, $idContenedor);
+        return $this->obtenerDatosParaExportarPublico($request, $idContenedor);
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function obtenerDatosParaExportarPublico(Request $request, $idContenedor): array
+    {
+        $contenedor = Contenedor::find($idContenedor);
+        $carga = $contenedor->carga ?? '';
+        $fechaCierre = ($contenedor && $contenedor->f_cierre)
+            ? Carbon::parse($contenedor->f_cierre)->format('d/m/Y')
+            : '';
+
+        $volumenChinaSub = DB::table('contenedor_consolidado_cotizacion_proveedores')
+            ->select('id_cotizacion', DB::raw('SUM(cbm_total_china) as volumen_chinaa'))
+            ->groupBy('id_cotizacion');
+
+        $query = DB::table('contenedor_consolidado_cotizacion as C')
+            ->leftJoin('reason_delete_cotizacion as rdc', 'rdc.id', '=', 'C.deleted_reason_id')
+            ->leftJoin('usuario as U', 'U.ID_Usuario', '=', 'C.id_usuario')
+            ->leftJoin('contenedor_consolidado_tipo_cliente as tc', 'tc.id', '=', 'C.id_tipo_cliente')
+            ->leftJoinSub($volumenChinaSub, 'vchina', function ($join) {
+                $join->on('vchina.id_cotizacion', '=', 'C.id');
+            })
+            ->where('C.id_contenedor', $idContenedor)
+            ->whereNull('C.id_cliente_importacion');
+
+        if ($request->has('estado_coordinacion') || $request->has('estado_china')) {
+            $query->whereExists(function ($sub) use ($request) {
+                $sub->select(DB::raw(1))
+                    ->from('contenedor_consolidado_cotizacion_proveedores as P')
+                    ->whereColumn('P.id_cotizacion', 'C.id')
+                    ->where(function ($q) use ($request) {
+                        if ($request->has('estado_coordinacion')) {
+                            $q->where('P.estados', $request->estado_coordinacion);
+                        }
+                        if ($request->has('estado_china')) {
+                            $q->orWhere('P.estados_proveedor', $request->estado_china);
+                        }
+                    });
+            });
+        }
+
+        if ($request->has('tipo_cliente') && $request->tipo_cliente != 'todos') {
+            $query->where('C.id_tipo_cliente', $request->tipo_cliente);
+        }
+
+        $allowedSort = ['id', 'fecha', 'nombre', 'volumen', 'updated_at', 'estado_cotizador'];
+        $sortField = $request->input('sort_by', 'id');
+        if (! in_array($sortField, $allowedSort, true)) {
+            $sortField = 'id';
+        }
+        $sortOrder = strtolower($request->input('sort_order', 'asc')) === 'desc' ? 'desc' : 'asc';
+        $query->orderBy('C.' . $sortField, $sortOrder);
+
+        $rows = $query->select([
+            'C.id',
+            'C.fecha',
+            'C.fecha_confirmacion',
+            'C.deleted_at',
+            'C.updated_at',
+            'C.nombre',
+            'C.documento',
+            'C.correo',
+            'C.telefono',
+            'C.volumen',
+            'C.qty_item',
+            'C.fob',
+            'C.monto',
+            'C.impuestos',
+            'C.tarifa',
+            'C.cotizacion_file_url',
+            'C.estado_cotizador',
+            'C.cod',
+            'rdc.name as razon_de_baja',
+            'U.No_Nombres_Apellidos as asesor',
+            'tc.name as tipo_cliente',
+            'vchina.volumen_chinaa',
+        ])->get();
+
+        $datosExport = [];
+        $index = 1;
+
+        foreach ($rows as $cotizacion) {
+            $datosExport[] = [
+                'n' => $index++,
+                'carga' => $carga,
+                'fecha_cierre' => $fechaCierre,
+                'asesor' => $cotizacion->asesor ?? '',
+                'cod' => $this->buildCod($contenedor, $cotizacion),
+                'created_at' => $cotizacion->fecha ?? null,
+                'fecha_de_confirmacion' => ($cotizacion->fecha && $cotizacion->fecha_confirmacion && $cotizacion->fecha < $cotizacion->fecha_confirmacion)
+                    ? $cotizacion->fecha_confirmacion
+                    : $cotizacion->fecha,
+                'fecha_de_baja' => $cotizacion->deleted_at ?? null,
+                'razon_de_baja' => $cotizacion->razon_de_baja ?? '',
+                'updated_at' => $cotizacion->updated_at ?? null,
+                'nombre_cliente' => $cotizacion->nombre ?? '',
+                'dni_ruc' => $cotizacion->documento ?? 'Sin documento',
+                'correo' => $cotizacion->correo ?? 'Sin correo',
+                'whatsapp' => $cotizacion->telefono ?? '',
+                'tipo_cliente' => $cotizacion->tipo_cliente ?? '',
+                'volumen' => $cotizacion->volumen ?? '',
+                'volumen_china' => $cotizacion->volumen_chinaa ?? '0',
+                'qty_item' => $cotizacion->qty_item ?? '',
+                'fob' => $cotizacion->fob ?? '',
+                'logistica' => $cotizacion->monto ?? '',
+                'impuesto' => $cotizacion->impuestos ?? '',
+                'tarifa' => $cotizacion->tarifa ?? '',
+                'cotizacion' => $this->buildCotizacionCdnUrl($cotizacion->cotizacion_file_url ?? ''),
+                'estado' => $cotizacion->estado_cotizador ?? 'PENDIENTE',
+            ];
+        }
+
+        return $datosExport;
     }
 
     //Exportar a Excel
