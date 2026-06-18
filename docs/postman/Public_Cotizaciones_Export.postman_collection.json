@@ -1,0 +1,99 @@
+{
+  "info": {
+    "_postman_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "name": "Probusiness — Cotizaciones Export (JSON)",
+    "description": "API pública de solo lectura para obtener cotizaciones de un contenedor en JSON.\n\n**Listo para usar:**\n1. Importa en Postman: File → Import.\n2. Solo cambia `idContenedor` si necesitas otro contenedor.\n3. Ejecuta **Exportar cotizaciones (JSON)**.\n\nBase URL: https://intranetback.probusiness.pe/api",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "https://intranetback.probusiness.pe/api",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "Ud$=;:0}{X#C{AyYfZ]4FpN|tBR46];8",
+      "type": "string"
+    },
+    {
+      "key": "idContenedor",
+      "value": "1",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Exportar cotizaciones (JSON)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/public/carga-consolidada/contenedor/cotizaciones/{{idContenedor}}/exportar",
+        "description": "Obtiene todas las cotizaciones del contenedor indicado."
+      },
+      "response": []
+    },
+    {
+      "name": "Exportar cotizaciones con filtros",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/public/carga-consolidada/contenedor/cotizaciones/{{idContenedor}}/exportar?sort_by=id&sort_order=asc",
+          "query": [
+            {
+              "key": "sort_by",
+              "value": "id",
+              "description": "Campo de ordenamiento (default: id)"
+            },
+            {
+              "key": "sort_order",
+              "value": "asc",
+              "description": "asc | desc"
+            },
+            {
+              "key": "estado_coordinacion",
+              "value": "todos",
+              "description": "Estado en coordinación. 'todos' = sin filtro",
+              "disabled": true
+            },
+            {
+              "key": "estado_china",
+              "value": "todos",
+              "description": "Estado en China. 'todos' = sin filtro",
+              "disabled": true
+            },
+            {
+              "key": "tipo_cliente",
+              "value": "todos",
+              "description": "ID tipo de cliente. 'todos' = sin filtro",
+              "disabled": true
+            }
+          ]
+        },
+        "description": "Consulta con filtros y ordenamiento opcionales. Activa los query params que necesites."
+      },
+      "response": []
+    }
+  ]
+}

@@ -3511,6 +3511,41 @@ class CotizacionController extends Controller
     }
 
     /**
+     * @OA\Get(
+     *     path="/public/carga-consolidada/contenedor/cotizaciones/{idContenedor}/exportar",
+     *     tags={"Cotización"},
+     *     summary="Obtener cotizaciones en JSON (integración externa)",
+     *     description="Devuelve los datos de cotizaciones de un contenedor en JSON. Requiere token estático de solo lectura (Bearer).",
+     *     operationId="exportarCotizacionJson",
+     *     security={{"thirdPartyReadOnlyToken":{}}},
+     *     @OA\Parameter(name="idContenedor", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Parameter(name="estado_coordinacion", in="query", required=false, @OA\Schema(type="string")),
+     *     @OA\Parameter(name="estado_china", in="query", required=false, @OA\Schema(type="string")),
+     *     @OA\Parameter(name="tipo_cliente", in="query", required=false, @OA\Schema(type="string")),
+     *     @OA\Parameter(name="sort_by", in="query", required=false, @OA\Schema(type="string")),
+     *     @OA\Parameter(name="sort_order", in="query", required=false, @OA\Schema(type="string", enum={"asc", "desc"})),
+     *     @OA\Response(response=200, description="Datos de cotizaciones"),
+     *     @OA\Response(response=401, description="No autorizado"),
+     *     @OA\Response(response=503, description="Token no configurado")
+     * )
+     */
+    public function exportarCotizacionJson(Request $request, $idContenedor)
+    {
+        try {
+            $datos = $this->cotizacionExportService->obtenerDatosCotizacionJson($request, $idContenedor);
+
+            return response()->json([
+                'success' => true,
+                'data' => $datos,
+                'total' => count($datos),
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error en exportarCotizacionJson: ' . $e->getMessage());
+            return response()->json(['message' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
      * Crea una notificación para el perfil de Coordinación cuando se crea una nueva cotización
      */
     private function crearNotificacionCoordinacion($cotizacion, $contenedor)

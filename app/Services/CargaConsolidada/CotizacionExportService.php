@@ -91,6 +91,16 @@ class CotizacionExportService
         return $spreadsheet;
     }
 
+    /**
+     * Devuelve los mismos datos que alimentan la exportación Excel, en formato array.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function obtenerDatosCotizacionJson(Request $request, $idContenedor): array
+    {
+        return $this->obtenerDatosParaExportar($request, $idContenedor);
+    }
+
     //Exportar a Excel
     public function exportarCotizacion(Request $request, $query = null)
     {
