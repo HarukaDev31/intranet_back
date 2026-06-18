@@ -2,10 +2,12 @@
 
 namespace App\Models\WaCopiloto;
 
+use App\Models\Concerns\TruncatesFailedReason;
 use Illuminate\Database\Eloquent\Model;
 
 class WaCopilotoMessage extends Model
 {
+    use TruncatesFailedReason;
     protected $table = 'wa_copiloto_messages';
 
     protected $fillable = [

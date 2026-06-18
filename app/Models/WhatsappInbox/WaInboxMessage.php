@@ -2,10 +2,12 @@
 
 namespace App\Models\WhatsappInbox;
 
+use App\Models\Concerns\TruncatesFailedReason;
 use Illuminate\Database\Eloquent\Model;
 
 class WaInboxMessage extends Model
 {
+    use TruncatesFailedReason;
     protected $table = 'wa_inbox_messages';
 
     protected $fillable = [
