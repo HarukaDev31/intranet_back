@@ -337,13 +337,19 @@ class WaCopilotoSendService
      */
     public function dispatchMetaTemplate($phoneE164, $templateName, array $templateParams)
     {
-        $params = $templateParams;
-        $header = isset($params['_header']) && is_array($params['_header']) ? $params['_header'] : null;
-        unset($params['_header']);
-        $bodyParams = $this->metaService->normalizeBodyParameters($params);
+        $header = isset($templateParams['_header']) && is_array($templateParams['_header'])
+            ? $templateParams['_header']
+            : null;
 
         /** @var WaCopilotoTemplateService $templateService */
         $templateService = app(WaCopilotoTemplateService::class);
+        $params = $templateParams;
+        foreach (array_keys($params) as $key) {
+            if (!is_string($key) || $key === '' || $key[0] === '_') {
+                unset($params[$key]);
+            }
+        }
+        $bodyParams = $this->metaService->normalizeBodyParameters($params);
         $requiredHeaderFormat = $templateService->getTemplateHeaderFormat($templateName);
 
         WaCopilotoLog::info('dispatchMetaTemplate.start', [

@@ -318,13 +318,20 @@ class WhatsappInboxSendService
      */
     public function dispatchMetaTemplate($phoneE164, $templateName, array $templateParams)
     {
-        $params = $templateParams;
-        $header = isset($params['_header']) && is_array($params['_header']) ? $params['_header'] : null;
-        unset($params['_header']);
-        $bodyParams = $this->metaService->normalizeBodyParameters($params);
+        $header = isset($templateParams['_header']) && is_array($templateParams['_header'])
+            ? $templateParams['_header']
+            : null;
 
         /** @var WhatsappInboxTemplateService $templateService */
         $templateService = app(WhatsappInboxTemplateService::class);
+        $alignedBody = $templateService->alignBodyParametersForMeta($templateName, $templateParams);
+        $bodyParams = $this->metaService->normalizeBodyParameters($alignedBody);
+        if ($templateService->usesPositionalParameters($templateName)) {
+            foreach ($bodyParams as $i => $row) {
+                unset($bodyParams[$i]['parameter_name']);
+            }
+        }
+
         $requiredHeaderFormat = $templateService->getTemplateHeaderFormat($templateName);
 
         WaInboxLog::info('dispatchMetaTemplate.start', [

@@ -115,6 +115,7 @@ class WhatsappInboxMessageService
             'failed_reason' => $message->failed_reason,
             'is_template' => $isTemplate,
             'template_name' => $message->template_name,
+            'template_params' => $this->formatResendableTemplateParams($params),
             'message_type' => $message->message_type,
             'meta_message_id' => $message->meta_message_id,
             'media_url' => CoordinacionMediaLink::urlForDisplay($message->media_url),
@@ -675,5 +676,26 @@ class WhatsappInboxMessageService
         }
 
         return $resolved['media_url'];
+    }
+
+    /**
+     * Parámetros de plantilla reutilizables al reenviar (sin metadatos internos _*).
+     *
+     * @param  array<string, mixed>  $params
+     * @return array<string, string>|null
+     */
+    private function formatResendableTemplateParams(array $params)
+    {
+        $out = [];
+        foreach ($params as $key => $value) {
+            if (!is_string($key) || $key === '' || $key[0] === '_') {
+                continue;
+            }
+            if (is_scalar($value)) {
+                $out[$key] = (string) $value;
+            }
+        }
+
+        return $out !== [] ? $out : null;
     }
 }

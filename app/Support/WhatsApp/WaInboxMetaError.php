@@ -45,6 +45,14 @@ class WaInboxMetaError
             return 'El archivo no coincide con el tipo exigido por la plantilla (PDF, imagen o video según corresponda).';
         }
 
+        if ($code === 132000
+            || $code === 132001
+            || strpos($haystack, 'number of params') !== false
+            || strpos($haystack, 'param count') !== false) {
+            return 'La plantilla de Meta no coincide con los parámetros enviados (conteo o formato). '
+                . 'Revisa en Business Manager que el body no tenga variables extra y vuelve a intentar el envío.';
+        }
+
         $out = 'Meta API HTTP ' . $httpStatus;
         if ($message !== '') {
             $out .= ': ' . $message;

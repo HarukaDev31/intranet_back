@@ -51,7 +51,127 @@ class WhatsappInboxTemplateService
                 'text' => "📩 Recordatorio:\n\n{{mensaje}}\n\n🙌",
                 'params' => ['mensaje'],
             ],
+            [
+                'name' => 'pb_docs_consideraciones_doc_v1',
+                'label' => 'Docs — Consideraciones PDF',
+                'language' => 'es_PE',
+                'text' => 'Consideraciones para la documentación de tu importación. 📋',
+                'params' => [],
+                'header_format' => 'DOCUMENT',
+            ],
         ]);
+    }
+
+    /**
+     * Quita metadatos internos del inbox (p. ej. _media_filename) que no son parámetros Meta.
+     *
+     * @param  array<string, mixed>  $params
+     * @return array<string, mixed>
+     */
+    public function stripInternalTemplateParamKeys(array $params)
+    {
+        foreach (array_keys($params) as $key) {
+            if (!is_string($key) || $key === '' || $key[0] === '_') {
+                unset($params[$key]);
+            }
+        }
+
+        return $params;
+    }
+
+    /**
+     * Nombres de variables del BODY según caché Graph (no incluye header DOCUMENT).
+     *
+     * @param  string  $templateName
+     * @return array<int, string>
+     */
+    public function getTemplateBodyParamNames($templateName)
+    {
+        $tpl = $this->findTemplateByName($templateName);
+        if ($tpl === null) {
+            return [];
+        }
+
+        return isset($tpl['params']) && is_array($tpl['params'])
+            ? array_values($tpl['params'])
+            : [];
+    }
+
+    /**
+     * @param  string  $templateName
+     * @return bool
+     */
+    public function usesPositionalParameters($templateName)
+    {
+        $tpl = $this->findTemplateByName($templateName);
+        if ($tpl === null) {
+            return false;
+        }
+
+        $format = strtoupper((string) ($tpl['parameter_format'] ?? ''));
+        if ($format === 'POSITIONAL') {
+            return true;
+        }
+        if ($format === 'NAMED') {
+            return false;
+        }
+
+        $names = $this->getTemplateBodyParamNames($templateName);
+        if ($names === []) {
+            return false;
+        }
+
+        foreach ($names as $name) {
+            if (!ctype_digit((string) $name)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Alinea el payload con la definición de la plantilla (conteo y placeholders).
+     *
+     * @param  string  $templateName
+     * @param  array<string, mixed>  $payloadParams
+     * @return array<string, string>
+     */
+    public function alignBodyParametersForMeta($templateName, array $payloadParams)
+    {
+        $payloadParams = $this->stripInternalTemplateParamKeys($payloadParams);
+        $expected = $this->getTemplateBodyParamNames($templateName);
+        if ($expected === []) {
+            return [];
+        }
+
+        $placeholder = (string) config('meta_whatsapp.empty_body_parameter_placeholder', '—');
+        $aligned = [];
+        foreach ($expected as $name) {
+            $name = (string) $name;
+            $val = isset($payloadParams[$name]) ? trim((string) $payloadParams[$name]) : '';
+            $aligned[$name] = $val !== '' ? $val : $placeholder;
+        }
+
+        return $aligned;
+    }
+
+    /**
+     * @param  string  $templateName
+     * @return array<string, mixed>|null
+     */
+    private function findTemplateByName($templateName)
+    {
+        $list = $this->listTemplates();
+        $templates = isset($list['data']) && is_array($list['data']) ? $list['data'] : [];
+
+        foreach ($templates as $tpl) {
+            if (is_array($tpl) && ($tpl['name'] ?? '') === $templateName) {
+                return $tpl;
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -251,6 +371,9 @@ class WhatsappInboxTemplateService
                     'params' => $parsed['params'],
                     'param_defs' => $parsed['param_defs'],
                     'header_format' => $parsed['header_format'],
+                    'parameter_format' => isset($item['parameter_format'])
+                        ? (string) $item['parameter_format']
+                        : null,
                 ];
             }
 
