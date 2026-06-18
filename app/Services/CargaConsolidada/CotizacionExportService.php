@@ -173,7 +173,6 @@ class CotizacionExportService
             'C.tarifa',
             'C.cotizacion_file_url',
             'C.estado_cotizador',
-            'C.cod',
             'rdc.name as razon_de_baja',
             'U.No_Nombres_Apellidos as asesor',
             'tc.name as tipo_cliente',
