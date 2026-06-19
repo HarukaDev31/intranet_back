@@ -3708,10 +3708,10 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
             // Verificar si es una imagen para generar contrato con firma
             $mimeType = $signedFile->getMimeType();
             $isImage = in_array($mimeType, ['image/png', 'image/jpeg', 'image/jpg', 'image/gif']);
+            $pdfFilename = sprintf('%s_signed_contract_%s.pdf', $uuid, now()->format('Y-m-d_H-i-s'));
 
             if ($isImage) {
                 // Generar contrato completo con firma
-                $pdfFilename = $uuid . '_signed_contract.pdf';
                 $relativePath = 'contratos/' . $pdfFilename;
 
                 // Obtener información del contenedor para el contrato
@@ -3769,7 +3769,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                 $cdnDbPath = $this->storagePutContentsForCdn($uploadPath, $pdfContent);
                 $filename = $pdfFilename;
             } else {
-                $filename = $uuid . '_signed_contract.pdf';
+                $filename = $pdfFilename;
                 $uploadPath = $this->storageStoreUpload(
                     $signedFile,
                     'contratos',
