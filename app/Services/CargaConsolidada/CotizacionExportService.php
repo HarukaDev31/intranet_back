@@ -246,7 +246,7 @@ class CotizacionExportService
      * @param \Illuminate\Database\Eloquent\Builder $query
      * @param Request $request
      */
-    private function applyProspectosTableFilters($query, Request $request)
+    private function applyProspectosTableFilters($query, Request $request, $marketingLayout = false)
     {
         $query->where(function ($q) {
             $q->whereDoesntHave('calculadoraImportacion')
@@ -311,7 +311,9 @@ class CotizacionExportService
             });
         }
 
-        if ($request->filled('estado_cotizador') && $request->estado_cotizador !== 'todos') {
+        if ($this->shouldFilterConfirmadoForMarketing($request, $marketingLayout)) {
+            $query->where('contenedor_consolidado_cotizacion.estado_cotizador', 'CONFIRMADO');
+        } elseif ($request->filled('estado_cotizador') && $request->estado_cotizador !== 'todos') {
             $query->where('contenedor_consolidado_cotizacion.estado_cotizador', $request->estado_cotizador);
         }
 
@@ -355,7 +357,7 @@ class CotizacionExportService
         //usar volumen_china de la suma total de los cbm_total_china de los proovedores con el mismo id_cotizacion de la tabla contenedor_consolidado_cotizacion_proveedores
         $query->selectRaw('contenedor_consolidado_cotizacion.*, rdc.name as razon_de_baja, (SELECT SUM(cbm_total_china) FROM contenedor_consolidado_cotizacion_proveedores WHERE id_cotizacion = contenedor_consolidado_cotizacion.id) as volumen_chinaa');
 
-        $this->applyProspectosTableFilters($query, $request);
+        $this->applyProspectosTableFilters($query, $request, $marketingLayout);
 
         $query->whereNull('id_cliente_importacion');
         
@@ -981,6 +983,28 @@ class CotizacionExportService
         }
 
         return $this->formatUsd($value);
+    }
+
+    /**
+     * Jefe Marketing solo ve/exporta prospectos con estado_cotizador CONFIRMADO.
+     *
+     * @param Request $request
+     * @param bool $marketingLayout
+     * @return bool
+     */
+    private function shouldFilterConfirmadoForMarketing(Request $request, $marketingLayout = false)
+    {
+        if ($marketingLayout || $request->input('export_layout') === 'prospectos_marketing') {
+            return true;
+        }
+
+        try {
+            $user = JWTAuth::parseToken()->authenticate();
+
+            return $user && $user->getNombreGrupo() === Usuario::JEFE_MARKETING;
+        } catch (\Exception $e) {
+            return false;
+        }
     }
 
     /**

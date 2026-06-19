@@ -315,6 +315,9 @@ class CotizacionController extends Controller
                 case Usuario::ROL_ALMACEN_CHINA:
                     $query->where('estado_cotizador', 'CONFIRMADO');
                     break;
+                case Usuario::JEFE_MARKETING:
+                    $query->where('estado_cotizador', 'CONFIRMADO');
+                    break;
             }
             $query->whereNull('id_cliente_importacion');
             $sortField = $request->input('sort_by', 'id');
