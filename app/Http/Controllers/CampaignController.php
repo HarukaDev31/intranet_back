@@ -6,11 +6,19 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use App\Helpers\DateHelper;
+use App\Services\CampaignStudentsExportService;
 use Tymon\JWTAuth\Facades\JWTAuth;
 
 class CampaignController extends Controller
 {
     private $table_campana_curso_dias = 'campana_curso_dias';
+
+    protected $campaignStudentsExportService;
+
+    public function __construct(CampaignStudentsExportService $campaignStudentsExportService)
+    {
+        $this->campaignStudentsExportService = $campaignStudentsExportService;
+    }
 
     /**
      * @OA\Get(
@@ -269,6 +277,11 @@ class CampaignController extends Controller
                 'error' => $e->getMessage()
             ], 500);
         }
+    }
+
+    public function exportStudents($id, Request $request)
+    {
+        return $this->campaignStudentsExportService->exportStudents($id, $request);
     }
     
     /**

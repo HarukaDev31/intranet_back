@@ -16,6 +16,7 @@ Route::group(['prefix' => 'campaigns', 'middleware' => 'jwt.auth'], function () 
     
     Route::get('/', [CampaignController::class, 'index']);
     Route::post('/', [CampaignController::class, 'store']);
+    Route::get('/{id}/students/exportar', [CampaignController::class, 'exportStudents']);
     Route::get('/{id}/students', [CampaignController::class, 'getStudents']);
     Route::get('{id}', [CampaignController::class, 'show']);
     Route::put('{id}', [CampaignController::class, 'update']);
