@@ -15,6 +15,8 @@ use App\Models\CargaConsolidada\CotizacionProveedor;
 use App\Models\CargaConsolidada\Contenedor;
 use Illuminate\Support\Facades\DB;
 use App\Traits\FileTrait;
+use App\Models\Usuario;
+use Tymon\JWTAuth\Facades\JWTAuth;
 
 class CotizacionExportService
 {
@@ -40,7 +42,8 @@ class CotizacionExportService
     public function buildCotizacionesSpreadsheet(Request $request, $idContenedor, $lightweight = false)
     {
         $startedAt = microtime(true);
-        $datosExport = $this->obtenerDatosParaExportar($request, $idContenedor, $lightweight);
+        $marketingLayout = $this->isMarketingProspectosExport($request);
+        $datosExport = $this->obtenerDatosParaExportar($request, $idContenedor, $lightweight, $marketingLayout);
         Log::info('[SeguimientoDrive] Hoja Cotizaciones: datos obtenidos', [
             'id_contenedor' => (int) $idContenedor,
             'filas' => count($datosExport),
@@ -63,6 +66,27 @@ class CotizacionExportService
             $formatStartedAt = microtime(true);
             $this->aplicarFormatoExcelSeguimiento($sheet, $info);
             Log::info('[SeguimientoDrive] Hoja Cotizaciones: formato aplicado', [
+                'id_contenedor' => (int) $idContenedor,
+                'ms' => (int) round((microtime(true) - $formatStartedAt) * 1000),
+                'total_ms' => (int) round((microtime(true) - $startedAt) * 1000),
+            ]);
+
+            return $spreadsheet;
+        }
+
+        if ($marketingLayout) {
+            $contenedor = Contenedor::find($idContenedor);
+            $carga = $contenedor ? (string) $contenedor->carga : '';
+            $this->configurarEncabezadosMarketingProspectos($sheet, $carga);
+            $fillStartedAt = microtime(true);
+            $info = $this->llenarDatosExcelMarketingProspectos($sheet, $datosExport);
+            Log::info('[SeguimientoDrive] Hoja Cotizaciones marketing: celdas escritas', [
+                'id_contenedor' => (int) $idContenedor,
+                'ms' => (int) round((microtime(true) - $fillStartedAt) * 1000),
+            ]);
+            $formatStartedAt = microtime(true);
+            $this->aplicarFormatoExcelMarketingProspectos($sheet, $info);
+            Log::info('[SeguimientoDrive] Hoja Cotizaciones marketing: formato aplicado', [
                 'id_contenedor' => (int) $idContenedor,
                 'ms' => (int) round((microtime(true) - $formatStartedAt) * 1000),
                 'total_ms' => (int) round((microtime(true) - $startedAt) * 1000),
@@ -317,7 +341,7 @@ class CotizacionExportService
     }
 
     //Obtiene los datos filtrados para la exportación
-    private function obtenerDatosParaExportar(Request $request, $id, $lightweight = false)
+    private function obtenerDatosParaExportar(Request $request, $id, $lightweight = false, $marketingLayout = false)
     {
         if ($lightweight) {
             return $this->obtenerFilasSeguimientoHoja1($request, $id);
@@ -377,11 +401,20 @@ class CotizacionExportService
         $query->orderBy('contenedor_consolidado_cotizacion.' . $sortField, $sortOrder);
 
         // Cargar relaciones necesarias (evita N+1 en tipoCliente)
-        $cotizaciones = $query->with('tipoCliente')->get();
+        $withRelations = ['tipoCliente'];
+        if ($marketingLayout) {
+            $withRelations[] = 'calculadoraImportacion';
+        }
+        $cotizaciones = $query->with($withRelations)->get();
 
         $datosExport = [];
         $index = 1;
         foreach ($cotizaciones as $cotizacion) {
+            if ($marketingLayout) {
+                $datosExport[] = $this->mapCotizacionToMarketingProspectosRow($cotizacion, $index++);
+                continue;
+            }
+
             $datosExport[] = [
                 'n' => $index++, 
                 'carga' => $contenedor->carga ?? '',
@@ -731,6 +764,244 @@ class CotizacionExportService
         $sheet->getStyle('B3:Y3')->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
         $sheet->getStyle('B3:Y3')->getAlignment()->setVertical(\PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER);
     }
+
+    /**
+     * Exportación alineada con la tabla de prospectos visible para Jefe Marketing.
+     *
+     * @param \PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $sheet
+     * @param string $carga
+     */
+    private function configurarEncabezadosMarketingProspectos($sheet, $carga)
+    {
+        $titulo = $carga !== '' ? 'Prospectos - Contenedor #' . $carga : 'Prospectos';
+        $sheet->setCellValue('B2', $titulo);
+
+        $headers = [
+            'B3' => 'N°',
+            'C3' => 'Fecha',
+            'D3' => 'Contacto',
+            'E3' => 'T. Cliente',
+            'F3' => 'Volumen',
+            'G3' => 'Qty Item',
+            'H3' => 'Fob',
+            'I3' => 'Logistica',
+            'J3' => 'Impuesto',
+            'K3' => 'Tarifa',
+            'L3' => 'Descuento',
+            'M3' => 'Cargos extra',
+            'N3' => 'Cotizacion',
+        ];
+
+        foreach ($headers as $cell => $value) {
+            $sheet->setCellValue($cell, $value);
+            $sheet->getStyle($cell)->getFont()->setBold(true);
+        }
+
+        $sheet->mergeCells('B2:N2');
+        $sheet->getStyle('B2')->getFont()->setBold(true)->setSize(16);
+        $sheet->getStyle('B2')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        $sheet->getStyle('B2')->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
+        $sheet->getStyle('B3:N3')->getFont()->setBold(true);
+        $sheet->getStyle('B3:N3')->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFCCCCCC');
+        $sheet->getStyle('B3:N3')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        $sheet->getStyle('B3:N3')->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
+    }
+
+    /**
+     * @param \PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $sheet
+     * @param array<int, array<string, mixed>> $datosExport
+     * @return array<string, mixed>
+     */
+    private function llenarDatosExcelMarketingProspectos($sheet, array $datosExport)
+    {
+        $row = 4;
+
+        foreach ($datosExport as $data) {
+            $sheet->setCellValue('B' . $row, $data['n'] ?? '');
+            $sheet->setCellValue('C' . $row, $data['fecha'] ?? '');
+            $sheet->setCellValue('D' . $row, $data['contacto'] ?? '');
+            $sheet->setCellValue('E' . $row, $data['tipo_cliente'] ?? '');
+            $sheet->setCellValue('F' . $row, $data['volumen'] ?? '');
+            $sheet->setCellValue('G' . $row, $data['qty_item'] ?? '');
+            $sheet->setCellValue('H' . $row, $data['fob'] ?? '');
+            $sheet->setCellValue('I' . $row, $data['logistica'] ?? '');
+            $sheet->setCellValue('J' . $row, $data['impuesto'] ?? '');
+            $sheet->setCellValue('K' . $row, $data['tarifa'] ?? '');
+            $sheet->setCellValue('L' . $row, $data['descuento'] ?? '');
+            $sheet->setCellValue('M' . $row, $data['cargos_extra'] ?? '');
+            $sheet->setCellValue('N' . $row, $data['cotizacion'] ?? '');
+            $row++;
+        }
+
+        return [
+            'lastRow' => max(3, $row - 1),
+            'totalRows' => count($datosExport),
+        ];
+    }
+
+    /**
+     * @param \PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $sheet
+     * @param array<string, mixed> $info
+     */
+    private function aplicarFormatoExcelMarketingProspectos($sheet, array $info)
+    {
+        $lastRow = (int) ($info['lastRow'] ?? 3);
+        if ($lastRow < 4) {
+            return;
+        }
+
+        $columnWidths = [
+            'B' => 6,
+            'C' => 14,
+            'D' => 36,
+            'E' => 14,
+            'F' => 10,
+            'G' => 10,
+            'H' => 14,
+            'I' => 14,
+            'J' => 14,
+            'K' => 14,
+            'L' => 14,
+            'M' => 14,
+            'N' => 28,
+        ];
+
+        foreach ($columnWidths as $col => $width) {
+            $sheet->getColumnDimension($col)->setWidth($width);
+        }
+
+        $sheet->getStyle('B3:N' . $lastRow)->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
+        $sheet->getStyle('B4:N' . $lastRow)->getAlignment()->setVertical(Alignment::VERTICAL_CENTER)->setWrapText(true);
+        $sheet->getStyle('B4:B' . $lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        $sheet->getStyle('C4:C' . $lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        $sheet->getStyle('F4:G' . $lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+    }
+
+    /**
+     * @param Cotizacion $cotizacion
+     * @param int $index
+     * @return array<string, mixed>
+     */
+    private function mapCotizacionToMarketingProspectosRow($cotizacion, $index)
+    {
+        $calc = $cotizacion->calculadoraImportacion;
+        $fromCalculator = (bool) $cotizacion->from_calculator;
+
+        return [
+            'n' => $index,
+            'fecha' => $this->safeFormatDate($cotizacion->fecha ?? null),
+            'contacto' => $this->buildContactoMarketing($cotizacion, $calc),
+            'tipo_cliente' => optional($cotizacion->tipoCliente)->name ?: 'Sin estado',
+            'volumen' => $cotizacion->volumen_neto ?? $cotizacion->volumen ?? '',
+            'qty_item' => $cotizacion->qty_item !== null && $cotizacion->qty_item !== '' ? $cotizacion->qty_item : '0',
+            'fob' => $this->formatUsd($cotizacion->fob ?? 0),
+            'logistica' => $this->formatUsd($cotizacion->monto ?? 0),
+            'impuesto' => $this->formatUsd($cotizacion->impuestos ?? 0),
+            'tarifa' => $this->formatUsd($cotizacion->tarifa ?? 0),
+            'descuento' => $this->formatMarketingCalculatorMoney($fromCalculator, optional($calc)->tarifa_descuento),
+            'cargos_extra' => $this->formatMarketingCalculatorMoney($fromCalculator, optional($calc)->cargos_extra),
+            'cotizacion' => $this->buildCotizacionLinksMarketing($cotizacion, $calc),
+        ];
+    }
+
+    /**
+     * @param Cotizacion $cotizacion
+     * @param mixed $calc
+     * @return string
+     */
+    private function buildContactoMarketing($cotizacion, $calc)
+    {
+        $lines = [];
+
+        if (! empty($cotizacion->nombre)) {
+            $lines[] = mb_strtoupper((string) $cotizacion->nombre, 'UTF-8');
+        }
+        if (! empty($cotizacion->documento)) {
+            $lines[] = (string) $cotizacion->documento;
+        }
+        if (! empty($cotizacion->telefono)) {
+            $lines[] = (string) $cotizacion->telefono;
+        }
+        if (! empty($cotizacion->correo)) {
+            $lines[] = (string) $cotizacion->correo;
+        }
+        if (! empty($cotizacion->cod_contract)) {
+            $lines[] = 'Contrato: ' . $cotizacion->cod_contract;
+        }
+        if ($calc && ! empty($calc->cod_cotizacion)) {
+            $lines[] = 'Cotización: ' . $calc->cod_cotizacion;
+        }
+
+        return implode("\n", $lines);
+    }
+
+    /**
+     * @param Cotizacion $cotizacion
+     * @param mixed $calc
+     * @return string
+     */
+    private function buildCotizacionLinksMarketing($cotizacion, $calc)
+    {
+        $links = [];
+
+        if ($calc && ! empty($calc->url_cotizacion_pdf)) {
+            $links[] = $this->generateImageUrl($calc->url_cotizacion_pdf) ?: (string) $calc->url_cotizacion_pdf;
+        }
+        if (! empty($cotizacion->cotizacion_file_url)) {
+            $links[] = $this->generateImageUrl($cotizacion->cotizacion_file_url) ?: (string) $cotizacion->cotizacion_file_url;
+        }
+
+        return implode("\n", array_filter($links));
+    }
+
+    /**
+     * @param mixed $value
+     * @return string
+     */
+    private function formatUsd($value)
+    {
+        $num = is_numeric($value) ? (float) $value : 0.0;
+
+        return '$' . number_format($num, 2, '.', ',');
+    }
+
+    /**
+     * @param bool $fromCalculator
+     * @param mixed $value
+     * @return string
+     */
+    private function formatMarketingCalculatorMoney($fromCalculator, $value)
+    {
+        if (! $fromCalculator) {
+            return 'N/A';
+        }
+
+        if ($value === null || $value === '') {
+            return $this->formatUsd(0);
+        }
+
+        return $this->formatUsd($value);
+    }
+
+    /**
+     * @param Request $request
+     * @return bool
+     */
+    private function isMarketingProspectosExport(Request $request)
+    {
+        if ($request->input('export_layout') === 'prospectos_marketing') {
+            return true;
+        }
+
+        try {
+            $user = JWTAuth::parseToken()->authenticate();
+
+            return $user && $user->getNombreGrupo() === Usuario::JEFE_MARKETING;
+        } catch (\Exception $e) {
+            return false;
+        }
+    }
+
     //Llena los datos en el Excel
     private function llenarDatosExcel($sheet, $datosExport)
     {
