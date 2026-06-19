@@ -216,6 +216,88 @@ class CotizacionExportService
         return $datosExport;
     }
 
+    /**
+     * Aplica los mismos filtros que la tabla de prospectos (CotizacionController@index).
+     *
+     * @param \Illuminate\Database\Eloquent\Builder $query
+     * @param Request $request
+     */
+    private function applyProspectosTableFilters($query, Request $request)
+    {
+        $query->where(function ($q) {
+            $q->whereDoesntHave('calculadoraImportacion')
+                ->orWhereHas('calculadoraImportacion', function ($sub) {
+                    $sub->where('estado', '!=', 'PENDIENTE');
+                });
+        });
+
+        if ($request->filled('idCotizacion')) {
+            $query->where('contenedor_consolidado_cotizacion.id', $request->idCotizacion);
+        }
+
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('contenedor_consolidado_cotizacion.nombre', 'LIKE', "%{$search}%")
+                    ->orWhere('contenedor_consolidado_cotizacion.documento', 'LIKE', "%{$search}%");
+
+                if (preg_match('/^[\d\s\-\(\)\.\+]+$/', $search)) {
+                    $telefonoNormalizado = preg_replace('/[\s\-\(\)\.\+]/', '', $search);
+
+                    if (preg_match('/^51(\d{9})$/', $telefonoNormalizado, $matches)) {
+                        $telefonoNormalizado = $matches[1];
+                    }
+
+                    if (! empty($telefonoNormalizado)) {
+                        $q->orWhere(function ($subQuery) use ($telefonoNormalizado, $search) {
+                            $subQuery->whereRaw('REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(contenedor_consolidado_cotizacion.telefono, " ", ""), "-", ""), "(", ""), ")", ""), "+", "") LIKE ?', ["%{$telefonoNormalizado}%"])
+                                ->orWhereRaw('REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(contenedor_consolidado_cotizacion.telefono, " ", ""), "-", ""), "(", ""), ")", ""), "+", "") LIKE ?', ["%51{$telefonoNormalizado}%"])
+                                ->orWhere('contenedor_consolidado_cotizacion.telefono', 'LIKE', "%{$search}%");
+                        });
+                    }
+                } else {
+                    $q->orWhere('contenedor_consolidado_cotizacion.telefono', 'LIKE', "%{$search}%");
+                }
+            });
+        }
+
+        if ($request->filled('estado')) {
+            $query->where('contenedor_consolidado_cotizacion.estado', $request->estado);
+        }
+
+        if ($request->filled('fecha_inicio')) {
+            $query->whereDate('contenedor_consolidado_cotizacion.fecha', '>=', $request->fecha_inicio);
+        }
+
+        if ($request->filled('fecha_fin')) {
+            $query->whereDate('contenedor_consolidado_cotizacion.fecha', '<=', $request->fecha_fin);
+        }
+
+        $query->whereHas('proveedores');
+
+        if ($request->filled('estado_coordinacion') && $request->estado_coordinacion !== 'todos') {
+            $query->whereHas('proveedores', function ($sub) use ($request) {
+                $sub->where('estados', $request->estado_coordinacion);
+            });
+        }
+
+        if ($request->filled('estado_china') && $request->estado_china !== 'todos') {
+            $query->whereHas('proveedores', function ($sub) use ($request) {
+                $sub->where('estados_proveedor', $request->estado_china);
+            });
+        }
+
+        if ($request->filled('estado_cotizador') && $request->estado_cotizador !== 'todos') {
+            $query->where('contenedor_consolidado_cotizacion.estado_cotizador', $request->estado_cotizador);
+        }
+
+        if ($request->filled('tipo_cliente') && $request->tipo_cliente !== 'todos') {
+            $query->whereHas('tipoCliente', function ($q) use ($request) {
+                $q->where('id', $request->tipo_cliente);
+            });
+        }
+    }
+
     //Exportar a Excel
     public function exportarCotizacion(Request $request, $query = null)
     {
@@ -241,21 +323,15 @@ class CotizacionExportService
             return $this->obtenerFilasSeguimientoHoja1($request, $id);
         }
 
-        // Filtrar por contenedor
-        $query = Cotizacion::withTrashed()
+        // Filtrar por contenedor (mismos criterios que la tabla de prospectos en front)
+        $query = Cotizacion::query()
             ->where('contenedor_consolidado_cotizacion.id_contenedor', $id)
             ->leftJoin('reason_delete_cotizacion as rdc', 'rdc.id', '=', 'contenedor_consolidado_cotizacion.deleted_reason_id');
 
         //usar volumen_china de la suma total de los cbm_total_china de los proovedores con el mismo id_cotizacion de la tabla contenedor_consolidado_cotizacion_proveedores
         $query->selectRaw('contenedor_consolidado_cotizacion.*, rdc.name as razon_de_baja, (SELECT SUM(cbm_total_china) FROM contenedor_consolidado_cotizacion_proveedores WHERE id_cotizacion = contenedor_consolidado_cotizacion.id) as volumen_chinaa');
 
-        ////if request has estado_coordinacion or estado_china  then query with  proveedores  and just get cotizaciones with at least one proveedor with the state
-        if ($request->has('estado_coordinacion') || $request->has('estado_china')) {
-                $query->whereHas('proveedores', function ($query) use ($request) {
-                    $query->where('estados', $request->estado_coordinacion)
-                        ->orWhere('estados_proveedor', $request->estado_china);
-                });
-        }
+        $this->applyProspectosTableFilters($query, $request);
 
         $query->whereNull('id_cliente_importacion');
         
@@ -269,19 +345,20 @@ class CotizacionExportService
             ->where('main.id_contenedor', $id)
             ->whereNull('id_cliente_importacion');
 
-        if ($request->has('estado_coordinacion') || $request->has('estado_china')) {
+        if ($request->filled('estado_coordinacion') && $request->estado_coordinacion !== 'todos') {
             $asesoresQuery->whereExists(function ($sub) use ($request) {
                 $sub->select(DB::raw(1))
                     ->from('contenedor_consolidado_cotizacion_proveedores as proveedores')
                     ->whereRaw('proveedores.id_cotizacion = main.id')
-                    ->where(function ($q) use ($request) {
-                        if ($request->has('estado_coordinacion') && $request->estado_coordinacion != 'todos') {
-                            $q->where('proveedores.estados', $request->estado_coordinacion);
-                        }
-                        if ($request->has('estado_china') && $request->estado_china != 'todos') {
-                            $q->where('proveedores.estados_proveedor', $request->estado_china);
-                        }
-                    });
+                    ->where('proveedores.estados', $request->estado_coordinacion);
+            });
+        }
+        if ($request->filled('estado_china') && $request->estado_china !== 'todos') {
+            $asesoresQuery->whereExists(function ($sub) use ($request) {
+                $sub->select(DB::raw(1))
+                    ->from('contenedor_consolidado_cotizacion_proveedores as proveedores')
+                    ->whereRaw('proveedores.id_cotizacion = main.id')
+                    ->where('proveedores.estados_proveedor', $request->estado_china);
             });
         }
         $asesoresResults = $asesoresQuery->get();
@@ -289,17 +366,15 @@ class CotizacionExportService
         foreach ($asesoresResults as $a) {
             $asesoresMap[$a->cotizacion_id] = $a->No_Nombres_Apellidos ?? '';
         }
-        //obtener tipo cliente: se obtiene de la relacion a la tabla contenedor_consolidado_tipo_cliente a travez del id_tipo_cliente en la tabla contenedor_consolidado_cotizacion
-        if ($request->has('tipo_cliente') && $request->tipo_cliente != 'todos') {
-            $query->whereHas('tipoCliente', function ($q) use ($request) {
-                $q->where('id', $request->tipo_cliente);
-            });
-        }
 
-        // Ordenamiento
+        // Ordenamiento (mismo criterio que la tabla en front)
+        $allowedSort = ['id', 'fecha', 'nombre', 'volumen', 'updated_at', 'estado_cotizador'];
         $sortField = $request->input('sort_by', 'id');
-        $sortOrder = $request->input('sort_order', 'asc');
-        $query->orderBy($sortField, $sortOrder);
+        if (! in_array($sortField, $allowedSort, true)) {
+            $sortField = 'id';
+        }
+        $sortOrder = strtolower($request->input('sort_order', 'asc')) === 'desc' ? 'desc' : 'asc';
+        $query->orderBy('contenedor_consolidado_cotizacion.' . $sortField, $sortOrder);
 
         // Cargar relaciones necesarias (evita N+1 en tipoCliente)
         $cotizaciones = $query->with('tipoCliente')->get();
