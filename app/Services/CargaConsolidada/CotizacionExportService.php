@@ -9,6 +9,7 @@ use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
+use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use Carbon\Carbon;
 use App\Models\CargaConsolidada\CotizacionProveedor;
@@ -825,12 +826,12 @@ class CotizacionExportService
             $sheet->setCellValue('E' . $row, $data['tipo_cliente'] ?? '');
             $sheet->setCellValue('F' . $row, $data['volumen'] ?? '');
             $sheet->setCellValue('G' . $row, $data['qty_item'] ?? '');
-            $sheet->setCellValue('H' . $row, $data['fob'] ?? '');
-            $sheet->setCellValue('I' . $row, $data['logistica'] ?? '');
-            $sheet->setCellValue('J' . $row, $data['impuesto'] ?? '');
-            $sheet->setCellValue('K' . $row, $data['tarifa'] ?? '');
-            $sheet->setCellValue('L' . $row, $data['descuento'] ?? '');
-            $sheet->setCellValue('M' . $row, $data['cargos_extra'] ?? '');
+            $this->setMarketingMoneyCell($sheet, 'H', $row, $data['fob'] ?? null);
+            $this->setMarketingMoneyCell($sheet, 'I', $row, $data['logistica'] ?? null);
+            $this->setMarketingMoneyCell($sheet, 'J', $row, $data['impuesto'] ?? null);
+            $this->setMarketingMoneyCell($sheet, 'K', $row, $data['tarifa'] ?? null);
+            $this->setMarketingMoneyCell($sheet, 'L', $row, $data['descuento'] ?? null, true);
+            $this->setMarketingMoneyCell($sheet, 'M', $row, $data['cargos_extra'] ?? null, true);
             $sheet->setCellValue('N' . $row, $data['cotizacion'] ?? '');
             $row++;
         }
@@ -877,6 +878,10 @@ class CotizacionExportService
         $sheet->getStyle('B4:B' . $lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
         $sheet->getStyle('C4:C' . $lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
         $sheet->getStyle('F4:G' . $lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+        $currencyFormat = NumberFormat::FORMAT_CURRENCY_USD_SIMPLE;
+        $sheet->getStyle('H4:M' . $lastRow)->getNumberFormat()->setFormatCode($currencyFormat);
+        $sheet->getStyle('H4:M' . $lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
     }
 
     /**
@@ -896,12 +901,12 @@ class CotizacionExportService
             'tipo_cliente' => optional($cotizacion->tipoCliente)->name ?: 'Sin estado',
             'volumen' => $cotizacion->volumen_neto ?? $cotizacion->volumen ?? '',
             'qty_item' => $cotizacion->qty_item !== null && $cotizacion->qty_item !== '' ? $cotizacion->qty_item : '0',
-            'fob' => $this->formatUsd($cotizacion->fob ?? 0),
-            'logistica' => $this->formatUsd($cotizacion->monto ?? 0),
-            'impuesto' => $this->formatUsd($cotizacion->impuestos ?? 0),
-            'tarifa' => $this->formatUsd($cotizacion->tarifa ?? 0),
-            'descuento' => $this->formatMarketingCalculatorMoney($fromCalculator, optional($calc)->tarifa_descuento),
-            'cargos_extra' => $this->formatMarketingCalculatorMoney($fromCalculator, optional($calc)->cargos_extra),
+            'fob' => $this->toNumericAmount($cotizacion->fob ?? 0),
+            'logistica' => $this->toNumericAmount($cotizacion->monto ?? 0),
+            'impuesto' => $this->toNumericAmount($cotizacion->impuestos ?? 0),
+            'tarifa' => $this->toNumericAmount($cotizacion->tarifa ?? 0),
+            'descuento' => $this->marketingCalculatorAmount($fromCalculator, optional($calc)->tarifa_descuento),
+            'cargos_extra' => $this->marketingCalculatorAmount($fromCalculator, optional($calc)->cargos_extra),
             'cotizacion' => $this->buildCotizacionLinksMarketing($cotizacion, $calc),
         ];
     }
@@ -958,31 +963,49 @@ class CotizacionExportService
 
     /**
      * @param mixed $value
-     * @return string
+     * @return float
      */
-    private function formatUsd($value)
+    private function toNumericAmount($value)
     {
-        $num = is_numeric($value) ? (float) $value : 0.0;
-
-        return '$' . number_format($num, 2, '.', ',');
+        return is_numeric($value) ? (float) $value : 0.0;
     }
 
     /**
+     * Monto numérico para calculadora; null = celda N/A (no sumable).
+     *
      * @param bool $fromCalculator
      * @param mixed $value
-     * @return string
+     * @return float|null
      */
-    private function formatMarketingCalculatorMoney($fromCalculator, $value)
+    private function marketingCalculatorAmount($fromCalculator, $value)
     {
         if (! $fromCalculator) {
-            return 'N/A';
+            return null;
         }
 
         if ($value === null || $value === '') {
-            return $this->formatUsd(0);
+            return 0.0;
         }
 
-        return $this->formatUsd($value);
+        return is_numeric($value) ? (float) $value : 0.0;
+    }
+
+    /**
+     * @param \PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $sheet
+     * @param string $col
+     * @param int $row
+     * @param mixed $value
+     * @param bool $allowNa
+     */
+    private function setMarketingMoneyCell($sheet, $col, $row, $value, $allowNa = false)
+    {
+        if ($allowNa && $value === null) {
+            $sheet->setCellValue($col . $row, 'N/A');
+
+            return;
+        }
+
+        $sheet->setCellValue($col . $row, $this->toNumericAmount($value));
     }
 
     /**
