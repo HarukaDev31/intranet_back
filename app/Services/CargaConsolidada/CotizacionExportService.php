@@ -17,6 +17,8 @@ use App\Models\CargaConsolidada\Contenedor;
 use Illuminate\Support\Facades\DB;
 use App\Traits\FileTrait;
 use App\Models\Usuario;
+use App\Services\CargaConsolidada\SeguimientoConsolidadoDriveCellRepository;
+use App\Support\CargaConsolidada\SeguimientoDriveCellRowKey;
 use Tymon\JWTAuth\Facades\JWTAuth;
 
 class CotizacionExportService
@@ -28,6 +30,10 @@ class CotizacionExportService
     private const COLOR_HEADER_ORANGE = 'FFFFC000';
 
     protected $cotizacionService;
+
+    /** @var array<string, string> */
+    private $manualNotasByRowKey = [];
+
     public function __construct(CotizacionService $cotizacionService)
     {
         $this->cotizacionService = $cotizacionService;
@@ -56,6 +62,9 @@ class CotizacionExportService
         $sheet->setTitle('Cotizaciones');
 
         if ($lightweight) {
+            $this->manualNotasByRowKey = app(SeguimientoConsolidadoDriveCellRepository::class)
+                ->manualValuesByColumn((int) $idContenedor, 'Cotizaciones', 'notas');
+
             $fillStartedAt = microtime(true);
             $this->configurarEncabezadosSeguimiento($sheet);
             $info = $this->llenarDatosExcelSeguimiento($sheet, $datosExport);
@@ -551,8 +560,16 @@ class CotizacionExportService
      */
     private function buildSeguimientoHoja1Row($carga, $cotizacionRow, $proveedorRow)
     {
+        $idCotizacion = (int) $cotizacionRow->id_cotizacion;
+        $idProveedor = $proveedorRow !== null ? (int) ($proveedorRow->id_proveedor ?? 0) : null;
+        $rowKey = SeguimientoDriveCellRowKey::cotizaciones(
+            $idCotizacion,
+            $idProveedor > 0 ? $idProveedor : null
+        );
+
         return [
-            'id_cotizacion' => (int) $cotizacionRow->id_cotizacion,
+            'id_cotizacion' => $idCotizacion,
+            'id_proveedor' => $idProveedor > 0 ? $idProveedor : null,
             'carga' => $carga,
             'asesor' => $cotizacionRow->asesor ?? '',
             'nombre_cliente' => $cotizacionRow->nombre_cliente ?? '',
@@ -566,7 +583,7 @@ class CotizacionExportService
                 : '',
             'estado' => $cotizacionRow->estado_cotizador ?? 'PENDIENTE',
             'estado_china' => $proveedorRow !== null ? ($proveedorRow->estado_china ?? '') : '',
-            'notas' => '',
+            'notas' => $this->manualNotasByRowKey[$rowKey] ?? '',
         ];
     }
 

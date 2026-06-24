@@ -5,7 +5,9 @@ namespace App\Services\CargaConsolidada;
 use App\Models\CargaConsolidada\Contenedor;
 use App\Models\CargaConsolidada\PagoConcept;
 use App\Services\CargaConsolidada\SeguimientoConsolidadoCorteConfig;
+use App\Services\CargaConsolidada\SeguimientoConsolidadoDriveCellRepository;
 use App\Services\CargaConsolidada\SeguimientoConsolidadoRowSyncService;
+use App\Support\CargaConsolidada\SeguimientoDriveCellRowKey;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -148,6 +150,7 @@ class SeguimientoConsolidadoExcelService
 
         $cotizacionesConPago = $this->loadCotizacionesConPagoAsociado($idContenedor);
         $groups = $this->classifyRows($rows, $contactarDesde, $cotizacionesConPago);
+        $this->applyManualContactarNotes($idContenedor, $groups);
         $this->rowSyncService->applyUltimaActualizacion($idContenedor, $groups);
 
         $this->log('info', 'Hoja Seguimiento: datos clasificados', [
@@ -829,13 +832,16 @@ class SeguimientoConsolidadoExcelService
         ]);
 
         foreach ($bloques as $bloque) {
+            $items = $bloque['items'];
+            $this->applyManualContactarNotesToItems($idContenedor, $items);
+
             $row = $this->writeContactarPeriodBlock(
                 $sheet,
                 $row,
                 $carga,
                 $bloque['inicio'],
                 $bloque['fin'],
-                $bloque['items']
+                $items
             );
         }
 
@@ -1174,6 +1180,43 @@ class SeguimientoConsolidadoExcelService
             return SeguimientoConsolidadoDateFormatter::formatCalendarDate($value);
         } catch (\Exception $e) {
             return (string) $value;
+        }
+    }
+
+    /**
+     * @param array<string, array<int, array<string, mixed>>> $groups
+     */
+    private function applyManualContactarNotes(int $idContenedor, array &$groups): void
+    {
+        if (!isset($groups['contactar']) || !is_array($groups['contactar'])) {
+            return;
+        }
+
+        $this->applyManualContactarNotesToItems($idContenedor, $groups['contactar']);
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $items
+     */
+    private function applyManualContactarNotesToItems(int $idContenedor, array &$items): void
+    {
+        $manualNotes = app(SeguimientoConsolidadoDriveCellRepository::class)
+            ->manualValuesByColumn($idContenedor, 'Seguimiento', 'note');
+
+        if ($manualNotes === []) {
+            return;
+        }
+
+        foreach ($items as $index => $item) {
+            $idProveedor = (int) ($item['id_proveedor'] ?? 0);
+            if ($idProveedor <= 0) {
+                continue;
+            }
+
+            $rowKey = SeguimientoDriveCellRowKey::contactarProveedor($idProveedor);
+            if (isset($manualNotes[$rowKey])) {
+                $items[$index]['note'] = $manualNotes[$rowKey];
+            }
         }
     }
 

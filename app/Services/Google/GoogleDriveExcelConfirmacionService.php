@@ -206,6 +206,55 @@ class GoogleDriveExcelConfirmacionService
         return 'https://drive.google.com/file/d/' . $fileId . '/edit?usp=sharing';
     }
 
+    /**
+     * Descarga un archivo de Drive por ID a una ruta local.
+     */
+    public function downloadFileByIdToPath(string $fileId, string $destPath): bool
+    {
+        $fileId = trim($fileId);
+        if ($fileId === '' || $destPath === '') {
+            return false;
+        }
+
+        if (!$this->isConfigured()) {
+            return false;
+        }
+
+        try {
+            $this->bootDrive();
+
+            $response = $this->drive->files->get($fileId, array_merge($this->driveListParams(), [
+                'alt' => 'media',
+            ]));
+
+            if (is_string($response)) {
+                $content = $response;
+            } elseif (is_object($response) && method_exists($response, 'getBody')) {
+                $content = $response->getBody()->getContents();
+            } else {
+                $content = (string) $response;
+            }
+            if ($content === '' || $content === false) {
+                return false;
+            }
+
+            $dir = dirname($destPath);
+            if (!is_dir($dir)) {
+                @mkdir($dir, 0775, true);
+            }
+
+            return file_put_contents($destPath, $content) !== false;
+        } catch (\Throwable $e) {
+            Log::error('GoogleDriveExcelConfirmacionService: fallo al descargar archivo', [
+                'file_id' => $fileId,
+                'dest' => $destPath,
+                'error' => $e->getMessage(),
+            ]);
+
+            return false;
+        }
+    }
+
     private function findFileId(string $folderId, string $fileName): ?string
     {
         $results = $this->drive->files->listFiles(array_merge($this->driveListParams(), [

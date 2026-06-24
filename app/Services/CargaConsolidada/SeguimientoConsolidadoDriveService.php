@@ -10,6 +10,7 @@ use App\Models\CargaConsolidada\Contenedor;
 use App\Models\CargaConsolidada\CotizacionProveedor;
 use App\Models\Usuario;
 use App\Services\Google\GoogleDriveSeguimientoConsolidadoService;
+use App\Services\CargaConsolidada\SeguimientoConsolidadoDriveCellSyncService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -666,7 +667,26 @@ class SeguimientoConsolidadoDriveService
                 'nuevo_archivo_drive' => $isInitialLink,
             ]);
 
+            if (!$isInitialLink && !empty($contenedor->excel_seguimiento_drive_file_id)) {
+                $pullResult = app(SeguimientoConsolidadoDriveCellSyncService::class)
+                    ->pullFromDrive($idContenedor, 'pre_sync');
+                if (empty($pullResult['success'])) {
+                    $this->log('warning', 'Pull pre-sync de celdas falló u omitido', [
+                        'id_contenedor' => $idContenedor,
+                        'message' => $pullResult['message'] ?? 'unknown',
+                    ]);
+                } else {
+                    $this->log('info', 'Pull pre-sync de celdas completado', [
+                        'id_contenedor' => $idContenedor,
+                        'cells_upserted' => $pullResult['cells_upserted'] ?? 0,
+                        'cells_history' => $pullResult['cells_history'] ?? 0,
+                    ]);
+                }
+            }
+
             $tmpPath = $this->excelService->writeTempFile($idContenedor, $request);
+            app(SeguimientoConsolidadoDriveCellSyncService::class)
+                ->applyManualCellsToLocalFile($idContenedor, $tmpPath);
 
             $this->log('info', 'Excel temporal generado', [
                 'id_contenedor' => $idContenedor,
@@ -712,6 +732,15 @@ class SeguimientoConsolidadoDriveService
                         'excel_seguimiento_drive_link' => $driveLink,
                         'excel_seguimiento_file_name' => $fileName,
                     ]);
+
+                $postPull = app(SeguimientoConsolidadoDriveCellSyncService::class)
+                    ->pullFromDrive($idContenedor, 'post_sync');
+                if (!empty($postPull['success'])) {
+                    $this->log('info', 'Pull post-sync de celdas completado', [
+                        'id_contenedor' => $idContenedor,
+                        'cells_upserted' => $postPull['cells_upserted'] ?? 0,
+                    ]);
+                }
             }
 
             return [
