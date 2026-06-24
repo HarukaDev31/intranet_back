@@ -1261,9 +1261,9 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
             if ($pendiente < 0) {
                 $pendiente = 0;
             }
-
+            $anioContenedor = Carbon::parse($fechaCierre)->year;
             $message = "Reserva de espacio:\n" .
-                "*Consolidado #" . $carga . "-2025*\n\n" .
+                "*Consolidado #" . $carga . "-{$anioContenedor}*\n\n" .
                 "Ahora tienes que hacer el pago del CBM preliminar para poder subir su carga en nuestro contenedor.\n\n" .
                 "☑ CBM Preliminar: " . $volumen . " cbm\n" .
                 "☑ Costo CBM: $" . $valorCot . "\n";
@@ -2378,7 +2378,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
         $message = "
             Hola " . $cotizacion->nombre . ", te escribe el área de contabilidad de Probusiness. \n\n" .
             "Reserva de espacio:\n" .
-            "*Consolidado #{$contenedor->carga}-2025*\n\n" .
+            "*Consolidado #{$contenedor->carga}-{$anioContenedor}*\n\n" .
             "Ahora tienes que hacer el pago del CBM preliminar para poder subir su carga en nuestro contenedor.\n\n" .
             "☑ CBM Preliminar: {$cotizacion->volumen} cbm\n" .
             "☑ Costo CBM: \${$cotizacion->monto}\n";
