@@ -35,6 +35,8 @@ class SeguimientoConsolidadoExcelService
     private const COLOR_YIWU = 'FF92D050';
     private const COLOR_RECIBIR = 'FFFFC000';
     private const COLOR_CONTACTAR = 'FF9BC2E6';
+    private const COLOR_CONTACTAR_CONTACTADO = 'FF92D050';
+    private const COLOR_CONTACTAR_VENCIDO = 'FFFFC7CE';
     private const COLOR_RESERVADO = 'FFC6EFCE';
     private const COLOR_CONFIG = 'FFE7E6E6';
 
@@ -140,6 +142,7 @@ class SeguimientoConsolidadoExcelService
         $carga = $contenedor ? (string) $contenedor->carga : '';
         $rows = $this->fetchProveedoresSeguimiento($idContenedor, $carga);
         $this->enrichFechasDatosProveedor($idContenedor, $rows);
+        $this->enrichFechasArriveProveedor($rows);
 
         $tieneHistoricoContactar = SeguimientoConsolidadoCorteConfig::contenedorTieneHistoricoContactar($idContenedor);
         $periodoAbierto = $tieneHistoricoContactar
@@ -153,6 +156,7 @@ class SeguimientoConsolidadoExcelService
         $groups = $this->classifyRows($rows, $contactarDesde, $cotizacionesConPago);
         $this->applyManualYiwuNotes($idContenedor, $groups);
         $this->applyManualContactarNotes($idContenedor, $groups);
+        $this->enrichContactarEstadoContacto($groups);
         $this->rowSyncService->applyUltimaActualizacion($idContenedor, $groups);
 
         $this->log('info', 'Hoja Seguimiento: datos clasificados', [
@@ -304,17 +308,18 @@ class SeguimientoConsolidadoExcelService
                 continue;
             }
 
+            // Por recibir: fecha de llegada o estado China LOADED (antes que contactar).
+            if ($this->isProveedorPorRecibir($row, $estadoChina)) {
+                $recibir[] = $row;
+                continue;
+            }
+
             // Contactar abierto: DATOS PROVEEDOR sin fecha, ingresados desde el último corte.
             if ($estadoCoord === 'DATOS PROVEEDOR' && !$this->hasFechaLlegada($row)) {
                 if ($this->isContactarPeriodoAbierto($row, $contactarDesde)) {
                     $contactar[] = $row;
                 }
                 continue;
-            }
-
-            // Por recibir: no YIWU y con fecha de llegada (puede convivir otro proveedor en YIWU).
-            if ($this->hasFechaLlegada($row)) {
-                $recibir[] = $row;
             }
         }
 
@@ -367,7 +372,7 @@ class SeguimientoConsolidadoExcelService
     }
 
     /**
-     * YIWU: proveedor RECIBIDO (R) o INSPECCIONADO (coord) / INSPECTION (china).
+     * YIWU: proveedor recibido/cargado/inspeccionado en China o INSPECCIONADO en coordinación.
      *
      * @param string $estadoChina
      * @param string $estadoCoord
@@ -375,7 +380,7 @@ class SeguimientoConsolidadoExcelService
      */
     private function isProveedorEnYiwu($estadoChina, $estadoCoord)
     {
-        if ($estadoChina === 'R' || $estadoChina === 'INSPECTION') {
+        if (in_array($estadoChina, ['R', 'INSPECTION', 'LOADED'], true)) {
             return true;
         }
 
@@ -445,6 +450,42 @@ class SeguimientoConsolidadoExcelService
             if ($idProveedor > 0 && isset($fechas[$idProveedor])) {
                 $rows[$index]['fecha_datos_proveedor'] = $fechas[$idProveedor];
             }
+        }
+    }
+
+    /**
+     * Resuelve fecha_recibir: prioriza arrive_date si ambas existen; si no hay fechas
+     * vigentes en proveedor pero sí historial, usa la última registrada.
+     *
+     * @param array<int, array<string, mixed>> $rows
+     */
+    private function enrichFechasArriveProveedor(array &$rows)
+    {
+        if ($rows === []) {
+            return;
+        }
+
+        $idProveedores = array_map(function ($row) {
+            return (int) ($row['id_proveedor'] ?? 0);
+        }, $rows);
+
+        $historyService = app(ProveedorArriveDateHistoryService::class);
+        $historyContext = $historyService->historyContextByProveedor($idProveedores);
+
+        foreach ($rows as $index => $row) {
+            $idProveedor = (int) ($row['id_proveedor'] ?? 0);
+            $context = $historyContext[$idProveedor] ?? ['has_history' => false, 'latest' => null];
+
+            $fechaRecibir = $historyService->resolveFechaRecibir(
+                $row['fecha_llegada_peru'] ?? null,
+                $row['fecha_llegada_china'] ?? null,
+                $context['latest'] ?? null,
+                !empty($context['has_history'])
+            );
+
+            $rows[$index]['fecha_recibir'] = $fechaRecibir;
+            $rows[$index]['fecha_llegada_peru'] = ProveedorArriveDateHistoryService::normalizeDate($row['fecha_llegada_peru'] ?? null);
+            $rows[$index]['fecha_llegada_china'] = ProveedorArriveDateHistoryService::normalizeDate($row['fecha_llegada_china'] ?? null);
         }
     }
 
@@ -531,6 +572,22 @@ class SeguimientoConsolidadoExcelService
     }
 
     /**
+     * Por recibir: tiene fecha de llegada o estado China LOADED.
+     *
+     * @param array<string, mixed> $row
+     * @param string $estadoChina
+     * @return bool
+     */
+    private function isProveedorPorRecibir(array $row, $estadoChina)
+    {
+        if ($this->hasFechaLlegada($row)) {
+            return true;
+        }
+
+        return strtoupper(trim((string) $estadoChina)) === 'LOADED';
+    }
+
+    /**
      * Por recibir / contactar: tiene fecha de llegada china o Perú.
      *
      * @param array<string, mixed> $row
@@ -538,10 +595,15 @@ class SeguimientoConsolidadoExcelService
      */
     private function hasFechaLlegada(array $row)
     {
-        $fechaPeru = trim((string) ($row['fecha_llegada_peru'] ?? ''));
-        $fechaChina = trim((string) ($row['fecha_llegada_china'] ?? ''));
+        $fechaRecibir = ProveedorArriveDateHistoryService::normalizeDate($row['fecha_recibir'] ?? null);
+        if ($fechaRecibir !== null) {
+            return true;
+        }
 
-        return $fechaPeru !== '' || $fechaChina !== '';
+        $fechaPeru = ProveedorArriveDateHistoryService::normalizeDate($row['fecha_llegada_peru'] ?? null);
+        $fechaChina = ProveedorArriveDateHistoryService::normalizeDate($row['fecha_llegada_china'] ?? null);
+
+        return $fechaPeru !== null || $fechaChina !== null;
     }
 
     /**
@@ -860,6 +922,16 @@ class SeguimientoConsolidadoExcelService
         ];
 
         $this->writeRowValues($sheet, $startCol, $row, $values, $applyBorder);
+
+        $highlight = $item['contactar_highlight'] ?? null;
+        if ($highlight === 'green' || $highlight === 'red') {
+            $start = Coordinate::stringFromColumnIndex($startCol);
+            $end = Coordinate::stringFromColumnIndex($startCol + self::TABLE_WIDTH_CONTACTAR - 1);
+            $color = $highlight === 'green'
+                ? self::COLOR_CONTACTAR_CONTACTADO
+                : self::COLOR_CONTACTAR_VENCIDO;
+            $this->applyFill($sheet, $start . $row . ':' . $end . $row, $color, false);
+        }
     }
 
     /**
@@ -932,6 +1004,7 @@ class SeguimientoConsolidadoExcelService
         foreach ($bloques as $bloque) {
             $items = $bloque['items'];
             $this->applyManualContactarNotesToItems($idContenedor, $items);
+            $this->enrichContactarEstadoContactoItems($items);
 
             $row = $this->writeContactarPeriodBlock(
                 $sheet,
@@ -958,6 +1031,8 @@ class SeguimientoConsolidadoExcelService
      */
     private function writeContactarAbiertoBlock(Worksheet $sheet, $row, $carga, array $periodoAbierto, array $items)
     {
+        $this->enrichContactarEstadoContactoItems($items);
+
         $title = 'CARGA POR CONTACTAR ('
             . $periodoAbierto['inicio']->format('d/m/Y H:i')
             . ' → ahora)';
@@ -1189,7 +1264,7 @@ class SeguimientoConsolidadoExcelService
                 'cbm_contactar' => $cbmPeru > 0 ? $cbmPeru : $cbmChina,
                 'fecha_llegada_peru' => $row->arrive_date,
                 'fecha_llegada_china' => $row->arrive_date_china,
-                'fecha_recibir' => $row->arrive_date ?: $row->arrive_date_china,
+                'fecha_recibir' => null,
                 'note' => '',
             ];
         }
@@ -1328,6 +1403,75 @@ class SeguimientoConsolidadoExcelService
         }
 
         $this->applyManualContactarNotesToItems($idContenedor, $groups['contactar']);
+    }
+
+    /**
+     * Marca filas CONTACTAR: verde si China ya contactó; rojo si pasaron 24 h sin contacto.
+     *
+     * @param array<string, array<int, array<string, mixed>>> $groups
+     */
+    private function enrichContactarEstadoContacto(array &$groups): void
+    {
+        if (!isset($groups['contactar']) || !is_array($groups['contactar'])) {
+            return;
+        }
+
+        $this->enrichContactarEstadoContactoItems($groups['contactar']);
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $items
+     */
+    private function enrichContactarEstadoContactoItems(array &$items): void
+    {
+        if ($items === []) {
+            return;
+        }
+
+        $idProveedores = [];
+        foreach ($items as $item) {
+            $idProveedor = (int) ($item['id_proveedor'] ?? 0);
+            if ($idProveedor > 0) {
+                $idProveedores[] = $idProveedor;
+            }
+        }
+
+        $historyService = app(ProveedorEstadosProveedorHistoryService::class);
+        $contactadoHistorial = $historyService->fueContactadoByProveedor($idProveedores);
+
+        foreach ($items as $index => $item) {
+            $idProveedor = (int) ($item['id_proveedor'] ?? 0);
+            $items[$index]['contactar_highlight'] = $this->resolveContactarHighlight(
+                $item,
+                !empty($contactadoHistorial[$idProveedor]),
+                $historyService
+            );
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $item
+     */
+    private function resolveContactarHighlight(
+        array $item,
+        bool $fueContactadoHistorial,
+        ProveedorEstadosProveedorHistoryService $historyService
+    ): ?string {
+        if ($historyService->isEstadoContactado($item['estado_china'] ?? '') || $fueContactadoHistorial) {
+            return 'green';
+        }
+
+        $registeredAt = $this->parseFechaDatosProveedor($item['fecha_datos_proveedor'] ?? null);
+        if ($registeredAt === null) {
+            return null;
+        }
+
+        $now = Carbon::now(SeguimientoConsolidadoDateFormatter::displayTimezone());
+        if ($now->gt($registeredAt->copy()->addHours(24))) {
+            return 'red';
+        }
+
+        return null;
     }
 
     /**
