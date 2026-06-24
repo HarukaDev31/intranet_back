@@ -26,8 +26,9 @@ class SeguimientoConsolidadoExcelService
     private const LOG_PREFIX = '[SeguimientoDrive]';
 
     private const COL_YIWU = 2;
-    private const COL_RECIBIR = 10;
-    private const COL_CONTACTAR = 18;
+    private const COL_RECIBIR = 12;
+    private const COL_CONTACTAR = 20;
+    private const TABLE_WIDTH_YIWU = 9;
     private const TABLE_WIDTH_CONTACTAR = 6;
     private const TABLE_WIDTH_SYNC = 7;
 
@@ -37,7 +38,7 @@ class SeguimientoConsolidadoExcelService
     private const COLOR_RESERVADO = 'FFC6EFCE';
     private const COLOR_CONFIG = 'FFE7E6E6';
 
-    private const HEADERS_YIWU = ['CONS', 'VENDEDOR', 'CLIENTE', 'CBM', 'TIPO CARGA', 'ESTADO PAGO', 'ULT. ACT.'];
+    private const HEADERS_YIWU = ['CONS', 'VENDEDOR', 'CLIENTE', 'CODE SUPPLIER', 'CBM', 'TIPO CARGA', 'ESTADO PAGO', 'ULT. ACT.', 'NOTAS'];
     private const HEADERS_RECIBIR = ['CONS', 'VENDEDOR', 'CLIENTE', 'CBM', 'FECHA', 'PROVEEDOR', 'ULT. ACT.'];
     private const HEADERS_CONTACTAR = ['CONS', 'VENDEDOR', 'CLIENTE', 'CBM', 'CODE SUPPLIER', 'NOTE'];
 
@@ -150,6 +151,7 @@ class SeguimientoConsolidadoExcelService
 
         $cotizacionesConPago = $this->loadCotizacionesConPagoAsociado($idContenedor);
         $groups = $this->classifyRows($rows, $contactarDesde, $cotizacionesConPago);
+        $this->applyManualYiwuNotes($idContenedor, $groups);
         $this->applyManualContactarNotes($idContenedor, $groups);
         $this->rowSyncService->applyUltimaActualizacion($idContenedor, $groups);
 
@@ -175,20 +177,18 @@ class SeguimientoConsolidadoExcelService
             : SeguimientoConsolidadoCorteConfig::excelConfigLabelPrimeraVez();
         $this->writeConfigSection($sheet, $configRow, $configLabel);
 
-        $this->writeTableTitle($sheet, self::COL_YIWU, $titleRow, 'CARGA EN YIWU', self::COLOR_YIWU, self::TABLE_WIDTH_SYNC);
+        $this->writeTableTitle($sheet, self::COL_YIWU, $titleRow, 'CARGA EN YIWU', self::COLOR_YIWU, self::TABLE_WIDTH_YIWU);
         $this->writeTableTitle($sheet, self::COL_RECIBIR, $titleRow, 'CARGA POR RECIBIR', self::COLOR_RECIBIR, self::TABLE_WIDTH_SYNC);
 
         $this->writeTableHeaders($sheet, self::COL_YIWU, $headerRow, self::HEADERS_YIWU, self::COLOR_YIWU);
         $this->writeTableHeaders($sheet, self::COL_RECIBIR, $headerRow, self::HEADERS_RECIBIR, self::COLOR_RECIBIR);
 
-        $yiwuFooterRow = $this->writeTableDataSection(
+        $yiwuFooterRow = $this->writeYiwuDataSection(
             $sheet,
             self::COL_YIWU,
             $headerRow,
             $dataStartRow,
-            self::TABLE_WIDTH_SYNC,
-            $groups['yiwu'],
-            [$this, 'writeYiwuRow']
+            $groups['yiwu']
         );
 
         $recibirFooterRow = $this->writeTableDataSection(
@@ -204,7 +204,7 @@ class SeguimientoConsolidadoExcelService
         $this->writeYiwuFooter($sheet, self::COL_YIWU, $yiwuFooterRow, $carga, $groups['yiwu']);
         $this->writeRecibirFooter($sheet, self::COL_RECIBIR, $recibirFooterRow, $carga, $groups['recibir']);
 
-        // CONTACTAR: histórico congelado primero, periodo abierto al final (misma columna R–W).
+        // CONTACTAR: histórico congelado primero, periodo abierto al final (misma columna T–Y).
         $contactarRow = $titleRow;
         $contactarRow = $this->writeContactarHistorico($sheet, $idContenedor, $contactarRow, $carga, $rows);
         $this->writeContactarAbiertoBlock(
@@ -224,9 +224,9 @@ class SeguimientoConsolidadoExcelService
     private function applyFixedColumnWidths(Worksheet $sheet)
     {
         $widths = [
-            2 => 8, 3 => 14, 4 => 28, 5 => 28, 6 => 10, 7 => 12, 8 => 14,
-            10 => 8, 11 => 14, 12 => 28, 13 => 10, 14 => 12, 15 => 14, 16 => 14,
-            18 => 8, 19 => 14, 20 => 28, 21 => 10, 22 => 14, 23 => 12,
+            2 => 8, 3 => 14, 4 => 28, 5 => 14, 6 => 10, 7 => 10, 8 => 14, 9 => 14, 10 => 18,
+            12 => 8, 13 => 14, 14 => 28, 15 => 10, 16 => 12, 17 => 14, 18 => 14,
+            20 => 8, 21 => 14, 22 => 28, 23 => 10, 24 => 14, 25 => 12,
         ];
 
         foreach ($widths as $colIndex => $width) {
@@ -240,7 +240,7 @@ class SeguimientoConsolidadoExcelService
      */
     private function writeConfigSection(Worksheet $sheet, $row, $label)
     {
-        $range = 'B' . $row . ':W' . $row;
+        $range = 'B' . $row . ':Y' . $row;
         $sheet->mergeCells($range);
         $sheet->setCellValue('B' . $row, $label);
         $this->applyFill($sheet, $range, self::COLOR_CONFIG, true);
@@ -339,15 +339,28 @@ class SeguimientoConsolidadoExcelService
 
             $base = $group['base'];
             $idCotizacion = (int) ($base['id_cotizacion'] ?? 0);
-            $yiwu[] = [
-                'id_cotizacion' => $idCotizacion,
-                'cons' => $base['cons'],
-                'vendedor' => $base['vendedor'],
-                'cliente' => $base['cliente'],
-                'cbm_yiwu' => $group['cbm_yiwu'],
-                'tipo_carga' => $todosEnYiwu ? 'C' : 'P',
-                'estado_pago' => $this->resolveEstadoPagoYiwu($idCotizacion, $cotizacionesConPago),
-            ];
+            $tipoCarga = $todosEnYiwu ? 'C' : 'P';
+            $estadoPago = $this->resolveEstadoPagoYiwu($idCotizacion, $cotizacionesConPago);
+
+            foreach ($group['proveedores'] as $proveedor) {
+                $china = strtoupper(trim((string) ($proveedor['estado_china'] ?? '')));
+                $coord = strtoupper(trim((string) ($proveedor['estado_coordinacion'] ?? '')));
+                $enYiwu = $this->isProveedorEnYiwu($china, $coord);
+
+                $yiwu[] = [
+                    'id_cotizacion' => $idCotizacion,
+                    'id_proveedor' => (int) ($proveedor['id_proveedor'] ?? 0),
+                    'cons' => $base['cons'],
+                    'vendedor' => $base['vendedor'],
+                    'cliente' => $base['cliente'],
+                    'code_supplier' => $proveedor['code_supplier'] ?? '',
+                    'en_yiwu' => $enYiwu,
+                    'cbm_yiwu' => $group['cbm_yiwu'],
+                    'tipo_carga' => $tipoCarga,
+                    'estado_pago' => $estadoPago,
+                    'notas' => '',
+                ];
+            }
         }
 
         return compact('yiwu', 'recibir', 'contactar');
@@ -562,6 +575,76 @@ class SeguimientoConsolidadoExcelService
     }
 
     /**
+     * Escribe filas YIWU (una por proveedor) y fusiona columnas de cotización como en hoja 1.
+     *
+     * @param array<int, array<string, mixed>> $items
+     * @return int Primera fila libre debajo del bloque de datos.
+     */
+    private function writeYiwuDataSection(Worksheet $sheet, $startCol, $headerRow, $dataStartRow, array $items)
+    {
+        $width = self::TABLE_WIDTH_YIWU;
+        $count = count($items);
+
+        for ($i = 0; $i < $count; $i++) {
+            $this->writeYiwuRow($sheet, $startCol, $dataStartRow + $i, $items[$i], false);
+        }
+
+        if ($count === 0) {
+            return $dataStartRow;
+        }
+
+        $dataEndRow = $dataStartRow + $count - 1;
+        $this->applyBorders($sheet, $this->tableRange($startCol, $headerRow, $dataEndRow, $width));
+        $this->mergeYiwuCotizacionColumns($sheet, $startCol, $dataStartRow, $dataEndRow, $items);
+
+        return $dataEndRow + 1;
+    }
+
+    /**
+     * Fusiona CONS, VENDEDOR, CLIENTE, CBM, TIPO CARGA, ESTADO PAGO y ULT. ACT. por cotización.
+     *
+     * @param array<int, array<string, mixed>> $items
+     */
+    private function mergeYiwuCotizacionColumns(Worksheet $sheet, $startCol, $dataStartRow, $dataEndRow, array $items)
+    {
+        $mergeOffsets = [0, 1, 2, 4, 5, 6, 7];
+        $groups = [];
+        $currentCotizacion = null;
+        $groupStart = $dataStartRow;
+
+        foreach ($items as $index => $item) {
+            $idCotizacion = (int) ($item['id_cotizacion'] ?? 0);
+            $row = $dataStartRow + $index;
+
+            if ($currentCotizacion !== null && $idCotizacion !== $currentCotizacion) {
+                $groups[] = ['start' => $groupStart, 'end' => $row - 1];
+                $groupStart = $row;
+            }
+
+            $currentCotizacion = $idCotizacion;
+        }
+
+        if ($currentCotizacion !== null) {
+            $groups[] = ['start' => $groupStart, 'end' => $dataEndRow];
+        }
+
+        foreach ($groups as $group) {
+            if ($group['end'] <= $group['start']) {
+                continue;
+            }
+
+            foreach ($mergeOffsets as $offset) {
+                $col = Coordinate::stringFromColumnIndex($startCol + $offset);
+                $range = $col . $group['start'] . ':' . $col . $group['end'];
+                $sheet->mergeCells($range);
+                $sheet->getStyle($range)->getAlignment()
+                    ->setVertical(Alignment::VERTICAL_CENTER)
+                    ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+            }
+        }
+    }
+
+    /**
      * @param Worksheet $sheet
      * @param int $startCol
      * @param int $row
@@ -575,7 +658,15 @@ class SeguimientoConsolidadoExcelService
         }
 
         $totalCbm = 0.0;
+        $seenCotizaciones = [];
         foreach ($items as $item) {
+            $idCotizacion = (int) ($item['id_cotizacion'] ?? 0);
+            if ($idCotizacion > 0 && isset($seenCotizaciones[$idCotizacion])) {
+                continue;
+            }
+            if ($idCotizacion > 0) {
+                $seenCotizaciones[$idCotizacion] = true;
+            }
             $totalCbm += (float) ($item['cbm_yiwu'] ?? 0);
         }
 
@@ -583,10 +674,10 @@ class SeguimientoConsolidadoExcelService
             $sheet,
             $startCol,
             $row,
-            self::TABLE_WIDTH_SYNC,
+            self::TABLE_WIDTH_YIWU,
             self::COLOR_YIWU,
             'TOTAL EN YIWU - CONS #' . $carga,
-            3,
+            4,
             $this->formatNumber($totalCbm)
         );
     }
@@ -707,16 +798,23 @@ class SeguimientoConsolidadoExcelService
             $item['cons'],
             $item['vendedor'],
             $item['cliente'],
+            $item['code_supplier'] ?? '',
             $this->formatNumber($item['cbm_yiwu']),
             $item['tipo_carga'],
             $item['estado_pago'],
             $item['ultima_actualizacion'] ?? '',
+            $item['notas'] ?? '',
         ];
 
         $this->writeRowValues($sheet, $startCol, $row, $values, $applyBorder);
 
+        if (!empty($item['en_yiwu'])) {
+            $codeCol = Coordinate::stringFromColumnIndex($startCol + 3);
+            $this->applyFill($sheet, $codeCol . $row, self::COLOR_YIWU, false);
+        }
+
         if (strtoupper(trim((string) $item['estado_pago'])) === 'RESERVADO') {
-            $estadoCol = Coordinate::stringFromColumnIndex($startCol + 5);
+            $estadoCol = Coordinate::stringFromColumnIndex($startCol + 6);
             $this->applyFill($sheet, $estadoCol . $row, self::COLOR_RESERVADO, true);
         }
     }
@@ -809,7 +907,7 @@ class SeguimientoConsolidadoExcelService
     }
 
     /**
-     * Histórico CONTACTAR congelado (arriba en columna R–W, más antiguo primero).
+     * Histórico CONTACTAR congelado (arriba en columna T–Y, más antiguo primero).
      *
      * @param Worksheet $sheet
      * @param int $idContenedor
@@ -849,7 +947,7 @@ class SeguimientoConsolidadoExcelService
     }
 
     /**
-     * Periodo CONTACTAR abierto (al final del histórico, misma columna R–W).
+     * Periodo CONTACTAR abierto (al final del histórico, misma columna T–Y).
      *
      * @param Worksheet $sheet
      * @param int $row
@@ -1180,6 +1278,43 @@ class SeguimientoConsolidadoExcelService
             return SeguimientoConsolidadoDateFormatter::formatCalendarDate($value);
         } catch (\Exception $e) {
             return (string) $value;
+        }
+    }
+
+    /**
+     * @param array<string, array<int, array<string, mixed>>> $groups
+     */
+    private function applyManualYiwuNotes(int $idContenedor, array &$groups): void
+    {
+        if (!isset($groups['yiwu']) || !is_array($groups['yiwu'])) {
+            return;
+        }
+
+        $this->applyManualYiwuNotesToItems($idContenedor, $groups['yiwu']);
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $items
+     */
+    private function applyManualYiwuNotesToItems(int $idContenedor, array &$items): void
+    {
+        $manualNotes = app(SeguimientoConsolidadoDriveCellRepository::class)
+            ->manualValuesByColumn($idContenedor, 'Seguimiento', 'yiwu_notas');
+
+        if ($manualNotes === []) {
+            return;
+        }
+
+        foreach ($items as $index => $item) {
+            $idProveedor = (int) ($item['id_proveedor'] ?? 0);
+            if ($idProveedor <= 0) {
+                continue;
+            }
+
+            $rowKey = SeguimientoDriveCellRowKey::yiwuProveedor($idProveedor);
+            if (isset($manualNotes[$rowKey])) {
+                $items[$index]['notas'] = $manualNotes[$rowKey];
+            }
         }
     }
 

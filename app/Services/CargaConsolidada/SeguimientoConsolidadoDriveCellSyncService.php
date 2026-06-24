@@ -82,6 +82,15 @@ class SeguimientoConsolidadoDriveCellSyncService
 
             $seguimientoSheet = $spreadsheet->getSheetByName('Seguimiento');
             if ($seguimientoSheet !== null) {
+                [$upserted, $history] = $this->syncSeguimientoYiwuNotes(
+                    $seguimientoSheet,
+                    $idContenedor,
+                    $snapshotId,
+                    $trigger
+                );
+                $cellsUpserted += $upserted;
+                $cellsHistory += $history;
+
                 [$upserted, $history] = $this->syncSeguimientoContactarNotes(
                     $seguimientoSheet,
                     $idContenedor,
@@ -364,6 +373,70 @@ class SeguimientoConsolidadoDriveCellSyncService
     /**
      * @return array{0:int,1:int}
      */
+    private function syncSeguimientoYiwuNotes(
+        Worksheet $sheet,
+        int $idContenedor,
+        int $snapshotId,
+        string $trigger
+    ): array {
+        $config = (array) config('seguimiento_drive_cells.sheets.Seguimiento.yiwu', []);
+        $startCol = (int) ($config['start_col'] ?? 2);
+        $noteColIndex = $startCol + 8;
+        $codeColIndex = $startCol + 3;
+        $clienteColIndex = $startCol + 2;
+
+        $highestRow = (int) $sheet->getHighestDataRow();
+        $upserted = 0;
+        $history = 0;
+
+        for ($row = 1; $row <= $highestRow; $row++) {
+            $consLabel = trim((string) $sheet->getCellByColumnAndRow($startCol, $row)->getCalculatedValue());
+            if ($consLabel !== '' && stripos($consLabel, 'TOTAL EN YIWU') !== false) {
+                continue;
+            }
+
+            $codeSupplier = trim((string) $sheet->getCellByColumnAndRow($codeColIndex, $row)->getCalculatedValue());
+            $note = trim((string) $sheet->getCellByColumnAndRow($noteColIndex, $row)->getCalculatedValue());
+            $cliente = trim((string) $sheet->getCellByColumnAndRow($clienteColIndex, $row)->getCalculatedValue());
+
+            if ($codeSupplier === '' || $note === '') {
+                continue;
+            }
+
+            $idProveedor = $this->resolveProveedorByCodeAndCliente($idContenedor, $codeSupplier, $cliente);
+            if ($idProveedor === null) {
+                continue;
+            }
+
+            $cellRef = Coordinate::stringFromColumnIndex($noteColIndex) . $row;
+            $result = $this->repository->upsertCell([
+                'id_contenedor' => $idContenedor,
+                'sheet_name' => 'Seguimiento',
+                'row_key' => SeguimientoDriveCellRowKey::yiwuProveedor($idProveedor),
+                'column_key' => 'yiwu_notas',
+                'id_cotizacion' => null,
+                'id_proveedor' => $idProveedor,
+                'cell_ref' => $cellRef,
+                'row_number' => $row,
+                'column_letter' => Coordinate::stringFromColumnIndex($noteColIndex),
+                'cell_value' => $note,
+                'is_manual' => true,
+                'change_source' => $trigger,
+                'snapshot_id' => $snapshotId,
+            ]);
+
+            $upserted++;
+            if ($result['changed']) {
+                $history++;
+            }
+        }
+
+        return [$upserted, $history];
+    }
+
+    /**
+     * @return array{0:int,1:int}
+     */
     private function syncSeguimientoContactarNotes(
         Worksheet $sheet,
         int $idContenedor,
@@ -371,7 +444,7 @@ class SeguimientoConsolidadoDriveCellSyncService
         string $trigger
     ): array {
         $config = (array) config('seguimiento_drive_cells.sheets.Seguimiento.contactar', []);
-        $startCol = (int) ($config['start_col'] ?? 18);
+        $startCol = (int) ($config['start_col'] ?? 20);
         $width = (int) ($config['width'] ?? 6);
         $noteColIndex = $startCol + 5;
         $codeColIndex = $startCol + 4;

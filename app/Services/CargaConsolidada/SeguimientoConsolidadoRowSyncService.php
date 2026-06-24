@@ -24,14 +24,35 @@ class SeguimientoConsolidadoRowSyncService
             return;
         }
 
+        $yiwuByCotizacion = [];
+
         foreach ($groups['yiwu'] as $index => $item) {
-            $groups['yiwu'][$index]['ultima_actualizacion'] = $this->touchRow(
+            $idCotizacion = (int) ($item['id_cotizacion'] ?? 0);
+            if ($idCotizacion <= 0) {
+                continue;
+            }
+            if (!isset($yiwuByCotizacion[$idCotizacion])) {
+                $yiwuByCotizacion[$idCotizacion] = [
+                    'indices' => [],
+                    'items' => [],
+                ];
+            }
+            $yiwuByCotizacion[$idCotizacion]['indices'][] = $index;
+            $yiwuByCotizacion[$idCotizacion]['items'][] = $item;
+        }
+
+        foreach ($yiwuByCotizacion as $idCotizacion => $group) {
+            $ultimaActualizacion = $this->touchRow(
                 (int) $idContenedor,
                 self::TABLA_YIWU,
-                (int) ($item['id_cotizacion'] ?? 0),
+                $idCotizacion,
                 null,
-                $this->hashYiwu($item)
+                $this->hashYiwuGroup($group['items'])
             );
+
+            foreach ($group['indices'] as $index) {
+                $groups['yiwu'][$index]['ultima_actualizacion'] = $ultimaActualizacion;
+            }
         }
 
         foreach ($groups['recibir'] as $index => $item) {
@@ -109,18 +130,33 @@ class SeguimientoConsolidadoRowSyncService
     }
 
     /**
-     * @param array<string, mixed> $item
+     * @param array<int, array<string, mixed>> $items
      * @return string
      */
-    private function hashYiwu(array $item)
+    private function hashYiwuGroup(array $items)
     {
+        $first = $items[0] ?? [];
+        $proveedores = [];
+
+        foreach ($items as $item) {
+            $proveedores[] = [
+                'code' => $item['code_supplier'] ?? '',
+                'en' => !empty($item['en_yiwu']),
+            ];
+        }
+
+        usort($proveedores, function ($a, $b) {
+            return strcmp((string) $a['code'], (string) $b['code']);
+        });
+
         return hash('sha256', json_encode([
-            'cons' => $item['cons'] ?? '',
-            'vendedor' => $item['vendedor'] ?? '',
-            'cliente' => $item['cliente'] ?? '',
-            'cbm' => $item['cbm_yiwu'] ?? '',
-            'tipo' => $item['tipo_carga'] ?? '',
-            'pago' => $item['estado_pago'] ?? '',
+            'cons' => $first['cons'] ?? '',
+            'vendedor' => $first['vendedor'] ?? '',
+            'cliente' => $first['cliente'] ?? '',
+            'cbm' => $first['cbm_yiwu'] ?? '',
+            'tipo' => $first['tipo_carga'] ?? '',
+            'pago' => $first['estado_pago'] ?? '',
+            'proveedores' => $proveedores,
         ]));
     }
 

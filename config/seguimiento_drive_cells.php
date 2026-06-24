@@ -29,8 +29,23 @@ return [
             ],
         ],
         'Seguimiento' => [
+            'yiwu' => [
+                'start_col' => 2,
+                'width' => 9,
+                'columns' => [
+                    'cons' => 0,
+                    'vendedor' => 1,
+                    'cliente' => 2,
+                    'code_supplier' => 3,
+                    'cbm_yiwu' => 4,
+                    'tipo_carga' => 5,
+                    'estado_pago' => 6,
+                    'ultima_actualizacion' => 7,
+                    'yiwu_notas' => ['index' => 8, 'is_manual' => true],
+                ],
+            ],
             'contactar' => [
-                'start_col' => 18,
+                'start_col' => 20,
                 'width' => 6,
                 'columns' => [
                     'cons' => 0,
