@@ -1836,7 +1836,8 @@ class EntregaController extends Controller
                 ->select(
                     'CP.id_cotizacion',
                     DB::raw('SUM(COALESCE(CP.cbm_total_china, CP.cbm_total, 0)) as sum_cbm_china'),
-                    DB::raw('SUM(COALESCE(CP.qty_box_china, CP.qty_box, 0)) as sum_qty_box')
+                    DB::raw('SUM(COALESCE(CP.qty_box_china, CP.qty_box, 0)) as sum_qty_box'),
+                    DB::raw('SUM(COALESCE(CP.qty_pallet_china, 0)) as sum_qty_pallet')
                 )
                 ->where('CP.id_contenedor', $idContenedor)
                 ->groupBy('CP.id_cotizacion');
@@ -1860,7 +1861,8 @@ class EntregaController extends Controller
                     'CC.nombre as cliente',
                     'CC.telefono as telefono',
                     DB::raw('COALESCE(CPA.sum_cbm_china, 0) as cbm_total_china'),
-                    DB::raw('COALESCE(CPA.sum_qty_box, 0) as qty_box_china')
+                    DB::raw('COALESCE(CPA.sum_qty_box, 0) as qty_box_china'),
+                    DB::raw('COALESCE(CPA.sum_qty_pallet, 0) as qty_pallet_china')
                 ])
                 ->orderBy('CC.nombre', 'asc');
 
@@ -1911,18 +1913,21 @@ class EntregaController extends Controller
 
             // Also generate the FORMATO RESUMEN Excel and store in the same temp dir
             $rowsFormato = [];
-            $rowsFormato[] = ['N°', 'CLIENTE', 'CELULAR', 'CBM TOTAL', 'TOTAL CAJAS', 'OBSERVACION', '# DE GUIA', 'FIRMA'];
+            $rowsFormato[] = ['N°', 'CLIENTE', 'CELULAR', 'CBM TOTAL', 'TOTAL PALLET DE CHINA', 'TOTAL CAJAS', 'TOTAL', 'OBSERVACION', '# DE GUIA', 'FIRMA'];
             $idx = 1;
             foreach ($rowsQuery as $r) {
                 $cbm = is_null($r->cbm_total_china) ? 0 : (float)$r->cbm_total_china;
                 $qty = is_null($r->qty_box_china) ? 0 : (int)$r->qty_box_china;
+                $pallet = is_null($r->qty_pallet_china) ? 0 : (int)$r->qty_pallet_china;
+                $total = $qty + $pallet;
                 $rowsFormato[] = [
                     $idx++,
                     (string)($r->cliente ?? ''),
                     $this->formatPhoneNumber($r->telefono ?? ''),
-                    // append unit labels like in RotuladoPared
                     number_format($cbm, 2, '.', '') . ' CBM',
+                    (string)$pallet . ' PALLETS',
                     (string)$qty . ' CAJAS',
+                    (string)$total,
                     '',
                     '',
                     ''
@@ -1931,96 +1936,27 @@ class EntregaController extends Controller
 
             $excelName2 = 'FORMATO_RESUMEN_' . $suffix . '_' . $timestamp . '.xlsx';
             $excelPath2 = 'temp/rotulado_' . $suffix . '_' . $timestamp . '/' . $excelName2;
-            // store the formato resumen
             $stored2 = Excel::store(new FormatoResumenExport($rowsFormato), $excelPath2);
             $fullExcelPath2 = storage_path('app/' . $excelPath2);
 
-            // Generate PDFs per cotizacion and add to temp dir
-            $pdfFiles = [];
-
-            // Guard: ensure Dompdf is available
-            if (!class_exists(\Dompdf\Dompdf::class)) {
-                Log::warning('Dompdf not available, skipping PDF generation.');
-            } else {
-                foreach ($rowsQuery as $r) {
-                    try {
-                        // Sanitize cliente nombre for filename: ASCII, underscores, max length
-                        $rawName = $r->cliente ?? ('cotizacion_' . $r->id_cotizacion);
-                        $trans = @iconv('UTF-8', 'ASCII//TRANSLIT', $rawName);
-                        if ($trans === false) $trans = $rawName;
-                        $trans = str_replace(' ', '_', $trans);
-                        $trans = preg_replace('/[^A-Za-z0-9_\-]/', '', $trans);
-                        $trans = strtoupper(substr($trans, 0, 40));
-                        if (empty($trans)) {
-                            $trans = 'COTIZACION_' . $r->id_cotizacion;
-                        }
-
-                        $pdfName = 'CARGO_ENTREGA_' . $trans . '_' . $suffix . '.pdf';
-                        $pdfPath = $tempDir . DIRECTORY_SEPARATOR . $pdfName;
-
-                        // Render Blade view
-                        $html = view('entrega.cargo_entrega', [
-                            'cliente' => $r->cliente,
-                            'cotizacion_id' => $r->id_cotizacion,
-                            'qty' => (int)($r->qty_box_china ?? 0),
-                            'carga' => $suffix,
-                        ])->render();
-
-                        $options = new Options();
-                        $options->set('isRemoteEnabled', true);
-                        $options->set('defaultFont', 'DejaVu Sans');
-                        $dompdf = new Dompdf($options);
-                        $dompdf->loadHtml($html);
-                        $dompdf->setPaper('A4', 'landscape');
-                        $dompdf->render();
-                        $output = $dompdf->output();
-                        file_put_contents($pdfPath, $output);
-                        $pdfFiles[] = $pdfPath;
-
-                        $relativePath = 'entregas/cargo_entrega/' . $idContenedor . '/' . $pdfName;
-                        $this->storagePutContents($relativePath, $output);
-                        DB::table('contenedor_consolidado_cotizacion')
-                            ->where('id', $r->id_cotizacion)
-                            ->whereNull('deleted_at')
-                            ->update(['cargo_entrega_pdf_url' => $relativePath]);
-                    } catch (\Exception $e) {
-                        Log::error('Error generating PDF for cotizacion ' . $r->id_cotizacion . ': ' . $e->getMessage());
-                        // continue generating others
-                    }
-                }
-            }
-
-            // Create ZIP with Excel + PDFs
+            // Create ZIP with Excel files only (sin cargos de entrega PDF)
             $zipName = 'PLANTILLAS_' . $suffix . '_' . $timestamp . '.zip';
             $zipPath = $tempDir . DIRECTORY_SEPARATOR . $zipName;
             $zip = new ZipArchive();
             if ($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) === true) {
-                // add excel files
                 if (file_exists($fullExcelPath)) {
                     $zip->addFile($fullExcelPath, $excelName);
                 }
-                if (isset($fullExcelPath2) && file_exists($fullExcelPath2)) {
+                if (file_exists($fullExcelPath2)) {
                     $zip->addFile($fullExcelPath2, $excelName2);
                 }
-                // add pdfs
-                foreach ($pdfFiles as $pf) {
-                    if (file_exists($pf)) {
-                        $zip->addFile($pf, basename($pf));
-                    }
-                }
                 $zip->close();
-                // Cleanup individual files (we keep only the ZIP to return)
                 try {
                     if (file_exists($fullExcelPath)) {
                         @unlink($fullExcelPath);
                     }
-                    if (isset($fullExcelPath2) && file_exists($fullExcelPath2)) {
+                    if (file_exists($fullExcelPath2)) {
                         @unlink($fullExcelPath2);
-                    }
-                    foreach ($pdfFiles as $pf) {
-                        if (file_exists($pf)) {
-                            @unlink($pf);
-                        }
                     }
                 } catch (\Exception $e) {
                     Log::warning('Error cleaning up temp files: ' . $e->getMessage());

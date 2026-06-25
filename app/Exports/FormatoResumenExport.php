@@ -32,7 +32,6 @@ class FormatoResumenExport implements FromArray, WithEvents
                 $highestColumn = $sheet->getHighestColumn();
                 $usedRange = 'A1:' . $highestColumn . $highestRow;
 
-                // General borders
                 $sheet->getStyle($usedRange)->applyFromArray([
                     'borders' => [
                         'allBorders' => [
@@ -42,37 +41,33 @@ class FormatoResumenExport implements FromArray, WithEvents
                     ]
                 ]);
 
-                // Header style (first row)
-                $sheet->getStyle('A1:H1')->getFont()->setBold(true)->setSize(12);
-                $sheet->getStyle('A1:H1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER)->setVertical(Alignment::VERTICAL_CENTER);
-                $sheet->getStyle('A1:H1')->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('FFFFFF');
+                $sheet->getStyle('A1:J1')->getFont()->setBold(true)->setSize(12);
+                $sheet->getStyle('A1:J1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER)->setVertical(Alignment::VERTICAL_CENTER);
+                $sheet->getStyle('A1:J1')->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('FFFFFF');
 
-                // Column widths to match the image layout
-                $sheet->getColumnDimension('A')->setWidth(6);   // N°
-                $sheet->getColumnDimension('B')->setWidth(40);  // CLIENTE
-                $sheet->getColumnDimension('C')->setWidth(18);  // CELULAR
-                $sheet->getColumnDimension('D')->setWidth(14);  // CBM TOTAL
-                $sheet->getColumnDimension('E')->setWidth(14);  // TOTAL CAJAS
-                $sheet->getColumnDimension('F')->setWidth(30);  // OBSERVACION
-                $sheet->getColumnDimension('G')->setWidth(14);  // # DE GUIA
-                $sheet->getColumnDimension('H')->setWidth(18);  // FIRMA
+                $sheet->getColumnDimension('A')->setWidth(6);
+                $sheet->getColumnDimension('B')->setWidth(40);
+                $sheet->getColumnDimension('C')->setWidth(18);
+                $sheet->getColumnDimension('D')->setWidth(14);
+                $sheet->getColumnDimension('E')->setWidth(22);
+                $sheet->getColumnDimension('F')->setWidth(14);
+                $sheet->getColumnDimension('G')->setWidth(10);
+                $sheet->getColumnDimension('H')->setWidth(30);
+                $sheet->getColumnDimension('I')->setWidth(14);
+                $sheet->getColumnDimension('J')->setWidth(18);
 
-                // Align columns
                 $sheet->getStyle('A2:A' . $highestRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
                 $sheet->getStyle('C2:C' . $highestRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-                $sheet->getStyle('D2:D' . $highestRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-                $sheet->getStyle('E2:E' . $highestRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-                $sheet->getStyle('G2:G' . $highestRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                $sheet->getStyle('D2:G' . $highestRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                $sheet->getStyle('I2:I' . $highestRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
-                // Set default row height and enable wrap for cliente and observation
                 for ($r = 1; $r <= (int)$highestRow; $r++) {
                     $sheet->getRowDimension($r)->setRowHeight(20);
                 }
                 $sheet->getStyle('B2:B' . $highestRow)->getAlignment()->setWrapText(true)->setVertical(Alignment::VERTICAL_CENTER);
-                $sheet->getStyle('F2:F' . $highestRow)->getAlignment()->setWrapText(true)->setVertical(Alignment::VERTICAL_CENTER);
+                $sheet->getStyle('H2:H' . $highestRow)->getAlignment()->setWrapText(true)->setVertical(Alignment::VERTICAL_CENTER);
 
-                // Make header bold and slightly larger
-                $sheet->getStyle('A1:H1')->getFont()->setSize(13)->setBold(true);
+                $sheet->getStyle('A1:J1')->getFont()->setSize(13)->setBold(true);
             }
         ];
     }
