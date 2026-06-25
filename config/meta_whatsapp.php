@@ -57,6 +57,21 @@ return [
 
     'video_transcode_timeout' => (int) env('META_WHATSAPP_VIDEO_TRANSCODE_TIMEOUT', 120),
 
+    /** Recompresión de imágenes que superan el tope de WhatsApp antes de subir a S3. */
+    'image_compress_enabled' => filter_var(env('META_WHATSAPP_IMAGE_COMPRESS', true), FILTER_VALIDATE_BOOLEAN),
+
+    /**
+     * Tamaño objetivo tras recomprimir (bytes). Por debajo del tope Meta (5 MB) con margen
+     * para que el envío por link no sea rechazado con #131053.
+     */
+    'inbox_image_compress_target_bytes' => (int) env('META_WHATSAPP_IMAGE_COMPRESS_TARGET_BYTES', 4 * 1024 * 1024 + 512 * 1024),
+
+    /** Tamaño máximo del archivo de imagen original aceptado antes de recomprimir (bytes). */
+    'inbox_header_max_image_input_bytes' => (int) env('META_WHATSAPP_INBOX_MAX_IMAGE_INPUT_BYTES', 40 * 1024 * 1024),
+
+    /** Lado mayor máximo (px) al redimensionar imágenes grandes. */
+    'inbox_image_compress_max_dimension' => (int) env('META_WHATSAPP_IMAGE_COMPRESS_MAX_DIMENSION', 2560),
+
     'inbox_queue' => env('META_WHATSAPP_INBOX_QUEUE', env('META_WHATSAPP_QUEUE', 'notificaciones')),
 
     /** Pausa entre envíos Meta encadenados (batch 2) para respetar orden en el teléfono del cliente. */

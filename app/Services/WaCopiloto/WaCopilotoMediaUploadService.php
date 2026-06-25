@@ -5,6 +5,7 @@ namespace App\Services\WaCopiloto;
 use App\Support\WhatsApp\CoordinacionMediaLink;
 use App\Support\WhatsApp\WaCopilotoLog;
 use App\Support\WhatsApp\WaCopilotoMime;
+use App\Support\WhatsApp\WaInboxImageCompressor;
 use App\Support\WhatsApp\WaInboxVideoTranscoder;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -66,6 +67,38 @@ class WaCopilotoMediaUploadService
         $uploadPath = $fullPath;
         $uploadFilename = $file->getClientOriginalName();
         $transcodedPath = null;
+        $compressedPath = null;
+        $overrideMime = null;
+
+        if ($kind === 'image') {
+            $compressor = new WaInboxImageCompressor();
+            $compress = $compressor->compressForWhatsApp($fullPath);
+            if (empty($compress['success'])) {
+                $errorMessage = isset($compress['error'])
+                    ? (string) $compress['error']
+                    : 'No se pudo comprimir la imagen para WhatsApp.';
+
+                try {
+                    Storage::disk('local')->delete($localRelative);
+                } catch (\Exception $e) {
+                    // ignorar
+                }
+
+                return null;
+            }
+
+            if (!empty($compress['recompressed']) && !empty($compress['path'])) {
+                $compressedPath = (string) $compress['path'];
+                $uploadPath = $compressedPath;
+                $overrideMime = isset($compress['mime']) ? (string) $compress['mime'] : 'image/jpeg';
+                $uploadFilename = pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME) . '.jpg';
+                $storageKey = CoordinacionMediaLink::buildCopilotoConversationStorageKey(
+                    $conversationId,
+                    $kind,
+                    $uploadFilename
+                );
+            }
+        }
 
         if ($kind === 'video') {
             @set_time_limit(max(180, (int) config('meta_whatsapp_copiloto.video_transcode_timeout', 120) + 30));
@@ -95,6 +128,9 @@ class WaCopilotoMediaUploadService
             if ($transcodedPath !== null && is_file($transcodedPath)) {
                 @unlink($transcodedPath);
             }
+            if ($compressedPath !== null && is_file($compressedPath)) {
+                @unlink($compressedPath);
+            }
         } catch (\Exception $e) {
             // ignorar limpieza
         }
@@ -112,7 +148,13 @@ class WaCopilotoMediaUploadService
         }
 
         $storedPath = (string) $uploaded['path'];
-        $mime = $kind === 'video' ? 'video/mp4' : (string) $file->getMimeType();
+        if ($kind === 'video') {
+            $mime = 'video/mp4';
+        } elseif ($overrideMime !== null) {
+            $mime = $overrideMime;
+        } else {
+            $mime = (string) $file->getMimeType();
+        }
         $mime = WaCopilotoMime::normalizeForStorage($mime);
 
         WaCopilotoLog::info('WaCopilotoMediaUpload.ok', [
@@ -162,6 +204,9 @@ class WaCopilotoMediaUploadService
 
         if ($key === 'video') {
             $max = (int) config('meta_whatsapp_copiloto.header_max_video_input_bytes', 80 * 1024 * 1024);
+        } elseif ($key === 'image' && config('meta_whatsapp.image_compress_enabled', true)) {
+            // La imagen se recomprime antes de subir; aceptar un original mayor al tope Meta.
+            $max = (int) config('meta_whatsapp.inbox_header_max_image_input_bytes', 40 * 1024 * 1024);
         } else {
             $max = isset($limits[$key]) ? (int) $limits[$key] : 0;
             if ($max <= 0) {
