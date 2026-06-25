@@ -20,4 +20,10 @@ return [
     'seguimiento_corte_hora' => env('SEGUIMIENTO_CORTE_HORA', '20:00'),
     'seguimiento_corte_timezone' => env('SEGUIMIENTO_CORTE_TIMEZONE', 'America/Lima'),
 
+    /**
+     * Mínimo entre encolados de sync Drive por consolidado (minutos).
+     * Agrupa cambios de observers + evita inundar la cola carga_consolidada.
+     */
+    'seguimiento_sync_debounce_minutes' => (int) env('SEGUIMIENTO_SYNC_DEBOUNCE_MINUTES', 10),
+
 ];

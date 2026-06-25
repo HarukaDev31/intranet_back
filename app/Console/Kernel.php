@@ -46,9 +46,9 @@ class Kernel extends ConsoleKernel
         $schedule->command('segimiento-consolidado:vincular')
             ->everyFiveMinutes()
             ->withoutOverlapping();
-        // Excel seguimiento consolidado en Drive: sincronización de respaldo
+        // Excel seguimiento consolidado en Drive: sincronización de respaldo (no cada 5 min)
         $schedule->command('segimiento-consolidado:sync-linked')
-            ->everyFiveMinutes()
+            ->everyThirtyMinutes()
             ->withoutOverlapping();
         // Corte diario — hora desde system_configs (excel_seguimiento_hora_corte)
         $schedule->command('segimiento-consolidado:corte-datos-proveedor')

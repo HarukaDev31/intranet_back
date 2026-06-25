@@ -3,7 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Enums\CargaConsolidada\ExcelSeguimientoLinkStatus;
-use App\Jobs\SyncSeguimientoConsolidadoExcelJob;
+use App\Services\CargaConsolidada\SeguimientoConsolidadoDriveService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -17,7 +17,7 @@ class SeguimientoConsolidadoSyncLinkedCommand extends Command
     /**
      * @return int
      */
-    public function handle()
+    public function handle(SeguimientoConsolidadoDriveService $driveService)
     {
         $ids = DB::table('carga_consolidada_contenedor')
             ->whereNotNull('excel_seguimiento_drive_link')
@@ -31,16 +31,27 @@ class SeguimientoConsolidadoSyncLinkedCommand extends Command
             })
             ->pluck('id');
 
+        $encolados = 0;
+        $omitidos = 0;
+        $idsEncolados = [];
+
         foreach ($ids as $id) {
-            SyncSeguimientoConsolidadoExcelJob::dispatch((int) $id);
+            if ($driveService->enqueueSyncJob((int) $id, 'scheduler_backup')) {
+                $encolados++;
+                $idsEncolados[] = (int) $id;
+            } else {
+                $omitidos++;
+            }
         }
 
         Log::info('[SeguimientoDrive] Scheduler sync-linked encoló jobs', [
-            'total' => $ids->count(),
-            'ids' => $ids->values()->all(),
+            'total_vinculados' => $ids->count(),
+            'encolados' => $encolados,
+            'omitidos_debounce' => $omitidos,
+            'ids_encolados' => $idsEncolados,
         ]);
 
-        $this->info('Encolados ' . $ids->count() . ' job(s) de sincronización.');
+        $this->info('Encolados ' . $encolados . ' job(s) de sincronización (' . $omitidos . ' omitidos por debounce).');
 
         return 0;
     }

@@ -13,6 +13,7 @@ use App\Services\Google\GoogleDriveSeguimientoConsolidadoService;
 use App\Services\CargaConsolidada\SeguimientoConsolidadoDriveCellSyncService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
@@ -482,12 +483,79 @@ class SeguimientoConsolidadoDriveService
             return;
         }
 
-        $this->log('debug', 'Sync encolado por cambio de datos', [
+        $this->enqueueSyncJob($idContenedor, 'data_change');
+    }
+
+    /**
+     * Evita encolar el mismo consolidado varias veces seguidas (observers + scheduler).
+     *
+     * @param int $idContenedor
+     * @param string $reason
+     * @return bool true si se encoló el job
+     */
+    public function enqueueSyncJob($idContenedor, $reason = 'manual')
+    {
+        $idContenedor = (int) $idContenedor;
+        if ($idContenedor <= 0) {
+            return false;
+        }
+
+        if (!$this->acquireSyncDebounce($idContenedor)) {
+            $this->log('debug', 'Sync no encolado: debounce activo', [
+                'id_contenedor' => $idContenedor,
+                'reason' => $reason,
+                'debounce_minutes' => (int) config('carga_consolidada.seguimiento_sync_debounce_minutes', 10),
+            ]);
+
+            return false;
+        }
+
+        $this->log('debug', 'Sync encolado', [
             'id_contenedor' => $idContenedor,
+            'reason' => $reason,
             'queue' => config('carga_consolidada.queue', 'carga_consolidada'),
         ]);
 
         SyncSeguimientoConsolidadoExcelJob::dispatch($idContenedor);
+
+        return true;
+    }
+
+    /**
+     * @param int $idContenedor
+     * @return bool
+     */
+    public function acquireSyncDebounce($idContenedor)
+    {
+        $minutes = (int) config('carga_consolidada.seguimiento_sync_debounce_minutes', 10);
+        if ($minutes <= 0) {
+            return true;
+        }
+
+        return Cache::add(
+            $this->syncDebounceCacheKey($idContenedor),
+            1,
+            now()->addMinutes($minutes)
+        );
+    }
+
+    /**
+     * Libera debounce tras fallo para permitir reintento antes del TTL.
+     *
+     * @param int $idContenedor
+     */
+    public function releaseSyncDebounce($idContenedor)
+    {
+        Cache::forget($this->syncDebounceCacheKey((int) $idContenedor));
+    }
+
+    /**
+     * @param int $idContenedor
+     * @return string
+     */
+    private function syncDebounceCacheKey($idContenedor)
+    {
+        return 'seguimiento_drive:sync_debounce:' . (int) $idContenedor;
     }
 
     /**
