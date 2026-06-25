@@ -2,10 +2,12 @@
 
 namespace App\Console\Commands;
 
+use App\Support\Storage\StoragePathSanitizer;
 use Illuminate\Console\Command;
+use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Support\Facades\Storage;
-use SplFileInfo;
 use Symfony\Component\Finder\Finder;
+use Symfony\Component\Finder\SplFileInfo;
 
 /**
  * Sube plantillas de storage/app/public/templates/ al bucket S3 (misma ruta relativa en BD/código).
@@ -56,7 +58,8 @@ class UploadStorageTemplatesToS3Command extends Command
 
         /** @var SplFileInfo $file */
         foreach ($finder as $file) {
-            $relative = 'templates/' . str_replace('\\', '/', $file->getRelativePathname());
+            $localRelative = str_replace('\\', '/', $file->getRelativePathname());
+            $relative = StoragePathSanitizer::relativePath('templates/' . $localRelative);
             $absolute = $file->getPathname();
 
             if (!$force && $client->doesObjectExist($bucket, $relative)) {
@@ -67,7 +70,7 @@ class UploadStorageTemplatesToS3Command extends Command
             }
 
             if ($dryRun) {
-                $this->line("[dry-run] Falta/subiría: {$relative}");
+                $this->line("[dry-run] Falta/subiría: {$relative}" . ($localRelative !== substr($relative, strlen('templates/')) ? " (local: {$localRelative})" : ''));
                 $uploaded++;
 
                 continue;
@@ -116,7 +119,9 @@ class UploadStorageTemplatesToS3Command extends Command
     private function s3Client()
     {
         try {
-            $adapter = Storage::disk('s3')->getAdapter();
+            /** @var FilesystemAdapter $disk */
+            $disk = Storage::disk('s3');
+            $adapter = $disk->getAdapter();
             if (method_exists($adapter, 'getClient')) {
                 return $adapter->getClient();
             }

@@ -47,8 +47,8 @@ return [
     'cdn_when_upload_disk_s3' => env('OBJECT_STORAGE_CDN_WHEN_S3', true),
 
     /**
-     * Chat inbox: URL firmada S3 en lugar de CDN (templates/ y objetos privados suelen dar 403 en CDN).
+     * Chat inbox: usa CDN por defecto; templates/ sigue forzando URL firmada desde CoordinacionMediaLink.
      */
-    'inbox_display_use_presigned' => filter_var(env('OBJECT_STORAGE_INBOX_DISPLAY_PRESIGNED', true), FILTER_VALIDATE_BOOLEAN),
+    'inbox_display_use_presigned' => filter_var(env('OBJECT_STORAGE_INBOX_DISPLAY_PRESIGNED', false), FILTER_VALIDATE_BOOLEAN),
 
 ];
