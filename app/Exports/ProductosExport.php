@@ -3,6 +3,7 @@
 namespace App\Exports;
 
 use App\Models\BaseDatos\ProductoImportadoExcel;
+use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithMapping;
@@ -14,6 +15,7 @@ use PhpOffice\PhpSpreadsheet\Style\Fill;
 class ProductosExport implements FromCollection, WithHeadings, WithMapping, ShouldAutoSize, WithStyles
 {
     protected $filters;
+    protected $rowIndex = 0;
 
     public function __construct($filters = [])
     {
@@ -22,57 +24,76 @@ class ProductosExport implements FromCollection, WithHeadings, WithMapping, Shou
 
     public function collection()
     {
-        $query = ProductoImportadoExcel::with('contenedor');
+        $query = ProductoImportadoExcel::query()
+            ->leftJoin(
+                'carga_consolidada_contenedor',
+                'productos_importados_excel.idContenedor',
+                '=',
+                'carga_consolidada_contenedor.id'
+            )
+            ->select(
+                'productos_importados_excel.nombre_comercial',
+                'productos_importados_excel.rubro',
+                'productos_importados_excel.tipo_producto',
+                'productos_importados_excel.unidad_comercial',
+                'productos_importados_excel.subpartida',
+                'carga_consolidada_contenedor.carga as carga_contenedor',
+                DB::raw('YEAR(carga_consolidada_contenedor.f_cierre) as anio')
+            );
 
-        // Aplicar filtros si están presentes
-        if (isset($this->filters['tipoProducto']) && $this->filters['tipoProducto'] && $this->filters['tipoProducto'] !== '') {
-            $query->where('tipo_producto', $this->filters['tipoProducto']);
-        }
-        
-        if (isset($this->filters['campana']) && $this->filters['campana'] && $this->filters['campana'] !== '') {
-            $query->whereHas('contenedor', function($q) {
-                $q->where('carga', $this->filters['campana']);
+        if (!empty($this->filters['search'])) {
+            $search = $this->filters['search'];
+            $query->where(function ($q) use ($search) {
+                $q->where('productos_importados_excel.nombre_comercial', 'like', '%' . $search . '%')
+                    ->orWhere('productos_importados_excel.subpartida', 'like', '%' . $search . '%');
             });
         }
-        
-        if (isset($this->filters['rubro']) && $this->filters['rubro'] && $this->filters['rubro'] !== '') {
-            $query->where('rubro', $this->filters['rubro']);
+
+        if (!empty($this->filters['rubro']) && $this->filters['rubro'] !== 'todos') {
+            $query->where('productos_importados_excel.rubro', $this->filters['rubro']);
         }
 
-        return $query->get();
+        if (!empty($this->filters['tipoProducto']) && $this->filters['tipoProducto'] !== 'todos') {
+            $query->where('productos_importados_excel.tipo_producto', $this->filters['tipoProducto']);
+        }
+
+        if (!empty($this->filters['campana']) && $this->filters['campana'] !== 'todos') {
+            $query->where('carga_consolidada_contenedor.id', $this->filters['campana']);
+        }
+
+        return $query
+            ->orderByRaw('CAST(carga_consolidada_contenedor.carga AS UNSIGNED) DESC')
+            ->orderByRaw('YEAR(carga_consolidada_contenedor.f_cierre) DESC')
+            ->get();
     }
 
     public function headings(): array
     {
         return [
-            'ID',
-            'Código',
-            'Descripción',
+            'N°',
+            'Nombre comercial',
             'Rubro',
-            'Tipo de Producto',
+            'T. Producto',
+            'Unidad Com.',
+            'Subpartida',
             'Campaña',
-            'Precio',
-            'Moneda',
-            'Stock',
-            'Fecha de Creación',
-            'Fecha de Actualización'
+            'Año',
         ];
     }
 
     public function map($producto): array
     {
+        $this->rowIndex++;
+
         return [
-            $producto->id,
-            $producto->codigo,
-            $producto->descripcion,
+            $this->rowIndex,
+            $producto->nombre_comercial,
             $producto->rubro,
             $producto->tipo_producto,
-            $producto->contenedor ? $producto->contenedor->carga : null,
-            $producto->precio,
-            $producto->moneda,
-            $producto->stock,
-            $producto->created_at ? $producto->created_at->format('d/m/Y H:i:s') : null,
-            $producto->updated_at ? $producto->updated_at->format('d/m/Y H:i:s') : null,
+            $producto->unidad_comercial,
+            $producto->subpartida,
+            $producto->carga_contenedor,
+            $producto->anio,
         ];
     }
 
@@ -83,9 +104,9 @@ class ProductosExport implements FromCollection, WithHeadings, WithMapping, Shou
                 'font' => ['bold' => true],
                 'fill' => [
                     'fillType' => Fill::FILL_SOLID,
-                    'startColor' => ['rgb' => 'E2EFDA']
-                ]
+                    'startColor' => ['rgb' => 'E2EFDA'],
+                ],
             ],
         ];
     }
-} 
+}

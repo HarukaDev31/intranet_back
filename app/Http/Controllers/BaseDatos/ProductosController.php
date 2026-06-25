@@ -362,30 +362,32 @@ class ProductosController extends Controller
     public function export(Request $request)
     {
         try {
-            // Obtener filtros
             $filters = [
+                'search' => $request->get('search'),
                 'tipoProducto' => $request->get('tipoProducto'),
                 'campana' => $request->get('campana'),
                 'rubro' => $request->get('rubro'),
             ];
 
-            // Obtener formato de exportación y validar
-            $format = strtolower($request->get('format', 'xlsx'));
+            $format = strtolower((string) $request->get('format', 'xlsx'));
+            if ($format === 'excel') {
+                $format = 'xlsx';
+            }
 
-            // Validar formatos soportados
             $supportedFormats = ['xlsx', 'xls', 'csv'];
-            if (!in_array($format, $supportedFormats)) {
+            if (!in_array($format, $supportedFormats, true)) {
                 return response()->json([
                     'status' => 'error',
                     'message' => 'Formato no soportado. Formatos válidos: ' . implode(', ', $supportedFormats)
                 ], 400);
             }
 
-            // Generar nombre del archivo con extensión correcta
             $filename = 'productos_' . date('Y-m-d_H-i-s') . '.' . $format;
+            $writerType = $format === 'csv'
+                ? \Maatwebsite\Excel\Excel::CSV
+                : ($format === 'xls' ? \Maatwebsite\Excel\Excel::XLS : \Maatwebsite\Excel\Excel::XLSX);
 
-            // Exportar usando la librería Excel con formato explícito
-            return Excel::download(new ProductosExport($filters), $filename, \Maatwebsite\Excel\Excel::XLSX);
+            return Excel::download(new ProductosExport($filters), $filename, $writerType);
         } catch (\Exception $e) {
             Log::error('Error al exportar productos: ' . $e->getMessage());
             return response()->json([
