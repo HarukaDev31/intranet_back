@@ -24,6 +24,9 @@ class ContabilidadPagosExport implements FromArray, WithStyles, WithEvents, With
     /** @var array<int, array{start: int, end: int}> */
     protected $mergeRanges = [];
 
+    /** @var int última fila con datos reales */
+    protected $lastDataRow = 1;
+
     public function __construct(Collection $data, $tipo = 'inicial')
     {
         $this->data = $data;
@@ -88,6 +91,8 @@ class ContabilidadPagosExport implements FromArray, WithStyles, WithEvents, With
             }
         }
 
+        $this->lastDataRow = $currentRow - 1;
+
         return $rows;
     }
 
@@ -109,7 +114,6 @@ class ContabilidadPagosExport implements FromArray, WithStyles, WithEvents, With
 
     public function styles(Worksheet $sheet)
     {
-        $lastCol = $this->tipo === 'final' ? 'G' : 'E';
         return [
             1 => [
                 'font' => [
@@ -126,12 +130,6 @@ class ContabilidadPagosExport implements FromArray, WithStyles, WithEvents, With
                     'vertical' => Alignment::VERTICAL_CENTER,
                 ],
             ],
-            'A2:' . $lastCol . '10000' => [
-                'alignment' => [
-                    'vertical' => Alignment::VERTICAL_CENTER,
-                    'wrapText' => true,
-                ],
-            ],
         ];
     }
 
@@ -140,8 +138,19 @@ class ContabilidadPagosExport implements FromArray, WithStyles, WithEvents, With
         return [
             AfterSheet::class => function (AfterSheet $event) {
                 $sheet = $event->sheet->getDelegate();
-                $highestRow = $sheet->getHighestRow();
                 $lastCol = $this->tipo === 'final' ? 'G' : 'E';
+                // Última fila real con datos (encabezado + filas generadas).
+                $highestRow = $this->lastDataRow;
+                if ($highestRow < 1) {
+                    return;
+                }
+
+                $sheet->getStyle('A2:' . $lastCol . $highestRow)->applyFromArray([
+                    'alignment' => [
+                        'vertical' => Alignment::VERTICAL_CENTER,
+                        'wrapText' => true,
+                    ],
+                ]);
 
                 $sheet->getStyle('A1:' . $lastCol . $highestRow)->applyFromArray([
                     'borders' => [
