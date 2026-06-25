@@ -173,6 +173,7 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
             Route::get('/general/download-plantilla-general/{idContenedor}', [CotizacionFinalController::class, 'downloadPlantillaGeneral']);
             Route::get('/general/download-cotizacion-excel/{idCotizacion}', [CotizacionFinalController::class, 'downloadCotizacionFinalExcel']);
             Route::get('/cargos-extra/{idContenedor}', [CotizacionFinalController::class, 'getCotizacionFinalCargosExtra']);
+            Route::get('/pagos/{idContenedor}/export-excel', [CotizacionFinalController::class, 'exportContabilidadPagosExcel']);
             Route::get('/pagos/{idCotizacion}', [CotizacionFinalController::class, 'getCotizacionFinalDocumentacionPagos']);
             Route::get('/general/{idContenedor}', [CotizacionFinalController::class, 'getContenedorCotizacionesFinales']);
             Route::get('/general/{idContenedor}/headers', [CotizacionFinalController::class, 'getCotizacionFinalHeaders']);
@@ -324,6 +325,7 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
     
     // Cotizaciones pagos
     Route::group(['prefix' => 'cotizaciones-pagos'], function () {
+        Route::get('{idContenedor}/export-excel', [CotizacionPagosController::class, 'exportContabilidadExcel']);
         Route::get('{idContenedor}', [CotizacionPagosController::class, 'getClientesDocumentacionPagos']);
     }); 
     

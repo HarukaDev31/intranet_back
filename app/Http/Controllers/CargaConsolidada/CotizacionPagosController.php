@@ -12,6 +12,8 @@ use Tymon\JWTAuth\Facades\JWTAuth;
 use Illuminate\Support\Facades\Log;
 //USE FILE TRAIT
 use App\Traits\FileTrait;
+use Maatwebsite\Excel\Facades\Excel;
+use App\Exports\ContabilidadPagosExport;
 class CotizacionPagosController extends Controller
 {
     use FileTrait;
@@ -46,6 +48,67 @@ class CotizacionPagosController extends Controller
                 ], 401);
             }
 
+            $data = $this->buildPagosInicialesCollection($request, $idContenedor, $user);
+
+                // Paginación manual para la colección
+                $perPage = $request->get('limit', 100);
+                $page = $request->get('page', 1);
+                $total = $data->count();
+                
+                // Calcular offset y obtener items de la página actual
+                $items = $data->slice(($page - 1) * $perPage, $perPage)->values();
+                
+                return response()->json([
+                    'success' => true,
+                    'data' => $items,
+                    'pagination' => [
+                        'current_page' => (int)$page,
+                        'last_page' => ceil($total / $perPage),
+                        'per_page' => (int)$perPage,
+                        'total' => $total,
+                    ]
+                ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al obtener clientes documentación pagos',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Exporta pagos de cotización inicial para Contabilidad (Excel).
+     */
+    public function exportContabilidadExcel(Request $request, $idContenedor)
+    {
+        try {
+            $user = JWTAuth::parseToken()->authenticate();
+            if (!$user) {
+                return response()->json(['success' => false, 'message' => 'Usuario no autenticado'], 401);
+            }
+            if (!in_array($user->No_Grupo, [Usuario::ROL_CONTABILIDAD, Usuario::ROL_ADMINISTRACION], true)) {
+                return response()->json(['success' => false, 'message' => 'No autorizado'], 403);
+            }
+
+            $data = $this->buildPagosInicialesCollection($request, $idContenedor, $user);
+            $filename = 'pagos-inicial-contenedor-' . $idContenedor . '-' . date('Y-m-d-His') . '.xlsx';
+
+            return Excel::download(new ContabilidadPagosExport($data, 'inicial'), $filename, \Maatwebsite\Excel\Excel::XLSX);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al exportar pagos: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Construye la colección de filas del tab Pagos (cotización inicial).
+     */
+    private function buildPagosInicialesCollection(Request $request, $idContenedor, $user)
+    {
             $table_proveedores = 'contenedor_consolidado_cotizacion_proveedores';
             // Usar consulta SQL directa para mejor control de codificación
             $sql = "
@@ -314,32 +377,7 @@ class CotizacionPagosController extends Controller
                 }
             }
 
-                // Paginación manual para la colección
-                $perPage = $request->get('limit', 100);
-                $page = $request->get('page', 1);
-                $total = $data->count();
-                
-                // Calcular offset y obtener items de la página actual
-                $items = $data->slice(($page - 1) * $perPage, $perPage)->values();
-                
-                return response()->json([
-                    'success' => true,
-                    'data' => $items,
-                    'pagination' => [
-                        'current_page' => (int)$page,
-                        'last_page' => ceil($total / $perPage),
-                        'per_page' => (int)$perPage,
-                        'total' => $total,
-                    ]
-                ]);
-
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Error al obtener clientes documentación pagos',
-                'error' => $e->getMessage()
-            ], 500);
-        }
+            return $data;
     }
 
     /**

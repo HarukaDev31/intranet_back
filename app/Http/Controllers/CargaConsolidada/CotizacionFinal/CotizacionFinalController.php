@@ -24,6 +24,7 @@ use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
 use PhpOffice\PhpSpreadsheet\Style\Color;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use Maatwebsite\Excel\Facades\Excel;
+use App\Exports\ContabilidadPagosExport;
 use ZipArchive;
 use Dompdf\Dompdf;
 use Dompdf\Options;
@@ -250,7 +251,63 @@ class CotizacionFinalController extends Controller
     public function getCotizacionFinalDocumentacionPagos(Request $request, $idContenedor)
     {
         try {
-            // Construir la consulta usando Eloquent con campos formateados directamente
+            $perPage = $request->input('per_page', 10);
+            $page = $request->input('page', 1);
+            $transformedData = $this->buildPagosFinalCollection($request, $idContenedor);
+            $total = $transformedData->count();
+            $items = $transformedData->slice(($page - 1) * $perPage, $perPage)->values();
+
+            return response()->json([
+                'success' => true,
+                'data' => $items,
+                'pagination' => [
+                    'current_page' => (int) $page,
+                    'per_page' => (int) $perPage,
+                    'total' => $total,
+                    'last_page' => (int) max(1, ceil($total / $perPage)),
+                    'from' => $total > 0 ? (($page - 1) * $perPage) + 1 : null,
+                    'to' => $total > 0 ? min($page * $perPage, $total) : null,
+                ],
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al obtener cotizaciones con documentación y pagos: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Exporta pagos de cotización final para Contabilidad (Excel).
+     */
+    public function exportContabilidadPagosExcel(Request $request, $idContenedor)
+    {
+        try {
+            $user = JWTAuth::parseToken()->authenticate();
+            if (!$user) {
+                return response()->json(['success' => false, 'message' => 'Usuario no autenticado'], 401);
+            }
+            if (!in_array($user->No_Grupo, [Usuario::ROL_CONTABILIDAD, Usuario::ROL_ADMINISTRACION], true)) {
+                return response()->json(['success' => false, 'message' => 'No autorizado'], 403);
+            }
+
+            $data = $this->buildPagosFinalCollection($request, $idContenedor);
+            $filename = 'pagos-final-contenedor-' . $idContenedor . '-' . date('Y-m-d-His') . '.xlsx';
+
+            return Excel::download(new ContabilidadPagosExport($data, 'final'), $filename, \Maatwebsite\Excel\Excel::XLSX);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al exportar pagos finales: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Construye filas del tab Pagos (cotización final).
+     */
+    private function buildPagosFinalCollection(Request $request, $idContenedor)
+    {
             $query = Cotizacion::with('tipoCliente')
                 ->select([
                     'contenedor_consolidado_cotizacion.*',
@@ -295,7 +352,6 @@ class CotizacionFinalController extends Controller
                 ->whereNotNull('contenedor_consolidado_cotizacion.estado_cliente')
                 ->where('contenedor_consolidado_cotizacion.estado_cotizador', "CONFIRMADO");
 
-            // Aplicar filtros adicionales si se proporcionan
             if ($request->has('search')) {
                 $search = $request->search;
                 $query->where(function ($q) use ($search) {
@@ -308,21 +364,20 @@ class CotizacionFinalController extends Controller
                 $query->where('contenedor_consolidado_cotizacion.estado_cotizacion_final', $request->estado_cotizacion_final);
             }
 
-            $perPage = $request->input('per_page', 10);
             $query->whereNull('id_cliente_importacion');
-            // Ordenamiento
             $sortField = $request->input('sort_by', 'id');
             $sortOrder = $request->input('sort_order', 'asc');
             $query->orderBy($sortField, $sortOrder);
 
-            $data = $query->paginate($perPage);
-
-            // Transformar los datos para incluir las columnas especÃ­ficas
-            $transformedData = [];
+            $rows = $query->get();
+            $transformedData = collect();
             $index = 1;
 
-            foreach ($data->items() as $row) {
+            foreach ($rows as $row) {
                 $pagos = json_decode($row->pagos ?? '[]', true);
+                if (!is_array($pagos)) {
+                    $pagos = [];
+                }
                 $pagos = array_map(function ($pago) {
                     $pago['voucher_url'] = $this->generateImageUrl($pago['voucher_url']);
                     return $pago;
@@ -331,7 +386,9 @@ class CotizacionFinalController extends Controller
                 $recargosDescuentosFinal = (float)($row->recargos_descuentos_final ?? 0);
                 $serviciosExtraFinal = (float)($row->servicios_extra_final ?? 0);
                 $totalPag = (float)($row->total_pagos ?? 0);
-                $subdata = [
+                $importeTotal = $totalLi + $serviciosExtraFinal + $recargosDescuentosFinal;
+
+                $transformedData->push([
                     'index' => $index,
                     'id_contenedor_pago' => $row->id_contenedor_pago,
                     'id_contenedor' => $row->id_contenedor,
@@ -340,39 +397,19 @@ class CotizacionFinalController extends Controller
                     'documento' => $this->cleanUtf8String($row->documento),
                     'telefono' => $this->cleanUtf8String($row->telefono),
                     'tipo_cliente' => $this->cleanUtf8String($row->name),
-                    'total_logistica_impuestos' => $totalLi+$serviciosExtraFinal+$recargosDescuentosFinal,
+                    'total_logistica_impuestos' => $importeTotal,
                     'total_pagos' => $row->total_pagos == 0 ? "0.00" : $row->total_pagos,
                     'pagos_count' => $row->pagos_count,
                     'id_cotizacion' => $row->id_cotizacion,
                     'show_pagos_grid' => (int) ($row->show_pagos_grid ?? 1),
                     'pagos' => json_encode($pagos),
                     'estado_cotizacion_final' => $row->estado_cotizacion_final ?? null,
-                    'diferencia' => round($totalLi + $serviciosExtraFinal + $recargosDescuentosFinal - $totalPag, 2),
-                ];
-
-                $transformedData[] = $subdata;
+                    'diferencia' => round($importeTotal - $totalPag, 2),
+                ]);
                 $index++;
             }
 
-            return response()->json([
-                'success' => true,
-                'data' => $transformedData,
-                'pagination' => [
-                    'current_page' => $data->currentPage(),
-                    'per_page' => $data->perPage(),
-                    'total' => $data->total(),
-                    'last_page' => $data->lastPage(),
-                    'from' => $data->firstItem(),
-                    'to' => $data->lastItem()
-                ],
-
-            ]);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Error al obtener cotizaciones con documentación y pagos: ' . $e->getMessage()
-            ], 500);
-        }
+            return $transformedData;
     }
     /**
      * Obtiene y procesa la boleta para envÃ­o
