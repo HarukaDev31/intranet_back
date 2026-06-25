@@ -11,6 +11,7 @@ use Maatwebsite\Excel\Events\AfterSheet;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
+use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
 class ContabilidadPagosExport implements FromArray, WithStyles, WithEvents, WithColumnWidths
@@ -60,7 +61,7 @@ class ContabilidadPagosExport implements FromArray, WithStyles, WithEvents, With
                 $row['index'] ?? '',
                 $row['nombre'] ?? '',
                 $row['telefono'] ?? '',
-                $this->formatUsd($importe),
+                $this->numericAmount($importe),
             ];
 
             $startRow = $currentRow;
@@ -68,8 +69,8 @@ class ContabilidadPagosExport implements FromArray, WithStyles, WithEvents, With
             if (count($pagos) === 0) {
                 $line = array_merge($base, ['', '']);
                 if ($this->tipo === 'final') {
-                    $line[] = $this->formatUsd($pagado);
-                    $line[] = $this->formatUsd($diferencia);
+                    $line[] = $this->numericAmount($pagado);
+                    $line[] = $this->numericAmount($diferencia);
                 }
                 $rows[] = $line;
                 $currentRow++;
@@ -80,8 +81,8 @@ class ContabilidadPagosExport implements FromArray, WithStyles, WithEvents, With
                         $this->formatPagoEstado($pago),
                     ]);
                     if ($this->tipo === 'final') {
-                        $line[] = $this->formatUsd($pagado);
-                        $line[] = $this->formatUsd($diferencia);
+                        $line[] = $this->numericAmount($pagado);
+                        $line[] = $this->numericAmount($diferencia);
                     }
                     $rows[] = $line;
                     $currentRow++;
@@ -182,8 +183,14 @@ class ContabilidadPagosExport implements FromArray, WithStyles, WithEvents, With
 
                 $sheet->getStyle('D2:D' . $highestRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
                 $sheet->getStyle('E2:E' . $highestRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+
+                $currencyFormat = NumberFormat::FORMAT_CURRENCY_USD_SIMPLE;
+                $sheet->getStyle('D2:D' . $highestRow)->getNumberFormat()->setFormatCode($currencyFormat);
+                $sheet->getStyle('E2:E' . $highestRow)->getNumberFormat()->setFormatCode($currencyFormat);
+
                 if ($this->tipo === 'final') {
                     $sheet->getStyle('G2:H' . $highestRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+                    $sheet->getStyle('G2:H' . $highestRow)->getNumberFormat()->setFormatCode($currencyFormat);
                 }
             },
         ];
@@ -204,9 +211,9 @@ class ContabilidadPagosExport implements FromArray, WithStyles, WithEvents, With
     private function formatPagoMonto($pago)
     {
         if (!is_array($pago)) {
-            return '';
+            return null;
         }
-        return $this->formatUsd($pago['monto'] ?? 0);
+        return $this->numericAmount($pago['monto'] ?? 0);
     }
 
     private function formatPagoEstado($pago)
@@ -217,8 +224,8 @@ class ContabilidadPagosExport implements FromArray, WithStyles, WithEvents, With
         return isset($pago['status']) ? trim((string) $pago['status']) : '';
     }
 
-    private function formatUsd($amount)
+    private function numericAmount($amount)
     {
-        return '$' . number_format((float) $amount, 2, '.', ',');
+        return round((float) $amount, 2);
     }
 }

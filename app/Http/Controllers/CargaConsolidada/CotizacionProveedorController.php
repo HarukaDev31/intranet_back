@@ -218,7 +218,15 @@ class CotizacionProveedorController extends Controller
 
             // Aplicar filtro whereNull después de los filtros de rol, igual que en CotizacionController
             $query->whereNull('main.id_cliente_importacion');
-            $query->orderBy('main.id', 'asc');
+
+            $sortMap = [
+                'id' => 'main.id',
+                'nombre' => 'main.nombre',
+            ];
+            $sortField = $request->input('sort_by', 'id');
+            $sortColumn = isset($sortMap[$sortField]) ? $sortMap[$sortField] : 'main.id';
+            $sortOrder = strtolower((string) $request->input('sort_order', 'asc')) === 'desc' ? 'desc' : 'asc';
+            $query->orderBy($sortColumn, $sortOrder);
             Log::info($query->toSql());
             // Ejecutar consulta con paginación
             $data = $query->paginate($perPage, ['*'], 'page', $page);
