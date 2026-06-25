@@ -2354,6 +2354,9 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
         }
 
         $fechaCierre = $this->formatFechaCierre($contenedor->f_cierre);
+        $anioContenedor = $contenedor->f_cierre
+            ? Carbon::parse($contenedor->f_cierre)->year
+            : Carbon::now()->year;
 
         // Calcular suma de pagos del concepto LOGISTICA para esta cotización
         try {
