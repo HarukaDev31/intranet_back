@@ -287,7 +287,8 @@ class CotizacionFinalController extends Controller
             if (!$user) {
                 return response()->json(['success' => false, 'message' => 'Usuario no autenticado'], 401);
             }
-            if (!in_array($user->No_Grupo, [Usuario::ROL_CONTABILIDAD, Usuario::ROL_ADMINISTRACION], true)) {
+            $rolUsuario = trim((string) $user->getNombreGrupo());
+            if (!in_array($rolUsuario, [Usuario::ROL_CONTABILIDAD, Usuario::ROL_ADMINISTRACION], true)) {
                 return response()->json(['success' => false, 'message' => 'No autorizado'], 403);
             }
 
