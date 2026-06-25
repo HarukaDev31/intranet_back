@@ -1201,6 +1201,7 @@ class CotizacionFinalController extends Controller
                     "✅Cotización final: $" . number_format($total, 2) . "\n" .
                     "✅Adelanto: $" . number_format($totalPagos, 2) . "\n" .
                     "✅ *Pendiente de pago: $" . number_format($totalAPagar, 2) . "*\n";
+                $pagosUrl = public_path('assets/images/pagos-full.jpg');
                 $this->sendMessage(
                     $messageResumen,
                     $phone,
@@ -1211,21 +1212,10 @@ class CotizacionFinalController extends Controller
                         number_format($total, 2, '.', ''),
                         number_format($totalPagos, 2, '.', ''),
                         number_format($totalAPagar, 2, '.', ''),
+                        $pagosUrl,
                         $messageResumen,
                         5
                     )
-                );
-                $pagosUrl = public_path('assets/images/pagos-full.jpg');
-                $captionPagos = 'Números de cuenta';
-                $this->sendMedia(
-                    $pagosUrl,
-                    'image/jpg',
-                    $captionPagos,
-                    $phone,
-                    10,
-                    'consolidado',
-                    'Numeros_de_cuenta.jpg',
-                    CoordinacionWhatsappPayload::consolidadoPagosImg($phone, $pagosUrl, $captionPagos, 10)
                 );
             }
             if ($request->estado == 'AJUSTADO') {

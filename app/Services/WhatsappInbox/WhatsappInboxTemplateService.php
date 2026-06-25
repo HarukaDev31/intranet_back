@@ -23,6 +23,16 @@ class WhatsappInboxTemplateService
     ];
 
     /**
+     * Plantillas conocidas con encabezado IMAGE (fallback si Graph no trae components).
+     *
+     * @var array<int, string>
+     */
+    private $knownImageHeaderTemplates = [
+        'pb_consolidado_pagos_img_v1',
+        'pb_consolidado_resumen_pago_v1',
+    ];
+
+    /**
      * Plantillas frecuentes (fallback si no hay WABA_ID o falla Graph).
      *
      * @return array<int, array<string, mixed>>
@@ -201,6 +211,10 @@ class WhatsappInboxTemplateService
 
         if (in_array($templateName, $this->knownDocumentHeaderTemplates, true)) {
             return 'DOCUMENT';
+        }
+
+        if (in_array($templateName, $this->knownImageHeaderTemplates, true)) {
+            return 'IMAGE';
         }
 
         return null;

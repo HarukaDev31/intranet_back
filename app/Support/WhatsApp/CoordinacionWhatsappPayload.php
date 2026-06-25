@@ -908,14 +908,22 @@ class CoordinacionWhatsappPayload
         string $totalCotizacion,
         string $adelanto,
         string $pendiente,
-        string $bitrixMessage,
+        string $filePath,
+        ?string $bitrixMessage = null,
         int $sleep = 0
     ): array {
-        return self::template($phone, 'pb_consolidado_resumen_pago_v1', [
-            'total_cotizacion' => $totalCotizacion,
-            'adelanto' => $adelanto,
-            'pendiente' => $pendiente,
-        ], $bitrixMessage, $sleep);
+        return self::imageTemplate(
+            $phone,
+            'pb_consolidado_resumen_pago_v1',
+            [
+                'total_cotizacion' => $totalCotizacion,
+                'adelanto' => $adelanto,
+                'pendiente' => $pendiente,
+            ],
+            $filePath,
+            $bitrixMessage,
+            $sleep
+        );
     }
 
     public static function consolidadoCotizacionFinalPdf(
