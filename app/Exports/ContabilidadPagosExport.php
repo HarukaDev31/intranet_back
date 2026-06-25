@@ -36,8 +36,8 @@ class ContabilidadPagosExport implements FromArray, WithStyles, WithEvents, With
     public function array(): array
     {
         $headers = $this->tipo === 'final'
-            ? ['N°', 'Cliente', 'Teléfono', 'Importe', 'Pagos', 'Pagado', 'Diferencia']
-            : ['N°', 'Cliente', 'Teléfono', 'Importe', 'Pagos'];
+            ? ['N°', 'Cliente', 'Teléfono', 'Importe', 'Pagos', 'Estado', 'Pagado', 'Diferencia']
+            : ['N°', 'Cliente', 'Teléfono', 'Importe', 'Pagos', 'Estado'];
 
         $rows = [$headers];
         $currentRow = 2;
@@ -66,7 +66,7 @@ class ContabilidadPagosExport implements FromArray, WithStyles, WithEvents, With
             $startRow = $currentRow;
 
             if (count($pagos) === 0) {
-                $line = array_merge($base, ['']);
+                $line = array_merge($base, ['', '']);
                 if ($this->tipo === 'final') {
                     $line[] = $this->formatUsd($pagado);
                     $line[] = $this->formatUsd($diferencia);
@@ -75,7 +75,10 @@ class ContabilidadPagosExport implements FromArray, WithStyles, WithEvents, With
                 $currentRow++;
             } else {
                 foreach ($pagos as $pago) {
-                    $line = array_merge($base, [$this->formatPagoCell($pago)]);
+                    $line = array_merge($base, [
+                        $this->formatPagoMonto($pago),
+                        $this->formatPagoEstado($pago),
+                    ]);
                     if ($this->tipo === 'final') {
                         $line[] = $this->formatUsd($pagado);
                         $line[] = $this->formatUsd($diferencia);
@@ -103,11 +106,12 @@ class ContabilidadPagosExport implements FromArray, WithStyles, WithEvents, With
             'B' => 32,
             'C' => 16,
             'D' => 16,
-            'E' => 22,
+            'E' => 16,
+            'F' => 14,
         ];
         if ($this->tipo === 'final') {
-            $widths['F'] = 16;
             $widths['G'] = 16;
+            $widths['H'] = 16;
         }
         return $widths;
     }
@@ -138,8 +142,7 @@ class ContabilidadPagosExport implements FromArray, WithStyles, WithEvents, With
         return [
             AfterSheet::class => function (AfterSheet $event) {
                 $sheet = $event->sheet->getDelegate();
-                $lastCol = $this->tipo === 'final' ? 'G' : 'E';
-                // Última fila real con datos (encabezado + filas generadas).
+                $lastCol = $this->tipo === 'final' ? 'H' : 'F';
                 $highestRow = $this->lastDataRow;
                 if ($highestRow < 1) {
                     return;
@@ -161,8 +164,9 @@ class ContabilidadPagosExport implements FromArray, WithStyles, WithEvents, With
                     ],
                 ]);
 
+                // Pagos y Estado no se combinan: varían por fila.
                 $mergeCols = $this->tipo === 'final'
-                    ? ['A', 'B', 'C', 'D', 'F', 'G']
+                    ? ['A', 'B', 'C', 'D', 'G', 'H']
                     : ['A', 'B', 'C', 'D'];
 
                 foreach ($this->mergeRanges as $range) {
@@ -177,10 +181,10 @@ class ContabilidadPagosExport implements FromArray, WithStyles, WithEvents, With
                 }
 
                 $sheet->getStyle('D2:D' . $highestRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
-                if ($this->tipo === 'final') {
-                    $sheet->getStyle('F2:G' . $highestRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
-                }
                 $sheet->getStyle('E2:E' . $highestRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+                if ($this->tipo === 'final') {
+                    $sheet->getStyle('G2:H' . $highestRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+                }
             },
         ];
     }
@@ -197,17 +201,20 @@ class ContabilidadPagosExport implements FromArray, WithStyles, WithEvents, With
         return array_values($pagos);
     }
 
-    private function formatPagoCell($pago)
+    private function formatPagoMonto($pago)
     {
         if (!is_array($pago)) {
             return '';
         }
-        $monto = $this->formatUsd($pago['monto'] ?? 0);
-        $status = isset($pago['status']) ? trim((string) $pago['status']) : '';
-        if ($status !== '') {
-            return $monto . ' (' . $status . ')';
+        return $this->formatUsd($pago['monto'] ?? 0);
+    }
+
+    private function formatPagoEstado($pago)
+    {
+        if (!is_array($pago)) {
+            return '';
         }
-        return $monto;
+        return isset($pago['status']) ? trim((string) $pago['status']) : '';
     }
 
     private function formatUsd($amount)
