@@ -2,7 +2,6 @@
 
 namespace App\Console\Commands;
 
-use App\Contracts\ObjectStorageConnectorInterface;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Storage;
 use SplFileInfo;
@@ -19,15 +18,18 @@ class UploadStorageTemplatesToS3Command extends Command
 
     protected $description = 'Sube plantillas (CONSIDERATIONS, excel-confirmacion, etc.) de storage/app/public/templates/ a S3';
 
-    /** @var ObjectStorageConnectorInterface */
-    private $storage;
-
-    public function handle(ObjectStorageConnectorInterface $storage): int
+    public function handle(): int
     {
-        $this->storage = $storage;
-
         if ($this->uploadDisk() !== 's3') {
             $this->error('FILESYSTEM_UPLOAD_DISK debe ser "s3". Actual: ' . $this->uploadDisk());
+
+            return self::FAILURE;
+        }
+
+        $bucket = (string) config('filesystems.disks.s3.bucket', '');
+        $client = $this->s3Client();
+        if ($bucket === '' || $client === null) {
+            $this->error('S3 no está configurado correctamente (cliente o bucket vacío).');
 
             return self::FAILURE;
         }
@@ -45,6 +47,10 @@ class UploadStorageTemplatesToS3Command extends Command
         $skipped = 0;
         $failed = 0;
 
+        $this->info("Bucket: {$bucket}");
+        $this->line('Destino: templates/ en la raíz del bucket (sin AWS_UPLOAD_PREFIX)');
+        $this->newLine();
+
         $finder = new Finder();
         $finder->files()->in($root);
 
@@ -53,15 +59,15 @@ class UploadStorageTemplatesToS3Command extends Command
             $relative = 'templates/' . str_replace('\\', '/', $file->getRelativePathname());
             $absolute = $file->getPathname();
 
-            if (!$force && Storage::disk('s3')->exists($relative)) {
-                $this->line("Omitido (ya en S3): {$relative}");
+            if (!$force && $client->doesObjectExist($bucket, $relative)) {
+                $this->line("Omitido (ya existe en bucket): {$relative}");
                 $skipped++;
 
                 continue;
             }
 
             if ($dryRun) {
-                $this->line("[dry-run] {$relative}");
+                $this->line("[dry-run] Falta/subiría: {$relative}");
                 $uploaded++;
 
                 continue;
@@ -72,18 +78,20 @@ class UploadStorageTemplatesToS3Command extends Command
                 if ($stream === false) {
                     throw new \RuntimeException('No se pudo abrir: ' . $absolute);
                 }
-                $ok = Storage::disk('s3')->writeStream($relative, $stream);
-                if (is_resource($stream)) {
-                    fclose($stream);
-                }
-                if (!$ok) {
-                    throw new \RuntimeException('writeStream devolvió false');
-                }
+                $client->putObject([
+                    'Bucket' => $bucket,
+                    'Key' => $relative,
+                    'Body' => $stream,
+                ]);
                 $this->info("Subido: {$relative}");
                 $uploaded++;
             } catch (\Throwable $e) {
                 $this->error("Fallo {$relative}: " . $e->getMessage());
                 $failed++;
+            } finally {
+                if (isset($stream) && is_resource($stream)) {
+                    fclose($stream);
+                }
             }
         }
 
@@ -100,5 +108,22 @@ class UploadStorageTemplatesToS3Command extends Command
     private function uploadDisk(): string
     {
         return (string) config('object_storage.upload_disk', 'local');
+    }
+
+    /**
+     * @return \Aws\S3\S3Client|null
+     */
+    private function s3Client()
+    {
+        try {
+            $adapter = Storage::disk('s3')->getAdapter();
+            if (method_exists($adapter, 'getClient')) {
+                return $adapter->getClient();
+            }
+        } catch (\Throwable $e) {
+            return null;
+        }
+
+        return null;
     }
 }
