@@ -889,10 +889,11 @@ class CoordinacionWhatsappPayload
         string $serviciosExtras,
         string $total,
         string $fechaLimite,
-        string $bitrixMessage,
+        string $filePath,
+        ?string $bitrixMessage = null,
         int $sleep = 0
     ): array {
-        return self::template($phone, 'pb_consolidado_cotizacion_final_v1', [
+        $params = [
             'carga' => $carga,
             'nombre' => $nombre,
             'costo_cbm' => $costoCbm,
@@ -900,7 +901,22 @@ class CoordinacionWhatsappPayload
             'servicios_extras' => $serviciosExtras,
             'total' => $total,
             'fecha_limite' => $fechaLimite,
-        ], $bitrixMessage, $sleep);
+        ];
+
+        if ($filePath !== '' && is_file($filePath)) {
+            return self::documentTemplate(
+                $phone,
+                'pb_consolidado_cotizacion_final_v1',
+                $params,
+                $filePath,
+                $bitrixMessage,
+                basename($filePath),
+                'application/pdf',
+                $sleep
+            );
+        }
+
+        return self::template($phone, 'pb_consolidado_cotizacion_final_v1', $params, $bitrixMessage, $sleep);
     }
 
     public static function consolidadoResumenPago(

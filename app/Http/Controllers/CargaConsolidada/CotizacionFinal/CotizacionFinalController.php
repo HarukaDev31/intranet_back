@@ -1166,6 +1166,7 @@ class CotizacionFinalController extends Controller
                 $serviciosExtrasLine = $serviciosExtraFinal > 0
                     ? '☑️Servicios extras: $' . number_format($serviciosExtraFinal, 2) . "\n"
                     : '';
+                $pathCotizacionFinalPDF = $this->getBoletaForSend($request->idCotizacion);
                 $this->sendMessage(
                     $message,
                     $phone,
@@ -1180,23 +1181,10 @@ class CotizacionFinalController extends Controller
                         $serviciosExtrasLine,
                         number_format($total, 2, '.', ''),
                         date('d/m/Y', strtotime($fechaArribo)),
+                        $pathCotizacionFinalPDF ? (string) $pathCotizacionFinalPDF : '',
                         $message
                     )
                 );
-                $pathCotizacionFinalPDF = $this->getBoletaForSend($request->idCotizacion);
-                if ($pathCotizacionFinalPDF) {
-                    $pdfCaption = 'Cotización final de importación';
-                    $this->sendMedia(
-                        $pathCotizacionFinalPDF,
-                        'application/pdf',
-                        $pdfCaption,
-                        $phone,
-                        3,
-                        'consolidado',
-                        basename($pathCotizacionFinalPDF),
-                        CoordinacionWhatsappPayload::consolidadoCotizacionFinalPdf($phone, $pathCotizacionFinalPDF, $pdfCaption, 3)
-                    );
-                }
                 $messageResumen = "💰*Resumen de Pago*\n" .
                     "✅Cotización final: $" . number_format($total, 2) . "\n" .
                     "✅Adelanto: $" . number_format($totalPagos, 2) . "\n" .
