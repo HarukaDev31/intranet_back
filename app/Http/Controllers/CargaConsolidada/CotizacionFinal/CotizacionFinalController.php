@@ -387,7 +387,7 @@ class CotizacionFinalController extends Controller
                 $recargosDescuentosFinal = (float)($row->recargos_descuentos_final ?? 0);
                 $serviciosExtraFinal = (float)($row->servicios_extra_final ?? 0);
                 $totalPag = (float)($row->total_pagos ?? 0);
-                $importeTotal = $totalLi + $serviciosExtraFinal + $recargosDescuentosFinal;
+                $importeTotal = $totalLi + $serviciosExtraFinal;
 
                 $transformedData->push([
                     'index' => $index,
