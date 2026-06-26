@@ -474,6 +474,8 @@ class PlantillaFinalBatchService
             'fob_final' => $genResult['fob_final'],
             'peso_final' => $genResult['peso_final'],
             'recargos_descuentos_final' => $genResult['recargos_descuentos_final'],
+            'recargos' => $genResult['recargos'],
+            'descuento' => $genResult['descuento'],
         ];
         if (!$estadoCotizacionFinal) {
             $updateData['estado_cotizacion_final'] = 'COTIZADO';

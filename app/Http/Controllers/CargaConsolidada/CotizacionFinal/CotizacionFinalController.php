@@ -384,10 +384,16 @@ class CotizacionFinalController extends Controller
                     return $pago;
                 }, $pagos);
                 $totalLi = (float)($row->total_logistica_impuestos ?? 0);
+                $recargos = (float)($row->recargos ?? 0);
                 $recargosDescuentosFinal = (float)($row->recargos_descuentos_final ?? 0);
                 $serviciosExtraFinal = (float)($row->servicios_extra_final ?? 0);
                 $totalPag = (float)($row->total_pagos ?? 0);
-                $importeTotal = $totalLi + $serviciosExtraFinal + $recargosDescuentosFinal;
+                $importeTotal = $totalLi + $serviciosExtraFinal;
+                if($recargos > 0 ){
+                    $importeTotal += $recargos ;
+                }else{
+                    $importeTotal += $recargosDescuentosFinal;
+                }
 
                 $transformedData->push([
                     'index' => $index,
@@ -2405,7 +2411,9 @@ class CotizacionFinalController extends Controller
                     'fob_final' => $result['fob_final'],
                     'peso_final' => $result['peso_final'],
                     'recargos_descuentos_final' => $result['recargos_descuentos_final'],
-                    'estado_cotizacion_final' => 'COTIZADO'
+                    'estado_cotizacion_final' => 'COTIZADO',
+                    'recargos' => $result['recargos'],
+                    'descuento' => $result['descuento']
                 ]);
 
             return response()->json([
@@ -5469,6 +5477,8 @@ class CotizacionFinalController extends Controller
             @unlink($tempExcelPath);
             $fob = $this->getMainSheetFobFinalAmount($objPHPExcel->getSheet(0));
             $recargosDescuentosFinal = ($extrasCalc['recargos'] ?? 0)-($extrasCalc['descuento'] ?? 0);
+            $recargos=$extrasCalc['recargos'] ?? 0;
+            $descuento=$extrasCalc['descuento'] ?? 0;
             return [    
                 'id' => $data['id'] ?? null,
                 'id_contenedor' => $idContenedor,
@@ -5486,6 +5496,8 @@ class CotizacionFinalController extends Controller
                 'recargos_descuentos_final' => $recargosDescuentosFinal,
                 'fob_final' => $fob,
                 'peso_final' => is_numeric($pesoTotal) ? $pesoTotal : 0,
+                'recargos' => $recargos,
+                'descuento' => $descuento,
                 'estado' => 'PENDIENTE',
                 "excel_file_name" => $excelFileName,
                 "excel_file_path" => $storedPath,
