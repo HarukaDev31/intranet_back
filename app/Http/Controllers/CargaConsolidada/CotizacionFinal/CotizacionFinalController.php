@@ -387,7 +387,7 @@ class CotizacionFinalController extends Controller
                 $recargosDescuentosFinal = (float)($row->recargos_descuentos_final ?? 0);
                 $serviciosExtraFinal = (float)($row->servicios_extra_final ?? 0);
                 $totalPag = (float)($row->total_pagos ?? 0);
-                $importeTotal = $totalLi + $serviciosExtraFinal;
+                $importeTotal = $totalLi + $serviciosExtraFinal ;
 
                 $transformedData->push([
                     'index' => $index,
@@ -1169,11 +1169,8 @@ class CotizacionFinalController extends Controller
                 $totalPagos = $cotizacion->total_pagos;
                 $volumen = $cotizacion->volumen_final;
                 $nombre = $cotizacion->nombre;
-                $extrasCalc = $this->getCalculadoraImportacionExtrasByCotizacion((int) $request->idCotizacion);
-                $logisticaFinal = (float) ($cotizacion->logistica_final ?? 0)
-                    + (float) ($extrasCalc['recargos'] ?? 0)
-                    - (float) ($extrasCalc['descuento'] ?? 0);
-                $impuestosFinal = $cotizacion->impuestos_final;
+                $logisticaFinal = (float) ($cotizacion->logistica_final ?? 0);
+                $impuestosFinal = (float) ($cotizacion->impuestos_final ?? 0);
                 $serviciosExtraFinal = (float) ($cotizacion->servicios_extra_final ?? 0);
                 $total = $logisticaFinal + $impuestosFinal + $serviciosExtraFinal;
                 $totalAPagar = $total - $totalPagos;
