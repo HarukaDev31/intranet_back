@@ -67,11 +67,17 @@ class SendReminderPagoWhatsAppJob implements ShouldQueue
             $carga = $contenedor ? $contenedor->carga : 'N/A';
             $fechaArribo = $contenedor ? $contenedor->fecha_arribo : null;
             $recargosDescuentosFinal = (float) ($cotizacion->recargos_descuentos_final ?? 0);
+            $recargos=(float) ($cotizacion->recargos ?? 0);
             $serviciosExtraFinal = (float) ($cotizacion->servicios_extra_final ?? 0);
             $logisticaFinal = (float) ($cotizacion->logistica_final ?? 0);
             $impuestosFinal = (float) ($cotizacion->impuestos_final ?? 0);
 
-            $totalCotizacion = $logisticaFinal + $impuestosFinal + $serviciosExtraFinal + $recargosDescuentosFinal;
+            $totalCotizacion = $logisticaFinal + $impuestosFinal + $serviciosExtraFinal;
+            if($recargos > 0 ){
+                $totalCotizacion += $recargos;
+            }else{
+                $totalCotizacion += $recargosDescuentosFinal;
+            }
             $totalPagos = (float) ($cotizacion->total_pagos ?? 0);
             $pendiente = $totalCotizacion - $totalPagos;
             $isAjustado = $cotizacion->estado_cotizacion_final == 'AJUSTADO';
