@@ -73,4 +73,17 @@ class StoragePathSanitizer
 
         return $base . $extension;
     }
+
+    /**
+     * Codifica segmentos de ruta para URL CDN sin alterar el nombre en disco (espacios, #, tildes).
+     */
+    public static function encodeRelativePathForUrl(string $relativePath): string
+    {
+        $relativePath = ltrim(str_replace('\\', '/', $relativePath), '/');
+        if ($relativePath === '') {
+            return '';
+        }
+
+        return implode('/', array_map('rawurlencode', explode('/', $relativePath)));
+    }
 }

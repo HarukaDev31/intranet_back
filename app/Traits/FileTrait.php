@@ -54,7 +54,7 @@ trait FileTrait
             $normalized = $prefix . '/' . ltrim($normalized, '/');
         }
 
-        return $base . '/' . StoragePathSanitizer::relativePath(ltrim($normalized, '/'));
+        return $base . '/' . StoragePathSanitizer::encodeRelativePathForUrl(ltrim($normalized, '/'));
     }
 
     public function generateImageUrl($ruta)

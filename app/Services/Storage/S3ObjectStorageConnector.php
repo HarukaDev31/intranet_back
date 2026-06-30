@@ -23,6 +23,13 @@ class S3ObjectStorageConnector implements ObjectStorageConnectorInterface
      */
     private $bareS3Keys = [];
 
+    /**
+     * Ruta de BD (sin prefijos storage) → ruta real encontrada en disco/S3.
+     *
+     * @var array<string, string>
+     */
+    private $resolvedStoragePaths = [];
+
     public function uploadDisk(): string
     {
         $disk = (string) config('object_storage.upload_disk', 'local');
@@ -143,45 +150,22 @@ class S3ObjectStorageConnector implements ObjectStorageConnectorInterface
             return false;
         }
 
-        $relativePath = $this->normalizeRelativePath($relativePath);
-        if ($relativePath === null) {
-            return false;
-        }
-
-        foreach ($this->disksToProbe() as $disk) {
-            if (Storage::disk($disk)->exists($relativePath)) {
-                unset($this->bareS3Keys[$relativePath]);
-
-                return true;
-            }
-        }
-
-        if ($this->uploadDisk() === 's3') {
-            foreach ($this->bareBucketKeyCandidates($relativePath) as $bareKey) {
-                if ($this->existsAtBareBucketKey($bareKey)) {
-                    $this->bareS3Keys[$relativePath] = $bareKey;
-
-                    return true;
-                }
-            }
-        }
-
-        return false;
+        return $this->locateStoragePath($relativePath) !== null;
     }
 
     public function delete(string $relativePath): bool
     {
-        $relativePath = $this->normalizeRelativePath($relativePath);
-        if ($relativePath === null) {
-            return false;
-        }
-        $disk = $this->diskForPath($relativePath);
-
-        if ($disk === null) {
+        $lookupPath = $this->resolveInputForLookup($relativePath);
+        if ($lookupPath === null) {
             return false;
         }
 
-        return Storage::disk($disk)->delete($relativePath);
+        $located = $this->locateStoragePath($lookupPath);
+        if ($located === null) {
+            return false;
+        }
+
+        return Storage::disk($located['disk'])->delete($located['path']);
     }
 
     public function url(string $relativePath): ?string
@@ -190,71 +174,79 @@ class S3ObjectStorageConnector implements ObjectStorageConnectorInterface
             return null;
         }
 
-        $relativePath = $this->resolveInputToRelativePath($relativePath);
-        if ($relativePath === null) {
+        $lookupPath = $this->resolveInputForLookup($relativePath);
+        if ($lookupPath === null) {
             return null;
         }
 
-        $disk = $this->diskForPath($relativePath);
+        $located = $this->locateStoragePath($lookupPath);
+        $storagePath = $located['path'] ?? $lookupPath;
 
-        if ($disk === null) {
+        if ($located === null) {
+            if ($this->shouldServeViaCdn() && stripos($lookupPath, 'cargaconsolidada/') === 0) {
+                return $this->buildCdnUrl($lookupPath);
+            }
+
             return null;
         }
+
+        $disk = $located['disk'];
 
         if ($disk === 's3') {
             if ($this->shouldServeViaCdn()) {
-                return $this->buildCdnUrl($this->cdnRelativePath($relativePath));
+                return $this->buildCdnUrl($this->cdnRelativePath($storagePath, $lookupPath));
             }
 
             try {
                 return $this->temporaryUrl($relativePath);
             } catch (\Throwable $e) {
                 Log::warning('S3ObjectStorageConnector: fallback a url pública', [
-                    'path' => $relativePath,
+                    'path' => $storagePath,
                     'error' => $e->getMessage(),
                 ]);
 
-                return Storage::disk('s3')->url($relativePath);
+                return Storage::disk('s3')->url($storagePath);
             }
         }
 
         if ($disk === 'public') {
             if ($this->shouldServeViaCdn()) {
-                return $this->buildCdnUrl($relativePath);
+                return $this->buildCdnUrl($storagePath);
             }
 
-            return Storage::disk('public')->url($relativePath);
+            return Storage::disk('public')->url($storagePath);
         }
 
-        return $this->legacyAppStorageUrl($relativePath);
+        return $this->legacyAppStorageUrl($storagePath);
     }
 
     public function temporaryUrl(string $relativePath, ?int $minutes = null): string
     {
-        $relativePath = $this->resolveInputToRelativePath($relativePath);
-        if ($relativePath === null) {
+        $lookupPath = $this->resolveInputForLookup($relativePath);
+        if ($lookupPath === null) {
             throw new RuntimeException('Ruta de archivo inválida.');
         }
 
-        $disk = $this->diskForPath($relativePath);
-
-        if ($disk === null) {
-            throw new RuntimeException('Archivo no encontrado: ' . $relativePath);
+        $located = $this->locateStoragePath($lookupPath);
+        if ($located === null) {
+            throw new RuntimeException('Archivo no encontrado: ' . $lookupPath);
         }
 
+        $storagePath = $located['path'];
+        $disk = $located['disk'];
         $minutes = $minutes ?? (int) config('object_storage.signed_url_minutes', 120);
 
         if ($disk === 's3') {
             if ($this->shouldServeViaCdn()) {
-                return $this->buildCdnUrl($this->cdnRelativePath($relativePath));
+                return $this->buildCdnUrl($this->cdnRelativePath($storagePath, $lookupPath));
             }
 
-            if (isset($this->bareS3Keys[$relativePath])) {
-                return $this->temporaryUrlForBucketKey($this->bareS3Keys[$relativePath], $minutes);
+            if (isset($this->bareS3Keys[$lookupPath])) {
+                return $this->temporaryUrlForBucketKey($this->bareS3Keys[$lookupPath], $minutes);
             }
 
             return Storage::disk('s3')->temporaryUrl(
-                $relativePath,
+                $storagePath,
                 now()->addMinutes($minutes)
             );
         }
@@ -382,54 +374,29 @@ class S3ObjectStorageConnector implements ObjectStorageConnectorInterface
 
     public function readStream(string $relativePath)
     {
-        $relativePath = ltrim($relativePath, '/');
-        $disk = $this->diskForPath($relativePath);
-
-        if ($disk === null) {
+        $lookupPath = $this->resolveInputForLookup($relativePath);
+        if ($lookupPath === null) {
             return false;
         }
 
-        return Storage::disk($disk)->readStream($relativePath);
+        $located = $this->locateStoragePath($lookupPath);
+        if ($located === null) {
+            return false;
+        }
+
+        return Storage::disk($located['disk'])->readStream($located['path']);
     }
 
     public function diskForPath(string $relativePath): ?string
     {
-        if ($relativePath === '') {
+        $lookupPath = $this->resolveInputForLookup($relativePath);
+        if ($lookupPath === null) {
             return null;
         }
 
-        $relativePath = $this->normalizeRelativePath($relativePath);
-        if ($relativePath === null) {
-            return null;
-        }
+        $located = $this->locateStoragePath($lookupPath);
 
-        foreach ($this->disksToProbe() as $disk) {
-            if (Storage::disk($disk)->exists($relativePath)) {
-                return $disk;
-            }
-        }
-
-        $sanitizedPath = StoragePathSanitizer::relativePath($relativePath);
-        if ($sanitizedPath !== '' && $sanitizedPath !== $relativePath) {
-            foreach ($this->disksToProbe() as $disk) {
-                if (Storage::disk($disk)->exists($sanitizedPath)) {
-                    return $disk;
-                }
-            }
-            $relativePath = $sanitizedPath;
-        }
-
-        if ($this->uploadDisk() === 's3') {
-            foreach ($this->bareBucketKeyCandidates($relativePath) as $bareKey) {
-                if ($this->existsAtBareBucketKey($bareKey)) {
-                    $this->bareS3Keys[$relativePath] = $bareKey;
-
-                    return 's3';
-                }
-            }
-        }
-
-        return null;
+        return $located['disk'] ?? null;
     }
 
     /**
@@ -681,6 +648,139 @@ class S3ObjectStorageConnector implements ObjectStorageConnectorInterface
         return $this->normalizeRelativePath($input);
     }
 
+    /**
+     * Igual que resolveInputToRelativePath pero conserva espacios, # y tildes del nombre en disco.
+     */
+    private function resolveInputForLookup(string $input): ?string
+    {
+        $input = str_replace('\\', '/', trim($input));
+
+        if (filter_var($input, FILTER_VALIDATE_URL)) {
+            $path = parse_url($input, PHP_URL_PATH);
+            if (!is_string($path) || $path === '') {
+                return null;
+            }
+
+            $input = rawurldecode($path);
+        }
+
+        $path = $this->stripStoragePathPrefixes($input);
+
+        return $path === '' ? null : $path;
+    }
+
+    private function stripStoragePathPrefixes(string $path): string
+    {
+        $path = str_replace('\\', '/', trim($path));
+        $path = ltrim($path, '/');
+
+        $strip = [
+            'storage/app/public/',
+            'storage/app/',
+            'storage/',
+            'app/public/',
+            'public/',
+            'files/',
+        ];
+        $changed = true;
+        while ($changed && $path !== '') {
+            $changed = false;
+            foreach ($strip as $prefix) {
+                if (stripos($path, $prefix) === 0) {
+                    $path = substr($path, strlen($prefix));
+                    $changed = true;
+                }
+            }
+        }
+
+        return $path;
+    }
+
+    /**
+     * @return string[]
+     */
+    private function pathLookupCandidates(string $lookupPath): array
+    {
+        $lookupPath = $this->stripStoragePathPrefixes($lookupPath);
+        if ($lookupPath === '') {
+            return [];
+        }
+
+        $candidates = [$lookupPath];
+        $sanitized = StoragePathSanitizer::relativePath($lookupPath);
+        if ($sanitized !== '' && $sanitized !== $lookupPath) {
+            $candidates[] = $sanitized;
+        }
+
+        return array_values(array_unique($candidates));
+    }
+
+    /**
+     * @return array{disk: string, path: string}|null
+     */
+    private function locateStoragePath(string $lookupPath): ?array
+    {
+        $lookupKey = $this->resolveInputForLookup($lookupPath);
+        if ($lookupKey === null) {
+            return null;
+        }
+
+        if (isset($this->resolvedStoragePaths[$lookupKey])) {
+            $path = $this->resolvedStoragePaths[$lookupKey];
+            $disk = $this->diskForResolvedPath($path, $lookupKey);
+
+            return $disk !== null ? ['disk' => $disk, 'path' => $path] : null;
+        }
+
+        foreach ($this->pathLookupCandidates($lookupKey) as $candidate) {
+            foreach ($this->disksToProbe() as $disk) {
+                if (Storage::disk($disk)->exists($candidate)) {
+                    $this->rememberResolvedPath($lookupKey, $candidate);
+                    unset($this->bareS3Keys[$lookupKey]);
+
+                    return ['disk' => $disk, 'path' => $candidate];
+                }
+            }
+        }
+
+        foreach ($this->pathLookupCandidates($lookupKey) as $candidate) {
+            if ($this->uploadDisk() !== 's3') {
+                continue;
+            }
+
+            foreach ($this->bareBucketKeyCandidates($candidate) as $bareKey) {
+                if ($this->existsAtBareBucketKey($bareKey)) {
+                    $this->rememberResolvedPath($lookupKey, $candidate);
+                    $this->bareS3Keys[$lookupKey] = $bareKey;
+
+                    return ['disk' => 's3', 'path' => $candidate];
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private function rememberResolvedPath(string $lookupKey, string $resolvedPath): void
+    {
+        $this->resolvedStoragePaths[$lookupKey] = $resolvedPath;
+    }
+
+    private function diskForResolvedPath(string $path, string $lookupKey): ?string
+    {
+        foreach ($this->disksToProbe() as $disk) {
+            if (Storage::disk($disk)->exists($path)) {
+                return $disk;
+            }
+        }
+
+        if ($this->uploadDisk() === 's3' && isset($this->bareS3Keys[$lookupKey])) {
+            return 's3';
+        }
+
+        return null;
+    }
+
     private function cdnBaseUrl(): string
     {
         return rtrim((string) config('object_storage.cdn_base_url', ''), '/');
@@ -712,24 +812,27 @@ class S3ObjectStorageConnector implements ObjectStorageConnectorInterface
         return true;
     }
 
-    private function cdnRelativePath(string $relativePath): string
+    private function cdnRelativePath(string $relativePath, ?string $lookupKey = null): string
     {
-        return isset($this->bareS3Keys[$relativePath])
-            ? $this->bareS3Keys[$relativePath]
+        $lookupKey = $lookupKey ?? $relativePath;
+
+        return isset($this->bareS3Keys[$lookupKey])
+            ? $this->bareS3Keys[$lookupKey]
             : $relativePath;
     }
 
     private function buildCdnUrl(string $relativePath): string
     {
-        $relativePath = StoragePathSanitizer::relativePath(ltrim(str_replace('\\', '/', $relativePath), '/'));
+        $relativePath = ltrim(str_replace('\\', '/', $relativePath), '/');
+        $encodedPath = StoragePathSanitizer::encodeRelativePathForUrl($relativePath);
         $base = $this->cdnBaseUrl();
         $prefix = trim(str_replace('\\', '/', (string) config('object_storage.s3_prefix', '')), '/');
 
         if (filter_var(config('object_storage.cdn_include_s3_prefix', false), FILTER_VALIDATE_BOOLEAN) && $prefix !== '') {
-            return $base . '/' . $prefix . '/' . $relativePath;
+            return $base . '/' . $prefix . '/' . $encodedPath;
         }
 
-        return $base . '/' . $relativePath;
+        return $base . '/' . $encodedPath;
     }
 
     private function legacyAppStorageUrl(string $relativePath): ?string
