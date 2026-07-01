@@ -52,9 +52,6 @@ services:
 
   horizon:
     image: intranet_back-app
-    build:
-      context: .
-      dockerfile: Dockerfile
     restart: unless-stopped
     command: php artisan horizon
     volumes:
@@ -67,9 +64,6 @@ services:
 
   scheduler:
     image: intranet_back-app
-    build:
-      context: .
-      dockerfile: Dockerfile
     restart: unless-stopped
     command: >
       sh -c "while true; do
