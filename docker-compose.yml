@@ -1,8 +1,8 @@
 # Stack base para servidor (QA/PROD). PHP 8.2 va dentro del contenedor — no instalar PHP en el host.
 #
-# Servidor:
-#   cp .env.example .env   → DB_HOST=IP/RDS del MySQL real, REDIS_HOST=redis
-#   docker compose up -d --build
+# Servidor (MySQL en host, bind-address=127.0.0.1):
+#   docker compose -f docker-compose.yml -f docker-compose.host-mysql.yml up -d --build
+#   .env → DB_HOST=localhost, DB_SOCKET=/var/run/mysqld/mysqld.sock
 #
 # Local con MySQL en contenedor:
 #   docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build

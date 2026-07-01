@@ -77,8 +77,12 @@ APP_ENV=qa
 APP_PORT=8085
 COMPOSE_PROJECT_NAME=intranet_qa
 
-DB_HOST=host.docker.internal   # MySQL en el mismo host, fuera de Docker
-# o DB_HOST=mi-rds.amazonaws.com
+# MySQL en el mismo host (bind-address=127.0.0.1) — socket Unix, sin abrir 3306 a internet:
+DB_HOST=localhost
+DB_SOCKET=/var/run/mysqld/mysqld.sock
+# deploy.sh usa COMPOSE_HOST_MYSQL=true por defecto (docker-compose.host-mysql.yml)
+# RDS u otro host TCP:
+# DB_HOST=mi-rds.amazonaws.com
 
 DB_DATABASE=intranet_qa
 REDIS_HOST=redis
@@ -104,6 +108,47 @@ Resumen puertos en el mismo servidor:
 ### Setup PROD (segundo clone)
 
 Misma estructura en `/var/www/html/intranet_back`, rama `main`, `APP_PORT=8081`, `COMPOSE_PROJECT_NAME=intranet_prod`, credenciales de prod.
+
+### MySQL en el host (bind-address=127.0.0.1) + Docker
+
+Mantén `bind-address = 127.0.0.1` en `mysqld.cnf`. La IP elástica de EC2 **no importa**: MySQL no escucha en interfaces públicas y el Security Group no debe abrir el puerto 3306 desde internet.
+
+**Problema:** desde un contenedor, `DB_HOST=127.0.0.1` apunta al loopback del contenedor, no al del host. `host.docker.internal` llega por la red Docker (`docker0`, p. ej. `172.17.0.1`), pero con `bind-address=127.0.0.1` MySQL rechaza esas conexiones TCP.
+
+**Solución recomendada — socket Unix montado** (sin cambiar bind-address):
+
+1. En `.env` del servidor:
+
+```env
+DB_HOST=localhost
+DB_SOCKET=/var/run/mysqld/mysqld.sock
+```
+
+2. Levantar con el overlay (o `deploy.sh`, que usa `COMPOSE_HOST_MYSQL=true` por defecto):
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.host-mysql.yml up -d
+```
+
+3. Usuario MySQL para socket (autentica como `localhost`):
+
+```sql
+CREATE USER IF NOT EXISTS 'tu_usuario'@'localhost' IDENTIFIED BY 'tu_password';
+GRANT ALL PRIVILEGES ON intranet_probusiness2.* TO 'tu_usuario'@'localhost';
+FLUSH PRIVILEGES;
+```
+
+4. Verifica la ruta del socket en el host:
+
+```bash
+mysql -e "SHOW VARIABLES LIKE 'socket';"
+```
+
+Si no es `/var/run/mysqld/mysqld.sock`, define `MYSQL_SOCKET_HOST` en `.env` con la ruta real.
+
+**Alternativa (solo si no puedes usar socket):** enlazar MySQL solo a la IP de `docker0` (`172.17.0.1`), no a `0.0.0.0`. Sigue sin exponer la IP elástica, pero el cliente local debe usar socket o `mysql -h 172.17.0.1`. Menos limpio que el socket.
+
+**No hagas:** `bind-address=0.0.0.0` “porque el SG protege” — cualquier error de firewall abre la BD a internet.
 
 ---
 

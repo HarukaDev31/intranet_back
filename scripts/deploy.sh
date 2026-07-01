@@ -14,17 +14,20 @@ DEPLOY_MODE="${DEPLOY_MODE:-docker}"
 PHP_FPM_SERVICE="${PHP_FPM_SERVICE:-php8.2-fpm}"
 RUN_MIGRATIONS="${RUN_MIGRATIONS:-true}"
 COMPOSE_LOCAL="${COMPOSE_LOCAL:-false}"
+COMPOSE_HOST_MYSQL="${COMPOSE_HOST_MYSQL:-true}"
 
 log() {
   echo "[deploy] $*"
 }
 
 compose() {
+  local files=(-f docker-compose.yml)
   if [[ "${COMPOSE_LOCAL}" == "true" ]]; then
-    docker compose -f docker-compose.yml -f docker-compose.local.yml "$@"
-  else
-    docker compose -f docker-compose.yml "$@"
+    files+=(-f docker-compose.local.yml)
+  elif [[ "${COMPOSE_HOST_MYSQL}" == "true" ]]; then
+    files+=(-f docker-compose.host-mysql.yml)
   fi
+  docker compose "${files[@]}" "$@"
 }
 
 cd "${DEPLOY_PATH}"
