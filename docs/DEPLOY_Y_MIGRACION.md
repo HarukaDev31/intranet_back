@@ -150,6 +150,33 @@ Si no es `/var/run/mysqld/mysqld.sock`, define `MYSQL_SOCKET_HOST` en `.env` con
 
 **No hagas:** `bind-address=0.0.0.0` “porque el SG protege” — cualquier error de firewall abre la BD a internet.
 
+#### Si ves `Connection timed out`
+
+Eso es **TCP** a un host incorrecto (p. ej. `host.docker.internal` o IP privada), no el socket. Revisa en orden:
+
+```bash
+cd /var/www/html/intranet_back_qa
+grep -E '^DB_|^DATABASE_URL=' .env
+```
+
+Debe quedar así (sin `DATABASE_URL` apuntando a otro host):
+
+```env
+DB_HOST=localhost
+DB_SOCKET=/var/run/mysqld/mysqld.sock
+```
+
+Recrear contenedores **con** el overlay (solo `exec` no monta el socket):
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.host-mysql.yml up -d --force-recreate app horizon scheduler
+docker compose -f docker-compose.yml -f docker-compose.host-mysql.yml exec app ls -la /var/run/mysqld/mysqld.sock
+docker compose -f docker-compose.yml -f docker-compose.host-mysql.yml exec app php artisan config:clear
+docker compose -f docker-compose.yml -f docker-compose.host-mysql.yml exec app php artisan migrate --force
+```
+
+Diagnóstico automático: `bash scripts/docker-db-check.sh`
+
 ---
 
 ## Horizon y Scheduler: de Supervisor (host) a Docker

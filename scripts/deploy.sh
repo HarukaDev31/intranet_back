@@ -61,6 +61,9 @@ if [[ "${DEPLOY_MODE}" == "docker" ]]; then
   compose exec -T -u root app composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
   fix_app_permissions
 
+  log "Limpiar config cache (evita DB_* obsoletos de un deploy anterior)"
+  compose exec -T app php artisan config:clear
+
   if [[ "${RUN_MIGRATIONS}" == "true" ]]; then
     compose exec -T app php artisan migrate --force
   fi
