@@ -13,7 +13,7 @@ Internet
    │
    ▼
 Nginx (host)  :443 / :80
-   │  proxy_pass → 127.0.0.1:8080 (QA)  o  :8081 (PROD)
+   │  proxy_pass → 127.0.0.1:8085 (QA)  o  :8081 (PROD)
    ▼
 docker compose (intranet_back_qa / intranet_back)
    ├── nginx (contenedor)
@@ -74,7 +74,7 @@ En `.env` de QA:
 
 ```env
 APP_ENV=qa
-APP_PORT=8080
+APP_PORT=8085
 COMPOSE_PROJECT_NAME=intranet_qa
 
 DB_HOST=host.docker.internal   # MySQL en el mismo host, fuera de Docker
@@ -98,7 +98,7 @@ Resumen puertos en el mismo servidor:
 
 | Ambiente | Dominio | `APP_PORT` | WebSockets (host) |
 |----------|---------|------------|-------------------|
-| QA | `intranetback-qa.probusiness.pe` | `8080` | `6002` |
+| QA | `intranetback-qa.probusiness.pe` | `8085` | `6002` |
 | PROD | `intranetback.probusiness.pe` | `8081` | `6001` |
 
 ### Setup PROD (segundo clone)
