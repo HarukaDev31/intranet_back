@@ -38,13 +38,25 @@ log "Fetch origin/${GIT_BRANCH}"
 git fetch origin "${GIT_BRANCH}"
 git reset --hard "origin/${GIT_BRANCH}"
 
+fix_app_permissions() {
+  compose exec -T -u root app chown -R www-data:www-data \
+    /var/www/html/vendor \
+    /var/www/html/storage \
+    /var/www/html/bootstrap/cache
+  compose exec -T -u root app chmod -R ug+rwx \
+    /var/www/html/storage \
+    /var/www/html/bootstrap/cache
+}
+
 if [[ "${DEPLOY_MODE}" == "docker" ]]; then
   log "Docker Compose build + up"
   compose build --pull
   compose up -d
 
-  log "Composer install (dentro del contenedor)"
-  compose exec -T app composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
+  log "Composer install (dentro del contenedor, como root)"
+  compose exec -T -u root app git config --global --add safe.directory /var/www/html || true
+  compose exec -T -u root app composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
+  fix_app_permissions
 
   if [[ "${RUN_MIGRATIONS}" == "true" ]]; then
     compose exec -T app php artisan migrate --force
@@ -54,6 +66,7 @@ if [[ "${DEPLOY_MODE}" == "docker" ]]; then
   compose exec -T app php artisan route:cache
   compose exec -T app php artisan view:cache
   compose exec -T app php artisan horizon:terminate || true
+  compose restart horizon scheduler || true
 else
   log "Composer install (host — requiere PHP instalado en el servidor)"
   composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist

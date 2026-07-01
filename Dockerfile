@@ -46,8 +46,7 @@ RUN groupmod -o -g "${WWWGROUP}" www-data \
 
 COPY docker/php/conf.d/laravel.ini /usr/local/etc/php/conf.d/99-laravel.ini
 
-USER www-data
-
+# php-fpm workers siguen siendo www-data; root solo para composer/artisan en deploy.
 EXPOSE 9000
 
 CMD ["php-fpm"]
