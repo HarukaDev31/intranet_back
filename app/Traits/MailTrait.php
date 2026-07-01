@@ -3,7 +3,6 @@
 namespace App\Traits;
 
 use Illuminate\Mail\Mailable;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 
@@ -96,35 +95,21 @@ trait MailTrait
     }
 
     /**
-     * Redirige si APP_ENV=local, host localhost/127.0.0.1, o conexión mysql_local (jobs sin headers).
+     * Redirige correo en local/QA si MAIL_LOCAL_REDIRECT_TO está definido.
      */
     protected function shouldRedirectOutboundMail(): bool
     {
-        
-
-        $domain = $this->resolveMailRequestDomain();
-        if ($domain !== null && $domain !== '') {
-            $d = strtolower($domain);
-            if (in_array($d, ['localhost', '127.0.0.1'], true)) {
-                return true;
-            }
+        if (!app()->environment(['local', 'testing', 'qa', 'staging'])) {
+            return false;
         }
 
-        try {
-            if (DB::getDefaultConnection() === 'mysql_local') {
-                return true;
-            }
-        } catch (\Exception $e) {
-            Log::debug('shouldRedirectOutboundMail BD: ' . $e->getMessage());
-        }
-
-        return false;
+        return trim((string) env('MAIL_LOCAL_REDIRECT_TO', '')) !== '';
     }
 
     /**
-     * Misma prioridad que WhatsappTrait::getRequestDomain: Origin/Referer, luego conexión BD.
+     * Origin/Referer o host de APP_URL (solo metadatos / redirección de correo).
      *
-     * @return string|null Host normalizado (sin puerto) o dominio inferido de la conexión
+     * @return string|null Host normalizado (sin puerto)
      */
     protected function resolveMailRequestDomain(): ?string
     {
@@ -147,22 +132,10 @@ trait MailTrait
                 }
             }
 
-            try {
-                $currentConnection = DB::getDefaultConnection();
-                $domain = $this->domainFromDbConnection($currentConnection);
-                if ($domain) {
-                    Log::info('MailTrait: dominio inferido desde conexión BD', [
-                        'connection' => $currentConnection,
-                        'domain' => $domain,
-                    ]);
-
-                    return $domain;
-                }
-            } catch (\Exception $dbException) {
-                Log::debug('MailTrait: sin conexión BD: ' . $dbException->getMessage());
+            $fromApp = parse_url((string) config('app.url', ''), PHP_URL_HOST);
+            if (is_string($fromApp) && $fromApp !== '') {
+                return $this->extractMailHost($fromApp);
             }
-
-            Log::debug('MailTrait: no se resolvió dominio (Origin/Referer ni BD)');
 
             return null;
         } catch (\Exception $e) {
@@ -170,17 +143,6 @@ trait MailTrait
 
             return null;
         }
-    }
-
-    private function domainFromDbConnection(string $connection): ?string
-    {
-        $map = [
-            'mysql' => 'intranetv2.probusiness.pe',
-            'mysql_qa' => 'qaintranet.probusiness.pe',
-            'mysql_local' => 'localhost',
-        ];
-
-        return $map[$connection] ?? null;
     }
 
     private function extractMailHost(string $host): string

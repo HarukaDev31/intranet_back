@@ -1,0 +1,88 @@
+# Stack base para servidor (QA/PROD). PHP 8.2 va dentro del contenedor — no instalar PHP en el host.
+#
+# Servidor:
+#   cp .env.example .env   → DB_HOST=IP/RDS del MySQL real, REDIS_HOST=redis
+#   docker compose up -d --build
+#
+# Local con MySQL en contenedor:
+#   docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build
+
+name: intranet_back
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        WWWUSER: ${WWWUSER:-1000}
+        WWWGROUP: ${WWWGROUP:-1000}
+    image: intranet_back-app
+    restart: unless-stopped
+    volumes:
+      - .:/var/www/html
+    environment:
+      APP_ENV: ${APP_ENV:-production}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      redis:
+        condition: service_started
+    networks:
+      - intranet
+
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${APP_PORT:-8080}:80"
+    volumes:
+      - .:/var/www/html:ro
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - app
+    networks:
+      - intranet
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    networks:
+      - intranet
+
+  horizon:
+    image: intranet_back-app
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    command: php artisan horizon
+    volumes:
+      - .:/var/www/html
+    depends_on:
+      - app
+      - redis
+    networks:
+      - intranet
+
+  scheduler:
+    image: intranet_back-app
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    command: >
+      sh -c "while true; do
+        php artisan schedule:run --verbose --no-interaction;
+        sleep 60;
+      done"
+    volumes:
+      - .:/var/www/html
+    depends_on:
+      - app
+    networks:
+      - intranet
+
+networks:
+  intranet:
+    driver: bridge

@@ -1,0 +1,31 @@
+name: Deploy QA
+
+on:
+  push:
+    branches: [qa]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-qa
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: qa
+
+    steps:
+      - name: Deploy to QA server
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            DEPLOY_PATH="${{ secrets.QA_DEPLOY_PATH }}"
+            if [ -z "$DEPLOY_PATH" ]; then DEPLOY_PATH="/var/www/html/intranet_back_qa"; fi
+            export DEPLOY_PATH
+            export GIT_BRANCH=qa
+            export DEPLOY_MODE="${{ vars.QA_DEPLOY_MODE }}"
+            if [ -z "$DEPLOY_MODE" ]; then DEPLOY_MODE="docker"; fi
+            bash "${DEPLOY_PATH}/scripts/deploy.sh"

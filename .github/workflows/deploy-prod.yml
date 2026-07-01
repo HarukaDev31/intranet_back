@@ -1,0 +1,31 @@
+name: Deploy PROD
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Escribe "deploy" para confirmar'
+        required: true
+        type: string
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    if: github.event.inputs.confirm == 'deploy'
+
+    steps:
+      - name: Deploy to production server
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            DEPLOY_PATH="${{ secrets.PROD_DEPLOY_PATH }}"
+            if [ -z "$DEPLOY_PATH" ]; then DEPLOY_PATH="/var/www/html/intranet_back"; fi
+            export DEPLOY_PATH
+            export GIT_BRANCH=main
+            export DEPLOY_MODE="${{ vars.PROD_DEPLOY_MODE }}"
+            if [ -z "$DEPLOY_MODE" ]; then DEPLOY_MODE="docker"; fi
+            bash "${DEPLOY_PATH}/scripts/deploy.sh"

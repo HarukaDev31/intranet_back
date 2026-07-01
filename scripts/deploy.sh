@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+# Despliegue con Docker Compose (por defecto). PHP/Composer/Artisan corren dentro del contenedor.
+#
+# Servidor QA:
+#   DEPLOY_PATH=/var/www/html/intranet_back_qa GIT_BRANCH=qa bash scripts/deploy.sh
+#
+# Modo legacy (sin Docker): DEPLOY_MODE=classic bash scripts/deploy.sh
+
+set -euo pipefail
+
+DEPLOY_PATH="${DEPLOY_PATH:?Define DEPLOY_PATH}"
+GIT_BRANCH="${GIT_BRANCH:-main}"
+DEPLOY_MODE="${DEPLOY_MODE:-docker}"
+PHP_FPM_SERVICE="${PHP_FPM_SERVICE:-php8.2-fpm}"
+RUN_MIGRATIONS="${RUN_MIGRATIONS:-true}"
+COMPOSE_LOCAL="${COMPOSE_LOCAL:-false}"
+
+log() {
+  echo "[deploy] $*"
+}
+
+compose() {
+  if [[ "${COMPOSE_LOCAL}" == "true" ]]; then
+    docker compose -f docker-compose.yml -f docker-compose.local.yml "$@"
+  else
+    docker compose -f docker-compose.yml "$@"
+  fi
+}
+
+cd "${DEPLOY_PATH}"
+
+if [[ ! -d .git ]]; then
+  echo "ERROR: ${DEPLOY_PATH} no es un repositorio git" >&2
+  exit 1
+fi
+
+log "Fetch origin/${GIT_BRANCH}"
+git fetch origin "${GIT_BRANCH}"
+git reset --hard "origin/${GIT_BRANCH}"
+
+if [[ "${DEPLOY_MODE}" == "docker" ]]; then
+  log "Docker Compose build + up"
+  compose build --pull
+  compose up -d
+
+  log "Composer install (dentro del contenedor)"
+  compose exec -T app composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
+
+  if [[ "${RUN_MIGRATIONS}" == "true" ]]; then
+    compose exec -T app php artisan migrate --force
+  fi
+
+  compose exec -T app php artisan config:cache
+  compose exec -T app php artisan route:cache
+  compose exec -T app php artisan view:cache
+  compose exec -T app php artisan horizon:terminate || true
+else
+  log "Composer install (host — requiere PHP instalado en el servidor)"
+  composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
+
+  if [[ "${RUN_MIGRATIONS}" == "true" ]]; then
+    php artisan migrate --force
+  fi
+
+  php artisan config:cache
+  php artisan route:cache
+  php artisan view:cache
+  php artisan horizon:terminate || true
+
+  if command -v systemctl >/dev/null 2>&1; then
+    sudo systemctl reload "${PHP_FPM_SERVICE}" || true
+  fi
+fi
+
+log "Deploy completado (${DEPLOY_MODE}, rama ${GIT_BRANCH})"

@@ -3,7 +3,8 @@
 namespace App\Support\WhatsApp;
 
 /**
- * Dominio de BD para jobs WaCopiloto (cola sin Origin/Referer del front).
+ * Metadatos de contexto para jobs WaCopiloto (auditoría / job_domain en batches).
+ * La BD ya no se elige por dominio: cada despliegue usa su .env.
  */
 class WaCopilotoJobContext
 {
@@ -41,17 +42,7 @@ class WaCopilotoJobContext
             return $fromApp;
         }
 
-        $copiloto = trim((string) config('meta_whatsapp_copiloto.job_domain', ''));
-        if ($copiloto !== '' && $copiloto !== 'localhost') {
-            return self::normalizeHost($copiloto);
-        }
-
-        $queue = trim((string) config('database.queue_job_domain', ''));
-        if ($queue !== '' && $queue !== 'localhost') {
-            return self::normalizeHost($queue);
-        }
-
-        return app()->environment('local') ? 'localhost' : 'intranetv2.probusiness.pe';
+        return 'localhost';
     }
 
     private static function normalizeHost($host): string
