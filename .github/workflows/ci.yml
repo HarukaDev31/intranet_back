@@ -61,7 +61,9 @@ jobs:
           REDIS_PORT: 6379
         run: |
           php artisan about --only=environment,cache,drivers
-          php artisan route:list --compact
+          # L9 no tiene --compact ni --columns; --json valida que todas las rutas resuelven
+          php artisan route:list --except-vendor --json > /tmp/routes.json
+          test -s /tmp/routes.json
 
       - name: Run unit tests
         env:

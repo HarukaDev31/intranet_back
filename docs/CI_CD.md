@@ -113,7 +113,7 @@ Durante upgrades en QA:
 
 | Error | Solución |
 |-------|----------|
-| `route:list --columns` | Ya corregido: usa `--compact` (L9+) |
+| `route:list --columns` / `--compact` | L9 usa `route:list --except-vendor --json` |
 | Feature tests fallan | No bloquean deploy (`continue-on-error`); arreglar gradualmente |
 | SSH permission denied | Revisar `DEPLOY_SSH_KEY` y `authorized_keys` |
 | `vendor/` corrupto en servidor | Deploy con `composer_clean=true` |
