@@ -7,7 +7,7 @@
 #
 # .env del servidor (QA):
 #   APP_PORT=8085
-#   APP_URL=https://intranetback-qa.probusiness.pe
+#   APP_URL=https://qa.intranetback.probusiness.pe
 #   DB_HOST=localhost
 #   DB_SOCKET=/var/run/mysqld/mysqld.sock
 #   REDIS_HOST=redis

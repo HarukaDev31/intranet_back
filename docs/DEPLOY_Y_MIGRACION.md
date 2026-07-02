@@ -102,7 +102,7 @@ Resumen puertos en el mismo servidor:
 
 | Ambiente | Dominio | `APP_PORT` | WebSockets (host) |
 |----------|---------|------------|-------------------|
-| QA | `intranetback-qa.probusiness.pe` | `8085` | `6002` |
+| QA | `qa.intranetback.probusiness.pe` | `8085` | `6002` |
 | PROD | `intranetback.probusiness.pe` | `8081` | `6001` |
 
 ### Setup PROD (segundo clone)
