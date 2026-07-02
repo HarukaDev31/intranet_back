@@ -99,7 +99,9 @@ services:
     image: intranet_back-app
     restart: unless-stopped
     user: www-data
-    command: php artisan websockets:serve
+    command: >
+      sh -c "php artisan config:clear &&
+        php artisan websockets:serve"
     ports:
       - "127.0.0.1:${LARAVEL_WEBSOCKETS_PORT}:${LARAVEL_WEBSOCKETS_PORT}"
     volumes:
