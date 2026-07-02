@@ -177,6 +177,30 @@ docker compose -f docker-compose.yml -f docker-compose.host-mysql.yml exec app p
 
 Diagnóstico automático: `bash scripts/docker-db-check.sh`
 
+#### Si `curl` devuelve HTTP 500
+
+Nginx y PHP responden; el error es de Laravel. En el servidor:
+
+```bash
+cd /var/www/html/intranet_back_qa
+docker compose -f docker-compose.yml -f docker-compose.host-mysql.yml exec app php artisan route:clear
+docker compose -f docker-compose.yml -f docker-compose.host-mysql.yml exec app php artisan config:clear
+docker compose -f docker-compose.yml -f docker-compose.host-mysql.yml exec app php artisan view:clear
+docker compose -f docker-compose.yml -f docker-compose.host-mysql.yml exec app tail -50 storage/logs/laravel.log
+curl -I http://127.0.0.1:8085
+```
+
+Causas frecuentes:
+
+| Causa | Solución |
+|-------|----------|
+| `route:cache` con closures en `web.php` | `route:clear` (deploy ya no hace `route:cache`) |
+| `config:cache` con `.env` viejo | `config:clear` y luego `config:cache` |
+| `APP_KEY` vacía | `php artisan key:generate` |
+| Permisos `storage/` | `chown -R www-data storage bootstrap/cache` |
+
+Para ver el error en pantalla (solo QA): `APP_DEBUG=true` temporal + `config:clear`.
+
 ---
 
 ## Horizon y Scheduler: de Supervisor (host) a Docker

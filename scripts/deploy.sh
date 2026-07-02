@@ -69,7 +69,8 @@ if [[ "${DEPLOY_MODE}" == "docker" ]]; then
   fi
 
   compose exec -T app php artisan config:cache
-  compose exec -T app php artisan route:cache
+  # No usar route:cache: web.php y varios módulos usan closures (rompe con 500).
+  compose exec -T app php artisan route:clear
   compose exec -T app php artisan view:cache
   compose exec -T app php artisan horizon:terminate || true
   compose restart horizon scheduler || true
@@ -82,7 +83,7 @@ else
   fi
 
   php artisan config:cache
-  php artisan route:cache
+  php artisan route:clear
   php artisan view:cache
   php artisan horizon:terminate || true
 
