@@ -70,11 +70,11 @@ jobs:
         env:
           REDIS_HOST: 127.0.0.1
           REDIS_PORT: 6379
-        run: vendor/bin/phpunit --testsuite=Unit
+        run: vendor/bin/phpunit --testsuite=Unit --exclude-group integration,requires-db
 
       - name: Run feature tests
         env:
           REDIS_HOST: 127.0.0.1
           REDIS_PORT: 6379
         continue-on-error: true
-        run: vendor/bin/phpunit --testsuite=Feature
+        run: vendor/bin/phpunit --testsuite=Feature --exclude-group integration,requires-db

@@ -7,6 +7,11 @@ use App\Services\CalculadoraImportacionService;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use Tests\TestCase;
 
+/**
+ * Requiere MySQL con datos reales (usuarios, contenedores). Ejecutar en local/QA, no en CI.
+ *
+ * @group requires-db
+ */
 class CalculadoraImportacionExcelGenerationTest extends TestCase
 {
     /**

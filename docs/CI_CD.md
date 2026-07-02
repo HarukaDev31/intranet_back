@@ -116,6 +116,7 @@ Durante upgrades en QA:
 | Error | Solución |
 |-------|----------|
 | `route:list --columns` / `--compact` | L9 usa `route:list --except-vendor --json` |
-| Feature tests fallan | No bloquean deploy (`continue-on-error`); arreglar gradualmente |
+| Feature tests fallan | No bloquean deploy; tests `@group integration` / `requires-db` se excluyen en CI |
+| Unit tests MySQL | Tests con BD real van con `@group requires-db`; correr en local: `phpunit --group requires-db` |
 | SSH permission denied | Revisar `DEPLOY_SSH_KEY` y `authorized_keys` |
 | `vendor/` corrupto en servidor | Deploy con `composer_clean=true` |

@@ -87,6 +87,9 @@ class GenerateMassiveExcelPayrollsTest extends TestCase
         ];
     }
 
+    /**
+     * @group integration
+     */
     public function test_generate_massive_excel_payrolls_descarga_zip_con_mocks(): void
     {
         $idContenedor = 152;
