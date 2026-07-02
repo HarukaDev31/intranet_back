@@ -342,8 +342,9 @@ PHP sube **dentro del Dockerfile** (8.2 para L9–L12 → **8.3** para L13).
 
 ```text
 qa (Docker) — upgrades en cadena, sin merge a main hasta el final:
-  L9  ✓ (actual)
-  L10 → L11 (+ Reverb, quitar beyondcode websockets)
+  L9  ✓
+  L10 ✓ (actual)
+  L11 (+ Reverb, quitar beyondcode websockets)
   L12 → L13 (Dockerfile php:8.3-fpm + CI php 8.3)
 ```
 

@@ -165,11 +165,14 @@ Estrategia: subir versiones en rama `qa` (o `upgrade/laravel-*` + deploy manual)
 
 | Laravel | PHP (Dockerfile) | Notas |
 |---------|------------------|-------|
-| 9–12 | `php:8.2-fpm` | Rama actual |
+| 9–12 | `php:8.2-fpm` | **L10** en QA (Jul 2026) |
 | 13 | `php:8.3-fpm` | Cambiar `Dockerfile` + CI `php-version: 8.3` |
 | 11+ | Reverb | Reemplazar `beyondcode/laravel-websockets` |
 
-Durante upgrades en QA:
+Durante upgrades en QA (L9→L10, etc.):
+
+- GitHub variable **`QA_COMPOSER_CLEAN=true`** o deploy manual con checkbox *composer_clean*
+- Tras el deploy exitoso, volver a `false`
 
 1. Merge cambios a `qa` (o deploy manual con `git_branch`)
 2. Variable `QA_COMPOSER_CLEAN=true` **o** checkbox en deploy manual
