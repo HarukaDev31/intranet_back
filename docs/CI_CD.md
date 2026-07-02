@@ -6,8 +6,8 @@ Pipeline para **QA (Docker)** y **PROD (host, manual)**.
 
 | Archivo | Disparador | Qué hace |
 |---------|------------|----------|
-| `ci.yml` | Push/PR en `qa`, `main`, `upgrade/**` | Composer, smoke (`about`, `route:list`), PHPUnit Unit (+ Feature sin bloquear) |
-| `deploy-qa.yml` | Push a `qa` o manual | CI → SSH → `scripts/deploy.sh` en el servidor QA |
+| `ci.yml` | PR a `qa`/`main`, push `main`/`upgrade/**` | Composer, smoke, PHPUnit Unit (+ Feature sin bloquear) |
+| `deploy-qa.yml` | Push a `qa` o manual | CI reutilizado → SSH → `deploy.sh` |
 | `deploy-prod.yml` | Manual (`deploy`) | SSH → PROD (classic por defecto en host) |
 
 ## Configuración en GitHub (una sola vez)
@@ -62,7 +62,9 @@ ssh -i github_actions_intranet DEPLOY_USER@DEPLOY_HOST
 ## Flujo QA (automático)
 
 ```text
-push/merge a qa  →  CI (tests)  →  deploy-qa (SSH + deploy.sh)
+push a qa  →  solo Deploy QA (incluye CI + deploy)
+PR a qa    →  solo CI (validación antes del merge)
+push main  →  CI
 ```
 
 El servidor ejecuta:
