@@ -62,17 +62,18 @@ if [[ "${DEPLOY_MODE}" == "docker" ]]; then
   fix_app_permissions
 
   log "Limpiar config cache (evita DB_* obsoletos de un deploy anterior)"
-  compose exec -T app php artisan config:clear
+  compose exec -T -u www-data app php artisan config:clear
 
   if [[ "${RUN_MIGRATIONS}" == "true" ]]; then
-    compose exec -T app php artisan migrate --force
+    compose exec -T -u www-data app php artisan migrate --force
   fi
 
-  compose exec -T app php artisan config:cache
+  compose exec -T -u www-data app php artisan config:cache
   # No usar route:cache: web.php y varios módulos usan closures (rompe con 500).
-  compose exec -T app php artisan route:clear
-  compose exec -T app php artisan view:cache
-  compose exec -T app php artisan horizon:terminate || true
+  compose exec -T -u www-data app php artisan route:clear
+  compose exec -T -u www-data app php artisan view:clear
+  compose exec -T -u www-data app php artisan horizon:terminate || true
+  fix_app_permissions
   compose restart horizon scheduler || true
 else
   log "Composer install (host — requiere PHP instalado en el servidor)"
