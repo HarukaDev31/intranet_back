@@ -182,11 +182,10 @@ class UploadStorageTemplatesToS3Command extends Command
     private function s3Client()
     {
         try {
-            /** @var FilesystemAdapter $disk */
+            /** @var \Illuminate\Contracts\Filesystem\Filesystem $disk */
             $disk = Storage::disk('s3');
-            $adapter = $disk->getAdapter();
-            if (method_exists($adapter, 'getClient')) {
-                return $adapter->getClient();
+            if (method_exists($disk, 'getClient')) {
+                return $disk->getClient();
             }
         } catch (\Throwable $e) {
             return null;

@@ -324,10 +324,10 @@ class MigrateCargoEntregaS3RootCommand extends Command
     private function resolveS3Client(): ?S3Client
     {
         try {
-            $adapter = Storage::disk('s3')->getAdapter();
-            if (method_exists($adapter, 'getClient')) {
+            $disk = Storage::disk('s3');
+            if (method_exists($disk, 'getClient')) {
                 /** @var S3Client $client */
-                $client = $adapter->getClient();
+                $client = $disk->getClient();
 
                 return $client;
             }

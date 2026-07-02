@@ -325,11 +325,20 @@ Cada clone tiene su `.env`. No hay middleware que cambie la BD según el dominio
 PHP sube **dentro del Dockerfile** al migrar versiones (8.2 hoy → 8.3 cuando vayas a Laravel 13). No tocas el host.
 
 ```text
-upgrade/laravel-9  → qa (docker) → validar → main
+upgrade/laravel-9  → qa (docker) → validar → main (PROD PHP ≥ 8.2)
 upgrade/laravel-10 → qa → validar → main
 ...
 Laravel 13         → cambiar base image a php:8.3-fpm en Dockerfile
 ```
+
+### WebSockets: beyondcode vs Reverb
+
+| Versión Laravel | WebSockets |
+|-----------------|------------|
+| **L8–L10** | `beyondcode/laravel-websockets` 1.14.x (abandonado pero compatible con L9/L10 y PHP 8.x). Contenedor `websockets` sin cambios. |
+| **L11+** | Migrar a **[Laravel Reverb](https://laravel.com/docs/reverb)** (oficial). Reverb exige Laravel 11+ y PHP 8.2+. El front sigue protocolo Pusher; cambia el servidor y la config de broadcasting. |
+
+No hace falta Reverb en el salto a **L9**: `websockets:serve` sigue funcionando. Planificar Reverb en la rama `upgrade/laravel-11`.
 
 Checklist por salto:
 

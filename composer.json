@@ -5,36 +5,35 @@
     "keywords": ["framework", "laravel"],
     "license": "MIT",
     "require": {
-        "php": "^7.4|^8.0",
+        "php": "^8.2",
         "aws/aws-sdk-php": "^3.337.3 <3.369",
         "barryvdh/laravel-snappy": "^1.0",
         "beyondcode/laravel-websockets": "^1.14",
         "darkaonline/l5-swagger": "^8.6",
         "doctrine/dbal": "^3.10",
         "dompdf/dompdf": "^3.1",
-        "fruitcake/laravel-cors": "^2.0",
-        "guzzlehttp/guzzle": "^7.0.1",
-        "laravel/framework": "^8.75",
+        "guzzlehttp/guzzle": "^7.2",
+        "laravel/framework": "^9.52",
         "laravel/horizon": "^5.22",
-        "laravel/telescope": "^4.10",
-        "laravel/sanctum": "^2.11",
-        "laravel/tinker": "^2.5",
-        "league/flysystem-aws-s3-v3": "^1.0",
+        "laravel/telescope": "^4.17",
+        "laravel/sanctum": "^3.3",
+        "laravel/tinker": "^2.8",
+        "league/flysystem-aws-s3-v3": "^3.0",
         "maatwebsite/excel": "^3.1",
-        "predis/predis": "1.1",
+        "predis/predis": "^2.2",
         "rap2hpoutre/laravel-log-viewer": "^2.5",
-        "revolution/laravel-google-sheets": "5.8.1",
+        "revolution/laravel-google-sheets": "^5.8.1",
         "setasign/fpdi": "^2.6",
         "spatie/browsershot": "^3.58",
-        "tymon/jwt-auth": "^1.0"
+        "tymon/jwt-auth": "^2.0"
     },
     "require-dev": {
-        "facade/ignition": "^2.5",
-        "fakerphp/faker": "^1.9.1",
-        "laravel/sail": "^1.0.1",
-        "mockery/mockery": "^1.4.4",
-        "nunomaduro/collision": "^5.10",
-        "phpunit/phpunit": "^9.5.10"
+        "fakerphp/faker": "^1.23",
+        "laravel/sail": "^1.26",
+        "mockery/mockery": "^1.6",
+        "nunomaduro/collision": "^6.4",
+        "phpunit/phpunit": "^9.6",
+        "spatie/laravel-ignition": "^1.6"
     },
     "autoload": {
         "psr-4": {
@@ -78,9 +77,9 @@
         "sort-packages": true,
         "platform-check": false,
         "platform": {
-            "php": "7.4.33",
-            "ext-pcntl": "7.4",
-            "ext-posix": "7.4"
+            "php": "8.2.12",
+            "ext-pcntl": "8.2",
+            "ext-posix": "8.2"
         }
     },
     "minimum-stability": "dev",

@@ -608,9 +608,9 @@ class S3ObjectStorageConnector implements ObjectStorageConnectorInterface
     private function s3Client()
     {
         try {
-            $adapter = Storage::disk('s3')->getAdapter();
-            if (method_exists($adapter, 'getClient')) {
-                return $adapter->getClient();
+            $disk = Storage::disk('s3');
+            if (method_exists($disk, 'getClient')) {
+                return $disk->getClient();
             }
         } catch (\Throwable $e) {
             return null;
