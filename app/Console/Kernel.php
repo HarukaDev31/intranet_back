@@ -23,13 +23,14 @@ class Kernel extends ConsoleKernel
         // Ejecutar auto-firma de contratos cada 5 minutos
         $schedule->command('contracts:auto-sign')->everyFiveMinutes();
         // Reintentar sincronización Bitrix de leads landing pendientes (solo si hay webhook)
-        $schedule->command('landing:enqueue-bitrix-sync')
+       /* $schedule->command('landing:enqueue-bitrix-sync')
             ->everyMinute()
             ->when(function () {
                 $url = config('services.bitrix.webhook_url');
 
                 return !empty($url) && is_string($url);
             });
+            */
         // Sincroniza calculadoras COTIZADO -> CONFIRMADO segun estado de cotizacion vinculada
         $schedule->command('calculadora:sync-cotizado-a-confirmado')
             ->everyFiveMinutes()
@@ -43,15 +44,17 @@ class Kernel extends ConsoleKernel
             ->everyFiveMinutes()
             ->withoutOverlapping();
         // Excel seguimiento consolidado en Drive: auto-vincular #11-2026 en adelante
-        $schedule->command('segimiento-consolidado:vincular')
+       /* $schedule->command('segimiento-consolidado:vincular')
             ->everyFiveMinutes()
             ->withoutOverlapping();
+            */
         // Excel seguimiento consolidado en Drive: sincronización de respaldo (no cada 5 min)
-        $schedule->command('segimiento-consolidado:sync-linked')
+       /* $schedule->command('segimiento-consolidado:sync-linked')
             ->everyThirtyMinutes()
             ->withoutOverlapping();
+            */
         // Corte diario — hora desde system_configs (excel_seguimiento_hora_corte)
-        $schedule->command('segimiento-consolidado:corte-datos-proveedor')
+       /* $schedule->command('segimiento-consolidado:corte-datos-proveedor')
             ->everyMinute()
             ->timezone(config('carga_consolidada.seguimiento_corte_timezone', 'America/Lima'))
             ->when(function () {
@@ -60,6 +63,7 @@ class Kernel extends ConsoleKernel
                 return Carbon::now($settings['timezone'])->format('H:i') === $settings['hora'];
             })
             ->withoutOverlapping();
+            */
     }
 
     /**
