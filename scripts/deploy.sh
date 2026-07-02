@@ -51,6 +51,17 @@ fix_app_permissions() {
     /var/www/html/bootstrap/cache
 }
 
+ensure_env_secrets() {
+  if ! grep -q '^APP_KEY=base64:' .env 2>/dev/null; then
+    log "Generar APP_KEY (.env lo escribe root)"
+    compose exec -T -u root app php artisan key:generate --force
+  fi
+  if ! grep -q '^JWT_SECRET=' .env 2>/dev/null || grep -q '^JWT_SECRET=$' .env 2>/dev/null; then
+    log "Generar JWT_SECRET (.env lo escribe root)"
+    compose exec -T -u root app php artisan jwt:secret --force
+  fi
+}
+
 if [[ "${DEPLOY_MODE}" == "docker" ]]; then
   log "Docker Compose build + up"
   compose build --pull
@@ -59,6 +70,7 @@ if [[ "${DEPLOY_MODE}" == "docker" ]]; then
   log "Composer install (dentro del contenedor, como root)"
   compose exec -T -u root app git config --global --add safe.directory /var/www/html || true
   compose exec -T -u root app composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
+  ensure_env_secrets
   fix_app_permissions
 
   log "Limpiar config cache (evita DB_* obsoletos de un deploy anterior)"
