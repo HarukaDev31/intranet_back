@@ -287,30 +287,44 @@ REDIS_PREFIX=qa_
 
 ## Fase 3 — CI/CD en GitHub
 
+Guía detallada: **[docs/CI_CD.md](CI_CD.md)**.
+
 | Workflow          | Cuándo              | Qué hace                    |
 |-------------------|---------------------|-----------------------------|
-| `ci.yml`          | PR/push `qa`/`main` | Tests + `route:list`        |
-| `deploy-qa.yml`   | Push a `qa`         | SSH → `deploy.sh` (docker)  |
-| `deploy-prod.yml` | Manual              | SSH → prod (escribir deploy)|
+| `ci.yml`          | PR/push `qa`/`main`/`upgrade/**` | Unit tests + smoke Laravel |
+| `deploy-qa.yml`   | Push a `qa` (+ manual) | CI OK → SSH → `deploy.sh` (docker) |
+| `deploy-prod.yml` | Manual              | SSH → prod (classic host)   |
 
-### Secrets
+### Secrets (Settings → Actions → Secrets)
 
 | Secret             | Ejemplo                            |
 |----------------------|------------------------------------|
-| `DEPLOY_HOST`        | IP del servidor                    |
-| `DEPLOY_USER`        | usuario SSH                        |
-| `DEPLOY_SSH_KEY`     | clave privada                      |
+| `DEPLOY_HOST`        | IP del servidor EC2                |
+| `DEPLOY_USER`        | `root` / `ubuntu`                  |
+| `DEPLOY_SSH_KEY`     | clave privada PEM (ed25519)        |
 | `QA_DEPLOY_PATH`     | `/var/www/html/intranet_back_qa`   |
 | `PROD_DEPLOY_PATH`   | `/var/www/html/intranet_back`      |
 
-Por defecto el deploy usa **Docker** (`DEPLOY_MODE=docker`). Solo si algún día vuelves a PHP en el host: variable `QA_DEPLOY_MODE=classic`.
+Opcional: `DEPLOY_SSH_PORT` (default 22).
+
+### Variables (Settings → Actions → Variables)
+
+| Variable             | QA        | PROD      |
+|----------------------|-----------|-----------|
+| `QA_DEPLOY_MODE`     | `docker`  | —         |
+| `QA_COMPOSER_CLEAN`  | `false`   | —         |
+| `PROD_DEPLOY_MODE`   | —         | `classic` |
+
+Pon `QA_COMPOSER_CLEAN=true` durante upgrades Laravel (borra `vendor/` en deploy).
 
 ### Flujo diario
 
 ```text
-feature → PR → qa → merge → deploy auto (docker build + up + migrate)
-validar QA → PR qa → main → Deploy PROD manual
+feature → PR → qa → merge → CI + deploy auto
+validar QA → (PROD sigue L8 hasta PHP 8.3+) → Deploy PROD manual
 ```
+
+Deploy manual otra rama: Actions → Deploy QA → `git_branch=upgrade/laravel-10`.
 
 ---
 
@@ -320,16 +334,25 @@ Cada clone tiene su `.env`. No hay middleware que cambie la BD según el dominio
 
 ---
 
-## Fase 5 — Migración Laravel (por ramas, en QA primero)
+## Fase 5 — Migración Laravel (QA directo hasta L13)
 
-PHP sube **dentro del Dockerfile** al migrar versiones (8.2 hoy → 8.3 cuando vayas a Laravel 13). No tocas el host.
+**PROD** permanece en L8 + PHP 7.4 hasta terminar la cadena en QA y subir PHP en prod.
+
+PHP sube **dentro del Dockerfile** (8.2 para L9–L12 → **8.3** para L13).
 
 ```text
-upgrade/laravel-9  → qa (docker) → validar → main (PROD PHP ≥ 8.2)
-upgrade/laravel-10 → qa → validar → main
-...
-Laravel 13         → cambiar base image a php:8.3-fpm en Dockerfile
+qa (Docker) — upgrades en cadena, sin merge a main hasta el final:
+  L9  ✓ (actual)
+  L10 → L11 (+ Reverb, quitar beyondcode websockets)
+  L12 → L13 (Dockerfile php:8.3-fpm + CI php 8.3)
 ```
+
+Cada salto en QA:
+
+1. Merge a `qa` (o deploy manual con `git_branch`)
+2. GitHub variable `QA_COMPOSER_CLEAN=true` o deploy manual con checkbox
+3. Checklist: Horizon, JWT, S3, Excel, WebSockets/Reverb, WhatsApp webhooks
+4. PROD no se toca
 
 ### WebSockets: beyondcode vs Reverb
 

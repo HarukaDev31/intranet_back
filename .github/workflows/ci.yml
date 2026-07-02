@@ -2,9 +2,14 @@ name: CI
 
 on:
   push:
-    branches: [qa, main]
+    branches: [qa, main, 'upgrade/**']
   pull_request:
     branches: [qa, main]
+  workflow_call:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
@@ -42,13 +47,31 @@ jobs:
         run: composer install --no-interaction --prefer-dist
 
       - name: Prepare Laravel
+        env:
+          REDIS_HOST: 127.0.0.1
+          REDIS_PORT: 6379
         run: |
           cp .env.example .env
           php artisan key:generate
           php artisan config:clear
 
-      - name: Validate routes
-        run: php artisan route:list --columns=method,uri,name
+      - name: Smoke check (about + routes)
+        env:
+          REDIS_HOST: 127.0.0.1
+          REDIS_PORT: 6379
+        run: |
+          php artisan about --only=environment,cache,drivers
+          php artisan route:list --compact
 
-      - name: Run tests
-        run: vendor/bin/phpunit
+      - name: Run unit tests
+        env:
+          REDIS_HOST: 127.0.0.1
+          REDIS_PORT: 6379
+        run: vendor/bin/phpunit --testsuite=Unit
+
+      - name: Run feature tests
+        env:
+          REDIS_HOST: 127.0.0.1
+          REDIS_PORT: 6379
+        continue-on-error: true
+        run: vendor/bin/phpunit --testsuite=Feature

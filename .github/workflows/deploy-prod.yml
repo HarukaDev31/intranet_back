@@ -7,6 +7,11 @@ on:
         description: 'Escribe "deploy" para confirmar'
         required: true
         type: string
+      run_migrations:
+        description: 'Ejecutar migrate --force'
+        required: false
+        default: true
+        type: boolean
 
 jobs:
   deploy:
@@ -21,11 +26,24 @@ jobs:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
+          port: ${{ secrets.DEPLOY_SSH_PORT || 22 }}
+          script_stop: true
           script: |
+            set -euo pipefail
+
             DEPLOY_PATH="${{ secrets.PROD_DEPLOY_PATH }}"
             if [ -z "$DEPLOY_PATH" ]; then DEPLOY_PATH="/var/www/html/intranet_back"; fi
+
+            DEPLOY_MODE="${{ vars.PROD_DEPLOY_MODE }}"
+            if [ -z "$DEPLOY_MODE" ]; then DEPLOY_MODE="classic"; fi
+
+            RUN_MIGRATIONS="${{ github.event.inputs.run_migrations }}"
+            if [ -z "$RUN_MIGRATIONS" ]; then RUN_MIGRATIONS="true"; fi
+
             export DEPLOY_PATH
             export GIT_BRANCH=main
-            export DEPLOY_MODE="${{ vars.PROD_DEPLOY_MODE }}"
-            if [ -z "$DEPLOY_MODE" ]; then DEPLOY_MODE="docker"; fi
+            export DEPLOY_MODE
+            export RUN_MIGRATIONS
+
+            echo "[deploy-prod] path=${DEPLOY_PATH} branch=main mode=${DEPLOY_MODE}"
             bash "${DEPLOY_PATH}/scripts/deploy.sh"
