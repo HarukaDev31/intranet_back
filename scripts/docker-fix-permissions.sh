@@ -17,14 +17,18 @@ compose() {
   docker compose "${files[@]}" "$@"
 }
 
-echo "[permissions] chown www-data en storage, bootstrap/cache y vendor"
-compose exec -T -u root app chown -R www-data:www-data \
-  /var/www/html/vendor \
-  /var/www/html/storage \
-  /var/www/html/bootstrap/cache
-
-compose exec -T -u root app chmod -R ug+rwx \
-  /var/www/html/storage \
-  /var/www/html/bootstrap/cache
+echo "[permissions] limpiar cache y corregir ownership (www-data)"
+compose exec -T -u root app sh -c '
+  mkdir -p storage/framework/cache/data
+  mkdir -p storage/framework/sessions
+  mkdir -p storage/framework/views
+  mkdir -p storage/logs
+  mkdir -p bootstrap/cache
+  rm -rf storage/framework/cache/data/*
+  chown -R www-data:www-data vendor storage bootstrap/cache
+  chmod -R ug+rwx storage bootstrap/cache
+'
+compose exec -T -u www-data app php artisan cache:clear || true
+compose exec -T -u www-data app php artisan config:clear || true
 
 echo "[permissions] listo"

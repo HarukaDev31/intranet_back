@@ -42,13 +42,15 @@ git fetch origin "${GIT_BRANCH}"
 git reset --hard "origin/${GIT_BRANCH}"
 
 fix_app_permissions() {
-  compose exec -T -u root app chown -R www-data:www-data \
-    /var/www/html/vendor \
-    /var/www/html/storage \
-    /var/www/html/bootstrap/cache
-  compose exec -T -u root app chmod -R ug+rwx \
-    /var/www/html/storage \
-    /var/www/html/bootstrap/cache
+  compose exec -T -u root app sh -c '
+    mkdir -p storage/framework/cache/data
+    mkdir -p storage/framework/sessions
+    mkdir -p storage/framework/views
+    mkdir -p storage/logs
+    mkdir -p bootstrap/cache
+    chown -R www-data:www-data vendor storage bootstrap/cache
+    chmod -R ug+rwx storage bootstrap/cache
+  '
 }
 
 ensure_env_secrets() {
