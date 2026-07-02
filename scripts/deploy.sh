@@ -52,6 +52,9 @@ if [[ ! -d .git ]]; then
   exit 1
 fi
 
+# Repo suele ser de ubuntu; tras sudo somos root → Git 2.35+ bloquea "dubious ownership"
+git config --global --add safe.directory "${DEPLOY_PATH}" 2>/dev/null || true
+
 log "Fetch origin/${GIT_BRANCH}"
 git fetch origin "${GIT_BRANCH}"
 git reset --hard "origin/${GIT_BRANCH}"
