@@ -1046,21 +1046,83 @@ class CoordinacionWhatsappPayload
         return "Hola {$nombre}.\n\nGracias por llenar nuestro formulario del consolidado #{$carga}, le estaremos avisando de nuevos avances.";
     }
 
+    /**
+     * @return array{template: string, params: array<string, string>, cantidad_line: string}
+     */
+    public static function resolveInspeccionLlegadaTemplate(
+        int $qtyBoxChina,
+        int $qtyPalletChina
+    ): array {
+        $boxes = max(0, $qtyBoxChina);
+        $pallets = max(0, $qtyPalletChina);
+
+        if ($boxes > 0 && $pallets > 0) {
+            return [
+                'template' => 'pb_inspeccion_llegada_v1_pallets_boxes',
+                'params' => [
+                    'cantidad_boxes' => (string) $boxes,
+                    'cantidad_pallets' => (string) $pallets,
+                ],
+                'cantidad_line' => "{$boxes} boxes y {$pallets} pallets",
+            ];
+        }
+
+        if ($pallets > 0) {
+            return [
+                'template' => 'pb_inspeccion_llegada_v1_pallets',
+                'params' => [
+                    'cantidad_pallets' => (string) $pallets,
+                ],
+                'cantidad_line' => "{$pallets} pallets",
+            ];
+        }
+
+        return [
+            'template' => 'pb_inspeccion_llegada_v1',
+            'params' => [
+                'cantidad_cajas' => (string) $boxes,
+            ],
+            'cantidad_line' => "{$boxes} boxes",
+        ];
+    }
+
+    public static function inspeccionLlegadaPreview(
+        string $nombreCliente,
+        string $codigoProveedor,
+        string $cantidadLine,
+        string $linkInspeccion
+    ): string {
+        return "📦 Cliente: {$nombreCliente} — Proveedor {$codigoProveedor} — {$cantidadLine}.\n\n"
+            . "Tu carga llegó a nuestro almacén de Yiwu, te comparto las fotos y videos.\n\n"
+            . "🔗 Ver inspección: {$linkInspeccion} 📦";
+    }
+
     public static function inspeccionLlegada(
         string $phone,
         string $nombreCliente,
         string $codigoProveedor,
-        string $cantidadCajas,
+        int $qtyBoxChina,
+        int $qtyPalletChina,
         string $linkInspeccion,
-        string $bitrixMessage,
+        ?string $bitrixMessage = null,
         int $sleep = 0
     ): array {
-        return self::template($phone, 'pb_inspeccion_llegada_v1', [
+        $resolved = self::resolveInspeccionLlegadaTemplate($qtyBoxChina, $qtyPalletChina);
+
+        $params = array_merge([
             'nombre_cliente' => $nombreCliente,
             'codigo_proveedor' => $codigoProveedor,
-            'cantidad_cajas' => $cantidadCajas,
             'link_inspeccion' => $linkInspeccion,
-        ], $bitrixMessage, $sleep);
+        ], $resolved['params']);
+
+        $preview = $bitrixMessage ?? self::inspeccionLlegadaPreview(
+            $nombreCliente,
+            $codigoProveedor,
+            $resolved['cantidad_line'],
+            $linkInspeccion
+        );
+
+        return self::template($phone, $resolved['template'], $params, $preview, $sleep);
     }
 
     public static function inspeccionImagen(

@@ -50,10 +50,24 @@ class WhatsappInboxTemplateService
             ],
             [
                 'name' => 'pb_inspeccion_llegada_v1',
-                'label' => 'Inspección — Llegó a almacén',
+                'label' => 'Inspección — Llegó a almacén (solo boxes)',
                 'language' => 'es_PE',
-                'text' => "📦 Cliente: {{nombre_cliente}} — Proveedor {{codigo_proveedor}} — {{cantidad_cajas}} boxes.\n\nTu carga llegó a nuestro almacén de Yiwu.",
-                'params' => ['nombre_cliente', 'codigo_proveedor', 'cantidad_cajas'],
+                'text' => "📦 Cliente: {{nombre_cliente}} — Proveedor {{codigo_proveedor}} — {{cantidad_cajas}} boxes.\n\nTu carga llegó a nuestro almacén de Yiwu, te comparto las fotos y videos.\n\n🔗 Ver inspección: {{link_inspeccion}} 📦",
+                'params' => ['nombre_cliente', 'codigo_proveedor', 'cantidad_cajas', 'link_inspeccion'],
+            ],
+            [
+                'name' => 'pb_inspeccion_llegada_v1_pallets',
+                'label' => 'Inspección — Llegó a almacén (solo pallets)',
+                'language' => 'es_PE',
+                'text' => "📦 Cliente: {{nombre_cliente}} — Proveedor {{codigo_proveedor}} — {{cantidad_pallets}} pallets.\n\nTu carga llegó a nuestro almacén de Yiwu, te comparto las fotos y videos.\n\n🔗 Ver inspección: {{link_inspeccion}} 📦",
+                'params' => ['nombre_cliente', 'codigo_proveedor', 'cantidad_pallets', 'link_inspeccion'],
+            ],
+            [
+                'name' => 'pb_inspeccion_llegada_v1_pallets_boxes',
+                'label' => 'Inspección — Llegó a almacén (boxes y pallets)',
+                'language' => 'es_PE',
+                'text' => "📦 Cliente: {{nombre_cliente}} — Proveedor {{codigo_proveedor}} — {{cantidad_boxes}} boxes y {{cantidad_pallets}} pallets.\n\nTu carga llegó a nuestro almacén de Yiwu, te comparto las fotos y videos.\n\n🔗 Ver inspección: {{link_inspeccion}} 📦",
+                'params' => ['nombre_cliente', 'codigo_proveedor', 'cantidad_boxes', 'cantidad_pallets', 'link_inspeccion'],
             ],
             [
                 'name' => 'pb_entrega_recordatorio_v1',
