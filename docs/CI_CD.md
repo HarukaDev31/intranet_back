@@ -112,14 +112,34 @@ PR a qa    →  solo CI (validación antes del merge)
 push main  →  CI
 ```
 
-El servidor ejecuta:
+El servidor ejecuta `scripts/deploy.sh` (optimizado: build/composer/migrate solo si cambió algo relevante).
 
 ```bash
 git fetch origin qa && git reset --hard origin/qa
-docker compose build && up -d
-composer install (dentro del contenedor)
-migrate, config:cache, restart horizon/scheduler/websockets
+# docker build     → solo si cambió Dockerfile/compose/docker/*
+# composer install → solo si cambió composer.lock
+# migrate          → solo si hay migraciones nuevas
+docker compose up -d
+config:cache + restart workers (si cambió app/config/routes)
 ```
+
+### Tiempos esperados
+
+| Tipo de deploy | Antes | Ahora (aprox.) |
+|----------------|-------|----------------|
+| Solo PHP/código | ~6 min | **~2–3 min** |
+| composer.lock cambió | ~6 min | ~4 min |
+| Dockerfile cambió | ~6 min | ~5 min (sin `--pull` por defecto) |
+
+Variables opcionales en deploy manual / servidor:
+
+| Variable | Default | Uso |
+|----------|---------|-----|
+| `DOCKER_REBUILD` | `auto` | `true` fuerza build |
+| `DOCKER_BUILD_PULL` | `false` | `true` = `build --pull` (1x/semana) |
+| `COMPOSER_INSTALL` | `auto` | `true` fuerza composer install |
+
+CI en push a `qa`: **smoke only** (sin PHPUnit). Tests completos en **PR a qa**.
 
 ## Deploy manual (GitHub UI)
 

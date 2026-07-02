@@ -7,6 +7,12 @@ on:
   pull_request:
     branches: [qa, main]
   workflow_call:
+    inputs:
+      quick:
+        description: 'Smoke only (omitir PHPUnit) — deploy QA'
+        required: false
+        type: boolean
+        default: false
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -67,12 +73,14 @@ jobs:
           test -s /tmp/routes.json
 
       - name: Run unit tests
+        if: ${{ github.event_name != 'workflow_call' || inputs.quick != true }}
         env:
           REDIS_HOST: 127.0.0.1
           REDIS_PORT: 6379
         run: vendor/bin/phpunit --testsuite=Unit --exclude-group integration,requires-db
 
       - name: Run feature tests
+        if: ${{ github.event_name != 'workflow_call' || inputs.quick != true }}
         env:
           REDIS_HOST: 127.0.0.1
           REDIS_PORT: 6379

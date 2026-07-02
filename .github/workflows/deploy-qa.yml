@@ -28,6 +28,8 @@ concurrency:
 jobs:
   ci:
     uses: ./.github/workflows/ci.yml
+    with:
+      quick: true
 
   deploy:
     runs-on: ubuntu-latest
@@ -73,5 +75,11 @@ jobs:
             export COMPOSER_CLEAN
             export RUN_MIGRATIONS
 
+            # Antes de deploy.sh (puede estar desactualizado en el servidor)
+            sudo git config --global --add safe.directory "${DEPLOY_PATH}" || true
+            sudo git config --global --add safe.directory '*' || true
+
             echo "[deploy-qa] path=${DEPLOY_PATH} branch=${GIT_BRANCH} mode=${DEPLOY_MODE} composer_clean=${COMPOSER_CLEAN}"
-            bash "${DEPLOY_PATH}/scripts/deploy.sh"
+            sudo -E env DEPLOY_PATH="${DEPLOY_PATH}" GIT_BRANCH="${GIT_BRANCH}" DEPLOY_MODE="${DEPLOY_MODE}" \
+              COMPOSER_CLEAN="${COMPOSER_CLEAN}" RUN_MIGRATIONS="${RUN_MIGRATIONS}" DEPLOY_USE_SUDO=false \
+              bash "${DEPLOY_PATH}/scripts/deploy.sh"

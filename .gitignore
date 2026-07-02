@@ -13,5 +13,6 @@ npm-debug.log
 yarn-error.log
 /.idea
 /.vscode
+.deploy/
 storage/credentials.json
 /storage/app/google-drive-oauth-token.json
