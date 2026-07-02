@@ -26,6 +26,10 @@ services:
       # Dentro de Docker, Redis es el servicio "redis", no 127.0.0.1 del host.
       REDIS_HOST: ${DOCKER_REDIS_HOST:-redis}
       REDIS_PORT: ${DOCKER_REDIS_PORT:-6379}
+      # Laravel → publicar eventos al contenedor websockets
+      PUSHER_HOST: ${DOCKER_PUSHER_HOST:-websockets}
+      PUSHER_PORT: ${WEBSOCKETS_PORT:-6001}
+      PUSHER_SCHEME: http
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
@@ -85,6 +89,30 @@ services:
       REDIS_PORT: ${DOCKER_REDIS_PORT:-6379}
     depends_on:
       - app
+    networks:
+      - intranet
+
+  # Laravel WebSockets (beyondcode). Nginx del host hace wss → 127.0.0.1:WEBSOCKETS_PORT
+  # QA: WEBSOCKETS_PORT=6002 | PROD: WEBSOCKETS_PORT=6001
+  websockets:
+    image: intranet_back-app
+    restart: unless-stopped
+    user: www-data
+    command: php artisan websockets:serve
+    ports:
+      - "127.0.0.1:${WEBSOCKETS_PORT:-6001}:${WEBSOCKETS_PORT:-6001}"
+    volumes:
+      - .:/var/www/html
+    environment:
+      LARAVEL_WEBSOCKETS_PORT: ${WEBSOCKETS_PORT:-6001}
+      REDIS_HOST: ${DOCKER_REDIS_HOST:-redis}
+      REDIS_PORT: ${DOCKER_REDIS_PORT:-6379}
+      PUSHER_HOST: 0.0.0.0
+      PUSHER_PORT: ${WEBSOCKETS_PORT:-6001}
+      PUSHER_SCHEME: http
+    depends_on:
+      - app
+      - redis
     networks:
       - intranet
 

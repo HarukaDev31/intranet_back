@@ -88,7 +88,7 @@ if [[ "${DEPLOY_MODE}" == "docker" ]]; then
   compose exec -T -u www-data app php artisan view:clear
   compose exec -T -u www-data app php artisan horizon:terminate || true
   fix_app_permissions
-  compose restart horizon scheduler || true
+  compose restart horizon scheduler websockets || true
 else
   log "Composer install (host — requiere PHP instalado en el servidor)"
   composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
