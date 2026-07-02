@@ -23,6 +23,9 @@ services:
       - .:/var/www/html
     environment:
       APP_ENV: ${APP_ENV:-production}
+      # Dentro de Docker, Redis es el servicio "redis", no 127.0.0.1 del host.
+      REDIS_HOST: ${DOCKER_REDIS_HOST:-redis}
+      REDIS_PORT: ${DOCKER_REDIS_PORT:-6379}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
@@ -56,6 +59,9 @@ services:
     command: php artisan horizon
     volumes:
       - .:/var/www/html
+    environment:
+      REDIS_HOST: ${DOCKER_REDIS_HOST:-redis}
+      REDIS_PORT: ${DOCKER_REDIS_PORT:-6379}
     depends_on:
       - app
       - redis
@@ -72,6 +78,9 @@ services:
       done"
     volumes:
       - .:/var/www/html
+    environment:
+      REDIS_HOST: ${DOCKER_REDIS_HOST:-redis}
+      REDIS_PORT: ${DOCKER_REDIS_PORT:-6379}
     depends_on:
       - app
     networks:

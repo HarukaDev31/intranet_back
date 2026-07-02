@@ -1,16 +1,20 @@
 # MySQL instalado en el host con bind-address=127.0.0.1 (sin exponer 3306 a internet).
 # Monta el socket Unix del host en los contenedores PHP — no requiere abrir TCP ni cambiar bind-address.
 #
-# Uso en servidor:
-#   COMPOSE_HOST_MYSQL=true docker compose -f docker-compose.yml -f docker-compose.host-mysql.yml up -d
+# Uso en servidor QA:
+#   APP_PORT=8085 en .env
+#   docker compose -f docker-compose.yml -f docker-compose.host-mysql.yml up -d
 #
-# .env del servidor:
+# .env del servidor (QA):
+#   APP_PORT=8085
+#   APP_URL=https://intranetback-qa.probusiness.pe
 #   DB_HOST=localhost
 #   DB_SOCKET=/var/run/mysqld/mysqld.sock
+#   REDIS_HOST=redis
+#   REDIS_PORT=6379
 #
 # Verifica la ruta del socket en el host:
 #   mysql -e "SHOW VARIABLES LIKE 'socket';"
-
 services:
   app:
     volumes:
