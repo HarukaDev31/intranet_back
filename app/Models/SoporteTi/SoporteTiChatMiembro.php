@@ -18,7 +18,9 @@ class SoporteTiChatMiembro extends Model
         'joined_at',
     ];
 
-    protected $dates = ['joined_at'];
+    protected $casts = [
+        'joined_at' => 'datetime',
+    ];
 
     public function usuario()
     {
