@@ -12,6 +12,12 @@
 #   DB_SOCKET=/var/run/mysqld/mysqld.sock
 #   REDIS_HOST=redis
 #   REDIS_PORT=6379
+#   REDIS_PREFIX=qa_
+#   HORIZON_PREFIX=qa_horizon:
+#   QUEUE_CONNECTION=redis
+#   CACHE_DRIVER=file
+#   SESSION_DRIVER=file
+#   (No uses REDIS_HOST=127.0.0.1:6380 dentro de Docker — es el host, no el contenedor)
 #
 # Verifica la ruta del socket en el host:
 #   mysql -e "SHOW VARIABLES LIKE 'socket';"
