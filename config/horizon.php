@@ -352,5 +352,34 @@ return [
                 'memory' => 512,
             ],
         ],
+
+        // QA: mismo esquema que local (defaults + overrides). Sin esto, Horizon no levanta workers.
+        'qa' => [
+            'supervisor-importaciones' => [
+                'maxProcesses' => 2,
+            ],
+            'supervisor-importaciones-facturacion' => [
+                'maxProcesses' => 1,
+            ],
+            'supervisor-plantillas-finales' => [
+                'maxProcesses' => 1,
+                'timeout' => 900,
+                'memory' => 512,
+            ],
+            'supervisor-emails' => [
+                'maxProcesses' => 2,
+            ],
+            'supervisor-notificaciones' => [
+                'maxProcesses' => 3,
+            ],
+            'supervisor-soporte-ti' => [
+                'maxProcesses' => 2,
+            ],
+            'supervisor-carga-consolidada' => [
+                'maxProcesses' => 1,
+                'timeout' => 900,
+                'memory' => 512,
+            ],
+        ],
     ],
 ];
