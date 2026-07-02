@@ -18,9 +18,9 @@ Repositorio → **Settings** → **Secrets and variables** → **Actions**.
 
 | Secret | Valor ejemplo | Notas |
 |--------|---------------|-------|
-| `DEPLOY_HOST` | `172.31.2.196` o IP pública | Mismo servidor QA/PROD si comparten EC2 |
-| `DEPLOY_USER` | `root` o `ubuntu` | Usuario SSH |
-| `DEPLOY_SSH_KEY` | Contenido de la clave **privada** PEM | La pública debe estar en `~/.ssh/authorized_keys` del servidor |
+| `DEPLOY_HOST` | `3.18.243.245` | IP pública del EC2 |
+| `DEPLOY_USER` | **`ubuntu`** | Usuario SSH (no root) |
+| `DEPLOY_SSH_KEY` | Contenido de tu **.pem** (clave privada) | La misma que usas en `ssh -i clave.pem ubuntu@IP` |
 | `QA_DEPLOY_PATH` | `/var/www/html/intranet_back_qa` | Ruta del clone QA |
 | `PROD_DEPLOY_PATH` | `/var/www/html/intranet_back` | Ruta del clone PROD |
 
@@ -42,24 +42,69 @@ Opcional:
 
 En **Settings → Environments → qa** puedes activar *Required reviewers* para aprobar deploys manuales (opcional).
 
-## Clave SSH para GitHub Actions
+## EC2: ubuntu + clave SSH + sudo
 
-En tu PC o en el servidor:
+Flujo manual: `ssh -i tu.pem ubuntu@IP` → `sudo su` → root.
 
-```bash
-ssh-keygen -t ed25519 -C "github-actions-intranet" -f github_actions_intranet -N ""
-```
+GitHub Actions:
 
-- `github_actions_intranet.pub` → pegar en el servidor: `~/.ssh/authorized_keys`
-- `github_actions_intranet` (privada) → secret `DEPLOY_SSH_KEY` en GitHub
+1. SSH como **`ubuntu`** con **`DEPLOY_SSH_KEY`** (tu .pem)
+2. `deploy.sh` se **re-ejecuta con `sudo`** (sin password interactivo)
 
-Probar desde tu máquina:
+### Paso A — sudo sin password para deploy (una vez en el servidor)
 
 ```bash
-ssh -i github_actions_intranet DEPLOY_USER@DEPLOY_HOST
+sudo visudo -f /etc/sudoers.d/intranet-deploy
 ```
 
-## Flujo QA (automático)
+```text
+ubuntu ALL=(ALL) NOPASSWD: /var/www/html/intranet_back_qa/scripts/deploy.sh
+ubuntu ALL=(ALL) NOPASSWD: /var/www/html/intranet_back/scripts/deploy.sh
+```
+
+Prueba:
+
+```bash
+sudo -n /var/www/html/intranet_back_qa/scripts/deploy.sh
+```
+
+### Paso B — Secret `DEPLOY_SSH_KEY` en GitHub
+
+Usa la **misma clave privada** con la que entras hoy:
+
+```cmd
+notepad C:\ruta\a\tu-clave.pem
+```
+
+Copia **todo** el archivo (desde `-----BEGIN` hasta `-----END`) → GitHub → Secret **`DEPLOY_SSH_KEY`**.
+
+| Secret | Valor |
+|--------|--------|
+| `DEPLOY_USER` | `ubuntu` |
+| `DEPLOY_SSH_KEY` | contenido completo del .pem |
+| `DEPLOY_HOST` | `3.18.243.245` |
+| `QA_DEPLOY_PATH` | `/var/www/html/intranet_back_qa` |
+
+### Paso C — Probar desde CMD
+
+```cmd
+ssh -i C:\ruta\a\tu-clave.pem ubuntu@3.18.243.245
+```
+
+Si entras sin password, GitHub también podrá con el mismo contenido en `DEPLOY_SSH_KEY`.
+
+### Clave dedicada solo para GitHub (opcional)
+
+Si no quieres poner tu .pem personal en GitHub, genera otra y añade la `.pub` a `~/.ssh/authorized_keys` de ubuntu:
+
+```cmd
+ssh-keygen -t ed25519 -f %USERPROFILE%\github_actions_intranet -N ""
+type %USERPROFILE%\github_actions_intranet.pub
+```
+
+En el servidor (como ubuntu), pega la línea en `~/.ssh/authorized_keys`. En GitHub usa la **privada** en `DEPLOY_SSH_KEY`.
+
+## Troubleshooting SSH
 
 ```text
 push a qa  →  solo Deploy QA (incluye CI + deploy)
@@ -118,5 +163,7 @@ Durante upgrades en QA:
 | `route:list --columns` / `--compact` | L9 usa `route:list --except-vendor --json` |
 | Feature tests fallan | No bloquean deploy; tests `@group integration` / `requires-db` se excluyen en CI |
 | Unit tests MySQL | Tests con BD real van con `@group requires-db`; correr en local: `phpunit --group requires-db` |
-| SSH permission denied | Revisar `DEPLOY_SSH_KEY` y `authorized_keys` |
+| SSH permission denied | `DEPLOY_USER=ubuntu`, .pem completo en `DEPLOY_SSH_KEY`, probar `ssh -i clave.pem ubuntu@IP` |
+| `ssh: no key found` | `DEPLOY_SSH_KEY` vacío o mal pegado; debe incluir `BEGIN`/`END` |
+| sudo pide password en CI | Configurar `/etc/sudoers.d/intranet-deploy` (NOPASSWD) |
 | `vendor/` corrupto en servidor | Deploy con `composer_clean=true` |

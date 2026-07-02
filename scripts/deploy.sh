@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 # Despliegue con Docker Compose (por defecto). PHP/Composer/Artisan corren dentro del contenedor.
 #
-# Servidor QA:
-#   DEPLOY_PATH=/var/www/html/intranet_back_qa GIT_BRANCH=qa bash scripts/deploy.sh
+# Servidor EC2: SSH como ubuntu (clave .pem), deploy.sh re-ejecuta con sudo → root.
 #
 # Modo legacy (sin Docker): DEPLOY_MODE=classic bash scripts/deploy.sh
 
@@ -31,6 +30,22 @@ compose() {
 }
 
 cd "${DEPLOY_PATH}"
+
+# GitHub Actions / SSH como ubuntu: re-ejecutar deploy como root (equivale a sudo su).
+if [ "${DEPLOY_USE_SUDO:-auto}" != "false" ] && [ "$(id -u)" -ne 0 ] && command -v sudo >/dev/null 2>&1; then
+  log "Usuario $(whoami) — re-ejecutando deploy con sudo"
+  exec sudo -E env \
+    DEPLOY_PATH="${DEPLOY_PATH}" \
+    GIT_BRANCH="${GIT_BRANCH}" \
+    DEPLOY_MODE="${DEPLOY_MODE}" \
+    RUN_MIGRATIONS="${RUN_MIGRATIONS}" \
+    COMPOSE_LOCAL="${COMPOSE_LOCAL}" \
+    COMPOSE_HOST_MYSQL="${COMPOSE_HOST_MYSQL}" \
+    COMPOSER_CLEAN="${COMPOSER_CLEAN:-false}" \
+    PHP_FPM_SERVICE="${PHP_FPM_SERVICE}" \
+    DEPLOY_USE_SUDO=false \
+    bash "$0"
+fi
 
 if [[ ! -d .git ]]; then
   echo "ERROR: ${DEPLOY_PATH} no es un repositorio git" >&2
