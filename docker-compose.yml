@@ -99,9 +99,8 @@ services:
     image: intranet_back-app
     restart: unless-stopped
     user: www-data
-    command: >
-      sh -c "php artisan config:clear &&
-        php artisan websockets:serve"
+    # --port explícito: evita config:cache con 6001 (prod) y bind en 0.0.0.0 para Docker
+    command: php artisan websockets:serve --host=0.0.0.0 --port=${LARAVEL_WEBSOCKETS_PORT}
     ports:
       - "127.0.0.1:${LARAVEL_WEBSOCKETS_PORT}:${LARAVEL_WEBSOCKETS_PORT}"
     volumes:
