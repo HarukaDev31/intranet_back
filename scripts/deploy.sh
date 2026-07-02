@@ -71,7 +71,12 @@ if [[ "${DEPLOY_MODE}" == "docker" ]]; then
 
   log "Composer install (dentro del contenedor, como root)"
   compose exec -T -u root app git config --global --add safe.directory /var/www/html || true
+  if [[ "${COMPOSER_CLEAN:-false}" == "true" ]]; then
+    log "COMPOSER_CLEAN=true — borrar vendor/ e instalar desde cero (upgrades Laravel)"
+    compose exec -T -u root app rm -rf vendor
+  fi
   compose exec -T -u root app composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
+  compose exec -T -u root app composer dump-autoload --optimize --no-interaction
   ensure_env_secrets
   fix_app_permissions
 

@@ -15,6 +15,11 @@ x-docker-redis-env: &docker-redis-env
   REDIS_HOST: ${DOCKER_REDIS_HOST:-redis}
   REDIS_PORT: ${DOCKER_REDIS_PORT:-6379}
 
+# www-data no puede escribir en /var/www/.config (psysh/tinker)
+x-docker-php-env: &docker-php-env
+  <<: *docker-redis-env
+  XDG_CONFIG_HOME: /tmp
+
 services:
   app:
     build:
@@ -29,7 +34,7 @@ services:
       - .:/var/www/html
     environment:
       APP_ENV: ${APP_ENV:-production}
-      <<: *docker-redis-env
+      <<: *docker-php-env
       # Laravel → publicar eventos al contenedor websockets (puerto desde .env)
       PUSHER_HOST: ${DOCKER_PUSHER_HOST:-websockets}
       PUSHER_PORT: ${LARAVEL_WEBSOCKETS_PORT}
@@ -70,7 +75,7 @@ services:
     volumes:
       - .:/var/www/html
     environment:
-      <<: *docker-redis-env
+      <<: *docker-php-env
       APP_ENV: ${APP_ENV:-production}
       QUEUE_CONNECTION: redis
     depends_on:
@@ -91,7 +96,7 @@ services:
     volumes:
       - .:/var/www/html
     environment:
-      <<: *docker-redis-env
+      <<: *docker-php-env
       APP_ENV: ${APP_ENV:-production}
     depends_on:
       - app
@@ -111,7 +116,7 @@ services:
     volumes:
       - .:/var/www/html
     environment:
-      <<: *docker-redis-env
+      <<: *docker-php-env
       LARAVEL_WEBSOCKETS_PORT: ${LARAVEL_WEBSOCKETS_PORT}
       PUSHER_HOST: 0.0.0.0
       PUSHER_PORT: ${LARAVEL_WEBSOCKETS_PORT}
