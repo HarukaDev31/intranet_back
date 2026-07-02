@@ -26,10 +26,11 @@ services:
       # Dentro de Docker, Redis es el servicio "redis", no 127.0.0.1 del host.
       REDIS_HOST: ${DOCKER_REDIS_HOST:-redis}
       REDIS_PORT: ${DOCKER_REDIS_PORT:-6379}
-      # Laravel → publicar eventos al contenedor websockets
+      # Laravel → publicar eventos al contenedor websockets (puerto desde .env)
       PUSHER_HOST: ${DOCKER_PUSHER_HOST:-websockets}
-      PUSHER_PORT: ${WEBSOCKETS_PORT:-6001}
+      PUSHER_PORT: ${LARAVEL_WEBSOCKETS_PORT}
       PUSHER_SCHEME: http
+      LARAVEL_WEBSOCKETS_PORT: ${LARAVEL_WEBSOCKETS_PORT}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
@@ -92,23 +93,23 @@ services:
     networks:
       - intranet
 
-  # Laravel WebSockets (beyondcode). Nginx del host hace wss → 127.0.0.1:WEBSOCKETS_PORT
-  # QA: WEBSOCKETS_PORT=6002 | PROD: WEBSOCKETS_PORT=6001
+  # Laravel WebSockets. Nginx del host: proxy_pass → 127.0.0.1:${LARAVEL_WEBSOCKETS_PORT}
+  # QA .env: LARAVEL_WEBSOCKETS_PORT=6002 | PROD .env: LARAVEL_WEBSOCKETS_PORT=6001
   websockets:
     image: intranet_back-app
     restart: unless-stopped
     user: www-data
     command: php artisan websockets:serve
     ports:
-      - "127.0.0.1:${WEBSOCKETS_PORT:-6001}:${WEBSOCKETS_PORT:-6001}"
+      - "127.0.0.1:${LARAVEL_WEBSOCKETS_PORT}:${LARAVEL_WEBSOCKETS_PORT}"
     volumes:
       - .:/var/www/html
     environment:
-      LARAVEL_WEBSOCKETS_PORT: ${WEBSOCKETS_PORT:-6001}
+      LARAVEL_WEBSOCKETS_PORT: ${LARAVEL_WEBSOCKETS_PORT}
       REDIS_HOST: ${DOCKER_REDIS_HOST:-redis}
       REDIS_PORT: ${DOCKER_REDIS_PORT:-6379}
       PUSHER_HOST: 0.0.0.0
-      PUSHER_PORT: ${WEBSOCKETS_PORT:-6001}
+      PUSHER_PORT: ${LARAVEL_WEBSOCKETS_PORT}
       PUSHER_SCHEME: http
     depends_on:
       - app
