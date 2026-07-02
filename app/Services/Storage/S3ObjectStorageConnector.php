@@ -552,9 +552,13 @@ class S3ObjectStorageConnector implements ObjectStorageConnectorInterface
 
     private function existsAtBareBucketKey(string $key): bool
     {
+        if (!$this->isS3Configured()) {
+            return false;
+        }
+
         $client = $this->s3Client();
         $bucket = config('filesystems.disks.s3.bucket');
-        if ($client === null || !is_string($bucket) || $bucket === '') {
+        if ($client === null) {
             return false;
         }
 
@@ -626,7 +630,22 @@ class S3ObjectStorageConnector implements ObjectStorageConnectorInterface
             (string) config('object_storage.legacy_public_disk', 'public'),
         ];
 
-        return array_values(array_unique(array_filter($disks)));
+        return array_values(array_unique(array_filter($disks, function ($disk) {
+            if ($disk === '' || $disk === null) {
+                return false;
+            }
+
+            return $disk !== 's3' || $this->isS3Configured();
+        })));
+    }
+
+    private function isS3Configured(): bool
+    {
+        $bucket = config('filesystems.disks.s3.bucket');
+        $key = config('filesystems.disks.s3.key');
+
+        return is_string($bucket) && $bucket !== ''
+            && is_string($key) && $key !== '';
     }
 
     /**
@@ -734,17 +753,25 @@ class S3ObjectStorageConnector implements ObjectStorageConnectorInterface
 
         foreach ($this->pathLookupCandidates($lookupKey) as $candidate) {
             foreach ($this->disksToProbe() as $disk) {
-                if (Storage::disk($disk)->exists($candidate)) {
-                    $this->rememberResolvedPath($lookupKey, $candidate);
-                    unset($this->bareS3Keys[$lookupKey]);
+                try {
+                    if (Storage::disk($disk)->exists($candidate)) {
+                        $this->rememberResolvedPath($lookupKey, $candidate);
+                        unset($this->bareS3Keys[$lookupKey]);
 
-                    return ['disk' => $disk, 'path' => $candidate];
+                        return ['disk' => $disk, 'path' => $candidate];
+                    }
+                } catch (\Throwable $e) {
+                    Log::debug('S3ObjectStorageConnector: exists probe', [
+                        'disk' => $disk,
+                        'candidate' => $candidate,
+                        'error' => $e->getMessage(),
+                    ]);
                 }
             }
         }
 
         foreach ($this->pathLookupCandidates($lookupKey) as $candidate) {
-            if ($this->uploadDisk() !== 's3') {
+            if ($this->uploadDisk() !== 's3' || !$this->isS3Configured()) {
                 continue;
             }
 

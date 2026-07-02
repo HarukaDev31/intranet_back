@@ -17,6 +17,13 @@
 #   QUEUE_CONNECTION=redis
 #   CACHE_DRIVER=file
 #   SESSION_DRIVER=file
+#   AWS (copiar de prod — mismo bucket/CDN):
+#   AWS_ACCESS_KEY_ID=...
+#   AWS_SECRET_ACCESS_KEY=...
+#   AWS_DEFAULT_REGION=us-east-2
+#   AWS_BUCKET=probusiness-intranet
+#   FILESYSTEM_UPLOAD_DISK=s3
+#   OBJECT_STORAGE_CDN_URL=https://cdn.probusiness.pe
 #   (No uses REDIS_HOST=127.0.0.1:6380 dentro de Docker — es el host, no el contenedor)
 #
 # Verifica la ruta del socket en el host:
