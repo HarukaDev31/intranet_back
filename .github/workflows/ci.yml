@@ -51,6 +51,10 @@ jobs:
           restore-keys: ${{ runner.os }}-composer-
 
       - name: Install dependencies
+        env:
+          REVERB_APP_ID: ci
+          REVERB_APP_KEY: ci-key
+          REVERB_APP_SECRET: ci-secret
         run: composer install --no-interaction --prefer-dist
 
       - name: Prepare Laravel
