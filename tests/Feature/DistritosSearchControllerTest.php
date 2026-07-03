@@ -3,13 +3,13 @@
 namespace Tests\Feature;
 
 use Illuminate\Support\Facades\Schema;
+use PHPUnit\Framework\Attributes\Group;
 use Tests\TestCase;
 
 /**
  * Requiere MySQL con tabla distrito. No corre en GitHub Actions (sin BD).
- *
- * @group requires-db
  */
+#[Group('requires-db')]
 class DistritosSearchControllerTest extends TestCase
 {
     /**

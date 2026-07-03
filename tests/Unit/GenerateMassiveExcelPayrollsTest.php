@@ -8,6 +8,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+use PHPUnit\Framework\Attributes\Group;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Tests\TestCase;
 
@@ -87,9 +88,7 @@ class GenerateMassiveExcelPayrollsTest extends TestCase
         ];
     }
 
-    /**
-     * @group integration
-     */
+    #[Group('integration')]
     public function test_generate_massive_excel_payrolls_descarga_zip_con_mocks(): void
     {
         $idContenedor = 152;
