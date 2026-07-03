@@ -35,7 +35,10 @@ services:
     environment:
       APP_ENV: ${APP_ENV:-production}
       <<: *docker-php-env
-      # Laravel → publicar eventos al contenedor websockets (puerto desde .env)
+      # Laravel → Reverb (puerto desde .env)
+      REVERB_HOST: ${DOCKER_PUSHER_HOST:-websockets}
+      REVERB_PORT: ${LARAVEL_WEBSOCKETS_PORT}
+      REVERB_SCHEME: http
       PUSHER_HOST: ${DOCKER_PUSHER_HOST:-websockets}
       PUSHER_PORT: ${LARAVEL_WEBSOCKETS_PORT}
       PUSHER_SCHEME: http
@@ -103,24 +106,25 @@ services:
     networks:
       - intranet
 
-  # Laravel WebSockets.
+  # Laravel Reverb (WebSockets). Servicio `websockets` mantiene el nombre por compatibilidad Docker/nginx.
   # QA .env: LARAVEL_WEBSOCKETS_PORT=6002 | PROD .env: LARAVEL_WEBSOCKETS_PORT=6001
   websockets:
     image: intranet_back-app
     restart: unless-stopped
     user: www-data
-    # --port explícito: evita config:cache con 6001 (prod) y bind en 0.0.0.0 para Docker
-    command: php artisan websockets:serve --host=0.0.0.0 --port=${LARAVEL_WEBSOCKETS_PORT}
+    command: php artisan reverb:start --host=0.0.0.0 --port=${LARAVEL_WEBSOCKETS_PORT}
     ports:
       - "127.0.0.1:${LARAVEL_WEBSOCKETS_PORT}:${LARAVEL_WEBSOCKETS_PORT}"
     volumes:
       - .:/var/www/html
     environment:
       <<: *docker-php-env
+      REVERB_SERVER_HOST: 0.0.0.0
+      REVERB_SERVER_PORT: ${LARAVEL_WEBSOCKETS_PORT}
+      REVERB_HOST: ${REVERB_HOST:-0.0.0.0}
+      REVERB_PORT: ${LARAVEL_WEBSOCKETS_PORT}
+      REVERB_SCHEME: http
       LARAVEL_WEBSOCKETS_PORT: ${LARAVEL_WEBSOCKETS_PORT}
-      PUSHER_HOST: 0.0.0.0
-      PUSHER_PORT: ${LARAVEL_WEBSOCKETS_PORT}
-      PUSHER_SCHEME: http
     depends_on:
       - app
       - redis

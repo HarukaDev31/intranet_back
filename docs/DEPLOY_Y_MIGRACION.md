@@ -343,8 +343,8 @@ PHP sube **dentro del Dockerfile** (8.2 para L9–L12 → **8.3** para L13).
 ```text
 qa (Docker) — upgrades en cadena, sin merge a main hasta el final:
   L9  ✓
-  L10 ✓ (actual)
-  L11 (+ Reverb, quitar beyondcode websockets)
+  L10 ✓
+  L11 ✓ (actual — Reverb)
   L12 → L13 (Dockerfile php:8.3-fpm + CI php 8.3)
 ```
 
@@ -355,14 +355,27 @@ Cada salto en QA:
 3. Checklist: Horizon, JWT, S3, Excel, WebSockets/Reverb, WhatsApp webhooks
 4. PROD no se toca
 
-### WebSockets: beyondcode vs Reverb
+### WebSockets: Reverb (L11+)
 
-| Versión Laravel | WebSockets |
-|-----------------|------------|
-| **L8–L10** | `beyondcode/laravel-websockets` 1.14.x (abandonado pero compatible con L9/L10 y PHP 8.x). Contenedor `websockets` sin cambios. |
-| **L11+** | Migrar a **[Laravel Reverb](https://laravel.com/docs/reverb)** (oficial). Reverb exige Laravel 11+ y PHP 8.2+. El front sigue protocolo Pusher; cambia el servidor y la config de broadcasting. |
+| Versión | WebSockets |
+|---------|------------|
+| **L11+** | **[Laravel Reverb](https://laravel.com/docs/reverb)** — contenedor `websockets` ejecuta `reverb:start`. |
+| L8–L10 | `beyondcode/laravel-websockets` (retirado en L11). |
 
-No hace falta Reverb en el salto a **L9**: `websockets:serve` sigue funcionando. Planificar Reverb en la rama `upgrade/laravel-11`.
+En el `.env` del servidor QA, añadir (mismos valores que `PUSHER_*`):
+
+```env
+BROADCAST_CONNECTION=reverb
+REVERB_APP_ID=...
+REVERB_APP_KEY=...
+REVERB_APP_SECRET=...
+REVERB_HOST=websockets
+REVERB_PORT=6002
+REVERB_SCHEME=http
+REVERB_SERVER_PORT=6002
+```
+
+El front sigue usando `pusher-js` / Echo con `PUSHER_APP_KEY` (alias de `REVERB_APP_KEY`).
 
 Checklist por salto:
 

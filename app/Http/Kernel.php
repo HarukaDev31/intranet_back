@@ -55,9 +55,7 @@ class Kernel extends HttpKernel
      *
      * @var array<string, class-string|string>
      */
-    protected $routeMiddleware = [
-        'websockets.auth' => \App\Http\Middleware\WebSocketsDashboardAuth::class,
-        'websockets.stats' => \App\Http\Middleware\WebSocketsStatistics::class,
+    protected $middlewareAliases = [
         'broadcasting.auth' => \App\Http\Middleware\BroadcastingAuth::class,
         'auth' => \App\Http\Middleware\Authenticate::class,
         'auth.basic' => \Illuminate\Auth\Middleware\AuthenticateWithBasicAuth::class,

@@ -8,11 +8,23 @@ use App\Models\Usuario;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Log;
-///import jwt
 use Tymon\JWTAuth\Facades\JWTAuth;
 
 class BroadcastController extends Controller
 {
+    /**
+     * @return array{key: string|null, secret: string|null}
+     */
+    private function broadcastCredentials(): array
+    {
+        $connection = config('broadcasting.default', 'reverb');
+        $config = config("broadcasting.connections.{$connection}", []);
+
+        return [
+            'key' => $config['key'] ?? null,
+            'secret' => $config['secret'] ?? null,
+        ];
+    }
     /**
      * Authenticate the request for channel access.
      *
@@ -88,14 +100,7 @@ class BroadcastController extends Controller
             if (strpos($channelName, $userChannelPrefix) === 0) {
                 $channelUserId = (int) substr($channelName, strlen($userChannelPrefix));
                 if ((int) $user->ID_Usuario === $channelUserId) {
-                    $signature = hash_hmac(
-                        'sha256',
-                        $request->socket_id . ':' . $channelName,
-                        config('broadcasting.connections.pusher.secret')
-                    );
-                    return response()->json([
-                        'auth' => config('broadcasting.connections.pusher.key') . ':' . $signature
-                    ]);
+                    return response()->json($this->pusherAuthPayload($request, $channelName));
                 }
                 Log::error('User not authorized for user channel', [
                     'user_id' => $user->ID_Usuario,
@@ -123,14 +128,7 @@ class BroadcastController extends Controller
             if (strpos($channelName, $soporteTiPrefix) === 0) {
                 $chatUuid = substr($channelName, strlen($soporteTiPrefix));
                 if ($this->usuarioPuedeAccederSalaSoporteTi($user, $chatUuid)) {
-                    $signature = hash_hmac(
-                        'sha256',
-                        $request->socket_id . ':' . $channelName,
-                        config('broadcasting.connections.pusher.secret')
-                    );
-                    return response()->json([
-                        'auth' => config('broadcasting.connections.pusher.key') . ':' . $signature
-                    ]);
+                    return response()->json($this->pusherAuthPayload($request, $channelName));
                 }
                 Log::error('User not authorized for soporte-ti chat channel', [
                     'user_id' => $user->ID_Usuario,
@@ -307,14 +305,15 @@ class BroadcastController extends Controller
      */
     protected function pusherAuthPayload(Request $request, $channelName)
     {
+        $credentials = $this->broadcastCredentials();
         $signature = hash_hmac(
             'sha256',
             $request->socket_id . ':' . $channelName,
-            config('broadcasting.connections.pusher.secret')
+            $credentials['secret']
         );
 
         return [
-            'auth' => config('broadcasting.connections.pusher.key') . ':' . $signature,
+            'auth' => $credentials['key'] . ':' . $signature,
         ];
     }
 

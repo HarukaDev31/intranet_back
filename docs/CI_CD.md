@@ -165,7 +165,7 @@ Estrategia: subir versiones en rama `qa` (o `upgrade/laravel-*` + deploy manual)
 
 | Laravel | PHP (Dockerfile) | Notas |
 |---------|------------------|-------|
-| 9–12 | `php:8.2-fpm` | **L10** en QA (Jul 2026) |
+| 9–12 | `php:8.2-fpm` | **L11** en QA (Jul 2026, Reverb) |
 | 13 | `php:8.3-fpm` | Cambiar `Dockerfile` + CI `php-version: 8.3` |
 | 11+ | Reverb | Reemplazar `beyondcode/laravel-websockets` |
 
