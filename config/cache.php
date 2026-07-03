@@ -18,6 +18,12 @@ return [
     'default' => env('CACHE_DRIVER', 'file'),
 
     /*
+    | L13: allow-list explícita para objetos en cache (false = más seguro).
+    | Si guardas objetos PHP en cache, lista las clases permitidas aquí.
+    */
+    'serializable_classes' => false,
+
+    /*
     |--------------------------------------------------------------------------
     | Cache Stores
     |--------------------------------------------------------------------------

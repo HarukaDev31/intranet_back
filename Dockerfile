@@ -1,4 +1,4 @@
-FROM php:8.2-fpm-bookworm
+FROM php:8.3-fpm-bookworm
 
 ARG WWWGROUP=1000
 ARG WWWUSER=1000

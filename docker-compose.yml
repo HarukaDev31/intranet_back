@@ -1,4 +1,4 @@
-# Stack base para servidor (QA/PROD). PHP 8.2 va dentro del contenedor — no instalar PHP en el host.
+# Stack base para servidor (QA/PROD). PHP 8.3 va dentro del contenedor — no instalar PHP en el host.
 #
 # Servidor (MySQL en host, bind-address=127.0.0.1):
 #   docker compose -f docker-compose.yml -f docker-compose.host-mysql.yml up -d --build

@@ -344,8 +344,9 @@ PHP sube **dentro del Dockerfile** (8.2 para L9–L12 → **8.3** para L13).
 qa (Docker) — upgrades en cadena, sin merge a main hasta el final:
   L9  ✓
   L10 ✓
-  L11 ✓ (actual — Reverb)
-  L12 → L13 (Dockerfile php:8.3-fpm + CI php 8.3)
+  L11 ✓
+  L12 ✓
+  L13 ✓ (actual — PHP 8.3 en Docker)
 ```
 
 Cada salto en QA:
