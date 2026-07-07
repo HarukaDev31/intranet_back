@@ -38,7 +38,7 @@ class ProductosExport implements FromCollection, WithHeadings, WithMapping, Shou
                 'productos_importados_excel.tipo_producto',
                 'productos_importados_excel.unidad_comercial',
                 'productos_importados_excel.subpartida',
-                'carga_consolidada_contenedor.carga as carga_contenedor',
+                DB::raw("CONCAT(TRIM(carga_consolidada_contenedor.carga), IF(carga_consolidada_contenedor.f_cierre IS NOT NULL, CONCAT('-', YEAR(carga_consolidada_contenedor.f_cierre)), '')) as carga_contenedor"),
                 DB::raw('YEAR(carga_consolidada_contenedor.f_cierre) as anio')
             );
 
