@@ -123,14 +123,15 @@ class ProductosController extends Controller
                 $query->where('productos_importados_excel.tipo_producto', $request->tipoProducto);
             }
 
-            // Filtrar por campaña (join) -> usar el id del contenedor
+            // Filtrar por campaña (solo consolidados cerrados por documentación)
             if ($request->has('campana') && $request->campana && $request->campana !== 'todos') {
-                $query->where('carga_consolidada_contenedor.id', $request->campana);
+                $query->where('carga_consolidada_contenedor.id', $request->campana)
+                    ->where('carga_consolidada_contenedor.estado_documentacion', Contenedor::CONTEDOR_CERRADO);
             }
 
-            // Ordenar por carga consolidada más reciente y por año de cierre (descendente)
-            $query->orderByRaw('CAST(carga_consolidada_contenedor.carga AS UNSIGNED) DESC')
-                ->orderByRaw('YEAR(carga_consolidada_contenedor.f_cierre) DESC');
+            // Más recientes primero por fecha de creación del producto
+            $query->orderByDesc('productos_importados_excel.created_at')
+                ->orderByDesc('productos_importados_excel.id');
 
             $data = $query->paginate($perPage, ['*'], 'page', $page);
             //for each foto add the url if url cannot contains http or https    
@@ -193,8 +194,9 @@ class ProductosController extends Controller
     public function filterOptions()
     {
         try {
-            // Obtener todas las cargas con año (de f_cierre del contenedor)
-            $cargas = Contenedor::whereNotNull('carga')
+            // Solo consolidados cerrados por documentación
+            $cargas = Contenedor::cerradoPorDocumentacion()
+                ->whereNotNull('carga')
                 ->where('carga', '!=', '')
                 ->whereNotNull('f_inicio')
                 ->select(
@@ -233,7 +235,8 @@ class ProductosController extends Controller
                 ->pluck('tipo_producto')
                 ->toArray();
 
-            $campanas = Contenedor::select('carga')
+            $campanas = Contenedor::cerradoPorDocumentacion()
+                ->select('carga')
                 ->whereNotNull('carga')
                 ->where('carga', '!=', '')
                 ->distinct()

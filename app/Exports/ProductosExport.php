@@ -3,6 +3,7 @@
 namespace App\Exports;
 
 use App\Models\BaseDatos\ProductoImportadoExcel;
+use App\Models\CargaConsolidada\Contenedor;
 use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\WithHeadings;
@@ -58,7 +59,8 @@ class ProductosExport implements FromCollection, WithHeadings, WithMapping, Shou
         }
 
         if (!empty($this->filters['campana']) && $this->filters['campana'] !== 'todos') {
-            $query->where('carga_consolidada_contenedor.id', $this->filters['campana']);
+            $query->where('carga_consolidada_contenedor.id', $this->filters['campana'])
+                ->where('carga_consolidada_contenedor.estado_documentacion', Contenedor::CONTEDOR_CERRADO);
         }
 
         return $query
