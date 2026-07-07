@@ -2092,13 +2092,20 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
 
             // Preparar datos para mensajes
             $telefono = $this->formatPhoneNumber($cotizacion->telefono);
-            $qtyBox = $proveedor->qty_box_china ?? $proveedor->qty_box;
+            $qtyBoxChina = (int) ($proveedor->qty_box_china ?? $proveedor->qty_box ?? 0);
+            $qtyPalletChina = (int) ($proveedor->qty_pallet_china ?? 0);
 
             // Preparar mensaje inicial de inspección (se enviará solo una vez; incluir link a vista inspección)
             $baseUrl = rtrim(env('APP_URL_CLIENTES', 'http://localhost:3001'), '/');
             $cotizacionUuid = Cotizacion::where('id', $idCotizacion)->value('uuid');
             $inspeccionViewUrl = $baseUrl . '/inspeccion/' . ($cotizacionUuid ?? '') . '?id_proveedor=' . $idProveedor;
-            $inspectionMessage = $this->buildInspectionMessage($cotizacion->nombre, $proveedor->code_supplier, $qtyBox, $inspeccionViewUrl);
+            $inspectionMessage = $this->buildInspectionMessage(
+                $cotizacion->nombre,
+                $proveedor->code_supplier,
+                $qtyBoxChina,
+                $qtyPalletChina,
+                $inspeccionViewUrl
+            );
             $proveedorsWithFilesSended = AlmacenInspection::where('id_cotizacion', $idCotizacion)
                 ->where('send_status', 'SENDED')
                 ->count();
@@ -2109,7 +2116,8 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                 $telefono,
                 $proveedor->code_supplier,
                 (string) $cotizacion->nombre,
-                (string) $qtyBox,
+                $qtyBoxChina,
+                $qtyPalletChina,
                 $inspeccionViewUrl
             );
             $usuarioActual = JWTAuth::parseToken()->authenticate();
@@ -2154,7 +2162,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
     private function getProveedorData($idProveedor)
     {
         return CotizacionProveedor::where('id', $idProveedor)
-            ->select(['estados_proveedor', 'code_supplier', 'qty_box_china', 'qty_box', 'id_cotizacion'])
+            ->select(['estados_proveedor', 'code_supplier', 'qty_box_china', 'qty_box', 'qty_pallet_china', 'id_cotizacion'])
             ->first();
     }
 
@@ -2220,14 +2228,23 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
     /**
      * Construir mensaje de inspección (link a vista solo cuando se envían fotos/videos por separado)
      */
-    private function buildInspectionMessage($cliente, $codeSupplier, $qtyBox, $inspeccionViewUrl = null)
+    private function buildInspectionMessage($cliente, $codeSupplier, $qtyBoxChina, $qtyPalletChina, $inspeccionViewUrl = null)
     {
-        $msg = $cliente . '----' . $codeSupplier . '----' . $qtyBox . ' boxes.' . "\n\n" .
-            '📦 Tu carga llegó a nuestro almacén de Yiwu, te comparto las fotos y videos.' . "\n\n";
-        if (!empty($inspeccionViewUrl)) {
-            $msg .= '🔗 Ver inspección: ' . $inspeccionViewUrl;
+        $resolved = CoordinacionWhatsappPayload::resolveInspeccionLlegadaTemplate(
+            (int) $qtyBoxChina,
+            (int) $qtyPalletChina
+        );
+
+        if (empty($inspeccionViewUrl)) {
+            return $cliente . '----' . $codeSupplier . '----' . $resolved['cantidad_line'] . '.';
         }
-        return $msg;
+
+        return CoordinacionWhatsappPayload::inspeccionLlegadaPreview(
+            (string) $cliente,
+            (string) $codeSupplier,
+            $resolved['cantidad_line'],
+            (string) $inspeccionViewUrl
+        );
     }
 
     /**
@@ -2239,7 +2256,8 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
         $telefono,
         $codeSupplier = null,
         ?string $nombreCliente = null,
-        ?string $cantidadCajas = null,
+        ?int $qtyBoxChina = null,
+        ?int $qtyPalletChina = null,
         ?string $linkInspeccion = null
     ) {
         $sentFiles = ['images' => 0, 'videos' => 0];
@@ -2253,7 +2271,8 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                 (string) $telefono,
                 (string) ($nombreCliente ?? ''),
                 (string) ($codeSupplier ?? ''),
-                (string) ($cantidadCajas ?? ''),
+                (int) ($qtyBoxChina ?? 0),
+                (int) ($qtyPalletChina ?? 0),
                 (string) ($linkInspeccion ?? ''),
                 $message
             );

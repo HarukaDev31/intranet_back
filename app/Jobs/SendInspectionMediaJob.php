@@ -90,7 +90,7 @@ class SendInspectionMediaJob implements ShouldQueue
 
             // Obtener datos del proveedor
             $proveedor = CotizacionProveedor::where('id', $this->idProveedor)
-                ->select(['estados_proveedor', 'code_supplier', 'qty_box_china', 'qty_box', 'id_cotizacion'])
+                ->select(['estados_proveedor', 'code_supplier', 'qty_box_china', 'qty_box', 'qty_pallet_china', 'id_cotizacion'])
                 ->first();
 
             if (!$proveedor) {
@@ -183,18 +183,24 @@ class SendInspectionMediaJob implements ShouldQueue
             }
 
             // Enviar mensaje principal (fotos/videos se envían después por separado): incluir link a vista inspección
-            $qtyBox = $proveedor->qty_box_china ?? $proveedor->qty_box;
+            $qtyBoxChina = (int) ($proveedor->qty_box_china ?? $proveedor->qty_box ?? 0);
+            $qtyPalletChina = (int) ($proveedor->qty_pallet_china ?? 0);
             $baseUrl = rtrim(env('APP_URL_CLIENTES', 'http://localhost:3001'), '/');
             $inspeccionLink = $baseUrl . '/inspeccion/' . ($cotizacion->uuid ?? '') . '?id_proveedor=' . $this->idProveedor;
-            $message = $cliente . '----' . $proveedor->code_supplier . '----' . $qtyBox . ' boxes. ' . "\n\n" .
-                '📦 Tu carga llegó a nuestro almacén de Yiwu, te comparto las fotos y videos. ' . "\n\n" .
-                '🔗 Ver inspección: ' . $inspeccionLink;
+            $resolved = CoordinacionWhatsappPayload::resolveInspeccionLlegadaTemplate($qtyBoxChina, $qtyPalletChina);
+            $message = CoordinacionWhatsappPayload::inspeccionLlegadaPreview(
+                (string) $cliente,
+                (string) $proveedor->code_supplier,
+                $resolved['cantidad_line'],
+                $inspeccionLink
+            );
 
             $metaLlegada = CoordinacionWhatsappPayload::inspeccionLlegada(
                 $telefono,
                 (string) $cliente,
                 (string) $proveedor->code_supplier,
-                (string) $qtyBox,
+                $qtyBoxChina,
+                $qtyPalletChina,
                 $inspeccionLink,
                 $message
             );
