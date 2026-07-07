@@ -21,8 +21,10 @@ class AutoSignContracts extends Command
      */
     protected $signature = 'contracts:auto-sign
         {--repair-missing : Regenerar PDF cuando hay ruta en BD pero el archivo no existe en storage}
+        {--repair-missing-signed : Copiar autosigned a signed cuando firmado falta pero autosigned existe en storage}
         {--regenerate-all-autosigned : Regenerar todos los que tienen autosigned_contract_at y subirlos a S3}
         {--id= : Solo procesar esta cotización (id numérico)}
+        {--uuid= : Solo procesar esta cotización (uuid)}
         {--limit=0 : Máximo de registros a procesar (0 = sin límite)}
         {--dry-run : Listar cotizaciones a procesar sin generar PDF}';
 
@@ -45,6 +47,10 @@ class AutoSignContracts extends Command
 
         if ($this->option('repair-missing')) {
             return $this->repairMissingAutosigned($dryRun);
+        }
+
+        if ($this->option('repair-missing-signed')) {
+            return $this->repairMissingSigned($dryRun);
         }
 
         if ($this->option('regenerate-all-autosigned')) {
@@ -108,6 +114,10 @@ class AutoSignContracts extends Command
             $query->where('id', (int) $id);
         }
 
+        if ($uuid = $this->option('uuid')) {
+            $query->where('uuid', (string) $uuid);
+        }
+
         $cotizaciones = $query->get();
         $toRepair = $cotizaciones->filter(function (Cotizacion $cotizacion) {
             $uploadPath = $this->storageUploadPathFromDb($cotizacion->cotizacion_contrato_autosigned_url);
@@ -158,6 +168,101 @@ class AutoSignContracts extends Command
         }
 
         $this->info("Regenerados: {$processed}, Errores: {$errors}");
+
+        return $errors > 0 ? self::FAILURE : self::SUCCESS;
+    }
+
+    private function repairMissingSigned(bool $dryRun): int
+    {
+        $this->info('Buscando firmados en BD sin archivo, con autosigned disponible...');
+
+        $query = Cotizacion::query()
+            ->whereNotNull('cotizacion_contrato_firmado_url')
+            ->whereNotNull('cotizacion_contrato_autosigned_url');
+
+        if ($id = $this->option('id')) {
+            $query->where('id', (int) $id);
+        }
+
+        if ($uuid = $this->option('uuid')) {
+            $query->where('uuid', (string) $uuid);
+        }
+
+        $limit = max(0, (int) $this->option('limit'));
+        if ($limit > 0) {
+            $query->limit($limit);
+        }
+
+        $cotizaciones = $query->get();
+        $toRepair = $cotizaciones->filter(function (Cotizacion $cotizacion) {
+            $signedPath = $this->storageUploadPathFromDb($cotizacion->cotizacion_contrato_firmado_url);
+            $autosignedPath = $this->storageUploadPathFromDb($cotizacion->cotizacion_contrato_autosigned_url);
+
+            if ($signedPath === null || $autosignedPath === null) {
+                return false;
+            }
+
+            if ($this->objectStorage()->exists($signedPath)) {
+                return false;
+            }
+
+            return $this->objectStorage()->exists($autosignedPath);
+        });
+
+        $this->info("Con ruta firmada en BD: {$cotizaciones->count()}, a copiar desde autosigned: {$toRepair->count()}");
+
+        foreach ($toRepair as $cotizacion) {
+            $this->line("  - ID {$cotizacion->id} | {$cotizacion->uuid}");
+            $this->line("    signed: {$cotizacion->cotizacion_contrato_firmado_url}");
+            $this->line("    from:   {$cotizacion->cotizacion_contrato_autosigned_url}");
+        }
+
+        if ($toRepair->isEmpty()) {
+            return self::SUCCESS;
+        }
+
+        if ($dryRun) {
+            $this->warn('Dry-run: no se copió ningún archivo.');
+
+            return self::SUCCESS;
+        }
+
+        $processed = 0;
+        $errors = 0;
+
+        foreach ($toRepair as $cotizacion) {
+            try {
+                $signedPath = $this->storageUploadPathFromDb($cotizacion->cotizacion_contrato_firmado_url);
+                $autosignedPath = $this->storageUploadPathFromDb($cotizacion->cotizacion_contrato_autosigned_url);
+
+                $stream = $this->objectStorage()->readStream($autosignedPath);
+                if ($stream === false || $stream === null) {
+                    throw new \RuntimeException('No se pudo leer autosigned: ' . $autosignedPath);
+                }
+
+                $pdfContent = stream_get_contents($stream);
+                if (is_resource($stream)) {
+                    fclose($stream);
+                }
+
+                if ($pdfContent === false || $pdfContent === '') {
+                    throw new \RuntimeException('Autosigned vacío: ' . $autosignedPath);
+                }
+
+                $this->storagePutContents($signedPath, $pdfContent);
+                $processed++;
+                $this->info("Subido signed ID {$cotizacion->id} → {$signedPath}");
+            } catch (\Exception $e) {
+                $errors++;
+                $this->error("Error ID {$cotizacion->id}: " . $e->getMessage());
+                Log::error('Error copiando autosigned a signed', [
+                    'cotizacion_id' => $cotizacion->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        $this->info("Copiados: {$processed}, Errores: {$errors}");
 
         return $errors > 0 ? self::FAILURE : self::SUCCESS;
     }

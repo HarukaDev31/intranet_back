@@ -283,8 +283,7 @@ class Contenedor extends Model
             ->pluck('carga')
             ->toArray();
     }
-    //get cotizaciones en paso clientes, deben tewer estado_cotizacion CONFIRMADO y estado_cliente !=null
-    //CONTENEDOR CERRADO POR DOCUMENTACION
+
     public function scopeCerradoPorDocumentacion($query)
     {
         return $query->where('estado_documentacion', self::CONTEDOR_CERRADO);
