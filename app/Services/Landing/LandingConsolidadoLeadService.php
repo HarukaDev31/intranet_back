@@ -13,6 +13,7 @@ class LandingConsolidadoLeadService
     {
         Log::info('LandingConsolidadoLeadService: iniciando almacenamiento de lead', [
             'codigo_campana' => $data['codigo_campana'] ?? null,
+            'form_source' => $data['form_source'] ?? LandingConsolidadoLead::FORM_SOURCE_PROBUSINESS_PE,
             'has_request' => (bool) $request,
         ]);
 
@@ -21,6 +22,7 @@ class LandingConsolidadoLeadService
             'whatsapp' => $data['whatsapp'],
             'proveedor' => $data['proveedor'],
             'codigo_campana' => $data['codigo_campana'],
+            'form_source' => $data['form_source'] ?? LandingConsolidadoLead::FORM_SOURCE_PROBUSINESS_PE,
         ];
 
         if ($request) {

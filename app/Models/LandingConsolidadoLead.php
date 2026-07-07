@@ -9,6 +9,10 @@ class LandingConsolidadoLead extends Model
 {
     public const MAX_BITRIX_SYNC_FAILURES = 3;
 
+    public const FORM_SOURCE_LANDING_V2 = 'landing_consolidado_v2';
+
+    public const FORM_SOURCE_PROBUSINESS_PE = 'probusiness_pe';
+
     protected $table = 'landing_consolidado_leads';
 
     protected $fillable = [
@@ -16,6 +20,7 @@ class LandingConsolidadoLead extends Model
         'whatsapp',
         'proveedor',
         'codigo_campana',
+        'form_source',
         'ip_address',
         'user_agent',
         'bitrix_synced_at',

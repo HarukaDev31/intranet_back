@@ -16,6 +16,7 @@ class LandingLeadAdminService
                 'whatsapp',
                 'proveedor',
                 'codigo_campana',
+                'form_source',
                 'ip_address',
                 'created_at',
             ])

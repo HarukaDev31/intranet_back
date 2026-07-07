@@ -28,6 +28,7 @@ class LandingConsolidadoLeadsExport implements FromCollection, WithHeadings, Wit
             'WhatsApp',
             'Proveedor',
             'Campaña',
+            'Origen formulario',
             'IP',
             'Fecha',
         ];
@@ -41,6 +42,7 @@ class LandingConsolidadoLeadsExport implements FromCollection, WithHeadings, Wit
             $row->whatsapp,
             $row->proveedor,
             $row->codigo_campana,
+            $row->form_source,
             $row->ip_address,
             $row->created_at ? date('d/m/Y H:i', strtotime($row->created_at)) : '',
         ];

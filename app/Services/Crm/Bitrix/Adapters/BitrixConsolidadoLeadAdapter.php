@@ -70,6 +70,7 @@ class BitrixConsolidadoLeadAdapter implements LandingLeadCrmSyncAdapterInterface
                 'Proveedor: ' . ($leadRow['proveedor'] ?? ''),
                 'IP: ' . ($leadRow['ip_address'] ?? ''),
                 'Campaña: ' . ($leadRow['codigo_campana'] ?? ''),
+                'Origen formulario: ' . ($leadRow['form_source'] ?? ''),
             ])),
         ]);
 

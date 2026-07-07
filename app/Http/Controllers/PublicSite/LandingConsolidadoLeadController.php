@@ -25,9 +25,12 @@ class LandingConsolidadoLeadController extends Controller
      */
     public function store(Request $request): JsonResponse
     {
+        $this->normalizeRequest($request);
+
         Log::info('LandingConsolidadoLeadController: request recibida', [
             'ip' => $request->ip(),
             'codigo_campana' => $request->input('codigo_campana'),
+            'form_source' => $request->input('form_source'),
         ]);
 
         $validator = Validator::make($request->all(), [
@@ -35,6 +38,7 @@ class LandingConsolidadoLeadController extends Controller
             'whatsapp' => ['required', 'string', 'max:64'],
             'proveedor' => ['required', 'string', 'in:si,no,buscando'],
             'codigo_campana' => ['required', 'string', 'max:32'],
+            'form_source' => ['nullable', 'string', 'max:64', 'in:landing_consolidado_v2,probusiness_pe'],
         ]);
 
         if ($validator->fails()) {
@@ -60,5 +64,25 @@ class LandingConsolidadoLeadController extends Controller
             'message' => 'Registro recibido. Un asesor te contactará pronto.',
             'id' => $lead->id,
         ], 201);
+    }
+
+    /**
+     * Compatibilidad con payloads legacy (CodeIgniter / landing Astro).
+     */
+    private function normalizeRequest(Request $request): void
+    {
+        $merge = [];
+
+        if (! $request->filled('codigo_campana') && $request->filled('campaign_code')) {
+            $merge['codigo_campana'] = $request->input('campaign_code');
+        }
+
+        if (! $request->filled('proveedor') && $request->filled('proveedor_china')) {
+            $merge['proveedor'] = $request->input('proveedor_china');
+        }
+
+        if (! empty($merge)) {
+            $request->merge($merge);
+        }
     }
 }
