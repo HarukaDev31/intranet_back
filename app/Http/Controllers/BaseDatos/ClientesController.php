@@ -15,6 +15,7 @@ use App\Services\BaseDatos\Clientes\ClienteService;
 use App\Services\BaseDatos\Clientes\ClienteExportService;
 use App\Services\BaseDatos\Clientes\ClienteImportService;
 use App\Services\BaseDatos\Clientes\ClienteCacheService;
+use App\Services\BaseDatos\Clientes\ClienteDocumentosDownloadService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
@@ -34,18 +35,21 @@ class ClientesController extends Controller
     protected $clienteService;
     protected $clienteExportService;
     protected $clienteImportService;
-    protected ClienteCacheService $clienteCacheService;
+    protected $clienteCacheService;
+    protected $clienteDocumentosDownloadService;
 
     public function __construct(
         ClienteService $clienteService,
         ClienteExportService $clienteExportService,
         ClienteImportService $clienteImportService,
-        ClienteCacheService $clienteCacheService
+        ClienteCacheService $clienteCacheService,
+        ClienteDocumentosDownloadService $clienteDocumentosDownloadService
     ) {
         $this->clienteService = $clienteService;
         $this->clienteExportService = $clienteExportService;
         $this->clienteImportService = $clienteImportService;
         $this->clienteCacheService = $clienteCacheService;
+        $this->clienteDocumentosDownloadService = $clienteDocumentosDownloadService;
     }
 
     /**
@@ -201,6 +205,36 @@ class ClientesController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Error al obtener cliente: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Descarga ZIP con documentos de consolidados del cliente (cotización inicial/final y contrato).
+     */
+    public function descargarDocumentos($id)
+    {
+        try {
+            $result = $this->clienteDocumentosDownloadService->generarZip((int) $id);
+
+            if (empty($result['success'])) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $result['message'] ?? 'No se encontraron documentos',
+                ], $result['status'] ?? 404);
+            }
+
+            return response()
+                ->download($result['zipPath'], $result['zipName'])
+                ->deleteFileAfterSend(true);
+        } catch (\Exception $e) {
+            Log::error('Error al descargar documentos del cliente: ' . $e->getMessage(), [
+                'cliente_id' => $id,
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al descargar documentos: ' . $e->getMessage(),
             ], 500);
         }
     }

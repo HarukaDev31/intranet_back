@@ -259,12 +259,13 @@ class Cliente extends Model
             ->get();
 
         foreach ($cotizaciones as $cotizacion) {
+            $anioCarga = (int) $cotizacion->carga . '-' . (int) date('Y', strtotime($cotizacion->fecha));
             $servicios[] = [
                 'id' => $cotizacion->id,
                 'monto' => $cotizacion->monto,
                 'is_imported' => $cotizacion->id_cliente_importacion ? 1 : 0,
                 'servicio' => 'Consolidado',
-                'detalle' => $cotizacion->carga,
+                'detalle' => $anioCarga,
                 'carga' => $cotizacion->carga,
                 'empresa' => $cotizacion->empresa,
                 'fecha' => $cotizacion->fecha,
@@ -273,69 +274,34 @@ class Cliente extends Model
         }
         Log::info('Servicios: ' . json_encode($servicios));
         
-        // Ordenamiento personalizado
+        // Orden: consolidados por año DESC y carga DESC (ej. 6-2026, 5-2026, 23-2025); cursos por fecha DESC
         usort($servicios, function ($a, $b) {
             $esConsolidadoA = $a['servicio'] === 'Consolidado';
             $esConsolidadoB = $b['servicio'] === 'Consolidado';
-            
-            // Determinar si es consolidado NO importado (empresa != 1) de 2025 con carga >= 6
-            $esNoImportado2025CargaAltaA = false;
-            $esNoImportado2025CargaAltaB = false;
-            
-            if ($esConsolidadoA) {
-                $cargaA = intval($a['carga'] ?? 0);
-                $anioA = date('Y', strtotime($a['fecha']));
-                $empresaA = $a['empresa'] ?? null;
-                // NO importado: empresa != 1
-                $esNoImportado2025CargaAltaA = ($anioA == '2025' && $cargaA >= 6 && $empresaA != 1);
-            }
-            
-            if ($esConsolidadoB) {
-                $cargaB = intval($b['carga'] ?? 0);
-                $anioB = date('Y', strtotime($b['fecha']));
-                $empresaB = $b['empresa'] ?? null;
-                // NO importado: empresa != 1
-                $esNoImportado2025CargaAltaB = ($anioB == '2025' && $cargaB >= 6 && $empresaB != 1);
-            }
-            
-            // PRIORIDAD 1: Consolidados NO importados 2025 con carga >= 6
-            // Ordenar por carga DESC
-            if ($esNoImportado2025CargaAltaA && $esNoImportado2025CargaAltaB) {
-                $cargaA = intval($a['carga'] ?? 0);
-                $cargaB = intval($b['carga'] ?? 0);
-                
-                if ($cargaA != $cargaB) {
-                    return $cargaB - $cargaA; // DESC: carga mayor primero
+
+            if ($esConsolidadoA && $esConsolidadoB) {
+                $anioA = (int) date('Y', strtotime($a['fecha']));
+                $anioB = (int) date('Y', strtotime($b['fecha']));
+                if ($anioA !== $anioB) {
+                    return $anioB - $anioA;
                 }
-                
-                // Si tienen la misma carga, ordenar por fecha DESC
-                $fechaA = strtotime($a['fecha']);
-                $fechaB = strtotime($b['fecha']);
-                return $fechaB - $fechaA;
+
+                $cargaA = (int) ($a['carga'] ?? 0);
+                $cargaB = (int) ($b['carga'] ?? 0);
+                return $cargaB - $cargaA;
             }
-            
-            // Si solo A es NO importado 2025 con carga >= 6, va primero
-            if ($esNoImportado2025CargaAltaA && !$esNoImportado2025CargaAltaB) {
+
+            if ($esConsolidadoA && !$esConsolidadoB) {
                 return -1;
             }
-            
-            // Si solo B es NO importado 2025 con carga >= 6, va primero
-            if (!$esNoImportado2025CargaAltaA && $esNoImportado2025CargaAltaB) {
+
+            if (!$esConsolidadoA && $esConsolidadoB) {
                 return 1;
             }
-            
-            // PRIORIDAD 2: Todo lo demás ordenado por fecha DESC y luego por carga DESC
+
             $fechaA = strtotime($a['fecha']);
             $fechaB = strtotime($b['fecha']);
-            
-            if ($fechaA != $fechaB) {
-                return $fechaB - $fechaA; // DESC: fecha más reciente primero
-            }
-            
-            // Si tienen la misma fecha, ordenar por carga DESC
-            $cargaA = intval($a['carga'] ?? 0);
-            $cargaB = intval($b['carga'] ?? 0);
-            return $cargaB - $cargaA;
+            return $fechaB - $fechaA;
         });
         
         return $servicios;
