@@ -148,13 +148,10 @@ class ClienteDocumentosDownloadService
             ];
         }
 
-        $finalPath = !empty($cotizacion->cotizacion_final_url)
-            ? $cotizacion->cotizacion_final_url
-            : $cotizacion->cotizacion_final_file_url;
-        if (!empty($finalPath)) {
+        if (!empty($cotizacion->cotizacion_final_url)) {
             $docs[] = [
-                'path' => $finalPath,
-                'filename' => 'cotizacion_final' . $this->extensionDesdeRuta($finalPath),
+                'path' => $cotizacion->cotizacion_final_url,
+                'filename' => 'cotizacion_final' . $this->extensionDesdeRuta($cotizacion->cotizacion_final_url),
             ];
         }
 
