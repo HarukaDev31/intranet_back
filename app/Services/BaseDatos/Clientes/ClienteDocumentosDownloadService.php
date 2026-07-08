@@ -12,6 +12,11 @@ class ClienteDocumentosDownloadService
 {
     use UsesObjectStorage;
 
+    private const LEGACY_INTRANET_DOMAINS = [
+        'https://intranet.probusiness.pe',
+        'https://intranetback.probusiness.pe',
+    ];
+
     /**
      * Genera un ZIP con cotización inicial, final y contrato de cada consolidado del cliente.
      *
@@ -184,19 +189,47 @@ class ClienteDocumentosDownloadService
             return null;
         }
 
-        if (filter_var($dbPath, FILTER_VALIDATE_URL)) {
-            $dbPath = $this->objectStorage()->normalizeRelativePath($dbPath);
+        $originalPath = (string) $dbPath;
+        $normalizedPath = $originalPath;
+        if (filter_var($normalizedPath, FILTER_VALIDATE_URL)) {
+            $normalizedPath = $this->objectStorage()->normalizeRelativePath($normalizedPath);
         }
 
-        $uploadPath = $this->storageUploadPathFromDb($dbPath);
-        if (empty($uploadPath) || !$this->objectStorage()->exists($uploadPath)) {
-            Log::warning('ClienteDocumentosDownloadService: archivo no encontrado', [
-                'dbPath' => $dbPath,
-                'uploadPath' => $uploadPath,
+        $uploadPath = $this->storageUploadPathFromDb($normalizedPath);
+        if (empty($uploadPath)) {
+            Log::warning('ClienteDocumentosDownloadService: ruta inválida', [
+                'dbPath' => $originalPath,
             ]);
             return null;
         }
 
+        $storage = $this->objectStorage();
+        if (method_exists($storage, 'existsOnS3') && $storage->existsOnS3($uploadPath)) {
+            $fromS3 = $this->materializarArchivoDesdeStorage($uploadPath, $originalPath, $tempFiles);
+            if ($fromS3 !== null) {
+                return $fromS3;
+            }
+        }
+
+        $fromLegacy = $this->resolverArchivoDesdeDominiosLegacy($originalPath, $uploadPath, $tempFiles);
+        if ($fromLegacy !== null) {
+            return $fromLegacy;
+        }
+
+        Log::warning('ClienteDocumentosDownloadService: archivo no encontrado', [
+            'dbPath' => $originalPath,
+            'uploadPath' => $uploadPath,
+        ]);
+
+        return null;
+    }
+
+    /**
+     * @param array<int, string> $tempFiles
+     * @return string|null
+     */
+    private function materializarArchivoDesdeStorage($uploadPath, $referencePath, array &$tempFiles)
+    {
         try {
             $local = $this->storageLocalPath($uploadPath);
             if (is_readable($local)) {
@@ -211,12 +244,133 @@ class ClienteDocumentosDownloadService
             return null;
         }
 
-        $ext = $this->extensionDesdeRuta($dbPath, '.bin');
+        return $this->guardarStreamEnTemporal($stream, $referencePath, $tempFiles);
+    }
+
+    /**
+     * @param array<int, string> $tempFiles
+     * @return string|null
+     */
+    private function resolverArchivoDesdeDominiosLegacy($originalPath, $uploadPath, array &$tempFiles)
+    {
+        $urls = [];
+
+        if (filter_var($originalPath, FILTER_VALIDATE_URL) && $this->esUrlDominioLegacy($originalPath)) {
+            $urls[] = $originalPath;
+        }
+
+        foreach (self::LEGACY_INTRANET_DOMAINS as $domain) {
+            $urls[] = $this->construirUrlLegacy($domain, 'storage', $uploadPath);
+            if (strpos($uploadPath, 'contratos/') === 0) {
+                $urls[] = $this->construirUrlLegacy($domain, 'files', $uploadPath);
+            }
+        }
+
+        $urls = array_values(array_unique($urls));
+        foreach ($urls as $url) {
+            $downloaded = $this->descargarArchivoHttp($url, $originalPath, $tempFiles);
+            if ($downloaded !== null) {
+                return $downloaded;
+            }
+        }
+
+        return null;
+    }
+
+    private function esUrlDominioLegacy($url)
+    {
+        $host = parse_url($url, PHP_URL_HOST);
+        if (!is_string($host) || $host === '') {
+            return false;
+        }
+
+        $host = strtolower($host);
+
+        return $host === 'intranet.probusiness.pe' || $host === 'intranetback.probusiness.pe';
+    }
+
+    private function construirUrlLegacy($domain, $prefix, $uploadPath)
+    {
+        $segments = explode('/', ltrim(str_replace('\\', '/', $uploadPath), '/'));
+        $encoded = implode('/', array_map('rawurlencode', $segments));
+
+        return rtrim($domain, '/') . '/' . trim($prefix, '/') . '/' . $encoded;
+    }
+
+    /**
+     * @param array<int, string> $tempFiles
+     * @return string|null
+     */
+    private function descargarArchivoHttp($url, $referencePath, array &$tempFiles)
+    {
+        if (!function_exists('curl_init')) {
+            return null;
+        }
+
+        $ch = curl_init();
+        if (!$ch) {
+            return null;
+        }
+
+        curl_setopt_array($ch, [
+            CURLOPT_URL => $url,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_MAXREDIRS => 5,
+            CURLOPT_TIMEOUT => 60,
+            CURLOPT_CONNECTTIMEOUT => 30,
+            CURLOPT_SSL_VERIFYPEER => true,
+            CURLOPT_SSL_VERIFYHOST => 2,
+            CURLOPT_USERAGENT => 'ProBusiness-ClienteDocumentos/1.0',
+        ]);
+
+        $content = curl_exec($ch);
+        $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $error = curl_error($ch);
+        curl_close($ch);
+
+        if ($content === false || $error !== '' || $httpCode !== 200 || $content === '') {
+            Log::debug('ClienteDocumentosDownloadService: fallo descarga HTTP legacy', [
+                'url' => $url,
+                'http_code' => $httpCode,
+                'error' => $error,
+            ]);
+
+            return null;
+        }
+
+        $ext = $this->extensionDesdeRuta($referencePath, '.bin');
+        $tmp = tempnam(sys_get_temp_dir(), 'cli_doc_');
+        if ($tmp === false) {
+            return null;
+        }
+
+        $tmpWithExt = $tmp . $ext;
+        @unlink($tmp);
+
+        if (file_put_contents($tmpWithExt, $content) === false) {
+            return null;
+        }
+
+        $tempFiles[] = $tmpWithExt;
+
+        return $tmpWithExt;
+    }
+
+    /**
+     * @param resource $stream
+     * @param array<int, string> $tempFiles
+     * @return string|null
+     */
+    private function guardarStreamEnTemporal($stream, $referencePath, array &$tempFiles)
+    {
+        $ext = $this->extensionDesdeRuta($referencePath, '.bin');
         $tmp = tempnam(sys_get_temp_dir(), 'cli_doc_');
         if ($tmp === false) {
             if (is_resource($stream)) {
                 fclose($stream);
             }
+
             return null;
         }
 
@@ -228,6 +382,7 @@ class ClienteDocumentosDownloadService
             if (is_resource($stream)) {
                 fclose($stream);
             }
+
             return null;
         }
 
@@ -238,6 +393,7 @@ class ClienteDocumentosDownloadService
         }
 
         $tempFiles[] = $tmpWithExt;
+
         return $tmpWithExt;
     }
 
