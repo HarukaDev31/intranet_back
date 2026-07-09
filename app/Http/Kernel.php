@@ -75,5 +75,6 @@ class Kernel extends HttpKernel
         'role.whatsapp_inbox' => \App\Http\Middleware\EnsureWhatsappInboxAccess::class,
         'role.copiloto_wa' => \App\Http\Middleware\EnsureCopilotoWaAccess::class,
         'third_party.token_access' => \App\Http\Middleware\ThirdPartyTokenAccess::class,
+        'fabricante.token' => \App\Http\Middleware\FabricanteTokenMiddleware::class,
     ];
 }
