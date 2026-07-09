@@ -32,8 +32,8 @@ class MoodleCredentialsMail extends Mailable
      * @param string $email Email del usuario
      * @param string $nombre Nombre completo del usuario
      * @param string $moodleUrl URL de la plataforma Moodle
-     * @param string $logo_header Ruta del logo para el header
-     * @param string $logo_footer Ruta del logo para el footer
+     * @param string|null $logo_header Ruta del logo para el header
+     * @param string|null $logo_footer Ruta del logo para el footer
      */
     public function __construct($username, $password, $email, $nombre, $moodleUrl, $logo_header, $logo_footer)
     {
