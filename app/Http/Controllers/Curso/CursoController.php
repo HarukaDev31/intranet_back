@@ -21,6 +21,7 @@ use App\Traits\FileTrait;
 use App\Traits\UsesObjectStorage;
 use App\Traits\WhatsappTrait;
 use App\Mail\MoodleCredentialsMail;
+use App\Support\BrandLogoPaths;
 use App\Exports\CursosExport;
 use Maatwebsite\Excel\Facades\Excel;
 
@@ -2170,9 +2171,16 @@ class CursoController extends Controller
             // URL de Moodle desde configuración o variable de entorno
             $moodleUrl = env('MOODLE_URL', 'https://aulavirtual.probusiness.pe/login/index.php');
             
-            // Rutas de los logos
-            $logo_header = public_path('storage/logo_icons/logo_header.png');
-            $logo_footer = public_path('storage/logo_icons/logo_footer.png');
+            // Logos: local o CDN (BrandLogoPaths) — no depende de public/storage en Docker
+            $logo_header = BrandLogoPaths::header();
+            $logo_footer = BrandLogoPaths::footer();
+
+            if ($logo_header === null || $logo_footer === null) {
+                Log::warning('Logos de marca no encontrados para credenciales Moodle', [
+                    'logo_header' => $logo_header,
+                    'logo_footer' => $logo_footer,
+                ]);
+            }
 
             // Enviar email con las credenciales
             try {
