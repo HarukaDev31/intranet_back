@@ -7,7 +7,7 @@ Guía para dockerizar **producción** en `/var/www/html/intranet_back` (`intrane
 | | Antes (classic) | Después (docker) |
 |---|-----------------|------------------|
 | PHP | 7.4/8 FPM en host | 8.3 en contenedor |
-| API | Nginx → php-fpm socket | Nginx host → `:8081` → compose |
+| API | Nginx → php-fpm socket | Nginx host → `:8082` → compose |
 | Horizon / cron | Supervisor en host | contenedores `horizon` + `scheduler` |
 | WebSockets | puerto 6001 host | contenedor `websockets` (Reverb) `:6001` |
 | Deploy | manual / classic | GitHub Actions → `deploy-prod.yml` |
@@ -21,7 +21,7 @@ APP_ENV=production
 APP_DEBUG=false
 APP_URL=https://intranetback.probusiness.pe
 
-APP_PORT=8081
+APP_PORT=8082
 COMPOSE_PROJECT_NAME=intranet_prod
 
 # MySQL en el mismo host (socket Unix — no TCP público)
@@ -59,7 +59,7 @@ Si difiere, define `MYSQL_SOCKET_HOST=/ruta/real/mysqld.sock` en `.env`.
 
 ## 2. Nginx del host
 
-Actualiza el vhost de prod para proxy al contenedor (puerto **8081**). El ejemplo incluye **CORS** para `*.probusiness.pe` (necesario tras migrar de php-fpm a proxy Docker):
+Actualiza el vhost de prod para proxy al contenedor (puerto **8082**). El ejemplo incluye **CORS** para `*.probusiness.pe` (necesario tras migrar de php-fpm a proxy Docker):
 
 ```bash
 cd /var/www/html/intranet_back
@@ -111,7 +111,7 @@ Comprobar:
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.host-mysql.yml ps
-curl -I http://127.0.0.1:8081
+curl -I http://127.0.0.1:8082
 docker compose -f docker-compose.yml -f docker-compose.host-mysql.yml exec app php artisan migrate:status
 docker compose logs -f horizon
 ```
@@ -152,6 +152,6 @@ sudo supervisorctl start intranet-horizon intranet-scheduler
 
 ## Notas
 
-- **QA y PROD** son clones distintos: `/var/www/html/intranet_back_qa` (8085) y `/var/www/html/intranet_back` (8081).
+- **QA y PROD** son clones distintos: `/var/www/html/intranet_back_qa` (8085) y `/var/www/html/intranet_back` (8082).
 - El workflow `deploy-prod.yml` usa `DEPLOY_MODE=docker` por defecto (variable `PROD_DEPLOY_MODE`).
 - Durante upgrades Laravel en prod: deploy manual con **composer_clean=true**.
