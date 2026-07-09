@@ -86,8 +86,8 @@ Accept: application/json
       "fecha_cierre": "15/03/2024",
       "asesor": "Juan Pérez",
       "cod": "COD-001",
-      "created_at": "2024-03-01 10:30:00",
-      "fecha_de_confirmacion": "2024-03-05 14:00:00",
+      "created_at": "2024-03-01 05:30:00",
+      "fecha_de_confirmacion": "2024-03-05 09:00:00",
       "fecha_de_baja": null,
       "razon_de_baja": "",
       "updated_at": "2024-03-10 09:15:00",
@@ -125,11 +125,11 @@ Accept: application/json
 | `fecha_cierre` | Cierre del contenedor (`dd/mm/yyyy`) |
 | `asesor` | Vendedor asignado |
 | `cod` | Código de cotización |
-| `created_at` | Fecha de creación |
-| `fecha_de_confirmacion` | Fecha de confirmación |
-| `fecha_de_baja` | Fecha de baja (null si activa) |
+| `created_at` | Fecha de creación (`America/Lima`, `Y-m-d H:i:s`) |
+| `fecha_de_confirmacion` | Fecha de confirmación (`America/Lima`; `null` si no está confirmada) |
+| `fecha_de_baja` | Fecha de baja (`America/Lima`; `null` si activa) |
 | `razon_de_baja` | Motivo de baja |
-| `updated_at` | Última actualización |
+| `updated_at` | Última actualización (`America/Lima`) |
 | `nombre_cliente` | Nombre del cliente |
 | `dni_ruc` | Documento |
 | `correo` | Email |
@@ -153,6 +153,33 @@ Accept: application/json
 | 429 | `{ "message": "Too Many Attempts." }` | Superaste el límite de peticiones por minuto (30/min por IP, configurable en el servidor) |
 | 500 | `{ "message": "..." }` | Error del servidor |
 
+
+---
+
+## Validar fechas (Lima)
+
+Los timestamps se **guardan en UTC** en el servidor. Esta API los **devuelve en hora Lima** (`America/Lima`).  
+En cotizaciones `CONFIRMADO`, `created_at` (fecha de registro) y `fecha_de_confirmacion` suelen ser distintas.
+
+```bash
+curl -s -G "https://intranetback.probusiness.pe/api/public/carga-consolidada/contenedor/cotizaciones/ID_CONTENEDOR/exportar" \
+  -H "Authorization: Bearer TU_TOKEN" \
+  -H "Accept: application/json" \
+| jq '.data[] | select(.estado == "CONFIRMADO") | {cod, created_at, fecha_de_confirmacion, updated_at}'
+```
+
+Ejemplo de salida esperada (horas ya en Lima):
+
+```json
+{
+  "cod": "COD-001",
+  "created_at": "2024-03-01 05:30:00",
+  "fecha_de_confirmacion": "2024-03-05 09:00:00",
+  "updated_at": "2024-03-10 04:15:00"
+}
+```
+
+Para QA, cambia el host a la URL de QA si aplica.
 
 ---
 

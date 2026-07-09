@@ -2,6 +2,7 @@
 
 namespace App\Services\CargaConsolidada;
 
+use App\Helpers\DateHelper;
 use App\Models\CargaConsolidada\Cotizacion;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -232,11 +233,11 @@ class CotizacionExportService
                 'fecha_cierre' => $fechaCierre,
                 'asesor' => $cotizacion->asesor ?? '',
                 'cod' => $this->buildCod($contenedor, $cotizacion),
-                'created_at' => $cotizacion->fecha ?? null,
-                'fecha_de_confirmacion' => $this->resolveFechaDeConfirmacion($cotizacion),
-                'fecha_de_baja' => $cotizacion->deleted_at ?? null,
+                'created_at' => DateHelper::toLima($cotizacion->fecha),
+                'fecha_de_confirmacion' => DateHelper::toLima($this->resolveFechaDeConfirmacion($cotizacion)),
+                'fecha_de_baja' => DateHelper::toLima($cotizacion->deleted_at),
                 'razon_de_baja' => $cotizacion->razon_de_baja ?? '',
-                'updated_at' => $cotizacion->updated_at ?? null,
+                'updated_at' => DateHelper::toLima($cotizacion->updated_at),
                 'nombre_cliente' => $cotizacion->nombre ?? '',
                 'dni_ruc' => $cotizacion->documento ?? 'Sin documento',
                 'correo' => $cotizacion->correo ?? 'Sin correo',

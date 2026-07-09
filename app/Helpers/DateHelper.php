@@ -4,6 +4,28 @@ namespace App\Helpers;
 
 class DateHelper
 {
+    public const LIMA_TIMEZONE = 'America/Lima';
+
+    /**
+     * Convierte una fecha/hora almacenada en la zona de la app (UTC) a hora Lima para respuestas de API.
+     */
+    public static function toLima($dateTime, string $format = 'Y-m-d H:i:s'): ?string
+    {
+        if ($dateTime === null || $dateTime === '') {
+            return null;
+        }
+
+        try {
+            $carbon = $dateTime instanceof \Carbon\Carbon
+                ? $dateTime->copy()
+                : \Carbon\Carbon::parse($dateTime, config('app.timezone'));
+
+            return $carbon->timezone(self::LIMA_TIMEZONE)->format($format);
+        } catch (\Exception $e) {
+            return is_string($dateTime) ? $dateTime : null;
+        }
+    }
+
     /**
      * Formatea una fecha según el formato especificado
      * 
