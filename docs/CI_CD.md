@@ -9,6 +9,24 @@ Pipeline para **QA (Docker)** y **PROD (Docker, manual confirmado)**.
 | `ci.yml` | PR a `qa`/`main`, push `main`/`upgrade/**` | Composer, smoke, PHPUnit Unit (+ Feature sin bloquear) |
 | `deploy-qa.yml` | Push a `qa` o manual | CI reutilizado → SSH → `deploy.sh` |
 | `deploy-prod.yml` | Push a `main` o manual (`deploy`) | CI reutilizado → SSH → PROD (docker) |
+| `deploy-tag.yml` | Llamado por deploy QA/PROD | Tag anotado en GitHub tras deploy exitoso |
+
+### Tags automáticos por deploy
+
+Tras un deploy exitoso, GitHub Actions crea y publica un tag anotado en el commit del workflow (`github.sha`):
+
+```
+deploy/qa/20260709-021506-a1b2c3d
+deploy/prod/20260709-021506-a1b2c3d
+```
+
+Formato: `deploy/{entorno}/{YYYYMMDD-HHMMSS}-{sha7}`
+
+- Visible en **Releases / Tags** del repositorio.
+- Útil para saber qué commit estaba en servidor en un momento dado (`git checkout deploy/prod/...`).
+- En deploy manual con otra `git_branch`, el tag sigue apuntando al SHA del workflow, no necesariamente al commit que el servidor haya hecho `git pull` (salvo que coincida).
+
+Requiere permiso `contents: write` del workflow (ya configurado en el job `tag`).
 
 ## Configuración en GitHub (una sola vez)
 
@@ -108,27 +126,24 @@ En el servidor (como ubuntu), pega la línea en `~/.ssh/authorized_keys`. En Git
 ## Troubleshooting SSH
 
 ```text
-push a qa   →  Deploy QA (CI smoke + deploy)
-push main   →  Deploy PROD (CI smoke + deploy)
+push a qa   →  Deploy QA (CI smoke + deploy + tag)
+push main   →  Deploy PROD (CI smoke + deploy + tag)
 PR a qa/main →  solo CI (validación antes del merge)
 ```
 
-El servidor ejecuta `scripts/deploy.sh` (optimizado: build/composer/migrate solo si cambió algo relevante).
+El servidor ejecuta `scripts/deploy.sh` (optimizado: build/composer solo si cambió algo relevante).
 
-```bash
-git fetch origin qa && git reset --hard origin/qa
-# docker build     → solo si cambió Dockerfile/compose/docker/*
-# composer install → solo si cambió composer.lock
-# migrate          → solo si hay migraciones nuevas
-docker compose up -d
-config:cache + restart workers (si cambió app/config/routes)
-```
+**Primer deploy** (sin `.deploy/initialized` o stack caído): build si aplica → `up -d` → composer si aplica → `clear:all` → migrate → reinicia horizon + scheduler + websockets.
+
+**Deploy rutinario** (código PHP/config): `git pull` → `up -d` (sin recrear contenedores si no cambió la imagen) → composer solo si cambió lock → **`clear:all`** → **migrate** → solo **`horizon:terminate`** (scheduler y websockets siguen corriendo).
+
+Reinicio completo de workers solo si cambió Docker/compose o hubo docker build en ese deploy.
 
 ### Tiempos esperados
 
 | Tipo de deploy | Antes | Ahora (aprox.) |
 |----------------|-------|----------------|
-| Solo PHP/código | ~6 min | **~2–3 min** |
+| Solo PHP/código | ~6 min | **~1–2 min** (sin restart de scheduler/ws) |
 | composer.lock cambió | ~6 min | ~4 min |
 | Dockerfile cambió | ~6 min | ~5 min (sin `--pull` por defecto) |
 

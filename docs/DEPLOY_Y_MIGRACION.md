@@ -401,4 +401,4 @@ RUN_MIGRATIONS=false DEPLOY_PATH=... GIT_BRANCH=qa bash scripts/deploy.sh
 DEPLOY_MODE=classic DEPLOY_PATH=... bash scripts/deploy.sh
 ```
 
-El deploy dockerizado ejecuta: `git pull` → `docker compose build` → `up -d` → `composer install` **dentro del contenedor** → `migrate` → cache → `horizon:terminate`.
+El deploy dockerizado ejecuta: `git pull` → `docker compose build` (si cambió contexto) → `up -d` → `composer install` (si cambió lock) → **`clear:all`** → `config:cache` → **migrate** → `horizon:terminate` (deploy rutinario) o restart completo de workers (primer deploy / cambio Docker).

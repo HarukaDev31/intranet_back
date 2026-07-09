@@ -1,0 +1,40 @@
+name: Deploy Tag
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: 'Entorno desplegado (qa o prod)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout commit desplegado
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+
+      - name: Crear y publicar tag de deploy
+        env:
+          DEPLOY_ENV: ${{ inputs.environment }}
+        run: |
+          set -euo pipefail
+
+          SHORT_SHA="${GITHUB_SHA::7}"
+          STAMP="$(date -u +%Y%m%d-%H%M%S)"
+          TAG="deploy/${DEPLOY_ENV}/${STAMP}-${SHORT_SHA}"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git tag -a "${TAG}" -m "Deploy ${DEPLOY_ENV} — run #${GITHUB_RUN_NUMBER} (${SHORT_SHA})"
+          git push origin "${TAG}"
+
+          echo "Tag publicado: ${TAG}"

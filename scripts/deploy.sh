@@ -81,13 +81,47 @@ record_composer_lock_hash() {
 
 needs_migrate() {
   [[ "${RUN_MIGRATIONS}" != "true" ]] && return 1
-  [[ -z "${CHANGED_FILES:-}" ]] && return 1
-  echo "${CHANGED_FILES}" | grep -qE '^database/migrations/'
+  return 0
 }
 
-needs_worker_restart() {
-  [[ -z "${CHANGED_FILES:-}" ]] && return 1
-  echo "${CHANGED_FILES}" | grep -qE '^(app/|config/|routes/|database/migrations/|composer\.(json|lock)|docker-compose|Dockerfile|bootstrap/)'
+is_first_deploy() {
+  if [[ ! -f "${DEPLOY_PATH}/.deploy/initialized" ]]; then
+    return 0
+  fi
+  if ! compose ps --status running app 2>/dev/null | grep -qE 'Up|running'; then
+    return 0
+  fi
+  return 1
+}
+
+mark_deploy_initialized() {
+  state_dir
+  echo "${NEW_HEAD}" > "${DEPLOY_PATH}/.deploy/initialized"
+}
+
+needs_full_worker_restart() {
+  is_first_deploy && return 0
+  [[ "${DOCKER_BUILT:-false}" == "true" ]] && return 0
+  [[ -n "${CHANGED_FILES:-}" ]] && echo "${CHANGED_FILES}" | grep -qE '^(docker-compose|Dockerfile|docker/)' && return 0
+  return 1
+}
+
+refresh_app_caches() {
+  log "Limpiar cachés (artisan clear:all)"
+  compose exec -T -u www-data app php artisan clear:all
+  log "Regenerar config cache"
+  compose exec -T -u www-data app php artisan config:cache
+}
+
+restart_horizon_workers() {
+  compose exec -T -u www-data app php artisan horizon:terminate || true
+}
+
+restart_all_workers() {
+  restart_horizon_workers
+  fix_app_permissions
+  log "Reiniciar horizon, scheduler y websockets (primer deploy o cambio Docker)"
+  compose restart horizon scheduler websockets || true
 }
 
 compose() {
@@ -192,6 +226,14 @@ ensure_env_secrets() {
 }
 
 if [[ "${DEPLOY_MODE}" == "docker" ]]; then
+  DOCKER_BUILT=false
+
+  if is_first_deploy; then
+    log "Primer deploy (o stack caído) — levantar stack completo"
+  else
+    log "Deploy rutinario — clear:all, migrate y solo horizon (sin reiniciar todo el stack)"
+  fi
+
   if needs_docker_build; then
     log "Docker build (contexto Docker cambió o DOCKER_REBUILD=true)"
     if [[ "${DOCKER_BUILD_PULL}" == "true" ]]; then
@@ -199,6 +241,7 @@ if [[ "${DEPLOY_MODE}" == "docker" ]]; then
     else
       compose build
     fi
+    DOCKER_BUILT=true
     record_docker_context_hash
   else
     log "Omitiendo docker build (sin cambios en Dockerfile/compose/docker/*)"
@@ -220,41 +263,40 @@ if [[ "${DEPLOY_MODE}" == "docker" ]]; then
     log "Omitiendo composer install (composer.lock sin cambios)"
   fi
 
-  ensure_env_secrets
+  if is_first_deploy; then
+    ensure_env_secrets
+  fi
   fix_app_permissions
 
-  log "Limpiar config cache (evita DB_* obsoletos de un deploy anterior)"
-  compose exec -T -u www-data app php artisan config:clear
+  refresh_app_caches
 
   if needs_migrate; then
+    log "Ejecutar migraciones"
     compose exec -T -u www-data app php artisan migrate --force
   else
-    log "Omitiendo migrate (sin migraciones nuevas en este deploy)"
+    log "Omitiendo migrate (RUN_MIGRATIONS=false)"
   fi
 
-  compose exec -T -u www-data app php artisan config:cache
-  compose exec -T -u www-data app php artisan route:clear
-  compose exec -T -u www-data app php artisan view:clear
-
-  if needs_worker_restart; then
-    compose exec -T -u www-data app php artisan horizon:terminate || true
-    fix_app_permissions
-    compose restart horizon scheduler websockets || true
+  if needs_full_worker_restart; then
+    restart_all_workers
   else
-    log "Omitiendo restart workers (solo cambios menores)"
+    log "Solo horizon:terminate (scheduler y websockets siguen corriendo)"
+    restart_horizon_workers
     fix_app_permissions
   fi
+
+  mark_deploy_initialized
 else
   log "Composer install (host — requiere PHP instalado en el servidor)"
   composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
 
-  if [[ "${RUN_MIGRATIONS}" == "true" ]]; then
+  php artisan clear:all
+  php artisan config:cache
+
+  if needs_migrate; then
     php artisan migrate --force
   fi
 
-  php artisan config:cache
-  php artisan route:clear
-  php artisan view:cache
   php artisan horizon:terminate || true
 
   if command -v systemctl >/dev/null 2>&1; then
