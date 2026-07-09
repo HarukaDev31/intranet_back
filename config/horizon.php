@@ -32,6 +32,23 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Horizon Dashboard Access (PROD)
+    |--------------------------------------------------------------------------
+    |
+    | En local/qa el dashboard es abierto. En production usa HORIZON_ALLOWED_IPS
+    | y/o HORIZON_DASHBOARD_TOKEN (?token=... o header X-Horizon-Token).
+    |
+    */
+
+    'dashboard_token' => env('HORIZON_DASHBOARD_TOKEN', ''),
+
+    'allowed_ips' => array_values(array_filter(array_map(
+        'trim',
+        explode(',', (string) env('HORIZON_ALLOWED_IPS', ''))
+    ))),
+
+    /*
+    |--------------------------------------------------------------------------
     | Horizon Redis Connection
     |--------------------------------------------------------------------------
     |

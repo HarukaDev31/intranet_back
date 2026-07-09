@@ -35,6 +35,8 @@ REDIS_PORT=6379
 REDIS_CLIENT=phpredis
 REDIS_PREFIX=intranet_back_
 FORWARD_REDIS_PORT=6381
+# Redis Docker no tiene password — no reutilices la de Redis del host
+REDIS_PASSWORD=null
 
 # WebSockets / Reverb (puerto 6001 en prod)
 LARAVEL_WEBSOCKETS_PORT=6001
@@ -44,6 +46,9 @@ REVERB_HOST=websockets
 BROADCAST_CONNECTION=reverb
 
 HORIZON_PREFIX=intranet_horizon:
+# Acceso dashboard /horizon en PROD (obligatorio una de las dos):
+HORIZON_DASHBOARD_TOKEN=
+HORIZON_ALLOWED_IPS=
 QUEUE_CONNECTION=redis
 CACHE_DRIVER=redis
 SESSION_DRIVER=file
@@ -59,7 +64,7 @@ Si difiere, define `MYSQL_SOCKET_HOST=/ruta/real/mysqld.sock` en `.env`.
 
 ## 2. Nginx del host
 
-Actualiza el vhost de prod para proxy al contenedor (puerto **8082**). El ejemplo incluye **CORS** para `*.probusiness.pe` (necesario tras migrar de php-fpm a proxy Docker):
+Actualiza el vhost de prod para proxy al contenedor (puerto **8082**). **No** configures CORS en Nginx host: Laravel ya lo envía (`HandleCors` + `config/cors.php`); duplicarlo rompe el front con `multiple values` en `Access-Control-Allow-Origin`.
 
 ```bash
 cd /var/www/html/intranet_back
@@ -68,13 +73,13 @@ sudo cp docker/nginx/host-reverse-proxy.probusiness.example.conf \
 sudo nginx -t && sudo systemctl reload nginx
 ```
 
-Comprueba preflight CORS:
+Comprueba CORS (un solo header, desde Laravel):
 
 ```bash
-curl -I -X OPTIONS "https://intranetback.probusiness.pe/api/soporte-ti/solicitudes" \
+curl -I -X OPTIONS "https://intranetback.probusiness.pe/api/calendar/my-role-groups" \
   -H "Origin: https://intranetv2.probusiness.pe" \
   -H "Access-Control-Request-Method: GET"
-# Debe incluir: Access-Control-Allow-Origin: https://intranetv2.probusiness.pe
+# Debe haber UNA sola línea Access-Control-Allow-Origin
 ```
 
 Limpia config cache de Laravel en Docker:
@@ -132,6 +137,35 @@ Secrets (mismos que QA):
 
 Deploy: **Actions → Deploy PROD → Run workflow** → escribir `deploy`.
 
+## Acceso a `/horizon` en PROD
+
+En `APP_ENV=production` el dashboard **no es público** (403 Forbidden sin configurar). Opciones en `.env`:
+
+**A) Token en URL** (recomendado):
+
+```env
+HORIZON_DASHBOARD_TOKEN=tu-token-largo-aleatorio
+```
+
+```bash
+openssl rand -hex 32
+```
+
+Abrir: `https://intranetback.probusiness.pe/horizon?token=tu-token-largo-aleatorio`
+
+**B) IPs permitidas** (oficina/VPN):
+
+```env
+HORIZON_ALLOWED_IPS=203.0.113.10,198.51.100.5
+```
+
+Tras cambiar `.env`:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.host-mysql.yml exec -u www-data app php artisan config:clear
+docker compose -f docker-compose.yml -f docker-compose.host-mysql.yml exec -u www-data app php artisan config:cache
+```
+
 ## 6. Rollback rápido (si algo falla)
 
 ```bash
@@ -145,7 +179,7 @@ sudo supervisorctl start intranet-horizon intranet-scheduler
 
 - [ ] `https://intranetback.probusiness.pe` responde 200
 - [ ] Login JWT funciona
-- [ ] Horizon procesa jobs (`/horizon`)
+- [ ] Horizon procesa jobs (`/horizon` — ver acceso abajo)
 - [ ] Uploads S3 / CDN
 - [ ] Webhooks WhatsApp / Bitrix
 - [ ] WebSockets (Reverb en `:6001`)

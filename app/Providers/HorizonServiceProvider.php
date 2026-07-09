@@ -37,7 +37,7 @@ class HorizonServiceProvider extends ServiceProvider
                 return true;
             }
 
-            $token = (string) env('HORIZON_DASHBOARD_TOKEN', '');
+            $token = (string) config('horizon.dashboard_token', '');
             if ($token !== '') {
                 $provided = (string) ($request->query('token') ?? $request->header('X-Horizon-Token', ''));
                 if ($provided !== '' && hash_equals($token, $provided)) {
@@ -45,10 +45,7 @@ class HorizonServiceProvider extends ServiceProvider
                 }
             }
 
-            $allowedIps = array_values(array_filter(array_map(
-                'trim',
-                explode(',', (string) env('HORIZON_ALLOWED_IPS', ''))
-            )));
+            $allowedIps = config('horizon.allowed_ips', []);
 
             return $allowedIps !== [] && in_array($request->ip(), $allowedIps, true);
         });
