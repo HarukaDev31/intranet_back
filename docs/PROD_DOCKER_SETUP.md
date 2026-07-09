@@ -59,13 +59,29 @@ Si difiere, define `MYSQL_SOCKET_HOST=/ruta/real/mysqld.sock` en `.env`.
 
 ## 2. Nginx del host
 
-Actualiza el vhost de prod para proxy al contenedor (puerto **8081**):
+Actualiza el vhost de prod para proxy al contenedor (puerto **8081**). El ejemplo incluye **CORS** para `*.probusiness.pe` (necesario tras migrar de php-fpm a proxy Docker):
 
 ```bash
 cd /var/www/html/intranet_back
 sudo cp docker/nginx/host-reverse-proxy.probusiness.example.conf \
   /etc/nginx/conf.d/intranetback.probusiness.pe.conf
 sudo nginx -t && sudo systemctl reload nginx
+```
+
+Comprueba preflight CORS:
+
+```bash
+curl -I -X OPTIONS "https://intranetback.probusiness.pe/api/soporte-ti/solicitudes" \
+  -H "Origin: https://intranetv2.probusiness.pe" \
+  -H "Access-Control-Request-Method: GET"
+# Debe incluir: Access-Control-Allow-Origin: https://intranetv2.probusiness.pe
+```
+
+Limpia config cache de Laravel en Docker:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.host-mysql.yml exec -u www-data app php artisan config:clear
+docker compose -f docker-compose.yml -f docker-compose.host-mysql.yml exec -u www-data app php artisan config:cache
 ```
 
 ## 3. Detener Supervisor del host (solo este proyecto)

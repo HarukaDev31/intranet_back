@@ -15,12 +15,8 @@ return [
     |
     */
 
-    // ============================================
-    // IMPORTANTE: CORS se configura en Nginx
-    // ============================================
-    // Desactivamos CORS aquí porque ya está configurado en Nginx
-    // con subdominios de probusiness.pe
-    
+    // Laravel HandleCors (Kernel) + preflight OPTIONS en Nginx host (ver host-reverse-proxy.probusiness.example.conf)
+
     'paths' => ['api/*', 'sanctum/csrf-cookie', 'files/*', 'storage/*'],
 
     'allowed_methods' => ['*'],
@@ -34,8 +30,7 @@ return [
         'https://admin.probusiness.pe',
         'https://qaintranet.probusiness.pe',
         'https://intranetback.probusiness.pe',
-        'https://intranetv2.probusiness.pe/',
-     
+        'https://intranetv2.probusiness.pe',
     ],
 
     // ✅ Subdominios Y dominio raíz probusiness.pe (el patrón .*\.probusiness.pe NO cubre el apex)
