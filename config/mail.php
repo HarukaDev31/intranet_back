@@ -14,8 +14,8 @@ return [
     */
 
     'default' => env('MAIL_MAILER', match (env('APP_ENV', 'production')) {
-        'production' => 'ses',
-        default => 'log',
+        'local', 'testing' => 'log',
+        default => 'ses',
     }),
 
     /*
