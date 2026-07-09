@@ -1,0 +1,85 @@
+name: Deploy QA
+
+on:
+  push:
+    branches: [qa]
+  workflow_dispatch:
+    inputs:
+      git_branch:
+        description: 'Rama a desplegar en QA'
+        required: false
+        default: 'qa'
+        type: string
+      composer_clean:
+        description: 'Borrar vendor/ antes de composer install (upgrades Laravel)'
+        required: false
+        default: false
+        type: boolean
+      run_migrations:
+        description: 'Ejecutar migrate --force'
+        required: false
+        default: true
+        type: boolean
+
+concurrency:
+  group: deploy-qa
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+    with:
+      quick: true
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: ci
+    environment: qa
+
+    steps:
+      - name: Deploy to QA server
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          port: ${{ secrets.DEPLOY_SSH_PORT || 22 }}
+          script_stop: true
+          script: |
+            set -euo pipefail
+
+            DEPLOY_PATH="${{ secrets.QA_DEPLOY_PATH }}"
+            if [ -z "$DEPLOY_PATH" ]; then DEPLOY_PATH="/var/www/html/intranet_back_qa"; fi
+
+            GIT_BRANCH="${{ github.event.inputs.git_branch }}"
+            if [ -z "$GIT_BRANCH" ]; then GIT_BRANCH="qa"; fi
+
+            DEPLOY_MODE="${{ vars.QA_DEPLOY_MODE }}"
+            if [ -z "$DEPLOY_MODE" ]; then DEPLOY_MODE="docker"; fi
+
+            COMPOSER_CLEAN="false"
+            if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ github.event.inputs.composer_clean }}" = "true" ]; then
+              COMPOSER_CLEAN="true"
+            elif [ "${{ vars.QA_COMPOSER_CLEAN }}" = "true" ]; then
+              COMPOSER_CLEAN="true"
+            fi
+
+            RUN_MIGRATIONS="true"
+            if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ github.event.inputs.run_migrations }}" = "false" ]; then
+              RUN_MIGRATIONS="false"
+            fi
+
+            export DEPLOY_PATH
+            export GIT_BRANCH
+            export DEPLOY_MODE
+            export COMPOSER_CLEAN
+            export RUN_MIGRATIONS
+
+            # Antes de deploy.sh (puede estar desactualizado en el servidor)
+            sudo git config --global --add safe.directory "${DEPLOY_PATH}" || true
+            sudo git config --global --add safe.directory '*' || true
+
+            echo "[deploy-qa] path=${DEPLOY_PATH} branch=${GIT_BRANCH} mode=${DEPLOY_MODE} composer_clean=${COMPOSER_CLEAN}"
+            sudo -E env DEPLOY_PATH="${DEPLOY_PATH}" GIT_BRANCH="${GIT_BRANCH}" DEPLOY_MODE="${DEPLOY_MODE}" \
+              COMPOSER_CLEAN="${COMPOSER_CLEAN}" RUN_MIGRATIONS="${RUN_MIGRATIONS}" DEPLOY_USE_SUDO=false \
+              bash "${DEPLOY_PATH}/scripts/deploy.sh"

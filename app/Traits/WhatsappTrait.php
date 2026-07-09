@@ -80,28 +80,11 @@ trait WhatsappTrait
     }
     
     /**
-     * Mapeo inverso de conexión de BD a dominio del frontend
-     * Múltiples dominios pueden usar la misma conexión (mysql)
-     */
-    private function getDomainFromDatabaseConnection($connection)
-    {
-        $connectionDomainMap = [
-            'mysql' => 'intranetv2.probusiness.pe', // Dominio principal para producción
-            'mysql_qa' => 'qaintranet.probusiness.pe',
-            'mysql_local' => 'localhost',
-        ];
-        
-        return $connectionDomainMap[$connection] ?? null;
-    }
-
-    /**
-     * Obtener el dominio del frontend desde donde se hace la petición
-     * Prioriza Origin/Referer, luego infiere desde la conexión de BD actual
+     * Obtener el dominio del frontend desde donde se hace la petición (Origin/Referer o APP_URL).
      */
     private function getRequestDomain()
     {
         try {
-            // Primero intentar obtener desde headers HTTP (Origin/Referer)
             $request = request();
             if ($request) {
                 $origin = $request->headers->get('origin');
@@ -116,29 +99,15 @@ trait WhatsappTrait
                 }
 
                 if ($sourceHost) {
-                    // Extraer solo el dominio (sin puerto o subdirectorios)
                     return $this->extractDomain($sourceHost);
                 }
             }
 
-            // Si no hay headers disponibles (ej: Jobs), inferir desde la conexión de BD actual
-            try {
-                $currentConnection = DB::getDefaultConnection();
-                $domain = $this->getDomainFromDatabaseConnection($currentConnection);
-                
-                if ($domain) {
-                    Log::info('Dominio inferido desde conexión de BD', [
-                        'connection' => $currentConnection,
-                        'domain' => $domain
-                    ]);
-                    return $domain;
-                }
-            } catch (\Exception $dbException) {
-                Log::debug('No se pudo obtener conexión de BD: ' . $dbException->getMessage());
+            $fromApp = parse_url((string) config('app.url', ''), PHP_URL_HOST);
+            if (is_string($fromApp) && $fromApp !== '') {
+                return $this->extractDomain($fromApp);
             }
 
-            // Si no se pudo obtener de ninguna forma
-            Log::warning('No se pudo obtener el dominio del frontend: Origin/Referer no disponibles y no se pudo inferir desde BD');
             return null;
         } catch (\Exception $e) {
             Log::warning('Error al obtener dominio del frontend: ' . $e->getMessage());
@@ -148,7 +117,6 @@ trait WhatsappTrait
 
     /**
      * Extraer el dominio del host
-     * Similar a DatabaseSelectionMiddleware
      */
     private function extractDomain($host)
     {

@@ -2,37 +2,26 @@
 
 namespace App\Support\WhatsApp;
 
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Resolución de teléfono de prueba (localhost / QA / FORCE) compartida por WhatsappTrait y Meta legacy.
+ * Resolución de teléfono de prueba (local / QA / FORCE) compartida por WhatsappTrait y Meta legacy.
+ * El ambiente se define por APP_ENV / .env, no por dominio ni conexión de BD.
  */
 class WhatsappEnvironmentPhone
 {
-    /** @var array<int, string> */
-    private const DOMAINS_DEFAULT = ['localhost', '127.0.0.1', 'qaintranet.probusiness.pe'];
-
-    /** @var array<string, string> */
-    private const CONNECTION_DOMAIN_MAP = [
-        'mysql' => 'intranetv2.probusiness.pe',
-        'mysql_qa' => 'qaintranet.probusiness.pe',
-        'mysql_local' => 'localhost',
-    ];
-
     public static function shouldUseDefaultNumber(?string $domain = null): bool
     {
-        $domain = $domain ?? self::inferDomain();
-
-        if ($domain !== null) {
-            foreach (self::DOMAINS_DEFAULT as $allowed) {
-                if (strpos($domain, $allowed) !== false || $domain === $allowed) {
-                    return true;
-                }
-            }
+        if ((bool) env('FORCE_SEND_DEFAULT_NUMBER', false)) {
+            return true;
         }
 
-        return (bool) env('FORCE_SEND_DEFAULT_NUMBER', false);
+        $configured = env('WHATSAPP_USE_DEFAULT_NUMBER');
+        if ($configured !== null && $configured !== '') {
+            return filter_var($configured, FILTER_VALIDATE_BOOLEAN);
+        }
+
+        return app()->environment(['local', 'testing', 'qa', 'staging']);
     }
 
     public static function resolve(?string $phoneNumberId, ?string $domain = null): ?string
@@ -46,8 +35,8 @@ class WhatsappEnvironmentPhone
         }
 
         $default = (string) env('DEFAULT_WHATSAPP_NUMBER', '51912705923@c.us');
-        Log::info('WhatsApp: número por defecto (ambiente dev/QA o forzado)', [
-            'domain' => $domain ?? self::inferDomain(),
+        Log::info('WhatsApp: número por defecto (ambiente no productivo o forzado)', [
+            'app_env' => app()->environment(),
             'original' => $phoneNumberId,
             'phoneNumberId' => $default,
         ]);
@@ -72,14 +61,22 @@ class WhatsappEnvironmentPhone
                 if ($host) {
                     return self::normalizeHost((string) $host);
                 }
+
+                $requestHost = $request->getHost();
+                if (is_string($requestHost) && $requestHost !== '') {
+                    return self::normalizeHost($requestHost);
+                }
             }
-
-            $connection = DB::getDefaultConnection();
-
-            return self::CONNECTION_DOMAIN_MAP[$connection] ?? null;
         } catch (\Throwable $e) {
             return null;
         }
+
+        $fromApp = parse_url((string) config('app.url', ''), PHP_URL_HOST);
+        if (is_string($fromApp) && $fromApp !== '') {
+            return self::normalizeHost($fromApp);
+        }
+
+        return null;
     }
 
     private static function normalizeHost(string $host): string

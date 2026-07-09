@@ -1,0 +1,58 @@
+# MySQL instalado en el host con bind-address=127.0.0.1 (sin exponer 3306 a internet).
+# Monta el socket Unix del host en los contenedores PHP — no requiere abrir TCP ni cambiar bind-address.
+#
+# Uso en servidor QA:
+#   APP_PORT=8085 en .env
+#   docker compose -f docker-compose.yml -f docker-compose.host-mysql.yml up -d
+#
+# .env del servidor (QA):
+#   APP_PORT=8085
+#   APP_URL=https://qa.intranetback.probusiness.pe
+#   DB_HOST=localhost
+#   DB_SOCKET=/var/run/mysqld/mysqld.sock
+#   REDIS_HOST=redis
+#   REDIS_PORT=6379
+#   REDIS_PREFIX=qa_
+#   LARAVEL_WEBSOCKETS_PORT=6002
+#   PUSHER_PORT=6002
+#   HORIZON_PREFIX=qa_horizon:
+#   QUEUE_CONNECTION=redis
+#   CACHE_DRIVER=file
+#   SESSION_DRIVER=file
+#   AWS (copiar de prod — mismo bucket/CDN):
+#   AWS_ACCESS_KEY_ID=...
+#   AWS_SECRET_ACCESS_KEY=...
+#   AWS_DEFAULT_REGION=us-east-2
+#   AWS_BUCKET=probusiness-intranet
+#   FILESYSTEM_UPLOAD_DISK=s3
+#   OBJECT_STORAGE_CDN_URL=https://cdn.probusiness.pe
+#   (No uses REDIS_HOST=127.0.0.1:6380 dentro de Docker — es el host, no el contenedor)
+#
+# Uso en servidor PROD (/var/www/html/intranet_back):
+#   APP_PORT=8081
+#   COMPOSE_PROJECT_NAME=intranet_prod
+#   APP_ENV=production
+#   APP_DEBUG=false
+#   DB_HOST=localhost
+#   DB_SOCKET=/var/run/mysqld/mysqld.sock
+#   DOCKER_REDIS_HOST=host.docker.internal
+#   REDIS_HOST=host.docker.internal
+#   REDIS_PORT=6379
+#   REDIS_PREFIX=intranet_back_
+#   LARAVEL_WEBSOCKETS_PORT=6001
+#   HORIZON_PREFIX=intranet_horizon:
+#
+# Verifica la ruta del socket en el host:
+#   mysql -e "SHOW VARIABLES LIKE 'socket';"
+services:
+  app:
+    volumes:
+      - ${MYSQL_SOCKET_HOST:-/var/run/mysqld/mysqld.sock}:/var/run/mysqld/mysqld.sock
+
+  horizon:
+    volumes:
+      - ${MYSQL_SOCKET_HOST:-/var/run/mysqld/mysqld.sock}:/var/run/mysqld/mysqld.sock
+
+  scheduler:
+    volumes:
+      - ${MYSQL_SOCKET_HOST:-/var/run/mysqld/mysqld.sock}:/var/run/mysqld/mysqld.sock

@@ -5,8 +5,13 @@ namespace Tests\Unit;
 use App\Services\CalculadoraImportacion\CalculadoraImportacionCacheService;
 use App\Services\CalculadoraImportacionService;
 use PhpOffice\PhpSpreadsheet\IOFactory;
+use PHPUnit\Framework\Attributes\Group;
 use Tests\TestCase;
 
+/**
+ * Requiere MySQL con datos reales (usuarios, contenedores). Ejecutar en local/QA, no en CI.
+ */
+#[Group('requires-db')]
 class CalculadoraImportacionExcelGenerationTest extends TestCase
 {
     /**

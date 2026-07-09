@@ -14,6 +14,12 @@ class BroadcastServiceProvider extends ServiceProvider
      */
     public function boot()
     {
+        $driver = config('broadcasting.default');
+
+        if (in_array($driver, [null, 'null'], true)) {
+            return;
+        }
+
         Broadcast::routes();
 
         require base_path('routes/channels.php');

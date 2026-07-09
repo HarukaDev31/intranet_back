@@ -5,8 +5,8 @@ namespace App\Support\Database;
 use Illuminate\Support\Facades\DB;
 
 /**
- * En WSL + MySQL en Windows (XAMPP), la conexión por defecto mysql@127.0.0.1 falla.
- * mysql_local usa DB_HOST_LOCAL_WSL; Horizon/queue:work arrancan sin middleware HTTP.
+ * En WSL + MySQL en Windows (XAMPP), Horizon/queue:work pueden usar mysql_local
+ * cuando APP_ENV=local y DB_HOST_LOCAL_WSL está definido (sin cambiar BD por dominio).
  */
 class WslLocalDatabaseConnection
 {

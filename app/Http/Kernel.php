@@ -16,12 +16,11 @@ class Kernel extends HttpKernel
     protected $middleware = [
         // \App\Http\Middleware\TrustHosts::class,
         \App\Http\Middleware\TrustProxies::class,
-        \Fruitcake\Cors\HandleCors::class,  // ❌ DESACTIVADO - Nginx maneja CORS
+        \Illuminate\Http\Middleware\HandleCors::class,
         \App\Http\Middleware\PreventRequestsDuringMaintenance::class,
         \Illuminate\Foundation\Http\Middleware\ValidatePostSize::class,
         \App\Http\Middleware\TrimStrings::class,
         \Illuminate\Foundation\Http\Middleware\ConvertEmptyStringsToNull::class,
-        \App\Http\Middleware\DatabaseSelectionMiddleware::class, // Middleware para seleccionar BD por dominio
         // \App\Http\Middleware\CorsMiddleware::class,  // ❌ DESACTIVADO - Nginx maneja CORS
     ];
 
@@ -56,9 +55,7 @@ class Kernel extends HttpKernel
      *
      * @var array<string, class-string|string>
      */
-    protected $routeMiddleware = [
-        'websockets.auth' => \App\Http\Middleware\WebSocketsDashboardAuth::class,
-        'websockets.stats' => \App\Http\Middleware\WebSocketsStatistics::class,
+    protected $middlewareAliases = [
         'broadcasting.auth' => \App\Http\Middleware\BroadcastingAuth::class,
         'auth' => \App\Http\Middleware\Authenticate::class,
         'auth.basic' => \Illuminate\Auth\Middleware\AuthenticateWithBasicAuth::class,

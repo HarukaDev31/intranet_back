@@ -1,0 +1,38 @@
+# Solo desarrollo local: añade MySQL en contenedor.
+# Uso: docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build
+
+services:
+  app:
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  mysql:
+    image: mysql:8.0
+    restart: unless-stopped
+    ports:
+      - "${FORWARD_DB_PORT:-3306}:3306"
+    environment:
+      MYSQL_DATABASE: ${DB_DATABASE:-probusiness_intranetv2_back}
+      MYSQL_USER: ${DB_USERNAME:-intranet}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-secret}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-rootsecret}
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-p${DB_ROOT_PASSWORD:-rootsecret}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks:
+      - intranet
+
+  redis:
+    ports:
+      - "${FORWARD_REDIS_PORT:-6379}:6379"
+
+volumes:
+  mysql-data:
+    driver: local

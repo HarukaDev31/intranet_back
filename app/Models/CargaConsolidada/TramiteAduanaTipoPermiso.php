@@ -14,6 +14,4 @@ class TramiteAduanaTipoPermiso extends Model
     const UPDATED_AT = null;
 
     protected $fillable = ['nombre'];
-
-    protected $dates = ['created_at', 'deleted_at'];
 }

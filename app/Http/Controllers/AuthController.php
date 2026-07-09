@@ -173,7 +173,7 @@ class AuthController extends Controller
                         // Obtener foto URL
                         $photoUrl = '';
                         if ($usuario->Txt_Foto) {
-                            $photoUrl = $this->generateImageUrl($usuario->Txt_Foto);
+                            $photoUrl = $this->safePhotoUrl($usuario->Txt_Foto);
                         }
 
                         $payload = [
@@ -358,7 +358,7 @@ class AuthController extends Controller
             // Obtener foto URL
             $photoUrl = '';
             if ($usuario->Txt_Foto) {
-                $photoUrl = $this->generateImageUrl($usuario->Txt_Foto);
+                $photoUrl = $this->safePhotoUrl($usuario->Txt_Foto);
             }
 
             // Construir respuesta según el formato UserProfile usando directamente el modelo Usuario
@@ -621,9 +621,9 @@ class AuthController extends Controller
             // Obtener foto URL
             $photoUrl = '';
             if ($usuario->Txt_Foto) {
-                $photoUrl = $this->generateImageUrl($usuario->Txt_Foto);
+                $photoUrl = $this->safePhotoUrl($usuario->Txt_Foto);
             } elseif ($photoPath) {
-                $photoUrl = $this->generateImageUrl($photoPath);
+                $photoUrl = $this->safePhotoUrl($photoPath);
             }
 
             // Construir respuesta según el formato UserProfile
@@ -1460,7 +1460,7 @@ class AuthController extends Controller
                 'user' => [
                     'id' => $user->id,
                     'name' => $user->full_name,
-                    'photoUrl' => $this->generateImageUrl($user->photo_url),
+                    'photoUrl' => $this->safePhotoUrl($user->photo_url),
                     'email' => $user->email,
                     'dni' => $user->dni, // Campo no disponible en la estructura actual
                     'fechaNacimiento' => $user->birth_date, // Campo no disponible en la estructura actual
@@ -1595,7 +1595,7 @@ class AuthController extends Controller
                     'user' => [
                         'id' => $user->id,
                         'name' => $user->full_name,
-                        'photoUrl' => $this->generateImageUrl($user->photo_url),
+                        'photoUrl' => $this->safePhotoUrl($user->photo_url),
                         'email' => $user->email,
                         'dni' => $user->dni, // Campo no disponible en la estructura actual
                         'fechaNacimiento' => $user->birth_date, // Campo no disponible en la estructura actual
@@ -1684,7 +1684,7 @@ class AuthController extends Controller
                 'user' => [
                     'id' => $user->id,
                     'fullName' => $user->full_name,
-                    'photoUrl' => $this->generateImageUrl($user->photo_url),
+                    'photoUrl' => $this->safePhotoUrl($user->photo_url),
                     'email' => $user->email,
                     'country' => $user->pais_id ? $user->pais->No_Pais : null, // Campo no disponible en la estructura actual
                     'birth_date' => $user->birth_date,
@@ -2097,5 +2097,13 @@ class AuthController extends Controller
                 'message' => 'Error al restablecer la contraseña'
             ], 500);
         }
+    }
+
+    /**
+     * Foto de perfil: solo CDN (sin HeadObject S3).
+     */
+    private function safePhotoUrl(?string $path): string
+    {
+        return $this->cdnStorageUrl($path) ?? '';
     }
 }

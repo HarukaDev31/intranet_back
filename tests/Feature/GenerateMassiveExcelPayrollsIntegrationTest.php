@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Schema;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use ReflectionMethod;
+use PHPUnit\Framework\Attributes\Group;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Tests\TestCase;
 
@@ -42,9 +43,8 @@ use Tests\TestCase;
  * Para conservar archivos y abrir URLs en el navegador tras el test:
  *   KEEP_INTEGRATION_TEST_ARTIFACTS=1 ./vendor/bin/phpunit tests/Feature/GenerateMassiveExcelPayrollsIntegrationTest.php
  * Ajusta APP_URL (o phpunit.xml env) al mismo host/puerto que uses (ej. http://localhost:8001).
- *
- * @group integration
  */
+#[Group('integration')]
 class GenerateMassiveExcelPayrollsIntegrationTest extends TestCase
 {
     /** @var string */

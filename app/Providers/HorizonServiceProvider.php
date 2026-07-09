@@ -24,16 +24,33 @@ class HorizonServiceProvider extends ServiceProvider
      */
     public function boot()
     {
-        // Si Horizon no está instalado, salir sin error (Windows / PHP sin pcntl)
         if (! class_exists(\Laravel\Horizon\Horizon::class)) {
             return;
         }
 
-        // Configurar Horizon para que solo sea accesible en entorno local
-        if ($this->app->environment('local')) {
-            Horizon::auth(function ($request) {
+        Horizon::auth(function ($request) {
+            if ($this->app->environment('local')) {
                 return true;
-            });
-        }
+            }
+
+            if ($this->app->environment('qa')) {
+                return true;
+            }
+
+            $token = (string) env('HORIZON_DASHBOARD_TOKEN', '');
+            if ($token !== '') {
+                $provided = (string) ($request->query('token') ?? $request->header('X-Horizon-Token', ''));
+                if ($provided !== '' && hash_equals($token, $provided)) {
+                    return true;
+                }
+            }
+
+            $allowedIps = array_values(array_filter(array_map(
+                'trim',
+                explode(',', (string) env('HORIZON_ALLOWED_IPS', ''))
+            )));
+
+            return $allowedIps !== [] && in_array($request->ip(), $allowedIps, true);
+        });
     }
 }

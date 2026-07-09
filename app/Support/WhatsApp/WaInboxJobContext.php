@@ -3,8 +3,8 @@
 namespace App\Support\WhatsApp;
 
 /**
- * Dominio de BD para jobs WaInbox (cola sin Origin/Referer del front, p. ej. webhook Meta).
- * Debe alinearse con DatabaseSelectionMiddleware / DatabaseConnectionTrait.
+ * Metadatos de contexto para jobs WaInbox (auditoría / job_domain en batches).
+ * La BD ya no se elige por dominio: cada despliegue usa su .env.
  */
 class WaInboxJobContext
 {
@@ -28,7 +28,6 @@ class WaInboxJobContext
                     }
                 }
 
-                // Webhook Meta: sin Origin; usar host del API (igual que DatabaseSelectionMiddleware).
                 $requestHost = $request->getHost();
                 if (is_string($requestHost) && $requestHost !== '') {
                     return self::normalizeHost($requestHost);
@@ -43,17 +42,7 @@ class WaInboxJobContext
             return $fromApp;
         }
 
-        $inbox = trim((string) config('meta_whatsapp.inbox_job_domain', ''));
-        if ($inbox !== '' && $inbox !== 'localhost') {
-            return self::normalizeHost($inbox);
-        }
-
-        $queue = trim((string) config('database.queue_job_domain', ''));
-        if ($queue !== '' && $queue !== 'localhost') {
-            return self::normalizeHost($queue);
-        }
-
-        return app()->environment('local') ? 'localhost' : 'intranetv2.probusiness.pe';
+        return 'localhost';
     }
 
     private static function normalizeHost($host): string
