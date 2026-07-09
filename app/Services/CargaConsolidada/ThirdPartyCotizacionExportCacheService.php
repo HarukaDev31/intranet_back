@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\Cache;
 
 class ThirdPartyCotizacionExportCacheService
 {
-    private const VERSION = 'v1';
+    private const VERSION = 'v2';
     private const CACHE_TTL_MINUTES = 10;
     private const LOCK_SECONDS = 30;
     private const BLOCK_SECONDS = 10;

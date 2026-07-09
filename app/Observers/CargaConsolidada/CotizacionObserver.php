@@ -9,8 +9,25 @@ use App\Services\CargaConsolidada\SeguimientoConsolidadoDriveService;
 class CotizacionObserver
 {
     /**
-     * Handle the Cotizacion "updated" event.
+     * Al pasar a CONFIRMADO se registra fecha_confirmacion; al salir de CONFIRMADO se limpia.
      */
+    public function updating(Cotizacion $cotizacion): void
+    {
+        if (! $cotizacion->isDirty('estado_cotizador')) {
+            return;
+        }
+
+        if ($cotizacion->estado_cotizador === 'CONFIRMADO') {
+            $cotizacion->fecha_confirmacion = now();
+
+            return;
+        }
+
+        if ($cotizacion->getOriginal('estado_cotizador') === 'CONFIRMADO') {
+            $cotizacion->fecha_confirmacion = null;
+        }
+    }
+
     public function updated(Cotizacion $cotizacion): void
     {
         // Si el estado del cotizador cambió, sincronizar la calculadora según el nuevo valor

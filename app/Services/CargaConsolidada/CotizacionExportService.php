@@ -224,9 +224,7 @@ class CotizacionExportService
                 'asesor' => $cotizacion->asesor ?? '',
                 'cod' => $this->buildCod($contenedor, $cotizacion),
                 'created_at' => $cotizacion->fecha ?? null,
-                'fecha_de_confirmacion' => ($cotizacion->fecha && $cotizacion->fecha_confirmacion && $cotizacion->fecha < $cotizacion->fecha_confirmacion)
-                    ? $cotizacion->fecha_confirmacion
-                    : $cotizacion->fecha,
+                'fecha_de_confirmacion' => $this->resolveFechaDeConfirmacion($cotizacion),
                 'fecha_de_baja' => $cotizacion->deleted_at ?? null,
                 'razon_de_baja' => $cotizacion->razon_de_baja ?? '',
                 'updated_at' => $cotizacion->updated_at ?? null,
@@ -435,7 +433,7 @@ class CotizacionExportService
                 // COD construido desde helper
                 'cod' => $this->buildCod($contenedor, $cotizacion),
                 'created_at' => $cotizacion->fecha ?? null,
-                'fecha_de_confirmacion' => $cotizacion->fecha < $cotizacion->fecha_confirmacion ? $cotizacion->fecha_confirmacion : $cotizacion->fecha,
+                'fecha_de_confirmacion' => $this->resolveFechaDeConfirmacion($cotizacion),
                 'fecha_de_baja' => $cotizacion->deleted_at ?? null,
                 'razon_de_baja' => $cotizacion->razon_de_baja ?? '',
                 'updated_at' => $cotizacion->updated_at ?? null,
@@ -1109,6 +1107,23 @@ class CotizacionExportService
             'lastRow' => $row - 1, 
             'totalRows' => count($datosExport)
         ];
+    }
+
+    /**
+     * Fecha real de confirmación por el cotizador (columna fecha_confirmacion).
+     * Solo aplica cuando estado_cotizador = CONFIRMADO; pendientes devuelven null.
+     *
+     * @param object $cotizacion
+     * @return mixed
+     */
+    private function resolveFechaDeConfirmacion($cotizacion)
+    {
+        $estado = $cotizacion->estado_cotizador ?? 'PENDIENTE';
+        if ($estado !== 'CONFIRMADO') {
+            return null;
+        }
+
+        return $cotizacion->fecha_confirmacion ?? null;
     }
 
     /**
