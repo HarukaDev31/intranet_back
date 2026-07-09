@@ -60,6 +60,12 @@ return [
     */
     'url_clientes' => env('APP_URL_CLIENTES', 'http://localhost:3001'),
 
+    /*
+    | Clave legacy CodeIgniter (ciEncrypt/ciDecrypt, contraseñas Moodle en BD).
+    | Copiar el mismo valor que en el intranet PHP antiguo / producción.
+    */
+    'ci_encryption_key' => env('CI_ENCRYPTION_KEY', env('ENCRYPTION_KEY')),
+
     'asset_url' => env('ASSET_URL', null),
 
     /*
