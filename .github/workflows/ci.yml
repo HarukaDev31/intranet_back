@@ -2,8 +2,8 @@ name: CI
 
 on:
   push:
-    # qa: CI corre dentro de deploy-qa.yml (evita duplicar tests en cada push)
-    branches: [main, 'upgrade/**']
+    # qa/main: CI corre dentro de deploy-qa.yml / deploy-prod.yml (evita duplicar tests en cada push)
+    branches: ['upgrade/**']
   pull_request:
     branches: [qa, main]
   workflow_call:

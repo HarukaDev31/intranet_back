@@ -135,7 +135,9 @@ Secrets (mismos que QA):
 - `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY`
 - `PROD_DEPLOY_PATH` = `/var/www/html/intranet_back`
 
-Deploy: **Actions → Deploy PROD → Run workflow** → escribir `deploy`.
+Deploy: **Actions → Deploy PROD → Run workflow** → escribir `deploy` (solo si no fue push a `main`).
+
+Tras merge a `main`, el deploy corre solo (como QA con `qa`).
 
 ## Acceso a `/horizon` en PROD
 

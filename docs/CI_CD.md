@@ -8,7 +8,7 @@ Pipeline para **QA (Docker)** y **PROD (Docker, manual confirmado)**.
 |---------|------------|----------|
 | `ci.yml` | PR a `qa`/`main`, push `main`/`upgrade/**` | Composer, smoke, PHPUnit Unit (+ Feature sin bloquear) |
 | `deploy-qa.yml` | Push a `qa` o manual | CI reutilizado → SSH → `deploy.sh` |
-| `deploy-prod.yml` | Manual (`deploy`) | SSH → PROD (docker por defecto) |
+| `deploy-prod.yml` | Push a `main` o manual (`deploy`) | CI reutilizado → SSH → PROD (docker) |
 
 ## Configuración en GitHub (una sola vez)
 
@@ -108,9 +108,9 @@ En el servidor (como ubuntu), pega la línea en `~/.ssh/authorized_keys`. En Git
 ## Troubleshooting SSH
 
 ```text
-push a qa  →  solo Deploy QA (incluye CI + deploy)
-PR a qa    →  solo CI (validación antes del merge)
-push main  →  CI
+push a qa   →  Deploy QA (CI smoke + deploy)
+push main   →  Deploy PROD (CI smoke + deploy)
+PR a qa/main →  solo CI (validación antes del merge)
 ```
 
 El servidor ejecuta `scripts/deploy.sh` (optimizado: build/composer/migrate solo si cambió algo relevante).
@@ -152,15 +152,17 @@ CI en push a `qa`: **smoke only** (sin PHPUnit). Tests completos en **PR a qa**.
 | `composer_clean` | `true` en saltos de versión Laravel (L9→L10, etc.) |
 | `run_migrations` | `false` si solo cambias config/código sin migraciones |
 
-## Flujo PROD (manual confirmado)
+## Flujo PROD (push a `main` o manual)
 
 PROD usa **Docker** (mismo `deploy.sh` que QA). Guía de migración: **[PROD_DOCKER_SETUP.md](PROD_DOCKER_SETUP.md)**.
 
+**Automático:** cada `push` a `main` ejecuta CI smoke + deploy (igual que QA con `qa`).
+
+**Manual:** **Actions → Deploy PROD → Run workflow** → escribir `deploy` (útil para re-deploy sin commit o otra rama).
+
 1. Validar en QA
-2. Merge a `main`
-3. **Actions → Deploy PROD → Run workflow**
-4. Escribir `deploy` en confirmación
-5. Opcional: `composer_clean=true` en upgrades Laravel
+2. Merge a `main` → deploy automático (o manual con confirmación)
+3. Opcional: `composer_clean=true` en upgrades Laravel (variable `PROD_COMPOSER_CLEAN` o checkbox manual)
 
 ## Upgrade QA → Laravel 13
 

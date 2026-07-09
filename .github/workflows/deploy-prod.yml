@@ -1,10 +1,12 @@
 name: Deploy PROD
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
     inputs:
       confirm:
-        description: 'Escribe "deploy" para confirmar'
+        description: 'Escribe "deploy" para confirmar (solo deploy manual)'
         required: true
         type: string
       git_branch:
@@ -25,13 +27,19 @@ on:
 
 concurrency:
   group: deploy-prod
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+    with:
+      quick: true
+
   deploy:
     runs-on: ubuntu-latest
+    needs: ci
     environment: production
-    if: github.event.inputs.confirm == 'deploy'
+    if: github.event_name == 'push' || github.event.inputs.confirm == 'deploy'
 
     steps:
       - name: Deploy to production server
@@ -55,14 +63,14 @@ jobs:
             if [ -z "$DEPLOY_MODE" ]; then DEPLOY_MODE="docker"; fi
 
             COMPOSER_CLEAN="false"
-            if [ "${{ github.event.inputs.composer_clean }}" = "true" ]; then
+            if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ github.event.inputs.composer_clean }}" = "true" ]; then
               COMPOSER_CLEAN="true"
             elif [ "${{ vars.PROD_COMPOSER_CLEAN }}" = "true" ]; then
               COMPOSER_CLEAN="true"
             fi
 
             RUN_MIGRATIONS="true"
-            if [ "${{ github.event.inputs.run_migrations }}" = "false" ]; then
+            if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ github.event.inputs.run_migrations }}" = "false" ]; then
               RUN_MIGRATIONS="false"
             fi
 
