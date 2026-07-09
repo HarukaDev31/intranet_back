@@ -268,6 +268,9 @@ if [[ "${DEPLOY_MODE}" == "docker" ]]; then
   fi
   fix_app_permissions
 
+  log "storage:link (public/storage → storage/app/public)"
+  compose exec -T -u www-data app php artisan storage:link --force || true
+
   refresh_app_caches
 
   if needs_migrate; then

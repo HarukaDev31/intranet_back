@@ -142,7 +142,9 @@
 <body>
     <div class="container">
         <div class="header">
+            @if (!empty($logo_header))
             <img src="{{ $message->embed($logo_header) }}" alt="probusiness" class="logo">
+            @endif
         </div>
         <div class="banner" style="text-align:center;">¿Olvidaste tu contraseña?</div>
         <div class="content">
@@ -198,7 +200,9 @@
                 Equipo Probusiness
             </div>
             <footer style="background:#111; padding:24px 0; text-align:left;">
+                @if (!empty($logo_footer))
                 <img src="{{ $message->embed($logo_footer) }}" alt="probusiness" class="footer-logo" style="display:inline-block; margin-left:24px;">
+                @endif
             </footer>
         </div>
     </div>

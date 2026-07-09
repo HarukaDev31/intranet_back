@@ -12,6 +12,7 @@ docker compose -f docker-compose.yml -f docker-compose.local.yml exec -T -u root
 docker compose -f docker-compose.yml -f docker-compose.local.yml exec -T -u root app chown -R www-data:www-data vendor storage bootstrap/cache
 docker compose -f docker-compose.yml -f docker-compose.local.yml exec -T -u root app chmod -R ug+rwx storage bootstrap/cache
 docker compose -f docker-compose.yml -f docker-compose.local.yml exec -T app php artisan key:generate --force || true
+docker compose -f docker-compose.yml -f docker-compose.local.yml exec -T app php artisan storage:link --force || true
 docker compose -f docker-compose.yml -f docker-compose.local.yml exec -T app php artisan migrate --force || true
 
 echo ""

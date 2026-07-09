@@ -10,6 +10,7 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Log;
 use App\Mail\ForgotPasswordMail;
+use App\Support\BrandLogoPaths;
 
 class SendForgotPasswordEmailJob implements ShouldQueue
 {
@@ -42,8 +43,15 @@ class SendForgotPasswordEmailJob implements ShouldQueue
     public function handle()
     {
         try {
-            $logoHeader = public_path('storage/logo_icons/logo_header.png');
-            $logoFooter = public_path('storage/logo_icons/logo_footer.png');
+            $logoHeader = BrandLogoPaths::header();
+            $logoFooter = BrandLogoPaths::footer();
+
+            if ($logoHeader === null || $logoFooter === null) {
+                Log::warning('Logos de marca no encontrados para forgot password', [
+                    'logo_header' => $logoHeader,
+                    'logo_footer' => $logoFooter,
+                ]);
+            }
 
             Mail::to($this->email)->send(new ForgotPasswordMail(
                 $this->token,
