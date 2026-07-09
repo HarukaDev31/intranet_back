@@ -54,6 +54,12 @@ return [
 
     'url' => env('APP_URL', 'http://localhost'),
 
+    /*
+    | URL del frontend de clientes (links WhatsApp: inspección, firma, formularios).
+    | Obligatorio en QA/PROD. Con config:cache, solo se lee desde aquí (no env() en jobs).
+    */
+    'url_clientes' => env('APP_URL_CLIENTES', 'http://localhost:3001'),
+
     'asset_url' => env('ASSET_URL', null),
 
     /*

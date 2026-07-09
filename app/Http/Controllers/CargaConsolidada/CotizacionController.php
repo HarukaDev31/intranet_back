@@ -3739,7 +3739,7 @@ class CotizacionController extends Controller
             // Construir el mensaje
             $nombreCliente = $cotizacion->nombre;
             $carga = $contenedor->carga;
-            $signUrl = rtrim(env('APP_URL_CLIENTES', 'http://localhost:3001'), '/') . '/firma-acuerdo-servicio/' . ($cotizacion->uuid ?? '');
+            $signUrl = rtrim((string) config('app.url_clientes'), '/') . '/firma-acuerdo-servicio/' . ($cotizacion->uuid ?? '');
             
             $message = "Hola {$nombreCliente} porfavor firmar su contrato del consolidado #{$carga} {$signUrl}";
 

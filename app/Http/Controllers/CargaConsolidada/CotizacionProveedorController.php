@@ -2105,7 +2105,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
             $qtyPalletChina = (int) ($proveedor->qty_pallet_china ?? 0);
 
             // Preparar mensaje inicial de inspección (se enviará solo una vez; incluir link a vista inspección)
-            $baseUrl = rtrim(env('APP_URL_CLIENTES', 'http://localhost:3001'), '/');
+            $baseUrl = rtrim((string) config('app.url_clientes'), '/');
             $cotizacionUuid = Cotizacion::where('id', $idCotizacion)->value('uuid');
             $inspeccionViewUrl = $baseUrl . '/inspeccion/' . ($cotizacionUuid ?? '') . '?id_proveedor=' . $idProveedor;
             $inspectionMessage = $this->buildInspectionMessage(

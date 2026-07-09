@@ -131,7 +131,7 @@ class EntregaController extends Controller
      */
     private function buildFormularioEntregaUrl(int $idContenedor, ?int $typeForm): string
     {
-        $base = rtrim((string) env('APP_URL_CLIENTES'), '/') . '/formulario-entrega/' . $idContenedor;
+        $base = rtrim((string) config('app.url_clientes'), '/') . '/formulario-entrega/' . $idContenedor;
         if ($typeForm === 1) {
             return $base . '?destino=lima';
         }

@@ -255,7 +255,7 @@ class ClientesController extends Controller
             }
 
             // Obtener URL base de clientes desde .env
-            $baseUrl = env('APP_URL_CLIENTES', 'https://clientes.probusiness.pe');
+            $baseUrl = config('app.url_clientes');
             $recuperarContrasenaUrl = rtrim($baseUrl, '/') . '/recuperar-contrasena';
 
            

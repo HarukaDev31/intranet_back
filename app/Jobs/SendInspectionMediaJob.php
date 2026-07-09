@@ -185,7 +185,7 @@ class SendInspectionMediaJob implements ShouldQueue
             // Enviar mensaje principal (fotos/videos se envían después por separado): incluir link a vista inspección
             $qtyBoxChina = (int) ($proveedor->qty_box_china ?? $proveedor->qty_box ?? 0);
             $qtyPalletChina = (int) ($proveedor->qty_pallet_china ?? 0);
-            $baseUrl = rtrim(env('APP_URL_CLIENTES', 'http://localhost:3001'), '/');
+            $baseUrl = rtrim((string) config('app.url_clientes'), '/');
             $inspeccionLink = $baseUrl . '/inspeccion/' . ($cotizacion->uuid ?? '') . '?id_proveedor=' . $this->idProveedor;
             $resolved = CoordinacionWhatsappPayload::resolveInspeccionLlegadaTemplate($qtyBoxChina, $qtyPalletChina);
             $message = CoordinacionWhatsappPayload::inspeccionLlegadaPreview(

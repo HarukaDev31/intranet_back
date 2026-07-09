@@ -1881,7 +1881,7 @@ Cualquier duda nos escribe.  ¡Gracias! */
                 return response()->json(['success' => false, 'message' => 'Debe seleccionar al menos un cliente'], 400);
             }
 
-            $clientesUrlBase = env('APP_URL_CLIENTES', 'http://localhost:3001');
+            $clientesUrlBase = config('app.url_clientes');
             $enviados = [];
             $errores  = [];
 
@@ -2247,7 +2247,7 @@ Cualquier duda nos escribe.  ¡Gracias! */
             $numeroWhatsapp = $telefono . '@c.us';
 
             $idContenedor = $cotizacion->id_contenedor;
-            $clientesUrlBase = env('APP_URL_CLIENTES', 'http://localhost:3001');
+            $clientesUrlBase = config('app.url_clientes');
             $datosFacturacion = $this->getDatosFacturacionParaMensaje($cotizacion);
             $message = $datosFacturacion
                 ? $this->buildMensajeFormularioAntiguo($cotizacion, $datosFacturacion)

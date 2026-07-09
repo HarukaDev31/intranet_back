@@ -1940,7 +1940,7 @@ class AuthController extends Controller
             );
 
             // Construir URL de reset (viene del frontend)
-            $frontendUrl = env('APP_URL_CLIENTES', 'http://localhost:3001');
+            $frontendUrl = config('app.url_clientes');
             $resetUrl = $frontendUrl . '/reset-password?token=' . $token;
 
             // Despachar job para enviar email
