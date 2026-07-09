@@ -10,7 +10,9 @@ use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
+use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+use App\Support\PhpSpreadsheet\PhpSpreadsheetRuntime;
 use Carbon\Carbon;
 use App\Models\CargaConsolidada\CotizacionProveedor;
 use App\Models\CargaConsolidada\Contenedor;
@@ -47,6 +49,13 @@ class CotizacionExportService
      * @return Spreadsheet
      */
     public function buildCotizacionesSpreadsheet(Request $request, $idContenedor, $lightweight = false)
+    {
+        return PhpSpreadsheetRuntime::run(function () use ($request, $idContenedor, $lightweight) {
+            return $this->buildCotizacionesSpreadsheetInternal($request, $idContenedor, $lightweight);
+        });
+    }
+
+    private function buildCotizacionesSpreadsheetInternal(Request $request, $idContenedor, $lightweight = false)
     {
         $startedAt = microtime(true);
         $marketingLayout = $this->isMarketingProspectosExport($request);
@@ -669,7 +678,7 @@ class CotizacionExportService
 
             foreach (['B', 'C', 'D', 'E', 'I'] as $col) {
                 $range = $col . $group['start'] . ':' . $col . $group['end'];
-                $sheet->mergeCells($range);
+                $sheet->mergeCells($range, Worksheet::MERGE_CELL_CONTENT_HIDE);
                 $sheet->getStyle($range)->getAlignment()
                     ->setVertical(Alignment::VERTICAL_CENTER)
                     ->setHorizontal(Alignment::HORIZONTAL_CENTER);

@@ -2,6 +2,7 @@
 
 namespace App\Services\CargaConsolidada;
 
+use App\Support\PhpSpreadsheet\PhpSpreadsheetRuntime;
 use App\Models\CargaConsolidada\Contenedor;
 use App\Models\CargaConsolidada\PagoConcept;
 use App\Services\CargaConsolidada\SeguimientoConsolidadoCorteConfig;
@@ -64,6 +65,18 @@ class SeguimientoConsolidadoExcelService
      * @return Spreadsheet
      */
     public function buildSpreadsheet($idContenedor, Request $request = null)
+    {
+        return PhpSpreadsheetRuntime::run(function () use ($idContenedor, $request) {
+            return $this->buildSpreadsheetInternal($idContenedor, $request);
+        });
+    }
+
+    /**
+     * @param int $idContenedor
+     * @param Request|null $request
+     * @return Spreadsheet
+     */
+    private function buildSpreadsheetInternal($idContenedor, Request $request = null)
     {
         $this->log('info', 'Construyendo spreadsheet', ['id_contenedor' => (int) $idContenedor]);
 
@@ -245,7 +258,7 @@ class SeguimientoConsolidadoExcelService
     private function writeConfigSection(Worksheet $sheet, $row, $label)
     {
         $range = 'B' . $row . ':Y' . $row;
-        $sheet->mergeCells($range);
+        $sheet->mergeCells($range, Worksheet::MERGE_CELL_CONTENT_HIDE);
         $sheet->setCellValue('B' . $row, $label);
         $this->applyFill($sheet, $range, self::COLOR_CONFIG, true);
         $sheet->getStyle($range)->getAlignment()
@@ -698,7 +711,7 @@ class SeguimientoConsolidadoExcelService
             foreach ($mergeOffsets as $offset) {
                 $col = Coordinate::stringFromColumnIndex($startCol + $offset);
                 $range = $col . $group['start'] . ':' . $col . $group['end'];
-                $sheet->mergeCells($range);
+                $sheet->mergeCells($range, Worksheet::MERGE_CELL_CONTENT_HIDE);
                 $sheet->getStyle($range)->getAlignment()
                     ->setVertical(Alignment::VERTICAL_CENTER)
                     ->setHorizontal(Alignment::HORIZONTAL_CENTER);
@@ -792,7 +805,7 @@ class SeguimientoConsolidadoExcelService
         $labelRange = $start . $row . ':' . Coordinate::stringFromColumnIndex($startCol + $valueColOffset - 1) . $row;
         $fullRange = $start . $row . ':' . $end . $row;
 
-        $sheet->mergeCells($labelRange);
+        $sheet->mergeCells($labelRange, Worksheet::MERGE_CELL_CONTENT_HIDE);
         $sheet->setCellValue($start . $row, $label);
         $sheet->setCellValue($valueCol . $row, $value);
 
@@ -816,7 +829,7 @@ class SeguimientoConsolidadoExcelService
         $end = Coordinate::stringFromColumnIndex($startCol + $width - 1);
         $range = $start . $row . ':' . $end . $row;
 
-        $sheet->mergeCells($range);
+        $sheet->mergeCells($range, Worksheet::MERGE_CELL_CONTENT_HIDE);
         $sheet->setCellValue($start . $row, $title);
         $this->applyFill($sheet, $range, $color, true);
         $sheet->getStyle($range)->getAlignment()
@@ -969,7 +982,7 @@ class SeguimientoConsolidadoExcelService
         $end = Coordinate::stringFromColumnIndex($startCol + self::TABLE_WIDTH_CONTACTAR - 1);
         $noteRow = $row + 1;
         $noteRange = $start . $noteRow . ':' . $end . $noteRow;
-        $sheet->mergeCells($noteRange);
+        $sheet->mergeCells($noteRange, Worksheet::MERGE_CELL_CONTENT_HIDE);
         $sheet->setCellValue($start . $noteRow, $footerNote ?: '*AQUI SOLO SALE PROVEEDORES EN DATOS PROVEEDOR SIN FECHA DE LLEGADA*');
         $sheet->getStyle($noteRange)->getFont()->getColor()->setARGB('FFFF0000');
         $sheet->getStyle($noteRange)->getFont()->setBold(true);
