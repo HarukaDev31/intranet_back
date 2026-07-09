@@ -111,10 +111,10 @@ trait CodeIgniterEncryption
             self::$ciFuncOverload = (extension_loaded('mbstring') && ini_get('mbstring.func_overload'));
         }
         
-        // Get key from Laravel's .env file
+        // Clave legacy CodeIgniter (config/app.php → ci_encryption_key; funciona con config:cache)
         if (!isset($this->ciKey)) {
-            $key = env('ENCRYPTION_KEY', config('app.ci_encryption_key'));
-            if ($key) {
+            $key = config('app.ci_encryption_key');
+            if (is_string($key) && trim($key) !== '') {
                 $this->ciKey = $key;
             }
         }

@@ -11,6 +11,7 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Carbon\Carbon;
 
 class SendReminderPagoWhatsAppJob implements ShouldQueue
 {
@@ -93,7 +94,7 @@ class SendReminderPagoWhatsAppJob implements ShouldQueue
                 . "✅ Cotización final: $" . number_format($totalCotizacion, 2, '.', '') . "\n"
                 . "✅ Adelanto: $" . number_format($totalPagos, 2, '.', '') . "\n"
                 . "✅ *Pendiente de pago: $" . number_format($pendiente, 2, '.', '') . "*\n"
-                . ($fechaArribo ? "Último día de pago: " . date('d/m/Y', strtotime($fechaArribo)) . "\n" : '')
+                . $this->formatUltimoDiaPagoLine($fechaArribo)
                 . "\nPor favor debe enviar el comprobante de pago a la brevedad.";
 
             $rawTelefono = (string) ($cotizacion->telefono ?? '');
@@ -135,6 +136,23 @@ class SendReminderPagoWhatsAppJob implements ShouldQueue
                 'trace' => $e->getTraceAsString(),
             ]);
         }
+    }
+
+    /**
+     * Si hoy (Lima) ya pasó fecha_arribo, el último día de pago es hoy.
+     */
+    private function formatUltimoDiaPagoLine(?string $fechaArribo): string
+    {
+        if ($fechaArribo === null || trim($fechaArribo) === '') {
+            return '';
+        }
+
+        $tz = 'America/Lima';
+        $hoy = Carbon::now($tz)->startOfDay();
+        $limite = Carbon::parse($fechaArribo, $tz)->startOfDay();
+        $fechaMostrar = $hoy->greaterThan($limite) ? $hoy : $limite;
+
+        return 'Último día de pago: ' . $fechaMostrar->format('d/m/Y') . "\n";
     }
 }
 
