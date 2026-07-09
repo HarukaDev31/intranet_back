@@ -13,7 +13,10 @@ return [
     |
     */
 
-    'default' => env('MAIL_MAILER', 'smtp'),
+    'default' => env('MAIL_MAILER', match (env('APP_ENV', 'production')) {
+        'production' => 'ses',
+        default => 'log',
+    }),
 
     /*
     |--------------------------------------------------------------------------
@@ -28,7 +31,7 @@ return [
     | sending an e-mail. You will specify which one you are using for your
     | mailers below. You are free to add additional mailers as required.
     |
-    | Supported: "smtp", "sendmail", "mailgun", "ses",
+    | Supported: "smtp", "sendmail", "mailgun", "ses", "ses-v2",
     |            "postmark", "log", "array", "failover"
     |
     */
@@ -47,6 +50,10 @@ return [
 
         'ses' => [
             'transport' => 'ses',
+        ],
+
+        'ses-v2' => [
+            'transport' => 'ses-v2',
         ],
 
         'mailgun' => [
@@ -120,9 +127,8 @@ return [
     | Redirección en entorno local
     |--------------------------------------------------------------------------
     |
-    | Si MAIL_LOCAL_REDIRECT_TO está definido y APP_ENV=local, los envíos que
-    | usen MailTrait (sendMailTo / localMailTo) pueden sustituir el destinatario real por
-    | esta dirección (p. ej. Mailhog o un buzón de desarrollo).
+    | QA/local/staging: si MAIL_LOCAL_REDIRECT_TO está definido, MailTrait sustituye el
+    | destinatario real por esta dirección. En production nunca se redirige.
     |
     */
 

@@ -9,7 +9,8 @@ use Illuminate\Support\Facades\Mail;
 trait MailTrait
 {
     /**
-     * Envía un Mailable; si aplica redirección (dominio/entorno dev), usa MAIL_LOCAL_REDIRECT_TO.
+     * Envía un Mailable con el mailer por defecto (MAIL_MAILER; en producción suele ser ses).
+     * Si aplica redirección (dominio/entorno dev), usa MAIL_LOCAL_REDIRECT_TO.
      */
     protected function sendMailTo(?string $intended, Mailable $mailable): void
     {
@@ -103,7 +104,7 @@ trait MailTrait
             return false;
         }
 
-        return trim((string) env('MAIL_LOCAL_REDIRECT_TO', '')) !== '';
+        return trim((string) config('mail.local_redirect_to', '')) !== '';
     }
 
     /**
