@@ -20,6 +20,7 @@ use App\Traits\MoodleRestProTrait;
 use App\Traits\FileTrait;
 use App\Traits\UsesObjectStorage;
 use App\Traits\WhatsappTrait;
+use App\Traits\MailTrait;
 use App\Mail\MoodleCredentialsMail;
 use App\Support\BrandLogoPaths;
 use App\Exports\CursosExport;
@@ -27,7 +28,7 @@ use Maatwebsite\Excel\Facades\Excel;
 
 class CursoController extends Controller
 {
-    use CodeIgniterEncryption, MoodleRestProTrait, FileTrait, WhatsappTrait, UsesObjectStorage;
+    use CodeIgniterEncryption, MoodleRestProTrait, FileTrait, WhatsappTrait, UsesObjectStorage, MailTrait;
     public $table_pedido_curso_pagos = 'pedido_curso_pagos';
     
     /**
@@ -2182,9 +2183,10 @@ class CursoController extends Controller
                 ]);
             }
 
-            // Enviar email con las credenciales
+            // Enviar email con las credenciales (MailTrait redirige en QA vía MAIL_LOCAL_REDIRECT_TO)
             try {
-                Mail::to($email)->send(
+                $this->sendMailTo(
+                    $email,
                     new MoodleCredentialsMail(
                         $username,
                         $password,
