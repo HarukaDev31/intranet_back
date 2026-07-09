@@ -153,7 +153,9 @@ openssl rand -hex 32
 
 Abrir: `https://intranetback.probusiness.pe/horizon?token=tu-token-largo-aleatorio`
 
-**B) IPs permitidas** (oficina/VPN):
+La primera visita con `?token=` guarda sesión; las llamadas `/horizon/api/*` del dashboard funcionan igual que en QA (Current Workload visible).
+
+**B) IPs permitidas** (oficina/VPN, sin depender del token en cada request):
 
 ```env
 HORIZON_ALLOWED_IPS=203.0.113.10,198.51.100.5

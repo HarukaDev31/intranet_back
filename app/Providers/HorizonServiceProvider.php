@@ -37,10 +37,17 @@ class HorizonServiceProvider extends ServiceProvider
                 return true;
             }
 
+            // Tras ?token= en la primera carga, la SPA llama /horizon/api/* sin query string.
+            if ($request->session()->get('horizon_authenticated') === true) {
+                return true;
+            }
+
             $token = (string) config('horizon.dashboard_token', '');
             if ($token !== '') {
                 $provided = (string) ($request->query('token') ?? $request->header('X-Horizon-Token', ''));
                 if ($provided !== '' && hash_equals($token, $provided)) {
+                    $request->session()->put('horizon_authenticated', true);
+
                     return true;
                 }
             }
