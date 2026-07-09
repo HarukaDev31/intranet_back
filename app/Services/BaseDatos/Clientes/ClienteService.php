@@ -4,10 +4,12 @@ namespace App\Services\BaseDatos\Clientes;
 
 use App\Models\BaseDatos\Clientes\Cliente;
 use App\Models\Usuario;
+use App\Models\User;
 use App\Models\Provincia;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Carbon\Carbon;
 
 class ClienteService
@@ -424,6 +426,62 @@ class ClienteService
                 'status' => 500
             ];
         }
+    }
+
+    /**
+     * Actualiza la contraseña del usuario del portal de clientes vinculado al cliente.
+     */
+    public function actualizarContrasenaUsuario($clienteId, $password)
+    {
+        $cliente = Cliente::find($clienteId);
+
+        if (!$cliente) {
+            return [
+                'success' => false,
+                'message' => 'Cliente no encontrado',
+                'status' => 404,
+            ];
+        }
+
+        $userId = null;
+
+        try {
+            $user = \App\Helpers\UserLookupHelper::findUserByContact(
+                $cliente->correo ?? null,
+                $cliente->telefono ?? null,
+                $cliente->documento ?? null
+            );
+            if ($user) {
+                $userId = $user->id;
+            }
+        } catch (\Exception $e) {
+            Log::warning('actualizarContrasenaUsuario: error buscando usuario - ' . $e->getMessage());
+        }
+
+        if (!$userId) {
+            return [
+                'success' => false,
+                'message' => 'Este cliente no tiene una cuenta en el portal de clientes',
+                'status' => 422,
+            ];
+        }
+
+        $usuario = User::find($userId);
+        if (!$usuario) {
+            return [
+                'success' => false,
+                'message' => 'Usuario del portal no encontrado',
+                'status' => 404,
+            ];
+        }
+
+        $usuario->password = Hash::make($password);
+        $usuario->save();
+
+        return [
+            'success' => true,
+            'message' => 'Contraseña actualizada correctamente',
+        ];
     }
 
     /**

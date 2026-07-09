@@ -17,6 +17,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use App\Models\User;
 use App\Services\Delivery\ProvinciaEntregaNotificacionService;
+use App\Support\BrandLogoPaths;
 use App\Traits\MailTrait;
 
 class SendDeliveryConfirmationWhatsAppProvinceJob implements ShouldQueue
@@ -118,15 +119,28 @@ class SendDeliveryConfirmationWhatsAppProvinceJob implements ShouldQueue
             } else {
                 $resultado = $this->sendMessage($mensaje, $telefono);
             }
-            $this->sendMailTo($user->email, new \App\Mail\DeliveryConfirmationProvinceMail(
-                $deliveryForm,
-                $cotizacion,
-                $user,
-                $carga,
-                public_path('storage/logo_icons/logo_header_white.png'),
-                public_path('storage/logo_icons/logo_footer.png'),
-                $notificacion
-            ));
+            if ($user && $user->email) {
+                $logoHeader = BrandLogoPaths::headerWhite();
+                $logoFooter = BrandLogoPaths::footer();
+
+                if ($logoHeader === null || $logoFooter === null) {
+                    Log::warning('Logos de marca no encontrados para confirmación de entrega provincia', [
+                        'logo_header' => $logoHeader,
+                        'logo_footer' => $logoFooter,
+                        'delivery_form_id' => $this->deliveryFormId,
+                    ]);
+                }
+
+                $this->sendMailTo($user->email, new \App\Mail\DeliveryConfirmationProvinceMail(
+                    $deliveryForm,
+                    $cotizacion,
+                    $user,
+                    $carga,
+                    $logoHeader,
+                    $logoFooter,
+                    $notificacion
+                ));
+            }
             // Enviar email de confirmación si el usuario tiene email
            
 

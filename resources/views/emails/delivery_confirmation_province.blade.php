@@ -192,7 +192,9 @@
 <body>
     <div class="container">
         <div class="header">
+            @if (!empty($logo_header))
             <img src="{{ $message->embed($logo_header) }}" alt="probusiness" class="logo">
+            @endif
         </div>
         
         <div class="content">
@@ -266,7 +268,9 @@
             <table class="footer-table">
                 <tr>
                     <td class="footer-left">
+                        @if (!empty($logo_footer))
                         <img src="{{ $message->embed($logo_footer) }}" alt="probusiness" class="footer-logo">
+                        @endif
                         <div class="footer-address">
                             Av Nicolás Arriola 374, La Victoria 15034,<br>
                             Lima, Perú
