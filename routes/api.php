@@ -48,6 +48,9 @@ Route::prefix('google/drive/oauth')->group(function () {
 // Módulo de Autenticación (usuarios internos y externos)
 require __DIR__.'/modules/auth.php';
 
+// Portal fabricante (app móvil)
+require __DIR__.'/modules/fabricante-auth.php';
+
 // Módulo de Menús
 require __DIR__.'/modules/menu.php';
 
