@@ -28,12 +28,13 @@ COMPOSE_PROJECT_NAME=intranet_prod
 DB_HOST=localhost
 DB_SOCKET=/var/run/mysqld/mysqld.sock
 
-# Redis del host (mismas colas que hoy en prod)
-DOCKER_REDIS_HOST=host.docker.internal
-REDIS_HOST=host.docker.internal
+# Redis del contenedor compose (no el Redis del host)
+DOCKER_REDIS_HOST=redis
+REDIS_HOST=redis
 REDIS_PORT=6379
 REDIS_CLIENT=phpredis
 REDIS_PREFIX=intranet_back_
+FORWARD_REDIS_PORT=6381
 
 # WebSockets / Reverb (puerto 6001 en prod)
 LARAVEL_WEBSOCKETS_PORT=6001

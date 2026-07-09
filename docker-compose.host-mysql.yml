@@ -10,8 +10,10 @@
 #   APP_URL=https://qa.intranetback.probusiness.pe
 #   DB_HOST=localhost
 #   DB_SOCKET=/var/run/mysqld/mysqld.sock
+#   DOCKER_REDIS_HOST=redis
 #   REDIS_HOST=redis
 #   REDIS_PORT=6379
+#   FORWARD_REDIS_PORT=6380
 #   REDIS_PREFIX=qa_
 #   LARAVEL_WEBSOCKETS_PORT=6002
 #   PUSHER_PORT=6002
@@ -35,16 +37,23 @@
 #   APP_DEBUG=false
 #   DB_HOST=localhost
 #   DB_SOCKET=/var/run/mysqld/mysqld.sock
-#   DOCKER_REDIS_HOST=host.docker.internal
-#   REDIS_HOST=host.docker.internal
+#   DOCKER_REDIS_HOST=redis
+#   REDIS_HOST=redis
 #   REDIS_PORT=6379
+#   FORWARD_REDIS_PORT=6381
 #   REDIS_PREFIX=intranet_back_
 #   LARAVEL_WEBSOCKETS_PORT=6001
 #   HORIZON_PREFIX=intranet_horizon:
 #
 # Verifica la ruta del socket en el host:
 #   mysql -e "SHOW VARIABLES LIKE 'socket';"
+#
+# Redis en contenedor (QA 6380 / PROD 6381 en el host; dentro de Docker siempre redis:6379).
 services:
+  redis:
+    ports:
+      - "127.0.0.1:${FORWARD_REDIS_PORT:-6380}:6379"
+
   app:
     volumes:
       - ${MYSQL_SOCKET_HOST:-/var/run/mysqld/mysqld.sock}:/var/run/mysqld/mysqld.sock
