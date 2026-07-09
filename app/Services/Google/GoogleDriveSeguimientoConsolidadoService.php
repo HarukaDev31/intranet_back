@@ -48,7 +48,7 @@ class GoogleDriveSeguimientoConsolidadoService extends GoogleDriveExcelConfirmac
                 $this->sanitizeName((string) $mesFolder)
             );
 
-            $driveLink = $this->uploadOrReplace($mesFolderId, $localPath, $fileName);
+            $driveLink = $this->uploadOrReplaceWithRetry($mesFolderId, $localPath, $fileName);
 
             Log::info('[SeguimientoDrive] Excel subido a carpeta del mes', [
                 'mes_folder' => $mesFolder,
@@ -162,5 +162,68 @@ class GoogleDriveSeguimientoConsolidadoService extends GoogleDriveExcelConfirmac
         }
 
         return $deleted;
+    }
+
+    /**
+     * Reintenta subidas ante errores transitorios de Google (503, rate limit, etc.).
+     */
+    private function uploadOrReplaceWithRetry(string $folderId, string $localPath, string $fileName, int $maxAttempts = 3): string
+    {
+        $lastException = null;
+
+        for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
+            try {
+                return $this->uploadOrReplace($folderId, $localPath, $fileName);
+            } catch (\Throwable $e) {
+                $lastException = $e;
+
+                if ($attempt >= $maxAttempts || !$this->isTransientDriveError($e)) {
+                    throw $e;
+                }
+
+                $delaySeconds = min(2 ** ($attempt - 1), 8);
+
+                Log::warning('[SeguimientoDrive] Error transitorio en subida Drive, reintentando', [
+                    'attempt' => $attempt,
+                    'max_attempts' => $maxAttempts,
+                    'delay_seconds' => $delaySeconds,
+                    'file' => $fileName,
+                    'error' => $e->getMessage(),
+                ]);
+
+                sleep($delaySeconds);
+                $this->resetDrive();
+                $this->bootDrive();
+            }
+        }
+
+        throw $lastException ?? new \RuntimeException('Fallo al subir archivo a Google Drive.');
+    }
+
+    private function isTransientDriveError(\Throwable $e): bool
+    {
+        $message = strtolower($e->getMessage());
+
+        if (
+            str_contains($message, 'transient')
+            || str_contains($message, 'backend error')
+            || str_contains($message, 'rate limit')
+            || str_contains($message, 'user rate limit')
+            || str_contains($message, 'quota')
+        ) {
+            return true;
+        }
+
+        if (preg_match('/\b(429|500|502|503|504)\b/', $message)) {
+            return true;
+        }
+
+        if (method_exists($e, 'getCode')) {
+            $code = (int) $e->getCode();
+
+            return in_array($code, [429, 500, 502, 503, 504], true);
+        }
+
+        return false;
     }
 }

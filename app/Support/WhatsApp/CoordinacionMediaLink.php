@@ -96,15 +96,27 @@ class CoordinacionMediaLink
             return null;
         }
 
-        $contents = file_get_contents($fullPath);
-        if ($contents === false) {
-            return null;
-        }
-
         try {
             $storage = app(ObjectStorageConnectorInterface::class);
-            $relative = ltrim($storageRelative, '/');
-            $storedPath = $storage->putContents($relative, $contents);
+            $relative = StoragePathSanitizer::relativePath(ltrim($storageRelative, '/'));
+            if ($relative === '') {
+                return null;
+            }
+
+            $stream = fopen($fullPath, 'rb');
+            if ($stream === false) {
+                return null;
+            }
+
+            try {
+                if (!$storage->put($relative, $stream)) {
+                    throw new \RuntimeException('No se pudo guardar el archivo en almacenamiento.');
+                }
+            } finally {
+                fclose($stream);
+            }
+
+            $storedPath = $storage->normalizeRelativePath($relative) ?? $relative;
             $url = self::resolveUrlForStoredPath($storage, $storedPath);
 
             return [
@@ -117,6 +129,11 @@ class CoordinacionMediaLink
                 'relative' => $storageRelative,
                 'error' => $e->getMessage(),
             ]);
+
+            $contents = @file_get_contents($fullPath);
+            if ($contents === false) {
+                return null;
+            }
 
             $fallbackUrl = self::uploadToPublicDisk($contents, $storageRelative)
                 ?? self::fallbackPublicAssetUrl($fullPath);

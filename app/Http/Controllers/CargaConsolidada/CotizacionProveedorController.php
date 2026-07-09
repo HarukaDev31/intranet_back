@@ -25,6 +25,7 @@ use App\Jobs\SendRecordatorioDatosProveedorJob;
 use App\Models\ContenedorCotizacion;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\ValidationException;
 use Dompdf\Dompdf;
 use Dompdf\Options;
 use ZipArchive;
@@ -1413,7 +1414,10 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                     if (\DateTime::createFromFormat('Y-m-d', $data['arrive_date_china']) !== false) {
                         $proveedor->arrive_date_china = $data['arrive_date_china'];
                     } else {
-                        Log::error('Error en updateProveedorData: La fecha de llegada de china no es válida');
+                        return response()->json([
+                            'success' => false,
+                            'message' => 'La fecha de llegada de china no es válida',
+                        ], 422);
                     }
 
 
@@ -1486,13 +1490,15 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                 $estadoProvedorToUpdate = $this->providerOrderStatus[$this->STATUS_RECIVED] ?? 0;
                 if ($estadoProveedorOrder < $estadoProvedorToUpdate) {
                     if (!is_numeric($data['qty_box_china']) || !is_numeric($data['cbm_total_china']) || $data['qty_box_china'] <= 0 || $data['cbm_total_china'] <= 0) {
-                        Log::error('Error en updateProveedorData: La cantidad de cajas y volumen total de china deben ser números y mayores que 0');
-                        $proveedor->estados_proveedor = $this->STATUS_CONTACTED;
-                    } else {
-                        $proveedor->qty_box_china = $data['qty_box_china'];
-                        $proveedor->cbm_total_china = $data['cbm_total_china'];
-                        $proveedor->estados_proveedor = $this->STATUS_RECIVED;
+                        return response()->json([
+                            'success' => false,
+                            'message' => 'La cantidad de cajas y volumen total de china deben ser números y mayores que 0',
+                        ], 422);
                     }
+
+                    $proveedor->qty_box_china = $data['qty_box_china'];
+                    $proveedor->cbm_total_china = $data['cbm_total_china'];
+                    $proveedor->estados_proveedor = $this->STATUS_RECIVED;
                     if (isset($data['peso_china']) && is_numeric($data['peso_china'])) {
                         $proveedor->peso_china = $data['peso_china'];
                     }
@@ -1530,7 +1536,10 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                                 Log::error('Error al disparar evento CotizacionChinaContacted: ' . $e->getMessage());
                             }
                         } else {
-                            Log::error('Error en updateProveedorData: La fecha de llegada de china no es válida');
+                            return response()->json([
+                                'success' => false,
+                                'message' => 'La fecha de llegada de china no es válida',
+                            ], 422);
                         }
                     } else {
                         $usuarioActual = JWTAuth::parseToken()->authenticate();
@@ -2321,12 +2330,11 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
 
         // Mensaje con código del proveedor (como en SendInspectionMediaJob)
         $messageToSend = $codeSupplier ?? '';
-        $localPath = $this->storageLocalPath($file->file_path);
         $caption = '📦 Inspección — proveedor ' . ($codeSupplier ?? '') . ' 📦';
         $isVideo = is_string($file->file_type) && strpos($file->file_type, 'video/') === 0;
         $meta = $isVideo
-            ? CoordinacionWhatsappPayload::inspeccionVideo((string) $telefono, (string) $codeSupplier, $localPath, $caption)
-            : CoordinacionWhatsappPayload::inspeccionImagen((string) $telefono, (string) $codeSupplier, $localPath, $caption);
+            ? CoordinacionWhatsappPayload::inspeccionVideo((string) $telefono, (string) $codeSupplier, (string) $file->file_path, $caption)
+            : CoordinacionWhatsappPayload::inspeccionImagen((string) $telefono, (string) $codeSupplier, (string) $file->file_path, $caption);
 
         // Usar sendMediaInspectionToController para enviar con URL pública
         $response = $this->sendMediaInspectionToController(
@@ -2648,6 +2656,8 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                     'nota' => $proveedor->nota
                 ]
             ]);
+        } catch (ValidationException $e) {
+            throw $e;
         } catch (\Exception $e) {
             Log::error('Error en addNote: ' . $e->getMessage());
             return response()->json([

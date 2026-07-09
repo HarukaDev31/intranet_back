@@ -137,6 +137,11 @@ class GoogleDriveExcelConfirmacionService
         $this->drive = new Drive($client);
     }
 
+    protected function resetDrive(): void
+    {
+        $this->drive = null;
+    }
+
     protected function ensureFolder(string $parentId, string $name): string
     {
         $existingId = $this->findFolderId($parentId, $name);

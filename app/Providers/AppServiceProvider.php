@@ -8,6 +8,8 @@ use App\Observers\CargaConsolidada\CotizacionObserver;
 use App\Observers\CargaConsolidada\CotizacionProveedorObserver;
 use App\Support\Database\WslLocalDatabaseConnection;
 use Illuminate\Support\ServiceProvider;
+use Maatwebsite\Excel\Events\BeforeExport;
+use Maatwebsite\Excel\Facades\Excel;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -39,5 +41,12 @@ class AppServiceProvider extends ServiceProvider
         // Registrar observer para sincronizar estados entre Cotizacion y CalculadoraImportacion
         Cotizacion::observe(CotizacionObserver::class);
         CotizacionProveedor::observe(CotizacionProveedorObserver::class);
+
+        Excel::listen(BeforeExport::class, function () {
+            $limit = (string) env('EXCEL_MEMORY_LIMIT', '1024M');
+            if ($limit !== '') {
+                @ini_set('memory_limit', $limit);
+            }
+        });
     }
 }

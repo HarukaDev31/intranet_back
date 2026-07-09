@@ -219,8 +219,12 @@ class SendInspectionMediaJob implements ShouldQueue
                 
                 if ($publicUrl) {
                     $caption = '📦 Inspección — proveedor ' . $codeSupplier . ' 📦';
-                    $localPath = $this->storageLocalPath($image->file_path);
-                    $meta = CoordinacionWhatsappPayload::inspeccionImagen($telefono, (string) $codeSupplier, $localPath, $caption);
+                    $meta = CoordinacionWhatsappPayload::inspeccionImagen(
+                        $telefono,
+                        (string) $codeSupplier,
+                        (string) $image->file_path,
+                        $caption
+                    );
                     $this->sendMediaInspectionToController(
                         $image->file_path,
                         $image->file_type,
@@ -250,8 +254,12 @@ class SendInspectionMediaJob implements ShouldQueue
                 
                 if ($publicUrl) {
                     $caption = '📦 Inspección — proveedor ' . $codeSupplier . ' 📦';
-                    $localPath = $this->storageLocalPath($video->file_path);
-                    $meta = CoordinacionWhatsappPayload::inspeccionVideo($telefono, (string) $codeSupplier, $localPath, $caption);
+                    $meta = CoordinacionWhatsappPayload::inspeccionVideo(
+                        $telefono,
+                        (string) $codeSupplier,
+                        (string) $video->file_path,
+                        $caption
+                    );
                     $this->sendMediaInspectionToController(
                         $video->file_path,
                         $video->file_type,
