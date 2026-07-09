@@ -1,6 +1,6 @@
 # CI/CD — GitHub Actions
 
-Pipeline para **QA (Docker)** y **PROD (host, manual)**.
+Pipeline para **QA (Docker)** y **PROD (Docker, manual confirmado)**.
 
 ## Workflows
 
@@ -8,7 +8,7 @@ Pipeline para **QA (Docker)** y **PROD (host, manual)**.
 |---------|------------|----------|
 | `ci.yml` | PR a `qa`/`main`, push `main`/`upgrade/**` | Composer, smoke, PHPUnit Unit (+ Feature sin bloquear) |
 | `deploy-qa.yml` | Push a `qa` o manual | CI reutilizado → SSH → `deploy.sh` |
-| `deploy-prod.yml` | Manual (`deploy`) | SSH → PROD (classic por defecto en host) |
+| `deploy-prod.yml` | Manual (`deploy`) | SSH → PROD (docker por defecto) |
 
 ## Configuración en GitHub (una sola vez)
 
@@ -36,7 +36,8 @@ Opcional:
 |----------|----------------------|-------------|
 | `QA_DEPLOY_MODE` | `docker` | `docker` o `classic` |
 | `QA_COMPOSER_CLEAN` | `false` | Pon `true` durante upgrades Laravel (borra `vendor/`) |
-| `PROD_DEPLOY_MODE` | `classic` | PROD sigue en PHP host + Supervisor |
+| `PROD_DEPLOY_MODE` | `docker` | `docker` o `classic` (rollback) |
+| `PROD_COMPOSER_CLEAN` | `false` | Pon `true` durante upgrades Laravel en prod |
 
 ### Environment `qa`
 
@@ -151,13 +152,15 @@ CI en push a `qa`: **smoke only** (sin PHPUnit). Tests completos en **PR a qa**.
 | `composer_clean` | `true` en saltos de versión Laravel (L9→L10, etc.) |
 | `run_migrations` | `false` si solo cambias config/código sin migraciones |
 
-## Flujo PROD (manual)
+## Flujo PROD (manual confirmado)
 
-PROD usa PHP 7.4/8 en **host** (sin Docker por ahora):
+PROD usa **Docker** (mismo `deploy.sh` que QA). Guía de migración: **[PROD_DOCKER_SETUP.md](PROD_DOCKER_SETUP.md)**.
 
-1. Merge validado en `main`
-2. **Actions → Deploy PROD → Run workflow**
-3. Escribir `deploy` en el campo de confirmación
+1. Validar en QA
+2. Merge a `main`
+3. **Actions → Deploy PROD → Run workflow**
+4. Escribir `deploy` en confirmación
+5. Opcional: `composer_clean=true` en upgrades Laravel
 
 ## Upgrade QA → Laravel 13
 

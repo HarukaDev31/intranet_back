@@ -293,7 +293,9 @@ Guía detallada: **[docs/CI_CD.md](CI_CD.md)**.
 |-------------------|---------------------|-----------------------------|
 | `ci.yml`          | PR/push `qa`/`main`/`upgrade/**` | Unit tests + smoke Laravel |
 | `deploy-qa.yml`   | Push a `qa` (+ manual) | CI OK → SSH → `deploy.sh` (docker) |
-| `deploy-prod.yml` | Manual              | SSH → prod (classic host)   |
+| `deploy-prod.yml` | Manual              | SSH → prod (docker)   |
+
+Guía migración prod host → Docker: **[PROD_DOCKER_SETUP.md](PROD_DOCKER_SETUP.md)**.
 
 ### Secrets (Settings → Actions → Secrets)
 
@@ -313,7 +315,7 @@ Opcional: `DEPLOY_SSH_PORT` (default 22).
 |----------------------|-----------|-----------|
 | `QA_DEPLOY_MODE`     | `docker`  | —         |
 | `QA_COMPOSER_CLEAN`  | `false`   | —         |
-| `PROD_DEPLOY_MODE`   | —         | `classic` |
+| `PROD_DEPLOY_MODE`   | —         | `docker` |
 
 Pon `QA_COMPOSER_CLEAN=true` durante upgrades Laravel (borra `vendor/` en deploy).
 

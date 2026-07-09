@@ -28,6 +28,20 @@
 #   OBJECT_STORAGE_CDN_URL=https://cdn.probusiness.pe
 #   (No uses REDIS_HOST=127.0.0.1:6380 dentro de Docker — es el host, no el contenedor)
 #
+# Uso en servidor PROD (/var/www/html/intranet_back):
+#   APP_PORT=8081
+#   COMPOSE_PROJECT_NAME=intranet_prod
+#   APP_ENV=production
+#   APP_DEBUG=false
+#   DB_HOST=localhost
+#   DB_SOCKET=/var/run/mysqld/mysqld.sock
+#   DOCKER_REDIS_HOST=host.docker.internal
+#   REDIS_HOST=host.docker.internal
+#   REDIS_PORT=6379
+#   REDIS_PREFIX=intranet_back_
+#   LARAVEL_WEBSOCKETS_PORT=6001
+#   HORIZON_PREFIX=intranet_horizon:
+#
 # Verifica la ruta del socket en el host:
 #   mysql -e "SHOW VARIABLES LIKE 'socket';"
 services:
