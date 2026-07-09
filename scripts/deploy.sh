@@ -100,6 +100,30 @@ compose() {
   docker compose "${files[@]}" "$@"
 }
 
+compose_files_array() {
+  COMPOSE_FILES=(-f docker-compose.yml)
+  if [[ "${COMPOSE_LOCAL}" == "true" ]]; then
+    COMPOSE_FILES+=(-f docker-compose.local.yml)
+  elif [[ "${COMPOSE_HOST_MYSQL}" == "true" ]]; then
+    COMPOSE_FILES+=(-f docker-compose.host-mysql.yml)
+  fi
+}
+
+# Un solo stack por path: si .env cambió COMPOSE_PROJECT_NAME, baja el proyecto anterior.
+down_stale_compose_projects() {
+  compose_files_array
+  local active legacy
+  active="$(docker compose "${COMPOSE_FILES[@]}" config --format '{{.name}}' 2>/dev/null || echo "intranet_back")"
+
+  for legacy in intranet_back intranet_prod; do
+    [[ "${legacy}" == "${active}" ]] && continue
+    if docker compose -p "${legacy}" "${COMPOSE_FILES[@]}" ps -q 2>/dev/null | grep -q .; then
+      log "Bajando stack Docker obsoleto: ${legacy} (proyecto activo: ${active})"
+      docker compose -p "${legacy}" "${COMPOSE_FILES[@]}" down || true
+    fi
+  done
+}
+
 cd "${DEPLOY_PATH}"
 
 # GitHub Actions / SSH como ubuntu: re-ejecutar deploy como root (equivale a sudo su).
@@ -179,6 +203,7 @@ if [[ "${DEPLOY_MODE}" == "docker" ]]; then
   else
     log "Omitiendo docker build (sin cambios en Dockerfile/compose/docker/*)"
   fi
+  down_stale_compose_projects
   compose up -d
 
   compose exec -T -u root app git config --global --add safe.directory /var/www/html || true

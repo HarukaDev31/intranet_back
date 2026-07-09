@@ -22,7 +22,8 @@ APP_DEBUG=false
 APP_URL=https://intranetback.probusiness.pe
 
 APP_PORT=8082
-COMPOSE_PROJECT_NAME=intranet_prod
+# Opcional; por defecto el compose usa name: intranet_back (no uses intranet_prod — duplica stack en el mismo path)
+# COMPOSE_PROJECT_NAME=intranet_back
 
 # MySQL en el mismo host (socket Unix — no TCP público)
 DB_HOST=localhost

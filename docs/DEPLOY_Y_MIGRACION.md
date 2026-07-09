@@ -107,7 +107,7 @@ Resumen puertos en el mismo servidor:
 
 ### Setup PROD (segundo clone)
 
-Misma estructura en `/var/www/html/intranet_back`, rama `main`, `APP_PORT=8081`, `COMPOSE_PROJECT_NAME=intranet_prod`, credenciales de prod.
+Misma estructura en `/var/www/html/intranet_back`, rama `main`, `APP_PORT=8082`, credenciales de prod.
 
 ### MySQL en el host (bind-address=127.0.0.1) + Docker
 
@@ -237,7 +237,7 @@ Cada clone (QA / PROD) tiene **su propio** Horizon y scheduler:
 
 ```text
 intranet_back_qa/     →  contenedores intranet_qa-horizon-1, intranet_qa-scheduler-1
-intranet_back/        →  contenedores intranet_prod-horizon-1, intranet_prod-scheduler-1
+intranet_back/        →  contenedores intranet_back-horizon-1, intranet_back-scheduler-1
 ```
 
 Separa colas/métricas con prefijos distintos en `.env`:
