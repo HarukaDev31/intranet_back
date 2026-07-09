@@ -240,6 +240,62 @@ class ClientesController extends Controller
     }
 
     /**
+     * Actualizar contraseña del usuario del portal vinculado al cliente.
+     */
+    public function actualizarContrasena(Request $request, $id): JsonResponse
+    {
+        try {
+            $request->validate([
+                'password' => 'required|string|min:8|confirmed',
+                'password_confirmation' => 'required|string',
+            ], [
+                'password.required' => 'La contraseña es requerida',
+                'password.min' => 'La contraseña debe tener al menos 8 caracteres',
+                'password.confirmed' => 'Las contraseñas no coinciden',
+                'password_confirmation.required' => 'Debe confirmar la contraseña',
+            ]);
+
+            $result = $this->clienteService->actualizarContrasenaUsuario((int) $id, $request->password);
+
+            if (!$result['success']) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $result['message'],
+                ], $result['status'] ?? 400);
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => $result['message'],
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            $errors = $e->errors();
+            $firstMessage = null;
+            foreach ($errors as $messages) {
+                if (!empty($messages[0])) {
+                    $firstMessage = $messages[0];
+                    break;
+                }
+            }
+
+            return response()->json([
+                'success' => false,
+                'message' => $firstMessage ?: 'Datos inválidos',
+                'errors' => $errors,
+            ], 422);
+        } catch (\Exception $e) {
+            Log::error('Error en actualizarContrasena: ' . $e->getMessage(), [
+                'cliente_id' => $id,
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al actualizar la contraseña: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
      * Enviar instrucciones de recuperación de contraseña
      */
     public function enviarInstruccionesRecuperacionContrasena($id): JsonResponse

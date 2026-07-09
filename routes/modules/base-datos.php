@@ -148,6 +148,7 @@ Route::group(['prefix' => 'base-datos', 'middleware' => 'jwt.auth'], function ()
         Route::get('list-excels', [ClientesController::class, 'obtenerListExcel']);
         Route::delete('delete-excel/{id}', [ClientesController::class, 'deleteExcel']);
         Route::post('{id}/enviar-instrucciones-recuperacion-contrasena', [ClientesController::class, 'enviarInstruccionesRecuperacionContrasena']);
+        Route::patch('{id}/contrasena', [ClientesController::class, 'actualizarContrasena']);
         Route::get('{id}/descargar-documentos', [ClientesController::class, 'descargarDocumentos']);
         Route::get('{id}', [ClientesController::class, 'show']);
         Route::delete('{id}', [ClientesController::class, 'destroy']);
