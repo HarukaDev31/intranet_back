@@ -1480,87 +1480,137 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                 isset($data['qty_box_china']) && isset($data['cbm_total_china'])
                 && $user->getNombreGrupo() == Usuario::ROL_ALMACEN_CHINA
             ) {
+                $arriveDateProvided = isset($data['arrive_date_china'])
+                    && $data['arrive_date_china'] !== null
+                    && $data['arrive_date_china'] !== '';
 
-                if (!isset($data['arrive_date_china']) || $data['arrive_date_china'] == null) {
-                    $data['arrive_date_china'] = \Carbon\Carbon::now()->format('Y-m-d');
-                } else {
+                if ($arriveDateProvided) {
                     $data['arrive_date_china'] = \Carbon\Carbon::parse($data['arrive_date_china'])->format('Y-m-d');
                 }
+
                 $estadoProveedorOrder = $this->providerOrderStatus[$estadoProveedor] ?? 0;
                 $estadoProvedorToUpdate = $this->providerOrderStatus[$this->STATUS_RECIVED] ?? 0;
                 if ($estadoProveedorOrder < $estadoProvedorToUpdate) {
-                    if (!is_numeric($data['qty_box_china']) || !is_numeric($data['cbm_total_china']) || $data['qty_box_china'] <= 0 || $data['cbm_total_china'] <= 0) {
+                    if (
+                        !is_numeric($data['qty_box_china'])
+                        || !is_numeric($data['cbm_total_china'])
+                        || (float) $data['qty_box_china'] < 0
+                        || (float) $data['cbm_total_china'] < 0
+                    ) {
                         return response()->json([
                             'success' => false,
-                            'message' => 'La cantidad de cajas y volumen total de china deben ser números y mayores que 0',
+                            'message' => 'La cantidad de cajas y volumen total de china deben ser números válidos',
                         ], 422);
                     }
 
-                    $proveedor->qty_box_china = $data['qty_box_china'];
-                    $proveedor->cbm_total_china = $data['cbm_total_china'];
-                    $proveedor->estados_proveedor = $this->STATUS_RECIVED;
+                    $qtyBoxChina = (float) $data['qty_box_china'];
+                    $cbmTotalChina = (float) $data['cbm_total_china'];
+
+                    if (isset($data['peso_china']) && is_numeric($data['peso_china']) && (float) $data['peso_china'] < 0) {
+                        return response()->json([
+                            'success' => false,
+                            'message' => 'El peso de china debe ser un número válido',
+                        ], 422);
+                    }
+                    if (isset($data['qty_pallet_china']) && is_numeric($data['qty_pallet_china']) && (float) $data['qty_pallet_china'] < 0) {
+                        return response()->json([
+                            'success' => false,
+                            'message' => 'La cantidad de pallets de china debe ser un número válido',
+                        ], 422);
+                    }
+
+                    $proveedor->qty_box_china = $qtyBoxChina;
+                    $proveedor->cbm_total_china = $cbmTotalChina;
                     if (isset($data['peso_china']) && is_numeric($data['peso_china'])) {
                         $proveedor->peso_china = $data['peso_china'];
                     }
                     if (isset($data['qty_pallet_china']) && is_numeric($data['qty_pallet_china'])) {
                         $proveedor->qty_pallet_china = $data['qty_pallet_china'];
                     }
-                    Log::info('proveedor->arrive_date_china: ' . $proveedor->arrive_date_china);
-                    ///validate if proveedor has arrive_date_china and is valid date if not update
-                    if (
-                        !isset($proveedor->arrive_date_china) || $proveedor->arrive_date_china == null
 
-                    ) {
-                        //amd if is valid date
-                        if (\DateTime::createFromFormat('Y-m-d', $data['arrive_date_china']) !== false) {
-                            $proveedor->arrive_date_china = $data['arrive_date_china'];
-                            try {
-                                $carga = Contenedor::where('id', $idContenedor)->first()->carga;
-                                $cotizacion = Cotizacion::find($idCotizacion);
-                                $supplierCode = $proveedor->code_supplier;
-                                $user = JWTAuth::parseToken()->authenticate();
-                                //china contacto al proveedor con codigo de proveedor "codigo"del cliente "nombre" del contenedor "carga" y fecha de llegada "fecha" 
-                                $message = "China contacto al proveedor con codigo de proveedor " . $supplierCode . " del cliente " . $cotizacion->nombre . " del contenedor " . $carga . " y fecha de llegada " . $data['arrive_date_china'];
-                                CotizacionChinaContacted::dispatch($cotizacion, $proveedor, $supplierCode, $data['arrive_date_china'], $message);
-                                $usuarioActual = JWTAuth::parseToken()->authenticate();
-                                //if qty box china is greater than 0 and cbm total china is greater than 0, dispatch event received else contacted
-                                if ($data['qty_box_china'] > 0 && $data['cbm_total_china'] > 0) {
-                                    $this->crearNotificacionesProveedorRecibido($cotizacion, $proveedor, $supplierCode, $data['qty_box_china'], $data['cbm_total_china'], $carga, $usuarioActual);
-                                    $this->dispararEventoYNotificacionProveedorRecibido($cotizacion, $proveedor, $supplierCode, $data['qty_box_china'], $data['cbm_total_china'], $carga, $usuarioActual);
-                                } else {
-                                    CotizacionChinaContacted::dispatch($cotizacion, $proveedor, $supplierCode, $data['arrive_date_china'], $message);
-                                    $this->crearNotificacionesProveedorContactado($cotizacion, $proveedor, $supplierCode, $carga, $data['arrive_date_china'], $user);
-                                }
-                                // Crear notificaciones en la base de datos para Coordinación y Cotizador
-                            } catch (\Exception $e) {
-                                Log::error('Error al disparar evento CotizacionChinaContacted: ' . $e->getMessage());
-                            }
-                        } else {
+                    if ($arriveDateProvided) {
+                        if (\DateTime::createFromFormat('Y-m-d', $data['arrive_date_china']) === false) {
                             return response()->json([
                                 'success' => false,
                                 'message' => 'La fecha de llegada de china no es válida',
                             ], 422);
                         }
-                    } else {
-                        $usuarioActual = JWTAuth::parseToken()->authenticate();
+                        $proveedor->arrive_date_china = $data['arrive_date_china'];
+                    }
+
+                    $hasRecibidoMetrics = $qtyBoxChina > 0
+                        || $cbmTotalChina > 0
+                        || (isset($data['peso_china']) && is_numeric($data['peso_china']) && (float) $data['peso_china'] > 0)
+                        || (isset($data['qty_pallet_china']) && is_numeric($data['qty_pallet_china']) && (float) $data['qty_pallet_china'] > 0);
+
+                    $proveedor->estados_proveedor = $hasRecibidoMetrics
+                        ? $this->STATUS_RECIVED
+                        : $this->STATUS_CONTACTED;
+
+                    Log::info('proveedor->arrive_date_china: ' . $proveedor->arrive_date_china);
+
+                    try {
+                        $carga = Contenedor::where('id', $idContenedor)->first()->carga;
                         $cotizacion = Cotizacion::find($idCotizacion);
                         $supplierCode = $proveedor->code_supplier;
-                        $carga = Contenedor::where('id', $idContenedor)->first()->carga;
-                        $this->dispararEventoYNotificacionProveedorRecibido($cotizacion, $proveedor, $supplierCode, $data['qty_box_china'], $data['cbm_total_china'], $carga, $usuarioActual);
-                        $this->crearNotificacionesProveedorRecibido($cotizacion, $proveedor, $supplierCode, $data['qty_box_china'], $data['cbm_total_china'], $carga, $usuarioActual);
+                        $usuarioActual = JWTAuth::parseToken()->authenticate();
+
+                        if ($hasRecibidoMetrics) {
+                            $this->crearNotificacionesProveedorRecibido(
+                                $cotizacion,
+                                $proveedor,
+                                $supplierCode,
+                                $qtyBoxChina,
+                                $cbmTotalChina,
+                                $carga,
+                                $usuarioActual
+                            );
+                            $this->dispararEventoYNotificacionProveedorRecibido(
+                                $cotizacion,
+                                $proveedor,
+                                $supplierCode,
+                                $qtyBoxChina,
+                                $cbmTotalChina,
+                                $carga,
+                                $usuarioActual
+                            );
+                        } elseif ($arriveDateProvided && $proveedor->arrive_date_china) {
+                            $message = 'China contacto al proveedor con codigo de proveedor ' . $supplierCode
+                                . ' del cliente ' . $cotizacion->nombre
+                                . ' del contenedor ' . $carga
+                                . ' y fecha de llegada ' . $proveedor->arrive_date_china;
+                            CotizacionChinaContacted::dispatch(
+                                $cotizacion,
+                                $proveedor,
+                                $supplierCode,
+                                $proveedor->arrive_date_china,
+                                $message
+                            );
+                            $this->crearNotificacionesProveedorContactado(
+                                $cotizacion,
+                                $proveedor,
+                                $supplierCode,
+                                $carga,
+                                $proveedor->arrive_date_china,
+                                $usuarioActual
+                            );
+                        }
+                    } catch (\Exception $e) {
+                        Log::error('Error al disparar evento CotizacionChinaContacted: ' . $e->getMessage());
                     }
+
                     $proveedor->save();
-
-
 
                     $usuariosAlmacen = $this->getUsersByGrupo(Usuario::ROL_COORDINACION);
                     $ids = array_column($usuariosAlmacen, 'ID_Usuario');
-                    $message = "Se ha actualizado el proveedor con codigo de proveedor " . $supplierCode . " a estado RECIBIDO";
+                    $message = $hasRecibidoMetrics
+                        ? 'Se ha actualizado el proveedor con codigo de proveedor ' . $supplierCode . ' a estado RECIBIDO'
+                        : 'Se ha actualizado el proveedor con codigo de proveedor ' . $supplierCode . ' a estado CONTACTADO';
                 } else {
                     $message = "Se ha actualizado la cantidad de cajas y volumen total de china del proveedor con codigo de proveedor " . $supplierCode . " a " . $data['qty_box_china'] . " cajas y " . $data['cbm_total_china'] . " m3";
                 }
                 $contenedorEstado = Cotizacion::where('id_contenedor', $idContenedor)->first()->estado_china;
-                if ($contenedorEstado == "PENDIENTE") {
+                if ($contenedorEstado == "PENDIENTE" && isset($hasRecibidoMetrics) && $hasRecibidoMetrics) {
                     $cotizacion = Cotizacion::find($idContenedor);
                     $cotizacion->estado_china = "RECIBIENDO";
                     $cotizacion->estado = "RECIBIENDO";
@@ -1593,26 +1643,6 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
             //just if current roles is almacen china
             if ($user->getNombreGrupo() == Usuario::ROL_ALMACEN_CHINA) {
                 $this->sendAlertDifferenceCbmMessage($idCotizacion);
-            }
-            //Validate if provveedor has status R but not have qty box china and cbm total china OR ARE 0
-            if ($proveedor->estados_proveedor == $this->STATUS_RECIVED && (!$proveedor->qty_box_china || $proveedor->qty_box_china == 0) && (!$proveedor->cbm_total_china || $proveedor->cbm_total_china == 0)) {
-                //if have arrive date china, change status to C else if have datos_proveedor change to NC
-                if ($proveedor->arrive_date_china) {
-                    $proveedor->estados_proveedor = $this->STATUS_CONTACTED;
-                    $proveedor->save();
-                    try {
-                        $carga = Contenedor::where('id', $idContenedor)->first()->carga;
-                        $message = "China contacto al proveedor con codigo de proveedor " . $supplierCode . " del cliente " . $cotizacion->nombre . " del contenedor " . $carga . " y fecha de llegada " . $data['arrive_date_china'];
-                        CotizacionChinaContacted::dispatch($cotizacion, $proveedor, $supplierCode, $data['arrive_date_china'], $message);
-                    } catch (\Exception $e) {
-                        Log::error('Error al disparar evento CotizacionChinaContacted: ' . $e->getMessage());
-                    }
-                    Log::info('proveedor status changed to C: ' . $proveedor->estados_proveedor);
-                } else if ($proveedor->datos_proveedor) {
-                    $proveedor->estados_proveedor = $this->STATUS_NOT_CONTACTED;
-                    $proveedor->save();
-                    Log::info('proveedor status changed to NC: ' . $proveedor->estados_proveedor);
-                }
             }
             return response()->json([
                 'success' => true,
