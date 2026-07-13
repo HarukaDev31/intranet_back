@@ -261,6 +261,8 @@ if [[ "${DEPLOY_MODE}" == "docker" ]]; then
     record_composer_lock_hash
   else
     log "Omitiendo composer install (composer.lock sin cambios)"
+    log "Regenerar autoload (polyfills / classmap)"
+    compose exec -T -u root app composer dump-autoload --optimize --no-interaction
   fi
 
   if is_first_deploy; then
