@@ -112,10 +112,6 @@ return [
     /** Valor enviado a Meta cuando un parámetro de plantilla llega vacío (Meta rechaza text sin valor). */
     'empty_body_parameter_placeholder' => env('META_WHATSAPP_EMPTY_PARAM_PLACEHOLDER', '—'),
 
-    /**
-     * Si falla PutObject en S3, intentar URL pública bajo APP_URL para archivos en public/
-     * (útil en local; en producción conviene arreglar IAM s3:PutObject en temp/whatsapp-meta/*).
-     */
     'fallback_public_asset_url' => filter_var(
         env('META_WHATSAPP_FALLBACK_PUBLIC_URL', true),
         FILTER_VALIDATE_BOOLEAN

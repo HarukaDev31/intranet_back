@@ -14,6 +14,9 @@ class CoordinacionWhatsappPayload
     /** Texto fijo D07 — debe coincidir con la plantilla Meta. */
     private const DOCS_RECORDATORIO_AVISO = 'Si no tenemos tus documentos a tiempo, aduana puede aplicarte multas o inmovilización de tus productos.';
 
+    /** Plantilla Meta D02 — Excel de confirmación (QA: link_excel + link_intranet). */
+    private const DOCS_EXCEL_LINK_TEMPLATE = 'pb_docs_excel_link_v1_qa';
+
     /**
      * @return array<string, string>
      */
@@ -24,6 +27,38 @@ class CoordinacionWhatsappPayload
             'packing_list' => 'Packing List 📦.',
             'excel_confirmacion' => 'Excel de confirmacion 📄',
         ];
+    }
+
+    /**
+     * Base del formulario web Excel de confirmación (APP_URL_EXCEL_CONFIRMACION o APP_URL_CLIENTES).
+     */
+    public static function excelConfirmacionBaseUrl(): string
+    {
+        $base = rtrim(trim((string) config('app.url_excel_confirmacion', '')), '/');
+        if ($base !== '') {
+            return $base;
+        }
+
+        return rtrim(trim((string) config('app.url_clientes', '')), '/');
+    }
+
+    /**
+     * URL del formulario web de Excel de confirmación.
+     */
+    public static function buildExcelConfirmacionUrl(string $uuid, ?string $codeSupplier = null): string
+    {
+        $base = self::excelConfirmacionBaseUrl();
+        if ($base === '') {
+            return self::normalizeExternalUrl(ltrim($uuid, '/'));
+        }
+
+        $url = $base . '/' . ltrim($uuid, '/');
+        $code = trim((string) ($codeSupplier ?? ''));
+        if ($code !== '') {
+            $url .= '?proveedor=' . rawurlencode($code);
+        }
+
+        return self::normalizeExternalUrl($url);
     }
 
     /**
@@ -335,22 +370,68 @@ class CoordinacionWhatsappPayload
         string $codigoProveedor,
         int $sleep = 0
     ): array {
-        $link = self::resolveExcelConfirmacionDriveLink($idProveedor);
-        if ($link === null) {
-            Log::error('CoordinacionWhatsappPayload: sin enlace Drive para Excel de confirmación', [
+        $bodyParameters = self::docsExcelLinkBodyParameters($idProveedor, $carga, $codigoProveedor);
+        if (($bodyParameters['link_excel'] ?? '') === '' && ($bodyParameters['link_intranet'] ?? '') === '') {
+            Log::error('CoordinacionWhatsappPayload: sin enlace para Excel de confirmación', [
                 'id_proveedor' => $idProveedor,
                 'codigo_proveedor' => $codigoProveedor,
+                'template' => self::DOCS_EXCEL_LINK_TEMPLATE,
             ]);
         }
 
-        $payload = self::template($phone, 'pb_docs_excel_link_v1', [
-            'carga' => $carga,
-            'codigo_proveedor' => $codigoProveedor,
-            'link_excel' => $link ?? '',
-        ], null, $sleep);
+        $payload = self::template($phone, self::DOCS_EXCEL_LINK_TEMPLATE, $bodyParameters, null, $sleep);
         $payload['id_proveedor'] = $idProveedor;
 
         return $payload;
+    }
+
+    /**
+     * @return array{carga: string, codigo_proveedor: string, link_excel: string, link_intranet?: string}
+     */
+    public static function docsExcelLinkBodyParameters(int $idProveedor, string $carga, string $codigoProveedor): array
+    {
+        $linkExcel = self::resolveExcelConfirmacionDriveLink($idProveedor) ?? '';
+        $linkIntranet = self::resolveExcelConfirmacionIntranetLink($idProveedor) ?? '';
+
+        return [
+            'carga' => $carga,
+            'codigo_proveedor' => $codigoProveedor,
+            'link_excel' => $linkExcel,
+            'link_intranet' => $linkIntranet,
+        ];
+    }
+
+    private static function rebuildExcelConfirmacionLinkForProveedor(int $idProveedor): ?string
+    {
+        $proveedor = CotizacionProveedor::query()
+            ->with(['cotizacion:id,uuid'])
+            ->find($idProveedor);
+
+        if ($proveedor === null) {
+            return null;
+        }
+
+        $uuid = trim((string) ($proveedor->cotizacion->uuid ?? ''));
+        if ($uuid === '') {
+            return null;
+        }
+
+        $code = trim((string) ($proveedor->code_supplier ?? ''));
+
+        return self::buildExcelConfirmacionUrl($uuid, $code !== '' ? $code : null);
+    }
+
+    public static function resolveExcelConfirmacionIntranetLink(int $idProveedor): ?string
+    {
+        if ($idProveedor <= 0) {
+            return null;
+        }
+
+        $rebuilt = self::rebuildExcelConfirmacionLinkForProveedor($idProveedor);
+
+        return $rebuilt !== null && $rebuilt !== ''
+            ? self::normalizeExternalUrl($rebuilt)
+            : null;
     }
 
     /**
@@ -360,7 +441,7 @@ class CoordinacionWhatsappPayload
      */
     public static function refreshDocsExcelLinkPayload(array &$payload): bool
     {
-        if (($payload['template'] ?? '') !== 'pb_docs_excel_link_v1') {
+        if (($payload['template'] ?? '') !== self::DOCS_EXCEL_LINK_TEMPLATE) {
             return true;
         }
 
@@ -378,20 +459,14 @@ class CoordinacionWhatsappPayload
             return false;
         }
 
-        $proveedor = CotizacionProveedor::find($idProveedor);
-        $code = $proveedor ? trim((string) ($proveedor->code_supplier ?? '')) : '';
-        $link = self::resolveExcelConfirmacionDriveLink($idProveedor);
-        if ($link === null) {
-            return false;
-        }
-
         $carga = (string) (($payload['body_parameters']['carga'] ?? '') ?: '');
-        $codigo = (string) (($payload['body_parameters']['codigo_proveedor'] ?? '') ?: $code);
+        $codigo = (string) (($payload['body_parameters']['codigo_proveedor'] ?? '') ?: '');
 
-        $payload['body_parameters']['link_excel'] = $link;
+        $payload['body_parameters'] = self::docsExcelLinkBodyParameters($idProveedor, $carga, $codigo);
         unset($payload['chat_preview'], $payload['bitrix_message']);
 
-        return true;
+        return ($payload['body_parameters']['link_excel'] ?? '') !== ''
+            || ($payload['body_parameters']['link_intranet'] ?? '') !== '';
     }
 
     public static function resolveExcelConfirmacionDriveLink(int $idProveedor): ?string
@@ -458,16 +533,23 @@ class CoordinacionWhatsappPayload
             $linkExcel = '';
         }
 
-        return self::template($phone, 'pb_docs_excel_link_v1', [
+        return self::template($phone, self::DOCS_EXCEL_LINK_TEMPLATE, [
             'carga' => $carga,
             'codigo_proveedor' => $codigoProveedor,
             'link_excel' => self::normalizeExternalUrl($linkExcel),
+            'link_intranet' => '',
         ], $bitrixMessage, $sleep);
     }
 
-    public static function docsExcelLinkPreview(string $carga, string $codigoProveedor, string $linkExcel): string
+    public static function docsExcelLinkPreview(string $carga, string $codigoProveedor, string $linkExcel, ?string $linkIntranet = null): string
     {
-        return "Documentación: CONSOLIDADO #{$carga}\n\nExcel de confirmación — Proveedor {$codigoProveedor}\n\nDescárgalo aquí: {$linkExcel} 📄";
+        $intranet = trim((string) ($linkIntranet ?? ''));
+
+        return "Documentación: CONSOLIDADO #{$carga}\n\n"
+            . "Excel de confirmación — Proveedor {$codigoProveedor}\n\n"
+            . "Llenalo aquí: {$linkExcel}"
+            . ($intranet !== '' ? " o\n{$intranet}" : '')
+            . ' 📄';
     }
 
     public static function docsPaso2(string $phone, string $bitrixMessage, ?string $fechaMaxima = null, int $sleep = 0): array

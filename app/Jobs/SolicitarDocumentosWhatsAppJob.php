@@ -178,7 +178,7 @@ class SolicitarDocumentosWhatsAppJob implements ShouldQueue
                     ]);
                 }
 
-                if ($link !== null && $cotizacionProveedor) {
+                if ($cotizacionProveedor) {
                     $excelLinks[] = [
                         'id_proveedor' => (int) $cotizacionProveedor->id,
                         'code_supplier' => $codeSupplier,
