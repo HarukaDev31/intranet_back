@@ -16,9 +16,12 @@ use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Exports\ViaticosExport;
+use App\Traits\FileTrait;
 
 class ViaticoController extends Controller
 {
+    use FileTrait;
+
     protected $viaticoService;
 
     public function __construct(ViaticoService $viaticoService)
@@ -82,23 +85,23 @@ class ViaticoController extends Controller
             //foreach viatico complete pago.file_path
             foreach ($viaticos as $viatico) {
                 foreach ($viatico->pagos as $pago) {
-                    $pago->file_path = asset('storage/' . $pago->file_path);
+                    $pago->file_path = $this->cdnStorageUrl($pago->file_path);
                 }
             }
             // Transformar datos
             $data = $viaticos->items();
             foreach ($data as $viatico) {
                 $viatico->url_comprobante = $viatico->receipt_file
-                    ? asset('storage/' . $viatico->receipt_file)
+                    ? $this->cdnStorageUrl($viatico->receipt_file)
                     : null;
                 if ($viatico->retribuciones && $viatico->retribuciones->isNotEmpty()) {
-                    $viatico->url_payment_receipt = asset('storage/' . $viatico->retribuciones->first()->file_path);
+                    $viatico->url_payment_receipt = $this->cdnStorageUrl($viatico->retribuciones->first()->file_path);
                     foreach ($viatico->retribuciones as $r) {
-                        $r->file_url = asset('storage/' . $r->file_path);
+                        $r->file_url = $this->cdnStorageUrl($r->file_path);
                     }
                 } else {
                     $viatico->url_payment_receipt = $viatico->payment_receipt_file
-                        ? asset('storage/' . $viatico->payment_receipt_file)
+                        ? $this->cdnStorageUrl($viatico->payment_receipt_file)
                         : null;
                 }
                 $viatico->nombre_usuario = optional($viatico->usuario)->No_Nombres_Apellidos ?? 'N/A';
@@ -282,10 +285,10 @@ class ViaticoController extends Controller
 
                
                 $viatico->url_comprobante = $viatico->receipt_file
-                    ? asset('storage/' . $viatico->receipt_file)
+                    ? $this->cdnStorageUrl($viatico->receipt_file)
                     : null;
                 $viatico->url_payment_receipt = $viatico->payment_receipt_file
-                    ? asset('storage/' . $viatico->payment_receipt_file)
+                    ? $this->cdnStorageUrl($viatico->payment_receipt_file)
                     : null;
                 $viatico->nombre_usuario = optional($viatico->usuario)->No_Nombres_Apellidos ?? 'N/A';
 
@@ -332,21 +335,21 @@ class ViaticoController extends Controller
             }
 
             $viatico->url_comprobante = $viatico->receipt_file
-                ? asset('storage/' . $viatico->receipt_file)
+                ? $this->cdnStorageUrl($viatico->receipt_file)
                 : null;
             if ($viatico->retribuciones && $viatico->retribuciones->isNotEmpty()) {
-                $viatico->url_payment_receipt = asset('storage/' . $viatico->retribuciones->first()->file_path);
+                $viatico->url_payment_receipt = $this->cdnStorageUrl($viatico->retribuciones->first()->file_path);
                 foreach ($viatico->retribuciones as $r) {
-                    $r->file_url = asset('storage/' . $r->file_path);
+                    $r->file_url = $this->cdnStorageUrl($r->file_path);
                 }
             } else {
                 $viatico->url_payment_receipt = $viatico->payment_receipt_file
-                    ? asset('storage/' . $viatico->payment_receipt_file)
+                    ? $this->cdnStorageUrl($viatico->payment_receipt_file)
                     : null;
             }
             $viatico->nombre_usuario = optional($viatico->usuario)->No_Nombres_Apellidos ?? 'N/A';
             foreach ($viatico->pagos as $pago) {
-                $pago->file_path = asset('storage/' . $pago->file_path);
+                $pago->file_path = $this->cdnStorageUrl($pago->file_path);
             }
             return response()->json([
                 'success' => true,
@@ -413,17 +416,17 @@ class ViaticoController extends Controller
 
             // El servicio ya devuelve el viático con usuario cargado; no hacer refresh() ni load() de nuevo
             $viatico->url_comprobante = $viatico->receipt_file
-                ? asset('storage/' . $viatico->receipt_file)
+                ? $this->cdnStorageUrl($viatico->receipt_file)
                 : null;
             // url_payment_receipt: primer retribución o legacy
             if ($viatico->retribuciones && $viatico->retribuciones->isNotEmpty()) {
-                $viatico->url_payment_receipt = asset('storage/' . $viatico->retribuciones->first()->file_path);
+                $viatico->url_payment_receipt = $this->cdnStorageUrl($viatico->retribuciones->first()->file_path);
                 foreach ($viatico->retribuciones as $r) {
-                    $r->file_url = asset('storage/' . $r->file_path);
+                    $r->file_url = $this->cdnStorageUrl($r->file_path);
                 }
             } else {
                 $viatico->url_payment_receipt = $viatico->payment_receipt_file
-                    ? asset('storage/' . $viatico->payment_receipt_file)
+                    ? $this->cdnStorageUrl($viatico->payment_receipt_file)
                     : null;
             }
             $viatico->nombre_usuario = optional($viatico->usuario)->No_Nombres_Apellidos ?? 'N/A';
