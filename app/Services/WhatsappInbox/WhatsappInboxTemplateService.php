@@ -84,6 +84,41 @@ class WhatsappInboxTemplateService
                 'params' => [],
                 'header_format' => 'DOCUMENT',
             ],
+            [
+                'name' => 'pb_docs_paso1_excel_video_v1',
+                'label' => 'Docs — Paso 1 Excel',
+                'language' => 'es_PE',
+                'text' => 'Documentación: CONSOLIDADO #{{carga}} — Paso 1 Excel de confirmación.',
+                'params' => ['carga'],
+            ],
+            [
+                'name' => 'pb_docs_excel_link_v1',
+                'label' => 'Docs — Excel link Drive',
+                'language' => 'es_PE',
+                'text' => 'Documentación: CONSOLIDADO #{{carga}} — Proveedor {{codigo_proveedor}} — {{link_excel}}',
+                'params' => ['carga', 'codigo_proveedor', 'link_excel'],
+            ],
+            [
+                'name' => 'pb_docs_excel_link_v1_qa',
+                'label' => 'Docs — Excel link QA (Drive + formulario web)',
+                'language' => 'es_PE',
+                'text' => 'Documentación: CONSOLIDADO #{{carga}} — Proveedor {{codigo_proveedor}} — {{link_excel}} — {{link_intranet}}',
+                'params' => ['carga', 'codigo_proveedor', 'link_excel', 'link_intranet'],
+            ],
+            [
+                'name' => 'pb_docs_paso2_word_v1',
+                'label' => 'Docs — Paso 2 Word',
+                'language' => 'es_PE',
+                'text' => 'Paso 2: solicitar Commercial Invoice y Packing List al proveedor.',
+                'params' => [],
+            ],
+            [
+                'name' => 'pb_docs_paso2_word_fecha_v1',
+                'label' => 'Docs — Paso 2 Word con fecha',
+                'language' => 'es_PE',
+                'text' => 'Paso 2: solicitar documentos. Fecha máxima: {{fecha_maxima}}',
+                'params' => ['fecha_maxima'],
+            ],
         ]);
     }
 
@@ -192,6 +227,30 @@ class WhatsappInboxTemplateService
 
         foreach ($templates as $tpl) {
             if (is_array($tpl) && ($tpl['name'] ?? '') === $templateName) {
+                $params = isset($tpl['params']) && is_array($tpl['params']) ? $tpl['params'] : [];
+                if ($params !== []) {
+                    return $tpl;
+                }
+
+                $fallback = $this->findDefaultTemplateByName($templateName);
+                if ($fallback !== null) {
+                    return array_merge($fallback, array_intersect_key($tpl, array_flip(['text', 'header_text', 'header_format', 'parameter_format', 'language'])));
+                }
+
+                return $tpl;
+            }
+        }
+
+        return $this->findDefaultTemplateByName($templateName);
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function findDefaultTemplateByName($templateName)
+    {
+        foreach ($this->defaultTemplates() as $tpl) {
+            if (($tpl['name'] ?? '') === $templateName) {
                 return $tpl;
             }
         }
@@ -199,10 +258,6 @@ class WhatsappInboxTemplateService
         return null;
     }
 
-    /**
-     * @param  string  $templateName
-     * @return bool
-     */
     /**
      * DOCUMENT | IMAGE | VIDEO | null
      *
@@ -330,7 +385,7 @@ class WhatsappInboxTemplateService
      */
     public function listTemplates()
     {
-        $cacheKey = 'wa_inbox_meta_templates_v2';
+        $cacheKey = 'wa_inbox_meta_templates_v3';
 
         $templates = Cache::remember($cacheKey, 3600, function () {
             return $this->fetchFromMetaOrDefault();
