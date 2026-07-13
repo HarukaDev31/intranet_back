@@ -24,7 +24,8 @@ class BackfillViaticosPagosStorageCommand extends Command
         {--all : Todos los pagos sin file_path válido}
         {--dry-run : Simular sin subir ni actualizar BD}
         {--force : Sobrescribir en S3 si ya existe la clave}
-        {--window=600 : Ventana en segundos alrededor de created_at para emparejar archivos}';
+        {--window=86400 : Ventana en segundos alrededor de created_at para emparejar archivos}
+        {--match=auto : Estrategia: auto, window o closest}';
 
     protected $description = 'Busca comprobantes de viaticos_pagos en disco/S3, sube faltantes y actualiza file_path en BD';
 
@@ -33,6 +34,9 @@ class BackfillViaticosPagosStorageCommand extends Command
 
     /** @var array<string, bool> */
     private $referencedPaths = [];
+
+    /** @var array<string, bool> */
+    private $usedCandidateKeys = [];
 
     /** @var array<string, array{relative: string, absolute: ?string, source: string, ts: int}> */
     private $candidateFiles = [];
@@ -71,12 +75,18 @@ class BackfillViaticosPagosStorageCommand extends Command
         $dryRun = (bool) $this->option('dry-run');
         $force = (bool) $this->option('force');
         $window = max(60, (int) $this->option('window'));
+        $matchStrategy = (string) $this->option('match');
+        if (!in_array($matchStrategy, ['auto', 'window', 'closest'], true)) {
+            $this->error('--match debe ser: auto, window o closest');
+
+            return self::FAILURE;
+        }
 
         $this->referencedPaths = $this->loadReferencedPaths();
         $this->buildCandidateIndex();
 
         $query = ViaticoPago::query()
-            ->with('viatico:id,created_at')
+            ->with('viatico:id,created_at,updated_at')
             ->where(function ($q) {
                 $q->whereNull('file_path')
                     ->orWhere('file_path', '')
@@ -105,7 +115,7 @@ class BackfillViaticosPagosStorageCommand extends Command
         }
 
         foreach ($pagos->groupBy('viatico_id') as $groupViaticoId => $groupPagos) {
-            $this->processViaticoGroup((int) $groupViaticoId, $groupPagos, $window, $dryRun, $force);
+            $this->processViaticoGroup((int) $groupViaticoId, $groupPagos, $window, $matchStrategy, $dryRun, $force);
         }
 
         $this->newLine();
@@ -127,56 +137,127 @@ class BackfillViaticosPagosStorageCommand extends Command
     /**
      * @param Collection<int, ViaticoPago> $pagos
      */
-    private function processViaticoGroup(int $viaticoId, Collection $pagos, int $window, bool $dryRun, bool $force): void
-    {
-        $anchor = $pagos->min(function (ViaticoPago $pago) {
-            return $pago->created_at ?? optional($pago->viatico)->created_at ?? now();
-        });
-
-        if (!$anchor instanceof Carbon) {
-            $anchor = Carbon::parse((string) $anchor);
-        }
-
-        $fromTs = $anchor->copy()->subSeconds($window)->getTimestamp();
-        $toTs = $anchor->copy()->addSeconds($window)->getTimestamp();
-
-        $candidates = collect($this->candidateFiles)
-            ->filter(function (array $file) use ($fromTs, $toTs) {
-                return $file['ts'] >= $fromTs && $file['ts'] <= $toTs;
-            })
-            ->sortBy('ts')
-            ->values();
-
+    private function processViaticoGroup(
+        int $viaticoId,
+        Collection $pagos,
+        int $window,
+        string $matchStrategy,
+        bool $dryRun,
+        bool $force
+    ): void {
         $sortedPagos = $pagos->sortBy('id')->values();
+        $needed = $sortedPagos->count();
+        $anchorTs = $this->resolveAnchorTimestamp($sortedPagos);
 
-        if ($candidates->count() < $sortedPagos->count()) {
-            $this->warn("Viático #{$viaticoId}: {$sortedPagos->count()} pagos sin archivo, {$candidates->count()} candidatos en ventana.");
+        $windowCandidates = $this->pickCandidatesInWindow($anchorTs, $window, $needed);
+        $candidates = $windowCandidates;
+        $strategyUsed = 'window';
+
+        if ($matchStrategy === 'closest' || ($matchStrategy === 'auto' && $candidates->count() < $needed)) {
+            $closest = $this->pickClosestCandidates($anchorTs, $needed);
+            if ($closest->count() > $candidates->count()) {
+                $candidates = $closest;
+                $strategyUsed = 'closest';
+            }
         }
 
-        if ($candidates->count() > $sortedPagos->count()) {
-            $this->ambiguous += $sortedPagos->count();
-            $this->line("Viático #{$viaticoId}: demasiados candidatos ({$candidates->count()}) para {$sortedPagos->count()} pagos; omitido por ambigüedad.");
+        if ($this->output->isVerbose()) {
+            $this->line("Viático #{$viaticoId}: ancla " . Carbon::createFromTimestamp($anchorTs)->toDateTimeString());
+            $this->line("  ventana ±{$window}s → {$windowCandidates->count()} candidatos");
+            $this->line('  estrategia usada: ' . $strategyUsed . ' → ' . $candidates->count() . ' candidatos');
+            foreach ($this->availableCandidates() as $file) {
+                $this->line('  · ' . $file['relative'] . ' (' . Carbon::createFromTimestamp($file['ts'])->toDateTimeString() . ')');
+            }
+        }
 
-            return;
+        if ($candidates->count() < $needed) {
+            $this->warn("Viático #{$viaticoId}: {$needed} pagos sin archivo, {$candidates->count()} candidatos tras {$strategyUsed}.");
+            $this->notFound += $needed - $candidates->count();
         }
 
         if ($candidates->isEmpty()) {
-            $this->notFound += $sortedPagos->count();
-
             return;
         }
 
         foreach ($sortedPagos as $index => $pago) {
             $candidate = $candidates->get($index);
             if ($candidate === null) {
-                $this->notFound++;
-                $this->line("  pago #{$pago->id} ({$pago->concepto}): sin candidato");
-
                 continue;
             }
 
+            $candidateKey = strtolower($candidate['relative']);
             $this->applyCandidateToPago($pago, $candidate, $dryRun, $force);
+            $this->usedCandidateKeys[$candidateKey] = true;
         }
+    }
+
+    /**
+     * @param Collection<int, ViaticoPago> $pagos
+     */
+    private function resolveAnchorTimestamp(Collection $pagos): int
+    {
+        $timestamps = [];
+
+        foreach ($pagos as $pago) {
+            if ($pago->created_at) {
+                $timestamps[] = $pago->created_at->getTimestamp();
+            }
+            if ($pago->updated_at) {
+                $timestamps[] = $pago->updated_at->getTimestamp();
+            }
+            if ($pago->viatico?->created_at) {
+                $timestamps[] = $pago->viatico->created_at->getTimestamp();
+            }
+            if ($pago->viatico?->updated_at) {
+                $timestamps[] = $pago->viatico->updated_at->getTimestamp();
+            }
+        }
+
+        if ($timestamps === []) {
+            return now()->getTimestamp();
+        }
+
+        sort($timestamps);
+
+        return (int) $timestamps[(int) floor((count($timestamps) - 1) / 2)];
+    }
+
+    /**
+     * @return Collection<int, array{relative: string, absolute: ?string, source: string, ts: int}>
+     */
+    private function pickCandidatesInWindow(int $anchorTs, int $window, int $limit): Collection
+    {
+        $fromTs = $anchorTs - $window;
+        $toTs = $anchorTs + $window;
+
+        return collect($this->availableCandidates())
+            ->filter(fn (array $file) => $file['ts'] >= $fromTs && $file['ts'] <= $toTs)
+            ->sortBy(fn (array $file) => abs($file['ts'] - $anchorTs))
+            ->take($limit)
+            ->values();
+    }
+
+    /**
+     * @return Collection<int, array{relative: string, absolute: ?string, source: string, ts: int}>
+     */
+    private function pickClosestCandidates(int $anchorTs, int $limit): Collection
+    {
+        return collect($this->availableCandidates())
+            ->sortBy(fn (array $file) => abs($file['ts'] - $anchorTs))
+            ->take($limit)
+            ->values();
+    }
+
+    /**
+     * @return array<string, array{relative: string, absolute: ?string, source: string, ts: int}>
+     */
+    private function availableCandidates(): array
+    {
+        return array_filter(
+            $this->candidateFiles,
+            fn (array $file, string $key) => !isset($this->usedCandidateKeys[$key]),
+            ARRAY_FILTER_USE_BOTH
+        );
     }
 
     /**
@@ -310,6 +391,11 @@ class BackfillViaticosPagosStorageCommand extends Command
 
         if ($this->uploadDisk() === 's3') {
             $this->indexS3Prefix('viaticos_pagos');
+
+            $prefix = trim((string) config('object_storage.s3_prefix', ''), '/');
+            if ($prefix !== '') {
+                $this->indexS3Prefix($prefix . '/viaticos_pagos');
+            }
         }
     }
 
@@ -355,7 +441,8 @@ class BackfillViaticosPagosStorageCommand extends Command
 
         foreach ($files as $relative) {
             $relative = StoragePathSanitizer::relativePath($relative);
-            $this->registerCandidate($relative, null, 's3', null, $this->timestampFromFilename($relative));
+            $normalized = $this->storage->normalizeRelativePath($relative) ?? $relative;
+            $this->registerCandidate($normalized, null, 's3', null, $this->timestampFromFilename($normalized));
         }
     }
 
