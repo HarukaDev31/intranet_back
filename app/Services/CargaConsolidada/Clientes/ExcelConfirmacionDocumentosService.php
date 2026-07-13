@@ -11,6 +11,22 @@ use ZipArchive;
 
 class ExcelConfirmacionDocumentosService
 {
+    private const CAMPO_NOMBRE_COMERCIAL = 'NOMBRE COMERCIAL';
+
+    private const CAMPO_FOTO = 'FOTO/IMAGEN';
+
+    private const CAMPO_HS_CODE = 'HS CODE (Solicitar al Proveedor)';
+
+    private const CAMPO_LINK = 'LINK DEL PRODUCTO';
+
+    /** @var list<string> */
+    private const CAMPOS_FIJOS_EXCEL = [
+        self::CAMPO_NOMBRE_COMERCIAL,
+        self::CAMPO_FOTO,
+        self::CAMPO_HS_CODE,
+        self::CAMPO_LINK,
+    ];
+
     /**
      * Genera y guarda un Excel de confirmación para un proveedor a partir de la plantilla OOXML.
      * Post-procesa el zip para tamaño/recorte del logo igual que la plantilla.
@@ -97,6 +113,7 @@ class ExcelConfirmacionDocumentosService
 
             $endRow = $startRow + $rowsNeeded - 1;
             $sheet->duplicateStyle($sheet->getStyle('H14'), "H{$startRow}:H{$endRow}");
+            $sheet->duplicateStyle($sheet->getStyle('G14'), "G{$startRow}:G{$endRow}");
 
             $sheet->setCellValue('I' . $startRow, '=G' . $startRow . '*H' . $startRow);
 
@@ -107,8 +124,19 @@ class ExcelConfirmacionDocumentosService
                 \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING
             );
 
-            $initialName = $item['initial_name'] ?? '';
-            $sheet->setCellValueExplicit('C' . $startRow, $initialName, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+            $caracteristicas = is_array($item['caracteristicas'] ?? null) ? $item['caracteristicas'] : [];
+            $qty = $item['qty'] ?? $item['initial_qty'] ?? null;
+            $precio = $item['precio_unitario'] ?? $item['initial_price'] ?? null;
+
+            $nombreComercial = $this->resolveCaracteristicaValue($caracteristicas, self::CAMPO_NOMBRE_COMERCIAL);
+            if ($nombreComercial === '') {
+                $nombreComercial = (string) ($item['initial_name'] ?? '');
+            }
+
+            $sheet->setCellValueExplicit('B' . $startRow, (string) ($idx + 1), \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+            $sheet->duplicateStyle($sheet->getStyle('B14'), 'B' . $startRow . ':B' . $endRow);
+
+            $sheet->setCellValueExplicit('C' . $startRow, $nombreComercial, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
             $sheet->duplicateStyle($sheet->getStyle('C14'), 'C' . $startRow . ':C' . $endRow);
             $sheet->getStyle('C' . $startRow . ':C' . $endRow)
                 ->getAlignment()
@@ -116,8 +144,41 @@ class ExcelConfirmacionDocumentosService
                 ->setVertical(\PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER)
                 ->setWrapText(true);
 
+            $foto = $this->resolveCaracteristicaValue($caracteristicas, self::CAMPO_FOTO);
+            if ($foto !== '') {
+                $sheet->setCellValueExplicit('D' . $startRow, $foto, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+                $sheet->duplicateStyle($sheet->getStyle('D14'), 'D' . $startRow . ':D' . $endRow);
+            }
+
+            if ($qty !== null && $qty !== '') {
+                $sheet->setCellValue('G' . $startRow, is_numeric($qty) ? (float) $qty : $qty);
+            }
+
+            if ($precio !== null && $precio !== '') {
+                $sheet->setCellValue('H' . $startRow, is_numeric($precio) ? (float) $precio : $precio);
+            }
+
+            $hsCode = $this->resolveCaracteristicaValue($caracteristicas, self::CAMPO_HS_CODE);
+            if ($hsCode !== '') {
+                $sheet->setCellValueExplicit('K' . $startRow, $hsCode, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+                $sheet->duplicateStyle($sheet->getStyle('K14'), 'K' . $startRow . ':K' . $endRow);
+            }
+
+            $linkProducto = $this->resolveCaracteristicaValue($caracteristicas, self::CAMPO_LINK);
+            if ($linkProducto !== '') {
+                $sheet->setCellValueExplicit('L' . $startRow, $linkProducto, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+                $sheet->duplicateStyle($sheet->getStyle('L14'), 'L' . $startRow . ':L' . $endRow);
+            }
+
             for ($i = 0; $i < $rowsNeeded; $i++) {
-                $sheet->setCellValueExplicit('E' . ($startRow + $i), $labels[$i] ?? '', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+                $label = (string) ($labels[$i] ?? '');
+                if ($label === '' || $this->isCampoFijoExcel($label)) {
+                    continue;
+                }
+
+                $value = $this->resolveCaracteristicaValue($caracteristicas, $label);
+                $cellValue = $this->formatCaracteristicaCell($label, $value);
+                $sheet->setCellValueExplicit('E' . ($startRow + $i), $cellValue, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
             }
             for ($i = 0; $i < $rowsNeeded; $i++) {
                 $sheet->setCellValueExplicit('F' . ($startRow + $i), $tipo, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
@@ -198,6 +259,31 @@ class ExcelConfirmacionDocumentosService
         $zip->addFromString('xl/sharedStrings.xml', $domSS->saveXML());
         $zip->addFromString('xl/worksheets/sheet1.xml', $domSheet->saveXML());
         $zip->close();
+    }
+
+    /**
+     * Labels por tipo de producto (fuente de verdad para Excel y formulario web).
+     *
+     * @return array<string, array<int|string, string>>
+     */
+    public function getLabelsPorTipoProducto(): array
+    {
+        return $this->labelsPorTipoProducto();
+    }
+
+    /**
+     * Labels filtradas (sin strings vacíos) para el formulario web.
+     *
+     * @return array<string, array<int, string>>
+     */
+    public function getLabelsPorTipoProductoFiltradas(): array
+    {
+        $result = [];
+        foreach ($this->labelsPorTipoProducto() as $tipo => $labels) {
+            $result[$tipo] = array_values(array_filter($labels, static fn ($label) => trim((string) $label) !== ''));
+        }
+
+        return $result;
     }
 
     /**
@@ -508,6 +594,54 @@ class ExcelConfirmacionDocumentosService
         }
 
         return $outDom->saveXML();
+    }
+
+    private function normalizeCaracteristicaKey(string $key): string
+    {
+        return strtolower(trim(rtrim(trim($key), ':')));
+    }
+
+    private function isCampoFijoExcel(string $label): bool
+    {
+        $normalized = $this->normalizeCaracteristicaKey($label);
+
+        foreach (self::CAMPOS_FIJOS_EXCEL as $campo) {
+            if ($this->normalizeCaracteristicaKey($campo) === $normalized) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param  array<string, mixed>  $caracteristicas
+     */
+    private function resolveCaracteristicaValue(array $caracteristicas, string $label): string
+    {
+        if (array_key_exists($label, $caracteristicas)) {
+            return trim((string) $caracteristicas[$label]);
+        }
+
+        $normalizedLabel = $this->normalizeCaracteristicaKey($label);
+        foreach ($caracteristicas as $key => $value) {
+            if ($this->normalizeCaracteristicaKey((string) $key) === $normalizedLabel) {
+                return trim((string) $value);
+            }
+        }
+
+        return '';
+    }
+
+    private function formatCaracteristicaCell(string $label, string $value): string
+    {
+        if ($value === '') {
+            return $label;
+        }
+
+        $labelBase = rtrim(trim($label), ':');
+
+        return $labelBase . ': ' . $value;
     }
 
     private function removeConflictingMergedCellsBeforeExcelConfirmacionBlock(

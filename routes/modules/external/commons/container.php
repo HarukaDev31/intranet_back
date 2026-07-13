@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\CargaConsolidada\CotizacionProveedorController;
 use App\Http\Controllers\Clientes\ImportacionesController;
+use App\Http\Controllers\PublicSite\ExcelConfirmacionController;
 
 // Rutas externas (algunas sin JWT para acceso por enlace)
 Route::group(['prefix' => 'contenedor/external' ], function () {
@@ -12,4 +13,8 @@ Route::group(['prefix' => 'contenedor/external' ], function () {
     Route::post('cotizacion/sign-service-contract/{uuid}', [CotizacionProveedorController::class, 'signServiceContract']);
     Route::get('cotizacion/get-service-contract/{uuid}', [CotizacionProveedorController::class, 'getUnsignedServiceContract']);
     Route::get('cotizacion/service-contract-pdf/{uuid}', [CotizacionProveedorController::class, 'streamServiceContractPdf']);
+
+    Route::get('excel-confirmacion/labels', [ExcelConfirmacionController::class, 'labels']);
+    Route::get('excel-confirmacion/{uuid}', [ExcelConfirmacionController::class, 'show']);
+    Route::put('excel-confirmacion/{uuid}', [ExcelConfirmacionController::class, 'update']);
 });

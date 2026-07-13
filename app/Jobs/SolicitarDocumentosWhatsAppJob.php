@@ -59,7 +59,7 @@ class SolicitarDocumentosWhatsAppJob implements ShouldQueue
             $this->setDatabaseConnection($this->domain ?? 'localhost');
 
             $cot = DB::table('contenedor_consolidado_cotizacion')
-                ->select('id_contenedor', 'telefono', 'nombre')
+                ->select('id_contenedor', 'telefono', 'nombre', 'uuid')
                 ->where('id', $this->idCotizacion)
                 ->whereNull('deleted_at')
                 ->first();
@@ -116,73 +116,82 @@ class SolicitarDocumentosWhatsAppJob implements ShouldQueue
 
             $templatePath = $this->resolveTemplateFromS3('excel-confirmacion/EXCEL_DE_CONFIRMACION_GENERAL.xlsx');
             if ($templatePath === null) {
-                Log::error('SolicitarDocumentosWhatsAppJob: plantilla Excel de confirmación no encontrada en almacenamiento');
-
-                return;
+                Log::warning('SolicitarDocumentosWhatsAppJob: plantilla Excel no encontrada; se enviará solo enlace al formulario web');
             }
             $outputDir = storage_path('app/temp/excel-confirmacion');
             if (!is_dir($outputDir)) {
                 @mkdir($outputDir, 0775, true);
             }
 
+            $cotizacionUuid = trim((string) ($cot->uuid ?? ''));
             $excelLinks = [];
 
             foreach ($this->proveedores as $prov) {
                 $cotizacionProveedor = CotizacionProveedor::where('id', $prov['id'] ?? null)->first();
-                $codeSupplier = $cotizacionProveedor ? (string) ($cotizacionProveedor->code_supplier ?? '') : '';
+                if (!$cotizacionProveedor) {
+                    continue;
+                }
+
+                $codeSupplier = (string) ($cotizacionProveedor->code_supplier ?? '');
                 $suffixArchivo = $codeSupplier !== '' ? $codeSupplier : ('prov_' . ($prov['id'] ?? 'unknown'));
                 $fileName = 'excel_confirmacion' . '_' . $suffixArchivo . '.xlsx';
                 $fullPath = $outputDir . DIRECTORY_SEPARATOR . $fileName;
 
-                $ok = $excelService->generarArchivoPorProveedor($templatePath, $fullPath, $prov);
-                if (!$ok) {
-                    continue;
+                if ($templatePath !== null) {
+                    $ok = $excelService->generarArchivoPorProveedor($templatePath, $fullPath, $prov);
+                    if ($ok) {
+                        $steps[] = [
+                            'type' => 'file',
+                            'path' => $fullPath,
+                            'filename' => $fileName,
+                            'caption' => 'Documento de confirmación' . ($codeSupplier !== '' ? ' - ' . $codeSupplier : ''),
+                            'mime' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                            'wa_delay' => 5,
+                            'code_supplier' => $codeSupplier,
+                        ];
+
+                        if ($driveExcelService->isConfigured()) {
+                            $driveLink = $driveExcelService->uploadForProveedor(
+                                $cargaCode,
+                                $nombreCliente !== '' ? $nombreCliente : 'Cliente',
+                                $codeSupplier !== '' ? $codeSupplier : $suffixArchivo,
+                                $fullPath,
+                                $fileName
+                            );
+
+                            if ($driveLink === null) {
+                                Log::warning('SolicitarDocumentosWhatsAppJob: fallo subida Excel a Drive (opcional)', [
+                                    'id_proveedor' => $cotizacionProveedor->id,
+                                    'file' => $fileName,
+                                ]);
+                            }
+                        }
+                    }
                 }
 
-                $steps[] = [
-                    'type' => 'file',
-                    'path' => $fullPath,
-                    'filename' => $fileName,
-                    'caption' => 'Documento de confirmación' . ($codeSupplier !== '' ? ' - ' . $codeSupplier : ''),
-                    'mime' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                    'wa_delay' => 5,
-                    'code_supplier' => $codeSupplier,
-                ];
-
-                $link = $driveExcelService->uploadForProveedor(
-                    $cargaCode,
-                    $nombreCliente !== '' ? $nombreCliente : 'Cliente',
-                    $codeSupplier !== '' ? $codeSupplier : $suffixArchivo,
-                    $fullPath,
-                    $fileName
-                );
-
-                if ($link !== null && $cotizacionProveedor) {
-                    $cotizacionProveedor->excel_confirmacion_drive_link = $link;
+                if ($cotizacionUuid !== '') {
+                    $formLink = CoordinacionWhatsappPayload::buildExcelConfirmacionUrl(
+                        $cotizacionUuid,
+                        $codeSupplier !== '' ? $codeSupplier : null
+                    );
+                    $cotizacionProveedor->excel_confirmacion_drive_link = $formLink;
                     $cotizacionProveedor->save();
 
-                    Log::info('SolicitarDocumentosWhatsAppJob: Excel subido a Drive', [
+                    Log::info('SolicitarDocumentosWhatsAppJob: enlace formulario Excel confirmación', [
                         'id_proveedor' => $cotizacionProveedor->id,
                         'code_supplier' => $codeSupplier,
-                        'drive_link' => $link,
+                        'form_link' => $formLink,
                     ]);
-                } elseif (!$driveExcelService->isConfigured()) {
-                    Log::warning('SolicitarDocumentosWhatsAppJob: Google Drive no configurado para Excel de confirmación', [
-                        'id_proveedor' => $prov['id'] ?? null,
-                        'file' => $fileName,
-                    ]);
-                } else {
-                    Log::warning('SolicitarDocumentosWhatsAppJob: fallo subida Excel a Drive', [
-                        'id_proveedor' => $prov['id'] ?? null,
-                        'file' => $fileName,
-                    ]);
-                }
 
-                if ($link !== null && $cotizacionProveedor) {
                     $excelLinks[] = [
                         'id_proveedor' => (int) $cotizacionProveedor->id,
                         'code_supplier' => $codeSupplier,
                     ];
+                } elseif ($cotizacionUuid === '') {
+                    Log::warning('SolicitarDocumentosWhatsAppJob: cotización sin UUID, no se generó enlace al formulario', [
+                        'id_cotizacion' => $this->idCotizacion,
+                        'id_proveedor' => $cotizacionProveedor->id,
+                    ]);
                 }
             }
 

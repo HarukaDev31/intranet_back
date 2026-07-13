@@ -61,6 +61,11 @@ return [
     'url_clientes' => env('APP_URL_CLIENTES', 'http://localhost:3001'),
 
     /*
+    | Formulario web Excel de confirmación (WhatsApp link_intranet / APP_URL_EXCEL_CONFIRMACION).
+    */
+    'url_excel_confirmacion' => env('APP_URL_EXCEL_CONFIRMACION', ''),
+
+    /*
     | Clave legacy CodeIgniter (ciEncrypt/ciDecrypt, contraseñas Moodle en BD).
     | Copiar el mismo valor que en el intranet PHP antiguo / producción.
     */

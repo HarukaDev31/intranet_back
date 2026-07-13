@@ -43,7 +43,8 @@ class CotizacionProveedor extends Model
         'tipo_rotulado',
         'invoice_status',
         'packing_status',
-        'excel_conf_status'
+        'excel_conf_status',
+        'excel_conf_form_cerrado'
     ];
 
     // Permitir asignación masiva de los nuevos estados de documentos (casts definidos abajo)
@@ -53,7 +54,8 @@ class CotizacionProveedor extends Model
         'maxcbm' => 'decimal:10',
         'invoice_status' => 'string',
         'packing_status' => 'string',
-        'excel_conf_status' => 'string'
+        'excel_conf_status' => 'string',
+        'excel_conf_form_cerrado' => 'boolean'
     ];
 
     /**

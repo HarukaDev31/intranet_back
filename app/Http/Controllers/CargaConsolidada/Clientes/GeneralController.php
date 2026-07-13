@@ -223,9 +223,15 @@ class GeneralController extends Controller
         }
 
         // Obtener proveedores relacionados en una sola consulta y agrupar por id_cotizacion
-        // Nota: sólo cargar proveedores si el usuario es del rol Documentacion
+        $rolesConProveedores = [
+            Usuario::ROL_DOCUMENTACION,
+            Usuario::ROL_JEFE_IMPORTACION,
+            Usuario::ROL_COORDINACION,
+            Usuario::ROL_ADMINISTRACION,
+            Usuario::ROL_CONTABILIDAD,
+        ];
         $proveedores = collect();
-        if (!empty($ids) && $user && $user->getNombreGrupo() == Usuario::ROL_DOCUMENTACION|| $user->getNombreGrupo() == Usuario::ROL_JEFE_IMPORTACION) {
+        if (!empty($ids) && $user && in_array($user->getNombreGrupo(), $rolesConProveedores, true)) {
             $proveedores = DB::table('contenedor_consolidado_cotizacion_proveedores')
                 ->whereIn('id_cotizacion', $ids)
                 ->where('id_contenedor', $idContenedor)
@@ -244,6 +250,7 @@ class GeneralController extends Controller
                     'invoice_status',
                     'packing_status',
                     'excel_conf_status',
+                    'excel_conf_form_cerrado',
                 ])
                 ->get()
                 ->groupBy('id_cotizacion');
@@ -271,8 +278,14 @@ class GeneralController extends Controller
             $itemArr['estado_permiso_por_tipo'] = $idCotizacion !== null ? ($estadoPermisoPorCotizacion[$idCotizacion] ?? []) : [];
             $itemArr['id_tramite'] = $idCotizacion !== null ? ($idTramitePorCotizacion[$idCotizacion] ?? null) : null;
 
-            // Si el usuario es Documentacion, incluir proveedores completos (id, code_supplier, archivos y estados)
-            if ($user && ($user->getNombreGrupo() == Usuario::ROL_DOCUMENTACION || $user->getNombreGrupo() == Usuario::ROL_JEFE_IMPORTACION) && $proveedores) {
+            // Si el usuario puede ver proveedores, incluir array por cotización
+            if ($user && in_array($user->getNombreGrupo(), [
+                Usuario::ROL_DOCUMENTACION,
+                Usuario::ROL_JEFE_IMPORTACION,
+                Usuario::ROL_COORDINACION,
+                Usuario::ROL_ADMINISTRACION,
+                Usuario::ROL_CONTABILIDAD,
+            ], true) && $proveedores) {
                 // clave usada en groupBy es id_cotizacion
                 $cotKey = $cot->id_cotizacion ?? $cot->id ?? null;
                 if ($cotKey !== null && (is_array($proveedores) ? isset($proveedores[$cotKey]) : $proveedores->has($cotKey))) {
@@ -299,6 +312,7 @@ class GeneralController extends Controller
                             'invoice_status' => $p->invoice_status,
                             'packing_status' => $p->packing_status,
                             'excel_conf_status' => $p->excel_conf_status,
+                            'excel_conf_form_cerrado' => (bool) $p->excel_conf_form_cerrado,
                         ];
                     })->values()->toArray();
                 }
