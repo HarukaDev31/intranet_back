@@ -22,6 +22,9 @@ class CotizacionProveedorItems extends Model
         'final_qty',
         'final_name',
         'tipo_producto',
+        'caracteristicas',
+        'confirmacion_qty',
+        'confirmacion_precio',
     ];
 
     protected $casts = [
@@ -32,6 +35,9 @@ class CotizacionProveedorItems extends Model
         'initial_qty' => 'integer',
         'final_price' => 'decimal:2',
         'final_qty' => 'integer',
+        'caracteristicas' => 'array',
+        'confirmacion_qty' => 'decimal:2',
+        'confirmacion_precio' => 'decimal:2',
     ];
 
     public function proveedor()

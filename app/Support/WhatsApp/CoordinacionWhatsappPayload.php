@@ -43,7 +43,7 @@ class CoordinacionWhatsappPayload
     }
 
     /**
-     * URL del formulario web de Excel de confirmación.
+     * URL del formulario web de Excel de confirmación (corrige http:/ → http://).
      */
     public static function buildExcelConfirmacionUrl(string $uuid, ?string $codeSupplier = null): string
     {
@@ -478,7 +478,11 @@ class CoordinacionWhatsappPayload
         $raw = CotizacionProveedor::where('id', $idProveedor)->value('excel_confirmacion_drive_link');
         $link = trim((string) ($raw ?? ''));
         if ($link === '') {
-            return null;
+            $rebuilt = self::rebuildExcelConfirmacionLinkForProveedor($idProveedor);
+
+            return $rebuilt !== null && self::isExcelConfirmacionFormUrl($rebuilt)
+                ? self::normalizeExternalUrl($rebuilt)
+                : null;
         }
 
         if (self::isLegacyTempExcelConfirmacionUrl($link)) {
@@ -490,16 +494,36 @@ class CoordinacionWhatsappPayload
             return null;
         }
 
-        if (!self::isGoogleDriveUrl($link)) {
-            Log::warning('CoordinacionWhatsappPayload: excel_confirmacion_drive_link no es Google Drive', [
-                'id_proveedor' => $idProveedor,
-                'link' => $link,
-            ]);
-
-            return null;
+        if (self::isExcelConfirmacionFormUrl($link) || self::isGoogleDriveUrl($link)) {
+            return self::normalizeExternalUrl($link);
         }
 
-        return self::normalizeExternalUrl($link);
+        $rebuilt = self::rebuildExcelConfirmacionLinkForProveedor($idProveedor);
+        if ($rebuilt !== null && self::isExcelConfirmacionFormUrl($rebuilt)) {
+            return self::normalizeExternalUrl($rebuilt);
+        }
+
+        Log::warning('CoordinacionWhatsappPayload: excel_confirmacion_drive_link no es URL válida', [
+            'id_proveedor' => $idProveedor,
+            'link' => $link,
+        ]);
+
+        return null;
+    }
+
+    public static function isExcelConfirmacionFormUrl(string $url): bool
+    {
+        $url = trim($url);
+        if ($url === '') {
+            return false;
+        }
+
+        $base = self::excelConfirmacionBaseUrl();
+        if ($base !== '' && str_starts_with($url, $base)) {
+            return true;
+        }
+
+        return (bool) preg_match('~^https?://[^/]+/[^/?#]+(\?proveedor=[^&#]+)?$~i', $url);
     }
 
     public static function isLegacyTempExcelConfirmacionUrl(string $url): bool

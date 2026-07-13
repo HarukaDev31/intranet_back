@@ -18,7 +18,7 @@ use App\Http\Controllers\CargaConsolidada\FacturaGuiaController;
 use App\Http\Controllers\CargaConsolidada\CotizacionPagosController;
 use App\Http\Controllers\CargaConsolidada\AduanaController;
 use App\Http\Controllers\CargaConsolidada\Clientes\PagosController as ClientesPagosController;
-use App\Http\Controllers\CargaConsolidada\EntregaController;
+use App\Http\Controllers\CargaConsolidada\ExcelConfirmacionCoordinacionController;
 use App\Http\Controllers\CargaConsolidada\InspeccionadosController;
 use App\Http\Controllers\CargaConsolidada\BoletinQuimicoController;
 use App\Http\Controllers\Clientes\ComprobanteFormController;
@@ -117,6 +117,16 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
             Route::get('/general/{idContenedor}', [GeneralController::class, 'index']);
             Route::post('/general/estado-cliente', [GeneralController::class, 'updateEstadoCliente']);
             Route::post('/general/status-cliente-doc', [GeneralController::class, 'updateStatusCliente']);
+
+            Route::prefix('excel-confirmacion')->group(function () {
+                Route::get('labels', [ExcelConfirmacionCoordinacionController::class, 'labels']);
+                Route::get('{uuid}', [ExcelConfirmacionCoordinacionController::class, 'show']);
+                Route::put('{uuid}', [ExcelConfirmacionCoordinacionController::class, 'update']);
+                Route::post('proveedor/{idProveedor}/cerrar', [ExcelConfirmacionCoordinacionController::class, 'cerrar']);
+                Route::post('proveedor/{idProveedor}/reabrir', [ExcelConfirmacionCoordinacionController::class, 'reabrir']);
+                Route::get('proveedor/{idProveedor}/export', [ExcelConfirmacionCoordinacionController::class, 'exportExcel']);
+            });
+
             Route::get('/embarcados/seguimiento-drive/config', [EmbarcadosController::class, 'getSeguimientoDriveConfig']);
             Route::put('/embarcados/seguimiento-drive/config', [EmbarcadosController::class, 'updateSeguimientoDriveConfig']);
             Route::post('/embarcados/{idContenedor}/vincular-drive', [EmbarcadosController::class, 'vincularDriveSeguimiento']);
