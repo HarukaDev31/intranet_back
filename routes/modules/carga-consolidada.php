@@ -18,6 +18,7 @@ use App\Http\Controllers\CargaConsolidada\FacturaGuiaController;
 use App\Http\Controllers\CargaConsolidada\CotizacionPagosController;
 use App\Http\Controllers\CargaConsolidada\AduanaController;
 use App\Http\Controllers\CargaConsolidada\Clientes\PagosController as ClientesPagosController;
+use App\Http\Controllers\CargaConsolidada\EntregaController;
 use App\Http\Controllers\CargaConsolidada\ExcelConfirmacionCoordinacionController;
 use App\Http\Controllers\CargaConsolidada\InspeccionadosController;
 use App\Http\Controllers\CargaConsolidada\BoletinQuimicoController;
