@@ -41,16 +41,8 @@ class ViaticoService
                     'concepto' => $item['concepto'],
                     'monto' => $item['monto'],
                 ];
-                if (!empty($item['pago_url'])) {
-                    // Ya viene con URL, no subir imagen; guardar solo la ruta
-                    $pagoData['existing_file_url'] = $this->normalizarRutaPagoDesdeUrl($item['existing_file_url']);
-                } else {
-                    $file = $itemFiles[$index] ?? null;
-                    if ($file instanceof UploadedFile) {
-                        $fileInfo = $this->guardarArchivoPagoItem($file);
-                        $pagoData = array_merge($pagoData, $fileInfo);
-                    }
-                }
+                $file = $itemFiles[$index] ?? null;
+                $pagoData = array_merge($pagoData, $this->resolverArchivoPagoItem($item, $file));
                 ViaticoPago::create($pagoData);
             }
 
@@ -186,6 +178,8 @@ class ViaticoService
                                     $archivosAEliminar[] = $pago->file_path;
                                 }
                                 $updateData = array_merge($updateData, $this->guardarArchivoPagoItem($file));
+                            } else {
+                                $updateData = array_merge($updateData, $this->resolverArchivoPagoItem($item, null));
                             }
                             $pago->update($updateData);
                         }
@@ -197,6 +191,8 @@ class ViaticoService
                         ];
                         if ($file instanceof UploadedFile) {
                             $pagoData = array_merge($pagoData, $this->guardarArchivoPagoItem($file));
+                        } else {
+                            $pagoData = array_merge($pagoData, $this->resolverArchivoPagoItem($item, null));
                         }
                         $nuevo = ViaticoPago::create($pagoData);
                         $idsPresentes[] = $nuevo->id;
@@ -265,6 +261,8 @@ class ViaticoService
                                     $this->eliminarArchivo($pago->file_path);
                                 }
                                 $updateData = array_merge($updateData, $this->guardarArchivoPagoItem($file));
+                            } else {
+                                $updateData = array_merge($updateData, $this->resolverArchivoPagoItem($item, null));
                             }
                             $pago->update($updateData);
                         }
@@ -276,6 +274,8 @@ class ViaticoService
                         ];
                         if ($file instanceof UploadedFile) {
                             $pagoData = array_merge($pagoData, $this->guardarArchivoPagoItem($file));
+                        } else {
+                            $pagoData = array_merge($pagoData, $this->resolverArchivoPagoItem($item, null));
                         }
                         $nuevo = ViaticoPago::create($pagoData);
                         $idsPresentes[] = $nuevo->id;
@@ -395,6 +395,25 @@ class ViaticoService
             Log::error('Error al eliminar viático: ' . $e->getMessage());
             throw $e;
         }
+    }
+
+    /**
+     * Resolver ruta/archivo de un ítem de pago: subida nueva o URL/ruta existente.
+     *
+     * @return array<string, mixed>
+     */
+    private function resolverArchivoPagoItem(array $item, ?UploadedFile $file): array
+    {
+        $existingUrl = trim((string) ($item['existing_file_url'] ?? $item['pago_url'] ?? ''));
+        if ($existingUrl !== '') {
+            return ['file_path' => $this->normalizarRutaPagoDesdeUrl($existingUrl)];
+        }
+
+        if ($file instanceof UploadedFile) {
+            return $this->guardarArchivoPagoItem($file);
+        }
+
+        return [];
     }
 
     /**
