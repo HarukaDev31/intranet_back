@@ -64,12 +64,23 @@ class ExcelConfirmacionFormService
             ->groupBy('id_proveedor');
 
         $proveedoresPayload = $proveedores->map(function (CotizacionProveedor $proveedor) use ($itemsByProveedor, $excelConfItemsByProveedor) {
+            $excelConfItems = $excelConfItemsByProveedor->get($proveedor->id) ?? collect();
+            $overlaysByOrigen = $excelConfItems
+                ->filter(fn (CotizacionProveedorItemExcelConf $item) => $item->id_item_origen !== null)
+                ->keyBy('id_item_origen');
+
             $originalItems = ($itemsByProveedor->get($proveedor->id) ?? collect())
-                ->map(fn (CotizacionProveedorItems $item) => $this->mapOriginalItemPayload($item));
-            $excelConfItems = ($excelConfItemsByProveedor->get($proveedor->id) ?? collect())
+                ->map(function (CotizacionProveedorItems $item) use ($overlaysByOrigen) {
+                    $overlay = $overlaysByOrigen->get($item->id);
+
+                    return $this->mapOriginalItemPayload($item, $overlay instanceof CotizacionProveedorItemExcelConf ? $overlay : null);
+                });
+
+            $newExcelConfItems = $excelConfItems
+                ->filter(fn (CotizacionProveedorItemExcelConf $item) => $item->id_item_origen === null)
                 ->map(fn (CotizacionProveedorItemExcelConf $item) => $this->mapExcelConfItemPayload($item));
 
-            $items = $originalItems->concat($excelConfItems)->values();
+            $items = $originalItems->concat($newExcelConfItems)->values();
 
             return [
                 'id' => $proveedor->id,
@@ -140,7 +151,8 @@ class ExcelConfirmacionFormService
                             $proveedorId,
                             (int) $cotizacion->id,
                             $itemId,
-                            $itemData
+                            $itemData,
+                            null
                         );
                         continue;
                     }
@@ -151,11 +163,15 @@ class ExcelConfirmacionFormService
                         return ['success' => false, 'code' => 'ITEM_INVALIDO', 'status' => 422];
                     }
 
-                    CotizacionProveedorItems::where('id', $itemId)->update([
-                        'caracteristicas' => $itemData['caracteristicas'] ?? null,
-                        'confirmacion_qty' => $itemData['qty'] ?? null,
-                        'confirmacion_precio' => $itemData['precio_unitario'] ?? null,
-                    ]);
+                    // Ítems de cotización: SOLO se guarda overlay en excel_conf (id_item_origen).
+                    // Nunca se escribe sobre initial_name / initial_qty / initial_price ni otras columnas de cotización.
+                    $excelConfKeptIds[] = $this->upsertExcelConfItem(
+                        $proveedorId,
+                        (int) $cotizacion->id,
+                        0,
+                        $itemData,
+                        $itemId
+                    );
                 }
 
                 $orphanQuery = CotizacionProveedorItemExcelConf::where('id_proveedor', $proveedorId);
@@ -197,16 +213,63 @@ class ExcelConfirmacionFormService
             return null;
         }
 
-        $originalItems = $proveedor->items->map(fn (CotizacionProveedorItems $item) => $this->mapOriginalItemPayload($item, forExport: true));
         $excelConfItems = CotizacionProveedorItemExcelConf::where('id_proveedor', $proveedorId)
             ->orderBy('id')
-            ->get()
+            ->get();
+        $overlaysByOrigen = $excelConfItems
+            ->filter(fn (CotizacionProveedorItemExcelConf $item) => $item->id_item_origen !== null)
+            ->keyBy('id_item_origen');
+
+        $originalItems = $proveedor->items->map(function (CotizacionProveedorItems $item) use ($overlaysByOrigen) {
+            $overlay = $overlaysByOrigen->get($item->id);
+
+            return $this->mapOriginalItemPayload(
+                $item,
+                $overlay instanceof CotizacionProveedorItemExcelConf ? $overlay : null,
+                forExport: true
+            );
+        });
+        $newExcelConfItems = $excelConfItems
+            ->filter(fn (CotizacionProveedorItemExcelConf $item) => $item->id_item_origen === null)
             ->map(fn (CotizacionProveedorItemExcelConf $item) => $this->mapExcelConfItemPayload($item, forExport: true));
 
         return [
             'id' => $proveedor->id,
             'code_supplier' => $proveedor->code_supplier,
-            'items' => $originalItems->concat($excelConfItems)->values()->all(),
+            'items' => $originalItems->concat($newExcelConfItems)->values()->all(),
+        ];
+    }
+
+    /**
+     * @return array{uuid: string, nombre_cliente: string, proveedores: array<int, array<string, mixed>>}|null
+     */
+    public function buildCotizacionExportPayload(string $uuid): ?array
+    {
+        $cotizacion = $this->findCotizacionByUuid($uuid);
+        if (!$cotizacion) {
+            return null;
+        }
+
+        $proveedores = CotizacionProveedor::where('id_cotizacion', $cotizacion->id)
+            ->orderBy('id')
+            ->get();
+
+        $payloads = [];
+        foreach ($proveedores as $proveedor) {
+            $payload = $this->buildProveedorExportPayload((int) $proveedor->id);
+            if ($payload !== null) {
+                $payloads[] = $payload;
+            }
+        }
+
+        if ($payloads === []) {
+            return null;
+        }
+
+        return [
+            'uuid' => $uuid,
+            'nombre_cliente' => (string) ($cotizacion->nombre ?? ''),
+            'proveedores' => $payloads,
         ];
     }
 
@@ -279,17 +342,31 @@ class ExcelConfirmacionFormService
     {
         $originalItems = CotizacionProveedorItems::where('id_proveedor', $proveedorId)->get();
         $excelConfItems = CotizacionProveedorItemExcelConf::where('id_proveedor', $proveedorId)->get();
-        $allItems = $originalItems->concat($excelConfItems);
+        $overlaysByOrigen = $excelConfItems
+            ->filter(fn (CotizacionProveedorItemExcelConf $item) => $item->id_item_origen !== null)
+            ->keyBy('id_item_origen');
+        $newItems = $excelConfItems->filter(fn (CotizacionProveedorItemExcelConf $item) => $item->id_item_origen === null);
 
-        if ($allItems->isEmpty()) {
+        if ($originalItems->isEmpty() && $newItems->isEmpty()) {
             return;
         }
 
         $allComplete = true;
-        foreach ($allItems as $item) {
-            if (!$this->isItemComplete($item, $labelsMap)) {
+
+        foreach ($originalItems as $item) {
+            $overlay = $overlaysByOrigen->get($item->id);
+            if (!$overlay instanceof CotizacionProveedorItemExcelConf || !$this->isItemComplete($overlay, $labelsMap)) {
                 $allComplete = false;
                 break;
+            }
+        }
+
+        if ($allComplete) {
+            foreach ($newItems as $item) {
+                if (!$this->isItemComplete($item, $labelsMap)) {
+                    $allComplete = false;
+                    break;
+                }
             }
         }
 
@@ -310,11 +387,24 @@ class ExcelConfirmacionFormService
 
         $tipo = strtoupper((string) ($item->tipo_producto ?? 'GENERAL'));
         $labels = $labelsMap[$tipo] ?? $labelsMap['GENERAL'] ?? [];
-        $caracteristicas = is_array($item->caracteristicas) ? $item->caracteristicas : [];
+        $caracteristicas = $this->normalizeCaracteristicasKeys(
+            is_array($item->caracteristicas) ? $item->caracteristicas : []
+        );
 
         foreach ($labels as $label) {
+            $normalized = strtolower(rtrim(trim((string) $label), ':'));
+            // Marca y Modelo son opcionales (en front se llenan con S/M al confirmar guardar)
+            if ($normalized === 'marca' || $normalized === 'modelo') {
+                continue;
+            }
+
             $value = trim((string) ($caracteristicas[$label] ?? ''));
             if ($value === '') {
+                return false;
+            }
+
+            $unitKey = $this->unidadKeyForLabel((string) $label);
+            if ($unitKey !== null && trim((string) ($caracteristicas[$unitKey] ?? '')) === '') {
                 return false;
             }
         }
@@ -325,12 +415,20 @@ class ExcelConfirmacionFormService
     /**
      * @param  array<string, mixed>  $itemData
      */
-    private function upsertExcelConfItem(int $proveedorId, int $cotizacionId, int $itemId, array $itemData): int
-    {
-        $caracteristicas = $itemData['caracteristicas'] ?? [];
+    private function upsertExcelConfItem(
+        int $proveedorId,
+        int $cotizacionId,
+        int $itemId,
+        array $itemData,
+        ?int $idItemOrigen = null
+    ): int {
+        $caracteristicas = $this->normalizeCaracteristicasKeys(
+            is_array($itemData['caracteristicas'] ?? null) ? $itemData['caracteristicas'] : []
+        );
         $payload = [
             'id_cotizacion' => $cotizacionId,
             'id_proveedor' => $proveedorId,
+            'id_item_origen' => $idItemOrigen,
             'initial_name' => $this->resolveNombreComercial($caracteristicas),
             'tipo_producto' => strtoupper((string) ($itemData['tipo_producto'] ?? 'GENERAL')),
             'caracteristicas' => $caracteristicas,
@@ -338,9 +436,37 @@ class ExcelConfirmacionFormService
             'confirmacion_precio' => $itemData['precio_unitario'] ?? null,
         ];
 
+        if ($idItemOrigen !== null) {
+            $existing = CotizacionProveedorItemExcelConf::where('id_proveedor', $proveedorId)
+                ->where('id_item_origen', $idItemOrigen)
+                ->first();
+            if ($existing) {
+                // Conserva el título original del producto de cotización si existe
+                $origen = CotizacionProveedorItems::where('id', $idItemOrigen)->first();
+                if ($origen && filled($origen->initial_name)) {
+                    $payload['initial_name'] = $origen->initial_name;
+                    $payload['tipo_producto'] = strtoupper((string) ($origen->tipo_producto ?: $payload['tipo_producto']));
+                }
+                $existing->update($payload);
+
+                return (int) $existing->id;
+            }
+
+            $origen = CotizacionProveedorItems::where('id', $idItemOrigen)->first();
+            if ($origen && filled($origen->initial_name)) {
+                $payload['initial_name'] = $origen->initial_name;
+                $payload['tipo_producto'] = strtoupper((string) ($origen->tipo_producto ?: $payload['tipo_producto']));
+            }
+
+            $created = CotizacionProveedorItemExcelConf::create($payload);
+
+            return (int) $created->id;
+        }
+
         if ($itemId > 0) {
             $existing = CotizacionProveedorItemExcelConf::where('id', $itemId)
                 ->where('id_proveedor', $proveedorId)
+                ->whereNull('id_item_origen')
                 ->first();
             if ($existing) {
                 $existing->update($payload);
@@ -364,17 +490,23 @@ class ExcelConfirmacionFormService
         return $nombre !== '' ? $nombre : null;
     }
 
-    private function mapOriginalItemPayload(CotizacionProveedorItems $item, bool $forExport = false): array
-    {
+    private function mapOriginalItemPayload(
+        CotizacionProveedorItems $item,
+        ?CotizacionProveedorItemExcelConf $overlay = null,
+        bool $forExport = false
+    ): array {
         $payload = [
             'id' => $item->id,
             'initial_name' => $item->initial_name,
             'tipo_producto' => $item->tipo_producto,
             'initial_qty' => $item->initial_qty,
             'initial_price' => $item->initial_price,
-            'caracteristicas' => $item->caracteristicas ?? [],
-            'qty' => $item->confirmacion_qty,
-            'precio_unitario' => $item->confirmacion_precio,
+            // Solo datos de confirmación (excel_conf). La cotización no se usa para prellenar.
+            'caracteristicas' => $this->normalizeCaracteristicasKeys(
+                is_array($overlay?->caracteristicas) ? $overlay->caracteristicas : []
+            ),
+            'qty' => $overlay?->confirmacion_qty,
+            'precio_unitario' => $overlay?->confirmacion_precio,
             'is_new' => false,
         ];
 
@@ -387,13 +519,16 @@ class ExcelConfirmacionFormService
 
     private function mapExcelConfItemPayload(CotizacionProveedorItemExcelConf $item, bool $forExport = false): array
     {
+        $caracteristicas = $this->normalizeCaracteristicasKeys(
+            is_array($item->caracteristicas) ? $item->caracteristicas : []
+        );
         $payload = [
             'id' => $item->id,
-            'initial_name' => $item->initial_name ?? $this->resolveNombreComercial($item->caracteristicas ?? []) ?? '',
+            'initial_name' => $item->initial_name ?? $this->resolveNombreComercial($caracteristicas) ?? '',
             'tipo_producto' => $item->tipo_producto,
             'initial_qty' => null,
             'initial_price' => null,
-            'caracteristicas' => $item->caracteristicas ?? [],
+            'caracteristicas' => $caracteristicas,
             'qty' => $item->confirmacion_qty,
             'precio_unitario' => $item->confirmacion_precio,
             'is_new' => true,
@@ -404,5 +539,62 @@ class ExcelConfirmacionFormService
         }
 
         return $payload;
+    }
+
+    /**
+     * Migra keys legacy y asegura claves de unidad (misma estructura para overlays y productos nuevos).
+     *
+     * @param  array<string, mixed>  $caracteristicas
+     * @return array<string, mixed>
+     */
+    private function normalizeCaracteristicasKeys(array $caracteristicas): array
+    {
+        $renames = [
+            'Tamaño:' => 'Tamaño (Producto):',
+            'Tamaño del producto:' => 'Tamaño (Producto):',
+            'Tamaño (Metros):' => 'Tamaño (Producto):',
+            'Capacidad (ml o kg):' => 'Capacidad:',
+            'Peso Neto:' => 'Peso Neto (Producto):',
+            'Peso' => 'Peso Neto (Producto):',
+            'Pares o Piezas:' => 'Unidad de medida:',
+        ];
+
+        $wasTamanoMetros = false;
+        foreach (array_keys($caracteristicas) as $key) {
+            $normalizedKey = strtolower(rtrim(trim((string) $key), ':'));
+            if ($normalizedKey === 'tamaño (metros)') {
+                $wasTamanoMetros = true;
+            }
+        }
+
+        $normalized = [];
+        foreach ($caracteristicas as $key => $value) {
+            $canonical = $renames[(string) $key] ?? (string) $key;
+            $incoming = trim((string) $value);
+            $existing = trim((string) ($normalized[$canonical] ?? ''));
+            if ($existing === '' && $incoming !== '') {
+                $normalized[$canonical] = $incoming;
+            } elseif (!array_key_exists($canonical, $normalized)) {
+                $normalized[$canonical] = $incoming;
+            }
+        }
+
+        if ($wasTamanoMetros && trim((string) ($normalized['Unidad Tamaño:'] ?? '')) === '') {
+            $normalized['Unidad Tamaño:'] = 'metros';
+        }
+
+        return $normalized;
+    }
+
+    private function unidadKeyForLabel(string $label): ?string
+    {
+        $normalized = strtolower(rtrim(trim($label), ':'));
+
+        return match ($normalized) {
+            'tamaño (producto)', 'tamaño', 'tamaño del producto', 'tamaño (metros)' => 'Unidad Tamaño:',
+            'capacidad', 'capacidad (ml o kg)' => 'Unidad Capacidad:',
+            'peso neto (producto)', 'peso neto', 'peso' => 'Unidad Peso Neto:',
+            default => null,
+        };
     }
 }

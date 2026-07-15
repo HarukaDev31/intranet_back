@@ -177,8 +177,7 @@ class ExcelConfirmacionCoordinacionController extends Controller
             $fileName = 'excel_confirmacion_' . $suffix . '.xlsx';
             $fullPath = $outputDir . DIRECTORY_SEPARATOR . $fileName;
 
-            $ok = app(\App\Services\CargaConsolidada\Clientes\ExcelConfirmacionDocumentosService::class)
-                ->generarArchivoPorProveedor($templatePath, $fullPath, $payload);
+            $ok = $this->excelService->generarArchivoPorProveedor($templatePath, $fullPath, $payload);
 
             if (!$ok || !file_exists($fullPath)) {
                 return response()->json(['success' => false, 'message' => 'No se pudo generar el Excel'], 500);
@@ -191,6 +190,53 @@ class ExcelConfirmacionCoordinacionController extends Controller
             ]);
 
             return response()->json(['success' => false, 'message' => 'Error al generar Excel'], 500);
+        }
+    }
+
+    public function exportExcelGeneral(string $uuid)
+    {
+        if ($denied = $this->authorizeCoordinacion()) {
+            return $denied;
+        }
+
+        try {
+            $exportData = $this->formService->buildCotizacionExportPayload($uuid);
+            if (!$exportData) {
+                return response()->json(['success' => false, 'message' => 'Cotización no encontrada o sin proveedores'], 404);
+            }
+
+            $templatePath = $this->formService->resolveTemplatePath();
+            if ($templatePath === null) {
+                return response()->json(['success' => false, 'message' => 'Plantilla de Excel no disponible'], 500);
+            }
+
+            $outputDir = storage_path('app/temp/excel-confirmacion');
+            if (!is_dir($outputDir)) {
+                @mkdir($outputDir, 0775, true);
+            }
+
+            $clientSlug = preg_replace('/[^\w\-]+/u', '_', (string) ($exportData['nombre_cliente'] ?? 'cliente'));
+            $clientSlug = trim($clientSlug, '_') ?: 'cliente';
+            $fileName = 'excel_confirmacion_general_' . $clientSlug . '.xlsx';
+            $fullPath = $outputDir . DIRECTORY_SEPARATOR . uniqid('excel_conf_general_', true) . '.xlsx';
+
+            $ok = $this->excelService->generarArchivoGeneralPorCotizacion(
+                $templatePath,
+                $fullPath,
+                $exportData['proveedores']
+            );
+
+            if (!$ok || !file_exists($fullPath)) {
+                return response()->json(['success' => false, 'message' => 'No se pudo generar el Excel general'], 500);
+            }
+
+            return response()->download($fullPath, $fileName)->deleteFileAfterSend(true);
+        } catch (\Throwable $e) {
+            Log::error('ExcelConfirmacionCoordinacionController::exportExcelGeneral — ' . $e->getMessage(), [
+                'uuid' => $uuid,
+            ]);
+
+            return response()->json(['success' => false, 'message' => 'Error al generar Excel general'], 500);
         }
     }
 

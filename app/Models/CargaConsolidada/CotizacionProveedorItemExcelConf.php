@@ -12,6 +12,7 @@ class CotizacionProveedorItemExcelConf extends Model
     protected $fillable = [
         'id_cotizacion',
         'id_proveedor',
+        'id_item_origen',
         'initial_name',
         'tipo_producto',
         'caracteristicas',
@@ -22,6 +23,7 @@ class CotizacionProveedorItemExcelConf extends Model
     protected $casts = [
         'id_cotizacion' => 'integer',
         'id_proveedor' => 'integer',
+        'id_item_origen' => 'integer',
         'caracteristicas' => 'array',
         'confirmacion_qty' => 'decimal:2',
         'confirmacion_precio' => 'decimal:2',

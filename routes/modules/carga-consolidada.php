@@ -121,6 +121,7 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
 
             Route::prefix('excel-confirmacion')->group(function () {
                 Route::get('labels', [ExcelConfirmacionCoordinacionController::class, 'labels']);
+                Route::get('{uuid}/export-general', [ExcelConfirmacionCoordinacionController::class, 'exportExcelGeneral']);
                 Route::get('{uuid}', [ExcelConfirmacionCoordinacionController::class, 'show']);
                 Route::put('{uuid}', [ExcelConfirmacionCoordinacionController::class, 'update']);
                 Route::post('proveedor/{idProveedor}/cerrar', [ExcelConfirmacionCoordinacionController::class, 'cerrar']);

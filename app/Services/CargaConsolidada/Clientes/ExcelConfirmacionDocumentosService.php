@@ -3,14 +3,18 @@
 namespace App\Services\CargaConsolidada\Clientes;
 
 use App\Models\CargaConsolidada\CotizacionProveedor;
+use App\Traits\UsesObjectStorage;
 use Illuminate\Support\Facades\Log;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Worksheet\MemoryDrawing;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 use ZipArchive;
 
 class ExcelConfirmacionDocumentosService
 {
+    use UsesObjectStorage;
     private const CAMPO_NOMBRE_COMERCIAL = 'NOMBRE COMERCIAL';
 
     private const CAMPO_FOTO = 'FOTO/IMAGEN';
@@ -124,7 +128,9 @@ class ExcelConfirmacionDocumentosService
                 \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING
             );
 
-            $caracteristicas = is_array($item['caracteristicas'] ?? null) ? $item['caracteristicas'] : [];
+            $caracteristicas = $this->mergeUnidadesEnCaracteristicas(
+                is_array($item['caracteristicas'] ?? null) ? $item['caracteristicas'] : []
+            );
             $qty = $item['qty'] ?? $item['initial_qty'] ?? null;
             $precio = $item['precio_unitario'] ?? $item['initial_price'] ?? null;
 
@@ -146,7 +152,7 @@ class ExcelConfirmacionDocumentosService
 
             $foto = $this->resolveCaracteristicaValue($caracteristicas, self::CAMPO_FOTO);
             if ($foto !== '') {
-                $sheet->setCellValueExplicit('D' . $startRow, $foto, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+                $this->embedFotoEnCelda($sheet, 'D' . $startRow, $foto, $rowsNeeded);
                 $sheet->duplicateStyle($sheet->getStyle('D14'), 'D' . $startRow . ':D' . $endRow);
             }
 
@@ -172,12 +178,12 @@ class ExcelConfirmacionDocumentosService
 
             for ($i = 0; $i < $rowsNeeded; $i++) {
                 $label = (string) ($labels[$i] ?? '');
-                if ($label === '' || $this->isCampoFijoExcel($label)) {
+                if ($label === '' || $this->isCampoFijoExcel($label) || $this->isUnidadCompanionLabel($label)) {
                     continue;
                 }
 
                 $value = $this->resolveCaracteristicaValue($caracteristicas, $label);
-                $cellValue = $this->formatCaracteristicaCell($label, $value);
+                $cellValue = $this->formatCaracteristicaCell($label, $value, $caracteristicas);
                 $sheet->setCellValueExplicit('E' . ($startRow + $i), $cellValue, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
             }
             for ($i = 0; $i < $rowsNeeded; $i++) {
@@ -199,6 +205,107 @@ class ExcelConfirmacionDocumentosService
         $this->restoreExcelDrawingExtentsFromTemplate($templatePath, $outputFullPath);
 
         return true;
+    }
+
+    /**
+     * Genera un único Excel con todos los proveedores, uno por hoja.
+     *
+     * @param  array<int, array<string, mixed>>  $proveedoresPayloads
+     */
+    public function generarArchivoGeneralPorCotizacion(
+        string $templatePath,
+        string $outputFullPath,
+        array $proveedoresPayloads
+    ): bool {
+        if ($proveedoresPayloads === []) {
+            return false;
+        }
+
+        $tempDir = dirname($outputFullPath);
+        if (!is_dir($tempDir)) {
+            @mkdir($tempDir, 0775, true);
+        }
+
+        $tempFiles = [];
+
+        try {
+            $firstPath = $tempDir . DIRECTORY_SEPARATOR . uniqid('excel_conf_general_', true) . '_0.xlsx';
+            if (!$this->generarArchivoPorProveedor($templatePath, $firstPath, $proveedoresPayloads[0])) {
+                return false;
+            }
+            $tempFiles[] = $firstPath;
+
+            $spreadsheet = IOFactory::load($firstPath);
+            $spreadsheet->getActiveSheet()->setTitle(
+                $this->sanitizeExcelSheetTitle(
+                    (string) ($proveedoresPayloads[0]['code_supplier'] ?? 'Proveedor_1'),
+                    $spreadsheet
+                )
+            );
+
+            for ($i = 1; $i < count($proveedoresPayloads); $i++) {
+                $partPath = $tempDir . DIRECTORY_SEPARATOR . uniqid('excel_conf_general_', true) . "_{$i}.xlsx";
+                if (!$this->generarArchivoPorProveedor($templatePath, $partPath, $proveedoresPayloads[$i])) {
+                    Log::warning('Excel confirmación general: no se pudo generar hoja de proveedor', [
+                        'index' => $i,
+                        'proveedor_id' => $proveedoresPayloads[$i]['id'] ?? null,
+                    ]);
+                    continue;
+                }
+                $tempFiles[] = $partPath;
+
+                $partSpreadsheet = IOFactory::load($partPath);
+                $partSheet = $partSpreadsheet->getActiveSheet();
+                $partSheet->setTitle(
+                    $this->sanitizeExcelSheetTitle(
+                        (string) ($proveedoresPayloads[$i]['code_supplier'] ?? 'Proveedor_' . ($i + 1)),
+                        $spreadsheet
+                    )
+                );
+                $spreadsheet->addExternalSheet($partSheet);
+            }
+
+            $writer = IOFactory::createWriter($spreadsheet, 'Xlsx');
+            $writer->save($outputFullPath);
+            $this->restoreExcelDrawingExtentsFromTemplate($templatePath, $outputFullPath);
+
+            return is_file($outputFullPath);
+        } finally {
+            foreach ($tempFiles as $file) {
+                @unlink($file);
+            }
+        }
+    }
+
+    private function sanitizeExcelSheetTitle(string $title, ?Spreadsheet $spreadsheet = null): string
+    {
+        $title = preg_replace('/[\\\\\\/\\?\\*\\[\\]:]/', '', trim($title));
+        $title = mb_substr($title !== '' ? $title : 'Proveedor', 0, 31);
+
+        if (!$spreadsheet instanceof Spreadsheet) {
+            return $title;
+        }
+
+        $base = $title;
+        $suffix = 1;
+        while ($this->excelSheetTitleExists($spreadsheet, $title)) {
+            $suffixStr = '_' . $suffix;
+            $title = mb_substr($base, 0, max(1, 31 - mb_strlen($suffixStr))) . $suffixStr;
+            $suffix++;
+        }
+
+        return $title;
+    }
+
+    private function excelSheetTitleExists(Spreadsheet $spreadsheet, string $title): bool
+    {
+        foreach ($spreadsheet->getWorksheetIterator() as $sheet) {
+            if ($sheet->getTitle() === $title) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -296,11 +403,11 @@ class ExcelConfirmacionDocumentosService
                 'Material:',
                 'Marca:',
                 'Modelo:',
-                'Tamaño:',
-                'Capacidad (ml o kg):',
-                'Peso Neto:',
+                'Tamaño (Producto):',
+                'Capacidad:',
+                'Peso Neto (Producto):',
                 'Incluye:',
-                'Pares o Piezas:',
+                'Unidad de medida:',
                 'Funcion:',
                 'Presentacion (botella, caja, etc.)::',
                 '',
@@ -335,14 +442,14 @@ class ExcelConfirmacionDocumentosService
                 'Material:',
                 'Marca:',
                 'Modelo:',
-                'Tamaño del producto:',
+                'Tamaño (Producto):',
                 'Potencia:',
                 'Voltaje:',
                 'Amperaje:',
                 'Bateria',
-                'Peso Neto:',
+                'Peso Neto (Producto):',
                 'Incluye:',
-                'Pares o Piezas:',
+                'Unidad de medida:',
                 'Función:',
                 '',
             ],
@@ -350,7 +457,7 @@ class ExcelConfirmacionDocumentosService
                 'Material (%):',
                 'Marca:',
                 'Modelo:',
-                'Tamaño (Metros):',
+                'Tamaño (Producto):',
                 'Gramaje (g/m²):',
                 'Tipo de Tela:',
                 'Cantidad de Rollos:',
@@ -361,13 +468,13 @@ class ExcelConfirmacionDocumentosService
                 'Material:',
                 'Marca:',
                 'Modelo:',
-                'Tamaño:',
+                'Tamaño (Producto):',
                 'Compatibilidad (vehiculo/moto):',
                 'Voltaje:',
                 'Potencia:',
-                'Peso Neto:',
+                'Peso Neto (Producto):',
                 'Incluye:',
-                'Pares o Piezas:',
+                'Unidad de medida:',
                 'Función:',
                 '',
             ],
@@ -375,7 +482,7 @@ class ExcelConfirmacionDocumentosService
                 'Material:',
                 'Marca:',
                 'Modelo:',
-                'Tamaño del producto:',
+                'Tamaño (Producto):',
                 'Tamaño de ruedas:',
                 'Distancia entre ruedas:',
                 'Voltaje:',
@@ -383,7 +490,7 @@ class ExcelConfirmacionDocumentosService
                 'Amperaje:',
                 'Autonomia:',
                 'Velocidad maxima:',
-                'Peso Neto:',
+                'Peso Neto (Producto):',
                 'Capacidad de Carga:',
                 'Tipo de Bateria:',
                 'Incluye:',
@@ -392,11 +499,11 @@ class ExcelConfirmacionDocumentosService
                 'Material:',
                 'Marca:',
                 'Modelo:',
-                'Tamaño:',
+                'Tamaño (Producto):',
                 'Potencia:',
                 'Voltaje:',
                 'Amperaje:',
-                'Peso',
+                'Peso Neto (Producto):',
                 'Incluye:',
                 'Funcion:',
                 '',
@@ -620,28 +727,175 @@ class ExcelConfirmacionDocumentosService
     private function resolveCaracteristicaValue(array $caracteristicas, string $label): string
     {
         if (array_key_exists($label, $caracteristicas)) {
-            return trim((string) $caracteristicas[$label]);
+            $direct = trim((string) $caracteristicas[$label]);
+            if ($direct !== '') {
+                return $direct;
+            }
         }
 
         $normalizedLabel = $this->normalizeCaracteristicaKey($label);
         foreach ($caracteristicas as $key => $value) {
             if ($this->normalizeCaracteristicaKey((string) $key) === $normalizedLabel) {
-                return trim((string) $value);
+                $found = trim((string) $value);
+                if ($found !== '') {
+                    return $found;
+                }
+            }
+        }
+
+        foreach ($this->caracteristicaLabelAliases($label) as $alias) {
+            if (array_key_exists($alias, $caracteristicas)) {
+                $found = trim((string) $caracteristicas[$alias]);
+                if ($found !== '') {
+                    return $found;
+                }
+            }
+            $normalizedAlias = $this->normalizeCaracteristicaKey($alias);
+            foreach ($caracteristicas as $key => $value) {
+                if ($this->normalizeCaracteristicaKey((string) $key) === $normalizedAlias) {
+                    $found = trim((string) $value);
+                    if ($found !== '') {
+                        return $found;
+                    }
+                }
             }
         }
 
         return '';
     }
 
-    private function formatCaracteristicaCell(string $label, string $value): string
+    /**
+     * @return array<int, string>
+     */
+    private function caracteristicaLabelAliases(string $label): array
+    {
+        $normalized = $this->normalizeCaracteristicaKey($label);
+
+        return match ($normalized) {
+            'tamaño (producto)' => ['Tamaño:', 'Tamaño del producto:', 'Tamaño (Metros):'],
+            'capacidad' => ['Capacidad (ml o kg):'],
+            'peso neto (producto)' => ['Peso Neto:', 'Peso'],
+            'unidad de medida' => ['Pares o Piezas:'],
+            'unidad tamaño' => ['Unidad Tamaño'],
+            'unidad capacidad' => ['Unidad Capacidad'],
+            'unidad peso neto' => ['Unidad Peso Neto'],
+            default => [],
+        };
+    }
+
+    /**
+     * Fusiona valor + unidad en el campo principal antes de exportar al Excel.
+     *
+     * @param  array<string, mixed>  $caracteristicas
+     * @return array<string, mixed>
+     */
+    private function mergeUnidadesEnCaracteristicas(array $caracteristicas): array
+    {
+        $merged = $caracteristicas;
+
+        $camposConUnidad = [
+            [
+                'valueKey' => 'Tamaño (Producto):',
+                'unitKey' => 'Unidad Tamaño:',
+                'legacyValueKeys' => ['Tamaño:', 'Tamaño del producto:', 'Tamaño (Metros):'],
+            ],
+            [
+                'valueKey' => 'Capacidad:',
+                'unitKey' => 'Unidad Capacidad:',
+                'legacyValueKeys' => ['Capacidad (ml o kg):'],
+            ],
+            [
+                'valueKey' => 'Peso Neto (Producto):',
+                'unitKey' => 'Unidad Peso Neto:',
+                'legacyValueKeys' => ['Peso Neto:', 'Peso'],
+            ],
+        ];
+
+        foreach ($camposConUnidad as $campo) {
+            $value = $this->resolveCaracteristicaValue($merged, $campo['valueKey']);
+            if ($value === '') {
+                foreach ($campo['legacyValueKeys'] as $legacyKey) {
+                    $legacyValue = $this->resolveCaracteristicaValue($merged, $legacyKey);
+                    if ($legacyValue !== '') {
+                        $value = $legacyValue;
+                        $merged[$campo['valueKey']] = $legacyValue;
+                        break;
+                    }
+                }
+            }
+
+            $unit = $this->resolveCaracteristicaValue($merged, $campo['unitKey']);
+            if ($value !== '' && $unit !== '') {
+                $merged[$campo['valueKey']] = $this->concatenarValorConUnidad($value, $unit);
+            } elseif ($value !== '') {
+                $merged[$campo['valueKey']] = $value;
+            }
+        }
+
+        unset(
+            $merged['Unidad Tamaño:'],
+            $merged['Unidad Capacidad:'],
+            $merged['Unidad Peso Neto:']
+        );
+
+        return $merged;
+    }
+
+    private function concatenarValorConUnidad(string $value, string $unit): string
+    {
+        $value = trim($value);
+        $unit = trim($unit);
+        if ($value === '' || $unit === '') {
+            return $value;
+        }
+
+        if (preg_match('/\b' . preg_quote($unit, '/') . '\b$/iu', $value)) {
+            return $value;
+        }
+
+        return trim($value . ' ' . $unit);
+    }
+
+    private function isUnidadCompanionLabel(string $label): bool
+    {
+        $normalized = $this->normalizeCaracteristicaKey($label);
+
+        return in_array($normalized, ['unidad tamaño', 'unidad capacidad', 'unidad peso neto'], true);
+    }
+
+    /**
+     * @param  array<string, mixed>  $caracteristicas
+     */
+    private function formatCaracteristicaCell(string $label, string $value, array $caracteristicas = []): string
     {
         if ($value === '') {
             return $label;
         }
 
+        // Tras mergeUnidadesEnCaracteristicas el valor ya incluye la unidad; esto cubre datos legacy.
+        $unitKey = $this->unidadKeyForLabel($label);
+        if ($unitKey !== null) {
+            $unit = $this->resolveCaracteristicaValue($caracteristicas, $unitKey);
+            if ($unit !== '') {
+                $value = $this->concatenarValorConUnidad($value, $unit);
+            }
+        }
+
         $labelBase = rtrim(trim($label), ':');
 
         return $labelBase . ': ' . $value;
+    }
+
+    private function unidadKeyForLabel(string $label): ?string
+    {
+        $normalized = strtolower(rtrim(trim($label), ':'));
+
+        return match ($normalized) {
+            'tamaño (producto)', 'tamaño', 'tamaño del producto', 'tamaño (metros)' => 'Unidad Tamaño:',
+            'capacidad', 'capacidad (ml o kg)' => 'Unidad Capacidad:',
+            'peso neto (producto)', 'peso neto', 'peso' => 'Unidad Peso Neto:',
+            default => null,
+        };
     }
 
     private function removeConflictingMergedCellsBeforeExcelConfirmacionBlock(
@@ -682,5 +936,118 @@ class ExcelConfirmacionDocumentosService
                 Log::warning('Excel confirmación: no se pudo descombinar ' . $range . ' — ' . $e->getMessage());
             }
         }
+    }
+
+    /**
+     * Inserta la foto como imagen embebida en la celda (no como texto base64).
+     */
+    private function embedFotoEnCelda(Worksheet $sheet, string $coordinate, string $foto, int $rowsNeeded): bool
+    {
+        $binary = $this->resolveFotoBinary($foto);
+        if ($binary === null) {
+            $sheet->setCellValueExplicit($coordinate, '', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+
+            return false;
+        }
+
+        $imageResource = @imagecreatefromstring($binary);
+        if ($imageResource === false) {
+            Log::warning('Excel confirmación: no se pudo decodificar imagen de producto', [
+                'coordinate' => $coordinate,
+            ]);
+            $sheet->setCellValueExplicit($coordinate, '', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+
+            return false;
+        }
+
+        $info = @getimagesizefromstring($binary);
+        $mime = is_array($info) ? (string) ($info['mime'] ?? '') : '';
+        [$rendering, $mimeType] = $this->memoryDrawingFormatForMime($mime);
+
+        $width = (int) ($info[0] ?? 120);
+        $height = (int) ($info[1] ?? 120);
+        $maxWidth = 150;
+        $maxHeight = max(90, $rowsNeeded * 18);
+        $scale = min($maxWidth / max($width, 1), $maxHeight / max($height, 1), 1.0);
+        $drawWidth = max(1, (int) round($width * $scale));
+        $drawHeight = max(1, (int) round($height * $scale));
+
+        $drawing = new MemoryDrawing();
+        $drawing->setName('Foto producto');
+        $drawing->setDescription('Foto producto');
+        $drawing->setImageResource($imageResource);
+        $drawing->setRenderingFunction($rendering);
+        $drawing->setMimeType($mimeType);
+        $drawing->setCoordinates($coordinate);
+        $drawing->setWidth($drawWidth);
+        $drawing->setHeight($drawHeight);
+        $drawing->setOffsetX(6);
+        $drawing->setOffsetY(6);
+        $drawing->setWorksheet($sheet);
+
+        $sheet->setCellValueExplicit($coordinate, '', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+
+        return true;
+    }
+
+    private function resolveFotoBinary(string $foto): ?string
+    {
+        $foto = trim($foto);
+        if ($foto === '') {
+            return null;
+        }
+
+        if (preg_match('/^data:image\\/\\w+;base64,(.+)$/is', $foto, $matches)) {
+            $decoded = base64_decode(str_replace(["\r", "\n", ' '], '', $matches[1]), true);
+
+            return $decoded !== false && $this->isValidImageBinary($decoded) ? $decoded : null;
+        }
+
+        if (filter_var($foto, FILTER_VALIDATE_URL)) {
+            $context = stream_context_create([
+                'http' => ['timeout' => 15, 'follow_location' => 1],
+                'ssl' => ['verify_peer' => true, 'verify_peer_name' => true],
+            ]);
+            $downloaded = @file_get_contents($foto, false, $context);
+
+            return $downloaded !== false && $this->isValidImageBinary($downloaded) ? $downloaded : null;
+        }
+
+        $storagePath = $this->storageUploadPathFromDb($foto) ?? $this->objectStorage()->normalizeRelativePath($foto);
+        if ($storagePath !== null && $this->objectStorage()->exists($storagePath)) {
+            $stream = $this->objectStorage()->readStream($storagePath);
+            if (is_resource($stream)) {
+                $contents = stream_get_contents($stream);
+                fclose($stream);
+                if ($contents !== false && $this->isValidImageBinary($contents)) {
+                    return $contents;
+                }
+            }
+        }
+
+        if (is_file($foto)) {
+            $contents = @file_get_contents($foto);
+
+            return $contents !== false && $this->isValidImageBinary($contents) ? $contents : null;
+        }
+
+        return null;
+    }
+
+    private function isValidImageBinary(string $binary): bool
+    {
+        return @getimagesizefromstring($binary) !== false;
+    }
+
+    /**
+     * @return array{0: string, 1: string}
+     */
+    private function memoryDrawingFormatForMime(string $mime): array
+    {
+        return match (strtolower($mime)) {
+            'image/png' => [MemoryDrawing::RENDERING_PNG, MemoryDrawing::MIMETYPE_PNG],
+            'image/gif' => [MemoryDrawing::RENDERING_GIF, MemoryDrawing::MIMETYPE_GIF],
+            default => [MemoryDrawing::RENDERING_JPEG, MemoryDrawing::MIMETYPE_JPEG],
+        };
     }
 }
