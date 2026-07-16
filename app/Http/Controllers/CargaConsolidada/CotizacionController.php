@@ -424,6 +424,7 @@ class CotizacionController extends Controller
                     'cotizacion_file_url' => $this->cdnStorageUrl($cotizacion->cotizacion_file_url),
                     'impuestos' => $cotizacion->impuestos,
                     'tipo_cliente' => optional($cotizacion->tipoCliente)->name,
+                    'origen_marketing' => $cotizacion->origen_marketing,
                     'bl_file_url' => $files->bl_file_url ? $files->bl_file_url : null,
                     'lista_embarque_url' => $listaEmbarqueUrl,
                     'url_cotizacion_pdf' => $urlCotizacionPdf,
@@ -2950,6 +2951,54 @@ class CotizacionController extends Controller
                 'status' => 'error',
                 'success' => false,
                 'message' => 'Error al actualizar el estado de la cotización'
+            ], 500);
+        }
+    }
+
+    /**
+     * Actualiza el origen de marketing de una cotización (perfil Jefe Marketing).
+     */
+    public function updateOrigenMarketing($id, Request $request)
+    {
+        try {
+            $allowed = [
+                'Facebook',
+                'Instagram',
+                'Tiktok',
+                'Landing CC',
+                'Landing CI',
+                'Pagina web CC',
+                'Pagina web CI',
+            ];
+
+            $origen = $request->input('origen_marketing');
+            if ($origen === '' || $origen === null) {
+                $origen = null;
+            } elseif (!in_array($origen, $allowed, true)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Origen de marketing inválido',
+                ], 422);
+            }
+
+            $cotizacion = Cotizacion::findOrFail($id);
+            $cotizacion->update([
+                'origen_marketing' => $origen,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Origen de marketing actualizado correctamente',
+                'data' => [
+                    'id' => $cotizacion->id,
+                    'origen_marketing' => $cotizacion->origen_marketing,
+                ],
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error en updateOrigenMarketing: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al actualizar el origen de marketing',
             ], 500);
         }
     }
