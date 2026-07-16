@@ -87,6 +87,7 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
             Route::get('/{idContenedor}', [CotizacionController::class, 'index']);
             Route::put('{id}', [CotizacionController::class, 'update']);
             Route::post('{id}/estado-cotizador', [CotizacionController::class, 'updateEstadoCotizacion']);
+            Route::post('{id}/origen-marketing', [CotizacionController::class, 'updateOrigenMarketing']);
             Route::post('{id}/file', [CotizacionController::class, 'updateCotizacionFile']);
             Route::delete('{id}/file', [CotizacionController::class, 'deleteCotizacionFile']);
             Route::post('{id}/send-recordatorio-firma', [CotizacionController::class, 'sendRecordatorioFirmaContrato']);
