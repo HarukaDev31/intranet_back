@@ -7,6 +7,8 @@ use App\Traits\UsesObjectStorage;
 use Illuminate\Support\Facades\Log;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\Shared\Drawing as SharedDrawing;
+use PhpOffice\PhpSpreadsheet\Style\Font;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Worksheet\MemoryDrawing;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
@@ -608,9 +610,13 @@ class ExcelConfirmacionDocumentosService
             return $outputDrawingXml;
         }
 
+        // Solo restaurar tamaños del logo/plantilla; no tocar fotos de producto.
         $k = 0;
         foreach ($nodes as $node) {
             if (!($node instanceof \DOMElement)) {
+                continue;
+            }
+            if ($this->drawingNodeBelongsToProductPhoto($node)) {
                 continue;
             }
             if (!isset($sizes[$k])) {
@@ -640,11 +646,30 @@ class ExcelConfirmacionDocumentosService
 
         $tplSrcRects = $tplXp->query('//*[local-name()="srcRect"]');
         $outSrcRects = $outXp->query('//*[local-name()="srcRect"]');
+        // Quitar recortes heredados en fotos de producto y no aplicar srcRect de plantilla sobre ellas.
+        if ($outSrcRects !== false) {
+            $toRemove = [];
+            foreach ($outSrcRects as $o) {
+                if ($o instanceof \DOMElement && $this->drawingNodeBelongsToProductPhoto($o)) {
+                    $toRemove[] = $o;
+                }
+            }
+            foreach ($toRemove as $o) {
+                $o->parentNode?->removeChild($o);
+            }
+        }
+
         if ($tplSrcRects !== false && $outSrcRects !== false) {
-            $n = min($tplSrcRects->length, $outSrcRects->length);
+            $outNonProduct = [];
+            foreach ($outXp->query('//*[local-name()="srcRect"]') as $o) {
+                if ($o instanceof \DOMElement && !$this->drawingNodeBelongsToProductPhoto($o)) {
+                    $outNonProduct[] = $o;
+                }
+            }
+            $n = min($tplSrcRects->length, count($outNonProduct));
             for ($i = 0; $i < $n; $i++) {
                 $t = $tplSrcRects->item($i);
-                $o = $outSrcRects->item($i);
+                $o = $outNonProduct[$i];
                 if (!($t instanceof \DOMElement) || !($o instanceof \DOMElement)) {
                     continue;
                 }
@@ -660,10 +685,16 @@ class ExcelConfirmacionDocumentosService
         $tplBlips = $tplXp->query('//*[local-name()="blipFill"]');
         $outBlips = $outXp->query('//*[local-name()="blipFill"]');
         if ($tplBlips !== false && $outBlips !== false) {
-            $m = min($tplBlips->length, $outBlips->length);
+            $outNonProductBlips = [];
+            foreach ($outBlips as $outBfCandidate) {
+                if ($outBfCandidate instanceof \DOMElement && !$this->drawingNodeBelongsToProductPhoto($outBfCandidate)) {
+                    $outNonProductBlips[] = $outBfCandidate;
+                }
+            }
+            $m = min($tplBlips->length, count($outNonProductBlips));
             for ($j = 0; $j < $m; $j++) {
                 $tplBf = $tplBlips->item($j);
-                $outBf = $outBlips->item($j);
+                $outBf = $outNonProductBlips[$j];
                 if (!($tplBf instanceof \DOMElement) || !($outBf instanceof \DOMElement)) {
                     continue;
                 }
@@ -964,30 +995,104 @@ class ExcelConfirmacionDocumentosService
         $mime = is_array($info) ? (string) ($info['mime'] ?? '') : '';
         [$rendering, $mimeType] = $this->memoryDrawingFormatForMime($mime);
 
-        $width = (int) ($info[0] ?? 120);
-        $height = (int) ($info[1] ?? 120);
-        $maxWidth = 150;
-        $maxHeight = max(90, $rowsNeeded * 18);
-        $scale = min($maxWidth / max($width, 1), $maxHeight / max($height, 1), 1.0);
-        $drawWidth = max(1, (int) round($width * $scale));
-        $drawHeight = max(1, (int) round($height * $scale));
+        [$cellWidthPx, $cellHeightPx] = $this->estimateMergedCellSizePx($sheet, $coordinate, $rowsNeeded);
+        $pad = 4;
+        $targetW = max(1, $cellWidthPx - ($pad * 2));
+        $targetH = max(1, $cellHeightPx - ($pad * 2));
+
+        // Estira la imagen para llenar el área de la celda (sin letterbox ni overflow).
+        $srcW = max(1, imagesx($imageResource));
+        $srcH = max(1, imagesy($imageResource));
+        $stretched = imagecreatetruecolor($targetW, $targetH);
+        if ($stretched === false) {
+            imagedestroy($imageResource);
+            $sheet->setCellValueExplicit($coordinate, '', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+
+            return false;
+        }
+
+        imagealphablending($stretched, false);
+        imagesavealpha($stretched, true);
+        $transparent = imagecolorallocatealpha($stretched, 0, 0, 0, 127);
+        imagefilledrectangle($stretched, 0, 0, $targetW, $targetH, $transparent);
+        imagealphablending($stretched, true);
+        imagecopyresampled($stretched, $imageResource, 0, 0, 0, 0, $targetW, $targetH, $srcW, $srcH);
+        imagedestroy($imageResource);
 
         $drawing = new MemoryDrawing();
         $drawing->setName('Foto producto');
         $drawing->setDescription('Foto producto');
-        $drawing->setImageResource($imageResource);
+        $drawing->setImageResource($stretched);
         $drawing->setRenderingFunction($rendering);
         $drawing->setMimeType($mimeType);
         $drawing->setCoordinates($coordinate);
-        $drawing->setWidth($drawWidth);
-        $drawing->setHeight($drawHeight);
-        $drawing->setOffsetX(6);
-        $drawing->setOffsetY(6);
+        $drawing->setResizeProportional(false);
+        $drawing->setWidth($targetW);
+        $drawing->setHeight($targetH);
+        $drawing->setOffsetX($pad);
+        $drawing->setOffsetY($pad);
         $drawing->setWorksheet($sheet);
 
         $sheet->setCellValueExplicit($coordinate, '', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
 
         return true;
+    }
+
+    /**
+     * Estima el tamaño en px de la celda D mergeada (alto = filas del bloque).
+     *
+     * @return array{0: int, 1: int}
+     */
+    private function estimateMergedCellSizePx(Worksheet $sheet, string $coordinate, int $rowsNeeded): array
+    {
+        [$col, $row] = Coordinate::coordinateFromString($coordinate);
+        $startRow = (int) $row;
+
+        $colWidth = $sheet->getColumnDimension($col)->getWidth();
+        if ($colWidth < 0) {
+            $colWidth = $sheet->getDefaultColumnDimension()->getWidth();
+        }
+        if ($colWidth < 0) {
+            $colWidth = 14.0;
+        }
+
+        $font = $sheet->getParent()?->getDefaultStyle()->getFont() ?? new Font();
+        $widthPx = (int) round(SharedDrawing::cellDimensionToPixels((float) $colWidth, $font));
+
+        $heightPx = 0;
+        for ($r = $startRow; $r < $startRow + max(1, $rowsNeeded); $r++) {
+            $rh = $sheet->getRowDimension($r)->getRowHeight();
+            if ($rh < 0) {
+                $rh = $sheet->getDefaultRowDimension()->getRowHeight();
+            }
+            if ($rh < 0) {
+                $rh = 15.0;
+            }
+            $heightPx += (int) round(SharedDrawing::pointsToPixels((float) $rh));
+        }
+
+        return [max(60, $widthPx), max(60, $heightPx)];
+    }
+
+    private function drawingNodeBelongsToProductPhoto(\DOMNode $node): bool
+    {
+        $current = $node;
+        while ($current !== null) {
+            if ($current instanceof \DOMElement && strtolower((string) $current->localName) === 'pic') {
+                $owner = $current->ownerDocument;
+                if (!$owner instanceof \DOMDocument) {
+                    return false;
+                }
+                $xp = new \DOMXPath($owner);
+                $nameAttr = $xp->query('.//*[local-name()="cNvPr"]/@name', $current)->item(0);
+                $name = $nameAttr?->nodeValue ?? '';
+
+                return stripos((string) $name, 'Foto producto') !== false;
+            }
+            $current = $current->parentNode;
+        }
+
+        return false;
     }
 
     private function resolveFotoBinary(string $foto): ?string
