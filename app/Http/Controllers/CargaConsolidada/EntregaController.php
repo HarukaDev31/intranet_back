@@ -3582,11 +3582,6 @@ Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, 
             if ($typeForm !== 0 && $typeForm !== 1) {
                 $typeForm = null;
             }
-            $message = $this->buildDeliveryFormsMessage(
-                (string) $contenedor->carga,
-                $typeForm,
-                (int) $idContenedor
-            );
 
             $telefono = preg_replace('/\D+/', '', (string) $cotizacion->telefono);
             if (!$telefono) {
@@ -3596,26 +3591,81 @@ Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, 
                 $telefono = '51' . $telefono;
             }
             $numeroWhatsapp = $telefono . '@c.us';
-
-            $result = $this->sendMessage(
-                $message,
-                $numeroWhatsapp,
-                0,
-                'consolidado',
-                CoordinacionWhatsappPayload::entregaRecordatorio($numeroWhatsapp, $message, $message)
+            $nombreCliente = trim((string) ($cotizacion->nombre_cliente ?? '')) !== ''
+                ? trim((string) $cotizacion->nombre_cliente)
+                : 'cliente';
+            $cargaStr = (string) $contenedor->carga;
+            $linkForm = $this->buildFormularioEntregaUrl((int) $idContenedor, $typeForm);
+            [$messagePrincipal, $messageSecundario] = $this->buildDeliveryFormsMessages(
+                $cargaStr,
+                $nombreCliente,
+                $typeForm,
+                (int) $idContenedor
             );
-            if (!$result['status']) {
-                return response()->json([
-                    'message' => 'Error al enviar mensaje: ' . (isset($result['response']['error']) ? $result['response']['error'] : 'Error desconocido'),
-                    'success' => false
-                ], 500);
+
+            // Misma lógica Meta que SendDeliveryFormBulkJob: link + reglas (no pb_entrega_recordatorio_v1).
+            if (config('meta_whatsapp.coordinacion_enabled')) {
+                $payloadPrincipal = $typeForm === 1
+                    ? CoordinacionWhatsappPayload::entregaLinkLima(
+                        $numeroWhatsapp,
+                        $cargaStr,
+                        $nombreCliente,
+                        $linkForm,
+                        $messagePrincipal
+                    )
+                    : CoordinacionWhatsappPayload::entregaLinkProvincia(
+                        $numeroWhatsapp,
+                        $cargaStr,
+                        $nombreCliente,
+                        $linkForm,
+                        $messagePrincipal
+                    );
+
+                $payloadSecundario = $typeForm === 1
+                    ? CoordinacionWhatsappPayload::entregaReglasLima($numeroWhatsapp, $messageSecundario, 5)
+                    : (intval($cargaStr) >= 5
+                        ? CoordinacionWhatsappPayload::entregaReglasProvinciaFleteFinal($numeroWhatsapp, $messageSecundario, 5)
+                        : CoordinacionWhatsappPayload::entregaReglasProvinciaFleteCotiza($numeroWhatsapp, $messageSecundario, 5));
+
+                $this->runWhatsAppCoordinacionBatch('entrega_form', [
+                    'id_cotizacion' => $idCotizacion,
+                    'cliente' => $nombreCliente,
+                    'carga' => $cargaStr,
+                    'phone_e164' => $telefono,
+                ], function () use ($payloadPrincipal, $payloadSecundario) {
+                    $this->queueCoordinacionWhatsApp(
+                        $payloadPrincipal,
+                        'entrega_link',
+                        'Enlace formulario entrega'
+                    );
+                    $this->queueCoordinacionWhatsApp(
+                        $payloadSecundario,
+                        'entrega_reglas',
+                        'Reglas de entrega'
+                    );
+                });
+            } else {
+                $resultPrincipal = $this->sendMessage($messagePrincipal, $numeroWhatsapp);
+                if (!$resultPrincipal['status']) {
+                    return response()->json([
+                        'message' => 'Error al enviar mensaje: ' . (isset($resultPrincipal['response']['error']) ? $resultPrincipal['response']['error'] : 'Error desconocido'),
+                        'success' => false,
+                    ], 500);
+                }
+                $resultSecundario = $this->sendMessage($messageSecundario, $numeroWhatsapp, 5);
+                if (!$resultSecundario['status']) {
+                    Log::warning('sendMessageDelivery: error enviando mensaje secundario', [
+                        'id_cotizacion' => $idCotizacion,
+                        'response' => isset($resultSecundario['response']) ? $resultSecundario['response'] : null,
+                    ]);
+                }
             }
 
             (new DeliveryFormLinkCoordinationNotifier())->notify(
-                $message,
-                null,
-                trim((string) ($cotizacion->nombre_cliente ?? '')) !== '' ? trim((string) $cotizacion->nombre_cliente) : 'cliente',
-                (string) $contenedor->carga,
+                $messagePrincipal,
+                $messageSecundario,
+                $nombreCliente,
+                $cargaStr,
                 $idCotizacion,
                 $telefono,
                 $typeForm
@@ -3684,31 +3734,61 @@ Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, 
         }
     }
 
-    private function buildDeliveryFormsMessage(string $carga, ?int $typeForm, int $idContenedor): string
+    /**
+     * Textos de preview / Bitrix alineados con SendDeliveryFormBulkJob y plantillas Meta E01–E04.
+     *
+     * @return array{0: string, 1: string}
+     */
+    private function buildDeliveryFormsMessages(string $carga, string $nombreCliente, ?int $typeForm, int $idContenedor): array
     {
         $isLima = ($typeForm === 1);
         $isProvincia = ($typeForm === 0);
-        $titulo = $isLima ? 'MENSAJE CLIENTES LIMA:' : ($isProvincia ? 'MENSAJE CLIENTES PROVINCIA:' : 'MENSAJE CLIENTES:');
-        $logistica = $isLima ? 'Cliente Lima' : ($isProvincia ? 'Cliente Provincia' : 'Cliente');
         $forms = $this->buildFormularioEntregaUrl($idContenedor, $typeForm);
+        $destinoCliente = $isLima ? 'Lima' : ($isProvincia ? 'Provincia' : '');
+        $nombreCliente = trim($nombreCliente) !== '' ? trim($nombreCliente) : 'cliente';
+        $lineaDestino = $destinoCliente !== '' ? "Cliente: {$destinoCliente}\n\n" : '';
+        $saludoInicial = "🙋🏻‍♀️Hola {$nombreCliente} te saluda área de Coordinación.\n\n"
+            . $lineaDestino;
 
-        return $titulo . "\n\n"
-            . "# Consolidado " . $carga . "\n"
-            . "Logística: " . $logistica . " \n\n"
-            . "✅ *Registrarse*, en el siguiente link.\n"
-            . "✅ *Plazo máximo* para el registro: 48 horas\n"
-            . "✅ *Organizaremos los envíos* una vez liberado el contenedor.\n"
-            . "✅ *FORMS:* " . $forms . "\n \n"
-            . "⚠  De no llenar el formulario no se programará el envío de sus productos.\n\n"
-            . "-------------------------\n"
-            . "msj2:\n"
-            . "Importante:\n\n"
-            . "➡ La información registrada será utilizada para la *emisión de guías de remisión*.\n"
-            . "➡ *Validar* que sus datos estén correctos y completos.\n"
-            . "➡ El *costo de flete* Almacén – Agencia detalla en su cotización final.\n"
-            . "➡ Los envíos se realizan con *Marvisur*.\n"
-            . "➡ Si desea trabajar con otra agencia de transporte, se aplicará un *costo adicional* y previa coordinación.\n"
-            . "➡ En ese caso, no asumimos responsabilidad por incidencias en la entrega con la agencia elegida.";
+        $messagePrincipal = $isLima
+            ? "# Consolidado " . $carga . "\n\n"
+                . $saludoInicial
+                . "✅ *Registrarse*, en el siguiente link.\n"
+                . "✅ *Reservar su horario* de recojo lo antes posible.\n"
+                . "✅ *Plazo máximo* para el registro: 48 horas\n"
+                . "✅ Tener los pagos al día.\n"
+                . "✅ *FORMS:* " . $forms . "\n\n"
+                . "⚠ Enviar movilidad acorde al volumen de su carga (auto, camioneta, furgón o camión)."
+            : "# Consolidado " . $carga . "\n"
+                . $saludoInicial
+                . "✅ *Registrarse*, en el siguiente link.\n"
+                . "✅ *Plazo máximo* para el registro: 48 horas\n"
+                . ($isProvincia ? "✅ *Organizaremos los envíos* una vez liberado el contenedor.\n" : '')
+                . "✅ *FORMS:* " . $forms . "\n \n"
+                . ($isProvincia || $typeForm === null
+                    ? "⚠  De no llenar el formulario no se programará el envío de sus productos."
+                    : '');
+
+        $messageSecundario = $isLima
+            ? "❌ Tiempo máximo de recojo: *30 minutos* según horario reservado\n"
+                . "❌ La movilidad debe retirar toda la mercadería en un solo viaje.\n"
+                . "❌ No se permite recojo parcial ni múltiples viajes.\n"
+                . "❌ No está permitido seleccionar, separar, armar o desarmar productos dentro del almacén.\n"
+                . "❌ No dejar pallets, etiquetas ni bolsas en el almacén.\n\n"
+                . "📍 Agradecemos su apoyo para mantener un proceso de entrega ordenado."
+            : "Importante:\n\n"
+                . "➡ La información registrada será utilizada para la *emisión de guías de remisión*.\n"
+                . "➡ *Validar* que sus datos estén correctos y completos.\n"
+                . (
+                    intval($carga) < 5
+                        ? "➡ El *costo de flete* Almacén – Agencia se cotizará y será informado por interno.\n"
+                        : "➡ El *costo de flete* Almacén – Agencia detalla en su cotización final.\n"
+                )
+                . "➡ Los envíos se realizan con *Marvisur*.\n"
+                . "➡ Si desea trabajar con otra agencia de transporte, se aplicará un *costo adicional* y previa coordinación.\n"
+                . "➡ En ese caso, no asumimos responsabilidad por incidencias en la entrega con la agencia elegida.";
+
+        return [$messagePrincipal, $messageSecundario];
     }
 
     public function sendRecordatorioFormularioDelivery(Request $request, $idCotizacion)
