@@ -9,6 +9,7 @@ use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use App\Traits\UsesObjectStorage;
+use App\Support\BrandLogoPaths;
 
 class AutoSignContracts extends Command
 {
@@ -342,16 +343,17 @@ class AutoSignContracts extends Command
         $contenedor = Contenedor::find($cotizacion->id_contenedor);
         $carga = $contenedor ? $contenedor->carga : 'N/A';
 
-        // Cargar imagen de auto-aceptación
-        $autoSignImagePath = public_path('storage/auto_accept_sign.png');
-        
-        if (!file_exists($autoSignImagePath)) {
-            throw new \Exception("No se encontró la imagen de auto-aceptación en: {$autoSignImagePath}");
+        // Cargar imagen de auto-aceptación (S3 → local → CDN)
+        $autoSignImagePath = BrandLogoPaths::autoAcceptSign();
+
+        if ($autoSignImagePath === null || !is_file($autoSignImagePath)) {
+            throw new \Exception('No se encontró la imagen de auto-aceptación (auto_accept_sign.png) en S3/CDN/local');
         }
 
-        // Convertir imagen a base64
-        $imageData = base64_encode(file_get_contents($autoSignImagePath));
-        $signatureBase64 = 'data:image/png;base64,' . $imageData;
+        $signatureBase64 = BrandLogoPaths::toDataUri($autoSignImagePath);
+        if ($signatureBase64 === null) {
+            throw new \Exception('No se pudo leer la imagen de auto-aceptación: ' . $autoSignImagePath);
+        }
 
         // Datos para la vista del contrato firmado
         $viewData = [
@@ -360,7 +362,7 @@ class AutoSignContracts extends Command
             'cliente_documento' => $cotizacion->documento,
             'cliente_domicilio' => $cotizacion->direccion ?? null,
             'carga' => $carga,
-            'logo_contrato_url' => public_path('storage/logo_contrato.png'),
+            'logo_contrato_url' => BrandLogoPaths::contrato(),
             'signature_base64' => $signatureBase64,
             'cod_contract' => $cotizacion->cod_contract,
         ];

@@ -69,47 +69,28 @@
 </head>
 <body>
     @php
-        // We know the filename is exactly 'logo_contrato.png'. Check common locations sequentially and embed the first found file as base64 (Dompdf-friendly).
         $filename = 'logo_contrato.png';
-        $logoSrc = asset('storage/logo_icons/' . $filename); // default public URL fallback
+        $logoSrc = '';
 
-        //If controller passed an absolute path, try it first
+        $resolved = null;
         if (!empty($logo_contrato_url)) {
-            $p = $logo_contrato_url;
-            $pNorm = str_replace('\\', DIRECTORY_SEPARATOR, $p);
-            if (@file_exists($pNorm) && is_readable($pNorm)) {
-                $ext = pathinfo($pNorm, PATHINFO_EXTENSION) ?: 'png';
-                $data = @file_get_contents($pNorm);
-                if ($data !== false && strlen($data) > 0) {
-                    $logoSrc = 'data:image/' . $ext . ';base64,' . base64_encode($data);
-                }
+            $pNorm = str_replace('\\', DIRECTORY_SEPARATOR, (string) $logo_contrato_url);
+            if (@is_file($pNorm) && is_readable($pNorm)) {
+                $resolved = $pNorm;
             }
         }
-
-        // public/storage/logo_contrato.png
-        if (strpos($logoSrc, 'data:') !== 0) {
-            $p = public_path('storage/' . $filename);
-            $pNorm = str_replace('\\', DIRECTORY_SEPARATOR, $p);
-            if (@file_exists($pNorm) && is_readable($pNorm)) {
-                $ext = pathinfo($pNorm, PATHINFO_EXTENSION) ?: 'png';
-                $data = @file_get_contents($pNorm);
-                if ($data !== false && strlen($data) > 0) {
-                    $logoSrc = 'data:image/' . $ext . ';base64,' . base64_encode($data);
-                }
+        if ($resolved === null) {
+            $resolved = \App\Support\BrandLogoPaths::contrato();
+        }
+        if ($resolved !== null && @is_file($resolved) && is_readable($resolved)) {
+            $ext = pathinfo($resolved, PATHINFO_EXTENSION) ?: 'png';
+            $data = @file_get_contents($resolved);
+            if ($data !== false && strlen($data) > 0) {
+                $logoSrc = 'data:image/' . $ext . ';base64,' . base64_encode($data);
             }
         }
-
-        // base_path public/storage (alternative)
-        if (strpos($logoSrc, 'data:') !== 0) {
-            $p = base_path('public/storage/logo_icons/' . $filename);
-            $pNorm = str_replace('\\', DIRECTORY_SEPARATOR, $p);
-            if (@file_exists($pNorm) && is_readable($pNorm)) {
-                $ext = pathinfo($pNorm, PATHINFO_EXTENSION) ?: 'png';
-                $data = @file_get_contents($pNorm);
-                if ($data !== false && strlen($data) > 0) {
-                    $logoSrc = 'data:image/' . $ext . ';base64,' . base64_encode($data);
-                }
-            }
+        if ($logoSrc === '') {
+            $logoSrc = \App\Support\BrandLogoPaths::cdnUrl($filename);
         }
     @endphp
     <div class="header">
@@ -295,17 +276,9 @@
             <p class="small">• En caso de discrepancia entre este contrato y cualquier otro documento, prevalecerá el presente acuerdo. Las comunicaciones electrónicas complementan, pero no sustituyen lo pactado en este contrato.</p>
         </div>
         @php
-            // Try to load Patricia's signature image from public/storage and embed as base64 for Dompdf
-            $firmaPatSrc = null;
-            $firmaPath = public_path('storage/social_icons/firma_patricia.png');
-            $firmaPathNorm = str_replace('\\', DIRECTORY_SEPARATOR, $firmaPath);
-            if (@file_exists($firmaPathNorm) && is_readable($firmaPathNorm)) {
-                $ext = pathinfo($firmaPathNorm, PATHINFO_EXTENSION) ?: 'png';
-                $data = @file_get_contents($firmaPathNorm);
-                if ($data !== false && strlen($data) > 0) {
-                    $firmaPatSrc = 'data:image/' . $ext . ';base64,' . base64_encode($data);
-                }
-            }
+            $firmaPatSrc = \App\Support\BrandLogoPaths::toDataUri(
+                \App\Support\BrandLogoPaths::firmaPatricia()
+            );
         @endphp
 
         <div class="signatures-wrap" style="margin-top:36px;">

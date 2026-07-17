@@ -35,6 +35,7 @@ use Illuminate\Support\Str;
 use App\Traits\UserGroupsTrait;
 use App\Traits\FileTrait;
 use App\Support\WhatsApp\CoordinacionWhatsappPayload;
+use App\Support\BrandLogoPaths;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Exports\EmbarqueExport;
 use App\Jobs\SendRotuladoJob;
@@ -3800,7 +3801,7 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                     'cliente_documento' => $cotizacion->documento,
                     'cliente_domicilio' => $cotizacion->direccion ?? null,
                     'carga' => $carga,
-                    'logo_contrato_url' => public_path('storage/logo_contrato.png'),
+                    'logo_contrato_url' => BrandLogoPaths::contrato(),
                     'signature_base64' => $signatureBase64,
                     'cod_contract' => $cotizacion->cod_contract,
                     'cod_contract_calculator' => optional($cotizacion->calculadoraImportacion)->cod_cotizacion,
