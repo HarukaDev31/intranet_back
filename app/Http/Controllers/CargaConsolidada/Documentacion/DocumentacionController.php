@@ -280,6 +280,11 @@ class DocumentacionController extends Controller
     private function processFileUpload($proveedor, $fieldName, $file, &$data)
     {
         try {
+            $maxFileSize = 30 * 1024 * 1024; // 30MB
+            if ($file->getSize() > $maxFileSize) {
+                throw new \Exception('El archivo excede el tamaño máximo permitido (30MB)');
+            }
+
             // Eliminar archivo anterior si existe
             if ($proveedor->$fieldName && $this->objectStorage()->exists($proveedor->$fieldName)) {
                 $this->objectStorage()->delete($proveedor->$fieldName);
@@ -2221,7 +2226,7 @@ class DocumentacionController extends Controller
             // Validar request
             $request->validate([
                 'name' => 'required|string',
-                'file' => 'required|file|max:10240', // 10MB
+                'file' => 'required|file|max:30720', // 30MB
                 'id_cotizacion' => 'required|integer',
                 'id_proveedor' => 'required|integer'
             ]);
@@ -2254,12 +2259,12 @@ class DocumentacionController extends Controller
                 ], 400);
             }
 
-            // Validar tamaño del archivo (10MB)
-            $maxFileSize = 10 * 1024 * 1024;
+            // Validar tamaño del archivo (30MB)
+            $maxFileSize = 30 * 1024 * 1024;
             if ($file->getSize() > $maxFileSize) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'El archivo excede el tamaño máximo permitido (10MB)'
+                    'message' => 'El archivo excede el tamaño máximo permitido (30MB)'
                 ], 400);
             }
 

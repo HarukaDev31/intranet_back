@@ -324,7 +324,7 @@ class EmbarcadosController extends Controller
             }
 
             $validator = \Validator::make($request->all(), [
-                'file' => 'required|file|mimes:pdf,xls,xlsx,doc,docx|max:10240'
+                'file' => 'required|file|mimes:pdf,xls,xlsx,doc,docx|max:30720'
             ]);
 
             if ($validator->fails()) {
@@ -385,7 +385,7 @@ class EmbarcadosController extends Controller
             }
 
             $validator = \Validator::make($request->all(), [
-                'file' => 'required|file|mimes:pdf,xls,xlsx|max:10240'
+                'file' => 'required|file|mimes:pdf,xls,xlsx|max:30720'
             ]);
 
             if ($validator->fails()) {
@@ -446,7 +446,7 @@ class EmbarcadosController extends Controller
             }
 
             $validator = \Validator::make($request->all(), [
-                'file' => 'required|file|mimes:xlsx,xls|max:10240'
+                'file' => 'required|file|mimes:xlsx,xls|max:30720'
             ]);
 
             if ($validator->fails()) {
