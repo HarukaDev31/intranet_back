@@ -2221,7 +2221,7 @@ class DocumentacionController extends Controller
             // Validar request
             $request->validate([
                 'name' => 'required|string',
-                'file' => 'required|file',
+                'file' => 'required|file|max:10240', // 10MB
                 'id_cotizacion' => 'required|integer',
                 'id_proveedor' => 'required|integer'
             ]);
@@ -2244,7 +2244,7 @@ class DocumentacionController extends Controller
             $file = $request->file('file');
 
             // Validar extensión del archivo
-            $allowedExtensions = ['jpg', 'jpeg', 'png', 'gif', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'txt'];
+            $allowedExtensions = ['jpg', 'jpeg', 'png', 'gif', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'txt', 'zip', 'rar'];
             $fileExtension = strtolower($file->getClientOriginalExtension());
 
             if (!in_array($fileExtension, $allowedExtensions)) {
@@ -2254,12 +2254,12 @@ class DocumentacionController extends Controller
                 ], 400);
             }
 
-            // Validar tamaño del archivo (1MB)
-            $maxFileSize = 1000000;
+            // Validar tamaño del archivo (10MB)
+            $maxFileSize = 10 * 1024 * 1024;
             if ($file->getSize() > $maxFileSize) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'El archivo excede el tamaño máximo permitido (1MB)'
+                    'message' => 'El archivo excede el tamaño máximo permitido (10MB)'
                 ], 400);
             }
 

@@ -21,6 +21,8 @@ class CotizacionCotizadorDocumentacionController extends Controller
 {
     use FileTrait;
     use UsesObjectStorage;
+
+    private const MAX_PROVEEDOR_DOCUMENTOS = 15;
     /**
      * Obtiene la documentación completa de una cotización (vista cotizador).
      */
@@ -198,7 +200,7 @@ class CotizacionCotizadorDocumentacionController extends Controller
     }
 
     /**
-     * Sube un documento por proveedor (máximo 4 por proveedor).
+     * Sube un documento por proveedor (máximo 15 por proveedor).
      */
     public function uploadProveedorDocumento(Request $request)
     {
@@ -219,10 +221,10 @@ class CotizacionCotizadorDocumentacionController extends Controller
             $count = CotizacionCotizadorProveedorDocumento::where('id_cotizacion', $request->id_cotizacion)
                 ->where('id_proveedor', $request->id_proveedor)
                 ->count();
-            if ($count >= 4) {
+            if ($count >= self::MAX_PROVEEDOR_DOCUMENTOS) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Máximo 4 documentos por proveedor'
+                    'message' => 'Máximo ' . self::MAX_PROVEEDOR_DOCUMENTOS . ' documentos por proveedor'
                 ], 422);
             }
 
@@ -422,6 +424,7 @@ class CotizacionCotizadorDocumentacionController extends Controller
                 }
 
                 // 3) Nuevos documentos por proveedor (proveedor_meta + proveedor_file_0, proveedor_file_1, ...)
+                $proveedorAddedInBatch = [];
                 foreach ($proveedorMeta as $i => $meta) {
                     $fileKey = 'proveedor_file_' . $i;
                     if (!$request->hasFile($fileKey)) {
@@ -437,7 +440,8 @@ class CotizacionCotizadorDocumentacionController extends Controller
                     }
                     $count = CotizacionCotizadorProveedorDocumento::where('id_cotizacion', $idCotizacion)
                         ->where('id_proveedor', $idProveedor)->count();
-                    if ($count >= 4) {
+                    $addedInBatch = $proveedorAddedInBatch[$idProveedor] ?? 0;
+                    if (($count + $addedInBatch) >= self::MAX_PROVEEDOR_DOCUMENTOS) {
                         continue;
                     }
                     $file = $request->file($fileKey);
@@ -449,8 +453,9 @@ class CotizacionCotizadorDocumentacionController extends Controller
                         'id_cotizacion' => $idCotizacion,
                         'id_proveedor' => $idProveedor,
                         'file_url' => $fileUrl,
-                        'orden' => $count + 1,
+                        'orden' => $count + $addedInBatch + 1,
                     ]);
+                    $proveedorAddedInBatch[$idProveedor] = $addedInBatch + 1;
                 }
             });
 
