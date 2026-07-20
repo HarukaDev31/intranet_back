@@ -8,6 +8,7 @@ use App\Jobs\GenerateMassiveExcelPayrollsJob;
 use App\Models\CargaConsolidada\ConsolidadoPlantillaFinalBatch;
 use Illuminate\Http\UploadedFile;
 use App\Traits\UsesObjectStorage;
+use App\Support\PhpSpreadsheet\PhpSpreadsheetRuntime;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use PhpOffice\PhpSpreadsheet\IOFactory;
@@ -75,7 +76,9 @@ class PlantillaFinalBatchService
         ]);
 
         try {
-            $stats = $this->runMassiveGeneration($batch);
+            $stats = PhpSpreadsheetRuntime::run(function () use ($batch) {
+                return $this->runMassiveGeneration($batch);
+            });
             $batch->update([
                 'clientes_completados' => (int) $stats['completados'],
                 'clientes_error' => (int) $stats['errores'],
@@ -174,17 +177,20 @@ class PlantillaFinalBatchService
     protected function countClientsInExcel($file)
     {
         try {
-            $spreadsheet = IOFactory::load($file->getRealPath());
-            $worksheet = $spreadsheet->getActiveSheet();
-            $highestRow = (int) $worksheet->getHighestRow();
-            $count = 0;
-            for ($row = 2; $row <= $highestRow; $row++) {
-                $name = trim((string) $worksheet->getCell('A' . $row)->getValue());
-                if ($name !== '') {
-                    $count++;
+            return PhpSpreadsheetRuntime::run(function () use ($file) {
+                $spreadsheet = IOFactory::load($file->getRealPath());
+                $worksheet = $spreadsheet->getActiveSheet();
+                $highestRow = (int) $worksheet->getHighestRow();
+                $count = 0;
+                for ($row = 2; $row <= $highestRow; $row++) {
+                    $name = trim((string) $worksheet->getCell('A' . $row)->getValue());
+                    if ($name !== '') {
+                        $count++;
+                    }
                 }
-            }
-            return $count;
+
+                return $count;
+            });
         } catch (\Exception $e) {
             Log::warning('No se pudo contar clientes del excel: ' . $e->getMessage());
             return 0;
