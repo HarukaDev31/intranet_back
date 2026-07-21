@@ -21,32 +21,35 @@ class CotizacionFinalCobranzaWhatsappService
 
     public const TEMPLATE_COTIZACION_FINAL = 'pb_consolidado_cotizacion_final_v1';
 
+    public const TEMPLATE_RESUMEN_PAGO = 'pb_consolidado_resumen_pago_v1';
+
     /**
-     * Cotizaciones COBRANDO en el rango sin envío exitoso de la plantilla final.
+     * Cotizaciones COBRANDO sin envío exitoso de la plantilla final.
+     * Cotizacion tiene timestamps=false → no se puede filtrar por updated_at.
      *
      * @return array<int, object>
      */
-    public function findMissingOrFailedSends(Carbon $from, Carbon $to, ?int $limit = 200): array
-    {
+    public function findMissingOrFailedSends(
+        ?Carbon $activityFrom = null,
+        ?Carbon $activityTo = null,
+        ?int $limit = 200,
+        ?int $idContenedor = null,
+        bool $strictActivity = false
+    ): array {
         $query = DB::table('contenedor_consolidado_cotizacion as CC')
             ->select([
                 'CC.id',
                 'CC.nombre',
                 'CC.telefono',
                 'CC.id_contenedor',
-                'CC.updated_at',
                 'CC.estado_cotizacion_final',
             ])
             ->where('CC.estado_cotizacion_final', 'COBRANDO')
             ->whereNull('CC.deleted_at')
-            ->whereBetween('CC.updated_at', [
-                $from->copy()->startOfDay()->toDateTimeString(),
-                $to->copy()->endOfDay()->toDateTimeString(),
-            ])
             ->orderBy('CC.id');
 
-        if ($limit !== null && $limit > 0) {
-            $query->limit($limit);
+        if ($idContenedor !== null && $idContenedor > 0) {
+            $query->where('CC.id_contenedor', $idContenedor);
         }
 
         $rows = $query->get();
@@ -58,6 +61,8 @@ class CotizacionFinalCobranzaWhatsappService
                 $candidates[] = (object) array_merge((array) $row, [
                     'skip_reason' => 'telefono_invalido',
                     'needs_resend' => false,
+                    'phone_digits' => '',
+                    'activity_in_range' => false,
                 ]);
                 continue;
             }
@@ -65,17 +70,90 @@ class CotizacionFinalCobranzaWhatsappService
             $hasOk = $this->hasSuccessfulTemplateSend(
                 $phoneDigits,
                 self::TEMPLATE_COTIZACION_FINAL,
-                $from->copy()->startOfDay()
+                null
             );
+
+            $activityInRange = false;
+            if ($activityFrom !== null && $activityTo !== null) {
+                $activityInRange = $this->hasOutboundActivityInRange(
+                    $phoneDigits,
+                    $activityFrom->copy()->startOfDay(),
+                    $activityTo->copy()->endOfDay()
+                );
+            }
 
             $candidates[] = (object) array_merge((array) $row, [
                 'phone_digits' => $phoneDigits,
                 'needs_resend' => !$hasOk,
                 'skip_reason' => $hasOk ? 'ya_enviado_ok' : null,
+                'activity_in_range' => $activityInRange,
             ]);
         }
 
+        if ($activityFrom !== null && $activityTo !== null) {
+            $withActivity = array_values(array_filter($candidates, static function ($row) {
+                return !empty($row->needs_resend) && !empty($row->activity_in_range);
+            }));
+
+            if ($withActivity !== []) {
+                $candidates = $withActivity;
+            } elseif ($strictActivity) {
+                $candidates = [];
+            } else {
+                // Fallback: todos los COBRANDO sin plantilla OK (sin updated_at no hay mejor filtro).
+                $candidates = array_values(array_filter($candidates, static function ($row) {
+                    return !empty($row->needs_resend)
+                        || (($row->skip_reason ?? '') === 'telefono_invalido');
+                }));
+            }
+        }
+
+        if ($limit !== null && $limit > 0 && count($candidates) > $limit) {
+            $candidates = array_slice($candidates, 0, $limit);
+        }
+
         return $candidates;
+    }
+
+    /**
+     * @return array{cobrando_total:int,sin_plantilla_ok:int,con_actividad:int}
+     */
+    public function diagnostics(?Carbon $activityFrom, ?Carbon $activityTo, ?int $idContenedor = null): array
+    {
+        $base = DB::table('contenedor_consolidado_cotizacion')
+            ->where('estado_cotizacion_final', 'COBRANDO')
+            ->whereNull('deleted_at');
+
+        if ($idContenedor !== null && $idContenedor > 0) {
+            $base->where('id_contenedor', $idContenedor);
+        }
+
+        $cobrandoTotal = (int) (clone $base)->count();
+        $all = $this->findMissingOrFailedSends(null, null, null, $idContenedor, false);
+        $sinOk = 0;
+        $conActividad = 0;
+
+        foreach ($all as $row) {
+            if (empty($row->needs_resend)) {
+                continue;
+            }
+            $sinOk++;
+            if ($activityFrom !== null && $activityTo !== null && !empty($row->phone_digits)) {
+                if ($this->hasOutboundActivityInRange(
+                    (string) $row->phone_digits,
+                    $activityFrom->copy()->startOfDay(),
+                    $activityTo->copy()->endOfDay()
+                )) {
+                    $conActividad++;
+                }
+            }
+        }
+
+        return [
+            'cobrando_total' => $cobrandoTotal,
+            'sin_plantilla_ok' => $sinOk,
+            'con_actividad' => $conActividad,
+        ];
     }
 
     /**
@@ -202,13 +280,34 @@ class CotizacionFinalCobranzaWhatsappService
         return $digits;
     }
 
-    private function hasSuccessfulTemplateSend(string $phoneDigits, string $template, Carbon $since): bool
+    private function hasSuccessfulTemplateSend(string $phoneDigits, string $template, ?Carbon $since): bool
     {
-        return WaInboxMessage::query()
+        $query = WaInboxMessage::query()
             ->where('direction', 'out')
             ->where('template_name', $template)
             ->whereIn('delivery_status', ['sent', 'delivered', 'read', 'pending'])
-            ->where('created_at', '>=', $since)
+            ->whereHas('conversation', function ($q) use ($phoneDigits) {
+                $q->where('phone_e164', $phoneDigits)
+                    ->orWhere('phone_e164', 'like', '%' . $phoneDigits);
+            });
+
+        if ($since !== null) {
+            $query->where('created_at', '>=', $since);
+        }
+
+        return $query->exists();
+    }
+
+    private function hasOutboundActivityInRange(string $phoneDigits, Carbon $from, Carbon $to): bool
+    {
+        return WaInboxMessage::query()
+            ->where('direction', 'out')
+            ->whereBetween('created_at', [$from, $to])
+            ->where(function ($q) {
+                $q->where('template_name', self::TEMPLATE_RESUMEN_PAGO)
+                    ->orWhere('template_name', self::TEMPLATE_COTIZACION_FINAL)
+                    ->orWhereNull('template_name');
+            })
             ->whereHas('conversation', function ($q) use ($phoneDigits) {
                 $q->where('phone_e164', $phoneDigits)
                     ->orWhere('phone_e164', 'like', '%' . $phoneDigits);
