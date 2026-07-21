@@ -1045,6 +1045,7 @@ class CoordinacionWhatsappPayload
             'fecha_limite' => $fechaLimite,
         ];
 
+        // TEXT + header DOCUMENT (PDF). El path local se materializa a S3 al encolar.
         if ($filePath !== '' && is_file($filePath)) {
             return self::documentTemplate(
                 $phone,
@@ -1088,12 +1089,18 @@ class CoordinacionWhatsappPayload
         string $phone,
         string $filePath,
         string $bitrixMessage,
-        int $sleep = 0
+        int $sleep = 0,
+        string $carga = ''
     ): array {
+        $params = [];
+        if ($carga !== '') {
+            $params['carga'] = $carga;
+        }
+
         return self::documentTemplate(
             $phone,
             'pb_consolidado_cotizacion_final_pdf_v1',
-            [],
+            $params,
             $filePath,
             $bitrixMessage,
             basename($filePath),
