@@ -26,7 +26,7 @@ class CotizacionFinalCobranzaWhatsappService
     /**
      * Catálogo del flujo COBRANDO (orden de envío).
      *
-     * @return array<int, array{key:string,label:string,description:string,selected_by_default:bool,has_media:bool,media_label:?string}>
+     * @return array<int, array{key:string,label:string,description:string,selected_by_default:bool,has_media:bool,media_label:?string,media_type:?string}>
      */
     public function availableTemplates(): array
     {
@@ -38,6 +38,7 @@ class CotizacionFinalCobranzaWhatsappService
                 'selected_by_default' => true,
                 'has_media' => true,
                 'media_label' => 'PDF boleta',
+                'media_type' => 'pdf',
             ],
             [
                 'key' => self::TEMPLATE_RESUMEN_PAGO,
@@ -46,6 +47,7 @@ class CotizacionFinalCobranzaWhatsappService
                 'selected_by_default' => true,
                 'has_media' => true,
                 'media_label' => 'Imagen de cuentas',
+                'media_type' => 'image',
             ],
         ];
     }
@@ -71,14 +73,30 @@ class CotizacionFinalCobranzaWhatsappService
             self::TEMPLATE_RESUMEN_PAGO => $this->buildResumenPagoPreviewText($ctx),
         ];
 
+        $pagosImageUrl = asset('assets/images/pagos-full.jpg');
+        if (!is_file(public_path('assets/images/pagos-full.jpg'))) {
+            $pagosImageUrl = null;
+        }
+
         $templates = [];
         $order = 1;
         foreach ($this->availableTemplates() as $tpl) {
             $key = $tpl['key'];
+            $mediaType = $tpl['media_type'] ?? null;
+            $mediaUrl = null;
+            if ($mediaType === 'image') {
+                $mediaUrl = $pagosImageUrl;
+            } elseif ($mediaType === 'pdf') {
+                // El front descarga con auth vía download-cotizacion-final-pdf/{id}
+                $mediaUrl = null;
+            }
+
             $templates[] = array_merge($tpl, [
                 'order' => $order++,
                 'preview' => $previews[$key] ?? '',
                 'preview_type' => 'text',
+                'media_url' => $mediaUrl,
+                'id_cotizacion' => (int) $ctx['id_cotizacion'],
             ]);
         }
 
