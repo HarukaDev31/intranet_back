@@ -12,17 +12,19 @@ class RetryCotizacionFinalCobranzaWhatsappCommand extends Command
     use DatabaseConnectionTrait;
 
     protected $signature = 'whatsapp:retry-cotizacion-final-cobranza
-                            {--date= : Fecha Y-m-d (default: ayer America/Lima)}
-                            {--from= : Fecha inicio Y-m-d (inclusive)}
-                            {--to= : Fecha fin Y-m-d (inclusive)}
-                            {--ids= : IDs de cotización separados por coma (omite búsqueda por fecha)}
-                            {--limit=200 : Máximo de cotizaciones a evaluar}
+                            {--date= : Fecha actividad inbox Y-m-d (default: ayer America/Lima)}
+                            {--from= : Fecha inicio Y-m-d}
+                            {--to= : Fecha fin Y-m-d}
+                            {--ids= : IDs de cotización separados por coma}
+                            {--id-contenedor= : Filtrar por contenedor}
+                            {--all-missing : Ignora fecha; todos los COBRANDO sin plantilla OK}
+                            {--limit=200 : Máximo a listar/enviar}
                             {--delay=3 : Segundos entre envíos}
-                            {--dry-run : Solo listar candidatos, no enviar}
+                            {--dry-run : Solo listar}
                             {--force : Sin confirmación}
-                            {--include-already-sent : Reenviar aunque ya exista envío OK de la plantilla}';
+                            {--include-already-sent : Reenviar aunque ya exista envío OK}';
 
-    protected $description = 'Busca cotizaciones COBRANDO sin envío OK de pb_consolidado_cotizacion_final_v1 (con PDF) y reenvía solo esa plantilla';
+    protected $description = 'Reenvía pb_consolidado_cotizacion_final_v1 (con PDF) a COBRANDO sin envío OK en inbox';
 
     /** @var CotizacionFinalCobranzaWhatsappService */
     private $service;
@@ -39,6 +41,12 @@ class RetryCotizacionFinalCobranzaWhatsappCommand extends Command
 
         $ids = $this->parseIds();
         $includeAlreadySent = (bool) $this->option('include-already-sent');
+        $idContenedor = (int) $this->option('id-contenedor');
+        $idContenedor = $idContenedor > 0 ? $idContenedor : null;
+        $allMissing = (bool) $this->option('all-missing');
+
+        $from = null;
+        $to = null;
 
         if ($ids !== []) {
             $this->info('Usando IDs explícitos: ' . implode(', ', $ids));
@@ -53,18 +61,37 @@ class RetryCotizacionFinalCobranzaWhatsappCommand extends Command
                 ];
             }
         } else {
-            [$from, $to] = $this->resolveDateRange();
-            $this->info(sprintf(
-                'Buscando COBRANDO sin plantilla OK entre %s y %s…',
-                $from->toDateString(),
-                $to->toDateString()
-            ));
+            if (!$allMissing) {
+                [$from, $to] = $this->resolveDateRange();
+                $this->info(sprintf(
+                    'Buscando COBRANDO sin plantilla OK (actividad inbox %s → %s)…',
+                    $from->toDateString(),
+                    $to->toDateString()
+                ));
+                $this->comment('Nota: Cotizacion no usa updated_at; el filtro de fecha usa actividad del inbox.');
+            } else {
+                $this->info('Buscando TODOS los COBRANDO sin plantilla OK…');
+            }
+
+            if ($idContenedor !== null) {
+                $this->line('Filtro id_contenedor=' . $idContenedor);
+            }
 
             $candidates = $this->service->findMissingOrFailedSends(
-                $from,
-                $to,
-                max(1, (int) $this->option('limit'))
+                $allMissing ? null : $from,
+                $allMissing ? null : $to,
+                max(1, (int) $this->option('limit')),
+                $idContenedor,
+                false
             );
+
+            $diag = $this->service->diagnostics($from, $to, $idContenedor);
+            $this->line(sprintf(
+                'Diagnóstico: COBRANDO=%d | sin plantilla OK=%d | con actividad en rango=%d',
+                $diag['cobrando_total'],
+                $diag['sin_plantilla_ok'],
+                $diag['con_actividad']
+            ));
         }
 
         $toSend = [];
@@ -83,7 +110,7 @@ class RetryCotizacionFinalCobranzaWhatsappCommand extends Command
         }
 
         $this->table(
-            ['ID', 'Nombre', 'Teléfono', 'Acción', 'Motivo skip'],
+            ['ID', 'Nombre', 'Teléfono', 'Contenedor', 'Acción', 'Motivo skip'],
             array_map(static function ($row) use ($toSend) {
                 $willSend = false;
                 foreach ($toSend as $s) {
@@ -95,8 +122,9 @@ class RetryCotizacionFinalCobranzaWhatsappCommand extends Command
 
                 return [
                     $row->id ?? '',
-                    mb_substr((string) ($row->nombre ?? ''), 0, 28),
+                    mb_substr((string) ($row->nombre ?? ''), 0, 24),
                     (string) ($row->telefono ?? $row->phone_digits ?? ''),
+                    $row->id_contenedor ?? '',
                     $willSend ? 'REENVIAR' : 'OK/skip',
                     (string) ($row->skip_reason ?? ''),
                 ];
@@ -107,6 +135,7 @@ class RetryCotizacionFinalCobranzaWhatsappCommand extends Command
 
         if ($toSend === []) {
             $this->warn('No hay nada que reenviar.');
+            $this->comment('Prueba: --all-missing  o  --id-contenedor=163  o  --ids=1,2,3');
 
             return 0;
         }
