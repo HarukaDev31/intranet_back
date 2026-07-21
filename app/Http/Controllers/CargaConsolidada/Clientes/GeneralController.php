@@ -250,6 +250,9 @@ class GeneralController extends Controller
                     'invoice_status',
                     'packing_status',
                     'excel_conf_status',
+                    'invoice_status_final',
+                    'packing_status_final',
+                    'excel_conf_status_final',
                     'excel_conf_form_cerrado',
                 ])
                 ->get()
@@ -262,9 +265,9 @@ class GeneralController extends Controller
             // Convertir el objeto a array para mantener todos los campos originales
             $itemArr = (array) $cot;
 
-            // Asegurar que cotizacion_contrato_firmado_url sea una URL completa cuando exista
+            // CDN sin HEAD a S3 (listado paginado; generateImageUrl hace exists() por archivo)
             if (isset($itemArr['cotizacion_contrato_firmado_url']) && !empty($itemArr['cotizacion_contrato_firmado_url'])) {
-                $itemArr['cotizacion_contrato_firmado_url'] = $this->generateImageUrl($itemArr['cotizacion_contrato_firmado_url']);
+                $itemArr['cotizacion_contrato_firmado_url'] = $this->cdnStorageUrl($itemArr['cotizacion_contrato_firmado_url']);
             }
 
             // Devolver el teléfono tal como está en la BD (sin formatear)
@@ -303,15 +306,18 @@ class GeneralController extends Controller
                             'code_supplier' => $p->code_supplier,
                             'vol_peru' => $p->vol_peru,
                             'vol_china' => $p->vol_china,
-                            // Devolver URLs completas para los archivos si existen
-                            'factura_comercial' => $this->generateImageUrl($p->factura_comercial),
-                            'packing_list' => $this->generateImageUrl($p->packing_list),
-                            'excel_confirmacion' => $this->generateImageUrl($p->excel_confirmacion),
+                            // CDN sin HEAD a S3 (mismo patrón que cotizaciones / listados grandes)
+                            'factura_comercial' => $this->cdnStorageUrl($p->factura_comercial),
+                            'packing_list' => $this->cdnStorageUrl($p->packing_list),
+                            'excel_confirmacion' => $this->cdnStorageUrl($p->excel_confirmacion),
                             'excel_confirmacion_drive_link' => $p->excel_confirmacion_drive_link,
-                            // Devolver status de documentos
+                            // Devolver status de documentos (Coord 2 + VB final)
                             'invoice_status' => $p->invoice_status,
                             'packing_status' => $p->packing_status,
                             'excel_conf_status' => $p->excel_conf_status,
+                            'invoice_status_final' => $p->invoice_status_final,
+                            'packing_status_final' => $p->packing_status_final,
+                            'excel_conf_status_final' => $p->excel_conf_status_final,
                             'excel_conf_form_cerrado' => (bool) $p->excel_conf_form_cerrado,
                         ];
                     })->values()->toArray();

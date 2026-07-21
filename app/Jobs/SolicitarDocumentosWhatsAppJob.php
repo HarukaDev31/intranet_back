@@ -124,76 +124,98 @@ class SolicitarDocumentosWhatsAppJob implements ShouldQueue
             }
 
             $cotizacionUuid = trim((string) ($cot->uuid ?? ''));
-            $excelLinks = [];
+            $proveedoresPayloads = [];
+            $proveedorModels = [];
 
             foreach ($this->proveedores as $prov) {
                 $cotizacionProveedor = CotizacionProveedor::where('id', $prov['id'] ?? null)->first();
                 if (!$cotizacionProveedor) {
                     continue;
                 }
-
                 $codeSupplier = (string) ($cotizacionProveedor->code_supplier ?? '');
-                $suffixArchivo = $codeSupplier !== '' ? $codeSupplier : ('prov_' . ($prov['id'] ?? 'unknown'));
-                $fileName = 'excel_confirmacion' . '_' . $suffixArchivo . '.xlsx';
-                $fullPath = $outputDir . DIRECTORY_SEPARATOR . $fileName;
+                $proveedoresPayloads[] = array_merge($prov, [
+                    'code_supplier' => $codeSupplier,
+                ]);
+                $proveedorModels[] = $cotizacionProveedor;
+            }
 
-                if ($templatePath !== null) {
-                    $ok = $excelService->generarArchivoPorProveedor($templatePath, $fullPath, $prov);
-                    if ($ok) {
-                        $steps[] = [
-                            'type' => 'file',
-                            'path' => $fullPath,
-                            'filename' => $fileName,
-                            'caption' => 'Documento de confirmación' . ($codeSupplier !== '' ? ' - ' . $codeSupplier : ''),
-                            'mime' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                            'wa_delay' => 5,
-                            'code_supplier' => $codeSupplier,
-                        ];
+            $driveLink = null;
+            $formLink = $cotizacionUuid !== ''
+                ? CoordinacionWhatsappPayload::buildExcelConfirmacionUrl($cotizacionUuid)
+                : '';
+            $idProveedorRef = isset($proveedorModels[0]) ? (int) $proveedorModels[0]->id : null;
+            $codigoLabel = 'General';
 
-                        if ($driveExcelService->isConfigured()) {
-                            $driveLink = $driveExcelService->uploadForProveedor(
-                                $cargaCode,
-                                $nombreCliente !== '' ? $nombreCliente : 'Cliente',
-                                $codeSupplier !== '' ? $codeSupplier : $suffixArchivo,
-                                $fullPath,
-                                $fileName
-                            );
+            if ($proveedoresPayloads !== [] && $templatePath !== null) {
+                $clientSlug = preg_replace('/[^\w\-]+/u', '_', $nombreCliente !== '' ? $nombreCliente : 'cliente');
+                $clientSlug = trim((string) $clientSlug, '_') ?: 'cliente';
+                $fileName = 'excel_confirmacion_general_' . $clientSlug . '.xlsx';
+                $fullPath = $outputDir . DIRECTORY_SEPARATOR . uniqid('excel_conf_general_', true) . '.xlsx';
 
-                            if ($driveLink === null) {
-                                Log::warning('SolicitarDocumentosWhatsAppJob: fallo subida Excel a Drive (opcional)', [
-                                    'id_proveedor' => $cotizacionProveedor->id,
-                                    'file' => $fileName,
-                                ]);
-                            }
+                $ok = $excelService->generarArchivoGeneralPorCotizacion(
+                    $templatePath,
+                    $fullPath,
+                    $proveedoresPayloads
+                );
+
+                if ($ok && is_file($fullPath)) {
+                    $steps[] = [
+                        'type' => 'file',
+                        'path' => $fullPath,
+                        'filename' => $fileName,
+                        'caption' => 'Documento de confirmación (general)',
+                        'mime' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                        'wa_delay' => 5,
+                    ];
+
+                    if ($driveExcelService->isConfigured()) {
+                        $driveLink = $driveExcelService->uploadForCliente(
+                            $cargaCode,
+                            $nombreCliente !== '' ? $nombreCliente : 'Cliente',
+                            $fullPath,
+                            $fileName
+                        );
+
+                        if ($driveLink === null) {
+                            Log::warning('SolicitarDocumentosWhatsAppJob: fallo subida Excel general a Drive (opcional)', [
+                                'id_cotizacion' => $this->idCotizacion,
+                                'file' => $fileName,
+                            ]);
                         }
                     }
-                }
-
-                if ($cotizacionUuid !== '') {
-                    $formLink = CoordinacionWhatsappPayload::buildExcelConfirmacionUrl(
-                        $cotizacionUuid,
-                        $codeSupplier !== '' ? $codeSupplier : null
-                    );
-                    $cotizacionProveedor->excel_confirmacion_drive_link = $formLink;
-                    $cotizacionProveedor->save();
-
-                    Log::info('SolicitarDocumentosWhatsAppJob: enlace formulario Excel confirmación', [
-                        'id_proveedor' => $cotizacionProveedor->id,
-                        'code_supplier' => $codeSupplier,
-                        'form_link' => $formLink,
-                    ]);
-
-                    $excelLinks[] = [
-                        'id_proveedor' => (int) $cotizacionProveedor->id,
-                        'code_supplier' => $codeSupplier,
-                    ];
-                } elseif ($cotizacionUuid === '') {
-                    Log::warning('SolicitarDocumentosWhatsAppJob: cotización sin UUID, no se generó enlace al formulario', [
+                } else {
+                    Log::warning('SolicitarDocumentosWhatsAppJob: no se pudo generar Excel general', [
                         'id_cotizacion' => $this->idCotizacion,
-                        'id_proveedor' => $cotizacionProveedor->id,
                     ]);
                 }
             }
+
+            if ($formLink !== '' || $driveLink !== null) {
+                foreach ($proveedorModels as $cotizacionProveedor) {
+                    if ($driveLink !== null) {
+                        $cotizacionProveedor->excel_confirmacion_drive_link = $driveLink;
+                        $cotizacionProveedor->save();
+                    }
+                }
+
+                Log::info('SolicitarDocumentosWhatsAppJob: Excel general + links', [
+                    'id_cotizacion' => $this->idCotizacion,
+                    'proveedores' => count($proveedorModels),
+                    'form_link' => $formLink,
+                    'drive_link' => $driveLink,
+                ]);
+            } elseif ($cotizacionUuid === '') {
+                Log::warning('SolicitarDocumentosWhatsAppJob: cotización sin UUID, no se generó enlace al formulario', [
+                    'id_cotizacion' => $this->idCotizacion,
+                ]);
+            }
+
+            $excelLinkMeta = [
+                'drive_link' => (string) ($driveLink ?? ''),
+                'intranet_link' => $formLink,
+                'codigo_label' => $codigoLabel,
+                'id_proveedor_ref' => $idProveedorRef,
+            ];
 
             $steps[] = ['type' => 'text', 'content' => $messagePaso2, 'wa_delay' => 8];
             if ($considerationsFile !== null) {
@@ -207,6 +229,27 @@ class SolicitarDocumentosWhatsAppJob implements ShouldQueue
                 ];
             }
 
+            if ($formLink !== '' || ($driveLink ?? null) !== null) {
+                $linksMessage = CoordinacionWhatsappPayload::docsExcelLinkPreview(
+                    $cargaCode,
+                    $codigoLabel,
+                    (string) ($driveLink ?? ''),
+                    $formLink
+                );
+                $insertAt = 1;
+                foreach ($steps as $idx => $step) {
+                    if (($step['type'] ?? '') === 'file' && strpos((string) ($step['filename'] ?? ''), 'excel_confirmacion') === 0) {
+                        $insertAt = $idx + 1;
+                        break;
+                    }
+                }
+                array_splice($steps, $insertAt, 0, [[
+                    'type' => 'text',
+                    'content' => $linksMessage,
+                    'wa_delay' => 5,
+                ]]);
+            }
+
             $useMeta = $this->shouldRouteCoordinacionToMeta('consolidado');
 
             if ($useMeta) {
@@ -215,7 +258,7 @@ class SolicitarDocumentosWhatsAppJob implements ShouldQueue
                     $cargaCode,
                     $messagePaso1,
                     $messagePaso2,
-                    $excelLinks,
+                    $excelLinkMeta,
                     $considerationsFile,
                     $nombreCliente,
                     $fecha_documentacion_max_formatted
@@ -263,7 +306,7 @@ class SolicitarDocumentosWhatsAppJob implements ShouldQueue
     }
 
     /**
-     * @param  array<int, array{id_proveedor: int, code_supplier: string}>  $excelLinks
+     * @param  array{drive_link: string, intranet_link: string, codigo_label: string, id_proveedor_ref: int|null}  $excelLink
      * @param  array{meta_url: string, email_path: string, filename: string, mime: string}|null  $considerationsFile
      */
     private function dispatchMetaDocumentosBatch(
@@ -271,7 +314,7 @@ class SolicitarDocumentosWhatsAppJob implements ShouldQueue
         string $cargaCode,
         string $messagePaso1,
         string $messagePaso2,
-        array $excelLinks,
+        array $excelLink,
         ?array $considerationsFile,
         string $nombreCliente,
         ?string $fechaDocumentacionMax
@@ -292,22 +335,26 @@ class SolicitarDocumentosWhatsAppJob implements ShouldQueue
             'Paso 1 — Excel y video'
         );
 
-        foreach ($excelLinks as $excel) {
-            $idProveedor = (int) ($excel['id_proveedor'] ?? 0);
-            if ($idProveedor <= 0) {
-                continue;
-            }
-            $code = (string) ($excel['code_supplier'] ?? '');
+        $drive = trim((string) ($excelLink['drive_link'] ?? ''));
+        $intranet = trim((string) ($excelLink['intranet_link'] ?? ''));
+        if ($drive !== '' || $intranet !== '') {
+            $codigoLabel = trim((string) ($excelLink['codigo_label'] ?? '')) !== ''
+                ? (string) $excelLink['codigo_label']
+                : 'General';
+            $idRef = isset($excelLink['id_proveedor_ref']) ? (int) $excelLink['id_proveedor_ref'] : null;
+
             $this->queueCoordinacionWhatsApp(
-                CoordinacionWhatsappPayload::docsExcelLinkForProveedor(
+                CoordinacionWhatsappPayload::docsExcelLinkForCotizacion(
                     $telefono,
                     $cargaCode,
-                    $idProveedor,
-                    $code,
-                    5
+                    $codigoLabel,
+                    $drive,
+                    $intranet,
+                    5,
+                    $idRef
                 ),
-                'docs_excel_' . $idProveedor,
-                'Excel Drive — ' . ($code !== '' ? $code : (string) $idProveedor)
+                'docs_excel_general',
+                'Excel Drive + intranet (general)'
             );
         }
 

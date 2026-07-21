@@ -128,8 +128,8 @@ class ExcelConfirmacionCoordinacionController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Formulario cerrado. El cliente ya no puede editarlo.',
-            'data' => ['excel_conf_form_cerrado' => true],
+            'message' => 'Formulario cerrado (Excel Conf. en Revisado). El cliente ya no puede editarlo.',
+            'data' => ['excel_conf_form_cerrado' => true, 'excel_conf_status' => 'Revisado'],
         ]);
     }
 
@@ -145,7 +145,7 @@ class ExcelConfirmacionCoordinacionController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Formulario reabierto para el cliente.',
+            'message' => 'Formulario reabierto para el cliente (Excel Conf. ya no está en Revisado).',
             'data' => ['excel_conf_form_cerrado' => false],
         ]);
     }

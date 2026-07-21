@@ -18,6 +18,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
 use App\Models\BaseDatos\ProductoImportadoExcel;
+use App\Support\CargaConsolidada\DocumentStatusSync;
 use App\Models\Distrito;
 use Carbon\Carbon;
 use Tymon\JWTAuth\Facades\JWTAuth;
@@ -237,6 +238,10 @@ class DocumentacionController extends Controller
             // Procesar archivo comercial
             if ($request->hasFile('file_comercial')) {
                 $this->processFileUpload($proveedor, 'factura_comercial', $request->file('file_comercial'), $data);
+                $data['invoice_status'] = 'Revisado';
+                if (strcasecmp((string) ($proveedor->invoice_status_final ?? ''), 'Revisado') !== 0) {
+                    $data['invoice_status_final'] = 'Recibido';
+                }
             } else {
                 unset($data['file_comercial']);
             }
@@ -244,6 +249,11 @@ class DocumentacionController extends Controller
             // Procesar excel de confirmación
             if ($request->hasFile('excel_confirmacion')) {
                 $this->processFileUpload($proveedor, 'excel_confirmacion', $request->file('excel_confirmacion'), $data);
+                $data['excel_conf_status'] = 'Revisado';
+                $data['excel_conf_form_cerrado'] = true;
+                if (strcasecmp((string) ($proveedor->excel_conf_status_final ?? ''), 'Revisado') !== 0) {
+                    $data['excel_conf_status_final'] = 'Recibido';
+                }
             } else {
                 unset($data['excel_confirmacion']);
             }
@@ -251,6 +261,10 @@ class DocumentacionController extends Controller
             // Procesar packing list
             if ($request->hasFile('packing_list')) {
                 $this->processFileUpload($proveedor, 'packing_list', $request->file('packing_list'), $data);
+                $data['packing_status'] = 'Revisado';
+                if (strcasecmp((string) ($proveedor->packing_status_final ?? ''), 'Revisado') !== 0) {
+                    $data['packing_status_final'] = 'Recibido';
+                }
             } else {
                 unset($data['packing_list']);
             }
@@ -327,6 +341,7 @@ class DocumentacionController extends Controller
     {
         $proveedor = CotizacionProveedor::find($idProveedor);
         $proveedor->factura_comercial = null;
+        DocumentStatusSync::resetCoord2Pendiente($proveedor, 'invoice_status');
         $proveedor->save();
         return response()->json([
             'success' => true,
@@ -338,6 +353,8 @@ class DocumentacionController extends Controller
     {
         $proveedor = CotizacionProveedor::find($idProveedor);
         $proveedor->excel_confirmacion = null;
+        DocumentStatusSync::resetCoord2Pendiente($proveedor, 'excel_conf_status');
+        $proveedor->excel_conf_form_cerrado = false;
         $proveedor->save();
         return response()->json([
             'success' => true,
@@ -350,6 +367,7 @@ class DocumentacionController extends Controller
     {
         $proveedor = CotizacionProveedor::find($idProveedor);
         $proveedor->packing_list = null;
+        DocumentStatusSync::resetCoord2Pendiente($proveedor, 'packing_status');
         $proveedor->save();
         return response()->json([
             'success' => true,

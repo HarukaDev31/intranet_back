@@ -10,6 +10,7 @@ use App\Models\CargaConsolidada\Cotizacion;
 use App\Models\CargaConsolidada\CotizacionProveedor;
 use App\Models\Usuario;
 use App\Services\CargaConsolidada\SeguimientoConsolidadoDriveService;
+use App\Support\CargaConsolidada\DocumentStatusSync;
 use Illuminate\Support\Facades\Log;
 use Exception;
 
@@ -55,6 +56,7 @@ class EmbarcadosController extends Controller
                 ->leftJoin('contenedor_consolidado_tipo_cliente as TC', 'TC.id', '=', 'CC.id_tipo_cliente')
                 ->select([
                     'CC.id',
+                    'CC.uuid',
                     'CC.nombre',
                     'CC.telefono',
                     'TC.name as tipo_cliente'
@@ -79,7 +81,7 @@ class EmbarcadosController extends Controller
                 });
             }
 
-            $cotizacionesPage = $baseQuery->orderBy('CC.id', 'asc')->paginate($perPage, ['CC.id','CC.nombre','CC.telefono','TC.name as tipo_cliente'], 'page', $page);
+            $cotizacionesPage = $baseQuery->orderBy('CC.id', 'asc')->paginate($perPage, ['CC.id','CC.uuid','CC.nombre','CC.telefono','TC.name as tipo_cliente'], 'page', $page);
             $cotizaciones = collect($cotizacionesPage->items());
 
             if ($cotizaciones->isEmpty()) {
@@ -112,6 +114,9 @@ class EmbarcadosController extends Controller
                     'invoice_status',
                     'packing_status',
                     'excel_conf_status',
+                    'invoice_status_final',
+                    'packing_status_final',
+                    'excel_conf_status_final',
                 ])
                 ->get()
                 ->groupBy('id_cotizacion');
@@ -130,20 +135,24 @@ class EmbarcadosController extends Controller
                             'code_supplier' => $p->code_supplier,
                             'vol_peru' => $p->vol_peru,
                             'vol_china' => $p->vol_china,
-                            // Devolver URLs completas para los archivos si existen
-                            'factura_comercial' => $this->generateImageUrl($p->factura_comercial),
-                            'packing_list' => $this->generateImageUrl($p->packing_list),
-                            'excel_confirmacion' => $this->generateImageUrl($p->excel_confirmacion),
-                            //Devolver status de documentos
+                            // CDN sin HEAD a S3 (listado paginado; generateImageUrl hace exists() por archivo)
+                            'factura_comercial' => $this->cdnStorageUrl($p->factura_comercial),
+                            'packing_list' => $this->cdnStorageUrl($p->packing_list),
+                            'excel_confirmacion' => $this->cdnStorageUrl($p->excel_confirmacion),
+                            //Devolver status de documentos (Coord 2 + VB final)
                             'invoice_status' => $p->invoice_status,
                             'packing_status' => $p->packing_status,
                             'excel_conf_status' => $p->excel_conf_status,
+                            'invoice_status_final' => $p->invoice_status_final,
+                            'packing_status_final' => $p->packing_status_final,
+                            'excel_conf_status_final' => $p->excel_conf_status_final,
                         ];
                     })->values();
                 }
 
                 return [
                     'id' => $cot->id,
+                    'uuid' => $cot->uuid ?? null,
                     'nombre' => $cot->nombre,
                     'whatsapp' => $whatsapp,
                     'tipo_cliente' => $cot->tipo_cliente ?? null,
@@ -197,9 +206,10 @@ class EmbarcadosController extends Controller
                     // Normalizar: quitar prefijo /storage/ si lo tiene
                     $this->deleteStoredFile($path);
                 }
-                $prov->factura_comercial = null;
-                $prov->save();
             }
+            $prov->factura_comercial = null;
+            DocumentStatusSync::resetCoord2Pendiente($prov, 'invoice_status');
+            $prov->save();
 
             return response()->json(['status' => 'success', 'message' => 'Factura comercial eliminada correctamente']);
         } catch (Exception $e) {
@@ -237,9 +247,10 @@ class EmbarcadosController extends Controller
                 if (!filter_var($path, FILTER_VALIDATE_URL)) {
                     $this->deleteStoredFile($path);
                 }
-                $prov->packing_list = null;
-                $prov->save();
             }
+            $prov->packing_list = null;
+            DocumentStatusSync::resetCoord2Pendiente($prov, 'packing_status');
+            $prov->save();
 
             return response()->json(['status' => 'success', 'message' => 'Packing list eliminada correctamente']);
         } catch (Exception $e) {
@@ -277,9 +288,11 @@ class EmbarcadosController extends Controller
                 if (!filter_var($path, FILTER_VALIDATE_URL)) {
                     $this->deleteStoredFile($path);
                 }
-                $prov->excel_confirmacion = null;
-                $prov->save();
             }
+            $prov->excel_confirmacion = null;
+            DocumentStatusSync::resetCoord2Pendiente($prov, 'excel_conf_status');
+            $prov->excel_conf_form_cerrado = false;
+            $prov->save();
 
             return response()->json(['status' => 'success', 'message' => 'Excel de confirmación eliminado correctamente']);
         } catch (Exception $e) {
@@ -343,6 +356,7 @@ class EmbarcadosController extends Controller
 
             $stored = $this->storageStoreUpload($file, 'assets/images/agentecompra', $filename);
             $prov->factura_comercial = $stored; // ruta relativa dentro del disk 'public'
+            DocumentStatusSync::markCoord2Revisado($prov, 'invoice_status');
             $prov->save();
 
             return response()->json(['status' => 'success', 'message' => 'Factura comercial subida correctamente', 'path' => $stored, 'url' => $this->generateImageUrl($stored)]);
@@ -404,6 +418,7 @@ class EmbarcadosController extends Controller
 
             $stored = $this->storageStoreUpload($file, 'assets/images/agentecompra', $filename);
             $prov->packing_list = $stored;
+            DocumentStatusSync::markCoord2Revisado($prov, 'packing_status');
             $prov->save();
 
             return response()->json(['status' => 'success', 'message' => 'Packing list subida correctamente', 'path' => $stored, 'url' => $this->generateImageUrl($stored)]);
@@ -465,6 +480,8 @@ class EmbarcadosController extends Controller
 
             $stored = $this->storageStoreUpload($file, 'assets/images/agentecompra', $filename);
             $prov->excel_confirmacion = $stored;
+            DocumentStatusSync::markCoord2Revisado($prov, 'excel_conf_status');
+            $prov->excel_conf_form_cerrado = true;
             $prov->save();
 
             return response()->json(['status' => 'success', 'message' => 'Excel de confirmación subido correctamente', 'path' => $stored, 'url' => $this->generateImageUrl($stored)]);

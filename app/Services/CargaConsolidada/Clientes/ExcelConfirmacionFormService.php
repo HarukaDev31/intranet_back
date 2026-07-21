@@ -51,7 +51,7 @@ class ExcelConfirmacionFormService
 
         $proveedores = CotizacionProveedor::where('id_cotizacion', $cotizacion->id)
             ->orderBy('id')
-            ->get(['id', 'code_supplier', 'supplier', 'excel_conf_status', 'excel_conf_form_cerrado']);
+            ->get(['id', 'code_supplier', 'supplier', 'excel_conf_status', 'excel_conf_status_final', 'excel_conf_form_cerrado']);
 
         $proveedorIds = $proveedores->pluck('id')->all();
         $itemsByProveedor = CotizacionProveedorItems::whereIn('id_proveedor', $proveedorIds)
@@ -87,7 +87,8 @@ class ExcelConfirmacionFormService
                 'code_supplier' => $proveedor->code_supplier,
                 'supplier' => $proveedor->supplier,
                 'excel_conf_status' => $proveedor->excel_conf_status,
-                'excel_conf_form_cerrado' => (bool) $proveedor->excel_conf_form_cerrado,
+                'excel_conf_status_final' => $proveedor->excel_conf_status_final,
+                'excel_conf_form_cerrado' => strcasecmp((string) $proveedor->excel_conf_status, 'Revisado') === 0,
                 'items' => $items,
             ];
         })->values();
@@ -119,6 +120,7 @@ class ExcelConfirmacionFormService
         DB::beginTransaction();
 
         try {
+            $savedAny = false;
             foreach ($proveedoresData as $proveedorData) {
                 $proveedorId = (int) ($proveedorData['id'] ?? 0);
                 if (!in_array($proveedorId, $proveedorIdsCotizacion, true)) {
@@ -127,15 +129,12 @@ class ExcelConfirmacionFormService
                     return ['success' => false, 'code' => 'PROVEEDOR_INVALIDO', 'status' => 422];
                 }
 
+                // Revisado: el cliente no puede modificar ese proveedor.
                 if (!$ignoreCerrado && $this->isProveedorCerrado($proveedorId)) {
-                    DB::rollBack();
-
-                    return [
-                        'success' => false,
-                        'code' => 'FORMULARIO_CERRADO',
-                        'status' => 423,
-                    ];
+                    continue;
                 }
+
+                $savedAny = true;
 
                 $itemIdsProveedor = CotizacionProveedorItems::where('id_proveedor', $proveedorId)
                     ->pluck('id')
@@ -183,6 +182,16 @@ class ExcelConfirmacionFormService
                 $this->refreshProveedorExcelConfStatus($proveedorId, $labelsMap);
             }
 
+            if (!$ignoreCerrado && !$savedAny) {
+                DB::rollBack();
+
+                return [
+                    'success' => false,
+                    'code' => 'FORMULARIO_CERRADO',
+                    'status' => 423,
+                ];
+            }
+
             DB::commit();
 
             return ['success' => true, 'code' => 'GUARDADO_OK', 'status' => 200];
@@ -196,14 +205,108 @@ class ExcelConfirmacionFormService
 
     public function isProveedorCerrado(int $proveedorId): bool
     {
-        return (bool) CotizacionProveedor::where('id', $proveedorId)->value('excel_conf_form_cerrado');
+        $status = CotizacionProveedor::where('id', $proveedorId)->value('excel_conf_status');
+
+        return strcasecmp((string) $status, 'Revisado') === 0;
     }
 
     public function setProveedorCerrado(int $proveedorId, bool $cerrado): bool
     {
-        return (bool) CotizacionProveedor::where('id', $proveedorId)->update([
-            'excel_conf_form_cerrado' => $cerrado,
-        ]);
+        $proveedor = CotizacionProveedor::find($proveedorId);
+        if (!$proveedor) {
+            return false;
+        }
+
+        $proveedor->excel_conf_form_cerrado = $cerrado;
+        if ($cerrado) {
+            $proveedor->excel_conf_status = 'Revisado';
+        } elseif (strcasecmp((string) $proveedor->excel_conf_status, 'Revisado') === 0) {
+            $proveedor->excel_conf_status = 'Recibido';
+        }
+
+        if (!$proveedor->save()) {
+            return false;
+        }
+
+        if ($cerrado) {
+            $this->generateAndStoreExcelConfirmacion($proveedorId);
+        }
+
+        return true;
+    }
+
+    /**
+     * Genera el Excel individual del proveedor y lo guarda en excel_confirmacion (documentación).
+     */
+    public function generateAndStoreExcelConfirmacion(int $proveedorId): ?string
+    {
+        try {
+            $payload = $this->buildProveedorExportPayload($proveedorId);
+            if (!$payload) {
+                return null;
+            }
+
+            $templatePath = $this->resolveTemplatePath();
+            if ($templatePath === null) {
+                Log::warning('ExcelConfirmacionFormService::generateAndStoreExcelConfirmacion — plantilla no disponible', [
+                    'id_proveedor' => $proveedorId,
+                ]);
+                return null;
+            }
+
+            $outputDir = storage_path('app/temp/excel-confirmacion');
+            if (!is_dir($outputDir)) {
+                @mkdir($outputDir, 0775, true);
+            }
+
+            $codeSupplier = (string) ($payload['code_supplier'] ?? '');
+            $suffix = $codeSupplier !== '' ? preg_replace('/[^A-Za-z0-9_\-]/', '_', $codeSupplier) : ('prov_' . $proveedorId);
+            $fileName = 'excel_confirmacion_' . $suffix . '_' . time() . '.xlsx';
+            $fullPath = $outputDir . DIRECTORY_SEPARATOR . $fileName;
+
+            $ok = $this->excelService->generarArchivoPorProveedor($templatePath, $fullPath, $payload);
+            if (!$ok || !file_exists($fullPath)) {
+                Log::error('ExcelConfirmacionFormService::generateAndStoreExcelConfirmacion — no se generó el archivo', [
+                    'id_proveedor' => $proveedorId,
+                ]);
+                return null;
+            }
+
+            $contents = file_get_contents($fullPath);
+            @unlink($fullPath);
+            if ($contents === false) {
+                return null;
+            }
+
+            $relativePath = 'assets/images/agentecompra/' . $fileName;
+            $stored = $this->storagePutContents($relativePath, $contents);
+
+            $proveedor = CotizacionProveedor::find($proveedorId);
+            if (!$proveedor) {
+                return $stored;
+            }
+
+            if (!empty($proveedor->excel_confirmacion)) {
+                try {
+                    $oldPath = $this->storageUploadPathFromDb($proveedor->excel_confirmacion) ?: $proveedor->excel_confirmacion;
+                    if ($oldPath && $this->objectStorage()->exists($oldPath)) {
+                        $this->objectStorage()->delete($oldPath);
+                    }
+                } catch (\Throwable $e) {
+                    Log::warning('ExcelConfirmacionFormService::generateAndStoreExcelConfirmacion — no se pudo borrar archivo previo: ' . $e->getMessage());
+                }
+            }
+
+            $proveedor->excel_confirmacion = $stored;
+            $proveedor->save();
+
+            return $stored;
+        } catch (\Throwable $e) {
+            Log::error('ExcelConfirmacionFormService::generateAndStoreExcelConfirmacion — ' . $e->getMessage(), [
+                'id_proveedor' => $proveedorId,
+            ]);
+            return null;
+        }
     }
 
     public function buildProveedorExportPayload(int $proveedorId): ?array
@@ -340,6 +443,12 @@ class ExcelConfirmacionFormService
      */
     private function refreshProveedorExcelConfStatus(int $proveedorId, array $labelsMap): void
     {
+        $currentStatus = CotizacionProveedor::where('id', $proveedorId)->value('excel_conf_status');
+        // Si ya está Revisado, no reabrir automáticamente por un guardado de coordinación.
+        if (strcasecmp((string) $currentStatus, 'Revisado') === 0) {
+            return;
+        }
+
         $originalItems = CotizacionProveedorItems::where('id_proveedor', $proveedorId)->get();
         $excelConfItems = CotizacionProveedorItemExcelConf::where('id_proveedor', $proveedorId)->get();
         $overlaysByOrigen = $excelConfItems
@@ -372,6 +481,7 @@ class ExcelConfirmacionFormService
 
         CotizacionProveedor::where('id', $proveedorId)->update([
             'excel_conf_status' => $allComplete ? 'Recibido' : 'Pendiente',
+            'excel_conf_form_cerrado' => false,
         ]);
     }
 

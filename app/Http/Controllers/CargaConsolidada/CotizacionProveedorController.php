@@ -46,6 +46,8 @@ use App\Events\CotizacionChinaReceived;
 use App\Events\CotizacionChinaInspected;
 use App\Models\Notificacion;
 use App\Services\CargaConsolidada\SeguimientoConsolidadoDriveService;
+use App\Services\CargaConsolidada\Clientes\ExcelConfirmacionFormService;
+use App\Support\CargaConsolidada\DocumentStatusSync;
 
 /**
  * @OA\Tag(
@@ -1567,20 +1569,51 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                     $cotizacion->save();
                 }
             }
-            // Permitir al frontend enviar y actualizar los nuevos estados de documentos
-            $allowedDocumentStatuses = ['Pendiente', 'Recibido', 'Observado', 'Revisado'];
-            if (isset($data['invoice_status']) && in_array($data['invoice_status'], $allowedDocumentStatuses)) {
-                $proveedor->invoice_status = $data['invoice_status'];
+            // Estados documentos: Coord 2 (invoice/packing/excel_conf) y VB final (*_final)
+            $excelConfStatusChangedToRevisado = false;
+            if (isset($data['invoice_status']) && in_array($data['invoice_status'], DocumentStatusSync::ALLOWED, true)) {
+                DocumentStatusSync::applyCoord2Status($proveedor, 'invoice_status', $data['invoice_status']);
+                unset($data['invoice_status'], $data['invoice_status_final']);
             }
-            if (isset($data['packing_status']) && in_array($data['packing_status'], $allowedDocumentStatuses)) {
-                $proveedor->packing_status = $data['packing_status'];
+            if (isset($data['packing_status']) && in_array($data['packing_status'], DocumentStatusSync::ALLOWED, true)) {
+                DocumentStatusSync::applyCoord2Status($proveedor, 'packing_status', $data['packing_status']);
+                unset($data['packing_status'], $data['packing_status_final']);
             }
-            if (isset($data['excel_conf_status']) && in_array($data['excel_conf_status'], $allowedDocumentStatuses)) {
-                $proveedor->excel_conf_status = $data['excel_conf_status'];
+            if (isset($data['excel_conf_status']) && in_array($data['excel_conf_status'], DocumentStatusSync::ALLOWED, true)) {
+                $excelConfStatusChangedToRevisado = DocumentStatusSync::applyCoord2Status(
+                    $proveedor,
+                    'excel_conf_status',
+                    $data['excel_conf_status']
+                );
+                unset($data['excel_conf_status'], $data['excel_conf_form_cerrado'], $data['excel_conf_status_final']);
+            }
+            // Visto bueno final (Coord 1/3 y resto) — solo si no se envió el estado Coord 2 del mismo doc
+            if (isset($data['invoice_status_final']) && in_array($data['invoice_status_final'], DocumentStatusSync::ALLOWED, true)) {
+                DocumentStatusSync::applyFinalStatus($proveedor, 'invoice_status_final', $data['invoice_status_final']);
+                unset($data['invoice_status_final']);
+            }
+            if (isset($data['packing_status_final']) && in_array($data['packing_status_final'], DocumentStatusSync::ALLOWED, true)) {
+                DocumentStatusSync::applyFinalStatus($proveedor, 'packing_status_final', $data['packing_status_final']);
+                unset($data['packing_status_final']);
+            }
+            if (isset($data['excel_conf_status_final']) && in_array($data['excel_conf_status_final'], DocumentStatusSync::ALLOWED, true)) {
+                DocumentStatusSync::applyFinalStatus($proveedor, 'excel_conf_status_final', $data['excel_conf_status_final']);
+                unset($data['excel_conf_status_final']);
             }
 
             // Actualizaciones masivas restantes
             $proveedor->update($data);
+
+            if ($excelConfStatusChangedToRevisado) {
+                try {
+                    app(ExcelConfirmacionFormService::class)->generateAndStoreExcelConfirmacion((int) $proveedor->id);
+                    $proveedor->refresh();
+                } catch (\Throwable $e) {
+                    Log::error('Error generando Excel confirmación al pasar a Revisado: ' . $e->getMessage(), [
+                        'id_proveedor' => $proveedor->id,
+                    ]);
+                }
+            }
             $volumenChina = CotizacionProveedor::where('id_cotizacion', $idCotizacion)
                 ->where('estados_proveedor', "LOADED")
                 ->sum('cbm_total_china');

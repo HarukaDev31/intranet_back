@@ -34,8 +34,8 @@ final class ExcelConfirmacionClientResponse
             'message' => 'Uno de los productos no coincide con tu cotización. Recarga la página e intenta guardar otra vez.',
         ],
         'FORMULARIO_CERRADO' => [
-            'title' => 'Formulario cerrado',
-            'message' => 'Coordinación cerró este proveedor. Ya no puedes editar ni guardar cambios hasta que lo reabran.',
+            'title' => 'Proveedor revisado',
+            'message' => 'Este proveedor ya esta en Revisado. Ya no puedes editar ni guardar cambios en ese proveedor.',
         ],
         'GUARDADO_OK' => [
             'title' => 'Cambios guardados',

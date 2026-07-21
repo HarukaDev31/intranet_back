@@ -363,6 +363,42 @@ class CoordinacionWhatsappPayload
         ], $bitrixMessage, $sleep);
     }
 
+    /**
+     * Un solo mensaje D02 por cotización: Drive (Excel general) + intranet (sin ?proveedor=).
+     *
+     * @param  int|null  $idProveedorRef  Proveedor de referencia para refrescar links desde BD
+     */
+    public static function docsExcelLinkForCotizacion(
+        string $phone,
+        string $carga,
+        string $codigoProveedorLabel,
+        string $linkExcel,
+        string $linkIntranet,
+        int $sleep = 0,
+        $idProveedorRef = null
+    ): array {
+        $bodyParameters = [
+            'carga' => $carga,
+            'codigo_proveedor' => $codigoProveedorLabel !== '' ? $codigoProveedorLabel : 'General',
+            'link_excel' => self::normalizeExternalUrl($linkExcel),
+            'link_intranet' => self::normalizeExternalUrl($linkIntranet),
+        ];
+
+        if (($bodyParameters['link_excel'] ?? '') === '' && ($bodyParameters['link_intranet'] ?? '') === '') {
+            Log::error('CoordinacionWhatsappPayload: sin enlace para Excel de confirmación (cotización)', [
+                'codigo_proveedor' => $codigoProveedorLabel,
+                'template' => self::DOCS_EXCEL_LINK_TEMPLATE,
+            ]);
+        }
+
+        $payload = self::template($phone, self::DOCS_EXCEL_LINK_TEMPLATE, $bodyParameters, null, $sleep);
+        if ($idProveedorRef !== null && (int) $idProveedorRef > 0) {
+            $payload['id_proveedor'] = (int) $idProveedorRef;
+        }
+
+        return $payload;
+    }
+
     public static function docsExcelLinkForProveedor(
         string $phone,
         string $carga,
@@ -395,7 +431,7 @@ class CoordinacionWhatsappPayload
 
         return [
             'carga' => $carga,
-            'codigo_proveedor' => $codigoProveedor,
+            'codigo_proveedor' => $codigoProveedor !== '' ? $codigoProveedor : 'General',
             'link_excel' => $linkExcel,
             'link_intranet' => $linkIntranet,
         ];
@@ -416,9 +452,8 @@ class CoordinacionWhatsappPayload
             return null;
         }
 
-        $code = trim((string) ($proveedor->code_supplier ?? ''));
-
-        return self::buildExcelConfirmacionUrl($uuid, $code !== '' ? $code : null);
+        // Link de intranet a nivel cotización (todos los proveedores en el mismo formulario).
+        return self::buildExcelConfirmacionUrl($uuid);
     }
 
     public static function resolveExcelConfirmacionIntranetLink(int $idProveedor): ?string
@@ -478,11 +513,7 @@ class CoordinacionWhatsappPayload
         $raw = CotizacionProveedor::where('id', $idProveedor)->value('excel_confirmacion_drive_link');
         $link = trim((string) ($raw ?? ''));
         if ($link === '') {
-            $rebuilt = self::rebuildExcelConfirmacionLinkForProveedor($idProveedor);
-
-            return $rebuilt !== null && self::isExcelConfirmacionFormUrl($rebuilt)
-                ? self::normalizeExternalUrl($rebuilt)
-                : null;
+            return null;
         }
 
         if (self::isLegacyTempExcelConfirmacionUrl($link)) {
@@ -494,16 +525,20 @@ class CoordinacionWhatsappPayload
             return null;
         }
 
-        if (self::isExcelConfirmacionFormUrl($link) || self::isGoogleDriveUrl($link)) {
+        // Solo Drive: URLs de formulario web ya no se usan como link_excel.
+        if (self::isGoogleDriveUrl($link)) {
             return self::normalizeExternalUrl($link);
         }
 
-        $rebuilt = self::rebuildExcelConfirmacionLinkForProveedor($idProveedor);
-        if ($rebuilt !== null && self::isExcelConfirmacionFormUrl($rebuilt)) {
-            return self::normalizeExternalUrl($rebuilt);
+        if (self::isExcelConfirmacionFormUrl($link)) {
+            Log::warning('CoordinacionWhatsappPayload: excel_confirmacion_drive_link es URL de formulario (legacy)', [
+                'id_proveedor' => $idProveedor,
+            ]);
+
+            return null;
         }
 
-        Log::warning('CoordinacionWhatsappPayload: excel_confirmacion_drive_link no es URL válida', [
+        Log::warning('CoordinacionWhatsappPayload: excel_confirmacion_drive_link no es URL de Drive válida', [
             'id_proveedor' => $idProveedor,
             'link' => $link,
         ]);
@@ -568,12 +603,13 @@ class CoordinacionWhatsappPayload
     public static function docsExcelLinkPreview(string $carga, string $codigoProveedor, string $linkExcel, ?string $linkIntranet = null): string
     {
         $intranet = trim((string) ($linkIntranet ?? ''));
+        $drive = trim($linkExcel);
+        $label = trim($codigoProveedor) !== '' ? trim($codigoProveedor) : 'General';
 
         return "Documentación: CONSOLIDADO #{$carga}\n\n"
-            . "Excel de confirmación — Proveedor {$codigoProveedor}\n\n"
-            . "Llenalo aquí: {$linkExcel}"
-            . ($intranet !== '' ? " o\n{$intranet}" : '')
-            . ' 📄';
+            . "Excel de confirmación — {$label}\n\n"
+            . ($drive !== '' ? "Descárgalo aquí: {$drive} 📄" : '')
+            . ($intranet !== '' ? (($drive !== '' ? "\n\n" : '') . "Llénalo en la intranet: {$intranet}") : '');
     }
 
     public static function docsPaso2(string $phone, string $bitrixMessage, ?string $fechaMaxima = null, int $sleep = 0): array

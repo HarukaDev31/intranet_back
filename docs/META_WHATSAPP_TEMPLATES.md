@@ -177,7 +177,7 @@ Los **PDF** e **imágenes** (jpg/png) sí van en plantillas con encabezado DOCUM
 | ID | Nombre Meta sugerido | Tipo | Origen | Variables |
 |----|----------------------|------|--------|-----------|
 | D01 | `pb_docs_paso1_excel_video_v1` | TEXT | `SolicitarDocumentosWhatsAppJob` paso 1 | `{{carga}}` |
-| D02 | `pb_docs_excel_link_v1` | TEXT | **Reemplaza xlsx** — un envío por proveedor o zip | `{{carga}}`, `{{codigo_proveedor}}`, `{{link_excel}}` |
+| D02 | `pb_docs_excel_link_v1` | TEXT | **Reemplaza xlsx** — un envío por cotización (Excel general) | `{{carga}}`, `{{codigo_proveedor}}`, `{{link_excel}}` |
 | D03 | `pb_docs_paso2_word_v1` | TEXT | Paso 2 texto | `{{carga}}`, `{{fecha_maxima}}` (opcional) |
 | D04 | `pb_docs_consideraciones_doc_v1` | DOCUMENT + TEXT | `SolicitarDocumentosWhatsAppJob` (media PDF) | — (PDF en header; body fijo) |
 | D05 | `pb_docs_recordatorio_intro_v1` | TEXT | `GeneralController::recordatoriosDocumentos` (intro) | `{{nombre_cliente}}`, `{{carga}}` |

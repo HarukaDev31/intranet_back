@@ -714,7 +714,7 @@ Video: https://youtu.be/rvhwblBEbXQ
 
 ### D02 — `pb_docs_excel_link_v1`
 
-**Reemplaza adjunto XLSX** — un mensaje por proveedor.
+**Reemplaza adjunto XLSX** — un mensaje por cotización (Excel general con una hoja por proveedor).
 
 **BODY:**
 
@@ -729,8 +729,10 @@ Descárgalo aquí: {{link_excel}} 📄
 | Parámetro Meta | Orden API | Campo backend |
 |----------------|-----------|---------------|
 | `{{carga}}` | 1 | Carga |
-| `{{codigo_proveedor}}` | 2 | Código proveedor |
+| `{{codigo_proveedor}}` | 2 | Etiqueta (`General` en envío único) |
 | `{{link_excel}}` | 3 | URL Google Drive (`excel_confirmacion_drive_link` en BD) |
+
+QA (`pb_docs_excel_link_v1_qa`) añade `{{link_intranet}}`: formulario web de la cotización (sin `?proveedor=`).
 
 ---
 
