@@ -33,6 +33,7 @@ use App\Traits\FileTrait;
 use App\Traits\UsesObjectStorage;
 use App\Jobs\SendReminderPagoWhatsAppJob;
 use App\Services\CargaConsolidada\CotizacionFinal\PlantillaFinalBatchService;
+use App\Support\PhpSpreadsheet\PhpSpreadsheetRuntime;
 
 class CotizacionFinalController extends Controller
 {
@@ -511,12 +512,13 @@ class CotizacionFinalController extends Controller
                 throw new \Exception("No se pudo crear el archivo temporal.");
             }
 
-            // Cargar Excel usando PhpSpreadsheet
-            $spreadsheet = IOFactory::load($tempFile);
+            // Cargar Excel + boleta con caché en memoria (evita incomplete object Cell en workers)
+            return PhpSpreadsheetRuntime::run(function () use ($tempFile) {
+                $spreadsheet = IOFactory::load($tempFile);
 
-            // Generar boleta
-            return $this->generateBoletaForSend($spreadsheet);
-        } catch (\Exception $e) {
+                return $this->generateBoletaForSend($spreadsheet);
+            });
+        } catch (\Throwable $e) {
             Log::error('Error en getBoletaForSend: ' . $e->getMessage(), [
                 'id_cotizacion' => $idCotizacion,
                 'trace' => $e->getTraceAsString()
