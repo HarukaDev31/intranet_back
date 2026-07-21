@@ -1167,13 +1167,30 @@ class CotizacionFinalController extends Controller
 
             if ($request->estado == 'COBRANDO') {
                 $whatsappService = app(\App\Services\CargaConsolidada\CotizacionFinal\CotizacionFinalCobranzaWhatsappService::class);
+                $preview = $whatsappService->buildTemplatesPreviewForCotizacion((int) $request->idCotizacion);
+
+                if (empty($preview['success'])) {
+                    return response()->json([
+                        'success' => true,
+                        'message' => 'Estado actualizado, pero no se pudo armar la vista previa WhatsApp: '
+                            . ($preview['error'] ?? 'error'),
+                        'requires_whatsapp_selection' => false,
+                        'id_cotizacion' => (int) $request->idCotizacion,
+                        'whatsapp_templates' => [],
+                    ]);
+                }
 
                 return response()->json([
                     'success' => true,
-                    'message' => 'Estado actualizado. Selecciona las plantillas WhatsApp a enviar.',
+                    'message' => 'Estado actualizado. Revisa y selecciona los mensajes a enviar.',
                     'requires_whatsapp_selection' => true,
                     'id_cotizacion' => (int) $request->idCotizacion,
-                    'whatsapp_templates' => $whatsappService->availableTemplates(),
+                    'whatsapp_templates' => $preview['templates'],
+                    'whatsapp_preview_meta' => [
+                        'phone' => $preview['phone'] ?? null,
+                        'cliente' => $preview['cliente'] ?? null,
+                        'carga' => $preview['carga'] ?? null,
+                    ],
                 ]);
             }
 
