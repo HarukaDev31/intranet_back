@@ -11,6 +11,8 @@ use App\Models\CargaConsolidada\CotizacionProveedor;
  */
 class DocumentStatusSync
 {
+    const COORD2_EMAIL = 'coordinacion2@probusiness.pe';
+
     /** @var array<string, string> */
     public const COORD_TO_FINAL = [
         'invoice_status' => 'invoice_status_final',
@@ -20,6 +22,37 @@ class DocumentStatusSync
 
     /** @var string[] */
     public const ALLOWED = ['Pendiente', 'Recibido', 'Observado', 'Revisado'];
+
+    /**
+     * @param  mixed  $user
+     */
+    public static function isCoord2User($user)
+    {
+        if ($user === null) {
+            return false;
+        }
+
+        $candidates = [
+            is_object($user) ? ($user->Txt_Email ?? null) : null,
+            is_object($user) ? ($user->No_Usuario ?? null) : null,
+            is_object($user) ? ($user->email ?? null) : null,
+            is_array($user) ? ($user['Txt_Email'] ?? null) : null,
+            is_array($user) ? ($user['No_Usuario'] ?? null) : null,
+            is_array($user) ? ($user['email'] ?? null) : null,
+        ];
+
+        foreach ($candidates as $candidate) {
+            $email = strtolower(trim((string) $candidate));
+            if ($email === '') {
+                continue;
+            }
+            if ($email === self::COORD2_EMAIL || strpos($email, 'coordinacion2@') === 0) {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     /**
      * @param  CotizacionProveedor|object  $proveedor
@@ -104,5 +137,24 @@ class DocumentStatusSync
         }
 
         $proveedor->{$finalField} = $newValue;
+    }
+
+    /**
+     * Quita del payload todos los campos de estado documental (Coord2 y VB).
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    public static function stripStatusFields(array $data)
+    {
+        foreach (array_keys(self::COORD_TO_FINAL) as $coordField) {
+            unset($data[$coordField]);
+        }
+        foreach (array_values(self::COORD_TO_FINAL) as $finalField) {
+            unset($data[$finalField]);
+        }
+        unset($data['excel_conf_form_cerrado']);
+
+        return $data;
     }
 }
