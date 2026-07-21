@@ -419,6 +419,17 @@ class CotizacionFinalController extends Controller
             return $transformedData;
     }
     /**
+     * Genera PDF temporal de boleta para WhatsApp (ruta absoluta o false).
+     * Usado por CotizacionFinalCobranzaWhatsappService / reintentos.
+     *
+     * @return string|false
+     */
+    public function generateBoletaPdfPathForWhatsApp($idCotizacion)
+    {
+        return $this->getBoletaForSend($idCotizacion);
+    }
+
+    /**
      * Obtiene y procesa la boleta para envÃ­o
      */
     private function getBoletaForSend($idCotizacion)
