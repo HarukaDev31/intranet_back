@@ -1155,127 +1155,98 @@ class CotizacionFinalController extends Controller
     {
         try {
             $cotizacion = Cotizacion::find($request->idCotizacion);
+            if (!$cotizacion) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Cotización no encontrada',
+                ], 404);
+            }
+
             $cotizacion->estado_cotizacion_final = $request->estado;
             $cotizacion->save();
+
             if ($request->estado == 'COBRANDO') {
-                $cotizacion = DB::table($this->table_contenedor_cotizacion . ' as CC')
-                    ->select([
-                        'CC.telefono',
-                        'CC.id_contenedor',
-                        'CC.impuestos_final',
-                        'CC.volumen_final',
-                        'CC.monto_final',
-                        'CC.tarifa_final',
-                        'CC.nombre',
-                        'CC.logistica_final',
-                        'CC.servicios_extra_final',
-                        DB::raw('(
-                            SELECT IFNULL(SUM(cccp.monto), 0)
-                            FROM contenedor_consolidado_cotizacion_coordinacion_pagos cccp
-                            JOIN cotizacion_coordinacion_pagos_concept ccp ON cccp.id_concept = ccp.id
-                            WHERE cccp.id_cotizacion = CC.id
-                            AND (ccp.name = "LOGISTICA" OR ccp.name = "IMPUESTOS")
-                        ) as total_pagos')
-                    ])
-                    ->where('CC.id', $request->idCotizacion)
-                    ->first();
+                $whatsappService = app(\App\Services\CargaConsolidada\CotizacionFinal\CotizacionFinalCobranzaWhatsappService::class);
 
-                if (!$cotizacion) {
-                    throw new \Exception('Cotización no encontrada');
-                }
-                $telefono = preg_replace('/\s+/', '', $cotizacion->telefono);
-                $phoneNumberId = $telefono ? $telefono . '@c.us' : '';
-                $totalPagos = $cotizacion->total_pagos;
-                $volumen = $cotizacion->volumen_final;
-                $nombre = $cotizacion->nombre;
-                $extrasCalc = $this->getCalculadoraImportacionExtrasByCotizacion((int) $request->idCotizacion);
-                $logisticaFinal = (float) ($cotizacion->logistica_final ?? 0)
-                    + (float) ($extrasCalc['recargos'] ?? 0)
-                    - (float) ($extrasCalc['descuento'] ?? 0);
-                $impuestosFinal = $cotizacion->impuestos_final;
-                $serviciosExtraFinal = (float) ($cotizacion->servicios_extra_final ?? 0);
-                $total = $logisticaFinal + $impuestosFinal + $serviciosExtraFinal;
-                $totalAPagar = $total - $totalPagos;
-                $idContenedor = $cotizacion->id_contenedor;
-                $contenedor = Contenedor::select('fecha_arribo', 'carga')
-                    ->select('fecha_arribo', 'carga')
-                    ->where('id', $idContenedor)
-                    ->first();
-
-                if (!$contenedor) {
-                    throw new \Exception('Contenedor no encontrado');
-                }
-                $carga = $contenedor->carga;
-                $fechaArribo = $contenedor->fecha_arribo;
-                $telefono = preg_replace('/\s+/', '', $cotizacion->telefono);
-                $this->phoneNumberId = $telefono ? $telefono . '@c.us' : '';
-                $message = "📦 *Consolidado #" . $carga . "*\n" .
-                    "Hola " . $nombre . " 😁 un gusto saludarte! \n" .
-                    "A continuación te envio la cotización final de tu importación📋📦.\n" .
-                    "🙋‍♂️PAGO PENDIENTE: \n" .
-                    "☑️Costo CBM: $" . number_format($logisticaFinal, 2) . "\n" .
-                    "☑️Impuestos: $" . number_format($impuestosFinal, 2) . "\n" .
-                    ($serviciosExtraFinal > 0 ? "☑️Servicios extras: $" . number_format($serviciosExtraFinal, 2) . "\n" : "") .
-                    "✅Total: $" . number_format($total, 2) . "\n" .
-                    "Pronto le aviso nuevos avances, que tengan buen dia \n" .
-                    "Último día de pago: " . date('d/m/Y', strtotime($fechaArribo)) . "\n";
-                $phone = (string) $this->phoneNumberId;
-                $serviciosExtrasLine = $serviciosExtraFinal > 0
-                    ? '☑️Servicios extras: $' . number_format($serviciosExtraFinal, 2) . "\n"
-                    : '';
-                $pathCotizacionFinalPDF = $this->getBoletaForSend($request->idCotizacion);
-                $this->sendMessage(
-                    $message,
-                    $phone,
-                    0,
-                    'consolidado',
-                    CoordinacionWhatsappPayload::consolidadoCotizacionFinal(
-                        $phone,
-                        (string) $carga,
-                        (string) $nombre,
-                        number_format($logisticaFinal, 2, '.', ''),
-                        number_format($impuestosFinal, 2, '.', ''),
-                        $serviciosExtrasLine,
-                        number_format($total, 2, '.', ''),
-                        date('d/m/Y', strtotime($fechaArribo)),
-                        $pathCotizacionFinalPDF ? (string) $pathCotizacionFinalPDF : '',
-                        $message
-                    )
-                );
-                $messageResumen = "💰*Resumen de Pago*\n" .
-                    "✅Cotización final: $" . number_format($total, 2) . "\n" .
-                    "✅Adelanto: $" . number_format($totalPagos, 2) . "\n" .
-                    "✅ *Pendiente de pago: $" . number_format($totalAPagar, 2) . "*\n";
-                $pagosUrl = public_path('assets/images/pagos-full.jpg');
-                $this->sendMessage(
-                    $messageResumen,
-                    $phone,
-                    5,
-                    'consolidado',
-                    CoordinacionWhatsappPayload::consolidadoResumenPago(
-                        $phone,
-                        number_format($total, 2, '.', ''),
-                        number_format($totalPagos, 2, '.', ''),
-                        number_format($totalAPagar, 2, '.', ''),
-                        $pagosUrl,
-                        $messageResumen,
-                        5
-                    )
-                );
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Estado actualizado. Selecciona las plantillas WhatsApp a enviar.',
+                    'requires_whatsapp_selection' => true,
+                    'id_cotizacion' => (int) $request->idCotizacion,
+                    'whatsapp_templates' => $whatsappService->availableTemplates(),
+                ]);
             }
+
             if ($request->estado == 'AJUSTADO') {
-                $cotizacion = Cotizacion::find($request->idCotizacion);
                 $cotizacion->estado_cotizacion_final = 'AJUSTADO';
                 $cotizacion->save();
             }
+
             return response()->json([
                 'success' => true,
-                'message' => 'Estado de cotización final actualizado correctamente'
+                'message' => 'Estado de cotización final actualizado correctamente',
             ]);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
                 'message' => 'Error al actualizar estado de cotización final: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Envía plantillas WhatsApp del flujo COBRANDO (selección desde front).
+     */
+    public function sendCobranzaWhatsApp(Request $request)
+    {
+        try {
+            $idCotizacion = (int) $request->input('idCotizacion', $request->input('id_cotizacion', 0));
+            $templates = $request->input('templates', []);
+            if (!is_array($templates)) {
+                $templates = [];
+            }
+
+            if ($idCotizacion <= 0) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'idCotizacion requerido',
+                ], 422);
+            }
+
+            $cotizacion = Cotizacion::find($idCotizacion);
+            if (!$cotizacion) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Cotización no encontrada',
+                ], 404);
+            }
+
+            $whatsappService = app(\App\Services\CargaConsolidada\CotizacionFinal\CotizacionFinalCobranzaWhatsappService::class);
+            $result = $whatsappService->sendSelectedTemplates($idCotizacion, $templates);
+
+            if (empty($result['status'])) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $result['error'] ?? 'Error al enviar WhatsApp',
+                    'data' => $result,
+                ], 422);
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => empty($result['sent'])
+                    ? 'Sin plantillas seleccionadas'
+                    : 'WhatsApp encolado correctamente',
+                'data' => $result,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('sendCobranzaWhatsApp: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al enviar WhatsApp: ' . $e->getMessage(),
             ], 500);
         }
     }

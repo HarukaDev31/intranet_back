@@ -167,6 +167,7 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
             Route::get('/general/download-cotizacion-final-pdf/{idCotizacion}', [CotizacionFinalController::class, 'downloadCotizacionFinalPdf']);
             Route::delete('/general/delete-cotizacion-final-file/{idCotizacion}', [CotizacionFinalController::class, 'deleteCotizacionFinalFile']);
             Route::put('/general/update-estado', [CotizacionFinalController::class, 'updateEstadoCotizacionFinal']);
+            Route::post('/general/send-cobranza-whatsapp', [CotizacionFinalController::class, 'sendCobranzaWhatsApp']);
             Route::post('/general/upload-factura-comercial', [CotizacionFinalController::class, 'uploadFacturaComercial']);
             Route::post('/general/upload-cotizacion-final/{idCotizacion}', [CotizacionFinalController::class, 'uploadCotizacionFinalFile']);
             Route::post('/general/generate-individual/{idContenedor}', [CotizacionFinalController::class, 'generateIndividualCotizacion']);

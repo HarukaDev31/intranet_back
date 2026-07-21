@@ -24,6 +24,122 @@ class CotizacionFinalCobranzaWhatsappService
     public const TEMPLATE_RESUMEN_PAGO = 'pb_consolidado_resumen_pago_v1';
 
     /**
+     * Catálogo del flujo COBRANDO (orden de envío).
+     *
+     * @return array<int, array{key:string,label:string,description:string,selected_by_default:bool,has_media:bool}>
+     */
+    public function availableTemplates(): array
+    {
+        return [
+            [
+                'key' => self::TEMPLATE_COTIZACION_FINAL,
+                'label' => 'Cotización final',
+                'description' => 'Mensaje con montos + PDF de boleta adjunto',
+                'selected_by_default' => true,
+                'has_media' => true,
+            ],
+            [
+                'key' => self::TEMPLATE_RESUMEN_PAGO,
+                'label' => 'Resumen de pago',
+                'description' => 'Adelanto / pendiente + imagen de cuentas',
+                'selected_by_default' => true,
+                'has_media' => true,
+            ],
+        ];
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public function defaultTemplateKeys(): array
+    {
+        return array_values(array_map(static function (array $t) {
+            return $t['key'];
+        }, array_filter($this->availableTemplates(), static function (array $t) {
+            return !empty($t['selected_by_default']);
+        })));
+    }
+
+    /**
+     * @return array{status:bool,error?:string,queued?:bool,id_cotizacion:int,sent?:array<int,string>,failed?:array<string,string>}
+     */
+    public function sendForCotizacion(int $idCotizacion): array
+    {
+        return $this->sendSelectedTemplates($idCotizacion, $this->defaultTemplateKeys());
+    }
+
+    /**
+     * @param  array<int, string>  $templateKeys
+     * @return array{status:bool,error?:string,queued?:bool,id_cotizacion:int,sent?:array<int,string>,failed?:array<string,string>}
+     */
+    public function sendSelectedTemplates(int $idCotizacion, array $templateKeys): array
+    {
+        $allowed = array_column($this->availableTemplates(), 'key');
+        $keys = array_values(array_unique(array_filter(array_map('strval', $templateKeys), static function ($k) use ($allowed) {
+            return in_array($k, $allowed, true);
+        })));
+
+        if ($keys === []) {
+            return [
+                'status' => true,
+                'id_cotizacion' => $idCotizacion,
+                'queued' => false,
+                'sent' => [],
+                'message' => 'Sin plantillas seleccionadas; no se envió WhatsApp',
+            ];
+        }
+
+        $ctx = $this->buildSendContext($idCotizacion);
+        if ($ctx === null) {
+            return ['status' => false, 'error' => 'Cotización o contenedor no encontrado', 'id_cotizacion' => $idCotizacion];
+        }
+        if ($ctx['phone'] === '') {
+            return ['status' => false, 'error' => 'Teléfono inválido', 'id_cotizacion' => $idCotizacion];
+        }
+
+        $sent = [];
+        $failed = [];
+        $anyQueued = false;
+        $sleep = 0;
+
+        foreach ($keys as $key) {
+            if ($key === self::TEMPLATE_COTIZACION_FINAL) {
+                $result = $this->sendCotizacionFinalTemplate($ctx, $sleep);
+            } elseif ($key === self::TEMPLATE_RESUMEN_PAGO) {
+                $result = $this->sendResumenPagoTemplate($ctx, $sleep > 0 ? $sleep : 5);
+            } else {
+                continue;
+            }
+
+            if (!empty($result['status'])) {
+                $sent[] = $key;
+                $anyQueued = $anyQueued || !empty($result['queued']);
+                $sleep = 5;
+            } else {
+                $failed[$key] = (string) ($result['error'] ?? 'Error de envío');
+            }
+        }
+
+        if ($sent === [] && $failed !== []) {
+            return [
+                'status' => false,
+                'error' => reset($failed) ?: 'Fallo envío WhatsApp',
+                'id_cotizacion' => $idCotizacion,
+                'failed' => $failed,
+                'sent' => $sent,
+            ];
+        }
+
+        return [
+            'status' => true,
+            'id_cotizacion' => $idCotizacion,
+            'queued' => $anyQueued,
+            'sent' => $sent,
+            'failed' => $failed,
+        ];
+    }
+
+    /**
      * Cotizaciones COBRANDO sin envío exitoso de la plantilla final.
      * Cotizacion tiene timestamps=false → no se puede filtrar por updated_at.
      *
@@ -100,7 +216,6 @@ class CotizacionFinalCobranzaWhatsappService
             } elseif ($strictActivity) {
                 $candidates = [];
             } else {
-                // Fallback: todos los COBRANDO sin plantilla OK (sin updated_at no hay mejor filtro).
                 $candidates = array_values(array_filter($candidates, static function ($row) {
                     return !empty($row->needs_resend)
                         || (($row->skip_reason ?? '') === 'telefono_invalido');
@@ -157,9 +272,9 @@ class CotizacionFinalCobranzaWhatsappService
     }
 
     /**
-     * @return array{status:bool,error?:string,queued?:bool,id_cotizacion:int}
+     * @return array<string, mixed>|null
      */
-    public function sendForCotizacion(int $idCotizacion): array
+    private function buildSendContext(int $idCotizacion): ?array
     {
         $cotizacion = DB::table('contenedor_consolidado_cotizacion as CC')
             ->select([
@@ -167,20 +282,23 @@ class CotizacionFinalCobranzaWhatsappService
                 'CC.telefono',
                 'CC.id_contenedor',
                 'CC.impuestos_final',
-                'CC.volumen_final',
-                'CC.monto_final',
-                'CC.tarifa_final',
                 'CC.nombre',
                 'CC.logistica_final',
                 'CC.servicios_extra_final',
-                'CC.estado_cotizacion_final',
+                DB::raw('(
+                    SELECT IFNULL(SUM(cccp.monto), 0)
+                    FROM contenedor_consolidado_cotizacion_coordinacion_pagos cccp
+                    JOIN cotizacion_coordinacion_pagos_concept ccp ON cccp.id_concept = ccp.id
+                    WHERE cccp.id_cotizacion = CC.id
+                    AND (ccp.name = "LOGISTICA" OR ccp.name = "IMPUESTOS")
+                ) as total_pagos'),
             ])
             ->where('CC.id', $idCotizacion)
             ->whereNull('CC.deleted_at')
             ->first();
 
         if (!$cotizacion) {
-            return ['status' => false, 'error' => 'Cotización no encontrada', 'id_cotizacion' => $idCotizacion];
+            return null;
         }
 
         $contenedor = Contenedor::query()
@@ -189,7 +307,7 @@ class CotizacionFinalCobranzaWhatsappService
             ->first();
 
         if (!$contenedor) {
-            return ['status' => false, 'error' => 'Contenedor no encontrado', 'id_cotizacion' => $idCotizacion];
+            return null;
         }
 
         $extrasCalc = $this->getCalculadoraImportacionExtrasByCotizacion($idCotizacion);
@@ -199,72 +317,116 @@ class CotizacionFinalCobranzaWhatsappService
         $impuestosFinal = (float) ($cotizacion->impuestos_final ?? 0);
         $serviciosExtraFinal = (float) ($cotizacion->servicios_extra_final ?? 0);
         $total = $logisticaFinal + $impuestosFinal + $serviciosExtraFinal;
-        $carga = (string) $contenedor->carga;
-        $fechaArribo = $contenedor->fecha_arribo;
-        $nombre = (string) ($cotizacion->nombre ?? '');
-
+        $totalPagos = (float) ($cotizacion->total_pagos ?? 0);
         $phoneDigits = $this->normalizePhoneDigits((string) ($cotizacion->telefono ?? ''));
-        if ($phoneDigits === '') {
-            return ['status' => false, 'error' => 'Teléfono inválido', 'id_cotizacion' => $idCotizacion];
-        }
 
-        $phone = $phoneDigits . '@c.us';
-        $serviciosExtrasLine = $serviciosExtraFinal > 0
-            ? '☑️Servicios extras: $' . number_format($serviciosExtraFinal, 2) . "\n"
+        return [
+            'id_cotizacion' => $idCotizacion,
+            'phone' => $phoneDigits !== '' ? $phoneDigits . '@c.us' : '',
+            'nombre' => (string) ($cotizacion->nombre ?? ''),
+            'carga' => (string) $contenedor->carga,
+            'fecha_arribo' => $contenedor->fecha_arribo,
+            'logistica_final' => $logisticaFinal,
+            'impuestos_final' => $impuestosFinal,
+            'servicios_extra_final' => $serviciosExtraFinal,
+            'total' => $total,
+            'total_pagos' => $totalPagos,
+            'total_a_pagar' => $total - $totalPagos,
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $ctx
+     * @return array{status:bool,error?:string,queued?:bool}
+     */
+    private function sendCotizacionFinalTemplate(array $ctx, int $sleep): array
+    {
+        $serviciosExtrasLine = ((float) $ctx['servicios_extra_final']) > 0
+            ? '☑️Servicios extras: $' . number_format((float) $ctx['servicios_extra_final'], 2) . "\n"
             : '';
 
-        $message = "📦 *Consolidado #" . $carga . "*\n" .
-            "Hola " . $nombre . " 😁 un gusto saludarte! \n" .
+        $message = "📦 *Consolidado #" . $ctx['carga'] . "*\n" .
+            "Hola " . $ctx['nombre'] . " 😁 un gusto saludarte! \n" .
             "A continuación te envio la cotización final de tu importación📋📦.\n" .
             "🙋‍♂️PAGO PENDIENTE: \n" .
-            "☑️Costo CBM: $" . number_format($logisticaFinal, 2) . "\n" .
-            "☑️Impuestos: $" . number_format($impuestosFinal, 2) . "\n" .
-            ($serviciosExtraFinal > 0 ? "☑️Servicios extras: $" . number_format($serviciosExtraFinal, 2) . "\n" : '') .
-            "✅Total: $" . number_format($total, 2) . "\n" .
+            "☑️Costo CBM: $" . number_format((float) $ctx['logistica_final'], 2) . "\n" .
+            "☑️Impuestos: $" . number_format((float) $ctx['impuestos_final'], 2) . "\n" .
+            (((float) $ctx['servicios_extra_final']) > 0
+                ? "☑️Servicios extras: $" . number_format((float) $ctx['servicios_extra_final'], 2) . "\n"
+                : '') .
+            "✅Total: $" . number_format((float) $ctx['total'], 2) . "\n" .
             "Pronto le aviso nuevos avances, que tengan buen dia \n" .
-            "Último día de pago: " . date('d/m/Y', strtotime((string) $fechaArribo)) . "\n";
+            "Último día de pago: " . date('d/m/Y', strtotime((string) $ctx['fecha_arribo'])) . "\n";
 
-        $pathPdf = app(CotizacionFinalController::class)->generateBoletaPdfPathForWhatsApp($idCotizacion);
+        $pathPdf = app(CotizacionFinalController::class)
+            ->generateBoletaPdfPathForWhatsApp((int) $ctx['id_cotizacion']);
 
-        $resultFinal = $this->sendMessage(
+        $result = $this->sendMessage(
             $message,
-            $phone,
-            0,
+            (string) $ctx['phone'],
+            $sleep,
             'consolidado',
             CoordinacionWhatsappPayload::consolidadoCotizacionFinal(
-                $phone,
-                $carga,
-                $nombre,
-                number_format($logisticaFinal, 2, '.', ''),
-                number_format($impuestosFinal, 2, '.', ''),
+                (string) $ctx['phone'],
+                (string) $ctx['carga'],
+                (string) $ctx['nombre'],
+                number_format((float) $ctx['logistica_final'], 2, '.', ''),
+                number_format((float) $ctx['impuestos_final'], 2, '.', ''),
                 $serviciosExtrasLine,
-                number_format($total, 2, '.', ''),
-                date('d/m/Y', strtotime((string) $fechaArribo)),
+                number_format((float) $ctx['total'], 2, '.', ''),
+                date('d/m/Y', strtotime((string) $ctx['fecha_arribo'])),
                 $pathPdf ? (string) $pathPdf : '',
-                $message
+                $message,
+                $sleep
             )
         );
 
-        if (empty($resultFinal['status'])) {
-            $error = (string) ($resultFinal['error'] ?? 'Fallo envío plantilla cotización final');
+        if (empty($result['status'])) {
             Log::error('CotizacionFinalCobranzaWhatsappService: fallo plantilla final', [
-                'id_cotizacion' => $idCotizacion,
-                'error' => $error,
+                'id_cotizacion' => $ctx['id_cotizacion'],
+                'error' => $result['error'] ?? null,
             ]);
-
-            return [
-                'status' => false,
-                'error' => $error,
-                'id_cotizacion' => $idCotizacion,
-                'queued' => !empty($resultFinal['queued']),
-            ];
         }
 
-        return [
-            'status' => true,
-            'id_cotizacion' => $idCotizacion,
-            'queued' => !empty($resultFinal['queued']),
-        ];
+        return $result;
+    }
+
+    /**
+     * @param  array<string, mixed>  $ctx
+     * @return array{status:bool,error?:string,queued?:bool}
+     */
+    private function sendResumenPagoTemplate(array $ctx, int $sleep): array
+    {
+        $messageResumen = "💰*Resumen de Pago*\n" .
+            "✅Cotización final: $" . number_format((float) $ctx['total'], 2) . "\n" .
+            "✅Adelanto: $" . number_format((float) $ctx['total_pagos'], 2) . "\n" .
+            "✅ *Pendiente de pago: $" . number_format((float) $ctx['total_a_pagar'], 2) . "*\n";
+        $pagosUrl = public_path('assets/images/pagos-full.jpg');
+
+        $result = $this->sendMessage(
+            $messageResumen,
+            (string) $ctx['phone'],
+            $sleep,
+            'consolidado',
+            CoordinacionWhatsappPayload::consolidadoResumenPago(
+                (string) $ctx['phone'],
+                number_format((float) $ctx['total'], 2, '.', ''),
+                number_format((float) $ctx['total_pagos'], 2, '.', ''),
+                number_format((float) $ctx['total_a_pagar'], 2, '.', ''),
+                $pagosUrl,
+                $messageResumen,
+                $sleep
+            )
+        );
+
+        if (empty($result['status'])) {
+            Log::warning('CotizacionFinalCobranzaWhatsappService: fallo resumen pago', [
+                'id_cotizacion' => $ctx['id_cotizacion'],
+                'error' => $result['error'] ?? null,
+            ]);
+        }
+
+        return $result;
     }
 
     public function normalizePhoneDigits(string $raw): string
