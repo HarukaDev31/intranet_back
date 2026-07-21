@@ -35,6 +35,25 @@ class WhatsappInboxTemplateService
     ];
 
     /**
+     * Parámetros de BODY conocidos (fallback si Graph/caché no trae {{vars}} parseadas).
+     * Orden = orden posicional en Meta cuando parameter_format=POSITIONAL.
+     *
+     * @var array<string, array<int, string>>
+     */
+    private $knownBodyParamNames = [
+        'pb_consolidado_resumen_pago_v1' => ['total_cotizacion', 'adelanto', 'pendiente'],
+        'pb_consolidado_cotizacion_final_v1' => [
+            'carga',
+            'nombre',
+            'costo_cbm',
+            'impuestos',
+            'servicios_extras',
+            'total',
+            'fecha_limite',
+        ],
+    ];
+
+    /**
      * Plantillas frecuentes (fallback si no hay WABA_ID o falla Graph).
      *
      * @return array<int, array<string, mixed>>
@@ -85,6 +104,22 @@ class WhatsappInboxTemplateService
                 'params' => [],
                 'header_format' => 'DOCUMENT',
             ],
+            [
+                'name' => 'pb_consolidado_resumen_pago_v1',
+                'label' => 'Consolidado — Resumen de pago',
+                'language' => 'es_PE',
+                'text' => "💰*Resumen de Pago*\n✅Cotización final: \${{total_cotizacion}}\n✅Adelanto: \${{adelanto}}\n✅ Pendiente de pago: \${{pendiente}} 💳",
+                'params' => ['total_cotizacion', 'adelanto', 'pendiente'],
+                'header_format' => 'IMAGE',
+            ],
+            [
+                'name' => 'pb_consolidado_cotizacion_final_v1',
+                'label' => 'Consolidado — Cotización final',
+                'language' => 'es_PE',
+                'text' => "📦 *Consolidado #{{carga}}*\nHola {{nombre}} 😁 un gusto saludarte!\nA continuación te envio la cotización final de tu importación📋📦.\n🙋‍♂PAGO PENDIENTE:\n☑️Costo CBM: \${{costo_cbm}}\n☑️Impuestos: \${{impuestos}}\n{{servicios_extras}}✅Total: \${{total}}\nPronto le aviso nuevos avances, que tengan buen dia\nÚltimo día de pago: {{fecha_limite}}",
+                'params' => ['carga', 'nombre', 'costo_cbm', 'impuestos', 'servicios_extras', 'total', 'fecha_limite'],
+                'header_format' => 'DOCUMENT',
+            ],
         ]);
     }
 
@@ -114,13 +149,16 @@ class WhatsappInboxTemplateService
     public function getTemplateBodyParamNames($templateName)
     {
         $tpl = $this->findTemplateByName($templateName);
-        if ($tpl === null) {
-            return [];
+        $names = [];
+        if ($tpl !== null && isset($tpl['params']) && is_array($tpl['params'])) {
+            $names = array_values($tpl['params']);
         }
 
-        return isset($tpl['params']) && is_array($tpl['params'])
-            ? array_values($tpl['params'])
-            : [];
+        if ($names === [] && isset($this->knownBodyParamNames[$templateName])) {
+            return array_values($this->knownBodyParamNames[$templateName]);
+        }
+
+        return $names;
     }
 
     /**
@@ -130,24 +168,26 @@ class WhatsappInboxTemplateService
     public function usesPositionalParameters($templateName)
     {
         $tpl = $this->findTemplateByName($templateName);
-        if ($tpl === null) {
+        if ($tpl !== null) {
+            $format = strtoupper((string) ($tpl['parameter_format'] ?? ''));
+            if ($format === 'POSITIONAL') {
+                return true;
+            }
+            if ($format === 'NAMED') {
+                return false;
+            }
+        }
+
+        // Solo mirar nombres del caché Graph (sin fallback known) para detectar {{1}}{{2}}.
+        $graphNames = [];
+        if ($tpl !== null && isset($tpl['params']) && is_array($tpl['params'])) {
+            $graphNames = array_values($tpl['params']);
+        }
+        if ($graphNames === []) {
             return false;
         }
 
-        $format = strtoupper((string) ($tpl['parameter_format'] ?? ''));
-        if ($format === 'POSITIONAL') {
-            return true;
-        }
-        if ($format === 'NAMED') {
-            return false;
-        }
-
-        $names = $this->getTemplateBodyParamNames($templateName);
-        if ($names === []) {
-            return false;
-        }
-
-        foreach ($names as $name) {
+        foreach ($graphNames as $name) {
             if (!ctype_digit((string) $name)) {
                 return false;
             }
@@ -167,12 +207,42 @@ class WhatsappInboxTemplateService
     {
         $payloadParams = $this->stripInternalTemplateParamKeys($payloadParams);
         $expected = $this->getTemplateBodyParamNames($templateName);
+        $placeholder = (string) config('meta_whatsapp.empty_body_parameter_placeholder', '—');
+
+        // Si Graph no trae params, no descartar los del payload (evita body_param_count=0).
         if ($expected === []) {
-            return [];
+            if ($payloadParams === []) {
+                return [];
+            }
+            $aligned = [];
+            foreach ($payloadParams as $name => $text) {
+                $val = trim((string) $text);
+                $aligned[(string) $name] = $val !== '' ? $val : $placeholder;
+            }
+
+            return $aligned;
         }
 
-        $placeholder = (string) config('meta_whatsapp.empty_body_parameter_placeholder', '—');
         $aligned = [];
+        $positional = $this->usesPositionalParameters($templateName);
+        $knownNamed = isset($this->knownBodyParamNames[$templateName])
+            ? array_values($this->knownBodyParamNames[$templateName])
+            : [];
+
+        // Meta POSITIONAL {{1}}{{2}}… + payload nombrado (total_cotizacion, …).
+        if ($positional && $knownNamed !== []) {
+            $values = [];
+            foreach ($knownNamed as $named) {
+                $val = isset($payloadParams[$named]) ? trim((string) $payloadParams[$named]) : '';
+                $values[] = $val !== '' ? $val : $placeholder;
+            }
+            foreach ($expected as $i => $name) {
+                $aligned[(string) $name] = $values[$i] ?? $placeholder;
+            }
+
+            return $aligned;
+        }
+
         foreach ($expected as $name) {
             $name = (string) $name;
             $val = isset($payloadParams[$name]) ? trim((string) $payloadParams[$name]) : '';
@@ -331,7 +401,7 @@ class WhatsappInboxTemplateService
      */
     public function listTemplates()
     {
-        $cacheKey = 'wa_inbox_meta_templates_v2';
+        $cacheKey = 'wa_inbox_meta_templates_v3';
 
         $templates = Cache::remember($cacheKey, 3600, function () {
             return $this->fetchFromMetaOrDefault();
