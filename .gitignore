@@ -7,6 +7,10 @@
 .env.backup
 .phpunit.result.cache
 docker-compose.override.yml
+# Overrides por entorno: NO versionar (cada server mantiene el suyo).
+# Así main↔qa no se pisan al merge/deploy.
+docker-compose.qa.yml
+docker-compose.prod.yml
 Homestead.json
 Homestead.yaml
 npm-debug.log

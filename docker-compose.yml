@@ -1,11 +1,16 @@
-# Stack base para servidor (QA/PROD). PHP 8.3 va dentro del contenedor — no instalar PHP en el host.
+# Stack base compartido (versionado). PHP 8.3 va dentro del contenedor.
 #
-# Servidor (MySQL en host, bind-address=127.0.0.1):
-#   docker compose -f docker-compose.yml -f docker-compose.host-mysql.yml up -d --build
-#   .env → DB_HOST=localhost, DB_SOCKET=/var/run/mysqld/mysqld.sock
+# Overrides por entorno (NO versionados — no se pisan al merge main↔qa):
+#   QA:   cp docker-compose.qa.yml.example docker-compose.qa.yml
+#         docker compose -f docker-compose.yml -f docker-compose.qa.yml up -d --build
+#   PROD: cp docker-compose.prod.yml.example docker-compose.prod.yml
+#         docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 #
 # Local con MySQL en contenedor:
 #   docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build
+#
+# Legacy (mismo overlay host-mysql para ambos; preferir .qa / .prod):
+#   docker compose -f docker-compose.yml -f docker-compose.host-mysql.yml up -d --build
 
 name: intranet_back
 
