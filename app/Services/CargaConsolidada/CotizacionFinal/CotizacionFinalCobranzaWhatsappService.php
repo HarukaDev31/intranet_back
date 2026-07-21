@@ -26,7 +26,7 @@ class CotizacionFinalCobranzaWhatsappService
     /**
      * Catálogo del flujo COBRANDO (orden de envío).
      *
-     * @return array<int, array{key:string,label:string,description:string,selected_by_default:bool,has_media:bool}>
+     * @return array<int, array{key:string,label:string,description:string,selected_by_default:bool,has_media:bool,media_label:?string}>
      */
     public function availableTemplates(): array
     {
@@ -37,6 +37,7 @@ class CotizacionFinalCobranzaWhatsappService
                 'description' => 'Mensaje con montos + PDF de boleta adjunto',
                 'selected_by_default' => true,
                 'has_media' => true,
+                'media_label' => 'PDF boleta',
             ],
             [
                 'key' => self::TEMPLATE_RESUMEN_PAGO,
@@ -44,7 +45,49 @@ class CotizacionFinalCobranzaWhatsappService
                 'description' => 'Adelanto / pendiente + imagen de cuentas',
                 'selected_by_default' => true,
                 'has_media' => true,
+                'media_label' => 'Imagen de cuentas',
             ],
+        ];
+    }
+
+    /**
+     * Plantillas con vista previa del texto exacto que se enviaría por Meta.
+     *
+     * @return array{success:bool,error?:string,templates:array<int,array<string,mixed>>,phone?:string,cliente?:string}
+     */
+    public function buildTemplatesPreviewForCotizacion(int $idCotizacion): array
+    {
+        $ctx = $this->buildSendContext($idCotizacion);
+        if ($ctx === null) {
+            return [
+                'success' => false,
+                'error' => 'Cotización o contenedor no encontrado',
+                'templates' => [],
+            ];
+        }
+
+        $previews = [
+            self::TEMPLATE_COTIZACION_FINAL => $this->buildCotizacionFinalPreviewText($ctx),
+            self::TEMPLATE_RESUMEN_PAGO => $this->buildResumenPagoPreviewText($ctx),
+        ];
+
+        $templates = [];
+        $order = 1;
+        foreach ($this->availableTemplates() as $tpl) {
+            $key = $tpl['key'];
+            $templates[] = array_merge($tpl, [
+                'order' => $order++,
+                'preview' => $previews[$key] ?? '',
+                'preview_type' => 'text',
+            ]);
+        }
+
+        return [
+            'success' => true,
+            'templates' => $templates,
+            'phone' => (string) ($ctx['phone'] ?? ''),
+            'cliente' => (string) ($ctx['nombre'] ?? ''),
+            'carga' => (string) ($ctx['carga'] ?? ''),
         ];
     }
 
@@ -337,15 +380,10 @@ class CotizacionFinalCobranzaWhatsappService
 
     /**
      * @param  array<string, mixed>  $ctx
-     * @return array{status:bool,error?:string,queued?:bool}
      */
-    private function sendCotizacionFinalTemplate(array $ctx, int $sleep): array
+    private function buildCotizacionFinalPreviewText(array $ctx): string
     {
-        $serviciosExtrasLine = ((float) $ctx['servicios_extra_final']) > 0
-            ? '☑️Servicios extras: $' . number_format((float) $ctx['servicios_extra_final'], 2) . "\n"
-            : '';
-
-        $message = "📦 *Consolidado #" . $ctx['carga'] . "*\n" .
+        return "📦 *Consolidado #" . $ctx['carga'] . "*\n" .
             "Hola " . $ctx['nombre'] . " 😁 un gusto saludarte! \n" .
             "A continuación te envio la cotización final de tu importación📋📦.\n" .
             "🙋‍♂️PAGO PENDIENTE: \n" .
@@ -357,6 +395,30 @@ class CotizacionFinalCobranzaWhatsappService
             "✅Total: $" . number_format((float) $ctx['total'], 2) . "\n" .
             "Pronto le aviso nuevos avances, que tengan buen dia \n" .
             "Último día de pago: " . date('d/m/Y', strtotime((string) $ctx['fecha_arribo'])) . "\n";
+    }
+
+    /**
+     * @param  array<string, mixed>  $ctx
+     */
+    private function buildResumenPagoPreviewText(array $ctx): string
+    {
+        return "💰*Resumen de Pago*\n" .
+            "✅Cotización final: $" . number_format((float) $ctx['total'], 2) . "\n" .
+            "✅Adelanto: $" . number_format((float) $ctx['total_pagos'], 2) . "\n" .
+            "✅ *Pendiente de pago: $" . number_format((float) $ctx['total_a_pagar'], 2) . "*\n";
+    }
+
+    /**
+     * @param  array<string, mixed>  $ctx
+     * @return array{status:bool,error?:string,queued?:bool}
+     */
+    private function sendCotizacionFinalTemplate(array $ctx, int $sleep): array
+    {
+        $serviciosExtrasLine = ((float) $ctx['servicios_extra_final']) > 0
+            ? '☑️Servicios extras: $' . number_format((float) $ctx['servicios_extra_final'], 2) . "\n"
+            : '';
+
+        $message = $this->buildCotizacionFinalPreviewText($ctx);
 
         $pathPdf = app(CotizacionFinalController::class)
             ->generateBoletaPdfPathForWhatsApp((int) $ctx['id_cotizacion']);
@@ -397,10 +459,7 @@ class CotizacionFinalCobranzaWhatsappService
      */
     private function sendResumenPagoTemplate(array $ctx, int $sleep): array
     {
-        $messageResumen = "💰*Resumen de Pago*\n" .
-            "✅Cotización final: $" . number_format((float) $ctx['total'], 2) . "\n" .
-            "✅Adelanto: $" . number_format((float) $ctx['total_pagos'], 2) . "\n" .
-            "✅ *Pendiente de pago: $" . number_format((float) $ctx['total_a_pagar'], 2) . "*\n";
+        $messageResumen = $this->buildResumenPagoPreviewText($ctx);
         $pagosUrl = public_path('assets/images/pagos-full.jpg');
 
         $result = $this->sendMessage(
