@@ -4,6 +4,7 @@ namespace App\Traits;
 
 use App\Jobs\WhatsApp\SendCoordinacionWhatsAppJob;
 use App\Services\WhatsApp\WhatsAppCoordinacionBatchService;
+use App\Support\WhatsApp\CoordinacionMediaLink;
 use App\Support\WhatsApp\CoordinacionWhatsappPayload;
 use App\Support\WhatsApp\WhatsappEnvironmentPhone;
 use Illuminate\Support\Facades\Log;
@@ -757,6 +758,17 @@ trait WhatsappTrait
         if (!empty($payload['phone'])) {
             $payload['phone'] = $this->resolvePhoneNumberForWhatsApp((string) $payload['phone']);
         }
+
+        // Subir /tmp (u otros locales) a S3 antes del job: Horizon no comparte filesystem del request.
+        $materialized = CoordinacionMediaLink::materializeOutboundHeader($payload);
+        if ($materialized === null) {
+            return [
+                'status' => false,
+                'queued' => false,
+                'error' => 'No se pudo subir el archivo del encabezado a S3',
+            ];
+        }
+        $payload = $materialized;
 
         if (empty($payload['_domain'])) {
             if (property_exists($this, 'domain') && !empty($this->domain)) {

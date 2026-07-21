@@ -177,6 +177,45 @@ class CoordinacionMediaLink
     }
 
     /**
+     * Sube header.path local (p. ej. /tmp/…) a object storage antes de encolar.
+     * Horizon corre en otro proceso/contenedor y no ve archivos temporales del request.
+     *
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>|null  null si había path local y no se pudo subir
+     */
+    public static function materializeOutboundHeader(array $payload): ?array
+    {
+        if (!isset($payload['header']) || !is_array($payload['header'])) {
+            return $payload;
+        }
+
+        $path = trim((string) ($payload['header']['path'] ?? ''));
+        if ($path === '' || filter_var($path, FILTER_VALIDATE_URL)) {
+            return $payload;
+        }
+
+        $needsEagerUpload = self::isAbsoluteLocalFile($path) || is_file($path);
+        if (!$needsEagerUpload) {
+            return $payload;
+        }
+
+        $prepared = self::prepareHeader($payload['header']);
+        if ($prepared === null || empty($prepared['link'])) {
+            Log::error('CoordinacionMediaLink: no se pudo materializar header antes de encolar', [
+                'path' => $path,
+                'template' => $payload['template'] ?? null,
+                'type' => $payload['type'] ?? null,
+            ]);
+
+            return null;
+        }
+
+        $payload['header'] = $prepared;
+
+        return $payload;
+    }
+
+    /**
      * @param  array<string, mixed>|null  $header
      * @return array<string, mixed>|null  Header con link HTTPS o null si no hay media válida
      */
