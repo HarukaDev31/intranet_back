@@ -1,0 +1,36 @@
+# Overlay QA (NO se commitea: ver .gitignore → docker-compose.qa.yml)
+#
+# En el servidor QA:
+#   cp docker-compose.qa.yml.example docker-compose.qa.yml
+#   docker compose -f docker-compose.yml -f docker-compose.qa.yml up -d --build
+#
+# .env típico QA:
+#   APP_PORT=8085
+#   APP_URL=https://qa.intranetback.probusiness.pe
+#   DB_HOST=localhost
+#   DB_SOCKET=/var/run/mysqld/mysqld.sock
+#   DOCKER_REDIS_HOST=redis
+#   FORWARD_REDIS_PORT=6380
+#   REDIS_PREFIX=qa_
+#   LARAVEL_WEBSOCKETS_PORT=6002
+#   PUSHER_PORT=6002
+#   HORIZON_PREFIX=qa_horizon:
+
+name: intranet_back_qa
+
+services:
+  redis:
+    ports:
+      - "127.0.0.1:${FORWARD_REDIS_PORT:-6380}:6379"
+
+  app:
+    volumes:
+      - ${MYSQL_SOCKET_HOST:-/var/run/mysqld/mysqld.sock}:/var/run/mysqld/mysqld.sock
+
+  horizon:
+    volumes:
+      - ${MYSQL_SOCKET_HOST:-/var/run/mysqld/mysqld.sock}:/var/run/mysqld/mysqld.sock
+
+  scheduler:
+    volumes:
+      - ${MYSQL_SOCKET_HOST:-/var/run/mysqld/mysqld.sock}:/var/run/mysqld/mysqld.sock
