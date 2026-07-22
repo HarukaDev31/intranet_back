@@ -7,6 +7,7 @@ use App\Models\CargaConsolidada\CotizacionProveedorItemExcelConf;
 use App\Models\CargaConsolidada\CotizacionProveedorItems;
 use App\Services\Storage\S3ObjectStorageConnector;
 use App\Traits\UsesObjectStorage;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -19,6 +20,8 @@ class ExcelConfirmacionFormService
     private const TEMPLATE_RELATIVE = 'excel-confirmacion/EXCEL_DE_CONFIRMACION_GENERAL.xlsx';
 
     private const CAMPO_NOMBRE_COMERCIAL = 'NOMBRE COMERCIAL';
+
+    private const CAMPO_FOTO = 'FOTO/IMAGEN';
 
     public function __construct(
         private ExcelConfirmacionDocumentosService $excelService
@@ -179,7 +182,13 @@ class ExcelConfirmacionFormService
                 }
                 $orphanQuery->delete();
 
-                $this->refreshProveedorExcelConfStatus($proveedorId, $labelsMap);
+                if ($ignoreCerrado) {
+                    // Coordinación: completa → Recibido, incompleta → Pendiente (sin tocar Revisado).
+                    $this->refreshProveedorExcelConfStatus($proveedorId, $labelsMap);
+                } else {
+                    // Cliente: si estaba Pendiente (u Observado), al guardar pasa a Recibido.
+                    $this->markExcelConfRecibidoTrasGuardadoCliente($proveedorId);
+                }
             }
 
             if (!$ignoreCerrado && !$savedAny) {
@@ -439,6 +448,36 @@ class ExcelConfirmacionFormService
     }
 
     /**
+     * Cuando el cliente guarda un proveedor en Pendiente/Observado (o vacío),
+     * el estado Excel Conf. pasa a Recibido. No toca Revisado.
+     */
+    private function markExcelConfRecibidoTrasGuardadoCliente(int $proveedorId): void
+    {
+        $proveedor = CotizacionProveedor::find($proveedorId);
+        if (!$proveedor) {
+            return;
+        }
+
+        $current = trim((string) ($proveedor->excel_conf_status ?? ''));
+        if (strcasecmp($current, 'Revisado') === 0) {
+            return;
+        }
+
+        // Solo avanzamos desde Pendiente / Observado / vacío (no regresamos desde Recibido).
+        $shouldMarkRecibido = $current === ''
+            || strcasecmp($current, 'Pendiente') === 0
+            || strcasecmp($current, 'Observado') === 0;
+
+        if (!$shouldMarkRecibido) {
+            return;
+        }
+
+        $proveedor->excel_conf_status = 'Recibido';
+        $proveedor->excel_conf_form_cerrado = false;
+        $proveedor->save();
+    }
+
+    /**
      * @param  array<string, array<int, string>>  $labelsMap
      */
     private function refreshProveedorExcelConfStatus(int $proveedorId, array $labelsMap): void
@@ -532,8 +571,12 @@ class ExcelConfirmacionFormService
         array $itemData,
         ?int $idItemOrigen = null
     ): int {
-        $caracteristicas = $this->normalizeCaracteristicasKeys(
-            is_array($itemData['caracteristicas'] ?? null) ? $itemData['caracteristicas'] : []
+        $caracteristicas = $this->sanitizeAndApplyFoto(
+            $this->normalizeCaracteristicasKeys(
+                is_array($itemData['caracteristicas'] ?? null) ? $itemData['caracteristicas'] : []
+            ),
+            $itemData['foto_file'] ?? null,
+            $proveedorId
         );
         $payload = [
             'id_cotizacion' => $cotizacionId,
@@ -612,8 +655,10 @@ class ExcelConfirmacionFormService
             'initial_qty' => $item->initial_qty,
             'initial_price' => $item->initial_price,
             // Solo datos de confirmación (excel_conf). La cotización no se usa para prellenar.
-            'caracteristicas' => $this->normalizeCaracteristicasKeys(
-                is_array($overlay?->caracteristicas) ? $overlay->caracteristicas : []
+            'caracteristicas' => $this->resolveFotoDisplayValue(
+                $this->normalizeCaracteristicasKeys(
+                    is_array($overlay?->caracteristicas) ? $overlay->caracteristicas : []
+                )
             ),
             'qty' => $overlay?->confirmacion_qty,
             'precio_unitario' => $overlay?->confirmacion_precio,
@@ -629,8 +674,10 @@ class ExcelConfirmacionFormService
 
     private function mapExcelConfItemPayload(CotizacionProveedorItemExcelConf $item, bool $forExport = false): array
     {
-        $caracteristicas = $this->normalizeCaracteristicasKeys(
-            is_array($item->caracteristicas) ? $item->caracteristicas : []
+        $caracteristicas = $this->resolveFotoDisplayValue(
+            $this->normalizeCaracteristicasKeys(
+                is_array($item->caracteristicas) ? $item->caracteristicas : []
+            )
         );
         $payload = [
             'id' => $item->id,
@@ -694,6 +741,118 @@ class ExcelConfirmacionFormService
         }
 
         return $normalized;
+    }
+
+    /**
+     * Adjunta UploadedFile de request multipart a cada ítem (fotos[proveedorId][itemId]).
+     *
+     * @param  array<int, array<string, mixed>>  $proveedoresData
+     * @return array<int, array<string, mixed>>
+     */
+    public function attachFotoFilesFromRequest(array $proveedoresData, $request): array
+    {
+        $fotos = $request->file('fotos');
+        if (!is_array($fotos)) {
+            return $proveedoresData;
+        }
+
+        foreach ($proveedoresData as $pIdx => $proveedorData) {
+            $proveedorId = (int) ($proveedorData['id'] ?? 0);
+            if ($proveedorId <= 0) {
+                continue;
+            }
+
+            $provFotos = $fotos[(string) $proveedorId] ?? $fotos[$proveedorId] ?? null;
+            if (!is_array($provFotos)) {
+                continue;
+            }
+
+            foreach ($proveedorData['items'] ?? [] as $iIdx => $itemData) {
+                $itemId = (int) ($itemData['id'] ?? 0);
+                $file = $provFotos[(string) $itemId] ?? $provFotos[$itemId] ?? null;
+                if ($file instanceof UploadedFile && $file->isValid()) {
+                    $proveedoresData[$pIdx]['items'][$iIdx]['foto_file'] = $file;
+                }
+            }
+        }
+
+        return $proveedoresData;
+    }
+
+    /**
+     * Si viene archivo: sube a storage y guarda SOLO la ruta relativa en FOTO/IMAGEN.
+     * Nunca persiste data-URL / base64.
+     *
+     * @param  array<string, mixed>  $caracteristicas
+     * @return array<string, mixed>
+     */
+    private function sanitizeAndApplyFoto(array $caracteristicas, $fotoFile, int $proveedorId): array
+    {
+        $fotoKey = self::CAMPO_FOTO;
+        foreach ($caracteristicas as $key => $value) {
+            $normalized = strtolower(rtrim(trim((string) $key), ':'));
+            if ($normalized !== 'foto/imagen') {
+                continue;
+            }
+            $fotoKey = (string) $key;
+            $foto = trim((string) $value);
+            // Nunca guardar base64 en BD
+            if ($foto !== '' && stripos($foto, 'data:image/') === 0) {
+                $caracteristicas[$key] = '';
+            }
+            break;
+        }
+
+        if ($fotoFile instanceof UploadedFile && $fotoFile->isValid()) {
+            $ext = strtolower($fotoFile->getClientOriginalExtension() ?: 'jpg');
+            if ($ext === 'jpeg') {
+                $ext = 'jpg';
+            }
+            $filename = 'excel_conf_' . $proveedorId . '_' . time() . '_' . uniqid('', true) . '.' . $ext;
+            $stored = $this->storageStoreUpload($fotoFile, 'excel-confirmacion/fotos', $filename);
+            $caracteristicas[$fotoKey] = $stored;
+        }
+
+        return $caracteristicas;
+    }
+
+    /**
+     * Expone FOTO/IMAGEN como URL pública si en BD hay ruta relativa.
+     * No reenvía data-URL base64 al front.
+     *
+     * @param  array<string, mixed>  $caracteristicas
+     * @return array<string, mixed>
+     */
+    private function resolveFotoDisplayValue(array $caracteristicas): array
+    {
+        foreach ($caracteristicas as $key => $value) {
+            $normalized = strtolower(rtrim(trim((string) $key), ':'));
+            if ($normalized !== 'foto/imagen') {
+                continue;
+            }
+
+            $foto = trim((string) $value);
+            if ($foto === '') {
+                break;
+            }
+
+            if (stripos($foto, 'data:image/') === 0) {
+                $caracteristicas[$key] = '';
+                break;
+            }
+
+            if (filter_var($foto, FILTER_VALIDATE_URL)) {
+                break;
+            }
+
+            $url = $this->objectStorage()->url($foto);
+            if (is_string($url) && $url !== '') {
+                $caracteristicas[$key] = $url;
+            }
+            break;
+        }
+
+        return $caracteristicas;
     }
 
     private function unidadKeyForLabel(string $label): ?string

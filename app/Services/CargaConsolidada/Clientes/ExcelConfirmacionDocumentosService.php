@@ -991,47 +991,51 @@ class ExcelConfirmacionDocumentosService
             return false;
         }
 
-        $info = @getimagesizefromstring($binary);
-        $mime = is_array($info) ? (string) ($info['mime'] ?? '') : '';
-        [$rendering, $mimeType] = $this->memoryDrawingFormatForMime($mime);
+        // Forzamos PNG para preservar transparencia al reescalar.
 
         [$cellWidthPx, $cellHeightPx] = $this->estimateMergedCellSizePx($sheet, $coordinate, $rowsNeeded);
         $pad = 4;
-        $targetW = max(1, $cellWidthPx - ($pad * 2));
-        $targetH = max(1, $cellHeightPx - ($pad * 2));
+            $maxW = max(1, min($cellWidthPx - ($pad * 2), 180));
+            $maxH = max(1, min($cellHeightPx - ($pad * 2), 240));
 
-        // Estira la imagen para llenar el área de la celda (sin letterbox ni overflow).
-        $srcW = max(1, imagesx($imageResource));
-        $srcH = max(1, imagesy($imageResource));
-        $stretched = imagecreatetruecolor($targetW, $targetH);
-        if ($stretched === false) {
+            // Escalar manteniendo proporción; el cuadro del drawing = tamaño real de la foto.
+            $srcW = max(1, imagesx($imageResource));
+            $srcH = max(1, imagesy($imageResource));
+            $scale = min($maxW / $srcW, $maxH / $srcH);
+            $drawW = max(1, (int) round($srcW * $scale));
+            $drawH = max(1, (int) round($srcH * $scale));
+
+            $resized = imagecreatetruecolor($drawW, $drawH);
+            if ($resized === false) {
+                imagedestroy($imageResource);
+                $sheet->setCellValueExplicit($coordinate, '', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+
+                return false;
+            }
+
+            imagealphablending($resized, false);
+            imagesavealpha($resized, true);
+            $transparent = imagecolorallocatealpha($resized, 0, 0, 0, 127);
+            imagefilledrectangle($resized, 0, 0, $drawW, $drawH, $transparent);
+            imagealphablending($resized, true);
+            imagecopyresampled($resized, $imageResource, 0, 0, 0, 0, $drawW, $drawH, $srcW, $srcH);
             imagedestroy($imageResource);
-            $sheet->setCellValueExplicit($coordinate, '', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
 
-            return false;
-        }
+            $offsetX = $pad + (int) floor(($maxW - $drawW) / 2);
+            $offsetY = $pad + (int) floor(($maxH - $drawH) / 2);
 
-        imagealphablending($stretched, false);
-        imagesavealpha($stretched, true);
-        $transparent = imagecolorallocatealpha($stretched, 0, 0, 0, 127);
-        imagefilledrectangle($stretched, 0, 0, $targetW, $targetH, $transparent);
-        imagealphablending($stretched, true);
-        imagecopyresampled($stretched, $imageResource, 0, 0, 0, 0, $targetW, $targetH, $srcW, $srcH);
-        imagedestroy($imageResource);
-
-        $drawing = new MemoryDrawing();
-        $drawing->setName('Foto producto');
-        $drawing->setDescription('Foto producto');
-        $drawing->setImageResource($stretched);
-        $drawing->setRenderingFunction($rendering);
-        $drawing->setMimeType($mimeType);
-        $drawing->setCoordinates($coordinate);
-        $drawing->setResizeProportional(false);
-        $drawing->setWidth($targetW);
-        $drawing->setHeight($targetH);
-        $drawing->setOffsetX($pad);
-        $drawing->setOffsetY($pad);
-        $drawing->setWorksheet($sheet);
+            $drawing = new MemoryDrawing();
+            $drawing->setName('Foto producto');
+            $drawing->setDescription('Foto producto');
+            $drawing->setImageResource($resized);
+            $drawing->setRenderingFunction(MemoryDrawing::RENDERING_PNG);
+            $drawing->setMimeType(MemoryDrawing::MIMETYPE_PNG);
+            $drawing->setCoordinates($coordinate);
+            $drawing->setResizeProportional(true);
+            // setImageResource ya fijó width/height al tamaño proporcional del PNG
+            $drawing->setOffsetX(max(0, $offsetX));
+            $drawing->setOffsetY(max(0, $offsetY));
+            $drawing->setWorksheet($sheet);
 
         $sheet->setCellValueExplicit($coordinate, '', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
 
@@ -1078,21 +1082,42 @@ class ExcelConfirmacionDocumentosService
     {
         $current = $node;
         while ($current !== null) {
-            if ($current instanceof \DOMElement && strtolower((string) $current->localName) === 'pic') {
-                $owner = $current->ownerDocument;
-                if (!$owner instanceof \DOMDocument) {
-                    return false;
+            if ($current instanceof \DOMElement) {
+                $local = strtolower((string) $current->localName);
+                // Nombre dentro del propio pic
+                if ($local === 'pic' && $this->picElementIsProductPhoto($current)) {
+                    return true;
                 }
-                $xp = new \DOMXPath($owner);
-                $nameAttr = $xp->query('.//*[local-name()="cNvPr"]/@name', $current)->item(0);
-                $name = $nameAttr?->nodeValue ?? '';
-
-                return stripos((string) $name, 'Foto producto') !== false;
+                // xdr:ext / a:ext son hermanos de xdr:pic dentro del anchor
+                if (in_array($local, ['onecellanchor', 'twocellanchor', 'absoluteanchor'], true)) {
+                    $owner = $current->ownerDocument;
+                    if ($owner instanceof \DOMDocument) {
+                        $xp = new \DOMXPath($owner);
+                        foreach ($xp->query('.//*[local-name()="pic"]', $current) as $pic) {
+                            if ($pic instanceof \DOMElement && $this->picElementIsProductPhoto($pic)) {
+                                return true;
+                            }
+                        }
+                    }
+                }
             }
             $current = $current->parentNode;
         }
 
         return false;
+    }
+
+    private function picElementIsProductPhoto(\DOMElement $pic): bool
+    {
+        $owner = $pic->ownerDocument;
+        if (!$owner instanceof \DOMDocument) {
+            return false;
+        }
+        $xp = new \DOMXPath($owner);
+        $nameAttr = $xp->query('.//*[local-name()="cNvPr"]/@name', $pic)->item(0);
+        $name = (string) ($nameAttr?->nodeValue ?? '');
+
+        return stripos($name, 'Foto producto') !== false;
     }
 
     private function resolveFotoBinary(string $foto): ?string

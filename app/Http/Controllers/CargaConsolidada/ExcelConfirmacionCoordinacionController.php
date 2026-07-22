@@ -58,17 +58,28 @@ class ExcelConfirmacionCoordinacionController extends Controller
             return $denied;
         }
 
-        $validator = Validator::make($request->all(), [
-            'proveedores' => 'required|array|min:1',
-            'proveedores.*.id' => 'required|integer',
-            'proveedores.*.items' => 'required|array|min:1',
-            'proveedores.*.items.*.id' => 'required|integer',
-            'proveedores.*.items.*.is_new' => 'nullable|boolean',
-            'proveedores.*.items.*.tipo_producto' => 'nullable|string|max:64',
-            'proveedores.*.items.*.caracteristicas' => 'nullable|array',
-            'proveedores.*.items.*.qty' => 'nullable|numeric|min:0',
-            'proveedores.*.items.*.precio_unitario' => 'nullable|numeric|min:0',
-        ]);
+        $proveedores = $request->input('proveedores');
+        if (is_string($proveedores)) {
+            $decoded = json_decode($proveedores, true);
+            $proveedores = is_array($decoded) ? $decoded : null;
+        }
+
+        $validator = Validator::make(
+            array_merge($request->all(), ['proveedores' => $proveedores]),
+            [
+                'proveedores' => 'required|array|min:1',
+                'proveedores.*.id' => 'required|integer',
+                'proveedores.*.items' => 'required|array|min:1',
+                'proveedores.*.items.*.id' => 'required|integer',
+                'proveedores.*.items.*.is_new' => 'nullable|boolean',
+                'proveedores.*.items.*.tipo_producto' => 'nullable|string|max:64',
+                'proveedores.*.items.*.caracteristicas' => 'nullable|array',
+                'proveedores.*.items.*.qty' => 'nullable|numeric|min:0',
+                'proveedores.*.items.*.precio_unitario' => 'nullable|numeric|min:0',
+                'fotos' => 'nullable|array',
+                'fotos.*.*' => 'nullable|file|image|max:5120',
+            ]
+        );
 
         if ($validator->fails()) {
             return response()->json([
@@ -78,9 +89,11 @@ class ExcelConfirmacionCoordinacionController extends Controller
             ], 422);
         }
 
+        $proveedores = $this->formService->attachFotoFilesFromRequest($proveedores, $request);
+
         $result = $this->formService->saveConfirmation(
             $uuid,
-            $request->input('proveedores', []),
+            $proveedores,
             ignoreCerrado: true
         );
 

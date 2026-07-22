@@ -123,7 +123,8 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
                 Route::get('labels', [ExcelConfirmacionCoordinacionController::class, 'labels']);
                 Route::get('{uuid}/export-general', [ExcelConfirmacionCoordinacionController::class, 'exportExcelGeneral']);
                 Route::get('{uuid}', [ExcelConfirmacionCoordinacionController::class, 'show']);
-                Route::put('{uuid}', [ExcelConfirmacionCoordinacionController::class, 'update']);
+                // POST: multipart con fotos (PHP no parsea files en PUT)
+                Route::match(['put', 'post'], '{uuid}', [ExcelConfirmacionCoordinacionController::class, 'update']);
                 Route::post('proveedor/{idProveedor}/cerrar', [ExcelConfirmacionCoordinacionController::class, 'cerrar']);
                 Route::post('proveedor/{idProveedor}/reabrir', [ExcelConfirmacionCoordinacionController::class, 'reabrir']);
                 Route::get('proveedor/{idProveedor}/export', [ExcelConfirmacionCoordinacionController::class, 'exportExcel']);

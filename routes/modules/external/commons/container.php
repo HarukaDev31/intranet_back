@@ -16,5 +16,5 @@ Route::group(['prefix' => 'contenedor/external' ], function () {
 
     Route::get('excel-confirmacion/labels', [ExcelConfirmacionController::class, 'labels']);
     Route::get('excel-confirmacion/{uuid}', [ExcelConfirmacionController::class, 'show']);
-    Route::put('excel-confirmacion/{uuid}', [ExcelConfirmacionController::class, 'update']);
+    Route::match(['put', 'post'], 'excel-confirmacion/{uuid}', [ExcelConfirmacionController::class, 'update']);
 });
