@@ -22,6 +22,7 @@ class Usuario extends Authenticatable implements JWTSubject
     const JEFE_MARKETING = 'Jefe Marketing';
     const ROL_SOPORTE = 'Soporte';
     const ROL_PM = 'PM';
+    const ROL_FINANZAS = 'Finanzas';
     protected $fillable = [
         'No_Usuario',
         'No_Password',

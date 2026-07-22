@@ -39,6 +39,7 @@ class ContenedorController extends Controller
     private $defaultDocumentacion = [];
     private $defaultJefeImportacion = [];
     private $defaultJefeMarketing = [];
+    private $defaultFinanzas = [];
     public function __construct()
     {
         $host = rtrim(config('app.url') ?? env('APP_URL'), '/');
@@ -84,6 +85,11 @@ class ContenedorController extends Controller
         $this->defaultJefeMarketing = array(
             ["name" => "COTIZACION", "iconURL" => $host . '/assets/icons/cotizacion.png'],
             ["name" => "CLIENTES", "iconURL" => $host . '/assets/icons/clientes.png'],
+        );
+        $this->defaultFinanzas = array(
+            ["name" => "CLIENTES", "iconURL" => $host . '/assets/icons/clientes.png'],
+            ["name" => "COTIZACION FINAL", "iconURL" => $host . '/assets/icons/cotizacion_final.png'],
+            
         );
     }
 
@@ -400,7 +406,9 @@ class ContenedorController extends Controller
             $this->getCotizacionSteps($idContenedor),
             $this->getDocumentacionSteps($idContenedor),
             $this->getJefeImportacionSteps($idContenedor),
-            $this->getJefeMarketingSteps($idContenedor)
+            $this->getJefeMarketingSteps($idContenedor),
+            $this->getFinanzasSteps($idContenedor)
+
         );
     }
     public function getCotizacionSteps($idContenedor)
@@ -477,13 +485,31 @@ class ContenedorController extends Controller
 
         return $stepsJefeMarketing;
     }
-
-    public function insertSteps($stepsCotizador, $stepsDocumentacion, $stepsJefeImportacion, $stepsJefeMarketing)
+    public function getFinanzasSteps($idContenedor)
+    {
+        $stepsFinanzas = [];
+        $idContenedor = intval($idContenedor);
+        $index = 1;
+        foreach ($this->defaultFinanzas as $step) {
+            $stepsFinanzas[] = [
+                'id_pedido' => $idContenedor,
+                'id_order' => $index,
+                'tipo' => 'FINANZAS',
+                'name' => $step['name'],
+                'iconURL' => $step['iconURL'],
+                'status' => 'PENDING',
+            ];
+            $index++;
+        }
+        return $stepsFinanzas;
+    }
+    public function insertSteps($stepsCotizador, $stepsDocumentacion, $stepsJefeImportacion, $stepsJefeMarketing, $stepsFinanzas)
     {
         ContenedorPasos::insert($stepsCotizador);
         ContenedorPasos::insert($stepsDocumentacion);
         ContenedorPasos::insert($stepsJefeImportacion);
         ContenedorPasos::insert($stepsJefeMarketing);
+        ContenedorPasos::insert($stepsFinanzas);
     }
     
     /**
@@ -636,7 +662,6 @@ class ContenedorController extends Controller
                 }
             }
             $query = ContenedorPasos::where('id_pedido', $idContenedor)->orderBy('id_order', 'asc');
-            Log::info('role', [$role]);
             switch ($role) {
                 case Usuario::ROL_COTIZADOR:
                     // Aseguramos que sólo consultamos pasos del cotizador
@@ -664,12 +689,14 @@ class ContenedorController extends Controller
                 case Usuario::JEFE_MARKETING:
                     $query->where('tipo', 'JEFE MARKETING');
                     break;
+                case Usuario::ROL_FINANZAS:
+                    $query->where('tipo', 'FINANZAS');
+                    break;
                 default:
                     $query->where('tipo', 'COTIZADOR');
                     break;
             }
             $data = $query->select('id', 'name', 'status', 'iconURL')->get();
-            //FOR EACH DATA, IF ICONURL IS NOT NULL, REPLACE THE ICONURL WITH THE URL OF THE ICON
             foreach ($data as $item) {
                 $item->iconURL = $this->generateImageUrl($item->iconURL);
             }
