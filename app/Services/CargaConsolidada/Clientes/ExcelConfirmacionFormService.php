@@ -623,12 +623,25 @@ class ExcelConfirmacionFormService
         array $itemData,
         ?int $idItemOrigen = null
     ): int {
+        $existingRow = null;
+        if ($idItemOrigen !== null) {
+            $existingRow = CotizacionProveedorItemExcelConf::where('id_proveedor', $proveedorId)
+                ->where('id_item_origen', $idItemOrigen)
+                ->first();
+        } elseif ($itemId > 0) {
+            $existingRow = CotizacionProveedorItemExcelConf::where('id', $itemId)
+                ->where('id_proveedor', $proveedorId)
+                ->whereNull('id_item_origen')
+                ->first();
+        }
+
         $caracteristicas = $this->sanitizeAndApplyFoto(
             $this->normalizeCaracteristicasKeys(
                 is_array($itemData['caracteristicas'] ?? null) ? $itemData['caracteristicas'] : []
             ),
             $itemData['foto_file'] ?? null,
-            $proveedorId
+            $proveedorId,
+            is_array($existingRow?->caracteristicas) ? $existingRow->caracteristicas : null
         );
         $payload = [
             'id_cotizacion' => $cotizacionId,
@@ -642,19 +655,16 @@ class ExcelConfirmacionFormService
         ];
 
         if ($idItemOrigen !== null) {
-            $existing = CotizacionProveedorItemExcelConf::where('id_proveedor', $proveedorId)
-                ->where('id_item_origen', $idItemOrigen)
-                ->first();
-            if ($existing) {
+            if ($existingRow) {
                 // Conserva el título original del producto de cotización si existe
                 $origen = CotizacionProveedorItems::where('id', $idItemOrigen)->first();
                 if ($origen && filled($origen->initial_name)) {
                     $payload['initial_name'] = $origen->initial_name;
                     $payload['tipo_producto'] = strtoupper((string) ($origen->tipo_producto ?: $payload['tipo_producto']));
                 }
-                $existing->update($payload);
+                $existingRow->update($payload);
 
-                return (int) $existing->id;
+                return (int) $existingRow->id;
             }
 
             $origen = CotizacionProveedorItems::where('id', $idItemOrigen)->first();
@@ -668,16 +678,10 @@ class ExcelConfirmacionFormService
             return (int) $created->id;
         }
 
-        if ($itemId > 0) {
-            $existing = CotizacionProveedorItemExcelConf::where('id', $itemId)
-                ->where('id_proveedor', $proveedorId)
-                ->whereNull('id_item_origen')
-                ->first();
-            if ($existing) {
-                $existing->update($payload);
+        if ($existingRow) {
+            $existingRow->update($payload);
 
-                return (int) $existing->id;
-            }
+            return (int) $existingRow->id;
         }
 
         $created = CotizacionProveedorItemExcelConf::create($payload);
@@ -838,21 +842,41 @@ class ExcelConfirmacionFormService
      * @param  array<string, mixed>  $caracteristicas
      * @return array<string, mixed>
      */
-    private function sanitizeAndApplyFoto(array $caracteristicas, $fotoFile, int $proveedorId): array
-    {
+    private function sanitizeAndApplyFoto(
+        array $caracteristicas,
+        $fotoFile,
+        int $proveedorId,
+        ?array $existingCaracteristicas = null
+    ): array {
         $fotoKey = self::CAMPO_FOTO;
+        $incomingRaw = '';
         foreach ($caracteristicas as $key => $value) {
             $normalized = strtolower(rtrim(trim((string) $key), ':'));
             if ($normalized !== 'foto/imagen') {
                 continue;
             }
             $fotoKey = (string) $key;
-            $foto = trim((string) $value);
-            // Nunca guardar base64 en BD
-            if ($foto !== '' && stripos($foto, 'data:image/') === 0) {
-                $caracteristicas[$key] = '';
-            }
+            $incomingRaw = trim((string) $value);
             break;
+        }
+
+        $existingFoto = '';
+        if (is_array($existingCaracteristicas)) {
+            foreach ($existingCaracteristicas as $key => $value) {
+                $normalized = strtolower(rtrim(trim((string) $key), ':'));
+                if ($normalized !== 'foto/imagen') {
+                    continue;
+                }
+                $candidate = trim((string) $value);
+                if (
+                    $candidate !== ''
+                    && stripos($candidate, 'data:image/') !== 0
+                    && !filter_var($candidate, FILTER_VALIDATE_URL)
+                ) {
+                    $existingFoto = $candidate;
+                }
+                break;
+            }
         }
 
         if ($fotoFile instanceof UploadedFile && $fotoFile->isValid()) {
@@ -863,6 +887,22 @@ class ExcelConfirmacionFormService
             $filename = 'excel_conf_' . $proveedorId . '_' . time() . '_' . uniqid('', true) . '.' . $ext;
             $stored = $this->storageStoreUpload($fotoFile, 'excel-confirmacion/fotos', $filename);
             $caracteristicas[$fotoKey] = $stored;
+
+            return $caracteristicas;
+        }
+
+        $isDisplayUrlOrBase64 = $incomingRaw !== ''
+            && (stripos($incomingRaw, 'data:image/') === 0 || (bool) filter_var($incomingRaw, FILTER_VALIDATE_URL));
+
+        if ($isDisplayUrlOrBase64) {
+            // El front reenvió URL pública/preview: conservar ruta relativa existente.
+            $caracteristicas[$fotoKey] = $existingFoto;
+        } elseif ($incomingRaw === '') {
+            // Vacío = foto borrada o sin foto.
+            $caracteristicas[$fotoKey] = '';
+        } else {
+            // Ruta relativa enviada explícitamente.
+            $caracteristicas[$fotoKey] = $incomingRaw;
         }
 
         return $caracteristicas;
