@@ -734,6 +734,25 @@ Descárgalo aquí: {{link_excel}} 📄
 
 QA (`pb_docs_excel_link_v1_qa`) añade `{{link_intranet}}`: formulario web de la cotización (sin `?proveedor=`).
 
+**BODY QA:**
+
+```
+Documentación: CONSOLIDADO #{{carga}}
+
+Excel de confirmación — {{codigo_proveedor}}
+
+Descárgalo aquí: {{link_excel}} 📄
+
+Llénalo en la web: {{link_intranet}}
+```
+
+| Parámetro Meta | Orden API | Campo backend |
+|----------------|-----------|---------------|
+| `{{carga}}` | 1 | Carga |
+| `{{codigo_proveedor}}` | 2 | Etiqueta (`General` en envío único) |
+| `{{link_excel}}` | 3 | URL Google Drive |
+| `{{link_intranet}}` | 4 | URL formulario web |
+
 ---
 
 ### D03 — `pb_docs_paso2_word_v1`

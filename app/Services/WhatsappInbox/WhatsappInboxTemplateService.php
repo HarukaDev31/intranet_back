@@ -51,6 +51,8 @@ class WhatsappInboxTemplateService
             'total',
             'fecha_limite',
         ],
+        'pb_docs_excel_link_v1' => ['carga', 'codigo_proveedor', 'link_excel'],
+        'pb_docs_excel_link_v1_qa' => ['carga', 'codigo_proveedor', 'link_excel', 'link_intranet'],
     ];
 
     /**
@@ -103,6 +105,20 @@ class WhatsappInboxTemplateService
                 'text' => 'Consideraciones para la documentación de tu importación. 📋',
                 'params' => [],
                 'header_format' => 'DOCUMENT',
+            ],
+            [
+                'name' => 'pb_docs_excel_link_v1',
+                'label' => 'Docs — Excel de confirmación (link)',
+                'language' => 'es_PE',
+                'text' => "Documentación: CONSOLIDADO #{{carga}}\n\nExcel de confirmación — Proveedor {{codigo_proveedor}}\n\nDescárgalo aquí: {{link_excel}} 📄",
+                'params' => ['carga', 'codigo_proveedor', 'link_excel'],
+            ],
+            [
+                'name' => 'pb_docs_excel_link_v1_qa',
+                'label' => 'Docs — Excel de confirmación (Drive + web)',
+                'language' => 'es_PE',
+                'text' => "Documentación: CONSOLIDADO #{{carga}}\n\nExcel de confirmación — {{codigo_proveedor}}\n\nDescárgalo aquí: {{link_excel}} 📄\n\nLlénalo en la web: {{link_intranet}}",
+                'params' => ['carga', 'codigo_proveedor', 'link_excel', 'link_intranet'],
             ],
             [
                 'name' => 'pb_consolidado_resumen_pago_v1',
@@ -343,13 +359,27 @@ class WhatsappInboxTemplateService
         $templates = isset($list['data']) && is_array($list['data']) ? $list['data'] : [];
         $bodyText = '[' . $templateName . ']';
         $headerText = '';
+        $found = false;
         foreach ($templates as $tpl) {
             if (!is_array($tpl) || ($tpl['name'] ?? '') !== $templateName) {
                 continue;
             }
             $bodyText = isset($tpl['text']) ? (string) $tpl['text'] : $bodyText;
             $headerText = isset($tpl['header_text']) ? (string) $tpl['header_text'] : '';
+            $found = true;
             break;
+        }
+
+        // Graph a veces no trae plantillas QA/_qa: usar fallback local.
+        if (!$found) {
+            foreach ($this->defaultTemplates() as $tpl) {
+                if (!is_array($tpl) || ($tpl['name'] ?? '') !== $templateName) {
+                    continue;
+                }
+                $bodyText = isset($tpl['text']) ? (string) $tpl['text'] : $bodyText;
+                $headerText = isset($tpl['header_text']) ? (string) $tpl['header_text'] : '';
+                break;
+            }
         }
 
         $parts = [];

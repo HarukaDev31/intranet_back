@@ -391,7 +391,14 @@ class CoordinacionWhatsappPayload
             ]);
         }
 
-        $payload = self::template($phone, self::DOCS_EXCEL_LINK_TEMPLATE, $bodyParameters, null, $sleep);
+        $preview = self::docsExcelLinkPreview(
+            (string) ($bodyParameters['carga'] ?? ''),
+            (string) ($bodyParameters['codigo_proveedor'] ?? ''),
+            (string) ($bodyParameters['link_excel'] ?? ''),
+            (string) ($bodyParameters['link_intranet'] ?? '')
+        );
+
+        $payload = self::template($phone, self::DOCS_EXCEL_LINK_TEMPLATE, $bodyParameters, $preview, $sleep);
         if ($idProveedorRef !== null && (int) $idProveedorRef > 0) {
             $payload['id_proveedor'] = (int) $idProveedorRef;
         }
@@ -415,7 +422,14 @@ class CoordinacionWhatsappPayload
             ]);
         }
 
-        $payload = self::template($phone, self::DOCS_EXCEL_LINK_TEMPLATE, $bodyParameters, null, $sleep);
+        $preview = self::docsExcelLinkPreview(
+            (string) ($bodyParameters['carga'] ?? ''),
+            (string) ($bodyParameters['codigo_proveedor'] ?? ''),
+            (string) ($bodyParameters['link_excel'] ?? ''),
+            (string) ($bodyParameters['link_intranet'] ?? '')
+        );
+
+        $payload = self::template($phone, self::DOCS_EXCEL_LINK_TEMPLATE, $bodyParameters, $preview, $sleep);
         $payload['id_proveedor'] = $idProveedor;
 
         return $payload;
@@ -498,7 +512,13 @@ class CoordinacionWhatsappPayload
         $codigo = (string) (($payload['body_parameters']['codigo_proveedor'] ?? '') ?: '');
 
         $payload['body_parameters'] = self::docsExcelLinkBodyParameters($idProveedor, $carga, $codigo);
-        unset($payload['chat_preview'], $payload['bitrix_message']);
+        $payload['chat_preview'] = self::docsExcelLinkPreview(
+            (string) (($payload['body_parameters']['carga'] ?? '') ?: ''),
+            (string) (($payload['body_parameters']['codigo_proveedor'] ?? '') ?: ''),
+            (string) (($payload['body_parameters']['link_excel'] ?? '') ?: ''),
+            (string) (($payload['body_parameters']['link_intranet'] ?? '') ?: '')
+        );
+        unset($payload['bitrix_message']);
 
         return ($payload['body_parameters']['link_excel'] ?? '') !== ''
             || ($payload['body_parameters']['link_intranet'] ?? '') !== '';
@@ -609,7 +629,7 @@ class CoordinacionWhatsappPayload
         return "Documentación: CONSOLIDADO #{$carga}\n\n"
             . "Excel de confirmación — {$label}\n\n"
             . ($drive !== '' ? "Descárgalo aquí: {$drive} 📄" : '')
-            . ($intranet !== '' ? (($drive !== '' ? "\n\n" : '') . "Llénalo en la intranet: {$intranet}") : '');
+            . ($intranet !== '' ? (($drive !== '' ? "\n\n" : '') . "Llénalo en la web: {$intranet}") : '');
     }
 
     public static function docsPaso2(string $phone, string $bitrixMessage, ?string $fechaMaxima = null, int $sleep = 0): array
