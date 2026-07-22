@@ -363,6 +363,25 @@ class CoordinacionWhatsappPayload
         ], $bitrixMessage, $sleep);
     }
 
+    /** Plantilla Meta — confirmación al cliente tras guardar Excel de confirmación (web). */
+    private const DOCS_EXCEL_CONF_RECIBIDO_TEMPLATE = 'pb_docs_excel_conf_recibido_v1';
+
+    public static function docsExcelConfRecibidoPreview(string $carga): string
+    {
+        return "Documentación: CONSOLIDADO #{$carga}\n\n"
+            . "Recibimos tu Excel de confirmación ✅\n\n"
+            . 'Nuestro equipo lo revisará pronto.';
+    }
+
+    public static function docsExcelConfRecibido(string $phone, string $carga, int $sleep = 0): array
+    {
+        $preview = self::docsExcelConfRecibidoPreview($carga);
+
+        return self::template($phone, self::DOCS_EXCEL_CONF_RECIBIDO_TEMPLATE, [
+            'carga' => $carga,
+        ], $preview, $sleep);
+    }
+
     /**
      * Un solo mensaje D02 por cotización: Drive (Excel general) + intranet (sin ?proveedor=).
      *

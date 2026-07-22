@@ -5,7 +5,9 @@ namespace App\Services\CargaConsolidada\Clientes;
 use App\Models\CargaConsolidada\CotizacionProveedor;
 use App\Models\CargaConsolidada\CotizacionProveedorItemExcelConf;
 use App\Models\CargaConsolidada\CotizacionProveedorItems;
+use App\Jobs\WhatsApp\SendCoordinacionWhatsAppJob;
 use App\Services\Storage\S3ObjectStorageConnector;
+use App\Support\WhatsApp\CoordinacionWhatsappPayload;
 use App\Traits\UsesObjectStorage;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -209,6 +211,56 @@ class ExcelConfirmacionFormService
             Log::error('ExcelConfirmacionFormService::saveConfirmation — ' . $e->getMessage(), ['uuid' => $uuid]);
 
             return ['success' => false, 'code' => 'ERROR_INTERNO', 'status' => 500];
+        }
+    }
+
+    /**
+     * Notifica por WhatsApp (Meta + inbox) que el cliente envió el Excel de confirmación.
+     * No lanza: el guardado ya quedó OK.
+     */
+    public function notifyClientExcelConfRecibido(string $uuid): void
+    {
+        try {
+            $cotizacion = DB::table('contenedor_consolidado_cotizacion')
+                ->select('id', 'telefono', 'id_contenedor')
+                ->where('uuid', $uuid)
+                ->whereNull('deleted_at')
+                ->first();
+
+            if (!$cotizacion) {
+                return;
+            }
+
+            $telefono = preg_replace('/\s+/', '', (string) ($cotizacion->telefono ?? ''));
+            if ($telefono === '') {
+                Log::warning('ExcelConfirmacionFormService: sin teléfono para notificar Excel conf. recibido', [
+                    'uuid' => $uuid,
+                ]);
+
+                return;
+            }
+
+            $contenedor = DB::table('carga_consolidada_contenedor')
+                ->select('carga')
+                ->where('id', $cotizacion->id_contenedor)
+                ->first();
+
+            $carga = $contenedor->carga ?? '';
+            $cargaCode = is_numeric($carga)
+                ? str_pad((string) $carga, 2, '0', STR_PAD_LEFT)
+                : (string) $carga;
+
+            $payload = CoordinacionWhatsappPayload::docsExcelConfRecibido($telefono, $cargaCode);
+            SendCoordinacionWhatsAppJob::dispatch($payload);
+
+            Log::info('ExcelConfirmacionFormService: notificado Excel conf. recibido', [
+                'uuid' => $uuid,
+                'carga' => $cargaCode,
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('ExcelConfirmacionFormService::notifyClientExcelConfRecibido — ' . $e->getMessage(), [
+                'uuid' => $uuid,
+            ]);
         }
     }
 

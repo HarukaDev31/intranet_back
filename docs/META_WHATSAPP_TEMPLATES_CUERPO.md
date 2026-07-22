@@ -754,6 +754,27 @@ Llenalo aquí: {{link_excel}} o
 
 ---
 
+### D02b — `pb_docs_excel_conf_recibido_v1`
+
+**Tipo:** TEXT · **Categoría:** UTILITY · **WABA:** consolidado  
+**Origen:** `ExcelConfirmacionController` (web pública) tras `saveConfirmation` exitoso del cliente.
+
+**BODY:**
+
+```
+Documentación: CONSOLIDADO #{{carga}}
+
+Recibimos tu Excel de confirmación ✅
+
+Nuestro equipo lo revisará pronto.
+```
+
+| Parámetro Meta | Orden API | Campo backend |
+|----------------|-----------|---------------|
+| `{{carga}}` | 1 | Código carga (ej. 05) |
+
+---
+
 ### D03 — `pb_docs_paso2_word_v1`
 
 **Sin fecha máxima:**
