@@ -656,7 +656,6 @@ class ExcelConfirmacionFormService
 
         if ($idItemOrigen !== null) {
             if ($existingRow) {
-                // Conserva el título original del producto de cotización si existe
                 $origen = CotizacionProveedorItems::where('id', $idItemOrigen)->first();
                 if ($origen && filled($origen->initial_name)) {
                     $payload['initial_name'] = $origen->initial_name;
@@ -710,7 +709,6 @@ class ExcelConfirmacionFormService
             'tipo_producto' => $item->tipo_producto,
             'initial_qty' => $item->initial_qty,
             'initial_price' => $item->initial_price,
-            // Solo datos de confirmación (excel_conf). La cotización no se usa para prellenar.
             'caracteristicas' => $this->resolveFotoDisplayValue(
                 $this->normalizeCaracteristicasKeys(
                     is_array($overlay?->caracteristicas) ? $overlay->caracteristicas : []
@@ -800,8 +798,6 @@ class ExcelConfirmacionFormService
     }
 
     /**
-     * Adjunta UploadedFile de request multipart a cada ítem (fotos[proveedorId][itemId]).
-     *
      * @param  array<int, array<string, mixed>>  $proveedoresData
      * @return array<int, array<string, mixed>>
      */
@@ -836,9 +832,6 @@ class ExcelConfirmacionFormService
     }
 
     /**
-     * Si viene archivo: sube a storage y guarda SOLO la ruta relativa en FOTO/IMAGEN.
-     * Nunca persiste data-URL / base64.
-     *
      * @param  array<string, mixed>  $caracteristicas
      * @return array<string, mixed>
      */
@@ -895,13 +888,10 @@ class ExcelConfirmacionFormService
             && (stripos($incomingRaw, 'data:image/') === 0 || (bool) filter_var($incomingRaw, FILTER_VALIDATE_URL));
 
         if ($isDisplayUrlOrBase64) {
-            // El front reenvió URL pública/preview: conservar ruta relativa existente.
             $caracteristicas[$fotoKey] = $existingFoto;
         } elseif ($incomingRaw === '') {
-            // Vacío = foto borrada o sin foto.
             $caracteristicas[$fotoKey] = '';
         } else {
-            // Ruta relativa enviada explícitamente.
             $caracteristicas[$fotoKey] = $incomingRaw;
         }
 
@@ -909,9 +899,6 @@ class ExcelConfirmacionFormService
     }
 
     /**
-     * Expone FOTO/IMAGEN como URL pública si en BD hay ruta relativa.
-     * No reenvía data-URL base64 al front.
-     *
      * @param  array<string, mixed>  $caracteristicas
      * @return array<string, mixed>
      */
