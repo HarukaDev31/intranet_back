@@ -110,14 +110,14 @@ class WhatsappInboxTemplateService
                 'name' => 'pb_docs_excel_link_v1',
                 'label' => 'Docs — Excel de confirmación (link)',
                 'language' => 'es_PE',
-                'text' => "Documentación: CONSOLIDADO #{{carga}}\n\nExcel de confirmación — Proveedor {{codigo_proveedor}}\n\nDescárgalo aquí: {{link_excel}} 📄",
+                'text' => "Documentación: CONSOLIDADO #{{carga}}\n\nExcel de confirmación — Proveedor {{codigo_proveedor}}\n\nLlenalo aquí: {{link_excel}} 📄",
                 'params' => ['carga', 'codigo_proveedor', 'link_excel'],
             ],
             [
                 'name' => 'pb_docs_excel_link_v1_qa',
                 'label' => 'Docs — Excel de confirmación (Drive + web)',
                 'language' => 'es_PE',
-                'text' => "Documentación: CONSOLIDADO #{{carga}}\n\nExcel de confirmación — {{codigo_proveedor}}\n\nDescárgalo aquí: {{link_excel}} 📄\n\nLlénalo en la web: {{link_intranet}}",
+                'text' => "Documentación: CONSOLIDADO #{{carga}}\n\nExcel de confirmación — Proveedor {{codigo_proveedor}}\n\nLlenalo aquí: {{link_excel}} o\n{{link_intranet}}  📄 .",
                 'params' => ['carga', 'codigo_proveedor', 'link_excel', 'link_intranet'],
             ],
             [

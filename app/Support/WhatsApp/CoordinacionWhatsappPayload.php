@@ -626,10 +626,11 @@ class CoordinacionWhatsappPayload
         $drive = trim($linkExcel);
         $label = trim($codigoProveedor) !== '' ? trim($codigoProveedor) : 'General';
 
+        // Debe coincidir con el BODY Meta de pb_docs_excel_link_v1_qa.
         return "Documentación: CONSOLIDADO #{$carga}\n\n"
-            . "Excel de confirmación — {$label}\n\n"
-            . ($drive !== '' ? "Descárgalo aquí: {$drive} 📄" : '')
-            . ($intranet !== '' ? (($drive !== '' ? "\n\n" : '') . "Llénalo en la web: {$intranet}") : '');
+            . "Excel de confirmación — Proveedor {$label}\n\n"
+            . "Llenalo aquí: {$drive} o\n"
+            . "{$intranet}  📄 .";
     }
 
     public static function docsPaso2(string $phone, string $bitrixMessage, ?string $fechaMaxima = null, int $sleep = 0): array

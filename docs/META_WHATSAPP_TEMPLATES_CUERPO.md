@@ -739,11 +739,10 @@ QA (`pb_docs_excel_link_v1_qa`) añade `{{link_intranet}}`: formulario web de la
 ```
 Documentación: CONSOLIDADO #{{carga}}
 
-Excel de confirmación — {{codigo_proveedor}}
+Excel de confirmación — Proveedor {{codigo_proveedor}}
 
-Descárgalo aquí: {{link_excel}} 📄
-
-Llénalo en la web: {{link_intranet}}
+Llenalo aquí: {{link_excel}} o
+{{link_intranet}}  📄 .
 ```
 
 | Parámetro Meta | Orden API | Campo backend |
