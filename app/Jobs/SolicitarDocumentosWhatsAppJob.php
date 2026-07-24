@@ -231,10 +231,8 @@ class SolicitarDocumentosWhatsAppJob implements ShouldQueue
 
             if ($formLink !== '' || ($driveLink ?? null) !== null) {
                 $linksMessage = CoordinacionWhatsappPayload::docsExcelLinkPreview(
-                    $cargaCode,
-                    $codigoLabel,
-                    (string) ($driveLink ?? ''),
-                    $formLink
+                    $formLink,
+                    (string) ($driveLink ?? '')
                 );
                 $insertAt = 1;
                 foreach ($steps as $idx => $step) {

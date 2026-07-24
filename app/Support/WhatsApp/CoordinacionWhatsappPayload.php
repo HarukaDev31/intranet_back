@@ -399,10 +399,8 @@ class CoordinacionWhatsappPayload
         $idProveedorRef = null
     ): array {
         $bodyParameters = [
-            'carga' => $carga,
-            'codigo_proveedor' => $codigoProveedorLabel !== '' ? $codigoProveedorLabel : 'General',
-            'link_excel' => self::normalizeExternalUrl($linkExcel),
             'link_intranet' => self::normalizeExternalUrl($linkIntranet),
+            'link_excel' => self::normalizeExternalUrl($linkExcel),
         ];
 
         if (($bodyParameters['link_excel'] ?? '') === '' && ($bodyParameters['link_intranet'] ?? '') === '') {
@@ -413,10 +411,8 @@ class CoordinacionWhatsappPayload
         }
 
         $preview = self::docsExcelLinkPreview(
-            (string) ($bodyParameters['carga'] ?? ''),
-            (string) ($bodyParameters['codigo_proveedor'] ?? ''),
-            (string) ($bodyParameters['link_excel'] ?? ''),
-            (string) ($bodyParameters['link_intranet'] ?? '')
+            (string) ($bodyParameters['link_intranet'] ?? ''),
+            (string) ($bodyParameters['link_excel'] ?? '')
         );
 
         $payload = self::template($phone, self::DOCS_EXCEL_LINK_TEMPLATE, $bodyParameters, $preview, $sleep);
@@ -444,10 +440,8 @@ class CoordinacionWhatsappPayload
         }
 
         $preview = self::docsExcelLinkPreview(
-            (string) ($bodyParameters['carga'] ?? ''),
-            (string) ($bodyParameters['codigo_proveedor'] ?? ''),
-            (string) ($bodyParameters['link_excel'] ?? ''),
-            (string) ($bodyParameters['link_intranet'] ?? '')
+            (string) ($bodyParameters['link_intranet'] ?? ''),
+            (string) ($bodyParameters['link_excel'] ?? '')
         );
 
         $payload = self::template($phone, self::DOCS_EXCEL_LINK_TEMPLATE, $bodyParameters, $preview, $sleep);
@@ -457,7 +451,7 @@ class CoordinacionWhatsappPayload
     }
 
     /**
-     * @return array{carga: string, codigo_proveedor: string, link_excel: string, link_intranet?: string}
+     * @return array{link_intranet: string, link_excel: string}
      */
     public static function docsExcelLinkBodyParameters(int $idProveedor, string $carga, string $codigoProveedor): array
     {
@@ -465,10 +459,8 @@ class CoordinacionWhatsappPayload
         $linkIntranet = self::resolveExcelConfirmacionIntranetLink($idProveedor) ?? '';
 
         return [
-            'carga' => $carga,
-            'codigo_proveedor' => $codigoProveedor !== '' ? $codigoProveedor : 'General',
-            'link_excel' => $linkExcel,
             'link_intranet' => $linkIntranet,
+            'link_excel' => $linkExcel,
         ];
     }
 
@@ -534,10 +526,8 @@ class CoordinacionWhatsappPayload
 
         $payload['body_parameters'] = self::docsExcelLinkBodyParameters($idProveedor, $carga, $codigo);
         $payload['chat_preview'] = self::docsExcelLinkPreview(
-            (string) (($payload['body_parameters']['carga'] ?? '') ?: ''),
-            (string) (($payload['body_parameters']['codigo_proveedor'] ?? '') ?: ''),
-            (string) (($payload['body_parameters']['link_excel'] ?? '') ?: ''),
-            (string) (($payload['body_parameters']['link_intranet'] ?? '') ?: '')
+            (string) (($payload['body_parameters']['link_intranet'] ?? '') ?: ''),
+            (string) (($payload['body_parameters']['link_excel'] ?? '') ?: '')
         );
         unset($payload['bitrix_message']);
 
@@ -634,24 +624,22 @@ class CoordinacionWhatsappPayload
         }
 
         return self::template($phone, self::DOCS_EXCEL_LINK_TEMPLATE, [
-            'carga' => $carga,
-            'codigo_proveedor' => $codigoProveedor,
-            'link_excel' => self::normalizeExternalUrl($linkExcel),
             'link_intranet' => '',
+            'link_excel' => self::normalizeExternalUrl($linkExcel),
         ], $bitrixMessage, $sleep);
     }
 
-    public static function docsExcelLinkPreview(string $carga, string $codigoProveedor, string $linkExcel, ?string $linkIntranet = null): string
+    public static function docsExcelLinkPreview(string $linkIntranet, string $linkExcel): string
     {
-        $intranet = trim((string) ($linkIntranet ?? ''));
+        $intranet = trim($linkIntranet);
         $drive = trim($linkExcel);
-        $label = trim($codigoProveedor) !== '' ? trim($codigoProveedor) : 'General';
 
         // Debe coincidir con el BODY Meta de pb_docs_excel_link_v1_qa.
-        return "Documentación: CONSOLIDADO #{$carga}\n\n"
-            . "Excel de confirmación — Proveedor {$label}\n\n"
-            . "Llenalo aquí: {$drive} o\n"
-            . "{$intranet}  📄 .";
+        return "Tienes 2 opciones para llenar la información\n"
+            . "1.\t📱 Desde tu celular:\n"
+            . "{$intranet}   .\n"
+            . "2.\t📄Descargando el Excel\n"
+            . "{$drive}✅.";
     }
 
     public static function docsPaso2(string $phone, string $bitrixMessage, ?string $fechaMaxima = null, int $sleep = 0): array

@@ -52,7 +52,7 @@ class WhatsappInboxTemplateService
             'fecha_limite',
         ],
         'pb_docs_excel_link_v1' => ['carga', 'codigo_proveedor', 'link_excel'],
-        'pb_docs_excel_link_v1_qa' => ['carga', 'codigo_proveedor', 'link_excel', 'link_intranet'],
+        'pb_docs_excel_link_v1_qa' => ['link_intranet', 'link_excel'],
         'pb_docs_excel_conf_recibido_v1' => ['consolidado', 'enlace'],
     ];
 
@@ -118,8 +118,8 @@ class WhatsappInboxTemplateService
                 'name' => 'pb_docs_excel_link_v1_qa',
                 'label' => 'Docs — Excel de confirmación (Drive + web)',
                 'language' => 'es_PE',
-                'text' => "Documentación: CONSOLIDADO #{{carga}}\n\nExcel de confirmación — Proveedor {{codigo_proveedor}}\n\nLlenalo aquí: {{link_excel}} o\n{{link_intranet}}  📄 .",
-                'params' => ['carga', 'codigo_proveedor', 'link_excel', 'link_intranet'],
+                'text' => "Tienes 2 opciones para llenar la información\n1.\t📱 Desde tu celular:\n{{link_intranet}}   .\n2.\t📄Descargando el Excel\n{{link_excel}}✅.",
+                'params' => ['link_intranet', 'link_excel'],
             ],
             [
                 'name' => 'pb_docs_excel_conf_recibido_v1',

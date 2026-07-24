@@ -732,25 +732,22 @@ Descárgalo aquí: {{link_excel}} 📄
 | `{{codigo_proveedor}}` | 2 | Etiqueta (`General` en envío único) |
 | `{{link_excel}}` | 3 | URL Google Drive (`excel_confirmacion_drive_link` en BD) |
 
-QA (`pb_docs_excel_link_v1_qa`) añade `{{link_intranet}}`: formulario web de la cotización (sin `?proveedor=`).
+QA (`pb_docs_excel_link_v1_qa`):
 
 **BODY QA:**
 
 ```
-Documentación: CONSOLIDADO #{{carga}}
-
-Excel de confirmación — Proveedor {{codigo_proveedor}}
-
-Llenalo aquí: {{link_excel}} o
-{{link_intranet}}  📄 .
+Tienes 2 opciones para llenar la información
+1.	📱 Desde tu celular:
+{{link_intranet}}   .
+2.	📄Descargando el Excel
+{{link_excel}}✅.
 ```
 
 | Parámetro Meta | Orden API | Campo backend |
 |----------------|-----------|---------------|
-| `{{carga}}` | 1 | Carga |
-| `{{codigo_proveedor}}` | 2 | Etiqueta (`General` en envío único) |
-| `{{link_excel}}` | 3 | URL Google Drive |
-| `{{link_intranet}}` | 4 | URL formulario web |
+| `{{link_intranet}}` | 1 | URL formulario web (sin `?proveedor=`) |
+| `{{link_excel}}` | 2 | URL Google Drive |
 
 ---
 
