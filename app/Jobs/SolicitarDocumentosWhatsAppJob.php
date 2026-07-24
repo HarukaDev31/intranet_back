@@ -134,7 +134,12 @@ class SolicitarDocumentosWhatsAppJob implements ShouldQueue
                 $fileName = 'excel_confirmacion' . '_' . $suffixArchivo . '.xlsx';
                 $fullPath = $outputDir . DIRECTORY_SEPARATOR . $fileName;
 
-                $ok = $excelService->generarArchivoPorProveedor($templatePath, $fullPath, $prov);
+                $ok = $excelService->generarArchivoPorProveedor(
+                    $templatePath,
+                    $fullPath,
+                    $prov,
+                    $nombreCliente
+                );
                 if (!$ok) {
                     continue;
                 }

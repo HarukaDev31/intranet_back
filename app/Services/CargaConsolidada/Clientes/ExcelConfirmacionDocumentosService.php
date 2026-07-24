@@ -13,13 +13,22 @@ class ExcelConfirmacionDocumentosService
 {
     /**
      * Genera y guarda un Excel de confirmación para un proveedor a partir de la plantilla OOXML.
+     * Prefill al cliente: Nombre del cliente (E5), Rubro (F) y Código de Proveedor (J).
+     * No prellena nombre comercial ni el resto de datos del producto.
      * Post-procesa el zip para tamaño/recorte del logo igual que la plantilla.
+     *
+     * @param  array<string, mixed>  $proveedorPayload
      */
-    public function generarArchivoPorProveedor(string $templatePath, string $outputFullPath, array $proveedorPayload): bool
-    {
+    public function generarArchivoPorProveedor(
+        string $templatePath,
+        string $outputFullPath,
+        array $proveedorPayload,
+        string $nombreCliente = ''
+    ): bool {
         $cotizacionProveedor = CotizacionProveedor::where('id', $proveedorPayload['id'] ?? null)->first();
         $codeSupplier = $cotizacionProveedor ? (string) ($cotizacionProveedor->code_supplier ?? '') : '';
         $items = $proveedorPayload['items'] ?? [];
+        $nombreCliente = trim($nombreCliente);
 
         if (!file_exists($templatePath)) {
             Log::error('Plantilla de Excel de confirmación no encontrada: ' . $templatePath);
@@ -29,6 +38,11 @@ class ExcelConfirmacionDocumentosService
 
         $spreadsheet = IOFactory::load($templatePath);
         $sheet = $spreadsheet->getActiveSheet();
+
+        // E5 alimenta el rotulado (columna A vía fórmula UPPER($E$5) de la plantilla).
+        if ($nombreCliente !== '') {
+            $sheet->setCellValueExplicit('E5', $nombreCliente, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+        }
 
         $labelsMap = $this->labelsPorTipoProducto();
         $baseStartRow = 14;
@@ -100,6 +114,7 @@ class ExcelConfirmacionDocumentosService
 
             $sheet->setCellValue('I' . $startRow, '=G' . $startRow . '*H' . $startRow);
 
+            // Código de Proveedor (J) — prellenado
             $sheet->duplicateStyle($sheet->getStyle('J14'), "J{$startRow}:J{$endRow}");
             $sheet->setCellValueExplicit(
                 'J' . $startRow,
@@ -107,8 +122,7 @@ class ExcelConfirmacionDocumentosService
                 \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING
             );
 
-            $initialName = $item['initial_name'] ?? '';
-            $sheet->setCellValueExplicit('C' . $startRow, $initialName, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+            // Nombre comercial (C) y demás datos del producto: quedan vacíos para que los complete el cliente.
             $sheet->duplicateStyle($sheet->getStyle('C14'), 'C' . $startRow . ':C' . $endRow);
             $sheet->getStyle('C' . $startRow . ':C' . $endRow)
                 ->getAlignment()
@@ -116,9 +130,11 @@ class ExcelConfirmacionDocumentosService
                 ->setVertical(\PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER)
                 ->setWrapText(true);
 
+            // Etiquetas de características según rubro (estructura del formulario, no datos del producto).
             for ($i = 0; $i < $rowsNeeded; $i++) {
                 $sheet->setCellValueExplicit('E' . ($startRow + $i), $labels[$i] ?? '', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
             }
+            // Rubro (F) — prellenado
             for ($i = 0; $i < $rowsNeeded; $i++) {
                 $sheet->setCellValueExplicit('F' . ($startRow + $i), $tipo, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
             }
