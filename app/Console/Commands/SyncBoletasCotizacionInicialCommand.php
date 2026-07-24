@@ -3,6 +3,8 @@
 namespace App\Console\Commands;
 
 use App\Contracts\ObjectStorageConnectorInterface;
+use App\Models\CalculadoraImportacion;
+use App\Services\CalculadoraImportacionService;
 use App\Support\Storage\StoragePathSanitizer;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
@@ -15,14 +17,15 @@ class SyncBoletasCotizacionInicialCommand extends Command
                             {path? : URL CDN, ruta relativa (boletas/...) o basename del PDF/Excel}
                             {--all : Auditar todas las rutas en calculadora_importacion}
                             {--upload : Subir a S3 los PENDING_LOCAL (existen en EC2, faltan en CDN/S3)}
-                            {--dry-run : Simular sin subir}
+                            {--regenerate : Regenerar Excel+PDF MISSING elegibles (cotización CONFIRMADO + contenedor existente)}
+                            {--dry-run : Simular sin subir ni regenerar}
                             {--details : Listar cada archivo con su estado}
                             {--check-cdn : Verificar HTTP HEAD contra OBJECT_STORAGE_CDN_URL}
                             {--column=pdf : Columnas: pdf (url_cotizacion_pdf), excel (url_cotizacion), both}
                             {--limit=0 : Máximo de filas BD a procesar (0 = sin límite)}
                             {--export-missing= : Exportar MISSING a CSV}';
 
-    protected $description = 'Valida boletas/cotización inicial en BD vs S3/CDN/disco local y sube las que solo estén en el servidor EC2';
+    protected $description = 'Valida boletas/cotización inicial vs S3/CDN/local; sube PENDING_LOCAL o regenera MISSING de cotizaciones CONFIRMADO';
 
     /** @var ObjectStorageConnectorInterface */
     private $storage;
@@ -35,12 +38,19 @@ class SyncBoletasCotizacionInicialCommand extends Command
         'pending_local' => 0,
         'uploaded' => 0,
         'missing' => 0,
+        'missing_eligible' => 0,
+        'missing_ineligible' => 0,
+        'regenerated' => 0,
+        'regenerate_failed' => 0,
         'failed' => 0,
         'skipped' => 0,
     ];
 
     /** @var array<int, array<string, mixed>> */
     private $missingRows = [];
+
+    /** @var array<int, true> id calculadora con al menos un archivo MISSING */
+    private $missingCalculadoraIds = [];
 
     /** @var array<string, bool> */
     private $seenPaths = [];
@@ -52,6 +62,7 @@ class SyncBoletasCotizacionInicialCommand extends Command
         $pathArg = trim((string) ($this->argument('path') ?? ''));
         $all = (bool) $this->option('all');
         $upload = (bool) $this->option('upload');
+        $regenerate = (bool) $this->option('regenerate');
         $dryRun = (bool) $this->option('dry-run');
         $details = (bool) $this->option('details');
         $checkCdn = (bool) $this->option('check-cdn');
@@ -80,7 +91,7 @@ class SyncBoletasCotizacionInicialCommand extends Command
         $this->line('Bucket: ' . (config('filesystems.disks.s3.bucket') ?: '(no configurado)'));
         $this->line('CDN: ' . ($this->cdnBase() !== '' ? $this->cdnBase() : '(no configurado)'));
         if ($dryRun) {
-            $this->warn('Modo dry-run: no se subirá nada.');
+            $this->warn('Modo dry-run: no se subirá ni regenerará nada.');
         }
 
         $rows = $pathArg !== ''
@@ -117,6 +128,45 @@ class SyncBoletasCotizacionInicialCommand extends Command
             $this->processRow($row, $upload, $dryRun, $details, $checkCdn);
         }
 
+        $eligible = [];
+        $ineligible = [];
+        if ($this->missingCalculadoraIds !== []) {
+            [$eligible, $ineligible] = $this->classifyMissingForRegenerate(array_keys($this->missingCalculadoraIds));
+            $this->stats['missing_eligible'] = count($eligible);
+            $this->stats['missing_ineligible'] = count($ineligible);
+
+            $this->newLine();
+            $this->info('MISSING elegibles para regenerar (cotización CONFIRMADO + contenedor existente): ' . count($eligible));
+            if ($eligible !== [] && ($details || !$regenerate || $dryRun)) {
+                $this->table(
+                    ['id_calc', 'cliente', 'id_cotizacion', 'id_contenedor', 'estado_cotizador'],
+                    array_map(static fn (array $r) => [
+                        $r['id'],
+                        $r['cliente'],
+                        $r['id_cotizacion'],
+                        $r['id_contenedor'],
+                        $r['estado_cotizador'],
+                    ], $eligible)
+                );
+            }
+
+            if ($ineligible !== [] && $details) {
+                $this->warn('MISSING no elegibles (' . count($ineligible) . '):');
+                $this->table(
+                    ['id_calc', 'motivo'],
+                    array_map(static fn (array $r) => [$r['id'], $r['motivo']], $ineligible)
+                );
+            }
+
+            if ($regenerate) {
+                $this->regenerateEligible($eligible, $dryRun);
+            } elseif ($eligible !== []) {
+                $this->newLine();
+                $this->comment('Para regenerar Excel+PDF (mismo flujo que pasar a COTIZADO):');
+                $this->line('  php artisan storage:sync-boletas-cotizacion-inicial --all --column=both --regenerate');
+            }
+        }
+
         $this->newLine();
         $this->table(
             ['Estado', 'Cantidad', 'Descripción'],
@@ -127,7 +177,11 @@ class SyncBoletasCotizacionInicialCommand extends Command
                 ['Pendiente local', $this->stats['pending_local'], 'En EC2 (storage) pero no en S3'],
                 ['Subidos', $this->stats['uploaded'], 'Copiados local → S3' . ($dryRun ? ' (dry-run)' : '')],
                 ['Sin archivo', $this->stats['missing'], 'Ni en S3 ni en disco local'],
-                ['Fallidos', $this->stats['failed'], 'Error al subir'],
+                ['MISSING elegibles', $this->stats['missing_eligible'], 'CONFIRMADO + contenedor OK → se pueden regenerar'],
+                ['MISSING no elegibles', $this->stats['missing_ineligible'], 'Sin cotización/contenedor o no CONFIRMADO'],
+                ['Regenerados', $this->stats['regenerated'], 'Excel+PDF regenerados a S3' . ($dryRun ? ' (dry-run)' : '')],
+                ['Regen. fallidos', $this->stats['regenerate_failed'], 'Error al regenerar'],
+                ['Fallidos upload', $this->stats['failed'], 'Error al subir local→S3'],
                 ['Omitidos', $this->stats['skipped'], 'Duplicados / sin ruta'],
             ]
         );
@@ -146,12 +200,14 @@ class SyncBoletasCotizacionInicialCommand extends Command
             }
         }
 
-        if ($this->stats['missing'] > 0) {
+        if ($this->stats['missing'] > 0 && !$regenerate) {
             $this->newLine();
-            $this->warn('MISSING: la ruta está en BD (o pedida) pero el archivo no está en S3 ni en storage local del servidor.');
+            $this->warn('MISSING: regenera elegibles con --regenerate (requiere cotización CONFIRMADO y contenedor existente).');
         }
 
-        return $this->stats['failed'] > 0 ? self::FAILURE : self::SUCCESS;
+        return ($this->stats['failed'] > 0 || $this->stats['regenerate_failed'] > 0)
+            ? self::FAILURE
+            : self::SUCCESS;
     }
 
     /**
@@ -346,6 +402,9 @@ class SyncBoletasCotizacionInicialCommand extends Command
                 'db_path' => $dbPath,
                 'cdn_url' => $this->cdnUrlFor($dbPath),
             ];
+            if ($row['id'] !== null) {
+                $this->missingCalculadoraIds[(int) $row['id']] = true;
+            }
         }
 
         if (!$details && !in_array($status, ['PENDING_LOCAL', 'MISSING', 'UPLOADED', 'WOULD_UPLOAD', 'UPLOAD_FAILED'], true)) {
@@ -374,6 +433,153 @@ class SyncBoletasCotizacionInicialCommand extends Command
         } else {
             $this->line($line);
         }
+    }
+
+    /**
+     * @param  array<int, int>  $calculadoraIds
+     * @return array{0: array<int, array<string, mixed>>, 1: array<int, array<string, mixed>>}
+     */
+    private function classifyMissingForRegenerate(array $calculadoraIds): array
+    {
+        $eligible = [];
+        $ineligible = [];
+
+        if ($calculadoraIds === []) {
+            return [$eligible, $ineligible];
+        }
+
+        $rows = DB::table('calculadora_importacion as ci')
+            ->leftJoin('contenedor_consolidado_cotizacion as ccc', function ($join) {
+                $join->on('ccc.id', '=', 'ci.id_cotizacion')
+                    ->whereNull('ccc.deleted_at');
+            })
+            ->leftJoin('carga_consolidada_contenedor as cont', 'cont.id', '=', 'ccc.id_contenedor')
+            ->whereIn('ci.id', $calculadoraIds)
+            ->select([
+                'ci.id',
+                'ci.nombre_cliente',
+                'ci.id_cotizacion',
+                'ci.id_carga_consolidada_contenedor',
+                'ccc.estado_cotizador',
+                'ccc.id_contenedor',
+                'cont.id as contenedor_existe',
+            ])
+            ->orderBy('ci.id')
+            ->get();
+
+        $foundIds = [];
+        foreach ($rows as $row) {
+            $id = (int) $row->id;
+            $foundIds[$id] = true;
+            $cliente = (string) ($row->nombre_cliente ?? '');
+            $idCotizacion = $row->id_cotizacion !== null ? (int) $row->id_cotizacion : null;
+            $estado = $row->estado_cotizador !== null ? (string) $row->estado_cotizador : null;
+            $idContenedor = $row->id_contenedor !== null ? (int) $row->id_contenedor : null;
+            $contenedorExiste = $row->contenedor_existe !== null;
+
+            if ($idCotizacion === null || $idCotizacion <= 0) {
+                $ineligible[] = ['id' => $id, 'motivo' => 'Sin id_cotizacion vinculado'];
+                continue;
+            }
+            if ($estado === null) {
+                $ineligible[] = ['id' => $id, 'motivo' => 'Cotización #'.$idCotizacion.' no existe o está eliminada'];
+                continue;
+            }
+            if (strtoupper($estado) !== 'CONFIRMADO') {
+                $ineligible[] = ['id' => $id, 'motivo' => 'estado_cotizador='.$estado.' (se requiere CONFIRMADO)'];
+                continue;
+            }
+            if (!$contenedorExiste || $idContenedor === null) {
+                $ineligible[] = ['id' => $id, 'motivo' => 'Contenedor inexistente (id_contenedor='.($idContenedor ?? 'null').')'];
+                continue;
+            }
+
+            $eligible[] = [
+                'id' => $id,
+                'cliente' => $cliente,
+                'id_cotizacion' => $idCotizacion,
+                'id_contenedor' => $idContenedor,
+                'estado_cotizador' => $estado,
+            ];
+        }
+
+        foreach ($calculadoraIds as $id) {
+            if (!isset($foundIds[(int) $id])) {
+                $ineligible[] = ['id' => (int) $id, 'motivo' => 'Fila no encontrada en calculadora_importacion'];
+            }
+        }
+
+        return [$eligible, $ineligible];
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $eligible
+     */
+    private function regenerateEligible(array $eligible, bool $dryRun): void
+    {
+        if ($eligible === []) {
+            $this->info('No hay MISSING elegibles para regenerar.');
+
+            return;
+        }
+
+        $this->newLine();
+        $this->info(($dryRun ? '[dry-run] ' : '') . 'Regenerando Excel+PDF (flujo COTIZADO) para ' . count($eligible) . ' calculadora(s)...');
+
+        /** @var CalculadoraImportacionService $service */
+        $service = app(CalculadoraImportacionService::class);
+        $bar = $this->output->createProgressBar(count($eligible));
+        $bar->start();
+
+        foreach ($eligible as $item) {
+            $id = (int) $item['id'];
+            try {
+                if ($dryRun) {
+                    $this->newLine();
+                    $this->line("  [dry-run] regeneraría id={$id} cotizacion={$item['id_cotizacion']} contenedor={$item['id_contenedor']}");
+                    $this->stats['regenerated']++;
+                    $bar->advance();
+                    continue;
+                }
+
+                $calculadora = CalculadoraImportacion::find($id);
+                if (!$calculadora) {
+                    throw new \RuntimeException('Calculadora no encontrada');
+                }
+
+                // No cambia estado de la calculadora: solo regenera archivos (igual que changeEstado→COTIZADO).
+                $service->regenerarArchivosCotizadoDesdeBd($calculadora->fresh());
+                $calculadora->refresh();
+
+                $pdfOk = $calculadora->url_cotizacion_pdf
+                    && $this->storage->existsOnS3((string) $calculadora->url_cotizacion_pdf);
+                $xlsxOk = $calculadora->url_cotizacion
+                    && $this->storage->existsOnS3((string) $calculadora->url_cotizacion);
+
+                if (!$pdfOk || !$xlsxOk) {
+                    throw new \RuntimeException(sprintf(
+                        'Tras regenerar: pdf_s3=%s xlsx_s3=%s | pdf=%s | xlsx=%s',
+                        $pdfOk ? 'SI' : 'NO',
+                        $xlsxOk ? 'SI' : 'NO',
+                        (string) ($calculadora->url_cotizacion_pdf ?? ''),
+                        (string) ($calculadora->url_cotizacion ?? '')
+                    ));
+                }
+
+                $this->stats['regenerated']++;
+                $this->newLine();
+                $this->info("  ✓ id={$id} → pdf={$calculadora->url_cotizacion_pdf}");
+            } catch (\Throwable $e) {
+                $this->stats['regenerate_failed']++;
+                $this->newLine();
+                $this->error("  ✗ id={$id}: " . $e->getMessage());
+            }
+
+            $bar->advance();
+        }
+
+        $bar->finish();
+        $this->newLine();
     }
 
     private function uploadLocalToS3(string $absoluteLocal, string $relativeS3, bool $dryRun): bool
