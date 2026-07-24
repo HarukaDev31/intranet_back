@@ -3,6 +3,7 @@
 namespace App\Services\CargaConsolidada\Clientes;
 
 use App\Models\CargaConsolidada\CotizacionProveedor;
+use App\Traits\FileTrait;
 use App\Traits\UsesObjectStorage;
 use Illuminate\Support\Facades\Log;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
@@ -16,6 +17,7 @@ use ZipArchive;
 
 class ExcelConfirmacionDocumentosService
 {
+    use FileTrait;
     use UsesObjectStorage;
     private const CAMPO_NOMBRE_COMERCIAL = 'NOMBRE COMERCIAL';
 
@@ -1133,36 +1135,55 @@ class ExcelConfirmacionDocumentosService
             return $decoded !== false && $this->isValidImageBinary($decoded) ? $decoded : null;
         }
 
-        // Preferir lectura directa desde storage (ruta relativa en BD).
-        $fromStorage = $this->readFotoBinaryFromStorage($foto);
-        if ($fromStorage !== null) {
-            return $fromStorage;
-        }
-
+        // 1) URL ya absoluta (CDN u otra): descargar
         if (filter_var($foto, FILTER_VALIDATE_URL)) {
-            $context = stream_context_create([
-                'http' => ['timeout' => 20, 'follow_location' => 1],
-                'ssl' => ['verify_peer' => true, 'verify_peer_name' => true],
-            ]);
-            $downloaded = @file_get_contents($foto, false, $context);
-            if ($downloaded !== false && $this->isValidImageBinary($downloaded)) {
+            $downloaded = $this->downloadFotoFromUrl($foto);
+            if ($downloaded !== null) {
                 return $downloaded;
             }
 
-            // URL firmada/CDN falló: intentar clave relativa desde el path de la URL.
             $pathFromUrl = $this->storagePathFromPublicUrl($foto);
             if ($pathFromUrl !== null) {
-                $fromUrlPath = $this->readFotoBinaryFromStorage($pathFromUrl);
-                if ($fromUrlPath !== null) {
-                    return $fromUrlPath;
+                $fromStorage = $this->readFotoBinaryFromStorage($pathFromUrl);
+                if ($fromStorage !== null) {
+                    return $fromStorage;
                 }
             }
 
-            Log::warning('Excel confirmación: no se pudo descargar foto por URL', [
+            Log::warning('Excel confirmación: no se pudo descargar foto por URL/CDN', [
                 'foto' => mb_substr($foto, 0, 180),
             ]);
 
             return null;
+        }
+
+        // 2) Ruta relativa en BD → CDN público primero
+        $cdnUrl = $this->cdnStorageUrl($foto);
+        if (is_string($cdnUrl) && $cdnUrl !== '') {
+            $downloaded = $this->downloadFotoFromUrl($cdnUrl);
+            if ($downloaded !== null) {
+                return $downloaded;
+            }
+            Log::warning('Excel confirmación: CDN no devolvió imagen, se intenta storage', [
+                'cdn' => mb_substr($cdnUrl, 0, 180),
+                'path' => mb_substr($foto, 0, 120),
+            ]);
+        }
+
+        // 3) URL de object storage (CDN o firmada S3)
+        $storageKey = $this->storageUploadPathFromDb($foto) ?? $this->objectStorage()->normalizeRelativePath($foto) ?? $foto;
+        $storageUrl = $this->objectStorage()->url($storageKey);
+        if (is_string($storageUrl) && $storageUrl !== '' && $storageUrl !== $cdnUrl) {
+            $downloaded = $this->downloadFotoFromUrl($storageUrl);
+            if ($downloaded !== null) {
+                return $downloaded;
+            }
+        }
+
+        // 4) Fallback: stream directo desde S3/disco
+        $fromStorage = $this->readFotoBinaryFromStorage($foto);
+        if ($fromStorage !== null) {
+            return $fromStorage;
         }
 
         if (is_file($foto)) {
@@ -1171,11 +1192,29 @@ class ExcelConfirmacionDocumentosService
             return $contents !== false && $this->isValidImageBinary($contents) ? $contents : null;
         }
 
-        Log::warning('Excel confirmación: foto no encontrada en storage ni como archivo', [
+        Log::warning('Excel confirmación: foto no encontrada vía CDN ni storage', [
             'foto' => mb_substr($foto, 0, 180),
         ]);
 
         return null;
+    }
+
+    private function downloadFotoFromUrl(string $url): ?string
+    {
+        $context = stream_context_create([
+            'http' => [
+                'timeout' => 20,
+                'follow_location' => 1,
+                'header' => "User-Agent: ProbusinessExcelConfirmacion/1.0\r\n",
+            ],
+            'ssl' => [
+                'verify_peer' => true,
+                'verify_peer_name' => true,
+            ],
+        ]);
+        $downloaded = @file_get_contents($url, false, $context);
+
+        return $downloaded !== false && $this->isValidImageBinary($downloaded) ? $downloaded : null;
     }
 
     private function readFotoBinaryFromStorage(string $foto): ?string
