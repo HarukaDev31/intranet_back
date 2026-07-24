@@ -250,12 +250,22 @@ class ExcelConfirmacionFormService
                 ? str_pad((string) $carga, 2, '0', STR_PAD_LEFT)
                 : (string) $carga;
 
-            $payload = CoordinacionWhatsappPayload::docsExcelConfRecibido($telefono, $cargaCode);
+            $enlace = CoordinacionWhatsappPayload::buildExcelConfirmacionUrl($uuid);
+            if ($enlace === '') {
+                Log::warning('ExcelConfirmacionFormService: sin enlace web para notificar Excel conf. recibido', [
+                    'uuid' => $uuid,
+                ]);
+
+                return;
+            }
+
+            $payload = CoordinacionWhatsappPayload::docsExcelConfRecibido($telefono, $cargaCode, $enlace);
             SendCoordinacionWhatsAppJob::dispatch($payload);
 
             Log::info('ExcelConfirmacionFormService: notificado Excel conf. recibido', [
                 'uuid' => $uuid,
-                'carga' => $cargaCode,
+                'consolidado' => $cargaCode,
+                'enlace' => $enlace,
             ]);
         } catch (\Throwable $e) {
             Log::error('ExcelConfirmacionFormService::notifyClientExcelConfRecibido — ' . $e->getMessage(), [

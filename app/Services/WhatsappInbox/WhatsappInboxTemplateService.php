@@ -53,7 +53,7 @@ class WhatsappInboxTemplateService
         ],
         'pb_docs_excel_link_v1' => ['carga', 'codigo_proveedor', 'link_excel'],
         'pb_docs_excel_link_v1_qa' => ['carga', 'codigo_proveedor', 'link_excel', 'link_intranet'],
-        'pb_docs_excel_conf_recibido_v1' => ['carga'],
+        'pb_docs_excel_conf_recibido_v1' => ['consolidado', 'enlace'],
     ];
 
     /**
@@ -125,8 +125,8 @@ class WhatsappInboxTemplateService
                 'name' => 'pb_docs_excel_conf_recibido_v1',
                 'label' => 'Docs — Excel de confirmación recibido',
                 'language' => 'es_PE',
-                'text' => "Documentación: CONSOLIDADO #{{carga}}\n\nRecibimos tu Excel de confirmación ✅\n\nNuestro equipo lo revisará pronto.",
-                'params' => ['carga'],
+                'text' => "Gracias por llenar la información de tu importación del consolidado #{{consolidado}}\nSi aun tienes información pendiente de llenar, vuelve a ingresar al enlace\n{{enlace}}.",
+                'params' => ['consolidado', 'enlace'],
             ],
             [
                 'name' => 'pb_consolidado_resumen_pago_v1',

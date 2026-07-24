@@ -762,16 +762,15 @@ Llenalo aquí: {{link_excel}} o
 **BODY:**
 
 ```
-Documentación: CONSOLIDADO #{{carga}}
-
-Recibimos tu Excel de confirmación ✅
-
-Nuestro equipo lo revisará pronto.
+Gracias por llenar la información de tu importación del consolidado #{{consolidado}}
+Si aun tienes información pendiente de llenar, vuelve a ingresar al enlace
+{{enlace}}.
 ```
 
 | Parámetro Meta | Orden API | Campo backend |
 |----------------|-----------|---------------|
-| `{{carga}}` | 1 | Código carga (ej. 05) |
+| `{{consolidado}}` | 1 | Código carga (ej. 05) |
+| `{{enlace}}` | 2 | URL formulario web (`buildExcelConfirmacionUrl`, sin `?proveedor=`) |
 
 ---
 

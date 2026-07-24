@@ -366,19 +366,21 @@ class CoordinacionWhatsappPayload
     /** Plantilla Meta — confirmación al cliente tras guardar Excel de confirmación (web). */
     private const DOCS_EXCEL_CONF_RECIBIDO_TEMPLATE = 'pb_docs_excel_conf_recibido_v1';
 
-    public static function docsExcelConfRecibidoPreview(string $carga): string
+    public static function docsExcelConfRecibidoPreview(string $consolidado, string $enlace): string
     {
-        return "Documentación: CONSOLIDADO #{$carga}\n\n"
-            . "Recibimos tu Excel de confirmación ✅\n\n"
-            . 'Nuestro equipo lo revisará pronto.';
+        return 'Gracias por llenar la información de tu importación del consolidado #' . $consolidado . "\n"
+            . "Si aun tienes información pendiente de llenar, vuelve a ingresar al enlace\n"
+            . $enlace . '.';
     }
 
-    public static function docsExcelConfRecibido(string $phone, string $carga, int $sleep = 0): array
+    public static function docsExcelConfRecibido(string $phone, string $consolidado, string $enlace, int $sleep = 0): array
     {
-        $preview = self::docsExcelConfRecibidoPreview($carga);
+        $enlace = self::normalizeExternalUrl($enlace);
+        $preview = self::docsExcelConfRecibidoPreview($consolidado, $enlace);
 
         return self::template($phone, self::DOCS_EXCEL_CONF_RECIBIDO_TEMPLATE, [
-            'carga' => $carga,
+            'consolidado' => $consolidado,
+            'enlace' => $enlace,
         ], $preview, $sleep);
     }
 
