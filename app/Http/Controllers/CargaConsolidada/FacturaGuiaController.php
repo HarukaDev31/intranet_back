@@ -1745,27 +1745,26 @@ Cualquier duda nos escribe.  ¡Gracias! */
                 return response()->json(['success' => false, 'message' => 'Cotización no encontrada'], 404);
             }
 
-            // Cargar comprobantes con su constancia de pago anidada; file_path siempre como URL absoluta firmada
+            // Cargar comprobantes con constancia; URLs públicas CDN (mismo criterio que panel cotización/contrato)
             $comprobantes = Comprobante::where('quotation_id', $idCotizacion)
                 ->orderBy('created_at', 'desc')
                 ->get()
                 ->map(function ($item) {
-                    $signedComprobanteUrl = !empty($item->file_path)
-                        ? $this->absoluteSignedFileUrl('carga-consolidada.contabilidad.comprobante.file', ['id' => $item->id], now()->addMinutes(30))
+                    $comprobanteCdnUrl = !empty($item->file_path)
+                        ? ($this->cdnStorageUrl($item->file_path) ?: $this->generateImageUrl($item->file_path))
                         : null;
-                    $item->file_url  = $signedComprobanteUrl;
-                    $item->file_path = $signedComprobanteUrl;
+                    $item->file_url  = $comprobanteCdnUrl;
+                    $item->file_path = $comprobanteCdnUrl;
 
-                    // Constancia de pago vinculada (solo si tiene detraccion)
                     $item->constancia = null;
                     if ($item->tiene_detraccion) {
                         $constancia = Detraccion::where('comprobante_id', $item->id)->first();
                         if ($constancia) {
-                            $signedConstanciaUrl = !empty($constancia->file_path)
-                                ? $this->absoluteSignedFileUrl('carga-consolidada.contabilidad.constancia.file', ['id' => $constancia->id], now()->addMinutes(30))
+                            $constanciaCdnUrl = !empty($constancia->file_path)
+                                ? ($this->cdnStorageUrl($constancia->file_path) ?: $this->generateImageUrl($constancia->file_path))
                                 : null;
-                            $constancia->file_url  = $signedConstanciaUrl;
-                            $constancia->file_path = $signedConstanciaUrl;
+                            $constancia->file_url  = $constanciaCdnUrl;
+                            $constancia->file_path = $constanciaCdnUrl;
                             $item->constancia = $constancia;
                         }
                     }
@@ -1786,13 +1785,14 @@ Cualquier duda nos escribe.  ¡Gracias! */
                     'id' => $g->id,
                     'file_name' => $g->file_name ?? 'Guía',
                     'file_url' => !empty($g->file_path)
-                        ? $this->absoluteSignedFileUrl('carga-consolidada.guia-remision.file', ['id' => $g->id], now()->addMinutes(30))
+                        ? ($this->cdnStorageUrl($g->file_path) ?: $this->generateImageUrl($g->file_path))
                         : null,
                 ];
             })->values()->all();
 
             $legacyGuiaUrl = $cotizacion->guia_remision_url
-                ? $this->generateImageUrl('cargaconsolidada/guiaremision/' . $idCotizacion . '/' . $cotizacion->guia_remision_url)
+                ? ($this->cdnStorageUrl('cargaconsolidada/guiaremision/' . $idCotizacion . '/' . $cotizacion->guia_remision_url)
+                    ?: $this->generateImageUrl('cargaconsolidada/guiaremision/' . $idCotizacion . '/' . $cotizacion->guia_remision_url))
                 : null;
             if (empty($guiasRemision) && $legacyGuiaUrl) {
                 $guiasRemision = [['id' => 0, 'file_name' => $cotizacion->guia_remision_url, 'file_url' => $legacyGuiaUrl]];
@@ -1802,9 +1802,15 @@ Cualquier duda nos escribe.  ¡Gracias! */
                 'tiene_cotizacion_inicial' => !empty($cotizacion->cotizacion_file_url),
                 'tiene_cotizacion_final'   => !empty($cotizacion->cotizacion_final_url),
                 'tiene_contrato'           => !empty($cotizacion->cotizacion_contrato_url),
-                'cotizacion_inicial_url'   => !empty($cotizacion->cotizacion_file_url) ? $this->generateImageUrl($cotizacion->cotizacion_file_url) : null,
-                'cotizacion_final_url'     => !empty($cotizacion->cotizacion_final_url) ? $this->generateImageUrl($cotizacion->cotizacion_final_url) : null,
-                'contrato_url'             => !empty($cotizacion->cotizacion_contrato_url) ? $this->generateImageUrl($cotizacion->cotizacion_contrato_url) : null,
+                'cotizacion_inicial_url'   => !empty($cotizacion->cotizacion_file_url)
+                    ? ($this->cdnStorageUrl($cotizacion->cotizacion_file_url) ?: $this->generateImageUrl($cotizacion->cotizacion_file_url))
+                    : null,
+                'cotizacion_final_url'     => !empty($cotizacion->cotizacion_final_url)
+                    ? ($this->cdnStorageUrl($cotizacion->cotizacion_final_url) ?: $this->generateImageUrl($cotizacion->cotizacion_final_url))
+                    : null,
+                'contrato_url'             => !empty($cotizacion->cotizacion_contrato_url)
+                    ? ($this->cdnStorageUrl($cotizacion->cotizacion_contrato_url) ?: $this->generateImageUrl($cotizacion->cotizacion_contrato_url))
+                    : null,
                 'guia_remision_url'        => $legacyGuiaUrl,
                 'guia_remision_file_name'  => $cotizacion->guia_remision_url,
                 'guias_remision'           => $guiasRemision,
