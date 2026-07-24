@@ -1133,26 +1133,36 @@ class ExcelConfirmacionDocumentosService
             return $decoded !== false && $this->isValidImageBinary($decoded) ? $decoded : null;
         }
 
+        // Preferir lectura directa desde storage (ruta relativa en BD).
+        $fromStorage = $this->readFotoBinaryFromStorage($foto);
+        if ($fromStorage !== null) {
+            return $fromStorage;
+        }
+
         if (filter_var($foto, FILTER_VALIDATE_URL)) {
             $context = stream_context_create([
-                'http' => ['timeout' => 15, 'follow_location' => 1],
+                'http' => ['timeout' => 20, 'follow_location' => 1],
                 'ssl' => ['verify_peer' => true, 'verify_peer_name' => true],
             ]);
             $downloaded = @file_get_contents($foto, false, $context);
+            if ($downloaded !== false && $this->isValidImageBinary($downloaded)) {
+                return $downloaded;
+            }
 
-            return $downloaded !== false && $this->isValidImageBinary($downloaded) ? $downloaded : null;
-        }
-
-        $storagePath = $this->storageUploadPathFromDb($foto) ?? $this->objectStorage()->normalizeRelativePath($foto);
-        if ($storagePath !== null && $this->objectStorage()->exists($storagePath)) {
-            $stream = $this->objectStorage()->readStream($storagePath);
-            if (is_resource($stream)) {
-                $contents = stream_get_contents($stream);
-                fclose($stream);
-                if ($contents !== false && $this->isValidImageBinary($contents)) {
-                    return $contents;
+            // URL firmada/CDN falló: intentar clave relativa desde el path de la URL.
+            $pathFromUrl = $this->storagePathFromPublicUrl($foto);
+            if ($pathFromUrl !== null) {
+                $fromUrlPath = $this->readFotoBinaryFromStorage($pathFromUrl);
+                if ($fromUrlPath !== null) {
+                    return $fromUrlPath;
                 }
             }
+
+            Log::warning('Excel confirmación: no se pudo descargar foto por URL', [
+                'foto' => mb_substr($foto, 0, 180),
+            ]);
+
+            return null;
         }
 
         if (is_file($foto)) {
@@ -1161,7 +1171,67 @@ class ExcelConfirmacionDocumentosService
             return $contents !== false && $this->isValidImageBinary($contents) ? $contents : null;
         }
 
+        Log::warning('Excel confirmación: foto no encontrada en storage ni como archivo', [
+            'foto' => mb_substr($foto, 0, 180),
+        ]);
+
         return null;
+    }
+
+    private function readFotoBinaryFromStorage(string $foto): ?string
+    {
+        $candidates = array_values(array_unique(array_filter([
+            $this->storageUploadPathFromDb($foto),
+            $this->objectStorage()->normalizeRelativePath($foto),
+            ltrim(str_replace('\\', '/', $foto), '/'),
+        ])));
+
+        foreach ($candidates as $storagePath) {
+            try {
+                if (!$this->objectStorage()->exists($storagePath)) {
+                    continue;
+                }
+                $stream = $this->objectStorage()->readStream($storagePath);
+                if (!is_resource($stream)) {
+                    continue;
+                }
+                $contents = stream_get_contents($stream);
+                fclose($stream);
+                if ($contents !== false && $this->isValidImageBinary($contents)) {
+                    return $contents;
+                }
+            } catch (\Throwable $e) {
+                Log::warning('Excel confirmación: error leyendo foto de storage', [
+                    'path' => $storagePath,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        return null;
+    }
+
+    private function storagePathFromPublicUrl(string $url): ?string
+    {
+        $path = parse_url($url, PHP_URL_PATH);
+        if (!is_string($path) || $path === '') {
+            return null;
+        }
+
+        $path = ltrim($path, '/');
+        // Quitar prefijos típicos de CDN / storage público
+        foreach (['storage/', 'probusiness/'] as $prefix) {
+            if (stripos($path, $prefix) === 0) {
+                $path = substr($path, strlen($prefix));
+            }
+        }
+
+        if ($path === '' || stripos($path, 'excel-confirmacion/') === false) {
+            // Aun así devolver path normalizado por si está bajo otro prefijo
+            return $this->objectStorage()->normalizeRelativePath($path);
+        }
+
+        return $this->objectStorage()->normalizeRelativePath($path) ?? $path;
     }
 
     private function isValidImageBinary(string $binary): bool

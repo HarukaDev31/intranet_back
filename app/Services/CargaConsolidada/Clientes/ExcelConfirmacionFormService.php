@@ -713,17 +713,21 @@ class ExcelConfirmacionFormService
         ?CotizacionProveedorItemExcelConf $overlay = null,
         bool $forExport = false
     ): array {
+        $caracteristicas = $this->normalizeCaracteristicasKeys(
+            is_array($overlay?->caracteristicas) ? $overlay->caracteristicas : []
+        );
+        // Export: conservar ruta relativa para leer de S3. Show: URL pública.
+        if (!$forExport) {
+            $caracteristicas = $this->resolveFotoDisplayValue($caracteristicas);
+        }
+
         $payload = [
             'id' => $item->id,
             'initial_name' => $item->initial_name,
             'tipo_producto' => $item->tipo_producto,
             'initial_qty' => $item->initial_qty,
             'initial_price' => $item->initial_price,
-            'caracteristicas' => $this->resolveFotoDisplayValue(
-                $this->normalizeCaracteristicasKeys(
-                    is_array($overlay?->caracteristicas) ? $overlay->caracteristicas : []
-                )
-            ),
+            'caracteristicas' => $caracteristicas,
             'qty' => $overlay?->confirmacion_qty,
             'precio_unitario' => $overlay?->confirmacion_precio,
             'is_new' => false,
@@ -738,11 +742,13 @@ class ExcelConfirmacionFormService
 
     private function mapExcelConfItemPayload(CotizacionProveedorItemExcelConf $item, bool $forExport = false): array
     {
-        $caracteristicas = $this->resolveFotoDisplayValue(
-            $this->normalizeCaracteristicasKeys(
-                is_array($item->caracteristicas) ? $item->caracteristicas : []
-            )
+        $caracteristicas = $this->normalizeCaracteristicasKeys(
+            is_array($item->caracteristicas) ? $item->caracteristicas : []
         );
+        if (!$forExport) {
+            $caracteristicas = $this->resolveFotoDisplayValue($caracteristicas);
+        }
+
         $payload = [
             'id' => $item->id,
             'initial_name' => $item->initial_name ?? $this->resolveNombreComercial($caracteristicas) ?? '',
