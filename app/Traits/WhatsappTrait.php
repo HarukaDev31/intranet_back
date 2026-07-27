@@ -212,13 +212,25 @@ trait WhatsappTrait
                 curl_setopt($ch, CURLOPT_BUFFERSIZE, 128000);
             }
             $response = curl_exec($ch);
-            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
             $error = curl_error($ch);
+            $curlErrno = curl_errno($ch);
             curl_close($ch);
-            if ($error) {
+
+            if ($error || $response === false) {
+                Log::error('Error de conexión en _callApi (WhatsApp redis)', [
+                    'url' => $url,
+                    'endpoint' => $endpoint,
+                    'curl_errno' => $curlErrno,
+                    'curl_error' => $error !== '' ? $error : 'curl_exec returned false',
+                    'httpCode' => $httpCode,
+                    'phoneNumberId' => $data['phoneNumberId'] ?? null,
+                    'fromNumber' => $data['fromNumber'] ?? null,
+                ]);
+
                 return [
                     'status' => false,
-                    'response' => ['error' => 'Error de conexión: ' . $error]
+                    'response' => ['error' => 'Error de conexión: ' . ($error !== '' ? $error : 'curl_exec returned false')],
                 ];
             }
 
@@ -226,20 +238,31 @@ trait WhatsappTrait
             if (json_last_error() !== JSON_ERROR_NONE) {
                 Log::warning('Respuesta no válida de API de WhatsApp', [
                     'endpoint' => $endpoint,
-                    'response' => $response,
-                    'jsonError' => json_last_error_msg()
+                    'response' => is_string($response) ? substr($response, 0, 500) : $response,
+                    'jsonError' => json_last_error_msg(),
                 ]);
             }
 
+            $ok = $httpCode >= 200 && $httpCode < 300;
             Log::info('Respuesta de API de WhatsApp', [
                 'endpoint' => $endpoint,
                 'httpCode' => $httpCode,
-                'success' => $httpCode >= 200 && $httpCode < 300
+                'success' => $ok,
+                'phoneNumberId' => $data['phoneNumberId'] ?? null,
+                'fromNumber' => $data['fromNumber'] ?? null,
             ]);
 
+            if (!$ok) {
+                Log::error('API WhatsApp redis respondió error HTTP', [
+                    'endpoint' => $endpoint,
+                    'httpCode' => $httpCode,
+                    'response' => $decodedResponse ?: substr((string) $response, 0, 500),
+                ]);
+            }
+
             return [
-                'status' => $httpCode >= 200 && $httpCode < 300,
-                'response' => $decodedResponse ?: ['raw_response' => $response]
+                'status' => $ok,
+                'response' => $decodedResponse ?: ['raw_response' => $response],
             ];
         } catch (\Exception $e) {
             Log::error('Excepción en _callApi: ' . $e->getMessage(), [
@@ -522,7 +545,14 @@ trait WhatsappTrait
             }
             
             $fileContent = base64_encode($fileContent);
-
+            Log::info('Enviando media WhatsApp', [
+                'filePath' => $filePath,
+                'fileName' => $fileName ?? basename($filePath),
+                'mimeType' => $mimeType,
+                'bytes' => strlen($fileContent),
+                'phoneNumberId' => $phoneNumberId,
+                'fromNumber' => $fromNumber,
+            ]);
             return $this->_callApi('/mediaV2', [
                 'fileContent' => $fileContent,
                 'fileName' => $fileName ?? basename($filePath),

@@ -80,9 +80,20 @@ class ForceSendCobrandoJob implements ShouldQueue
             ];
             $fCierre = strtr($fCierre, $meses);
 
-            // Configurar teléfono para WhatsApp
-            $telefono = preg_replace('/\s+/', '', $telefono);
-            $this->phoneNumberId = $telefono ? $telefono . '@c.us' : '';
+            // Configurar teléfono para WhatsApp (mismo formato que SendReminderPagoWhatsAppJob)
+            $rawTelefono = (string) ($telefono ?? '');
+            $telefonoDigits = preg_replace('/\D/', '', $rawTelefono);
+            if (strlen($telefonoDigits) === 9) {
+                $telefonoDigits = '51' . $telefonoDigits;
+            } elseif (strlen($telefonoDigits) === 10 && substr($telefonoDigits, 0, 1) === '0') {
+                $telefonoDigits = '51' . substr($telefonoDigits, 1);
+            }
+
+            if ($telefonoDigits === '') {
+                throw new Exception('Teléfono inválido o vacío para cobranza');
+            }
+
+            $this->phoneNumberId = $telefonoDigits . '@c.us';
 
             // Construir mensaje de cobranza
             // Calcular suma y conteo de pagos del concepto LOGISTICA para esta cotización
@@ -117,21 +128,50 @@ class ForceSendCobrandoJob implements ShouldQueue
                 "⚠ Nota: Realizar el pago antes del llenado del contenedor.\n\n" .
                 "📦 En caso hubiera variaciones en el cubicaje se cobrará la diferencia en la cotización final.\n\n" .
                 "Apenas haga el pago, envíe por este medio para hacer la reserva.";
-            // Enviar mensaje
-            $this->sendMessage($message,$this->phoneNumberId,0,'administracion');
 
-            // Enviar imagen de pagos
+            Log::info('ForceSendCobrandoJob enviando a WhatsApp redis', [
+                'id_cotizacion' => $this->idCotizacion,
+                'phoneNumberId' => $this->phoneNumberId,
+                'fromNumber' => 'administracion',
+                'api' => 'https://redis.probusiness.pe/api/whatsapp/messageV2',
+            ]);
+
+            $msgResult = $this->sendMessage($message, $this->phoneNumberId, 0, 'administracion');
+            if (!is_array($msgResult) || empty($msgResult['status'])) {
+                Log::error('ForceSendCobrandoJob: falló envío de texto (call API)', [
+                    'id_cotizacion' => $this->idCotizacion,
+                    'phoneNumberId' => $this->phoneNumberId,
+                    'result' => $msgResult,
+                ]);
+                throw new Exception('Falló call API /messageV2: ' . json_encode($msgResult['response'] ?? $msgResult));
+            }
+
             $pagosUrl = public_path('assets/images/pagos-full.jpg');
-            $this->sendMedia($pagosUrl, 'image/jpg',null,$telefono,10,'administracion');
+            $mediaResult = $this->sendMedia($pagosUrl, 'image/jpg', null, $this->phoneNumberId, 10, 'administracion');
+            if ($mediaResult === false || !is_array($mediaResult) || empty($mediaResult['status'])) {
+                Log::error('ForceSendCobrandoJob: falló envío de imagen pagos (call API)', [
+                    'id_cotizacion' => $this->idCotizacion,
+                    'phoneNumberId' => $this->phoneNumberId,
+                    'pagosUrl' => $pagosUrl,
+                    'exists' => is_file($pagosUrl),
+                    'result' => $mediaResult,
+                ]);
+                throw new Exception('Falló call API /mediaV2: ' . json_encode(is_array($mediaResult) ? ($mediaResult['response'] ?? $mediaResult) : $mediaResult));
+            }
 
             Log::info("Mensaje de cobranza enviado exitosamente via Job", [
                 'id_cotizacion' => $this->idCotizacion,
                 'cliente' => $cliente,
-                'telefono' => $telefono,
+                'telefono' => $telefonoDigits,
+                'phoneNumberId' => $this->phoneNumberId,
                 'volumen' => $volumen,
-                'monto' => $valorCot
+                'monto' => $valorCot,
+                'message_api' => $msgResult,
+                'media_api' => [
+                    'status' => $mediaResult['status'] ?? null,
+                    'http_hint' => $mediaResult['response'] ?? null,
+                ],
             ]);
-
         } catch (Exception $e) {
             Log::error('Error en ForceSendCobrandoJob: ' . $e->getMessage(), [
                 'id_cotizacion' => $this->idCotizacion,
