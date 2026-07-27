@@ -54,6 +54,8 @@ class WhatsappInboxTemplateService
         'pb_docs_excel_link_v1' => ['carga', 'codigo_proveedor', 'link_excel'],
         'pb_docs_excel_link_v1_qa' => ['link_intranet', 'link_excel'],
         'pb_docs_excel_conf_recibido_v1' => ['consolidado', 'enlace'],
+        'pb_docs_recordatorio_proveedor_v1' => ['codigo_proveedor', 'documentos_faltantes'],
+        'pb_docs_recordatorio_proveedor_v1_qa' => ['codigo_proveedor', 'link_web', 'link_drive', 'documentos_faltantes'],
     ];
 
     /**
@@ -127,6 +129,20 @@ class WhatsappInboxTemplateService
                 'language' => 'es_PE',
                 'text' => "Gracias por llenar la información de tu importación del consolidado #{{consolidado}}\nSi aun tienes información pendiente de llenar, vuelve a ingresar al enlace\n{{enlace}}.",
                 'params' => ['consolidado', 'enlace'],
+            ],
+            [
+                'name' => 'pb_docs_recordatorio_proveedor_v1',
+                'label' => 'Docs — Recordatorio proveedor',
+                'language' => 'es_PE',
+                'text' => "Recordatorio de documentación de importación 📋\n\nProveedor: {{codigo_proveedor}}\n\nAún estamos esperando los siguientes documentos: {{documentos_faltantes}}\n\nPor favor envíalos lo antes posible para continuar con la declaración aduanera. Gracias.",
+                'params' => ['codigo_proveedor', 'documentos_faltantes'],
+            ],
+            [
+                'name' => 'pb_docs_recordatorio_proveedor_v1_qa',
+                'label' => 'Docs — Recordatorio proveedor (Excel QA)',
+                'language' => 'es_PE',
+                'text' => "Recordatorio de documentación de importación 📋\n\nProveedor: {{codigo_proveedor}}\n\nAún estamos esperando los siguientes documentos:\nExcel de confirmación 📄\nTienes 2 opciones para llenar la información\n1.📱 Desde tu celular:\n{{link_web}}\n2.📄Descargando el Excel\n{{link_drive}}\n{{documentos_faltantes}}\n\nPor favor envíalos lo antes posible para continuar con la declaración aduanera. Gracias.",
+                'params' => ['codigo_proveedor', 'link_web', 'link_drive', 'documentos_faltantes'],
             ],
             [
                 'name' => 'pb_consolidado_resumen_pago_v1',

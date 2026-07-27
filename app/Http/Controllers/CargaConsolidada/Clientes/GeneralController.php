@@ -936,7 +936,7 @@ class GeneralController extends Controller
 
             // Obtener información de la cotización
             $cot = DB::table('contenedor_consolidado_cotizacion')
-                ->select('nombre', 'telefono', 'id_contenedor')
+                ->select('id', 'nombre', 'telefono', 'id_contenedor', 'uuid')
                 ->where('id', $idCotizacion)
                 ->whereNull('deleted_at')
                 ->first();
@@ -952,6 +952,7 @@ class GeneralController extends Controller
             $telefono = $cot->telefono;
             $telefono = preg_replace('/\s+/', '', $telefono);
             $telefono = $telefono ? $telefono . '@c.us' : '';
+            $uuidCotizacion = trim((string) ($cot->uuid ?? ''));
 
             $cargaRaw = DB::table('carga_consolidada_contenedor')
                 ->where('id', $cot->id_contenedor)
@@ -977,6 +978,7 @@ class GeneralController extends Controller
                 }
 
                 $proveedoresPendientes[] = [
+                    'id' => (int) $idProveedor,
                     'code' => (string) ($proveedor->code_supplier ?? "Proveedor #{$idProveedor}"),
                     'documentos' => $documentos,
                 ];
@@ -994,7 +996,8 @@ class GeneralController extends Controller
                     (string) $telefono,
                     (string) $nombreCliente,
                     $cargaCode,
-                    $proveedoresPendientes
+                    $proveedoresPendientes,
+                    $uuidCotizacion !== '' ? $uuidCotizacion : null
                 );
 
                 $phoneDigits = preg_replace('/\D+/', '', (string) $telefono);
@@ -1024,12 +1027,34 @@ class GeneralController extends Controller
                 $legacyMessage = CoordinacionWhatsappPayload::docsRecordatorioLegacyMessage(
                     (string) $nombreCliente,
                     $cargaCode,
-                    $proveedoresPendientes
+                    $proveedoresPendientes,
+                    $uuidCotizacion !== '' ? $uuidCotizacion : null
                 );
                 $response = $this->sendMessage($legacyMessage, $telefono, 5, 'consolidado');
             }
 
             Log::info('Respuesta de WhatsApp recordatorios: ' . json_encode($response));
+
+            $templatesUsados = null;
+            if ($this->shouldRouteCoordinacionToMeta('consolidado')) {
+                $tieneSinExcel = false;
+                $tieneConExcel = false;
+                foreach ($proveedoresPendientes as $p) {
+                    if (CoordinacionWhatsappPayload::documentosIncludeExcelConfirmacion((array) ($p['documentos'] ?? []))) {
+                        $tieneConExcel = true;
+                    } else {
+                        $tieneSinExcel = true;
+                    }
+                }
+                $templatesUsados = ['pb_docs_recordatorio_intro_v1'];
+                if ($tieneConExcel) {
+                    $templatesUsados[] = 'pb_docs_recordatorio_proveedor_v1_qa';
+                }
+                if ($tieneSinExcel) {
+                    $templatesUsados[] = 'pb_docs_recordatorio_proveedor_v1';
+                }
+                $templatesUsados[] = 'pb_docs_recordatorio_aviso_v1';
+            }
 
             return response()->json([
                 'success' => true,
@@ -1039,9 +1064,7 @@ class GeneralController extends Controller
                     'nombre_cliente' => $nombreCliente,
                     'carga' => $cargaCode,
                     'proveedores' => $proveedoresPendientes,
-                    'templates' => $this->shouldRouteCoordinacionToMeta('consolidado')
-                        ? ['pb_docs_recordatorio_intro_v1', 'pb_docs_recordatorio_proveedor_v1', 'pb_docs_recordatorio_aviso_v1']
-                        : null,
+                    'templates' => $templatesUsados,
                 ]
             ]);
         }catch (\Exception $e) {
