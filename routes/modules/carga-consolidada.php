@@ -72,6 +72,7 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
         Route::get('pasos/{idContenedor}', [ContenedorController::class, 'getContenedorPasos']);
         Route::post('/', [ContenedorController::class, 'store']);
         Route::post('/estado-documentacion', [ContenedorController::class, 'updateEstadoDocumentacion']);
+        Route::post('/estado-finanzas', [ContenedorController::class, 'updateEstadoFinanzas']);
         Route::delete('packing-list/{idContenedor}', [ContenedorController::class, 'deletePackingList']);
         Route::post('update-fecha-documentacion/{idContenedor}', [ContenedorController::class, 'updateFechaDocumentacionMax']);
 

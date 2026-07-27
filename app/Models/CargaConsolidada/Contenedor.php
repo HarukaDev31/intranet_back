@@ -40,6 +40,7 @@ class Contenedor extends Model
         'factura_general_url',
         'estado_china',
         'estado_documentacion',
+        'estado_finanzas',
         'tipo_carga',
         'naviera',
         'tipo_contenedor',
@@ -145,6 +146,16 @@ class Contenedor extends Model
     ];
 
     /**
+     * Los valores posibles para el campo estado_finanzas.
+     *
+     * @var array
+     */
+    public const ESTADOS_FINANZAS = [
+        'PENDIENTE' => 'Pendiente',
+        'COMPLETADO' => 'Completado'
+    ];
+
+    /**
      * Los valores posibles para el campo tipo_carga.
      *
      * @var array
@@ -192,6 +203,14 @@ class Contenedor extends Model
     public function scopePorEstadoChina($query, $estado)
     {
         return $query->where('estado_china', $estado);
+    }
+
+    /**
+     * Scope para filtrar por estado de finanzas.
+     */
+    public function scopePorEstadoFinanzas($query, $estado)
+    {
+        return $query->where('estado_finanzas', $estado);
     }
 
     /**
@@ -267,7 +286,8 @@ class Contenedor extends Model
     {
         return $this->estado === 'COMPLETADO' && 
                $this->estado_china === 'COMPLETADO' && 
-               $this->estado_documentacion === 'COMPLETADO';
+               $this->estado_documentacion === 'COMPLETADO' &&
+               $this->estado_finanzas === 'COMPLETADO';
     }
 
     /**

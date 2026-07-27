@@ -145,9 +145,9 @@ class ContenedorController extends Controller
                 } else {
                     $query->where('estado_documentacion', '!=', Contenedor::CONTEDOR_CERRADO);
                 }
-            } 
-            
-            else {
+            } else {
+                // Coordinación, China, Finanzas, etc.: abiertos/completados por estado_china.
+                // Finanzas solo cambia el campo de estado que se muestra en front (estado_finanzas).
                 if ($completado) {
                     $query->where('estado_china', '=', Contenedor::CONTEDOR_CERRADO);
                 } else {
@@ -167,10 +167,49 @@ class ContenedorController extends Controller
                 });
             }
 
+            if ($request->filled('estado_finanzas') && strtolower((string) $request->estado_finanzas) !== 'todos') {
+                $query->where('estado_finanzas', $request->estado_finanzas);
+            }
+
+            // Años disponibles (antes de filtrar por anio, para el select del front)
+            $yearsQuery = clone $query;
+            $yearsQuery->getQuery()->orders = null;
+            $aniosDisponibles = $yearsQuery
+                ->without(['pais', 'tcYuan'])
+                ->whereNotNull('f_inicio')
+                ->selectRaw('YEAR(f_inicio) as anio')
+                ->groupBy('anio')
+                ->orderBy('anio', 'desc')
+                ->pluck('anio')
+                ->map(function ($year) {
+                    return (int) $year;
+                })
+                ->filter(function ($year) {
+                    return $year > 0;
+                })
+                ->values()
+                ->all();
+
+            // Filtrar por año de f_inicio (mismo criterio que columna "anio" del listado)
+            $anio = $request->input('anio', $request->input('year'));
+            if ($anio !== null && $anio !== '' && strtolower((string) $anio) !== 'todos') {
+                $anioInt = (int) $anio;
+                if ($anioInt >= 2000 && $anioInt <= 2100) {
+                    $query->whereYear('f_inicio', $anioInt);
+                }
+            }
+
             //order by int(carga) desc y en base al año y mes de f_inicio
             $query->orderBy(DB::raw('YEAR(f_inicio)'), 'DESC');
             $query->orderByRaw('CAST(carga AS UNSIGNED) DESC');
-            $data = $query->paginate(100);
+
+            $allowedPerPage = [5, 10, 20, 100];
+            $perPage = (int) $request->input('limit', $request->input('per_page', 20));
+            if (!in_array($perPage, $allowedPerPage, true)) {
+                $perPage = 20;
+            }
+            $page = max(1, (int) $request->input('page', 1));
+            $data = $query->paginate($perPage, ['*'], 'page', $page);
 
             // Optimización: obtener todos los ids de la página y hacer agregaciones en lote.
             $pageIds = collect($data->items())->pluck('id')->all();
@@ -292,6 +331,7 @@ class ContenedorController extends Controller
                     'empresa' => $c->empresa,
                     'estado_documentacion' => $c->estado_documentacion,
                     'estado_china' => $c->estado_china,
+                    'estado_finanzas' => $c->estado_finanzas,
                     'pais' => $c->pais,
                     'tipo_contenedor' => $c->tipo_contenedor,
                     'canal_control' => $c->canal_control,
@@ -321,8 +361,10 @@ class ContenedorController extends Controller
                     'total' => $data->total(),
                     'from' => $data->firstItem(),
                     'to' => $data->lastItem(),
-                ]
-
+                ],
+                'filters' => [
+                    'anios' => $aniosDisponibles,
+                ],
             ]);
         } catch (\Exception $e) {
             return response()->json([
@@ -592,6 +634,22 @@ class ContenedorController extends Controller
     public function destroy($id)
     {
         try {
+            $contenedor = Contenedor::find($id);
+            if (!$contenedor) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Contenedor no encontrado',
+                ], 404);
+            }
+
+            $estadoChina = strtoupper(trim((string) ($contenedor->estado_china ?? '')));
+            if ($estadoChina !== Contenedor::CONTEDOR_PENDIENTE) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Solo se puede eliminar un consolidado en estado PENDIENTE.',
+                ], 422);
+            }
+
             //set foreign key check to 0
             DB::statement('SET FOREIGN_KEY_CHECKS = 0');
 
@@ -599,7 +657,6 @@ class ContenedorController extends Controller
             $steps->delete();
             $cotizaciones = Cotizacion::where('id_contenedor', $id);
             $cotizaciones->delete();
-            $contenedor = Contenedor::find($id);
             $contenedor->delete();
             //set foreign key check to 1
             DB::statement('SET FOREIGN_KEY_CHECKS = 1');
@@ -1164,6 +1221,78 @@ Le estaré informando cualquier avance 🫡.";
             ];
         }
     }
+
+    /**
+     * @OA\Post(
+     *     path="/carga-consolidada/contenedor/estado-finanzas",
+     *     tags={"Contenedor"},
+     *     summary="Actualizar estado de finanzas",
+     *     description="Actualiza el estado_finanzas de un contenedor (PENDIENTE|COMPLETADO). Rol Finanzas.",
+     *     operationId="updateEstadoFinanzas",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             @OA\Property(property="id", type="integer"),
+     *             @OA\Property(property="estado_finanzas", type="string", enum={"PENDIENTE","COMPLETADO"})
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Estado actualizado exitosamente"),
+     *     @OA\Response(response=403, description="Sin permiso"),
+     *     @OA\Response(response=404, description="Contenedor no encontrado"),
+     *     @OA\Response(response=422, description="Estado inválido")
+     * )
+     */
+    public function updateEstadoFinanzas(Request $request)
+    {
+        try {
+            $user = JWTAuth::parseToken()->authenticate();
+            if (!$user || $user->getNombreGrupo() !== Usuario::ROL_FINANZAS) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No autorizado para actualizar el estado de finanzas',
+                ], 403);
+            }
+
+            $id = (int) $request->input('id');
+            $estado = strtoupper(trim((string) $request->input('estado_finanzas', '')));
+            $allowed = array_keys(Contenedor::ESTADOS_FINANZAS);
+
+            if (!in_array($estado, $allowed, true)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Estado de finanzas inválido. Use PENDIENTE o COMPLETADO.',
+                ], 422);
+            }
+
+            $contenedor = Contenedor::find($id);
+            if (!$contenedor) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Contenedor no encontrado',
+                ], 404);
+            }
+
+            $contenedor->estado_finanzas = $estado;
+            $contenedor->save();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Estado de finanzas actualizado correctamente',
+                'data' => [
+                    'id' => $contenedor->id,
+                    'estado_finanzas' => $contenedor->estado_finanzas,
+                ],
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error en updateEstadoFinanzas: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al actualizar el estado de finanzas: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
     /**
      * @OA\Put(
      *     path="/carga-consolidada/contenedor/{idcontenedor}/fecha-documentacion-max",

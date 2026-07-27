@@ -5,6 +5,7 @@ namespace App\Services\CargaConsolidada\CotizacionFinal;
 use App\Events\PlantillaFinalBatchFinished;
 use App\Http\Controllers\CargaConsolidada\CotizacionFinal\CotizacionFinalController;
 use App\Jobs\GenerateMassiveExcelPayrollsJob;
+use App\Models\CargaConsolidada\Contenedor;
 use App\Models\CargaConsolidada\ConsolidadoPlantillaFinalBatch;
 use Illuminate\Http\UploadedFile;
 use App\Traits\UsesObjectStorage;
@@ -87,6 +88,11 @@ class PlantillaFinalBatchService
                 'estado' => 'COMPLETED',
                 'mensaje_error' => null,
             ]);
+
+            if ((int) $stats['completados'] > 0) {
+                Contenedor::where('id', (int) $batch->id_contenedor)
+                    ->update(['estado_finanzas' => Contenedor::CONTEDOR_CERRADO]);
+            }
 
             event(new PlantillaFinalBatchFinished(
                 $batch->fresh(),

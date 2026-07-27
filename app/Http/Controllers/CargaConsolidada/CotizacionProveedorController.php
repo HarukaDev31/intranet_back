@@ -633,6 +633,10 @@ class CotizacionProveedorController extends Controller
             $proveedor->estados_proveedor = $request->estado;
             $proveedor->save();
 
+            if ($request->estado === $this->STATUS_RECIVED) {
+                $this->promoteContenedorToRecibiendoIfPendiente($proveedor->id_contenedor);
+            }
+
             return response()->json([
                 'success' => true,
                 'message' => 'Estado actualizado correctamente',
@@ -735,6 +739,10 @@ class CotizacionProveedorController extends Controller
                     ->where('id_cotizacion', $idCotizacion)
                     ->where('id', $idProveedor)
                     ->update(['estados_proveedor' => $estado]);
+
+                if ($estado === $this->STATUS_RECIVED) {
+                    $this->promoteContenedorToRecibiendoIfPendiente($idContenedor);
+                }
             }
             // Manejo de otros estados
             else {
@@ -1610,12 +1618,8 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                 } else {
                     $message = "Se ha actualizado la cantidad de cajas y volumen total de china del proveedor con codigo de proveedor " . $supplierCode . " a " . $data['qty_box_china'] . " cajas y " . $data['cbm_total_china'] . " m3";
                 }
-                $contenedorEstado = Cotizacion::where('id_contenedor', $idContenedor)->first()->estado_china;
-                if ($contenedorEstado == "PENDIENTE" && isset($hasRecibidoMetrics) && $hasRecibidoMetrics) {
-                    $cotizacion = Cotizacion::find($idContenedor);
-                    $cotizacion->estado_china = "RECIBIENDO";
-                    $cotizacion->estado = "RECIBIENDO";
-                    $cotizacion->save();
+                if (isset($hasRecibidoMetrics) && $hasRecibidoMetrics) {
+                    $this->promoteContenedorToRecibiendoIfPendiente($idContenedor);
                 }
             }
             // Permitir al frontend enviar y actualizar los nuevos estados de documentos
@@ -3000,6 +3004,28 @@ Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda m
                 ->update($updateData);
         }
     }
+
+    /**
+     * Si el contenedor está PENDIENTE, pasa a RECIBIENDO al primer proveedor en R.
+     */
+    private function promoteContenedorToRecibiendoIfPendiente($idContenedor)
+    {
+        if (!$idContenedor) {
+            return;
+        }
+
+        $contenedor = Contenedor::find($idContenedor);
+        if (!$contenedor) {
+            return;
+        }
+
+        if ($contenedor->estado_china === Contenedor::CONTEDOR_PENDIENTE) {
+            $contenedor->estado_china = 'RECIBIENDO';
+            $contenedor->estado = 'RECIBIENDO';
+            $contenedor->save();
+        }
+    }
+
     public function refreshRotuladoStatus($id)
     {
         try {
