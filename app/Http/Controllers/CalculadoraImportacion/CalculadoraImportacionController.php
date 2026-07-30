@@ -520,6 +520,7 @@ class CalculadoraImportacionController extends Controller
                 'clienteInfo.whatsapp' => 'nullable|string',
                 'clienteInfo.correo' => 'nullable|string',
                 'clienteInfo.tipoCliente' => 'required|string',
+                'clienteInfo.origen_marketing' => 'nullable|string|in:Facebook,Instagram,Tiktok,Landing CC,Landing CI,Pagina web CC,Pagina web CI',
                 'clienteInfo.qtyProveedores' => 'required|integer|min:1',
                 'proveedores' => 'required|array|min:1',
                 'proveedores.*.cbm' => 'required|numeric|min:0',
@@ -1103,6 +1104,7 @@ class CalculadoraImportacionController extends Controller
                                 'from_calculator' => true,
                                 'cotizacion_file_url' => $calculadora->url_cotizacion,
                                 'es_imo' => (bool) ($calculadora->es_imo ?? false),
+                                'origen_marketing' => $calculadora->origen_marketing,
                             ]);
 
                             $calculadora->id_cotizacion = $cotizacionId;
@@ -1134,6 +1136,7 @@ class CalculadoraImportacionController extends Controller
                         'id_usuario' => $calculadora->id_usuario,
                         'from_calculator' => true,
                         'es_imo' => (bool) ($calculadora->es_imo ?? false),
+                        'origen_marketing' => $calculadora->origen_marketing,
                     ]);
                     Log::info('cotizacion_file_url e id_usuario actualizados al pasar a COTIZADO', ['cotizacion_id' => $calculadora->id_cotizacion]);
 
@@ -1321,6 +1324,7 @@ class CalculadoraImportacionController extends Controller
                     'cotizacion_file_url' => $calculadora->url_cotizacion,
                     'id_usuario' => $calculadora->id_usuario,
                     'from_calculator' => true,
+                    'origen_marketing' => $calculadora->origen_marketing,
                 ]);
             }
 

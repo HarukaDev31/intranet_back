@@ -165,6 +165,7 @@ class CalculadoraImportacionService
                 'correo_cliente' => $data['clienteInfo']['correo'] ?: null,
                 'whatsapp_cliente' => is_array($data['clienteInfo']['whatsapp']) ? ($data['clienteInfo']['whatsapp']['value'] ?? null) : ($data['clienteInfo']['whatsapp'] ?? null),
                 'tipo_cliente' => $data['clienteInfo']['tipoCliente'],
+                'origen_marketing' => $this->normalizeOrigenMarketing($data['clienteInfo']['origen_marketing'] ?? null),
                 'tipo_cotizacion' => $tipoCotizacion,
                 'qty_proveedores' => $data['clienteInfo']['qtyProveedores'],
                 'tarifa_total_extra_proveedor' => $data['tarifaTotalExtraProveedor'] ?? 0,
@@ -328,6 +329,9 @@ class CalculadoraImportacionService
                 'correo_cliente' => $data['clienteInfo']['correo'] ?: null,
                 'whatsapp_cliente' => is_array($data['clienteInfo']['whatsapp']) ? ($data['clienteInfo']['whatsapp']['value'] ?? null) : ($data['clienteInfo']['whatsapp'] ?? null),
                 'tipo_cliente' => $data['clienteInfo']['tipoCliente'],
+                'origen_marketing' => array_key_exists('origen_marketing', $data['clienteInfo'] ?? [])
+                    ? $this->normalizeOrigenMarketing($data['clienteInfo']['origen_marketing'] ?? null)
+                    : $calculadora->origen_marketing,
                 'tipo_cotizacion' => $tipoCotizacion,
                 'qty_proveedores' => $data['clienteInfo']['qtyProveedores'],
                 'tarifa_total_extra_proveedor' => $data['tarifaTotalExtraProveedor'] ?? 0,
@@ -719,6 +723,36 @@ class CalculadoraImportacionService
             'calculadora_items' => $calcItems->toArray(),
             'cotizacion_relacionada' => $cotizacionData,
         ];
+    }
+
+    /**
+     * Normaliza origen_marketing (nullable; mismos valores que carga consolidada).
+     *
+     * @param  mixed  $value
+     * @return string|null
+     */
+    private function normalizeOrigenMarketing($value)
+    {
+        if ($value === '' || $value === null) {
+            return null;
+        }
+
+        $origen = is_string($value) ? trim($value) : '';
+        if ($origen === '') {
+            return null;
+        }
+
+        $allowed = [
+            'Facebook',
+            'Instagram',
+            'Tiktok',
+            'Landing CC',
+            'Landing CI',
+            'Pagina web CC',
+            'Pagina web CI',
+        ];
+
+        return in_array($origen, $allowed, true) ? $origen : null;
     }
 
     /**
