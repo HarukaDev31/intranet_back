@@ -1294,9 +1294,9 @@ class CotizacionController extends Controller
                     'id' => $provider->id,
                     'volumen_doc' => $provider->volumen_doc ? (float) $provider->volumen_doc : null,
                     'valor_doc' => $provider->valor_doc ? (float) $provider->valor_doc : null,
-                    'factura_comercial' => $provider->factura_comercial,
-                    'excel_confirmacion' => $provider->excel_confirmacion,
-                    'packing_list' => $provider->packing_list
+                    'factura_comercial' => $this->cdnStorageUrl($provider->factura_comercial),
+                    'excel_confirmacion' => $this->cdnStorageUrl($provider->excel_confirmacion),
+                    'packing_list' => $this->cdnStorageUrl($provider->packing_list),
                 ];
             });
 
@@ -1336,14 +1336,14 @@ class CotizacionController extends Controller
                 'valor_doc' => $cotizacion->valor_doc,
                 'valor_cot' => $cotizacion->valor_cot,
                 'volumen_china' => $cotizacion->volumen_china,
-                'factura_comercial' => $cotizacion->factura_comercial,
+                'factura_comercial' => $this->cdnStorageUrl($cotizacion->factura_comercial),
                 'id_usuario' => $cotizacion->id_usuario,
                 'monto' => $cotizacion->monto,
                 'fob' => $cotizacion->fob,
                 'impuestos' => $cotizacion->impuestos,
                 'tarifa' => $cotizacion->tarifa,
                 'excel_comercial' => $cotizacion->excel_comercial,
-                'excel_confirmacion' => $cotizacion->excel_confirmacion,
+                'excel_confirmacion' => $this->cdnStorageUrl($cotizacion->excel_confirmacion),
                 'vol_selected' => $cotizacion->vol_selected,
                 'estado_cliente' => $cotizacion->estado_cliente,
                 'peso' => $cotizacion->peso,
