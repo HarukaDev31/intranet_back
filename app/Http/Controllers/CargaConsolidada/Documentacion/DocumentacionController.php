@@ -340,6 +340,13 @@ class DocumentacionController extends Controller
     public function deleteProveedorFacturaComercial(Request $request, $idProveedor)
     {
         $proveedor = CotizacionProveedor::find($idProveedor);
+        if (!$proveedor) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Proveedor no encontrado'
+            ], 404);
+        }
+
         $proveedor->factura_comercial = null;
         DocumentStatusSync::resetCoord2Pendiente($proveedor, 'invoice_status');
         $proveedor->save();
@@ -352,6 +359,13 @@ class DocumentacionController extends Controller
     public function deleteProveedorExcelConfirmacion(Request $request, $idProveedor)
     {
         $proveedor = CotizacionProveedor::find($idProveedor);
+        if (!$proveedor) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Proveedor no encontrado'
+            ], 404);
+        }
+
         $proveedor->excel_confirmacion = null;
         DocumentStatusSync::resetCoord2Pendiente($proveedor, 'excel_conf_status');
         $proveedor->excel_conf_form_cerrado = false;
@@ -366,6 +380,13 @@ class DocumentacionController extends Controller
     public function deleteProveedorPackingList(Request $request, $idProveedor)
     {
         $proveedor = CotizacionProveedor::find($idProveedor);
+        if (!$proveedor) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Proveedor no encontrado'
+            ], 404);
+        }
+
         $proveedor->packing_list = null;
         DocumentStatusSync::resetCoord2Pendiente($proveedor, 'packing_status');
         $proveedor->save();
