@@ -522,6 +522,33 @@ class CotizacionController extends Controller
 
 
         ];
+
+        // Conteo NUEVO / ANTIGUO (tipo_cliente) — solo para Jefe Marketing en prospectos
+        if ($usergroup === Usuario::JEFE_MARKETING) {
+            $tipoCounts = DB::table('contenedor_consolidado_cotizacion as c')
+                ->leftJoin('contenedor_consolidado_tipo_cliente as t', 't.id', '=', 'c.id_tipo_cliente')
+                ->where('c.id_contenedor', $idContenedor)
+                ->whereNull('c.deleted_at')
+                ->where('c.estado_cotizador', 'CONFIRMADO')
+                ->whereNull('c.id_cliente_importacion')
+                ->selectRaw("
+                    SUM(CASE WHEN UPPER(TRIM(COALESCE(t.name, ''))) = 'NUEVO' THEN 1 ELSE 0 END) as total_nuevo,
+                    SUM(CASE WHEN UPPER(TRIM(COALESCE(t.name, ''))) = 'ANTIGUO' THEN 1 ELSE 0 END) as total_antiguo
+                ")
+                ->first();
+
+            $headersData['clientes_nuevo'] = [
+                'value' => (int) ($tipoCounts->total_nuevo ?? 0),
+                'label' => 'Nuevo',
+                'icon' => 'i-heroicons-user-plus',
+            ];
+            $headersData['clientes_antiguo'] = [
+                'value' => (int) ($tipoCounts->total_antiguo ?? 0),
+                'label' => 'Antiguo',
+                'icon' => 'i-heroicons-user',
+            ];
+        }
+
         $roleAllowedMap = [
             Usuario::ROL_COTIZADOR => ['cbm_vendido', 'cbm_pendiente', 'cbm_embarcado', 'qty_items', 'cbm_total_peru', 'cbm_total_china','cbm_total_imo'],
             Usuario::ROL_ALMACEN_CHINA => ['cbm_total_china', 'cbm_total_peru', 'qty_items'],
@@ -529,7 +556,7 @@ class CotizacionController extends Controller
             Usuario::ROL_COORDINACION => ['cbm_total_china', 'cbm_total_peru', 'qty_items', 'total_logistica', 'total_logistica_pagado'],
             Usuario::ROL_CONTABILIDAD => ['cbm_total_china', 'cbm_total_peru', 'qty_items', 'total_logistica', 'total_logistica_pagado', 'total_diferencia_logistica'],
             Usuario::ROL_JEFE_IMPORTACION => ['cbm_total_china', 'cbm_total_peru', 'qty_items', 'total_logistica', 'total_logistica_pagado'],
-            Usuario::JEFE_MARKETING => ['cbm_total_china', 'cbm_total_peru', 'qty_items', 'total_logistica', 'total_logistica_pagado'], 
+            Usuario::JEFE_MARKETING => ['clientes_nuevo', 'clientes_antiguo'],
         ];
         $userIdCheck = $user->ID_Usuario;
         if (array_key_exists($usergroup, $roleAllowedMap)) {
