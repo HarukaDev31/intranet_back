@@ -27,6 +27,7 @@ class CalculadoraImportacion extends Model
         'correo_cliente',
         'whatsapp_cliente',
         'tipo_cliente',
+        'origen_marketing',
         'tipo_cotizacion',
         'qty_proveedores',
         'tarifa_total_extra_proveedor',

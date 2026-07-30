@@ -424,6 +424,7 @@ class CotizacionController extends Controller
                     'cotizacion_file_url' => $this->cdnStorageUrl($cotizacion->cotizacion_file_url),
                     'impuestos' => $cotizacion->impuestos,
                     'tipo_cliente' => optional($cotizacion->tipoCliente)->name,
+                    'origen_marketing' => $cotizacion->origen_marketing,
                     'bl_file_url' => $files->bl_file_url ? $files->bl_file_url : null,
                     'lista_embarque_url' => $listaEmbarqueUrl,
                     'url_cotizacion_pdf' => $urlCotizacionPdf,

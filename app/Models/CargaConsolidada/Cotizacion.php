@@ -34,6 +34,7 @@ class Cotizacion extends Model
         'id_contenedor',
         'uuid',
         'id_tipo_cliente',
+        'origen_marketing',
         'id_cliente',
         'fecha',
         'nombre',

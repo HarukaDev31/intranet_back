@@ -78,6 +78,7 @@ class CalculadoraImportacionCotizacionSyncService
                     'tipo_cotizacion' => $calculadora->tipo_cotizacion ?? \App\Models\CalculadoraImportacion::TIPO_COTIZACION_VOLUMEN,
                     'volumen_neto' => $this->volumenNetoDesdeCalculadora($calculadora),
                     'es_imo' => (bool) ($calculadora->es_imo ?? false),
+                    'origen_marketing' => $calculadora->origen_marketing,
                 ];
                 if ($calculadora->url_cotizacion) {
                     $updateData['cotizacion_file_url'] = $calculadora->url_cotizacion;
@@ -126,6 +127,7 @@ class CalculadoraImportacionCotizacionSyncService
             'tipo_cotizacion' => $calculadora->tipo_cotizacion ?? \App\Models\CalculadoraImportacion::TIPO_COTIZACION_VOLUMEN,
             'volumen_neto' => $this->volumenNetoDesdeCalculadora($calculadora),
             'es_imo' => (bool) ($calculadora->es_imo ?? false),
+            'origen_marketing' => $calculadora->origen_marketing,
         ];
         if ($calculadora->url_cotizacion) {
             $updateData['cotizacion_file_url'] = $calculadora->url_cotizacion;
@@ -192,6 +194,7 @@ class CalculadoraImportacionCotizacionSyncService
                 'es_imo' => (bool) ($calculadora->es_imo ?? false),
                 'tipo_cotizacion' => $calculadora->tipo_cotizacion ?? \App\Models\CalculadoraImportacion::TIPO_COTIZACION_VOLUMEN,
                 'volumen_neto' => $this->volumenNetoDesdeCalculadora($calculadora),
+                'origen_marketing' => $calculadora->origen_marketing,
             ]);
 
             $calculadora->id_cotizacion = $cotizacionId;
