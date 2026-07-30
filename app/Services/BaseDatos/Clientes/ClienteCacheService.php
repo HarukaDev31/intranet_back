@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Cache;
 
 class ClienteCacheService
 {
-    private const VERSION = 'v1';
+    private const VERSION = 'v2';
     private const TAG = 'base-datos-clientes';
 
     public function rememberIndex(array $params, callable $resolver): array
