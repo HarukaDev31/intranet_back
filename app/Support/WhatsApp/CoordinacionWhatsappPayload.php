@@ -14,8 +14,8 @@ class CoordinacionWhatsappPayload
     /** Texto fijo D07 — debe coincidir con la plantilla Meta. */
     private const DOCS_RECORDATORIO_AVISO = 'Si no tenemos tus documentos a tiempo, aduana puede aplicarte multas o inmovilización de tus productos.';
 
-    /** Plantilla Meta D02 — Excel de confirmación (link_excel + link_intranet). */
-    private const DOCS_EXCEL_LINK_TEMPLATE = 'pb_docs_excel_link_v1';
+    /** Plantilla Meta D02 — Excel de confirmación (QA: link_excel + link_intranet). */
+    private const DOCS_EXCEL_LINK_TEMPLATE = 'pb_docs_excel_link_v1_qa';
 
     /**
      * @return array<string, string>
@@ -29,9 +29,8 @@ class CoordinacionWhatsappPayload
         ];
     }
 
-    /** Plantilla Meta D06 — recordatorio proveedor con Excel (link web + Drive). */
-    /** Prod: mismo nombre base; Meta debe aceptar params link_web/link_drive o aprobar variante dedicada. */
-    private const DOCS_RECORDATORIO_PROVEEDOR_EXCEL = 'pb_docs_recordatorio_proveedor_v1';
+    /** Plantilla Meta D06 QA — recordatorio proveedor con Excel (link web + Drive). */
+    private const DOCS_RECORDATORIO_PROVEEDOR_EXCEL = 'pb_docs_recordatorio_proveedor_v1_qa';
 
     /** Plantilla Meta D06 — recordatorio proveedor sin Excel. */
     private const DOCS_RECORDATORIO_PROVEEDOR = 'pb_docs_recordatorio_proveedor_v1';
@@ -641,7 +640,7 @@ class CoordinacionWhatsappPayload
         $intranet = trim($linkIntranet);
         $drive = trim($linkExcel);
 
-        // Debe coincidir con el BODY Meta de pb_docs_excel_link_v1.
+        // Debe coincidir con el BODY Meta de pb_docs_excel_link_v1_qa.
         return "Tienes 2 opciones para llenar la información\n"
             . "1.\t📱 Desde tu celular:\n"
             . "{$intranet}   .\n"

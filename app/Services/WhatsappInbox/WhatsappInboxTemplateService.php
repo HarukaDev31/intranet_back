@@ -51,6 +51,11 @@ class WhatsappInboxTemplateService
             'total',
             'fecha_limite',
         ],
+        'pb_docs_excel_link_v1' => ['carga', 'codigo_proveedor', 'link_excel'],
+        'pb_docs_excel_link_v1_qa' => ['link_intranet', 'link_excel'],
+        'pb_docs_excel_conf_recibido_v1' => ['consolidado', 'enlace'],
+        'pb_docs_recordatorio_proveedor_v1' => ['codigo_proveedor', 'documentos_faltantes'],
+        'pb_docs_recordatorio_proveedor_v1_qa' => ['codigo_proveedor', 'link_web', 'link_drive', 'documentos_faltantes'],
     ];
 
     /**
@@ -105,8 +110,14 @@ class WhatsappInboxTemplateService
                 'header_format' => 'DOCUMENT',
             ],
             [
-            [
                 'name' => 'pb_docs_excel_link_v1',
+                'label' => 'Docs — Excel de confirmación (link)',
+                'language' => 'es_PE',
+                'text' => "Documentación: CONSOLIDADO #{{carga}}\n\nExcel de confirmación — Proveedor {{codigo_proveedor}}\n\nLlenalo aquí: {{link_excel}} 📄",
+                'params' => ['carga', 'codigo_proveedor', 'link_excel'],
+            ],
+            [
+                'name' => 'pb_docs_excel_link_v1_qa',
                 'label' => 'Docs — Excel de confirmación (Drive + web)',
                 'language' => 'es_PE',
                 'text' => "Tienes 2 opciones para llenar la información\n1.\t📱 Desde tu celular:\n{{link_intranet}}   .\n2.\t📄Descargando el Excel\n{{link_excel}}✅.",
@@ -127,8 +138,14 @@ class WhatsappInboxTemplateService
                 'params' => ['codigo_proveedor', 'documentos_faltantes'],
             ],
             [
+                'name' => 'pb_docs_recordatorio_proveedor_v1_qa',
+                'label' => 'Docs — Recordatorio proveedor (Excel QA)',
+                'language' => 'es_PE',
+                'text' => "Recordatorio de documentación de importación 📋\n\nProveedor: {{codigo_proveedor}}\n\nAún estamos esperando los siguientes documentos:\nExcel de confirmación 📄\nTienes 2 opciones para llenar la información\n1.📱 Desde tu celular:\n{{link_web}}\n2.📄Descargando el Excel\n{{link_drive}}\n{{documentos_faltantes}}\n\nPor favor envíalos lo antes posible para continuar con la declaración aduanera. Gracias.",
+                'params' => ['codigo_proveedor', 'link_web', 'link_drive', 'documentos_faltantes'],
+            ],
+            [
                 'name' => 'pb_consolidado_resumen_pago_v1',
-
                 'label' => 'Consolidado — Resumen de pago',
                 'language' => 'es_PE',
                 'text' => "💰*Resumen de Pago*\n✅Cotización final: \${{total_cotizacion}}\n✅Adelanto: \${{adelanto}}\n✅ Pendiente de pago: \${{pendiente}} 💳",
@@ -377,7 +394,7 @@ class WhatsappInboxTemplateService
             break;
         }
 
-        // Fallback local si Graph no trae la plantilla.
+        // Graph a veces no trae plantillas QA/_qa: usar fallback local.
         if (!$found) {
             foreach ($this->defaultTemplates() as $tpl) {
                 if (!is_array($tpl) || ($tpl['name'] ?? '') !== $templateName) {

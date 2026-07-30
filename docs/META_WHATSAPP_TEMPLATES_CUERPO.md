@@ -716,6 +716,18 @@ Video: https://youtu.be/rvhwblBEbXQ
 
 **Reemplaza adjunto XLSX** — un mensaje por cotización (Excel general con una hoja por proveedor).
 
+**BODY (legacy):**
+
+```
+Documentación: CONSOLIDADO #{{carga}}
+
+Excel de confirmación — Proveedor {{codigo_proveedor}}
+
+Descárgalo aquí: {{link_excel}} 📄
+```
+
+QA / main (`pb_docs_excel_link_v1_qa`) — plantilla que usa el backend:
+
 **BODY:**
 
 ```
@@ -731,7 +743,7 @@ Tienes 2 opciones para llenar la información
 | `{{link_intranet}}` | 1 | URL formulario web (sin `?proveedor=`) |
 | `{{link_excel}}` | 2 | URL Google Drive |
 
-> Nota: en Meta producción el nombre es `pb_docs_excel_link_v1` (no usar sufijo `_qa`).
+> Nota: el backend envía `pb_docs_excel_link_v1_qa` (misma plantilla Meta que en QA).
 
 ---
 
@@ -853,7 +865,7 @@ Por favor envíalos lo antes posible para continuar con la declaración aduanera
 ---
 
 
-> Excel de confirmación: cuando el recordatorio incluye `excel_confirmacion`, el backend arma cuerpo con `link_web` + `link_drive` vía `docsRecordatorioProveedorConExcel`. En producción se usa el nombre `pb_docs_recordatorio_proveedor_v1` (no `_qa`); si Meta prod solo tiene la variante de 2 parámetros, hace falta aprobar la variante con links o un template dedicado.
+> Excel de confirmación: cuando el recordatorio incluye `excel_confirmacion`, el backend usa `pb_docs_recordatorio_proveedor_v1_qa` con `link_web` + `link_drive` vía `docsRecordatorioProveedorConExcel` (misma plantilla Meta que en QA).
 
 ### D07 — `pb_docs_recordatorio_aviso_v1`
 

@@ -177,11 +177,12 @@ Los **PDF** e **imágenes** (jpg/png) sí van en plantillas con encabezado DOCUM
 | ID | Nombre Meta sugerido | Tipo | Origen | Variables |
 |----|----------------------|------|--------|-----------|
 | D01 | `pb_docs_paso1_excel_video_v1` | TEXT | `SolicitarDocumentosWhatsAppJob` paso 1 | `{{carga}}` |
-| D02 | `pb_docs_excel_link_v1` | TEXT | **Reemplaza xlsx** — un envío por proveedor o zip | `{{carga}}`, `{{codigo_proveedor}}`, `{{link_excel}}` |
+| D02 | `pb_docs_excel_link_v1` / `_qa` | TEXT | Excel confirmación (web + Drive) | QA: `{{link_intranet}}`, `{{link_excel}}` |
+| D02b | `pb_docs_excel_conf_recibido_v1` | TEXT | Cliente guardó Excel confirmación (web) | `{{consolidado}}`, `{{enlace}}` |
 | D03 | `pb_docs_paso2_word_v1` | TEXT | Paso 2 texto | `{{carga}}`, `{{fecha_maxima}}` (opcional) |
 | D04 | `pb_docs_consideraciones_doc_v1` | DOCUMENT + TEXT | `SolicitarDocumentosWhatsAppJob` (media PDF) | — (PDF en header; body fijo) |
 | D05 | `pb_docs_recordatorio_intro_v1` | TEXT | `GeneralController::recordatoriosDocumentos` (intro) | `{{nombre_cliente}}`, `{{carga}}` |
-| D06 | `pb_docs_recordatorio_proveedor_v1` | TEXT | `recordatoriosDocumentos` (por proveedor) | `{{codigo_proveedor}}`, `{{documentos_faltantes}}` |
+| D06 | `pb_docs_recordatorio_proveedor_v1` / `_qa` | TEXT | `recordatoriosDocumentos` (por proveedor) | sin Excel: `{{codigo_proveedor}}`, `{{documentos_faltantes}}` · con Excel: + `{{link_web}}`, `{{link_drive}}` |
 | D07 | `pb_docs_recordatorio_aviso_v1` | TEXT | `recordatoriosDocumentos` (cierre) | — (texto fijo) |
 
 ---
