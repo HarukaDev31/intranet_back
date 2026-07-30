@@ -1570,7 +1570,7 @@ class ClientesController extends Controller
                         'fecha' => \Carbon\Carbon::parse($servicio['fecha'])->format('d/m/Y'),
                         'categoria' => $categoria
                     ];
-                })
+                })->values()->all(),
             ];
         }
 

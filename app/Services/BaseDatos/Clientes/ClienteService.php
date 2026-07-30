@@ -412,7 +412,7 @@ class ClienteService
                         'carga' => $servicio['carga'] ?? null,
                         'empresa' => $servicio['empresa'] ?? null
                     ];
-                })->values()
+                })->values()->all(),
             ];
 
             return [
@@ -1175,7 +1175,7 @@ class ClienteService
                         'fecha' => Carbon::parse($servicio['fecha'])->format('d/m/Y'),
                         'categoria' => $categoria
                     ];
-                })
+                })->values()->all(),
             ];
         }
         
