@@ -223,9 +223,15 @@ class GeneralController extends Controller
         }
 
         // Obtener proveedores relacionados en una sola consulta y agrupar por id_cotizacion
-        // Nota: sólo cargar proveedores si el usuario es del rol Documentacion
+        $rolesConProveedores = [
+            Usuario::ROL_DOCUMENTACION,
+            Usuario::ROL_JEFE_IMPORTACION,
+            Usuario::ROL_COORDINACION,
+            Usuario::ROL_ADMINISTRACION,
+            Usuario::ROL_CONTABILIDAD,
+        ];
         $proveedores = collect();
-        if (!empty($ids) && $user && $user->getNombreGrupo() == Usuario::ROL_DOCUMENTACION|| $user->getNombreGrupo() == Usuario::ROL_JEFE_IMPORTACION) {
+        if (!empty($ids) && $user && in_array($user->getNombreGrupo(), $rolesConProveedores, true)) {
             $proveedores = DB::table('contenedor_consolidado_cotizacion_proveedores')
                 ->whereIn('id_cotizacion', $ids)
                 ->where('id_contenedor', $idContenedor)
@@ -244,6 +250,10 @@ class GeneralController extends Controller
                     'invoice_status',
                     'packing_status',
                     'excel_conf_status',
+                    'invoice_status_final',
+                    'packing_status_final',
+                    'excel_conf_status_final',
+                    'excel_conf_form_cerrado',
                 ])
                 ->get()
                 ->groupBy('id_cotizacion');
@@ -257,7 +267,7 @@ class GeneralController extends Controller
 
             // Asegurar que cotizacion_contrato_firmado_url sea una URL completa cuando exista
             if (isset($itemArr['cotizacion_contrato_firmado_url']) && !empty($itemArr['cotizacion_contrato_firmado_url'])) {
-                $itemArr['cotizacion_contrato_firmado_url'] = $this->generateImageUrl($itemArr['cotizacion_contrato_firmado_url']);
+                $itemArr['cotizacion_contrato_firmado_url'] = $this->cdnStorageUrl($itemArr['cotizacion_contrato_firmado_url']);
             }
 
             // Devolver el teléfono tal como está en la BD (sin formatear)
@@ -272,7 +282,13 @@ class GeneralController extends Controller
             $itemArr['id_tramite'] = $idCotizacion !== null ? ($idTramitePorCotizacion[$idCotizacion] ?? null) : null;
 
             // Si el usuario es Documentacion, incluir proveedores completos (id, code_supplier, archivos y estados)
-            if ($user && ($user->getNombreGrupo() == Usuario::ROL_DOCUMENTACION || $user->getNombreGrupo() == Usuario::ROL_JEFE_IMPORTACION) && $proveedores) {
+            if ($user && in_array($user->getNombreGrupo(), [
+                Usuario::ROL_DOCUMENTACION,
+                Usuario::ROL_JEFE_IMPORTACION,
+                Usuario::ROL_COORDINACION,
+                Usuario::ROL_ADMINISTRACION,
+                Usuario::ROL_CONTABILIDAD,
+            ], true) && $proveedores) {
                 // clave usada en groupBy es id_cotizacion
                 $cotKey = $cot->id_cotizacion ?? $cot->id ?? null;
                 if ($cotKey !== null && (is_array($proveedores) ? isset($proveedores[$cotKey]) : $proveedores->has($cotKey))) {
@@ -291,14 +307,18 @@ class GeneralController extends Controller
                             'vol_peru' => $p->vol_peru,
                             'vol_china' => $p->vol_china,
                             // Devolver URLs completas para los archivos si existen
-                            'factura_comercial' => $this->generateImageUrl($p->factura_comercial),
-                            'packing_list' => $this->generateImageUrl($p->packing_list),
-                            'excel_confirmacion' => $this->generateImageUrl($p->excel_confirmacion),
+                            'factura_comercial' => $this->cdnStorageUrl($p->factura_comercial),
+                            'packing_list' => $this->cdnStorageUrl($p->packing_list),
+                            'excel_confirmacion' => $this->cdnStorageUrl($p->excel_confirmacion),
                             'excel_confirmacion_drive_link' => $p->excel_confirmacion_drive_link,
-                            // Devolver status de documentos
+                            // Devolver status de documentos (Coord 2 + VB final)
                             'invoice_status' => $p->invoice_status,
                             'packing_status' => $p->packing_status,
                             'excel_conf_status' => $p->excel_conf_status,
+                            'invoice_status_final' => $p->invoice_status_final,
+                            'packing_status_final' => $p->packing_status_final,
+                            'excel_conf_status_final' => $p->excel_conf_status_final,
+                            'excel_conf_form_cerrado' => (bool) $p->excel_conf_form_cerrado,
                         ];
                     })->values()->toArray();
                 }
@@ -917,7 +937,7 @@ class GeneralController extends Controller
 
             // Obtener información de la cotización
             $cot = DB::table('contenedor_consolidado_cotizacion')
-                ->select('nombre', 'telefono', 'id_contenedor')
+                ->select('id', 'nombre', 'telefono', 'id_contenedor', 'uuid')
                 ->where('id', $idCotizacion)
                 ->whereNull('deleted_at')
                 ->first();
@@ -933,6 +953,7 @@ class GeneralController extends Controller
             $telefono = $cot->telefono;
             $telefono = preg_replace('/\s+/', '', $telefono);
             $telefono = $telefono ? $telefono . '@c.us' : '';
+            $uuidCotizacion = trim((string) ($cot->uuid ?? ''));
 
             $cargaRaw = DB::table('carga_consolidada_contenedor')
                 ->where('id', $cot->id_contenedor)
@@ -958,6 +979,7 @@ class GeneralController extends Controller
                 }
 
                 $proveedoresPendientes[] = [
+                    'id' => (int) $idProveedor,
                     'code' => (string) ($proveedor->code_supplier ?? "Proveedor #{$idProveedor}"),
                     'documentos' => $documentos,
                 ];
@@ -975,7 +997,8 @@ class GeneralController extends Controller
                     (string) $telefono,
                     (string) $nombreCliente,
                     $cargaCode,
-                    $proveedoresPendientes
+                    $proveedoresPendientes,
+                    $uuidCotizacion !== '' ? $uuidCotizacion : null
                 );
 
                 $phoneDigits = preg_replace('/\D+/', '', (string) $telefono);
@@ -1005,12 +1028,31 @@ class GeneralController extends Controller
                 $legacyMessage = CoordinacionWhatsappPayload::docsRecordatorioLegacyMessage(
                     (string) $nombreCliente,
                     $cargaCode,
-                    $proveedoresPendientes
+                    $proveedoresPendientes,
+                    $uuidCotizacion !== '' ? $uuidCotizacion : null
                 );
                 $response = $this->sendMessage($legacyMessage, $telefono, 5, 'consolidado');
             }
 
             Log::info('Respuesta de WhatsApp recordatorios: ' . json_encode($response));
+
+            $templatesUsados = null;
+            if ($this->shouldRouteCoordinacionToMeta('consolidado')) {
+                $tieneSinExcel = false;
+                $tieneConExcel = false;
+                foreach ($proveedoresPendientes as $p) {
+                    if (CoordinacionWhatsappPayload::documentosIncludeExcelConfirmacion((array) ($p['documentos'] ?? []))) {
+                        $tieneConExcel = true;
+                    } else {
+                        $tieneSinExcel = true;
+                    }
+                }
+                $templatesUsados = ['pb_docs_recordatorio_intro_v1'];
+                if ($tieneConExcel || $tieneSinExcel) {
+                    $templatesUsados[] = 'pb_docs_recordatorio_proveedor_v1';
+                }
+                $templatesUsados[] = 'pb_docs_recordatorio_aviso_v1';
+            }
 
             return response()->json([
                 'success' => true,
@@ -1020,9 +1062,7 @@ class GeneralController extends Controller
                     'nombre_cliente' => $nombreCliente,
                     'carga' => $cargaCode,
                     'proveedores' => $proveedoresPendientes,
-                    'templates' => $this->shouldRouteCoordinacionToMeta('consolidado')
-                        ? ['pb_docs_recordatorio_intro_v1', 'pb_docs_recordatorio_proveedor_v1', 'pb_docs_recordatorio_aviso_v1']
-                        : null,
+                    'templates' => $templatesUsados,
                 ]
             ]);
         }catch (\Exception $e) {

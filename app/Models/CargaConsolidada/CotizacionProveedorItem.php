@@ -19,6 +19,15 @@ class CotizacionProveedorItem extends Model
         'final_qty',
         'final_name',
         'tipo_producto',
+        'caracteristicas',
+        'confirmacion_qty',
+        'confirmacion_precio',
+    ];
+
+    protected \ = [
+        'caracteristicas' => 'array',
+        'confirmacion_qty' => 'decimal:2',
+        'confirmacion_precio' => 'decimal:2',
     ];
 }
 

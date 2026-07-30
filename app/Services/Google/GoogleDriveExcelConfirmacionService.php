@@ -9,7 +9,7 @@ use Google\Service\Drive\Permission;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Sube Excel de confirmación a Google Drive (carpetas por consolidado / cliente / proveedor).
+ * Sube Excel de confirmación a Google Drive (carpetas por consolidado / cliente; opcional proveedor).
  *
  * Modo oauth (recomendado Gmail): cuenta de usuario con refresh token.
  * Modo service_account: Shared drive o carpeta compartida con SA (Workspace).
@@ -61,6 +61,41 @@ class GoogleDriveExcelConfirmacionService
         return (bool) config('google.service.enable', false)
             && is_string($credentials)
             && is_file($credentials);
+    }
+
+    /**
+     * Sube un Excel general a nivel cliente (sin carpeta por proveedor).
+     *
+     * @return string|null URL pública edit?usp=sharing
+     */
+    public function uploadForCliente(
+        string $cargaCode,
+        string $nombreCliente,
+        string $localPath,
+        string $fileName
+    ): ?string {
+        if (!$this->isConfigured() || !is_file($localPath)) {
+            return null;
+        }
+
+        try {
+            $this->bootDrive();
+
+            $consolidadoFolderId = $this->ensureFolder($this->rootFolderId, 'Consolidado-' . $this->sanitizeName($cargaCode));
+            $clienteFolderId = $this->ensureFolder($consolidadoFolderId, $this->sanitizeName($nombreCliente));
+
+            return $this->uploadOrReplace($clienteFolderId, $localPath, $fileName);
+        } catch (\Throwable $e) {
+            Log::error('GoogleDriveExcelConfirmacionService: fallo al subir Excel general', [
+                'auth' => $this->usesOAuth ? 'oauth' : 'service_account',
+                'carga' => $cargaCode,
+                'cliente' => $nombreCliente,
+                'file' => $fileName,
+                'error' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
     }
 
     /**

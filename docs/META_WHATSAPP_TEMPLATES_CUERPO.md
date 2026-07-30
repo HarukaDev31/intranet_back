@@ -714,23 +714,44 @@ Video: https://youtu.be/rvhwblBEbXQ
 
 ### D02 — `pb_docs_excel_link_v1`
 
-**Reemplaza adjunto XLSX** — un mensaje por proveedor.
+**Reemplaza adjunto XLSX** — un mensaje por cotización (Excel general con una hoja por proveedor).
 
 **BODY:**
 
 ```
-Documentación: CONSOLIDADO #{{carga}}
-
-Excel de confirmación — Proveedor {{codigo_proveedor}}
-
-Descárgalo aquí: {{link_excel}} 📄
+Tienes 2 opciones para llenar la información
+1.	📱 Desde tu celular:
+{{link_intranet}}   .
+2.	📄Descargando el Excel
+{{link_excel}}✅.
 ```
 
 | Parámetro Meta | Orden API | Campo backend |
 |----------------|-----------|---------------|
-| `{{carga}}` | 1 | Carga |
-| `{{codigo_proveedor}}` | 2 | Código proveedor |
-| `{{link_excel}}` | 3 | URL Google Drive (`excel_confirmacion_drive_link` en BD) |
+| `{{link_intranet}}` | 1 | URL formulario web (sin `?proveedor=`) |
+| `{{link_excel}}` | 2 | URL Google Drive |
+
+> Nota: en Meta producción el nombre es `pb_docs_excel_link_v1` (no usar sufijo `_qa`).
+
+---
+
+### D02b — `pb_docs_excel_conf_recibido_v1`
+
+**Tipo:** TEXT · **Categoría:** UTILITY · **WABA:** consolidado  
+**Origen:** `ExcelConfirmacionController` (web pública) tras `saveConfirmation` exitoso del cliente.
+
+**BODY:**
+
+```
+Gracias por llenar la información de tu importación del consolidado #{{consolidado}}
+Si aun tienes información pendiente de llenar, vuelve a ingresar al enlace
+{{enlace}}.
+```
+
+| Parámetro Meta | Orden API | Campo backend |
+|----------------|-----------|---------------|
+| `{{consolidado}}` | 1 | Código carga (ej. 05) |
+| `{{enlace}}` | 2 | URL formulario web (`buildExcelConfirmacionUrl`, sin `?proveedor=`) |
 
 ---
 
@@ -830,6 +851,9 @@ Por favor envíalos lo antes posible para continuar con la declaración aduanera
 > Meta rechaza plantillas con **demasiadas variables para la longitud del texto**. El cuerpo anterior incluye suficiente texto fijo para 2 variables. No acortar a una sola línea.
 
 ---
+
+
+> Excel de confirmación: cuando el recordatorio incluye `excel_confirmacion`, el backend arma cuerpo con `link_web` + `link_drive` vía `docsRecordatorioProveedorConExcel`. En producción se usa el nombre `pb_docs_recordatorio_proveedor_v1` (no `_qa`); si Meta prod solo tiene la variante de 2 parámetros, hace falta aprobar la variante con links o un template dedicado.
 
 ### D07 — `pb_docs_recordatorio_aviso_v1`
 
