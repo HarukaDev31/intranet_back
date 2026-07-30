@@ -24,7 +24,7 @@ class CotizacionProveedorItem extends Model
         'confirmacion_precio',
     ];
 
-    protected \ = [
+    protected $casts = [
         'caracteristicas' => 'array',
         'confirmacion_qty' => 'decimal:2',
         'confirmacion_precio' => 'decimal:2',
