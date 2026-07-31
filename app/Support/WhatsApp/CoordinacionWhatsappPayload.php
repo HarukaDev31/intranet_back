@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 
 namespace App\Support\WhatsApp;
 
@@ -11,10 +11,10 @@ use Illuminate\Support\Facades\Log;
  */
 class CoordinacionWhatsappPayload
 {
-    /** Texto fijo D07 — debe coincidir con la plantilla Meta. */
-    private const DOCS_RECORDATORIO_AVISO = 'Si no tenemos tus documentos a tiempo, aduana puede aplicarte multas o inmovilización de tus productos.';
+    /** Texto fijo D07 ΓÇö debe coincidir con la plantilla Meta. */
+    private const DOCS_RECORDATORIO_AVISO = 'Si no tenemos tus documentos a tiempo, aduana puede aplicarte multas o inmovilizaci├│n de tus productos.';
 
-    /** Plantilla Meta D02 — Excel de confirmación (QA: link_excel + link_intranet). */
+    /** Plantilla Meta D02 ΓÇö Excel de confirmaci├│n (QA: link_excel + link_intranet). */
     private const DOCS_EXCEL_LINK_TEMPLATE = 'pb_docs_excel_link_v1_qa';
 
     /**
@@ -23,20 +23,20 @@ class CoordinacionWhatsappPayload
     public static function documentosRecordatorioMap(): array
     {
         return [
-            'commercial_invoice' => 'Commercial Invoice 📄',
-            'packing_list' => 'Packing List 📦.',
-            'excel_confirmacion' => 'Excel de confirmación 📄',
+            'commercial_invoice' => 'COMERCIAL INVOICE',
+            'packing_list' => 'Packing List ≡ƒôª',
+            'excel_confirmacion' => 'Excel de confirmaci├│n ≡ƒôä',
         ];
     }
 
-    /** Plantilla Meta D06 QA — recordatorio proveedor con Excel (link web + Drive). */
-    private const DOCS_RECORDATORIO_PROVEEDOR_EXCEL_QA = 'pb_docs_recordatorio_proveedor_v1_qa';
+    /** Plantilla Meta D06 QA ΓÇö recordatorio agregado (con Excel + docs din├ímicos). */
+    private const DOCS_RECORDATORIO_PROVEEDOR_EXCEL = 'pb_docs_recordatorio_proveedor_v1_qa';
 
-    /** Plantilla Meta D06 — recordatorio proveedor sin Excel. */
+    /** Plantilla Meta D06 ΓÇö recordatorio agregado sin Excel. */
     private const DOCS_RECORDATORIO_PROVEEDOR = 'pb_docs_recordatorio_proveedor_v1';
 
     /**
-     * Base del formulario web Excel de confirmación (APP_URL_EXCEL_CONFIRMACION o APP_URL_CLIENTES).
+     * Base del formulario web Excel de confirmaci├│n (APP_URL_EXCEL_CONFIRMACION o APP_URL_CLIENTES).
      */
     public static function excelConfirmacionBaseUrl(): string
     {
@@ -49,7 +49,7 @@ class CoordinacionWhatsappPayload
     }
 
     /**
-     * URL del formulario web de Excel de confirmación (corrige http:/ → http://).
+     * URL del formulario web de Excel de confirmaci├│n (corrige http:/ ΓåÆ http://).
      */
     public static function buildExcelConfirmacionUrl(string $uuid, ?string $codeSupplier = null): string
     {
@@ -68,7 +68,7 @@ class CoordinacionWhatsappPayload
     }
 
     /**
-     * URL del formulario datos proveedor (corrige http:/ → http://).
+     * URL del formulario datos proveedor (corrige http:/ ΓåÆ http://).
      */
     public static function buildDatosProveedorUrl(string $uuid): string
     {
@@ -96,7 +96,7 @@ class CoordinacionWhatsappPayload
     }
 
     /**
-     * Lista compacta para parámetros Meta (sin saltos de línea).
+     * Lista compacta para par├ímetros Meta (sin saltos de l├¡nea).
      *
      * @param  iterable<object|array<string, mixed>>  $providers
      */
@@ -132,11 +132,11 @@ class CoordinacionWhatsappPayload
             return 'Proveedor pendiente: ' . $items[0];
         }
 
-        return 'Proveedores pendientes: ' . implode(' · ', $items);
+        return 'Proveedores pendientes: ' . implode(' ┬╖ ', $items);
     }
 
     /**
-     * Códigos de proveedor pendientes (formulario datos) — una línea para Meta.
+     * C├│digos de proveedor pendientes (formulario datos) ΓÇö una l├¡nea para Meta.
      *
      * @param  iterable<object|array<string, mixed>>  $pendientes
      */
@@ -156,14 +156,14 @@ class CoordinacionWhatsappPayload
         }
 
         if ($codes === []) {
-            return '—';
+            return 'ΓÇö';
         }
 
-        return implode(' · ', $codes);
+        return implode(' ┬╖ ', $codes);
     }
 
     /**
-     * Documentos faltantes en una línea para parámetros Meta (sin saltos de línea).
+     * Documentos faltantes en una l├¡nea para par├ímetros Meta (sin saltos de l├¡nea).
      *
      * @param  array<int, string>  $documentos
      * @param  array<string, string>  $documentosMap
@@ -182,10 +182,10 @@ class CoordinacionWhatsappPayload
         }
 
         if ($labels === []) {
-            return '—';
+            return 'ΓÇö';
         }
 
-        return implode(' · ', $labels);
+        return implode(' ┬╖ ', $labels);
     }
 
     /**
@@ -369,13 +369,13 @@ class CoordinacionWhatsappPayload
         ], $bitrixMessage, $sleep);
     }
 
-    /** Plantilla Meta — confirmación al cliente tras guardar Excel de confirmación (web). */
+    /** Plantilla Meta ΓÇö confirmaci├│n al cliente tras guardar Excel de confirmaci├│n (web). */
     private const DOCS_EXCEL_CONF_RECIBIDO_TEMPLATE = 'pb_docs_excel_conf_recibido_v1';
 
     public static function docsExcelConfRecibidoPreview(string $consolidado, string $enlace): string
     {
-        return 'Gracias por llenar la información de tu importación del consolidado #' . $consolidado . "\n"
-            . "Si aun tienes información pendiente de llenar, vuelve a ingresar al enlace\n"
+        return 'Gracias por llenar la informaci├│n de tu importaci├│n del consolidado #' . $consolidado . "\n"
+            . "Si aun tienes informaci├│n pendiente de llenar, vuelve a ingresar al enlace\n"
             . $enlace . '.';
     }
 
@@ -391,7 +391,7 @@ class CoordinacionWhatsappPayload
     }
 
     /**
-     * Un solo mensaje D02 por cotización: Drive (Excel general) + intranet (sin ?proveedor=).
+     * Un solo mensaje D02 por cotizaci├│n: Drive (Excel general) + intranet (sin ?proveedor=).
      *
      * @param  int|null  $idProveedorRef  Proveedor de referencia para refrescar links desde BD
      */
@@ -410,7 +410,7 @@ class CoordinacionWhatsappPayload
         ];
 
         if (($bodyParameters['link_excel'] ?? '') === '' && ($bodyParameters['link_intranet'] ?? '') === '') {
-            Log::error('CoordinacionWhatsappPayload: sin enlace para Excel de confirmación (cotización)', [
+            Log::error('CoordinacionWhatsappPayload: sin enlace para Excel de confirmaci├│n (cotizaci├│n)', [
                 'codigo_proveedor' => $codigoProveedorLabel,
                 'template' => self::DOCS_EXCEL_LINK_TEMPLATE,
             ]);
@@ -438,7 +438,7 @@ class CoordinacionWhatsappPayload
     ): array {
         $bodyParameters = self::docsExcelLinkBodyParameters($idProveedor, $carga, $codigoProveedor);
         if (($bodyParameters['link_excel'] ?? '') === '' && ($bodyParameters['link_intranet'] ?? '') === '') {
-            Log::error('CoordinacionWhatsappPayload: sin enlace para Excel de confirmación', [
+            Log::error('CoordinacionWhatsappPayload: sin enlace para Excel de confirmaci├│n', [
                 'id_proveedor' => $idProveedor,
                 'codigo_proveedor' => $codigoProveedor,
                 'template' => self::DOCS_EXCEL_LINK_TEMPLATE,
@@ -485,7 +485,7 @@ class CoordinacionWhatsappPayload
             return null;
         }
 
-        // Link de intranet a nivel cotización (todos los proveedores en el mismo formulario).
+        // Link de intranet a nivel cotizaci├│n (todos los proveedores en el mismo formulario).
         return self::buildExcelConfirmacionUrl($uuid);
     }
 
@@ -503,7 +503,7 @@ class CoordinacionWhatsappPayload
     }
 
     /**
-     * @deprecated Usar docsExcelLinkForProveedor — el link debe venir de excel_confirmacion_drive_link (Drive).
+     * @deprecated Usar docsExcelLinkForProveedor ΓÇö el link debe venir de excel_confirmacion_drive_link (Drive).
      *
      * @param  array<string, mixed>  $payload
      */
@@ -575,7 +575,7 @@ class CoordinacionWhatsappPayload
             return null;
         }
 
-        Log::warning('CoordinacionWhatsappPayload: excel_confirmacion_drive_link no es URL de Drive válida', [
+        Log::warning('CoordinacionWhatsappPayload: excel_confirmacion_drive_link no es URL de Drive v├ílida', [
             'id_proveedor' => $idProveedor,
             'link' => $link,
         ]);
@@ -622,7 +622,7 @@ class CoordinacionWhatsappPayload
         int $sleep = 0
     ): array {
         if (self::isLegacyTempExcelConfirmacionUrl($linkExcel)) {
-            Log::warning('CoordinacionWhatsappPayload: docsExcelLink rechazó URL S3 legacy', [
+            Log::warning('CoordinacionWhatsappPayload: docsExcelLink rechaz├│ URL S3 legacy', [
                 'codigo_proveedor' => $codigoProveedor,
                 'link' => $linkExcel,
             ]);
@@ -641,11 +641,11 @@ class CoordinacionWhatsappPayload
         $drive = trim($linkExcel);
 
         // Debe coincidir con el BODY Meta de pb_docs_excel_link_v1_qa.
-        return "Tienes 2 opciones para llenar la información\n"
-            . "1.\t📱 Desde tu celular:\n"
+        return "Tienes 2 opciones para llenar la informaci├│n\n"
+            . "1.\t≡ƒô▒ Desde tu celular:\n"
             . "{$intranet}   .\n"
-            . "2.\t📄Descargando el Excel\n"
-            . "{$drive}✅.";
+            . "2.\t≡ƒôäDescargando el Excel\n"
+            . "{$drive}Γ£à.";
     }
 
     public static function docsPaso2(string $phone, string $bitrixMessage, ?string $fechaMaxima = null, int $sleep = 0): array
@@ -700,27 +700,117 @@ class CoordinacionWhatsappPayload
         ?int $idProveedor = null,
         ?string $uuidCotizacion = null
     ): array {
-        if (self::documentosIncludeExcelConfirmacion($documentos)) {
-            return self::docsRecordatorioProveedorConExcel(
-                $phone,
-                $codigoProveedor,
-                $documentos,
-                $sleep,
-                $idProveedor,
-                $uuidCotizacion
-            );
-        }
-
-        $documentosFaltantes = self::formatDocumentosFaltantesForMeta($documentos, self::documentosRecordatorioMap());
-
-        return self::template($phone, self::DOCS_RECORDATORIO_PROVEEDOR, [
-            'codigo_proveedor' => $codigoProveedor,
-            'documentos_faltantes' => $documentosFaltantes,
-        ], self::docsRecordatorioProveedorBitrix($codigoProveedor, $documentosFaltantes), $sleep);
+        // Compat: un solo proveedor ΓåÆ misma l├│gica agregada.
+        return self::docsRecordatorioAgregado(
+            $phone,
+            [[
+                'id' => $idProveedor,
+                'code' => $codigoProveedor,
+                'documentos' => $documentos,
+            ]],
+            $uuidCotizacion,
+            $sleep
+        );
     }
 
     /**
-     * D06 QA: solo cuando el recordatorio incluye excel_confirmacion.
+     * D06 QA: un solo mensaje con todos los proveedores/documentos pendientes.
+     *
+     * @param  array<int, array{id?: int|null, code: string, documentos: array<int, string>}>  $proveedores
+     */
+    public static function docsRecordatorioAgregado(
+        string $phone,
+        array $proveedores,
+        ?string $uuidCotizacion = null,
+        int $sleep = 0
+    ): array {
+        $agg = self::aggregateDocsRecordatorioByType($proveedores);
+        $empty = (string) config('meta_whatsapp.empty_body_parameter_placeholder', 'ΓÇö');
+
+        if ($agg['excel_codes'] !== []) {
+            $codigosExcel = self::formatProveedorCodesList($agg['excel_codes']);
+            $documentosOtros = self::formatDocumentosOtrosAgregados($agg['docs_by_type']);
+            if ($documentosOtros === '') {
+                $documentosOtros = $empty;
+            }
+
+            $uuid = trim((string) ($uuidCotizacion ?? ''));
+            $linkWeb = $uuid !== ''
+                ? self::buildExcelConfirmacionUrl(
+                    $uuid,
+                    count($agg['excel_codes']) === 1 ? $agg['excel_codes'][0] : null
+                )
+                : $empty;
+
+            $linkDrive = $empty;
+            foreach ($agg['excel_ids'] as $idProveedor) {
+                $resolved = (string) (self::resolveExcelConfirmacionDriveLink($idProveedor) ?? '');
+                if ($resolved !== '') {
+                    $linkDrive = $resolved;
+                    break;
+                }
+            }
+
+            if ($linkWeb === '' || $linkWeb === $empty) {
+                Log::warning('CoordinacionWhatsappPayload: recordatorio Excel agregado sin link_web', [
+                    'codigos_excel' => $agg['excel_codes'],
+                    'uuid' => $uuid,
+                ]);
+                $linkWeb = $empty;
+            }
+            if ($linkDrive === $empty) {
+                Log::warning('CoordinacionWhatsappPayload: recordatorio Excel agregado sin link_drive', [
+                    'excel_ids' => $agg['excel_ids'],
+                    'codigos_excel' => $agg['excel_codes'],
+                ]);
+            }
+
+            $preview = self::docsRecordatorioAgregadoExcelBitrix(
+                $codigosExcel,
+                $linkWeb,
+                $linkDrive,
+                $documentosOtros
+            );
+
+            return self::template($phone, self::DOCS_RECORDATORIO_PROVEEDOR_EXCEL, [
+                'codigos_excel' => $codigosExcel,
+                'link_web' => str_starts_with($linkWeb, 'http') ? self::normalizeExternalUrl($linkWeb) : $linkWeb,
+                'link_drive' => str_starts_with($linkDrive, 'http') ? self::normalizeExternalUrl($linkDrive) : $linkDrive,
+                'documentos_otros' => $documentosOtros,
+                // Aliases mientras Meta migra el body de la plantilla (nombres viejos).
+                'codigo_proveedor' => $codigosExcel,
+                'documentos_faltantes' => $documentosOtros,
+            ], $preview, $sleep);
+        }
+
+        $documentosFaltantes = self::formatDocumentosOtrosAgregados($agg['docs_by_type']);
+        if ($documentosFaltantes === '') {
+            $documentosFaltantes = $empty;
+        }
+        $allCodes = [];
+        foreach ($agg['docs_by_type'] as $codes) {
+            foreach ($codes as $code) {
+                $allCodes[] = $code;
+            }
+        }
+        $codigos = self::formatProveedorCodesList(array_values(array_unique($allCodes)));
+        if ($codigos === '') {
+            $codigos = $empty;
+        }
+
+        return self::template($phone, self::DOCS_RECORDATORIO_PROVEEDOR, [
+            'codigo_proveedor' => $codigos,
+            'documentos_faltantes' => $documentosFaltantes,
+        ], self::docsRecordatorioProveedorBitrix($codigos, $documentosFaltantes), $sleep);
+    }
+
+    public static function docsRecordatorioAviso(string $phone, int $sleep = 0): array
+    {
+        return self::template($phone, 'pb_docs_recordatorio_aviso_v1', [], self::DOCS_RECORDATORIO_AVISO, $sleep);
+    }
+
+    /**
+     * @deprecated Usar docsRecordatorioAgregado ΓÇö se mantiene por compatibilidad.
      *
      * @param  array<int, string>  $documentos
      */
@@ -732,65 +822,20 @@ class CoordinacionWhatsappPayload
         ?int $idProveedor = null,
         ?string $uuidCotizacion = null
     ): array {
-        $otrosDocs = self::documentosSinExcelConfirmacion($documentos);
-        $documentosFaltantes = self::formatDocumentosFaltantesForMeta($otrosDocs, self::documentosRecordatorioMap());
-        if (trim($documentosFaltantes) === '' || $documentosFaltantes === '—') {
-            $documentosFaltantes = (string) config('meta_whatsapp.empty_body_parameter_placeholder', '—');
-        }
-
-        $uuid = trim((string) ($uuidCotizacion ?? ''));
-        $linkWeb = $uuid !== ''
-            ? self::buildExcelConfirmacionUrl($uuid, $codigoProveedor)
-            : '';
-
-        $linkDrive = '';
-        if ($idProveedor !== null && $idProveedor > 0) {
-            $linkDrive = (string) (self::resolveExcelConfirmacionDriveLink($idProveedor) ?? '');
-        }
-
-        if ($linkWeb === '') {
-            Log::warning('CoordinacionWhatsappPayload: recordatorio Excel sin link_web', [
-                'codigo_proveedor' => $codigoProveedor,
-                'uuid' => $uuid,
-            ]);
-            $linkWeb = (string) config('meta_whatsapp.empty_body_parameter_placeholder', '—');
-        }
-        if ($linkDrive === '') {
-            Log::warning('CoordinacionWhatsappPayload: recordatorio Excel sin link_drive (excel_confirmacion_drive_link)', [
-                'id_proveedor' => $idProveedor,
-                'codigo_proveedor' => $codigoProveedor,
-            ]);
-            $linkDrive = (string) config('meta_whatsapp.empty_body_parameter_placeholder', '—');
-        }
-
-        $preview = self::docsRecordatorioProveedorExcelBitrix(
-            $codigoProveedor,
-            $linkWeb,
-            $linkDrive,
-            $documentosFaltantes
+        return self::docsRecordatorioAgregado(
+            $phone,
+            [[
+                'id' => $idProveedor,
+                'code' => $codigoProveedor,
+                'documentos' => $documentos,
+            ]],
+            $uuidCotizacion,
+            $sleep
         );
-
-        $payload = self::template($phone, self::DOCS_RECORDATORIO_PROVEEDOR_EXCEL_QA, [
-            'codigo_proveedor' => $codigoProveedor,
-            'link_web' => str_starts_with($linkWeb, 'http') ? self::normalizeExternalUrl($linkWeb) : $linkWeb,
-            'link_drive' => str_starts_with($linkDrive, 'http') ? self::normalizeExternalUrl($linkDrive) : $linkDrive,
-            'documentos_faltantes' => $documentosFaltantes,
-        ], $preview, $sleep);
-
-        if ($idProveedor !== null && $idProveedor > 0) {
-            $payload['id_proveedor'] = $idProveedor;
-        }
-
-        return $payload;
-    }
-
-    public static function docsRecordatorioAviso(string $phone, int $sleep = 0): array
-    {
-        return self::template($phone, 'pb_docs_recordatorio_aviso_v1', [], self::DOCS_RECORDATORIO_AVISO, $sleep);
     }
 
     /**
-     * Secuencia Meta D05 → D06 (por proveedor) → D07.
+     * Secuencia Meta D05 ΓåÆ D06 (un mensaje agregado) ΓåÆ D07 (solo si no hubo Excel/aviso en D06).
      *
      * @param  array<int, array{id?: int, code: string, documentos: array<int, string>}>  $proveedores
      * @return array<int, array<string, mixed>>
@@ -812,31 +857,38 @@ class CoordinacionWhatsappPayload
             ),
         ];
 
+        $validos = [];
         foreach ($proveedores as $proveedor) {
             $code = trim((string) ($proveedor['code'] ?? ''));
             $documentos = (array) ($proveedor['documentos'] ?? []);
             if ($code === '' || $documentos === []) {
                 continue;
             }
-
-            $idProveedor = isset($proveedor['id']) ? (int) $proveedor['id'] : null;
-            $steps[] = self::docsRecordatorioProveedor(
-                $phone,
-                $code,
-                $documentos,
-                3,
-                $idProveedor,
-                $uuidCotizacion
-            );
+            $validos[] = $proveedor;
         }
 
-        $steps[] = self::docsRecordatorioAviso($phone, 3);
+        if ($validos !== []) {
+            $steps[] = self::docsRecordatorioAgregado($phone, $validos, $uuidCotizacion, 3);
+        }
+
+        $tieneExcel = false;
+        foreach ($validos as $proveedor) {
+            if (self::documentosIncludeExcelConfirmacion((array) ($proveedor['documentos'] ?? []))) {
+                $tieneExcel = true;
+                break;
+            }
+        }
+
+        // Con Excel el aviso ya va dentro de pb_docs_recordatorio_proveedor_v1_qa.
+        if (! $tieneExcel) {
+            $steps[] = self::docsRecordatorioAviso($phone, 3);
+        }
 
         return $steps;
     }
 
     /**
-     * Texto legacy (API antigua / sin Meta) — mismo contenido que las plantillas, para fallback.
+     * Texto legacy (API antigua / sin Meta) ΓÇö mismo contenido que las plantillas, para fallback.
      *
      * @param  array<int, array{id?: int, code: string, documentos: array<int, string>}>  $proveedores
      */
@@ -858,11 +910,89 @@ class CoordinacionWhatsappPayload
         array $proveedores,
         ?string $uuidCotizacion = null
     ): string {
-        $map = self::documentosRecordatorioMap();
         $lines = [
             self::docsRecordatorioIntroBitrix($nombreCliente, $carga),
             '',
         ];
+
+        $agg = self::aggregateDocsRecordatorioByType($proveedores);
+        $empty = (string) config('meta_whatsapp.empty_body_parameter_placeholder', 'ΓÇö');
+
+        if ($agg['excel_codes'] !== []) {
+            $uuid = trim((string) ($uuidCotizacion ?? ''));
+            $linkWeb = $uuid !== ''
+                ? self::buildExcelConfirmacionUrl(
+                    $uuid,
+                    count($agg['excel_codes']) === 1 ? $agg['excel_codes'][0] : null
+                )
+                : $empty;
+            $linkDrive = $empty;
+            foreach ($agg['excel_ids'] as $idProveedor) {
+                $resolved = (string) (self::resolveExcelConfirmacionDriveLink($idProveedor) ?? '');
+                if ($resolved !== '') {
+                    $linkDrive = $resolved;
+                    break;
+                }
+            }
+            $lines[] = self::docsRecordatorioAgregadoExcelBitrix(
+                self::formatProveedorCodesList($agg['excel_codes']),
+                $linkWeb,
+                $linkDrive,
+                self::formatDocumentosOtrosAgregados($agg['docs_by_type']) ?: $empty
+            );
+        } else {
+            $documentosFaltantes = self::formatDocumentosOtrosAgregados($agg['docs_by_type']) ?: $empty;
+            $lines[] = "Recordatorio de documentaci├│n de importaci├│n ≡ƒôï\n\n"
+                . "A├║n estamos esperando los siguientes documentos:\n"
+                . $documentosFaltantes . "\n\n"
+                . 'Por favor env├¡alos lo antes posible para continuar con la declaraci├│n aduanera. Gracias.';
+            $lines[] = '';
+            $lines[] = self::DOCS_RECORDATORIO_AVISO;
+        }
+
+        return implode("\n", $lines);
+    }
+
+    private static function docsRecordatorioIntroBitrix(string $nombreCliente, string $carga): string
+    {
+        return "Hola {$nombreCliente}, estamos esperando que nos env├¡es los documentos de tu importaci├│n del consolidado #{$carga}. A continuaci├│n detallo los que faltan:";
+    }
+
+    private static function docsRecordatorioProveedorBitrix(string $codigoProveedor, string $documentosFaltantes): string
+    {
+        return "Recordatorio de documentaci├│n de importaci├│n ≡ƒôï\n\n"
+            . "A├║n estamos esperando los siguientes documentos:\n"
+            . "{$documentosFaltantes}\n\n"
+            . 'Por favor env├¡alos lo antes posible para continuar con la declaraci├│n aduanera. Gracias.';
+    }
+
+    private static function docsRecordatorioAgregadoExcelBitrix(
+        string $codigosExcel,
+        string $linkWeb,
+        string $linkDrive,
+        string $documentosOtros
+    ): string {
+        return "Recordatorio de documentaci├│n de importaci├│n ≡ƒôï\n\n"
+            . "A├║n estamos esperando los siguientes documentos:\n\n"
+            . "Excel de confirmaci├│n ({$codigosExcel}) ≡ƒôä\n"
+            . "Tienes 2 opciones para llenar la informaci├│n\n"
+            . "1.≡ƒô▒ Desde tu celular:\n{$linkWeb}\n"
+            . "2.≡ƒôäDescargando el Excel\n{$linkDrive}\n\n"
+            . "{$documentosOtros}\n\n"
+            . "Por favor env├¡alos lo antes posible para continuar con la declaraci├│n aduanera. Gracias\n\n"
+            . 'Probusiness Coordinaci├│n: ' . self::DOCS_RECORDATORIO_AVISO;
+    }
+
+    /**
+     * @param  array<int, array{id?: int|null, code?: string, documentos?: array<int, string>}>  $proveedores
+     * @return array{excel_codes: list<string>, excel_ids: list<int>, docs_by_type: array<string, list<string>>}
+     */
+    private static function aggregateDocsRecordatorioByType(array $proveedores): array
+    {
+        $excelCodes = [];
+        $excelIds = [];
+        /** @var array<string, list<string>> $docsByType */
+        $docsByType = [];
 
         foreach ($proveedores as $proveedor) {
             $code = trim((string) ($proveedor['code'] ?? ''));
@@ -871,63 +1001,82 @@ class CoordinacionWhatsappPayload
                 continue;
             }
 
-            if (self::documentosIncludeExcelConfirmacion($documentos)) {
-                $otros = self::documentosSinExcelConfirmacion($documentos);
-                $otrosLabel = self::formatDocumentosFaltantesForMeta($otros, $map);
-                if (trim($otrosLabel) === '' || $otrosLabel === '—') {
-                    $otrosLabel = (string) config('meta_whatsapp.empty_body_parameter_placeholder', '—');
+            foreach ($documentos as $doc) {
+                $key = strtolower(trim((string) $doc));
+                if ($key === '') {
+                    continue;
                 }
-                $uuid = trim((string) ($uuidCotizacion ?? ''));
-                $linkWeb = $uuid !== ''
-                    ? self::buildExcelConfirmacionUrl($uuid, $code)
-                    : (string) config('meta_whatsapp.empty_body_parameter_placeholder', '—');
-                $idProveedor = isset($proveedor['id']) ? (int) $proveedor['id'] : 0;
-                $linkDrive = $idProveedor > 0
-                    ? (string) (self::resolveExcelConfirmacionDriveLink($idProveedor) ?? '')
-                    : '';
-                if ($linkDrive === '') {
-                    $linkDrive = (string) config('meta_whatsapp.empty_body_parameter_placeholder', '—');
+
+                if ($key === 'excel_confirmacion') {
+                    if (! in_array($code, $excelCodes, true)) {
+                        $excelCodes[] = $code;
+                    }
+                    $id = isset($proveedor['id']) ? (int) $proveedor['id'] : 0;
+                    if ($id > 0 && ! in_array($id, $excelIds, true)) {
+                        $excelIds[] = $id;
+                    }
+                    continue;
                 }
-                $lines[] = self::docsRecordatorioProveedorExcelBitrix($code, $linkWeb, $linkDrive, $otrosLabel);
-            } else {
-                $lines[] = self::docsRecordatorioProveedorBitrix(
-                    $code,
-                    self::formatDocumentosFaltantesForMeta($documentos, $map)
-                );
+
+                if (! isset($docsByType[$key])) {
+                    $docsByType[$key] = [];
+                }
+                if (! in_array($code, $docsByType[$key], true)) {
+                    $docsByType[$key][] = $code;
+                }
             }
-            $lines[] = '';
         }
 
-        $lines[] = self::DOCS_RECORDATORIO_AVISO;
+        return [
+            'excel_codes' => $excelCodes,
+            'excel_ids' => $excelIds,
+            'docs_by_type' => $docsByType,
+        ];
+    }
+
+    /**
+     * @param  list<string>  $codes
+     */
+    private static function formatProveedorCodesList(array $codes): string
+    {
+        $codes = array_values(array_filter(array_map(static function ($c) {
+            return trim((string) $c);
+        }, $codes)));
+
+        if ($codes === []) {
+            return '';
+        }
+
+        return implode(' Y ', $codes);
+    }
+
+    /**
+     * @param  array<string, list<string>>  $docsByType
+     */
+    private static function formatDocumentosOtrosAgregados(array $docsByType): string
+    {
+        $map = self::documentosRecordatorioMap();
+        $order = ['packing_list', 'commercial_invoice'];
+        $lines = [];
+
+        foreach ($order as $type) {
+            if (empty($docsByType[$type])) {
+                continue;
+            }
+            $label = $map[$type] ?? ucwords(str_replace('_', ' ', $type));
+            $codes = self::formatProveedorCodesList($docsByType[$type]);
+            $lines[] = "{$label} ({$codes})";
+        }
+
+        foreach ($docsByType as $type => $codes) {
+            if (in_array($type, $order, true) || $codes === []) {
+                continue;
+            }
+            $label = $map[$type] ?? ucwords(str_replace('_', ' ', $type));
+            $lines[] = "{$label} (" . self::formatProveedorCodesList($codes) . ')';
+        }
 
         return implode("\n", $lines);
-    }
-
-    private static function docsRecordatorioIntroBitrix(string $nombreCliente, string $carga): string
-    {
-        return "Hola {$nombreCliente}, estamos esperando que nos envíes los documentos de tu importación del consolidado #{$carga}. A continuación detallo los que faltan:";
-    }
-
-    private static function docsRecordatorioProveedorBitrix(string $codigoProveedor, string $documentosFaltantes): string
-    {
-        return "Proveedor {$codigoProveedor} — pendientes: {$documentosFaltantes}";
-    }
-
-    private static function docsRecordatorioProveedorExcelBitrix(
-        string $codigoProveedor,
-        string $linkWeb,
-        string $linkDrive,
-        string $documentosFaltantes
-    ): string {
-        return "Recordatorio de documentación de importación 📋\n\n"
-            . "Proveedor: {$codigoProveedor}\n\n"
-            . "Aún estamos esperando los siguientes documentos:\n"
-            . "Excel de confirmación 📄\n"
-            . "Tienes 2 opciones para llenar la información\n"
-            . "1.📱 Desde tu celular:\n{$linkWeb}\n"
-            . "2.📄Descargando el Excel\n{$linkDrive}\n"
-            . "{$documentosFaltantes}\n\n"
-            . 'Por favor envíalos lo antes posible para continuar con la declaración aduanera. Gracias.';
     }
 
     /**
@@ -1435,9 +1584,9 @@ class CoordinacionWhatsappPayload
         string $cantidadLine,
         string $linkInspeccion
     ): string {
-        return "📦 Cliente: {$nombreCliente} — Proveedor {$codigoProveedor} — {$cantidadLine}.\n\n"
-            . "Tu carga llegó a nuestro almacén de Yiwu, te comparto las fotos y videos.\n\n"
-            . "🔗 Ver inspección: {$linkInspeccion} 📦";
+        return "≡ƒôª Cliente: {$nombreCliente} ΓÇö Proveedor {$codigoProveedor} ΓÇö {$cantidadLine}.\n\n"
+            . "Tu carga lleg├│ a nuestro almac├⌐n de Yiwu, te comparto las fotos y videos.\n\n"
+            . "≡ƒöù Ver inspecci├│n: {$linkInspeccion} ≡ƒôª";
     }
 
     public static function inspeccionLlegada(

@@ -55,7 +55,7 @@ class WhatsappInboxTemplateService
         'pb_docs_excel_link_v1_qa' => ['link_intranet', 'link_excel'],
         'pb_docs_excel_conf_recibido_v1' => ['consolidado', 'enlace'],
         'pb_docs_recordatorio_proveedor_v1' => ['codigo_proveedor', 'documentos_faltantes'],
-        'pb_docs_recordatorio_proveedor_v1_qa' => ['codigo_proveedor', 'link_web', 'link_drive', 'documentos_faltantes'],
+        'pb_docs_recordatorio_proveedor_v1_qa' => ['codigos_excel', 'link_web', 'link_drive', 'documentos_otros'],
     ];
 
     /**
@@ -132,17 +132,17 @@ class WhatsappInboxTemplateService
             ],
             [
                 'name' => 'pb_docs_recordatorio_proveedor_v1',
-                'label' => 'Docs — Recordatorio proveedor',
+                'label' => 'Docs — Recordatorio documentos (sin Excel)',
                 'language' => 'es_PE',
-                'text' => "Recordatorio de documentación de importación 📋\n\nProveedor: {{codigo_proveedor}}\n\nAún estamos esperando los siguientes documentos: {{documentos_faltantes}}\n\nPor favor envíalos lo antes posible para continuar con la declaración aduanera. Gracias.",
+                'text' => "Recordatorio de documentación de importación 📋\n\nProveedor: {{codigo_proveedor}}\n\nAún estamos esperando los siguientes documentos:\n{{documentos_faltantes}}\n\nPor favor envíalos lo antes posible para continuar con la declaración aduanera. Gracias.",
                 'params' => ['codigo_proveedor', 'documentos_faltantes'],
             ],
             [
                 'name' => 'pb_docs_recordatorio_proveedor_v1_qa',
-                'label' => 'Docs — Recordatorio proveedor (Excel QA)',
+                'label' => 'Docs — Recordatorio documentos (con Excel)',
                 'language' => 'es_PE',
-                'text' => "Recordatorio de documentación de importación 📋\n\nProveedor: {{codigo_proveedor}}\n\nAún estamos esperando los siguientes documentos:\nExcel de confirmación 📄\nTienes 2 opciones para llenar la información\n1.📱 Desde tu celular:\n{{link_web}}\n2.📄Descargando el Excel\n{{link_drive}}\n{{documentos_faltantes}}\n\nPor favor envíalos lo antes posible para continuar con la declaración aduanera. Gracias.",
-                'params' => ['codigo_proveedor', 'link_web', 'link_drive', 'documentos_faltantes'],
+                'text' => "Recordatorio de documentación de importación 📋\n\nAún estamos esperando los siguientes documentos:\n\nExcel de confirmación ({{codigos_excel}}) 📄\nTienes 2 opciones para llenar la información\n1.📱 Desde tu celular:\n{{link_web}}\n2.📄Descargando el Excel\n{{link_drive}}\n\n{{documentos_otros}}\n\nPor favor envíalos lo antes posible para continuar con la declaración aduanera. Gracias\n\nProbusiness Coordinación: Si no tenemos tus documentos a tiempo, aduana puede aplicarte multas o inmovilización de tus productos.",
+                'params' => ['codigos_excel', 'link_web', 'link_drive', 'documentos_otros'],
             ],
             [
                 'name' => 'pb_consolidado_resumen_pago_v1',
