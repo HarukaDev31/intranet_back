@@ -604,8 +604,8 @@ class ExcelConfirmacionFormService
 
         foreach ($labels as $label) {
             $normalized = strtolower(rtrim(trim((string) $label), ':'));
-            // Marca y Modelo son opcionales (en front se llenan con S/M al confirmar guardar)
-            if ($normalized === 'marca' || $normalized === 'modelo') {
+            // Solo «Incluye» es opcional; el resto de características son obligatorias
+            if ($normalized === 'incluye') {
                 continue;
             }
 
