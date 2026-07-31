@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 
 namespace App\Http\Controllers\CargaConsolidada\Clientes;
 
@@ -55,7 +55,7 @@ class GeneralController extends Controller
     }
 
     /**
-     * Add value_formatted to headers with currency values (CBMs and log├¡stica related)
+     * Add value_formatted to headers with currency values (CBMs and logística related)
      */
     private function addCurrencyFormatting(array $headers)
     {
@@ -84,7 +84,7 @@ class GeneralController extends Controller
      */
     public function index(Request $request, $idContenedor)
     {
-        // Obtener usuario para condicionar campos seg├║n rol
+        // Obtener usuario para condicionar campos según rol
         $user = null;
         try {
             $user = JWTAuth::parseToken()->authenticate();
@@ -123,41 +123,41 @@ class GeneralController extends Controller
         // Aplicar filtro de estado si se proporciona
         $page = $request->input('currentPage', 1);
         $perPage = $request->input('itemsPerPage', 10);
-        // Aplicar filtros adicionales si se proporcionan (con TRIM y b├║squeda mejorada)
+        // Aplicar filtros adicionales si se proporcionan (con TRIM y búsqueda mejorada)
         if ($request->has('search') && !empty($request->search)) {
             $search = trim($request->search); // TRIM del request
 
             $query->where(function ($q) use ($search) {
-                // B├║squeda en nombre (con TRIM de BD)
+                // Búsqueda en nombre (con TRIM de BD)
                 $q->whereRaw('TRIM(CC.nombre) LIKE ?', ["%{$search}%"])
-                    // B├║squeda en documento (con TRIM de BD)
+                    // Búsqueda en documento (con TRIM de BD)
                     ->orWhereRaw('TRIM(CC.documento) LIKE ?', ["%{$search}%"])
-                    // B├║squeda en correo (con TRIM de BD)
+                    // Búsqueda en correo (con TRIM de BD)
                     ->orWhereRaw('TRIM(CC.correo) LIKE ?', ["%{$search}%"]);
 
-                // Si el t├⌐rmino parece ser un tel├⌐fono (contiene solo n├║meros, espacios, guiones, etc.)
+                // Si el término parece ser un teléfono (contiene solo números, espacios, guiones, etc.)
                 if (preg_match('/^[\d\s\-\(\)\.\+]+$/', $search)) {
-                    // Normalizar el t├⌐rmino de b├║squeda (remover espacios, guiones, par├⌐ntesis, puntos y +)
+                    // Normalizar el término de búsqueda (remover espacios, guiones, paréntesis, puntos y +)
                     $telefonoNormalizado = preg_replace('/[\s\-\(\)\.\+]/', '', $search);
 
-                    // Si empieza con 51 y tiene m├ís de 9 d├¡gitos, remover prefijo
+                    // Si empieza con 51 y tiene más de 9 dígitos, remover prefijo
                     if (preg_match('/^51(\d{9})$/', $telefonoNormalizado, $matches)) {
                         $telefonoNormalizado = $matches[1];
                     }
 
                     if (!empty($telefonoNormalizado)) {
-                        // Buscar coincidencias flexibles en tel├⌐fono
+                        // Buscar coincidencias flexibles en teléfono
                         $q->orWhere(function ($subQuery) use ($telefonoNormalizado, $search) {
-                            // B├║squeda por tel├⌐fono normalizado (eliminar espacios, guiones, etc. de BD)
+                            // Búsqueda por teléfono normalizado (eliminar espacios, guiones, etc. de BD)
                             $subQuery->whereRaw('REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(TRIM(CC.telefono), " ", ""), "-", ""), "(", ""), ")", ""), "+", "") LIKE ?', ["%{$telefonoNormalizado}%"])
-                                // B├║squeda con prefijo 51
+                                // Búsqueda con prefijo 51
                                 ->orWhereRaw('REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(TRIM(CC.telefono), " ", ""), "-", ""), "(", ""), ")", ""), "+", "") LIKE ?', ["%51{$telefonoNormalizado}%"])
-                                // B├║squeda del t├⌐rmino original tambi├⌐n (con TRIM)
+                                // Búsqueda del término original también (con TRIM)
                                 ->orWhereRaw('TRIM(CC.telefono) LIKE ?', ["%{$search}%"]);
                         });
                     }
                 } else {
-                    // Si no parece tel├⌐fono, hacer b├║squeda normal en tel├⌐fono (con TRIM)
+                    // Si no parece teléfono, hacer búsqueda normal en teléfono (con TRIM)
                     $q->orWhereRaw('TRIM(CC.telefono) LIKE ?', ["%{$search}%"]);
                 }
             });
@@ -168,17 +168,17 @@ class GeneralController extends Controller
         $sortOrder = $request->input('sort_order', 'asc');
         $query->orderBy($sortField, $sortOrder);
 
-        // Paginaci├│n
+        // Paginación
         $data = $query->paginate($perPage, ['*'], 'page', $page);
 
-        // Obtener cotizaciones de la p├ígina actual
+        // Obtener cotizaciones de la página actual
         $cotizaciones = $data->items();
 
-        // Obtener IDs de cotizaci├│n para consultar proveedores relacionados
+        // Obtener IDs de cotización para consultar proveedores relacionados
         // usar 'id_cotizacion' porque 'id' puede venir ambigua por el join con C.*
         $ids = collect($cotizaciones)->pluck('id_cotizacion')->filter()->all();
 
-        // Estado permiso por tipo, por cotizaci├│n (para roles Coordinaci├│n, Documentaci├│n, Jefe Importaci├│n, Cotizador)
+        // Estado permiso por tipo, por cotización (para roles Coordinación, Documentación, Jefe Importación, Cotizador)
         $estadoPermisoPorCotizacion = [];
         $effectiveRole = $user ? $user->getNombreGrupo() : null;
         if ($user && $user->getNombreGrupo() == Usuario::ROL_JEFE_IMPORTACION && $request->filled('role')) {
@@ -260,7 +260,7 @@ class GeneralController extends Controller
         }
 
         // Mapear cotizaciones devolviendo todas las columnas originales
-        // y, si el usuario es Documentacion, a├▒adir el array 'proveedores' por cotizaci├│n
+        // y, si el usuario es Documentacion, añadir el array 'proveedores' por cotización
         $dataTransformed = collect($cotizaciones)->map(function ($cot) use ($proveedores, $user, $estadoPermisoPorCotizacion, $idTramitePorCotizacion) {
             // Convertir el objeto a array para mantener todos los campos originales
             $itemArr = (array) $cot;
@@ -270,13 +270,13 @@ class GeneralController extends Controller
                 $itemArr['cotizacion_contrato_firmado_url'] = $this->cdnStorageUrl($itemArr['cotizacion_contrato_firmado_url']);
             }
 
-            // Devolver el tel├⌐fono tal como est├í en la BD (sin formatear)
+            // Devolver el teléfono tal como está en la BD (sin formatear)
             $itemArr['whatsapp'] = $cot->telefono ?? '';
 
-            // Por defecto, devolver proveedores vac├¡o
+            // Por defecto, devolver proveedores vacío
             $itemArr['proveedores'] = [];
 
-            // Estado permiso por tipo (para columna Estado en perfil Documentaci├│n) e id_tramite para enlace a vista permiso
+            // Estado permiso por tipo (para columna Estado en perfil Documentación) e id_tramite para enlace a vista permiso
             $idCotizacion = $cot->id_cotizacion ?? $cot->id ?? null;
             $itemArr['estado_permiso_por_tipo'] = $idCotizacion !== null ? ($estadoPermisoPorCotizacion[$idCotizacion] ?? []) : [];
             $itemArr['id_tramite'] = $idCotizacion !== null ? ($idTramitePorCotizacion[$idCotizacion] ?? null) : null;
@@ -344,8 +344,8 @@ class GeneralController extends Controller
      * @OA\Put(
      *     path="/carga-consolidada/clientes/status",
      *     tags={"Clientes Carga Consolidada"},
-     *     summary="Actualizar estado del cliente para documentaci├│n",
-     *     description="Actualiza el estado de documentaci├│n del cliente",
+     *     summary="Actualizar estado del cliente para documentación",
+     *     description="Actualiza el estado de documentación del cliente",
      *     operationId="updateStatusCliente",
      *     security={{"bearerAuth":{}}},
      *     @OA\RequestBody(
@@ -376,7 +376,7 @@ class GeneralController extends Controller
             if (!$cotizacion) {
                 return [
                     'success' => false,
-                    'message' => 'Cotizaci├│n no encontrada'
+                    'message' => 'Cotización no encontrada'
                 ];
             }
 
@@ -390,7 +390,7 @@ class GeneralController extends Controller
             } else {
                 return [
                     'success' => false,
-                    'message' => 'Solo se puede cambiar el estado si est├í en Pendiente.'
+                    'message' => 'Solo se puede cambiar el estado si está en Pendiente.'
                 ];
             }
         } catch (\Exception $e) {
@@ -406,7 +406,7 @@ class GeneralController extends Controller
      *     path="/carga-consolidada/clientes/estado",
      *     tags={"Clientes Carga Consolidada"},
      *     summary="Actualizar estado general del cliente",
-     *     description="Actualiza el estado general de un cliente en una cotizaci├│n",
+     *     description="Actualiza el estado general de un cliente en una cotización",
      *     operationId="updateEstadoCliente",
      *     security={{"bearerAuth":{}}},
      *     @OA\RequestBody(
@@ -417,7 +417,7 @@ class GeneralController extends Controller
      *         )
      *     ),
      *     @OA\Response(response=200, description="Estado actualizado exitosamente"),
-     *     @OA\Response(response=404, description="Cotizaci├│n no encontrada")
+     *     @OA\Response(response=404, description="Cotización no encontrada")
      * )
      */
     public function updateEstadoCliente(Request $request)
@@ -437,7 +437,7 @@ class GeneralController extends Controller
         }
         return response()->json([
             'success' => false,
-            'message' => 'Cotizaci├│n no encontrada'
+            'message' => 'Cotización no encontrada'
         ], 404);
     }
     /**
@@ -445,7 +445,7 @@ class GeneralController extends Controller
      *     path="/carga-consolidada/contenedores/{idContenedor}/clientes/headers",
      *     tags={"Clientes Carga Consolidada"},
      *     summary="Obtener headers de datos de clientes",
-     *     description="Obtiene los totales y estad├¡sticas del contenedor para clientes",
+     *     description="Obtiene los totales y estadísticas del contenedor para clientes",
      *     operationId="getHeadersDataGeneral",
      *     security={{"bearerAuth":{}}},
      *     @OA\Parameter(name="idContenedor", in="path", required=true, @OA\Schema(type="integer")),
@@ -481,7 +481,7 @@ class GeneralController extends Controller
      *     path="/carga-consolidada/contenedores/{idContenedor}/clientes/header",
      *     tags={"Clientes Carga Consolidada"},
      *     summary="Obtener header de clientes con CBMs",
-     *     description="Obtiene los totales de CBMs y log├¡stica para el header de clientes",
+     *     description="Obtiene los totales de CBMs y logística para el header de clientes",
      *     operationId="getClientesHeader",
      *     security={{"bearerAuth":{}}},
      *     @OA\Parameter(name="idContenedor", in="path", required=true, @OA\Schema(type="integer")),
@@ -492,10 +492,10 @@ class GeneralController extends Controller
     {
         try {
             $user = JWTAuth::parseToken()->authenticate();
-            // Consulta principal con m├║ltiples subconsultas
+            // Consulta principal con múltiples subconsultas
             $result = DB::table($this->table_contenedor_cotizacion_proveedores . ' as cccp')
                 ->select([
-                    // CBM total china con condici├│n de estado
+                    // CBM total china con condición de estado
                     DB::raw('COALESCE(SUM(IF(cc.estado_cotizador = "CONFIRMADO", cccp.cbm_total_china, 0)), 0) as cbm_total_china'),
 
                     // Subconsulta para cbm_total
@@ -645,7 +645,7 @@ class GeneralController extends Controller
                         return in_array($key, $allowedKeys);
                     }, ARRAY_FILTER_USE_KEY);
                 }
-                // Add formatted currency strings for CBMs and log├¡stica totals
+                // Add formatted currency strings for CBMs and logística totals
                 $headersData = $this->addCurrencyFormatting($headersData);
                 return response()->json([
                     'success' => true,
@@ -705,8 +705,8 @@ class GeneralController extends Controller
      * @OA\Get(
      *     path="/carga-consolidada/cotizaciones/{idCotizacion}/proveedores-items",
      *     tags={"Clientes Carga Consolidada"},
-     *     summary="Obtener proveedores e items de cotizaci├│n",
-     *     description="Obtiene los proveedores e items asociados a una cotizaci├│n",
+     *     summary="Obtener proveedores e items de cotización",
+     *     description="Obtiene los proveedores e items asociados a una cotización",
      *     operationId="getProveedoresItemsCotizacion",
      *     security={{"bearerAuth":{}}},
      *     @OA\Parameter(name="idCotizacion", in="path", required=true, @OA\Schema(type="integer")),
@@ -772,7 +772,7 @@ class GeneralController extends Controller
      *     path="/carga-consolidada/cotizaciones/{idCotizacion}/documentos-pendientes",
      *     tags={"Clientes Carga Consolidada"},
      *     summary="Obtener documentos pendientes de proveedor",
-     *     description="Obtiene los documentos pendientes de cada proveedor de una cotizaci├│n",
+     *     description="Obtiene los documentos pendientes de cada proveedor de una cotización",
      *     operationId="getProveedorPendingDocuments",
      *     security={{"bearerAuth":{}}},
      *     @OA\Parameter(name="idCotizacion", in="path", required=true, @OA\Schema(type="integer")),
@@ -815,7 +815,7 @@ class GeneralController extends Controller
      *     path="/carga-consolidada/clientes/solicitar-documentos",
      *     tags={"Clientes Carga Consolidada"},
      *     summary="Solicitar documentos a cliente",
-     *     description="Env├¡a solicitud de documentos a un cliente por WhatsApp",
+     *     description="Envía solicitud de documentos a un cliente por WhatsApp",
      *     operationId="solicitarDocumentos",
      *     security={{"bearerAuth":{}}},
      *     @OA\RequestBody(
@@ -827,7 +827,7 @@ class GeneralController extends Controller
      *         )
      *     ),
      *     @OA\Response(response=200, description="Documentos solicitados exitosamente"),
-     *     @OA\Response(response=422, description="Payload inv├ílido")
+     *     @OA\Response(response=422, description="Payload inválido")
      * )
      */
     public function solicitarDocumentos(Request $request)
@@ -840,14 +840,14 @@ class GeneralController extends Controller
             if (!$idCotizacion || empty($proveedores)) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Payload inv├ílido: se requiere id_cotizacion y proveedores'
+                    'message' => 'Payload inválido: se requiere id_cotizacion y proveedores'
                 ], 422);
             }
             $cotizacion = Cotizacion::find($idCotizacion);
             if (!$cotizacion) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Cotizaci├│n no encontrada'
+                    'message' => 'Cotización no encontrada'
                 ], 404);
             }
 
@@ -889,7 +889,7 @@ class GeneralController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'Items actualizados; env├¡o por WhatsApp y generaci├│n de Excel encolados',
+                'message' => 'Items actualizados; envío por WhatsApp y generación de Excel encolados',
                 'payload' => [
                     'id_cotizacion' => (int) $idCotizacion,
                     'carga' => $cargaCode,
@@ -909,7 +909,7 @@ class GeneralController extends Controller
      *     path="/carga-consolidada/clientes/recordatorios-documentos",
      *     tags={"Clientes Carga Consolidada"},
      *     summary="Enviar recordatorios de documentos",
-     *     description="Env├¡a recordatorios de documentos pendientes a clientes por WhatsApp",
+     *     description="Envía recordatorios de documentos pendientes a clientes por WhatsApp",
      *     operationId="recordatoriosDocumentos",
      *     security={{"bearerAuth":{}}},
      *     @OA\RequestBody(
@@ -920,7 +920,7 @@ class GeneralController extends Controller
      *         )
      *     ),
      *     @OA\Response(response=200, description="Recordatorios enviados exitosamente"),
-     *     @OA\Response(response=422, description="Payload inv├ílido")
+     *     @OA\Response(response=422, description="Payload inválido")
      * )
      */
     public function recordatoriosDocumentos(Request $request){
@@ -931,11 +931,11 @@ class GeneralController extends Controller
             if (!$idCotizacion || empty($proveedores)) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Payload inv├ílido: se requiere id_cotizacion y proveedores'
+                    'message' => 'Payload inválido: se requiere id_cotizacion y proveedores'
                 ], 422);
             }
 
-            // Obtener informaci├│n de la cotizaci├│n
+            // Obtener información de la cotización
             $cot = DB::table('contenedor_consolidado_cotizacion')
                 ->select('id', 'nombre', 'telefono', 'id_contenedor', 'uuid')
                 ->where('id', $idCotizacion)
@@ -945,7 +945,7 @@ class GeneralController extends Controller
             if (!$cot) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Cotizaci├│n no encontrada'
+                    'message' => 'Cotización no encontrada'
                 ], 404);
             }
 
@@ -988,7 +988,7 @@ class GeneralController extends Controller
             if ($proveedoresPendientes === []) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'No hay proveedores con documentos pendientes v├ílidos'
+                    'message' => 'No hay proveedores con documentos pendientes válidos'
                 ], 422);
             }
 
@@ -1015,7 +1015,7 @@ class GeneralController extends Controller
                         $this->queueCoordinacionWhatsApp(
                             $step,
                             'recordatorio_' . $index,
-                            'Recordatorio ┬╖ ' . $template
+                            'Recordatorio · ' . $template
                         );
                     }
                 });
@@ -1038,20 +1038,10 @@ class GeneralController extends Controller
 
             $templatesUsados = null;
             if ($this->shouldRouteCoordinacionToMeta('consolidado')) {
-                $tieneExcel = false;
-                foreach ($proveedoresPendientes as $p) {
-                    if (CoordinacionWhatsappPayload::documentosIncludeExcelConfirmacion((array) ($p['documentos'] ?? []))) {
-                        $tieneExcel = true;
-                        break;
-                    }
-                }
-                $templatesUsados = ['pb_docs_recordatorio_intro_v1'];
-                $templatesUsados[] = $tieneExcel
-                    ? 'pb_docs_recordatorio_proveedor_v1_qa'
-                    : 'pb_docs_recordatorio_proveedor_v1';
-                if (! $tieneExcel) {
-                    $templatesUsados[] = 'pb_docs_recordatorio_aviso_v1';
-                }
+                $templatesUsados = [
+                    'pb_docs_recordatorio_intro_v1',
+                    'pb_docs_recordatorio_proveedor_v1_qa',
+                ];
             }
 
             return response()->json([
