@@ -182,8 +182,8 @@ Los **PDF** e **imágenes** (jpg/png) sí van en plantillas con encabezado DOCUM
 | D03 | `pb_docs_paso2_word_v1` | TEXT | Paso 2 texto | `{{carga}}`, `{{fecha_maxima}}` (opcional) |
 | D04 | `pb_docs_consideraciones_doc_v1` | DOCUMENT + TEXT | `SolicitarDocumentosWhatsAppJob` (media PDF) | — (PDF en header; body fijo) |
 | D05 | `pb_docs_recordatorio_intro_v1` | TEXT | `GeneralController::recordatoriosDocumentos` (intro) | `{{nombre_cliente}}`, `{{carga}}` |
-| D06 | `pb_docs_recordatorio_proveedor_v1` / `_qa` | TEXT | `recordatoriosDocumentos` (por proveedor) | sin Excel: `{{codigo_proveedor}}`, `{{documentos_faltantes}}` · con Excel: + `{{link_web}}`, `{{link_drive}}` |
-| D07 | `pb_docs_recordatorio_aviso_v1` | TEXT | `recordatoriosDocumentos` (cierre) | — (texto fijo) |
+| D06 | `pb_docs_recordatorio_proveedor_v1` / `_qa` | TEXT | `recordatoriosDocumentos` (**un mensaje agregado**) | sin Excel: `{{codigo_proveedor}}`, `{{documentos_faltantes}}` · con Excel: `{{codigos_excel}}`, `{{link_web}}`, `{{link_drive}}`, `{{documentos_otros}}` |
+| D07 | `pb_docs_recordatorio_aviso_v1` | TEXT | `recordatoriosDocumentos` (cierre; solo si **no** hay Excel) | — (texto fijo) |
 
 ---
 

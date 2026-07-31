@@ -1038,20 +1038,20 @@ class GeneralController extends Controller
 
             $templatesUsados = null;
             if ($this->shouldRouteCoordinacionToMeta('consolidado')) {
-                $tieneSinExcel = false;
-                $tieneConExcel = false;
+                $tieneExcel = false;
                 foreach ($proveedoresPendientes as $p) {
                     if (CoordinacionWhatsappPayload::documentosIncludeExcelConfirmacion((array) ($p['documentos'] ?? []))) {
-                        $tieneConExcel = true;
-                    } else {
-                        $tieneSinExcel = true;
+                        $tieneExcel = true;
+                        break;
                     }
                 }
                 $templatesUsados = ['pb_docs_recordatorio_intro_v1'];
-                if ($tieneConExcel || $tieneSinExcel) {
-                    $templatesUsados[] = 'pb_docs_recordatorio_proveedor_v1';
+                $templatesUsados[] = $tieneExcel
+                    ? 'pb_docs_recordatorio_proveedor_v1_qa'
+                    : 'pb_docs_recordatorio_proveedor_v1';
+                if (! $tieneExcel) {
+                    $templatesUsados[] = 'pb_docs_recordatorio_aviso_v1';
                 }
-                $templatesUsados[] = 'pb_docs_recordatorio_aviso_v1';
             }
 
             return response()->json([
