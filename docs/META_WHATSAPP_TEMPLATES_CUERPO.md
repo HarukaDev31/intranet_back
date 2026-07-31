@@ -837,37 +837,11 @@ Hola {{nombre_cliente}}, estamos esperando que nos envíes los documentos de tu 
 
 ---
 
-### D06 — `pb_docs_recordatorio_proveedor_v1`
+### D06 — `pb_docs_recordatorio_proveedor_v1_qa` ⚠️ ACTUALIZAR EN META
 
-**Tipo:** TEXT · **WABA:** consolidado · **Origen:** `GeneralController::recordatoriosDocumentos` — **un solo mensaje agregado** con todos los documentos/proveedores pendientes (ya no uno por proveedor).
+**Tipo:** TEXT · **WABA:** consolidado · **Origen:** `GeneralController::recordatoriosDocumentos` — **un solo mensaje** con todos los documentos pendientes.
 
-**Idioma en BM:** **Spanish (Peru)** / `es_PE` (debe coincidir con la API; no registrar en English).
-
-**BODY (sin Excel):**
-
-```
-Recordatorio de documentación de importación 📋
-
-Proveedor: {{codigo_proveedor}}
-
-Aún estamos esperando los siguientes documentos:
-{{documentos_faltantes}}
-
-Por favor envíalos lo antes posible para continuar con la declaración aduanera. Gracias.
-```
-
-| Parámetro Meta | Orden API | Campo backend | Sample BM |
-|----------------|-----------|---------------|-----------|
-| `{{codigo_proveedor}}` | 1 | Códigos unidos (`JASO6-1 Y JASO6-2`) | `JASO6-1 Y JASO6-2` |
-| `{{documentos_faltantes}}` | 2 | Docs con códigos por línea | `Packing List 📦 (JASO6-1 Y JASO6-2)` |
-
----
-
-### D06b — `pb_docs_recordatorio_proveedor_v1_qa` ⚠️ ACTUALIZAR EN META
-
-**Tipo:** TEXT · **WABA:** consolidado · **Origen:** mismo endpoint cuando el recordatorio incluye `excel_confirmacion`.
-
-**Usar cuando:** hay Excel pendiente (cualquier proveedor). **Un solo envío** (agrega todos los proveedores). El aviso de aduana va **dentro** de esta plantilla (no se envía D07).
+**Importante:** el listado de documentos es **100% dinámico**. Si no falta Excel, **no** aparece el bloque de Excel. Los códigos entre paréntesis son **códigos de proveedor** (ej. `JASO6-1`).
 
 **Idioma en BM:** **Spanish (Peru)** / `es_PE`.
 
@@ -878,14 +852,7 @@ Recordatorio de documentación de importación 📋
 
 Aún estamos esperando los siguientes documentos:
 
-Excel de confirmación ({{codigos_excel}}) 📄
-Tienes 2 opciones para llenar la información
-1.📱 Desde tu celular:
-{{link_web}}
-2.📄Descargando el Excel
-{{link_drive}}
-
-{{documentos_otros}}
+{{documentos_faltantes}}
 
 Por favor envíalos lo antes posible para continuar con la declaración aduanera. Gracias
 
@@ -894,32 +861,38 @@ Probusiness Coordinación: Si no tenemos tus documentos a tiempo, aduana puede a
 
 | Parámetro Meta | Orden API | Campo backend | Sample BM |
 |----------------|-----------|---------------|-----------|
-| `{{codigos_excel}}` | 1 | Códigos con Excel pendiente | `JASO6-1 Y JASO6-2` |
-| `{{link_web}}` | 2 | URL formulario web | `https://confirmacion.probusiness.pe/{uuid}` |
-| `{{link_drive}}` | 3 | Link Drive (o `—`) | `https://drive.google.com/...` |
-| `{{documentos_otros}}` | 4 | Packing / Invoice con códigos (o `—`) | `Packing List 📦 (JASO6-1 Y JASO6-2)\nCOMERCIAL INVOICE (JASO6-1)` |
+| `{{documentos_faltantes}}` | 1 | Bloque dinámico armado por el backend | ver ejemplos abajo |
+
+**Ejemplo `documentos_faltantes` CON Excel:**
+
+```
+Excel de confirmación (JASO6-1 Y JASO6-2) 📄
+Tienes 2 opciones para llenar la información
+1.📱 Desde tu celular:
+https://confirmacion.probusiness.pe/uuid
+2.📄Descargando el Excel
+https://drive.google.com/...
+
+Packing List 📦 (JASO6-1 Y JASO6-2)
+COMERCIAL INVOICE (JASO6-1)
+```
+
+**Ejemplo `documentos_faltantes` SIN Excel:**
+
+```
+Packing List 📦 (JASO6-1 Y JASO6-2)
+COMERCIAL INVOICE (JASO6-1)
+```
 
 **Notas Meta:**
-- Si la plantilla actual `pb_docs_recordatorio_proveedor_v1_qa` ya está aprobada con variables viejas (`codigo_proveedor`, `documentos_faltantes`), crear una **nueva versión** (ej. `pb_docs_recordatorio_proveedor_v2`) o editar y reenviar a revisión con los 4 parámetros de arriba.
-- Tras aprobar, el backend ya envía: `codigos_excel`, `link_web`, `link_drive`, `documentos_otros`.
+- Solo **1 variable**. No hardcodear “Excel de confirmación” en el body fijo.
+- Si la plantilla actual tiene más variables, editar/reenviar a revisión o crear `pb_docs_recordatorio_proveedor_v2` y avisar para apuntar el backend.
 
-### D07 — `pb_docs_recordatorio_aviso_v1`
+### D07 — `pb_docs_recordatorio_aviso_v1` (legacy)
 
-**Tipo:** TEXT · **WABA:** consolidado · **Origen:** `GeneralController::recordatoriosDocumentos` (cierre **solo si no hay Excel**).
+Ya **no se envía** en la secuencia nueva: el aviso de aduana está al final de D06.
 
-**Idioma en BM:** **Spanish (Peru)** / `es_PE`.
-
-**BODY:**
-
-```
-Si no tenemos tus documentos a tiempo, aduana puede aplicarte multas o inmovilización de tus productos.
-```
-
-Sin variables.
-
-**Secuencia recordatorio:**
-- Con Excel: D05 → D06b (`_qa`, 1 mensaje) 
-- Sin Excel: D05 → D06 (`v1`, 1 mensaje) → D07
+**Secuencia actual:** D05 (intro) → D06 (`_qa`, 1 mensaje agregado)
 
 ---
 

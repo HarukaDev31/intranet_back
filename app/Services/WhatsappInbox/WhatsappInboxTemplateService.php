@@ -55,7 +55,7 @@ class WhatsappInboxTemplateService
         'pb_docs_excel_link_v1_qa' => ['link_intranet', 'link_excel'],
         'pb_docs_excel_conf_recibido_v1' => ['consolidado', 'enlace'],
         'pb_docs_recordatorio_proveedor_v1' => ['codigo_proveedor', 'documentos_faltantes'],
-        'pb_docs_recordatorio_proveedor_v1_qa' => ['codigos_excel', 'link_web', 'link_drive', 'documentos_otros'],
+        'pb_docs_recordatorio_proveedor_v1_qa' => ['documentos_faltantes'],
     ];
 
     /**
@@ -139,10 +139,10 @@ class WhatsappInboxTemplateService
             ],
             [
                 'name' => 'pb_docs_recordatorio_proveedor_v1_qa',
-                'label' => 'Docs — Recordatorio documentos (con Excel)',
+                'label' => 'Docs — Recordatorio documentos (agregado)',
                 'language' => 'es_PE',
-                'text' => "Recordatorio de documentación de importación 📋\n\nAún estamos esperando los siguientes documentos:\n\nExcel de confirmación ({{codigos_excel}}) 📄\nTienes 2 opciones para llenar la información\n1.📱 Desde tu celular:\n{{link_web}}\n2.📄Descargando el Excel\n{{link_drive}}\n\n{{documentos_otros}}\n\nPor favor envíalos lo antes posible para continuar con la declaración aduanera. Gracias\n\nProbusiness Coordinación: Si no tenemos tus documentos a tiempo, aduana puede aplicarte multas o inmovilización de tus productos.",
-                'params' => ['codigos_excel', 'link_web', 'link_drive', 'documentos_otros'],
+                'text' => "Recordatorio de documentación de importación 📋\n\nAún estamos esperando los siguientes documentos:\n\n{{documentos_faltantes}}\n\nPor favor envíalos lo antes posible para continuar con la declaración aduanera. Gracias\n\nProbusiness Coordinación: Si no tenemos tus documentos a tiempo, aduana puede aplicarte multas o inmovilización de tus productos.",
+                'params' => ['documentos_faltantes'],
             ],
             [
                 'name' => 'pb_consolidado_resumen_pago_v1',
