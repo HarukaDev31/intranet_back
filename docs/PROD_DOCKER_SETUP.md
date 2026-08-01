@@ -25,9 +25,12 @@ APP_PORT=8082
 # Opcional; por defecto el compose usa name: intranet_back (no uses intranet_prod — duplica stack en el mismo path)
 # COMPOSE_PROJECT_NAME=intranet_back
 
-# MySQL en el mismo host (socket Unix — no TCP público)
+# MySQL en el mismo host (socket Unix — no TCP público).
+# El compose monta el DIRECTORIO /var/run/mysqld (no el .sock suelto),
+# para sobrevivir reinicios de MySQL por unattended-upgrade.
 DB_HOST=localhost
 DB_SOCKET=/var/run/mysqld/mysqld.sock
+# MYSQL_SOCKET_DIR_HOST=/var/run/mysqld
 
 # Redis del contenedor compose (no el Redis del host)
 DOCKER_REDIS_HOST=redis
@@ -61,7 +64,7 @@ Verifica la ruta del socket MySQL:
 mysql -e "SHOW VARIABLES LIKE 'socket';"
 ```
 
-Si difiere, define `MYSQL_SOCKET_HOST=/ruta/real/mysqld.sock` en `.env`.
+Si el directorio no es `/var/run/mysqld`, define `MYSQL_SOCKET_DIR_HOST=/ruta/real/mysqld` en `.env`.
 
 ## 2. Nginx del host
 
