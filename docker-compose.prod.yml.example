@@ -10,16 +10,16 @@
 #   APP_ENV=production
 #   APP_DEBUG=false
 #   DB_HOST=localhost
-#   DB_SOCKET=/run/mysqld/mysqld.sock
+#   DB_SOCKET=/opt/mysql-socket/mysqld.sock
+#   MYSQL_SOCKET_DIR_HOST=/opt/mysql-socket
 #   DOCKER_REDIS_HOST=redis
 #   FORWARD_REDIS_PORT=6381
 #   REDIS_PREFIX=intranet_back_
 #   LARAVEL_WEBSOCKETS_PORT=6001
 #   HORIZON_PREFIX=intranet_horizon:
 #
-# MySQL: montar el DIRECTORIO /run/mysqld (no el archivo .sock; no /var/run por symlink).
-# Si montás solo el .sock, unattended-upgrade / restart de MySQL recrea el inode
-# y el contenedor queda con Connection refused hasta reiniciarlo.
+# MySQL: socket en /opt/mysql-socket (persistente). No uses /run/mysqld:
+# systemd recrea ese dir en cada restart y el bind mount de Docker queda stale.
 
 name: intranet_back
 
@@ -30,12 +30,12 @@ services:
 
   app:
     volumes:
-      - ${MYSQL_SOCKET_DIR_HOST:-/run/mysqld}:/run/mysqld
+      - ${MYSQL_SOCKET_DIR_HOST:-/opt/mysql-socket}:/opt/mysql-socket
 
   horizon:
     volumes:
-      - ${MYSQL_SOCKET_DIR_HOST:-/run/mysqld}:/run/mysqld
+      - ${MYSQL_SOCKET_DIR_HOST:-/opt/mysql-socket}:/opt/mysql-socket
 
   scheduler:
     volumes:
-      - ${MYSQL_SOCKET_DIR_HOST:-/run/mysqld}:/run/mysqld
+      - ${MYSQL_SOCKET_DIR_HOST:-/opt/mysql-socket}:/opt/mysql-socket

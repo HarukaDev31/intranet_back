@@ -79,7 +79,7 @@ COMPOSE_PROJECT_NAME=intranet_qa
 
 # MySQL en el mismo host (bind-address=127.0.0.1) — socket Unix, sin abrir 3306 a internet:
 DB_HOST=localhost
-DB_SOCKET=/run/mysqld/mysqld.sock
+DB_SOCKET=/opt/mysql-socket/mysqld.sock
 # deploy.sh usa COMPOSE_HOST_MYSQL=true por defecto (docker-compose.host-mysql.yml)
 # RDS u otro host TCP:
 # DB_HOST=mi-rds.amazonaws.com
@@ -115,29 +115,37 @@ Mantén `bind-address = 127.0.0.1` en `mysqld.cnf`. La IP elástica de EC2 **no 
 
 **Problema:** desde un contenedor, `DB_HOST=127.0.0.1` apunta al loopback del contenedor, no al del host. `host.docker.internal` llega por la red Docker (`docker0`, p. ej. `172.17.0.1`), pero con `bind-address=127.0.0.1` MySQL rechaza esas conexiones TCP.
 
-**Solución recomendada — socket Unix montando el DIRECTORIO** (sin cambiar bind-address, sin abrir 3306):
+**Solución recomendada — socket Unix en ruta persistente** (sin cambiar bind-address, sin abrir 3306):
 
-> **Importante:** montá `/run/mysqld/` (ruta canónica), **no** el archivo `mysqld.sock` ni `/var/run/mysqld` (en Ubuntu `/var/run` → `/run` y Docker puede montar una carpeta sombra vacía).  
-> Si montás solo el `.sock`, unattended-upgrade / `systemctl restart mysql` recrea el inode y el contenedor queda con `Connection refused` hasta `docker compose restart`. Con el directorio, el contenedor ve el socket nuevo solo.
+> **Importante:** usá `/opt/mysql-socket/` (dir fijo en disco), **no** `/run/mysqld` ni el archivo `.sock` suelto.  
+> systemd (`RuntimeDirectory=mysqld`) borra y recrea `/run/mysqld` en cada restart → el bind mount de Docker queda stale. Con `/opt/mysql-socket`, el `.sock` se recrea dentro del mismo inode de directorio y el contenedor lo ve sin reiniciar.
+
+Setup una vez en el host:
+
+```bash
+cd /var/www/html/intranet_back   # o intranet_back_qa
+sudo bash scripts/setup-mysql-docker-socket.sh
+```
 
 1. En `.env` del servidor:
 
 ```env
 DB_HOST=localhost
-DB_SOCKET=/run/mysqld/mysqld.sock
+DB_SOCKET=/opt/mysql-socket/mysqld.sock
+MYSQL_SOCKET_DIR_HOST=/opt/mysql-socket
 ```
 
 2. Levantar con el overlay (o `deploy.sh`, que usa `COMPOSE_HOST_MYSQL=true` por defecto):
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.host-mysql.yml up -d
+docker compose -f docker-compose.yml -f docker-compose.host-mysql.yml up -d --force-recreate app horizon scheduler
 ```
 
 Los overlays (`host-mysql`, `qa`, `prod`) montan:
 
 ```yaml
 volumes:
-  - ${MYSQL_SOCKET_DIR_HOST:-/run/mysqld}:/run/mysqld
+  - ${MYSQL_SOCKET_DIR_HOST:-/opt/mysql-socket}:/opt/mysql-socket
 ```
 
 3. Usuario MySQL para socket (autentica como `localhost`):
@@ -148,15 +156,15 @@ GRANT ALL PRIVILEGES ON intranet_probusiness2.* TO 'tu_usuario'@'localhost';
 FLUSH PRIVILEGES;
 ```
 
-4. Verifica la ruta del socket en el host:
+4. Verifica:
 
 ```bash
-ls -la /run/mysqld/mysqld.sock
+ls -la /opt/mysql-socket/mysqld.sock
 ```
 
-Si el directorio no es `/run/mysqld`, define `MYSQL_SOCKET_DIR_HOST` en `.env`.
+Si el directorio no es `/opt/mysql-socket`, define `MYSQL_SOCKET_DIR_HOST` / `DB_SOCKET` y re-ejecutá el setup.
 
-**Alternativa (solo si no puedes usar socket):** enlazar MySQL solo a la IP del bridge Docker (p. ej. `172.17.0.1` / gateway de la red Compose), **nunca** a `0.0.0.0`. Sigue sin exponer la IP elástica, pero es más frágil que el socket por directorio.
+**Alternativa (solo si no puedes usar socket):** enlazar MySQL solo a la IP del bridge Docker (p. ej. `172.17.0.1` / gateway de la red Compose), **nunca** a `0.0.0.0`. Sigue sin exponer la IP elástica, pero es más frágil que el socket persistente.
 
 **No hagas:** `bind-address=0.0.0.0` “porque el SG protege” — cualquier error de firewall abre la BD a internet.
 
@@ -173,14 +181,15 @@ Debe quedar así (sin `DATABASE_URL` apuntando a otro host):
 
 ```env
 DB_HOST=localhost
-DB_SOCKET=/run/mysqld/mysqld.sock
+DB_SOCKET=/opt/mysql-socket/mysqld.sock
+MYSQL_SOCKET_DIR_HOST=/opt/mysql-socket
 ```
 
 Recrear contenedores **con** el overlay (solo `exec` no monta el socket):
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.host-mysql.yml up -d --force-recreate app horizon scheduler
-docker compose -f docker-compose.yml -f docker-compose.host-mysql.yml exec app ls -la /run/mysqld/mysqld.sock
+docker compose -f docker-compose.yml -f docker-compose.host-mysql.yml exec app ls -la /opt/mysql-socket/mysqld.sock
 docker compose -f docker-compose.yml -f docker-compose.host-mysql.yml exec app php artisan config:clear
 docker compose -f docker-compose.yml -f docker-compose.host-mysql.yml exec app php artisan migrate --force
 ```

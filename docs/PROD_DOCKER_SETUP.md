@@ -26,11 +26,11 @@ APP_PORT=8082
 # COMPOSE_PROJECT_NAME=intranet_back
 
 # MySQL en el mismo host (socket Unix — no TCP público).
-# El compose monta el DIRECTORIO /run/mysqld (no el .sock; no /var/run por symlink),
-# para sobrevivir reinicios de MySQL por unattended-upgrade.
+# Socket persistente /opt/mysql-socket (NO /run/mysqld: systemd lo recrea).
+# Setup una vez: sudo bash scripts/setup-mysql-docker-socket.sh
 DB_HOST=localhost
-DB_SOCKET=/run/mysqld/mysqld.sock
-# MYSQL_SOCKET_DIR_HOST=/run/mysqld
+DB_SOCKET=/opt/mysql-socket/mysqld.sock
+MYSQL_SOCKET_DIR_HOST=/opt/mysql-socket
 
 # Redis del contenedor compose (no el Redis del host)
 DOCKER_REDIS_HOST=redis
@@ -61,10 +61,10 @@ SESSION_DRIVER=file
 Verifica la ruta del socket MySQL:
 
 ```bash
-mysql -e "SHOW VARIABLES LIKE 'socket';"
+ls -la /opt/mysql-socket/mysqld.sock
 ```
 
-Si el directorio no es `/run/mysqld`, define `MYSQL_SOCKET_DIR_HOST=/ruta/real/mysqld` en `.env`.
+Si el directorio no es `/opt/mysql-socket`, define `MYSQL_SOCKET_DIR_HOST` y `DB_SOCKET` en `.env`, y ejecutá el setup con esa ruta.
 
 ## 2. Nginx del host
 
