@@ -1,5 +1,11 @@
 # MySQL instalado en el host con bind-address=127.0.0.1 (sin exponer 3306 a internet).
-# Monta el socket Unix del host en los contenedores PHP — no requiere abrir TCP ni cambiar bind-address.
+# Monta el DIRECTORIO del socket Unix del host — no el archivo .sock suelto.
+#
+# Por qué el directorio y no el archivo:
+#   Montar solo mysqld.sock congela el inode. Cuando unattended-upgrade reinicia MySQL,
+#   el .sock se recrea y el contenedor sigue con el viejo → Connection refused
+#   hasta hacer docker compose restart. Montando /var/run/mysqld/ el contenedor
+#   ve el archivo nuevo sin reiniciar y sin abrir TCP (ni bind-address 0.0.0.0).
 #
 # Uso en servidor QA:
 #   APP_PORT=8085 en .env
@@ -49,6 +55,7 @@
 #
 # Verifica la ruta del socket en el host:
 #   mysql -e "SHOW VARIABLES LIKE 'socket';"
+# Si el directorio no es /var/run/mysqld, define MYSQL_SOCKET_DIR_HOST en .env.
 #
 # Redis en contenedor (QA 6380 / PROD 6381 en el host; dentro de Docker siempre redis:6379).
 services:
@@ -58,12 +65,12 @@ services:
 
   app:
     volumes:
-      - ${MYSQL_SOCKET_HOST:-/var/run/mysqld/mysqld.sock}:/var/run/mysqld/mysqld.sock
+      - ${MYSQL_SOCKET_DIR_HOST:-/var/run/mysqld}:/var/run/mysqld
 
   horizon:
     volumes:
-      - ${MYSQL_SOCKET_HOST:-/var/run/mysqld/mysqld.sock}:/var/run/mysqld/mysqld.sock
+      - ${MYSQL_SOCKET_DIR_HOST:-/var/run/mysqld}:/var/run/mysqld
 
   scheduler:
     volumes:
-      - ${MYSQL_SOCKET_HOST:-/var/run/mysqld/mysqld.sock}:/var/run/mysqld/mysqld.sock
+      - ${MYSQL_SOCKET_DIR_HOST:-/var/run/mysqld}:/var/run/mysqld

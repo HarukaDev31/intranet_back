@@ -115,7 +115,10 @@ Mantén `bind-address = 127.0.0.1` en `mysqld.cnf`. La IP elástica de EC2 **no 
 
 **Problema:** desde un contenedor, `DB_HOST=127.0.0.1` apunta al loopback del contenedor, no al del host. `host.docker.internal` llega por la red Docker (`docker0`, p. ej. `172.17.0.1`), pero con `bind-address=127.0.0.1` MySQL rechaza esas conexiones TCP.
 
-**Solución recomendada — socket Unix montado** (sin cambiar bind-address):
+**Solución recomendada — socket Unix montando el DIRECTORIO** (sin cambiar bind-address, sin abrir 3306):
+
+> **Importante:** montá `/var/run/mysqld/` (directorio), **no** el archivo `mysqld.sock`.  
+> Si montás solo el `.sock`, unattended-upgrade / `systemctl restart mysql` recrea el inode y el contenedor queda con `Connection refused` hasta `docker compose restart`. Con el directorio, el contenedor ve el socket nuevo solo.
 
 1. En `.env` del servidor:
 
@@ -128,6 +131,13 @@ DB_SOCKET=/var/run/mysqld/mysqld.sock
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.host-mysql.yml up -d
+```
+
+Los overlays (`host-mysql`, `qa`, `prod`) montan:
+
+```yaml
+volumes:
+  - ${MYSQL_SOCKET_DIR_HOST:-/var/run/mysqld}:/var/run/mysqld
 ```
 
 3. Usuario MySQL para socket (autentica como `localhost`):
@@ -144,9 +154,9 @@ FLUSH PRIVILEGES;
 mysql -e "SHOW VARIABLES LIKE 'socket';"
 ```
 
-Si no es `/var/run/mysqld/mysqld.sock`, define `MYSQL_SOCKET_HOST` en `.env` con la ruta real.
+Si el directorio no es `/var/run/mysqld`, define `MYSQL_SOCKET_DIR_HOST` en `.env`.
 
-**Alternativa (solo si no puedes usar socket):** enlazar MySQL solo a la IP de `docker0` (`172.17.0.1`), no a `0.0.0.0`. Sigue sin exponer la IP elástica, pero el cliente local debe usar socket o `mysql -h 172.17.0.1`. Menos limpio que el socket.
+**Alternativa (solo si no puedes usar socket):** enlazar MySQL solo a la IP del bridge Docker (p. ej. `172.17.0.1` / gateway de la red Compose), **nunca** a `0.0.0.0`. Sigue sin exponer la IP elástica, pero es más frágil que el socket por directorio.
 
 **No hagas:** `bind-address=0.0.0.0` “porque el SG protege” — cualquier error de firewall abre la BD a internet.
 

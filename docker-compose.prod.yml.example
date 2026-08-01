@@ -16,6 +16,10 @@
 #   REDIS_PREFIX=intranet_back_
 #   LARAVEL_WEBSOCKETS_PORT=6001
 #   HORIZON_PREFIX=intranet_horizon:
+#
+# MySQL: montar el DIRECTORIO /var/run/mysqld (no el archivo .sock).
+# Si montás solo el .sock, unattended-upgrade / restart de MySQL recrea el inode
+# y el contenedor queda con Connection refused hasta reiniciarlo.
 
 name: intranet_back
 
@@ -26,12 +30,12 @@ services:
 
   app:
     volumes:
-      - ${MYSQL_SOCKET_HOST:-/var/run/mysqld/mysqld.sock}:/var/run/mysqld/mysqld.sock
+      - ${MYSQL_SOCKET_DIR_HOST:-/var/run/mysqld}:/var/run/mysqld
 
   horizon:
     volumes:
-      - ${MYSQL_SOCKET_HOST:-/var/run/mysqld/mysqld.sock}:/var/run/mysqld/mysqld.sock
+      - ${MYSQL_SOCKET_DIR_HOST:-/var/run/mysqld}:/var/run/mysqld
 
   scheduler:
     volumes:
-      - ${MYSQL_SOCKET_HOST:-/var/run/mysqld/mysqld.sock}:/var/run/mysqld/mysqld.sock
+      - ${MYSQL_SOCKET_DIR_HOST:-/var/run/mysqld}:/var/run/mysqld
