@@ -8,7 +8,7 @@
 #   APP_PORT=8085
 #   APP_URL=https://qa.intranetback.probusiness.pe
 #   DB_HOST=localhost
-#   DB_SOCKET=/var/run/mysqld/mysqld.sock
+#   DB_SOCKET=/run/mysqld/mysqld.sock
 #   DOCKER_REDIS_HOST=redis
 #   FORWARD_REDIS_PORT=6380
 #   REDIS_PREFIX=qa_
@@ -16,7 +16,7 @@
 #   PUSHER_PORT=6002
 #   HORIZON_PREFIX=qa_horizon:
 #
-# MySQL: montar el DIRECTORIO /var/run/mysqld (no el archivo .sock).
+# MySQL: montar el DIRECTORIO /run/mysqld (no el archivo .sock; no /var/run por symlink).
 # Si montás solo el .sock, unattended-upgrade / restart de MySQL recrea el inode
 # y el contenedor queda con Connection refused hasta reiniciarlo.
 
@@ -29,12 +29,12 @@ services:
 
   app:
     volumes:
-      - ${MYSQL_SOCKET_DIR_HOST:-/var/run/mysqld}:/var/run/mysqld
+      - ${MYSQL_SOCKET_DIR_HOST:-/run/mysqld}:/run/mysqld
 
   horizon:
     volumes:
-      - ${MYSQL_SOCKET_DIR_HOST:-/var/run/mysqld}:/var/run/mysqld
+      - ${MYSQL_SOCKET_DIR_HOST:-/run/mysqld}:/run/mysqld
 
   scheduler:
     volumes:
-      - ${MYSQL_SOCKET_DIR_HOST:-/var/run/mysqld}:/var/run/mysqld
+      - ${MYSQL_SOCKET_DIR_HOST:-/run/mysqld}:/run/mysqld

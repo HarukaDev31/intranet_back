@@ -79,7 +79,7 @@ COMPOSE_PROJECT_NAME=intranet_qa
 
 # MySQL en el mismo host (bind-address=127.0.0.1) — socket Unix, sin abrir 3306 a internet:
 DB_HOST=localhost
-DB_SOCKET=/var/run/mysqld/mysqld.sock
+DB_SOCKET=/run/mysqld/mysqld.sock
 # deploy.sh usa COMPOSE_HOST_MYSQL=true por defecto (docker-compose.host-mysql.yml)
 # RDS u otro host TCP:
 # DB_HOST=mi-rds.amazonaws.com
@@ -117,14 +117,14 @@ Mantén `bind-address = 127.0.0.1` en `mysqld.cnf`. La IP elástica de EC2 **no 
 
 **Solución recomendada — socket Unix montando el DIRECTORIO** (sin cambiar bind-address, sin abrir 3306):
 
-> **Importante:** montá `/var/run/mysqld/` (directorio), **no** el archivo `mysqld.sock`.  
+> **Importante:** montá `/run/mysqld/` (ruta canónica), **no** el archivo `mysqld.sock` ni `/var/run/mysqld` (en Ubuntu `/var/run` → `/run` y Docker puede montar una carpeta sombra vacía).  
 > Si montás solo el `.sock`, unattended-upgrade / `systemctl restart mysql` recrea el inode y el contenedor queda con `Connection refused` hasta `docker compose restart`. Con el directorio, el contenedor ve el socket nuevo solo.
 
 1. En `.env` del servidor:
 
 ```env
 DB_HOST=localhost
-DB_SOCKET=/var/run/mysqld/mysqld.sock
+DB_SOCKET=/run/mysqld/mysqld.sock
 ```
 
 2. Levantar con el overlay (o `deploy.sh`, que usa `COMPOSE_HOST_MYSQL=true` por defecto):
@@ -137,7 +137,7 @@ Los overlays (`host-mysql`, `qa`, `prod`) montan:
 
 ```yaml
 volumes:
-  - ${MYSQL_SOCKET_DIR_HOST:-/var/run/mysqld}:/var/run/mysqld
+  - ${MYSQL_SOCKET_DIR_HOST:-/run/mysqld}:/run/mysqld
 ```
 
 3. Usuario MySQL para socket (autentica como `localhost`):
@@ -151,10 +151,10 @@ FLUSH PRIVILEGES;
 4. Verifica la ruta del socket en el host:
 
 ```bash
-mysql -e "SHOW VARIABLES LIKE 'socket';"
+ls -la /run/mysqld/mysqld.sock
 ```
 
-Si el directorio no es `/var/run/mysqld`, define `MYSQL_SOCKET_DIR_HOST` en `.env`.
+Si el directorio no es `/run/mysqld`, define `MYSQL_SOCKET_DIR_HOST` en `.env`.
 
 **Alternativa (solo si no puedes usar socket):** enlazar MySQL solo a la IP del bridge Docker (p. ej. `172.17.0.1` / gateway de la red Compose), **nunca** a `0.0.0.0`. Sigue sin exponer la IP elástica, pero es más frágil que el socket por directorio.
 
@@ -173,14 +173,14 @@ Debe quedar así (sin `DATABASE_URL` apuntando a otro host):
 
 ```env
 DB_HOST=localhost
-DB_SOCKET=/var/run/mysqld/mysqld.sock
+DB_SOCKET=/run/mysqld/mysqld.sock
 ```
 
 Recrear contenedores **con** el overlay (solo `exec` no monta el socket):
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.host-mysql.yml up -d --force-recreate app horizon scheduler
-docker compose -f docker-compose.yml -f docker-compose.host-mysql.yml exec app ls -la /var/run/mysqld/mysqld.sock
+docker compose -f docker-compose.yml -f docker-compose.host-mysql.yml exec app ls -la /run/mysqld/mysqld.sock
 docker compose -f docker-compose.yml -f docker-compose.host-mysql.yml exec app php artisan config:clear
 docker compose -f docker-compose.yml -f docker-compose.host-mysql.yml exec app php artisan migrate --force
 ```

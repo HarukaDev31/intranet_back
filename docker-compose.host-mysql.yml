@@ -4,8 +4,13 @@
 # Por qué el directorio y no el archivo:
 #   Montar solo mysqld.sock congela el inode. Cuando unattended-upgrade reinicia MySQL,
 #   el .sock se recrea y el contenedor sigue con el viejo → Connection refused
-#   hasta hacer docker compose restart. Montando /var/run/mysqld/ el contenedor
-#   ve el archivo nuevo sin reiniciar y sin abrir TCP (ni bind-address 0.0.0.0).
+#   hasta hacer docker compose restart. Montando el dir, el contenedor ve el archivo nuevo
+#   sin reiniciar y sin abrir TCP (ni bind-address 0.0.0.0).
+#
+# Por qué /run/mysqld y no /var/run/mysqld:
+#   En Ubuntu /var/run → /run. Si Docker monta source/dest vía el symlink, puede crear
+#   una carpeta sombra vacía (ls total 0) aunque el sock exista en el host.
+#   Usá la ruta canónica /run/mysqld.
 #
 # Uso en servidor QA:
 #   APP_PORT=8085 en .env
@@ -15,7 +20,7 @@
 #   APP_PORT=8085
 #   APP_URL=https://qa.intranetback.probusiness.pe
 #   DB_HOST=localhost
-#   DB_SOCKET=/var/run/mysqld/mysqld.sock
+#   DB_SOCKET=/run/mysqld/mysqld.sock
 #   DOCKER_REDIS_HOST=redis
 #   REDIS_HOST=redis
 #   REDIS_PORT=6379
@@ -42,7 +47,7 @@
 #   APP_ENV=production
 #   APP_DEBUG=false
 #   DB_HOST=localhost
-#   DB_SOCKET=/var/run/mysqld/mysqld.sock
+#   DB_SOCKET=/run/mysqld/mysqld.sock
 #   DOCKER_REDIS_HOST=redis
 #   REDIS_HOST=redis
 #   REDIS_PORT=6379
@@ -54,8 +59,8 @@
 #   HORIZON_PREFIX=intranet_horizon:
 #
 # Verifica la ruta del socket en el host:
-#   mysql -e "SHOW VARIABLES LIKE 'socket';"
-# Si el directorio no es /var/run/mysqld, define MYSQL_SOCKET_DIR_HOST en .env.
+#   ls -la /run/mysqld/mysqld.sock
+# Si el directorio no es /run/mysqld, define MYSQL_SOCKET_DIR_HOST en .env.
 #
 # Redis en contenedor (QA 6380 / PROD 6381 en el host; dentro de Docker siempre redis:6379).
 services:
@@ -65,12 +70,12 @@ services:
 
   app:
     volumes:
-      - ${MYSQL_SOCKET_DIR_HOST:-/var/run/mysqld}:/var/run/mysqld
+      - ${MYSQL_SOCKET_DIR_HOST:-/run/mysqld}:/run/mysqld
 
   horizon:
     volumes:
-      - ${MYSQL_SOCKET_DIR_HOST:-/var/run/mysqld}:/var/run/mysqld
+      - ${MYSQL_SOCKET_DIR_HOST:-/run/mysqld}:/run/mysqld
 
   scheduler:
     volumes:
-      - ${MYSQL_SOCKET_DIR_HOST:-/var/run/mysqld}:/var/run/mysqld
+      - ${MYSQL_SOCKET_DIR_HOST:-/run/mysqld}:/run/mysqld

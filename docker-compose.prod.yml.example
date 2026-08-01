@@ -10,14 +10,14 @@
 #   APP_ENV=production
 #   APP_DEBUG=false
 #   DB_HOST=localhost
-#   DB_SOCKET=/var/run/mysqld/mysqld.sock
+#   DB_SOCKET=/run/mysqld/mysqld.sock
 #   DOCKER_REDIS_HOST=redis
 #   FORWARD_REDIS_PORT=6381
 #   REDIS_PREFIX=intranet_back_
 #   LARAVEL_WEBSOCKETS_PORT=6001
 #   HORIZON_PREFIX=intranet_horizon:
 #
-# MySQL: montar el DIRECTORIO /var/run/mysqld (no el archivo .sock).
+# MySQL: montar el DIRECTORIO /run/mysqld (no el archivo .sock; no /var/run por symlink).
 # Si montás solo el .sock, unattended-upgrade / restart de MySQL recrea el inode
 # y el contenedor queda con Connection refused hasta reiniciarlo.
 
@@ -30,12 +30,12 @@ services:
 
   app:
     volumes:
-      - ${MYSQL_SOCKET_DIR_HOST:-/var/run/mysqld}:/var/run/mysqld
+      - ${MYSQL_SOCKET_DIR_HOST:-/run/mysqld}:/run/mysqld
 
   horizon:
     volumes:
-      - ${MYSQL_SOCKET_DIR_HOST:-/var/run/mysqld}:/var/run/mysqld
+      - ${MYSQL_SOCKET_DIR_HOST:-/run/mysqld}:/run/mysqld
 
   scheduler:
     volumes:
-      - ${MYSQL_SOCKET_DIR_HOST:-/var/run/mysqld}:/var/run/mysqld
+      - ${MYSQL_SOCKET_DIR_HOST:-/run/mysqld}:/run/mysqld
