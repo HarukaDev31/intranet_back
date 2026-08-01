@@ -1,0 +1,15 @@
+# Socket Unix persistente para Docker (host MySQL + contenedores Laravel).
+# Copiar a: /etc/mysql/mysql.conf.d/zz-docker-socket.cnf
+# O usar: sudo bash scripts/setup-mysql-docker-socket.sh
+#
+# NO uses /run/mysqld ni /var/run/mysqld: systemd RuntimeDirectory=mysqld
+# borra y recrea ese directorio en cada restart → bind mount de Docker queda stale.
+
+[mysqld]
+socket = /opt/mysql-socket/mysqld.sock
+
+[client]
+socket = /opt/mysql-socket/mysqld.sock
+
+[mysql]
+socket = /opt/mysql-socket/mysqld.sock

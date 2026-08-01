@@ -1,16 +1,14 @@
 # MySQL instalado en el host con bind-address=127.0.0.1 (sin exponer 3306 a internet).
-# Monta el DIRECTORIO del socket Unix del host — no el archivo .sock suelto.
+# Monta el DIRECTORIO persistente del socket Unix — no el archivo .sock suelto.
 #
-# Por qué el directorio y no el archivo:
-#   Montar solo mysqld.sock congela el inode. Cuando unattended-upgrade reinicia MySQL,
-#   el .sock se recrea y el contenedor sigue con el viejo → Connection refused
-#   hasta hacer docker compose restart. Montando el dir, el contenedor ve el archivo nuevo
-#   sin reiniciar y sin abrir TCP (ni bind-address 0.0.0.0).
+# Por qué /opt/mysql-socket y no /run/mysqld:
+#   systemd (RuntimeDirectory=mysqld) borra y recrea /run/mysqld en cada restart de MySQL.
+#   Docker queda montado al inode viejo → "No such file or directory" hasta recrear
+#   contenedores. /opt/mysql-socket es un dir fijo en disco; el .sock se recrea adentro
+#   y el contenedor lo ve sin reiniciar, sin abrir TCP.
 #
-# Por qué /run/mysqld y no /var/run/mysqld:
-#   En Ubuntu /var/run → /run. Si Docker monta source/dest vía el symlink, puede crear
-#   una carpeta sombra vacía (ls total 0) aunque el sock exista en el host.
-#   Usá la ruta canónica /run/mysqld.
+# Setup en el HOST (una vez por servidor) — ver docs/PROD_DOCKER_SETUP.md o:
+#   sudo bash scripts/setup-mysql-docker-socket.sh
 #
 # Uso en servidor QA:
 #   APP_PORT=8085 en .env
@@ -20,7 +18,8 @@
 #   APP_PORT=8085
 #   APP_URL=https://qa.intranetback.probusiness.pe
 #   DB_HOST=localhost
-#   DB_SOCKET=/run/mysqld/mysqld.sock
+#   DB_SOCKET=/opt/mysql-socket/mysqld.sock
+#   MYSQL_SOCKET_DIR_HOST=/opt/mysql-socket
 #   DOCKER_REDIS_HOST=redis
 #   REDIS_HOST=redis
 #   REDIS_PORT=6379
@@ -47,7 +46,8 @@
 #   APP_ENV=production
 #   APP_DEBUG=false
 #   DB_HOST=localhost
-#   DB_SOCKET=/run/mysqld/mysqld.sock
+#   DB_SOCKET=/opt/mysql-socket/mysqld.sock
+#   MYSQL_SOCKET_DIR_HOST=/opt/mysql-socket
 #   DOCKER_REDIS_HOST=redis
 #   REDIS_HOST=redis
 #   REDIS_PORT=6379
@@ -58,9 +58,8 @@
 #   LARAVEL_WEBSOCKETS_PORT=6001
 #   HORIZON_PREFIX=intranet_horizon:
 #
-# Verifica la ruta del socket en el host:
-#   ls -la /run/mysqld/mysqld.sock
-# Si el directorio no es /run/mysqld, define MYSQL_SOCKET_DIR_HOST en .env.
+# Verifica:
+#   ls -la /opt/mysql-socket/mysqld.sock
 #
 # Redis en contenedor (QA 6380 / PROD 6381 en el host; dentro de Docker siempre redis:6379).
 services:
@@ -70,12 +69,12 @@ services:
 
   app:
     volumes:
-      - ${MYSQL_SOCKET_DIR_HOST:-/run/mysqld}:/run/mysqld
+      - ${MYSQL_SOCKET_DIR_HOST:-/opt/mysql-socket}:/opt/mysql-socket
 
   horizon:
     volumes:
-      - ${MYSQL_SOCKET_DIR_HOST:-/run/mysqld}:/run/mysqld
+      - ${MYSQL_SOCKET_DIR_HOST:-/opt/mysql-socket}:/opt/mysql-socket
 
   scheduler:
     volumes:
-      - ${MYSQL_SOCKET_DIR_HOST:-/run/mysqld}:/run/mysqld
+      - ${MYSQL_SOCKET_DIR_HOST:-/opt/mysql-socket}:/opt/mysql-socket

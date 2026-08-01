@@ -22,7 +22,7 @@ grep -E '^DB_|^DATABASE_URL=' .env 2>/dev/null || echo "(sin .env o sin vars DB_
 
 echo ""
 echo "=== Socket montado en contenedor ==="
-compose exec -T app sh -c 'ls -la /run/mysqld/mysqld.sock 2>&1 || ls -la /run/mysqld/ 2>&1 || ls -la /var/run/mysqld/mysqld.sock 2>&1 || echo "NO existe el socket en el contenedor"'
+compose exec -T app sh -c 'ls -la /opt/mysql-socket/mysqld.sock 2>&1 || ls -la /opt/mysql-socket/ 2>&1 || ls -la /run/mysqld/mysqld.sock 2>&1 || echo "NO existe el socket en el contenedor"'
 
 echo ""
 echo "=== Config efectiva Laravel (después de config:clear) ==="
