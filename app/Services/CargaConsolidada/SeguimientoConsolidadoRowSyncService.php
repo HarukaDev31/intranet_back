@@ -142,6 +142,8 @@ class SeguimientoConsolidadoRowSyncService
             $proveedores[] = [
                 'code' => $item['code_supplier'] ?? '',
                 'en' => !empty($item['en_yiwu']),
+                'cbm' => $item['cbm_yiwu'] ?? '',
+                'cbm_cotizado' => $item['cbm_cotizado'] ?? '',
             ];
         }
 
@@ -153,7 +155,6 @@ class SeguimientoConsolidadoRowSyncService
             'cons' => $first['cons'] ?? '',
             'vendedor' => $first['vendedor'] ?? '',
             'cliente' => $first['cliente'] ?? '',
-            'cbm' => $first['cbm_yiwu'] ?? '',
             'tipo' => $first['tipo_carga'] ?? '',
             'pago' => $first['estado_pago'] ?? '',
             'proveedores' => $proveedores,
