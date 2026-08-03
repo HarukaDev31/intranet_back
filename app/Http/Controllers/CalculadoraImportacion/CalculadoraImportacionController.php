@@ -325,9 +325,12 @@ class CalculadoraImportacionController extends Controller
                 $cotizacionesPendientes = CalculadoraImportacion::where('estado', 'PENDIENTE')->count();
                 $cotizacionesVendidas = CalculadoraImportacion::where('estado', 'CONFIRMADO')->count();
 
+                // Cachear arrays (nunca Eloquent/Collection): Redis serializa mal los modelos → __PHP_Incomplete_Class.
                 return [
                     'success' => true,
-                    'data' => $data,
+                    'data' => array_map(static function ($calculadora) {
+                        return $calculadora->toArray();
+                    }, $data),
                     'pagination' => [
                         'current_page' => $calculos->currentPage(),
                         'last_page' => $calculos->lastPage(),
@@ -351,9 +354,9 @@ class CalculadoraImportacionController extends Controller
                         ],
                     ],
                     'filters' => [
-                        'contenedores' => $contenedores,
+                        'contenedores' => $contenedores->values()->all(),
                         'estadoCalculadora' => $estadoCalculadora,
-                        'vendedores' => $vendedores,
+                        'vendedores' => $vendedores->values()->all(),
                     ],
                 ];
             });
@@ -869,7 +872,7 @@ class CalculadoraImportacionController extends Controller
                 return [
                     'success' => true,
                     'data' => [
-                        'calculadora' => $calculadora,
+                        'calculadora' => $calculadora->toArray(),
                         'totales' => $totales,
                         'tc_yuan_actual' => $tcYuanActual,
                     ],
@@ -880,15 +883,6 @@ class CalculadoraImportacionController extends Controller
                 $code = (int) $payload['_http_code'];
                 unset($payload['_http_code']);
                 return response()->json($payload, $code);
-            }
-
-            // Asegura orden consistente incluso cuando el payload viene desde caché previa.
-            if (
-                isset($payload['success'], $payload['data']['calculadora']) &&
-                $payload['success'] === true &&
-                is_object($payload['data']['calculadora'])
-            ) {
-                $this->ordenarProveedoresPorId($payload['data']['calculadora']);
             }
 
             return response()->json($payload);
@@ -915,7 +909,7 @@ class CalculadoraImportacionController extends Controller
                 $calculos = $this->calculadoraImportacionService->obtenerCalculosPorCliente($dni);
                 return [
                     'success' => true,
-                    'data' => $calculos,
+                    'data' => $calculos->toArray(),
                     'total' => $calculos->count(),
                 ];
             });
