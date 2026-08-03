@@ -242,6 +242,7 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
             Route::delete('/files/{idFile}', [AduanaController::class, 'deleteFileAduana']);
         });
         
+        Route::post('{id}/partir', [ContenedorController::class, 'partir']);
         Route::get('{id}', [ContenedorController::class, 'show']);
         Route::put('{id}', [ContenedorController::class, 'update']);
         Route::delete('{id}', [ContenedorController::class, 'destroy']);

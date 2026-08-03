@@ -318,7 +318,8 @@ class ContenedorController extends Controller
                 }
                 return [
                     'id' => $c->id,
-                    'carga' => $c->carga.' - '.date('Y', strtotime($c->f_inicio)),
+                    'carga' => $c->formatCargaLabel(),
+                    'parte' => $c->parte,
                     'mes' => $c->mes,
                     'anio' => date('Y', strtotime($c->f_inicio)),
                     'f_cierre' => $c->f_cierre,
@@ -667,6 +668,71 @@ class ContenedorController extends Controller
     }
 
     /**
+     * Parte un consolidado en A (origen) y B (duplicado solo del contenedor).
+     * No copia cotizaciones, proveedores ni items.
+     */
+    public function partir($id)
+    {
+        try {
+            $origen = Contenedor::find($id);
+            if (!$origen) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Contenedor no encontrado',
+                ], 404);
+            }
+
+            if ($origen->estado_china !== Contenedor::CONTEDOR_PENDIENTE) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Solo se puede partir un consolidado que aún no fue recibido',
+                ], 422);
+            }
+
+            if (!empty($origen->parte)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Este consolidado ya está partido',
+                ], 422);
+            }
+
+            $nuevo = null;
+            DB::transaction(function () use ($origen, &$nuevo) {
+                $origen->parte = 'A';
+                $origen->save();
+
+                $nuevo = $origen->replicate();
+                $nuevo->parte = 'B';
+                $nuevo->save();
+
+                $this->generateSteps($nuevo->id);
+            });
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Consolidado partido correctamente',
+                'data' => [
+                    'original' => [
+                        'id' => $origen->id,
+                        'carga' => $origen->fresh()->formatCargaLabel(),
+                        'parte' => 'A',
+                    ],
+                    'nuevo' => [
+                        'id' => $nuevo->id,
+                        'carga' => $nuevo->formatCargaLabel(),
+                        'parte' => 'B',
+                    ],
+                ],
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al partir consolidado: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
      * @OA\Get(
      *     path="/carga-consolidada/contenedor/filter-options",
      *     tags={"Contenedor"},
@@ -853,14 +919,11 @@ class ContenedorController extends Controller
         $data = Contenedor::where('empresa', '!=', 1)
             ->where('estado_documentacion', '!=', Contenedor::ESTADOS_DOCUMENTACION['COMPLETADO'])
             ->orderByRaw('CAST(carga AS UNSIGNED) DESC')
-            ->get(['id', 'carga', 'f_inicio'])
+            ->get(['id', 'carga', 'parte', 'f_inicio'])
             ->map(function ($c) {
-                $anio = $c->f_inicio
-                    ? Carbon::parse($c->f_inicio)->format('Y')
-                    : Carbon::now()->format('Y');
                 return [
                     'id' => (int) $c->id,
-                    'carga' => $c->carga . ' - ' . $anio,
+                    'carga' => $c->formatCargaLabel(),
                 ];
             })
             ->values()
@@ -917,7 +980,7 @@ class ContenedorController extends Controller
         $data = $cargas->map(function($carga){
             return [
                 'value' => $carga->id,
-                'label' => 'Contenedor #'.$carga->carga.' - '.Carbon::parse($carga->f_inicio ?? '2025-01-01')->format('Y'),
+                'label' => 'Contenedor #'.$carga->formatCargaLabel(),
                 'tc_yuan' => $carga->tcYuan ? (float) $carga->tcYuan->tc_yuan : null,
             ];
         });
