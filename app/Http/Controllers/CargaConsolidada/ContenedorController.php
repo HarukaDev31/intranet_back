@@ -320,6 +320,7 @@ class ContenedorController extends Controller
                     'id' => $c->id,
                     'carga' => $c->formatCargaLabel(),
                     'parte' => $c->parte,
+                    'id_contenedor_origen' => $c->id_contenedor_origen,
                     'mes' => $c->mes,
                     'anio' => date('Y', strtotime($c->f_inicio)),
                     'f_cierre' => $c->f_cierre,
@@ -651,29 +652,65 @@ class ContenedorController extends Controller
                 ], 422);
             }
 
-            //set foreign key check to 0
-            DB::statement('SET FOREIGN_KEY_CHECKS = 0');
+            DB::transaction(function () use ($contenedor) {
+                $idOrigen = $contenedor->id_contenedor_origen
+                    ?: ($contenedor->parte === 'A' ? $contenedor->id : null);
+                $carga = $contenedor->carga;
+                $year = $contenedor->f_inicio ? date('Y', strtotime($contenedor->f_inicio)) : null;
+                $teniaParte = !empty($contenedor->parte);
 
-            $steps = ContenedorPasos::where('id_pedido', $id);
-            $steps->delete();
-            $cotizaciones = Cotizacion::where('id_contenedor', $id);
-            $cotizaciones->delete();
-            $contenedor->delete();
-            //set foreign key check to 1
-            DB::statement('SET FOREIGN_KEY_CHECKS = 1');
-            return response()->json(['message' => 'Contenedor borrado correctamente', 'success' => true]);
+                $contenedor->delete();
+
+                if ($idOrigen) {
+                    $restantes = Contenedor::where('id_contenedor_origen', $idOrigen)->get();
+                } elseif ($teniaParte) {
+                    // Compat: partidos previos sin id_contenedor_origen
+                    $restantes = Contenedor::where('carga', $carga)
+                        ->whereNotNull('parte')
+                        ->when($year, function ($q) use ($year) {
+                            $q->whereYear('f_inicio', $year);
+                        })
+                        ->get();
+                } else {
+                    return;
+                }
+
+                // Si solo queda 1, vuelve a la normalidad (parte / origen null).
+                if ($restantes->count() === 1) {
+                    $ultimo = $restantes->first();
+                    $ultimo->parte = null;
+                    $ultimo->id_contenedor_origen = null;
+                    $ultimo->save();
+                }
+            });
+
+            return response()->json([
+                'message' => 'Contenedor borrado correctamente',
+                'success' => true,
+            ]);
         } catch (\Exception $e) {
-            return response()->json(['message' => 'Error al eliminar contenedor: ' . $e->getMessage()], 500);
+            return response()->json([
+                'message' => 'Error al eliminar contenedor: ' . $e->getMessage(),
+                'success' => false,
+            ], 500);
         }
     }
 
     /**
-     * Parte un consolidado en A (origen) y B (duplicado solo del contenedor).
-     * No copia cotizaciones, proveedores ni items.
+     * Parte un consolidado en N subconsolidados (2–10).
+     * El original siempre queda como parte A; el resto se clona sin cotizaciones/proveedores.
      */
-    public function partir($id)
+    public function partir(Request $request, $id)
     {
         try {
+            $cantidad = (int) $request->input('cantidad', 2);
+            if ($cantidad < 2 || $cantidad > 10) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'La cantidad debe ser entre 2 y 10',
+                ], 422);
+            }
+
             $origen = Contenedor::find($id);
             if (!$origen) {
                 return response()->json([
@@ -689,39 +726,47 @@ class ContenedorController extends Controller
                 ], 422);
             }
 
-            if (!empty($origen->parte)) {
+            if (!empty($origen->parte) || !empty($origen->id_contenedor_origen)) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Este consolidado ya está partido',
                 ], 422);
             }
 
-            $nuevo = null;
-            DB::transaction(function () use ($origen, &$nuevo) {
+            $creados = [];
+            DB::transaction(function () use ($origen, $cantidad, &$creados) {
+                $partes = Contenedor::PARTES;
                 $origen->parte = 'A';
+                $origen->id_contenedor_origen = $origen->id;
                 $origen->save();
 
-                $nuevo = $origen->replicate();
-                $nuevo->parte = 'B';
-                $nuevo->save();
+                $creados[] = [
+                    'id' => $origen->id,
+                    'carga' => $origen->fresh()->formatCargaLabel(),
+                    'parte' => 'A',
+                ];
 
-                $this->generateSteps($nuevo->id);
+                for ($i = 1; $i < $cantidad; $i++) {
+                    $nuevo = $origen->replicate();
+                    $nuevo->parte = $partes[$i];
+                    $nuevo->id_contenedor_origen = $origen->id;
+                    $nuevo->save();
+                    $this->generateSteps($nuevo->id);
+
+                    $creados[] = [
+                        'id' => $nuevo->id,
+                        'carga' => $nuevo->formatCargaLabel(),
+                        'parte' => $partes[$i],
+                    ];
+                }
             });
 
             return response()->json([
                 'success' => true,
                 'message' => 'Consolidado partido correctamente',
                 'data' => [
-                    'original' => [
-                        'id' => $origen->id,
-                        'carga' => $origen->fresh()->formatCargaLabel(),
-                        'parte' => 'A',
-                    ],
-                    'nuevo' => [
-                        'id' => $nuevo->id,
-                        'carga' => $nuevo->formatCargaLabel(),
-                        'parte' => 'B',
-                    ],
+                    'original' => $creados[0],
+                    'contenedores' => $creados,
                 ],
             ]);
         } catch (\Exception $e) {
