@@ -29,6 +29,7 @@ class Contenedor extends Model
         'mes',
         'id_pais',
         'carga',
+        'parte',
         'f_puerto',
         'f_entrega',
         'empresa',
@@ -153,6 +154,21 @@ class Contenedor extends Model
         'G. IMPORTACION' => 'G. Importación',
         'CARGA CONSOLIDADA' => 'Carga Consolidada'
     ];
+
+    /**
+     * Label de carga para listados: "15 - 2026" o partido "15A-2026".
+     *
+     * @return string
+     */
+    public function formatCargaLabel()
+    {
+        $year = $this->f_inicio ? date('Y', strtotime($this->f_inicio)) : date('Y');
+        if (!empty($this->parte)) {
+            return $this->carga . $this->parte . '-' . $year;
+        }
+
+        return $this->carga . ' - ' . $year;
+    }
 
     /**
      * Obtiene el país asociado al contenedor.
