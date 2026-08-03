@@ -4,13 +4,20 @@ namespace App\Models\CargaConsolidada;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use App\Models\Pais;
 
 class Contenedor extends Model
 {
     use HasFactory;
+    use SoftDeletes;
+
     const CONTEDOR_CERRADO="COMPLETADO";
     const CONTEDOR_PENDIENTE="PENDIENTE";
+
+    /** Letras disponibles al partir (máx. 10 subconsolidados). */
+    const PARTES = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'];
+
     /**
      * La tabla asociada al modelo.
      *
@@ -30,6 +37,7 @@ class Contenedor extends Model
         'id_pais',
         'carga',
         'parte',
+        'id_contenedor_origen',
         'f_puerto',
         'f_entrega',
         'empresa',
@@ -90,6 +98,7 @@ class Contenedor extends Model
         'multa' => 'decimal:2',
         'f_inicio' => 'date',
         'limite_cbm_imo' => 'decimal:2',
+        'deleted_at' => 'datetime',
     ];
 
     /**
@@ -168,6 +177,14 @@ class Contenedor extends Model
         }
 
         return $this->carga . ' - ' . $year;
+    }
+
+    /**
+     * Contenedor original del grupo partido (parte A).
+     */
+    public function contenedorOrigen()
+    {
+        return $this->belongsTo(self::class, 'id_contenedor_origen');
     }
 
     /**
