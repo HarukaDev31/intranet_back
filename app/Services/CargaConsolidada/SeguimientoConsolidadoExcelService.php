@@ -26,24 +26,45 @@ class SeguimientoConsolidadoExcelService
 {
     private const LOG_PREFIX = '[SeguimientoDrive]';
 
+    // Layout hoja Seguimiento (1-indexed): YIWU B–L | RECIBIR N–T | CONTACTAR V–AB | URGENCIA AD–AK
     private const COL_YIWU = 2;
-    private const COL_RECIBIR = 12;
-    private const COL_CONTACTAR = 20;
-    private const TABLE_WIDTH_YIWU = 9;
-    private const TABLE_WIDTH_CONTACTAR = 6;
+    private const COL_RECIBIR = 14;
+    private const COL_CONTACTAR = 22;
+    private const COL_URGENCIA = 30;
+    private const TABLE_WIDTH_YIWU = 11;
+    private const TABLE_WIDTH_CONTACTAR = 7;
     private const TABLE_WIDTH_SYNC = 7;
+    private const TABLE_WIDTH_URGENCIA = 8;
+    private const COL_CONFIG_END = 37;
 
     private const COLOR_YIWU = 'FF92D050';
     private const COLOR_RECIBIR = 'FFFFC000';
     private const COLOR_CONTACTAR = 'FF9BC2E6';
     private const COLOR_CONTACTAR_CONTACTADO = 'FF92D050';
     private const COLOR_CONTACTAR_VENCIDO = 'FFFFC7CE';
+    private const COLOR_URGENCIA = 'FFFF6B6B';
     private const COLOR_RESERVADO = 'FFC6EFCE';
     private const COLOR_CONFIG = 'FFE7E6E6';
 
-    private const HEADERS_YIWU = ['CONS', 'VENDEDOR', 'CLIENTE', 'CODE SUPPLIER', 'CBM', 'TIPO CARGA', 'ESTADO PAGO', 'ULT. ACT.', 'NOTAS'];
+    private const HEADERS_YIWU = [
+        'CONS', 'VENDEDOR', 'CLIENTE', 'CODE SUPPLIER', 'CBM', 'CBM COTIZADO', 'DIFERENCIA',
+        'TIPO CARGA', 'ESTADO PAGO', 'ULT. ACT.', 'NOTAS',
+    ];
     private const HEADERS_RECIBIR = ['CONS', 'VENDEDOR', 'CLIENTE', 'CBM', 'FECHA', 'PROVEEDOR', 'ULT. ACT.'];
-    private const HEADERS_CONTACTAR = ['CONS', 'VENDEDOR', 'CLIENTE', 'CBM', 'CODE SUPPLIER', 'NOTE'];
+    private const HEADERS_CONTACTAR = [
+        'CONS', 'VENDEDOR', 'CLIENTE', 'CBM', 'CODE SUPPLIER', 'FECHA/HORA REGISTRO', 'NOTE',
+    ];
+    private const HEADERS_URGENCIA = [
+        'CONS', 'VENDEDOR', 'CLIENTE', 'CBM', 'CELULAR', 'MOTIVO', 'ESTADO', 'NOTAS',
+    ];
+
+    /** Estados de coordinación que ya tienen datos de proveedor cargados (o posteriores). */
+    private const ESTADOS_CON_DATOS_PROVEEDOR = [
+        'DATOS PROVEEDOR',
+        'COBRANDO',
+        'INSPECCIONADO',
+        'RESERVADO',
+    ];
 
     /** @var CotizacionExportService */
     private $cotizacionExportService;
@@ -157,19 +178,11 @@ class SeguimientoConsolidadoExcelService
         $this->enrichFechasDatosProveedor($idContenedor, $rows);
         $this->enrichFechasArriveProveedor($rows);
 
-        $tieneHistoricoContactar = SeguimientoConsolidadoCorteConfig::contenedorTieneHistoricoContactar($idContenedor);
-        $periodoAbierto = $tieneHistoricoContactar
-            ? SeguimientoConsolidadoCorteConfig::periodoContactarAbierto()
-            : SeguimientoConsolidadoCorteConfig::periodoContactarDesdeInicioDia();
-        $contactarDesde = $tieneHistoricoContactar
-            ? null
-            : $periodoAbierto['inicio'];
-
         $cotizacionesConPago = $this->loadCotizacionesConPagoAsociado($idContenedor);
-        $groups = $this->classifyRows($rows, $contactarDesde, $cotizacionesConPago);
+        $groups = $this->classifyRows($rows, $cotizacionesConPago);
         $this->applyManualYiwuNotes($idContenedor, $groups);
         $this->applyManualContactarNotes($idContenedor, $groups);
-        $this->enrichContactarEstadoContacto($groups);
+        $this->applyManualUrgenciaNotes($idContenedor, $groups);
         $this->rowSyncService->applyUltimaActualizacion($idContenedor, $groups);
 
         $this->log('info', 'Hoja Seguimiento: datos clasificados', [
@@ -178,10 +191,8 @@ class SeguimientoConsolidadoExcelService
             'total_proveedores' => count($rows),
             'yiwu' => count($groups['yiwu']),
             'recibir' => count($groups['recibir']),
-            'contactar_abierto' => count($groups['contactar']),
-            'corte_hora' => $periodoAbierto['hora'],
-            'contactar_desde' => $periodoAbierto['inicio']->toDateTimeString(),
-            'primera_vinculacion_contactar' => !$tieneHistoricoContactar,
+            'contactar' => count($groups['contactar']),
+            'urgencia' => count($groups['urgencia']),
         ]);
 
         $configRow = 1;
@@ -189,16 +200,21 @@ class SeguimientoConsolidadoExcelService
         $headerRow = 4;
         $dataStartRow = 5;
 
-        $configLabel = $tieneHistoricoContactar
-            ? SeguimientoConsolidadoCorteConfig::excelConfigLabel()
-            : SeguimientoConsolidadoCorteConfig::excelConfigLabelPrimeraVez();
-        $this->writeConfigSection($sheet, $configRow, $configLabel);
+        $this->writeConfigSection(
+            $sheet,
+            $configRow,
+            'Seguimiento consolidado — CONTACTAR sin freeze; URGENCIA: sin datos proveedor o sin pago'
+        );
 
         $this->writeTableTitle($sheet, self::COL_YIWU, $titleRow, 'CARGA EN YIWU', self::COLOR_YIWU, self::TABLE_WIDTH_YIWU);
         $this->writeTableTitle($sheet, self::COL_RECIBIR, $titleRow, 'CARGA POR RECIBIR', self::COLOR_RECIBIR, self::TABLE_WIDTH_SYNC);
+        $this->writeTableTitle($sheet, self::COL_CONTACTAR, $titleRow, 'CARGA POR CONTACTAR', self::COLOR_CONTACTAR, self::TABLE_WIDTH_CONTACTAR);
+        $this->writeTableTitle($sheet, self::COL_URGENCIA, $titleRow, 'CONTACTAR CON URGENCIA', self::COLOR_URGENCIA, self::TABLE_WIDTH_URGENCIA);
 
         $this->writeTableHeaders($sheet, self::COL_YIWU, $headerRow, self::HEADERS_YIWU, self::COLOR_YIWU);
         $this->writeTableHeaders($sheet, self::COL_RECIBIR, $headerRow, self::HEADERS_RECIBIR, self::COLOR_RECIBIR);
+        $this->writeTableHeaders($sheet, self::COL_CONTACTAR, $headerRow, self::HEADERS_CONTACTAR, self::COLOR_CONTACTAR);
+        $this->writeTableHeaders($sheet, self::COL_URGENCIA, $headerRow, self::HEADERS_URGENCIA, self::COLOR_URGENCIA);
 
         $yiwuFooterRow = $this->writeYiwuDataSection(
             $sheet,
@@ -218,19 +234,35 @@ class SeguimientoConsolidadoExcelService
             [$this, 'writeRecibirRow']
         );
 
+        $contactarFooterRow = $this->writeTableDataSection(
+            $sheet,
+            self::COL_CONTACTAR,
+            $headerRow,
+            $dataStartRow,
+            self::TABLE_WIDTH_CONTACTAR,
+            $groups['contactar'],
+            [$this, 'writeContactarRow']
+        );
+
+        $urgenciaFooterRow = $this->writeUrgenciaDataSection(
+            $sheet,
+            self::COL_URGENCIA,
+            $headerRow,
+            $dataStartRow,
+            $groups['urgencia']
+        );
+
         $this->writeYiwuFooter($sheet, self::COL_YIWU, $yiwuFooterRow, $carga, $groups['yiwu']);
         $this->writeRecibirFooter($sheet, self::COL_RECIBIR, $recibirFooterRow, $carga, $groups['recibir']);
-
-        // CONTACTAR: histórico congelado primero, periodo abierto al final (misma columna T–Y).
-        $contactarRow = $titleRow;
-        $contactarRow = $this->writeContactarHistorico($sheet, $idContenedor, $contactarRow, $carga, $rows);
-        $this->writeContactarAbiertoBlock(
+        $this->writeContactarFooter(
             $sheet,
-            $contactarRow,
+            self::COL_CONTACTAR,
+            $contactarFooterRow,
             $carga,
-            $periodoAbierto,
-            $groups['contactar']
+            $groups['contactar'],
+            '*DATOS PROVEEDOR sin fecha de llegada; al contactar (China) desaparecen de este bloque*'
         );
+        $this->writeUrgenciaFooter($sheet, self::COL_URGENCIA, $urgenciaFooterRow, $carga, $groups['urgencia']);
 
         $this->applyFixedColumnWidths($sheet);
     }
@@ -241,9 +273,14 @@ class SeguimientoConsolidadoExcelService
     private function applyFixedColumnWidths(Worksheet $sheet)
     {
         $widths = [
-            2 => 8, 3 => 14, 4 => 28, 5 => 14, 6 => 10, 7 => 10, 8 => 14, 9 => 14, 10 => 18,
-            12 => 8, 13 => 14, 14 => 28, 15 => 10, 16 => 12, 17 => 14, 18 => 14,
-            20 => 8, 21 => 14, 22 => 28, 23 => 10, 24 => 14, 25 => 12,
+            // YIWU B–L
+            2 => 8, 3 => 14, 4 => 28, 5 => 14, 6 => 10, 7 => 12, 8 => 11, 9 => 10, 10 => 14, 11 => 14, 12 => 18,
+            // RECIBIR N–T
+            14 => 8, 15 => 14, 16 => 28, 17 => 10, 18 => 12, 19 => 14, 20 => 14,
+            // CONTACTAR V–AB
+            22 => 8, 23 => 14, 24 => 28, 25 => 10, 26 => 14, 27 => 16, 28 => 18,
+            // URGENCIA AD–AK
+            30 => 8, 31 => 14, 32 => 28, 33 => 10, 34 => 14, 35 => 18, 36 => 12, 37 => 18,
         ];
 
         foreach ($widths as $colIndex => $width) {
@@ -257,7 +294,8 @@ class SeguimientoConsolidadoExcelService
      */
     private function writeConfigSection(Worksheet $sheet, $row, $label)
     {
-        $range = 'B' . $row . ':Y' . $row;
+        $end = Coordinate::stringFromColumnIndex(self::COL_CONFIG_END);
+        $range = 'B' . $row . ':' . $end . $row;
         $sheet->mergeCells($range, Worksheet::MERGE_CELL_CONTENT_HIDE);
         $sheet->setCellValue('B' . $row, $label);
         $this->applyFill($sheet, $range, self::COLOR_CONFIG, true);
@@ -285,56 +323,101 @@ class SeguimientoConsolidadoExcelService
 
     /**
      * @param array<int, array<string, mixed>> $rows
-     * @param Carbon|null $contactarDesde Inicio del periodo CONTACTAR abierto (null = último corte).
      * @param array<int, true> $cotizacionesConPago id_cotizacion => true si tiene al menos un pago asociado
      * @return array<string, array<int, array<string, mixed>>>
      */
-    private function classifyRows(array $rows, Carbon $contactarDesde = null, array $cotizacionesConPago = [])
+    private function classifyRows(array $rows, array $cotizacionesConPago = [])
     {
         $yiwu = [];
         $recibir = [];
         $contactar = [];
+        $urgencia = [];
         $byCotizacion = [];
+        $historyService = app(ProveedorEstadosProveedorHistoryService::class);
+
+        $idProveedores = [];
+        foreach ($rows as $row) {
+            $idProveedor = (int) ($row['id_proveedor'] ?? 0);
+            if ($idProveedor > 0) {
+                $idProveedores[] = $idProveedor;
+            }
+        }
+        $contactadoHistorial = $historyService->fueContactadoByProveedor($idProveedores);
 
         foreach ($rows as $row) {
             $estadoChina = strtoupper(trim((string) ($row['estado_china'] ?? '')));
             $estadoCoord = strtoupper(trim((string) ($row['estado_coordinacion'] ?? '')));
             $idCotizacion = (int) ($row['id_cotizacion'] ?? 0);
+            $idProveedor = (int) ($row['id_proveedor'] ?? 0);
 
             if ($idCotizacion > 0) {
                 if (!isset($byCotizacion[$idCotizacion])) {
                     $byCotizacion[$idCotizacion] = [
                         'base' => $row,
                         'proveedores' => [],
-                        'cbm_yiwu' => 0.0,
                     ];
                 }
 
                 $byCotizacion[$idCotizacion]['proveedores'][] = $row;
-
-                if ($this->isProveedorEnYiwu($estadoChina, $estadoCoord)) {
-                    $byCotizacion[$idCotizacion]['cbm_yiwu'] += (float) ($row['cbm_yiwu'] ?? 0);
-                }
             }
 
-            if ($this->isProveedorEnYiwu($estadoChina, $estadoCoord)) {
-                continue;
-            }
+            $enYiwu = $this->isProveedorEnYiwu($estadoChina, $estadoCoord);
+            $fueContactado = $historyService->isEstadoContactado($estadoChina)
+                || !empty($contactadoHistorial[$idProveedor]);
 
-            // Por recibir: fecha de llegada o estado China LOADED (antes que contactar).
-            if ($this->isProveedorPorRecibir($row, $estadoChina)) {
+            if (!$enYiwu && $this->isProveedorPorRecibir($row, $estadoChina)) {
                 $recibir[] = $row;
-                continue;
             }
 
-            // Contactar abierto: DATOS PROVEEDOR sin fecha, ingresados desde el último corte.
-            if ($estadoCoord === 'DATOS PROVEEDOR' && !$this->hasFechaLlegada($row)) {
-                if ($this->isContactarPeriodoAbierto($row, $contactarDesde)) {
-                    $contactar[] = $row;
+            // CONTACTAR: DATOS PROVEEDOR sin fecha; al contactar China desaparecen.
+            if (
+                !$enYiwu
+                && $estadoCoord === 'DATOS PROVEEDOR'
+                && !$this->hasFechaLlegada($row)
+                && !$fueContactado
+            ) {
+                $row['fecha_hora_registro'] = $this->formatFechaHoraRegistro($row['fecha_datos_proveedor'] ?? null);
+                $contactar[] = $row;
+            }
+
+            // URGENCIA: sin datos de proveedor o sin pago (fuera de YIWU).
+            if (!$enYiwu) {
+                $sinDatos = $this->isSinDatosProveedor($estadoCoord);
+                $sinPago = $idCotizacion <= 0 || !isset($cotizacionesConPago[$idCotizacion]);
+
+                if ($sinDatos || $sinPago) {
+                    $motivos = [];
+                    if ($sinDatos) {
+                        $motivos[] = 'DATOS DEL PROVEEDOR';
+                    }
+                    if ($sinPago) {
+                        $motivos[] = 'NO PAGA';
+                    }
+
+                    $urgencia[] = array_merge($row, [
+                        'motivo' => implode(' / ', $motivos),
+                        'estado_urgencia' => $fueContactado ? 'CONTACTADO' : 'PENDIENTE',
+                        'notas' => '',
+                    ]);
                 }
-                continue;
             }
         }
+
+        usort($recibir, function ($a, $b) {
+            $fa = (string) ($a['fecha_recibir'] ?? '');
+            $fb = (string) ($b['fecha_recibir'] ?? '');
+            if ($fa === $fb) {
+                return ((int) ($a['id_proveedor'] ?? 0)) <=> ((int) ($b['id_proveedor'] ?? 0));
+            }
+            if ($fa === '') {
+                return 1;
+            }
+            if ($fb === '') {
+                return -1;
+            }
+
+            return strcmp($fa, $fb);
+        });
 
         foreach ($byCotizacion as $group) {
             $tieneProveedorEnYiwu = false;
@@ -373,7 +456,9 @@ class SeguimientoConsolidadoExcelService
                     'cliente' => $base['cliente'],
                     'code_supplier' => $proveedor['code_supplier'] ?? '',
                     'en_yiwu' => $enYiwu,
-                    'cbm_yiwu' => $group['cbm_yiwu'],
+                    // CBM por proveedor (no sumado por cotización).
+                    'cbm_yiwu' => (float) ($proveedor['cbm_yiwu'] ?? 0),
+                    'cbm_cotizado' => (float) ($proveedor['cbm_cotizado'] ?? 0),
                     'tipo_carga' => $tipoCarga,
                     'estado_pago' => $estadoPago,
                     'notas' => '',
@@ -381,7 +466,27 @@ class SeguimientoConsolidadoExcelService
             }
         }
 
-        return compact('yiwu', 'recibir', 'contactar');
+        return compact('yiwu', 'recibir', 'contactar', 'urgencia');
+    }
+
+    /**
+     * @param string $estadoCoord
+     * @return bool
+     */
+    private function isSinDatosProveedor($estadoCoord)
+    {
+        $estado = strtoupper(trim((string) $estadoCoord));
+
+        return $estado === '' || !in_array($estado, self::ESTADOS_CON_DATOS_PROVEEDOR, true);
+    }
+
+    /**
+     * @param mixed $value
+     * @return string
+     */
+    private function formatFechaHoraRegistro($value)
+    {
+        return SeguimientoConsolidadoDateFormatter::formatUtcTimestamp($value, 'd/m/Y H:i');
     }
 
     /**
@@ -676,13 +781,15 @@ class SeguimientoConsolidadoExcelService
     }
 
     /**
-     * Fusiona CONS, VENDEDOR, CLIENTE, CBM, TIPO CARGA, ESTADO PAGO y ULT. ACT. por cotización.
+     * Fusiona CONS, VENDEDOR, CLIENTE, TIPO CARGA, ESTADO PAGO y ULT. ACT. por cotización.
+     * CBM / CBM COTIZADO / DIFERENCIA quedan por proveedor (sin merge).
      *
      * @param array<int, array<string, mixed>> $items
      */
     private function mergeYiwuCotizacionColumns(Worksheet $sheet, $startCol, $dataStartRow, $dataEndRow, array $items)
     {
-        $mergeOffsets = [0, 1, 2, 4, 5, 6, 7];
+        // Offsets: 0 CONS, 1 VENDEDOR, 2 CLIENTE, 7 TIPO, 8 ESTADO PAGO, 9 ULT. ACT.
+        $mergeOffsets = [0, 1, 2, 7, 8, 9];
         $groups = [];
         $currentCotizacion = null;
         $groupStart = $dataStartRow;
@@ -869,12 +976,18 @@ class SeguimientoConsolidadoExcelService
      */
     private function writeYiwuRow(Worksheet $sheet, $startCol, $row, array $item, $applyBorder = true)
     {
+        $cbmCol = Coordinate::stringFromColumnIndex($startCol + 4);
+        $cotizadoCol = Coordinate::stringFromColumnIndex($startCol + 5);
+
         $values = [
             $item['cons'],
             $item['vendedor'],
             $item['cliente'],
             $item['code_supplier'] ?? '',
             $this->formatNumber($item['cbm_yiwu']),
+            $this->formatNumber($item['cbm_cotizado'] ?? 0),
+            // DIFERENCIA = CBM - CBM COTIZADO (fórmula Excel)
+            '=' . $cbmCol . $row . '-' . $cotizadoCol . $row,
             $item['tipo_carga'],
             $item['estado_pago'],
             $item['ultima_actualizacion'] ?? '',
@@ -889,7 +1002,7 @@ class SeguimientoConsolidadoExcelService
         }
 
         if (strtoupper(trim((string) $item['estado_pago'])) === 'RESERVADO') {
-            $estadoCol = Coordinate::stringFromColumnIndex($startCol + 6);
+            $estadoCol = Coordinate::stringFromColumnIndex($startCol + 8);
             $this->applyFill($sheet, $estadoCol . $row, self::COLOR_RESERVADO, true);
         }
     }
@@ -931,20 +1044,11 @@ class SeguimientoConsolidadoExcelService
             $item['cliente'],
             $this->formatNumber($item['cbm_contactar']),
             $item['code_supplier'],
+            $item['fecha_hora_registro'] ?? $this->formatFechaHoraRegistro($item['fecha_datos_proveedor'] ?? null),
             $item['note'] ?? '',
         ];
 
         $this->writeRowValues($sheet, $startCol, $row, $values, $applyBorder);
-
-        $highlight = $item['contactar_highlight'] ?? null;
-        if ($highlight === 'green' || $highlight === 'red') {
-            $start = Coordinate::stringFromColumnIndex($startCol);
-            $end = Coordinate::stringFromColumnIndex($startCol + self::TABLE_WIDTH_CONTACTAR - 1);
-            $color = $highlight === 'green'
-                ? self::COLOR_CONTACTAR_CONTACTADO
-                : self::COLOR_CONTACTAR_VENCIDO;
-            $this->applyFill($sheet, $start . $row . ':' . $end . $row, $color, false);
-        }
     }
 
     /**
@@ -1250,6 +1354,8 @@ class SeguimientoConsolidadoExcelService
                 'P.arrive_date',
                 'P.arrive_date_china',
                 'C.nombre as cliente',
+                'C.telefono as celular',
+                'C.volumen as volumen_cotizado',
                 'C.estado_cliente as estado_pago',
                 'U.No_Nombres_Apellidos as vendedor',
             ])
@@ -1261,6 +1367,10 @@ class SeguimientoConsolidadoExcelService
         foreach ($rows as $row) {
             $cbmChina = is_numeric($row->cbm_total_china) ? (float) $row->cbm_total_china : 0.0;
             $cbmPeru = is_numeric($row->cbm_total) ? (float) $row->cbm_total : 0.0;
+            // CBM cotizado por proveedor (cbm_total); fallback al volumen de la cotización.
+            $cbmCotizado = $cbmPeru > 0
+                ? $cbmPeru
+                : (is_numeric($row->volumen_cotizado) ? (float) $row->volumen_cotizado : 0.0);
 
             $result[] = [
                 'id_cotizacion' => (int) $row->id_cotizacion,
@@ -1268,11 +1378,13 @@ class SeguimientoConsolidadoExcelService
                 'cons' => $carga,
                 'vendedor' => $row->vendedor,
                 'cliente' => $row->cliente,
+                'celular' => $row->celular ?? '',
                 'code_supplier' => $row->code_supplier,
                 'estado_coordinacion' => $row->estado_coordinacion,
                 'estado_china' => $row->estado_china,
                 'estado_pago' => $row->estado_pago,
                 'cbm_yiwu' => $cbmChina,
+                'cbm_cotizado' => $cbmCotizado,
                 'cbm_recibir' => $cbmPeru > 0 ? $cbmPeru : $cbmChina,
                 'cbm_contactar' => $cbmPeru > 0 ? $cbmPeru : $cbmChina,
                 'fecha_llegada_peru' => $row->arrive_date,
@@ -1379,6 +1491,171 @@ class SeguimientoConsolidadoExcelService
         }
 
         $this->applyManualYiwuNotesToItems($idContenedor, $groups['yiwu']);
+    }
+
+    /**
+     * @param array<string, array<int, array<string, mixed>>> $groups
+     */
+    private function applyManualUrgenciaNotes(int $idContenedor, array &$groups): void
+    {
+        if (!isset($groups['urgencia']) || !is_array($groups['urgencia'])) {
+            return;
+        }
+
+        $manualNotes = app(SeguimientoConsolidadoDriveCellRepository::class)
+            ->manualValuesByColumn($idContenedor, 'Seguimiento', 'urgencia_notas');
+
+        if ($manualNotes === []) {
+            return;
+        }
+
+        foreach ($groups['urgencia'] as $index => $item) {
+            $idProveedor = (int) ($item['id_proveedor'] ?? 0);
+            if ($idProveedor <= 0) {
+                continue;
+            }
+
+            $rowKey = SeguimientoDriveCellRowKey::urgenciaProveedor($idProveedor);
+            if (isset($manualNotes[$rowKey])) {
+                $groups['urgencia'][$index]['notas'] = $manualNotes[$rowKey];
+            }
+        }
+    }
+
+    /**
+     * @param Worksheet $sheet
+     * @param int $startCol
+     * @param int $headerRow
+     * @param int $dataStartRow
+     * @param array<int, array<string, mixed>> $items
+     * @return int
+     */
+    private function writeUrgenciaDataSection(Worksheet $sheet, $startCol, $headerRow, $dataStartRow, array $items)
+    {
+        $width = self::TABLE_WIDTH_URGENCIA;
+        $count = count($items);
+
+        for ($i = 0; $i < $count; $i++) {
+            $this->writeUrgenciaRow($sheet, $startCol, $dataStartRow + $i, $items[$i], false);
+        }
+
+        if ($count === 0) {
+            $this->applyBorders($sheet, $this->tableRange($startCol, $headerRow, $headerRow, $width));
+
+            return $dataStartRow;
+        }
+
+        $dataEndRow = $dataStartRow + $count - 1;
+        $this->applyBorders($sheet, $this->tableRange($startCol, $headerRow, $dataEndRow, $width));
+        $this->mergeUrgenciaCotizacionColumns($sheet, $startCol, $dataStartRow, $dataEndRow, $items);
+
+        return $dataEndRow + 1;
+    }
+
+    /**
+     * Fusiona CELULAR, MOTIVO y ESTADO por cotización (varias filas CBM del mismo cliente).
+     *
+     * @param array<int, array<string, mixed>> $items
+     */
+    private function mergeUrgenciaCotizacionColumns(Worksheet $sheet, $startCol, $dataStartRow, $dataEndRow, array $items)
+    {
+        // Offsets: 4 CELULAR, 5 MOTIVO, 6 ESTADO
+        $mergeOffsets = [4, 5, 6];
+        $groups = [];
+        $currentCotizacion = null;
+        $groupStart = $dataStartRow;
+
+        foreach ($items as $index => $item) {
+            $idCotizacion = (int) ($item['id_cotizacion'] ?? 0);
+            $row = $dataStartRow + $index;
+
+            if ($currentCotizacion !== null && $idCotizacion !== $currentCotizacion) {
+                $groups[] = ['start' => $groupStart, 'end' => $row - 1];
+                $groupStart = $row;
+            }
+
+            $currentCotizacion = $idCotizacion;
+        }
+
+        if ($currentCotizacion !== null) {
+            $groups[] = ['start' => $groupStart, 'end' => $dataEndRow];
+        }
+
+        foreach ($groups as $group) {
+            if ($group['end'] <= $group['start']) {
+                continue;
+            }
+
+            foreach ($mergeOffsets as $offset) {
+                $col = Coordinate::stringFromColumnIndex($startCol + $offset);
+                $range = $col . $group['start'] . ':' . $col . $group['end'];
+                $sheet->mergeCells($range, Worksheet::MERGE_CELL_CONTENT_HIDE);
+                $sheet->getStyle($range)->getAlignment()
+                    ->setVertical(Alignment::VERTICAL_CENTER)
+                    ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+            }
+        }
+    }
+
+    /**
+     * @param Worksheet $sheet
+     * @param int $startCol
+     * @param int $row
+     * @param array<string, mixed> $item
+     * @param bool $applyBorder
+     */
+    private function writeUrgenciaRow(Worksheet $sheet, $startCol, $row, array $item, $applyBorder = true)
+    {
+        $values = [
+            $item['cons'],
+            $item['vendedor'],
+            $item['cliente'],
+            $this->formatNumber($item['cbm_contactar'] ?? $item['cbm_recibir'] ?? 0),
+            $item['celular'] ?? '',
+            $item['motivo'] ?? '',
+            $item['estado_urgencia'] ?? 'PENDIENTE',
+            $item['notas'] ?? '',
+        ];
+
+        $this->writeRowValues($sheet, $startCol, $row, $values, $applyBorder);
+
+        if (($item['estado_urgencia'] ?? '') === 'CONTACTADO') {
+            $estadoCol = Coordinate::stringFromColumnIndex($startCol + 6);
+            $this->applyFill($sheet, $estadoCol . $row, self::COLOR_CONTACTAR_CONTACTADO, true);
+        }
+    }
+
+    /**
+     * @param Worksheet $sheet
+     * @param int $startCol
+     * @param int $row
+     * @param string $carga
+     * @param array<int, array<string, mixed>> $items
+     * @return int
+     */
+    private function writeUrgenciaFooter(Worksheet $sheet, $startCol, $row, $carga, array $items)
+    {
+        if (empty($items)) {
+            return $row;
+        }
+
+        $totalCbm = 0.0;
+        foreach ($items as $item) {
+            $totalCbm += (float) ($item['cbm_contactar'] ?? $item['cbm_recibir'] ?? 0);
+        }
+
+        $this->writeTableTotalRow(
+            $sheet,
+            $startCol,
+            $row,
+            self::TABLE_WIDTH_URGENCIA,
+            self::COLOR_URGENCIA,
+            'TOTAL POR CONTACTAR - CONS #' . $carga,
+            3,
+            $this->formatNumber($totalCbm)
+        );
+
+        return $row + 1;
     }
 
     /**
