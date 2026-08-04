@@ -313,23 +313,7 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                 CoordinacionWhatsappPayload::rotuladoAlmacenChinaImg((string) $this->phoneNumberId, $direccionUrl, $dirCaption, $sleepSendMedia)
             );
 
-            $sleepSendMedia += 3;
-            $datosMsg = "También necesito los datos de tu proveedor para comunicarnos y recibir tu carga.
-
-➡ *Datos del proveedor: (Usted lo llena)*
-
-☑ Nombre del producto:
-☑ Nombre del vendedor:
-☑ Celular del vendedor:
-
-Te avisaré apenas tu carga llegue a nuestro almacén de China, cualquier duda me escribes. 🫡";
-            $this->sendMessage(
-                $datosMsg,
-                $this->phoneNumberId,
-                $sleepSendMedia,
-                'consolidado',
-                CoordinacionWhatsappPayload::rotuladoDatosProveedor((string) $this->phoneNumberId, $datosMsg, $sleepSendMedia)
-            );
+            // Ya no se envía pb_rotulado_datos_proveedor_v1 al pedir rotulado.
 
             // Verificar que el ZIP se generó correctamente
             if (!file_exists($zipFileName)) {

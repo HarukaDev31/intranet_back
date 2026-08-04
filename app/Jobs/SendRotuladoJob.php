@@ -437,37 +437,7 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                 $metaDireccion
             );
 
-            // PASO 4: Recordatorio datos proveedor (sin enlace al formulario)
-            $sleepSendMedia += 6;
-            $message = "También necesito que me envíes los datos de tu proveedor x por favor 🫡\n\n";
-            $providers = CotizacionProveedor::where('id_cotizacion', $this->idCotizacion)
-                ->where(function ($query) {
-                    $query->where('supplier_phone', null)
-                        ->orWhere('supplier_phone', '')
-                        ->orWhere('supplier', null)
-                        ->orWhere('supplier', '');
-                })
-                ->get();
-            foreach ($providers as $provider) {
-                $message .= "----------------------------------------------------------\n";
-                if ($provider) {
-                    $message .= "Nombre del vendedor: " . $provider->supplier . "\n";
-                    $message .= "Número o WeChat: " . $provider->supplier_phone . "\n";
-                    $message .= "Codigo proveedor: " . $provider->code_supplier . "\n";
-                    $message .= "----------------------------------------------------------\n";
-                }
-            }
-            $this->addCoordinationSection(null, $message);
-            $metaDatos = $this->withBatchStep(
-                CoordinacionWhatsappPayload::rotuladoDatosProveedor(
-                    (string) $this->phoneNumberId,
-                    $message,
-                    $sleepSendMedia
-                ),
-                'rotulado_datos_proveedor',
-                'Recordatorio datos proveedor'
-            );
-            $this->sendMessage($message, $this->phoneNumberId, $sleepSendMedia, 'consolidado', $metaDatos);
+            // Ya no se envía pb_rotulado_datos_proveedor_v1 al pedir rotulado.
 
             $this->sendCoordinationRotuladoEmail($cotizacionInfo ? $cotizacionInfo->telefono : null);
 
