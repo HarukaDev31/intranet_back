@@ -488,6 +488,7 @@ class SeguimientoConsolidadoDriveService
 
     /**
      * Evita encolar el mismo consolidado varias veces seguidas (observers + scheduler).
+     * Si el debounce está activo, marca dirty para re-encolar al terminar el sync en curso.
      *
      * @param int $idContenedor
      * @param string $reason
@@ -501,7 +502,8 @@ class SeguimientoConsolidadoDriveService
         }
 
         if (!$this->acquireSyncDebounce($idContenedor)) {
-            $this->log('debug', 'Sync no encolado: debounce activo', [
+            $this->markSyncDirty($idContenedor);
+            $this->log('debug', 'Sync no encolado: debounce activo (marcado dirty)', [
                 'id_contenedor' => $idContenedor,
                 'reason' => $reason,
                 'debounce_minutes' => (int) config('carga_consolidada.seguimiento_sync_debounce_minutes', 10),
@@ -550,12 +552,65 @@ class SeguimientoConsolidadoDriveService
     }
 
     /**
+     * Marca que hubo cambios mientras el debounce impedía encolar (p. ej. pagos → URGENCIA).
+     *
+     * @param int $idContenedor
+     */
+    public function markSyncDirty($idContenedor)
+    {
+        Cache::put(
+            $this->syncDirtyCacheKey((int) $idContenedor),
+            1,
+            now()->addHours(2)
+        );
+    }
+
+    /**
+     * Consume el flag dirty (si existía).
+     *
+     * @param int $idContenedor
+     * @return bool
+     */
+    public function consumeSyncDirty($idContenedor)
+    {
+        return (bool) Cache::pull($this->syncDirtyCacheKey((int) $idContenedor));
+    }
+
+    /**
+     * Tras un sync: si hubo cambios durante debounce/ejecución, libera debounce y re-encola.
+     *
+     * @param int $idContenedor
+     * @param string $reason
+     * @return bool
+     */
+    public function requeueIfDirty($idContenedor, $reason = 'dirty_retry')
+    {
+        $idContenedor = (int) $idContenedor;
+        if ($idContenedor <= 0 || !$this->consumeSyncDirty($idContenedor)) {
+            return false;
+        }
+
+        $this->releaseSyncDebounce($idContenedor);
+
+        return $this->enqueueSyncJob($idContenedor, $reason);
+    }
+
+    /**
      * @param int $idContenedor
      * @return string
      */
     private function syncDebounceCacheKey($idContenedor)
     {
         return 'seguimiento_drive:sync_debounce:' . (int) $idContenedor;
+    }
+
+    /**
+     * @param int $idContenedor
+     * @return string
+     */
+    private function syncDirtyCacheKey($idContenedor)
+    {
+        return 'seguimiento_drive:sync_dirty:' . (int) $idContenedor;
     }
 
     /**

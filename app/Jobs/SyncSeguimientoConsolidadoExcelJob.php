@@ -76,6 +76,7 @@ class SyncSeguimientoConsolidadoExcelJob implements ShouldQueue, ShouldBeUnique
             ]);
 
             $service->releaseSyncDebounce($this->idContenedor);
+            $service->requeueIfDirty($this->idContenedor, 'dirty_after_fail');
 
             return;
         }
@@ -83,6 +84,9 @@ class SyncSeguimientoConsolidadoExcelJob implements ShouldQueue, ShouldBeUnique
         Log::info('[SeguimientoDrive] Job Sync finalizado OK', [
             'id_contenedor' => $this->idContenedor,
         ]);
+
+        // Pagos u otros cambios durante debounce/ejecución: regenerar de nuevo (URGENCIA, YIWU, etc.).
+        $service->requeueIfDirty($this->idContenedor, 'dirty_retry');
     }
 
     /**
