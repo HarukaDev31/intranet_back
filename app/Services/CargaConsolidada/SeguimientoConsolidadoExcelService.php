@@ -203,7 +203,7 @@ class SeguimientoConsolidadoExcelService
         $this->writeConfigSection(
             $sheet,
             $configRow,
-            'Seguimiento consolidado — CONTACTAR sin freeze; URGENCIA: sin datos proveedor o sin pago'
+            'Seguimiento consolidado — CONTACTAR sin freeze; URGENCIA: sin datos proveedor y sin pago'
         );
 
         $this->writeTableTitle($sheet, self::COL_YIWU, $titleRow, 'CARGA EN YIWU', self::COLOR_YIWU, self::TABLE_WIDTH_YIWU);
@@ -380,22 +380,15 @@ class SeguimientoConsolidadoExcelService
                 $contactar[] = $row;
             }
 
-            // URGENCIA: sin datos de proveedor o sin pago (fuera de YIWU).
+            // URGENCIA: solo si faltan datos de proveedor Y no han pagado (fuera de YIWU).
+            // Con datos → CONTACTAR/RECIBIR/etc.; con pago y sin datos → no urgencia.
             if (!$enYiwu) {
                 $sinDatos = $this->isSinDatosProveedor($estadoCoord);
                 $sinPago = $idCotizacion <= 0 || !isset($cotizacionesConPago[$idCotizacion]);
 
-                if ($sinDatos || $sinPago) {
-                    $motivos = [];
-                    if ($sinDatos) {
-                        $motivos[] = 'DATOS DEL PROVEEDOR';
-                    }
-                    if ($sinPago) {
-                        $motivos[] = 'NO PAGA';
-                    }
-
+                if ($sinDatos && $sinPago) {
                     $urgencia[] = array_merge($row, [
-                        'motivo' => implode(' / ', $motivos),
+                        'motivo' => 'DATOS DEL PROVEEDOR / NO PAGA',
                         'estado_urgencia' => $fueContactado ? 'CONTACTADO' : 'PENDIENTE',
                         'notas' => '',
                     ]);
