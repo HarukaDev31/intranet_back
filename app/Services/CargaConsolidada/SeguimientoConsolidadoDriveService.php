@@ -640,6 +640,7 @@ class SeguimientoConsolidadoDriveService
         $query = DB::table('carga_consolidada_contenedor')
             ->whereNotNull('excel_seguimiento_drive_link')
             ->whereNotNull('f_inicio')
+            ->where('estado', 'PENDIENTE')
             ->select('id');
 
         if ($idContenedor !== null) {

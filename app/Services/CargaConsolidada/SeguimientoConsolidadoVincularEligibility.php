@@ -111,6 +111,10 @@ class SeguimientoConsolidadoVincularEligibility
             return false;
         }
 
+        if (!self::estaEstadoFinanzasPendiente($contenedor)) {
+            return false;
+        }
+
         if (!empty($contenedor->excel_seguimiento_drive_link)) {
             return false;
         }
@@ -123,14 +127,27 @@ class SeguimientoConsolidadoVincularEligibility
     }
 
     /**
-     * Vincular, regenerar y sync automático (requiere f_inicio + umbral de carga).
+     * Estado operativo / finanzas del consolidado: solo PENDIENTE sigue en sync Excel.
+     *
+     * @param Contenedor $contenedor
+     * @return bool
+     */
+    public static function estaEstadoFinanzasPendiente(Contenedor $contenedor)
+    {
+        return strtoupper(trim((string) ($contenedor->estado ?? ''))) === Contenedor::CONTEDOR_PENDIENTE;
+    }
+
+    /**
+     * Vincular, regenerar y sync automático (requiere f_inicio + umbral + estado PENDIENTE).
      *
      * @param Contenedor $contenedor
      * @return bool
      */
     public static function puedeOperarSeguimientoDrive(Contenedor $contenedor)
     {
-        return self::tieneFInicio($contenedor) && self::cumpleUmbralCarga($contenedor);
+        return self::tieneFInicio($contenedor)
+            && self::cumpleUmbralCarga($contenedor)
+            && self::estaEstadoFinanzasPendiente($contenedor);
     }
 
     /**
@@ -142,6 +159,7 @@ class SeguimientoConsolidadoVincularEligibility
             ->whereNotNull('carga')
             ->where('carga', '!=', '')
             ->whereNotNull('f_inicio')
+            ->where('estado', Contenedor::CONTEDOR_PENDIENTE)
             ->where(function ($q) {
                 $q->whereNull('excel_seguimiento_drive_link')
                     ->orWhere('excel_seguimiento_drive_link', '');
@@ -170,6 +188,13 @@ class SeguimientoConsolidadoVincularEligibility
     {
         if (!self::tieneFInicio($contenedor)) {
             return 'Sin f_inicio (importado; excluido de seguimiento Drive)';
+        }
+
+        if (!self::estaEstadoFinanzasPendiente($contenedor)) {
+            return sprintf(
+                'Estado finanzas "%s" (solo se sincroniza en PENDIENTE)',
+                (string) ($contenedor->estado ?? '')
+            );
         }
 
         $anio = self::resolveAnioContenedor($contenedor);

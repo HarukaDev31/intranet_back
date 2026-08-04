@@ -12,7 +12,7 @@ class SeguimientoConsolidadoSyncLinkedCommand extends Command
 {
     protected $signature = 'segimiento-consolidado:sync-linked';
 
-    protected $description = 'Encola sincronización de Excel en Drive para consolidados vinculados';
+    protected $description = 'Encola sincronización de Excel en Drive para consolidados vinculados en estado PENDIENTE';
 
     /**
      * @return int
@@ -22,6 +22,7 @@ class SeguimientoConsolidadoSyncLinkedCommand extends Command
         $ids = DB::table('carga_consolidada_contenedor')
             ->whereNotNull('excel_seguimiento_drive_link')
             ->whereNotNull('f_inicio')
+            ->where('estado', 'PENDIENTE')
             ->where(function ($q) {
                 $q->whereNull('excel_seguimiento_link_status')
                     ->orWhereNotIn('excel_seguimiento_link_status', [
