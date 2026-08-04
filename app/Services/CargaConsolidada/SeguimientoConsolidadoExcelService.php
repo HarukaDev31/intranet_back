@@ -798,6 +798,8 @@ class SeguimientoConsolidadoExcelService
     }
 
     /**
+     * Totales YIWU: suma CBM, CBM COTIZADO y DIFERENCIA de todas las filas (por proveedor).
+     *
      * @param Worksheet $sheet
      * @param int $startCol
      * @param int $row
@@ -811,28 +813,37 @@ class SeguimientoConsolidadoExcelService
         }
 
         $totalCbm = 0.0;
-        $seenCotizaciones = [];
+        $totalCotizado = 0.0;
         foreach ($items as $item) {
-            $idCotizacion = (int) ($item['id_cotizacion'] ?? 0);
-            if ($idCotizacion > 0 && isset($seenCotizaciones[$idCotizacion])) {
-                continue;
-            }
-            if ($idCotizacion > 0) {
-                $seenCotizaciones[$idCotizacion] = true;
-            }
             $totalCbm += (float) ($item['cbm_yiwu'] ?? 0);
+            $totalCotizado += (float) ($item['cbm_cotizado'] ?? 0);
         }
+        $totalDiferencia = $totalCbm - $totalCotizado;
 
-        $this->writeTableTotalRow(
-            $sheet,
-            $startCol,
-            $row,
-            self::TABLE_WIDTH_YIWU,
-            self::COLOR_YIWU,
-            'TOTAL EN YIWU - CONS #' . $carga,
-            4,
-            $this->formatNumber($totalCbm)
-        );
+        $width = self::TABLE_WIDTH_YIWU;
+        // Offsets: 4 CBM, 5 CBM COTIZADO, 6 DIFERENCIA — label en CONS…CODE SUPPLIER (0–3).
+        $labelEndOffset = 3;
+        $start = Coordinate::stringFromColumnIndex($startCol);
+        $end = Coordinate::stringFromColumnIndex($startCol + $width - 1);
+        $labelRange = $start . $row . ':' . Coordinate::stringFromColumnIndex($startCol + $labelEndOffset) . $row;
+        $fullRange = $start . $row . ':' . $end . $row;
+
+        $cbmCol = Coordinate::stringFromColumnIndex($startCol + 4);
+        $cotizadoCol = Coordinate::stringFromColumnIndex($startCol + 5);
+        $diffCol = Coordinate::stringFromColumnIndex($startCol + 6);
+
+        $sheet->mergeCells($labelRange, Worksheet::MERGE_CELL_CONTENT_HIDE);
+        $sheet->setCellValue($start . $row, 'TOTAL EN YIWU - CONS #' . $carga);
+        $sheet->setCellValue($cbmCol . $row, $this->formatNumber($totalCbm));
+        $sheet->setCellValue($cotizadoCol . $row, $this->formatNumber($totalCotizado));
+        $sheet->setCellValue($diffCol . $row, $this->formatNumber($totalDiferencia));
+
+        $this->applyFill($sheet, $fullRange, self::COLOR_YIWU, true);
+        $sheet->getStyle($labelRange)->getFont()->setBold(true);
+        foreach ([$cbmCol, $cotizadoCol, $diffCol] as $col) {
+            $sheet->getStyle($col . $row)->getFont()->setBold(true);
+        }
+        $this->applyBorders($sheet, $fullRange);
     }
 
     /**
