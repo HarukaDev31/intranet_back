@@ -422,13 +422,16 @@ class SeguimientoConsolidadoExcelService
 
             $base = $group['base'];
             $idCotizacion = (int) ($base['id_cotizacion'] ?? 0);
+            // C = todos los proveedores de la cotización ya en YIWU; P = parcial.
             $tipoCarga = $todosEnYiwu ? 'C' : 'P';
             $estadoPago = $this->resolveEstadoPagoYiwu($idCotizacion, $cotizacionesConPago);
 
             foreach ($group['proveedores'] as $proveedor) {
                 $china = strtoupper(trim((string) ($proveedor['estado_china'] ?? '')));
                 $coord = strtoupper(trim((string) ($proveedor['estado_coordinacion'] ?? '')));
-                $enYiwu = $this->isProveedorEnYiwu($china, $coord);
+                if (!$this->isProveedorEnYiwu($china, $coord)) {
+                    continue;
+                }
 
                 $yiwu[] = [
                     'id_cotizacion' => $idCotizacion,
@@ -437,8 +440,7 @@ class SeguimientoConsolidadoExcelService
                     'vendedor' => $base['vendedor'],
                     'cliente' => $base['cliente'],
                     'code_supplier' => $proveedor['code_supplier'] ?? '',
-                    'en_yiwu' => $enYiwu,
-                    // CBM por proveedor (no sumado por cotización).
+                    'en_yiwu' => true,
                     'cbm_yiwu' => (float) ($proveedor['cbm_yiwu'] ?? 0),
                     'cbm_cotizado' => (float) ($proveedor['cbm_cotizado'] ?? 0),
                     'tipo_carga' => $tipoCarga,

@@ -155,6 +155,11 @@ class SeguimientoConsolidadoDriveCellSyncService
             $changed = $this->applyManualCotizacionesCells($cotizacionesSheet, $idContenedor) || $changed;
         }
 
+        $seguimientoSheet = $spreadsheet->getSheetByName('Seguimiento');
+        if ($seguimientoSheet !== null) {
+            $changed = $this->applyManualSeguimientoNotes($seguimientoSheet, $idContenedor) || $changed;
+        }
+
         if (!$changed) {
             return;
         }
@@ -404,11 +409,16 @@ class SeguimientoConsolidadoDriveCellSyncService
                 continue;
             }
 
-            $codeSupplier = trim((string) $sheet->getCellByColumnAndRow($codeColIndex, $row)->getCalculatedValue());
-            $note = trim((string) $sheet->getCellByColumnAndRow($noteColIndex, $row)->getCalculatedValue());
-            $cliente = trim((string) $sheet->getCellByColumnAndRow($clienteColIndex, $row)->getCalculatedValue());
+            $codeSupplier = trim((string) $this->cellDisplayValue($sheet, $codeColIndex, $row));
+            $note = trim((string) $this->cellDisplayValue($sheet, $noteColIndex, $row));
+            $cliente = trim((string) $this->cellDisplayValue($sheet, $clienteColIndex, $row));
 
-            if ($codeSupplier === '' || $note === '') {
+            if ($codeSupplier === '') {
+                continue;
+            }
+
+            // Nota vacía: no borrar la guardada en BD (preservar entre syncs).
+            if ($note === '') {
                 continue;
             }
 
@@ -463,9 +473,9 @@ class SeguimientoConsolidadoDriveCellSyncService
         $history = 0;
 
         for ($row = 1; $row <= $highestRow; $row++) {
-            $codeSupplier = trim((string) $sheet->getCellByColumnAndRow($codeColIndex, $row)->getCalculatedValue());
-            $note = trim((string) $sheet->getCellByColumnAndRow($noteColIndex, $row)->getCalculatedValue());
-            $cliente = trim((string) $sheet->getCellByColumnAndRow($clienteColIndex, $row)->getCalculatedValue());
+            $codeSupplier = trim((string) $this->cellDisplayValue($sheet, $codeColIndex, $row));
+            $note = trim((string) $this->cellDisplayValue($sheet, $noteColIndex, $row));
+            $cliente = trim((string) $this->cellDisplayValue($sheet, $clienteColIndex, $row));
 
             if ($codeSupplier === '' || $note === '') {
                 continue;
@@ -638,18 +648,200 @@ class SeguimientoConsolidadoDriveCellSyncService
 
     private function resolveProveedorByCodeAndCliente(int $idContenedor, string $codeSupplier, string $cliente): ?int
     {
-        $query = DB::table('contenedor_consolidado_cotizacion_proveedores as P')
+        if ($cliente !== '') {
+            $withCliente = DB::table('contenedor_consolidado_cotizacion_proveedores as P')
+                ->join('contenedor_consolidado_cotizacion as C', 'C.id', '=', 'P.id_cotizacion')
+                ->where('P.id_contenedor', $idContenedor)
+                ->where('P.code_supplier', $codeSupplier)
+                ->whereNull('C.deleted_at')
+                ->where('C.nombre', $cliente)
+                ->orderBy('P.id')
+                ->first();
+
+            if ($withCliente) {
+                return (int) $withCliente->id;
+            }
+        }
+
+        // Fallback: code en el consolidado (CLIENTE puede estar vacío por merge).
+        $row = DB::table('contenedor_consolidado_cotizacion_proveedores as P')
             ->join('contenedor_consolidado_cotizacion as C', 'C.id', '=', 'P.id_cotizacion')
             ->where('P.id_contenedor', $idContenedor)
             ->where('P.code_supplier', $codeSupplier)
-            ->whereNull('C.deleted_at');
-
-        if ($cliente !== '') {
-            $query->where('C.nombre', $cliente);
-        }
-
-        $row = $query->orderBy('P.id')->first();
+            ->whereNull('C.deleted_at')
+            ->orderBy('P.id')
+            ->first();
 
         return $row ? (int) $row->id : null;
+    }
+
+    /**
+     * Reaplica notas manuales de Seguimiento (YIWU / CONTACTAR / URGENCIA) al Excel regenerado.
+     */
+    private function applyManualSeguimientoNotes(Worksheet $sheet, int $idContenedor): bool
+    {
+        $changed = false;
+        $changed = $this->applyManualYiwuNotesFromDb($sheet, $idContenedor) || $changed;
+        $changed = $this->applyManualContactarNotesFromDb($sheet, $idContenedor) || $changed;
+        $changed = $this->applyManualUrgenciaNotesFromDb($sheet, $idContenedor) || $changed;
+
+        return $changed;
+    }
+
+    private function applyManualYiwuNotesFromDb(Worksheet $sheet, int $idContenedor): bool
+    {
+        $notes = $this->repository->manualValuesByColumn($idContenedor, 'Seguimiento', 'yiwu_notas');
+        if ($notes === []) {
+            return false;
+        }
+
+        $config = (array) config('seguimiento_drive_cells.sheets.Seguimiento.yiwu', []);
+        $startCol = (int) ($config['start_col'] ?? 2);
+        $noteColIndex = $startCol + (int) data_get($config, 'columns.yiwu_notas.index', 10);
+        $codeColIndex = $startCol + (int) data_get($config, 'columns.code_supplier', 3);
+        $clienteColIndex = $startCol + (int) data_get($config, 'columns.cliente', 2);
+        $highestRow = (int) $sheet->getHighestDataRow();
+        $changed = false;
+
+        for ($row = 1; $row <= $highestRow; $row++) {
+            $codeSupplier = trim((string) $this->cellDisplayValue($sheet, $codeColIndex, $row));
+            if ($codeSupplier === '') {
+                continue;
+            }
+
+            $cliente = trim((string) $this->cellDisplayValue($sheet, $clienteColIndex, $row));
+            $idProveedor = $this->resolveProveedorByCodeAndCliente($idContenedor, $codeSupplier, $cliente);
+            if ($idProveedor === null) {
+                continue;
+            }
+
+            $rowKey = SeguimientoDriveCellRowKey::yiwuProveedor($idProveedor);
+            if (!isset($notes[$rowKey]) || $notes[$rowKey] === '') {
+                continue;
+            }
+
+            $cellRef = Coordinate::stringFromColumnIndex($noteColIndex) . $row;
+            $current = trim((string) $sheet->getCell($cellRef)->getValue());
+            if ($current === $notes[$rowKey]) {
+                continue;
+            }
+
+            $sheet->setCellValue($cellRef, $notes[$rowKey]);
+            $changed = true;
+        }
+
+        return $changed;
+    }
+
+    private function applyManualContactarNotesFromDb(Worksheet $sheet, int $idContenedor): bool
+    {
+        $notes = $this->repository->manualValuesByColumn($idContenedor, 'Seguimiento', 'note');
+        if ($notes === []) {
+            return false;
+        }
+
+        $config = (array) config('seguimiento_drive_cells.sheets.Seguimiento.contactar', []);
+        $startCol = (int) ($config['start_col'] ?? 22);
+        $noteColIndex = $startCol + (int) data_get($config, 'columns.note.index', 6);
+        $codeColIndex = $startCol + (int) data_get($config, 'columns.code_supplier', 4);
+        $clienteColIndex = $startCol + (int) data_get($config, 'columns.cliente', 2);
+        $highestRow = (int) $sheet->getHighestDataRow();
+        $changed = false;
+
+        for ($row = 1; $row <= $highestRow; $row++) {
+            $codeSupplier = trim((string) $this->cellDisplayValue($sheet, $codeColIndex, $row));
+            if ($codeSupplier === '') {
+                continue;
+            }
+
+            $cliente = trim((string) $this->cellDisplayValue($sheet, $clienteColIndex, $row));
+            $idProveedor = $this->resolveProveedorByCodeAndCliente($idContenedor, $codeSupplier, $cliente);
+            if ($idProveedor === null) {
+                continue;
+            }
+
+            $rowKey = SeguimientoDriveCellRowKey::contactarProveedor($idProveedor);
+            if (!isset($notes[$rowKey]) || $notes[$rowKey] === '') {
+                continue;
+            }
+
+            $cellRef = Coordinate::stringFromColumnIndex($noteColIndex) . $row;
+            $current = trim((string) $sheet->getCell($cellRef)->getValue());
+            if ($current === $notes[$rowKey]) {
+                continue;
+            }
+
+            $sheet->setCellValue($cellRef, $notes[$rowKey]);
+            $changed = true;
+        }
+
+        return $changed;
+    }
+
+    private function applyManualUrgenciaNotesFromDb(Worksheet $sheet, int $idContenedor): bool
+    {
+        $notes = $this->repository->manualValuesByColumn($idContenedor, 'Seguimiento', 'urgencia_notas');
+        if ($notes === []) {
+            return false;
+        }
+
+        $config = (array) config('seguimiento_drive_cells.sheets.Seguimiento.urgencia', []);
+        $startCol = (int) ($config['start_col'] ?? 30);
+        $noteColIndex = $startCol + (int) data_get($config, 'columns.urgencia_notas.index', 7);
+        $clienteColIndex = $startCol + (int) data_get($config, 'columns.cliente', 2);
+        $cbmColIndex = $startCol + (int) data_get($config, 'columns.cbm', 3);
+        $highestRow = (int) $sheet->getHighestDataRow();
+        $changed = false;
+
+        for ($row = 1; $row <= $highestRow; $row++) {
+            $cliente = trim((string) $this->cellDisplayValue($sheet, $clienteColIndex, $row));
+            $cbm = trim((string) $this->cellDisplayValue($sheet, $cbmColIndex, $row));
+            if ($cliente === '') {
+                continue;
+            }
+
+            $idProveedor = $this->resolveUrgenciaProveedor($idContenedor, $cliente, $cbm);
+            if ($idProveedor === null) {
+                continue;
+            }
+
+            $rowKey = SeguimientoDriveCellRowKey::urgenciaProveedor($idProveedor);
+            if (!isset($notes[$rowKey]) || $notes[$rowKey] === '') {
+                continue;
+            }
+
+            $cellRef = Coordinate::stringFromColumnIndex($noteColIndex) . $row;
+            $current = trim((string) $sheet->getCell($cellRef)->getValue());
+            if ($current === $notes[$rowKey]) {
+                continue;
+            }
+
+            $sheet->setCellValue($cellRef, $notes[$rowKey]);
+            $changed = true;
+        }
+
+        return $changed;
+    }
+
+    /**
+     * Valor visible de celda (si está en merge, lee la celda master).
+     *
+     * @return mixed
+     */
+    private function cellDisplayValue(Worksheet $sheet, int $colIndex, int $row)
+    {
+        $cell = $sheet->getCellByColumnAndRow($colIndex, $row);
+        if ($cell->isInMergeRange()) {
+            $mergeRange = $cell->getMergeRange();
+            if (is_string($mergeRange) && $mergeRange !== '') {
+                $boundaries = Coordinate::rangeBoundaries($mergeRange);
+                $masterColLetter = (string) $boundaries[0][0];
+                $masterRow = (int) $boundaries[0][1];
+
+                return $sheet->getCell($masterColLetter . $masterRow)->getCalculatedValue();
+            }
+        }
+
+        return $cell->getCalculatedValue();
     }
 }
