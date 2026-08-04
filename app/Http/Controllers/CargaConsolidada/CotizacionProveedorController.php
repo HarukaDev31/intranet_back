@@ -588,6 +588,15 @@ class CotizacionProveedorController extends Controller
                 'resultado_whatsapp' => $resultadoWhatsApp
             ]);
 
+            // DB::table no dispara Observer: refrescar Excel (sale de URGENCIA "sin datos" → entra a CONTACTAR).
+            if (count($proveedoresActualizados) > 0 && !empty($cotizacion->id_contenedor)) {
+                app(SeguimientoConsolidadoDriveService::class)
+                    ->queueSyncIfLinkedFromEstadoChange(
+                        (int) $cotizacion->id_contenedor,
+                        $this->STATUS_DATOS_PROVEEDOR
+                    );
+            }
+
             return response()->json([
                 'success' => true,
                 'message' => 'Proveedores actualizados correctamente',

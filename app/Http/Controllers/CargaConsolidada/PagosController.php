@@ -24,6 +24,7 @@ use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
 use App\Traits\UsesObjectStorage;
 use App\Traits\WhatsappTrait;
+use App\Services\CargaConsolidada\SeguimientoConsolidadoDriveService;
 
 class PagosController extends Controller
 {
@@ -434,6 +435,9 @@ class PagosController extends Controller
             if (! $force && $cot->estado_cotizacion_final === 'COBRANDO') {
                 if ($estado !== 'PAGADO' && $estado !== 'SOBREPAGO') {
                     Log::info("syncEstadoCotizacionFromPayments: manteniendo COBRANDO para cotizacion {$idCotizacion}");
+                    // Aunque no cambie estado_cotizacion_final, el Excel URGENCIA depende de los pagos.
+                    $this->queueSeguimientoExcelSyncFromPago($cot);
+
                     return [
                         'success' => true,
                         'skipped' => true,
@@ -449,6 +453,9 @@ class PagosController extends Controller
                 $cot->estado_cotizacion_final = $estado;
                 $cot->timestamps = false;
                 $cot->save();
+                // CotizacionObserver también encola sync; reforzamos por si el observer no aplica.
+                $this->queueSeguimientoExcelSyncFromPago($cot);
+
                 return [
                     'success' => true,
                     'updated' => true,
@@ -458,6 +465,9 @@ class PagosController extends Controller
                     'monto_a_pagar' => $montoAart
                 ];
             }
+
+            // Pago registrado/eliminado sin cambio de estado (p. ej. parcial): igual hay que refrescar URGENCIA.
+            $this->queueSeguimientoExcelSyncFromPago($cot);
 
             return [
                 'success' => true,
@@ -470,6 +480,30 @@ class PagosController extends Controller
         } catch (\Exception $e) {
             Log::error("syncEstadoCotizacionFromPayments error: " . $e->getMessage());
             return ['success' => false, 'message' => $e->getMessage()];
+        }
+    }
+
+    /**
+     * El bloque CONTACTAR CON URGENCIA del Excel usa existencia de pagos (LOGÍSTICA/IMPUESTOS).
+     * Los inserts van por DB::table y a menudo no cambian estado_cotizacion_final → sin observer.
+     *
+     * @param Cotizacion $cot
+     */
+    private function queueSeguimientoExcelSyncFromPago(Cotizacion $cot): void
+    {
+        $idContenedor = (int) ($cot->id_contenedor ?? 0);
+        if ($idContenedor <= 0) {
+            return;
+        }
+
+        try {
+            app(SeguimientoConsolidadoDriveService::class)->queueSyncIfLinked($idContenedor);
+        } catch (\Exception $e) {
+            Log::warning('No se pudo encolar sync Excel seguimiento tras pago', [
+                'id_cotizacion' => $cot->id,
+                'id_contenedor' => $idContenedor,
+                'error' => $e->getMessage(),
+            ]);
         }
     }
 

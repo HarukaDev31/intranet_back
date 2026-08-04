@@ -144,6 +144,20 @@ class PromoteInspeccionadoToReservadoService
                 'proveedores_actualizados' => $updated,
                 'estado_cliente_actualizado' => $estadoClienteUpdated > 0,
             ]);
+
+            // Update por DB::table no dispara CotizacionProveedorObserver; refrescar Excel (URGENCIA / YIWU).
+            $idContenedor = (int) ($cot->id_contenedor ?? 0);
+            if ($idContenedor > 0) {
+                try {
+                    app(SeguimientoConsolidadoDriveService::class)->queueSyncIfLinked($idContenedor);
+                } catch (\Exception $e) {
+                    Log::warning('[Pagos] No se pudo encolar sync Excel tras INSPECCIONADO→RESERVADO', [
+                        'id_cotizacion' => $idCotizacion,
+                        'id_contenedor' => $idContenedor,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
         }
 
         return $updated;
