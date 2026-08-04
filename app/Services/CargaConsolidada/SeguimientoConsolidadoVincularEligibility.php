@@ -127,18 +127,18 @@ class SeguimientoConsolidadoVincularEligibility
     }
 
     /**
-     * Estado operativo / finanzas del consolidado: solo PENDIENTE sigue en sync Excel.
+     * Solo consolidados con estado_finanzas = PENDIENTE siguen en sync Excel.
      *
      * @param Contenedor $contenedor
      * @return bool
      */
     public static function estaEstadoFinanzasPendiente(Contenedor $contenedor)
     {
-        return strtoupper(trim((string) ($contenedor->estado ?? ''))) === Contenedor::CONTEDOR_PENDIENTE;
+        return strtoupper(trim((string) ($contenedor->estado_finanzas ?? ''))) === Contenedor::CONTEDOR_PENDIENTE;
     }
 
     /**
-     * Vincular, regenerar y sync automático (requiere f_inicio + umbral + estado PENDIENTE).
+     * Vincular, regenerar y sync automático (requiere f_inicio + umbral + estado_finanzas PENDIENTE).
      *
      * @param Contenedor $contenedor
      * @return bool
@@ -159,7 +159,7 @@ class SeguimientoConsolidadoVincularEligibility
             ->whereNotNull('carga')
             ->where('carga', '!=', '')
             ->whereNotNull('f_inicio')
-            ->where('estado', Contenedor::CONTEDOR_PENDIENTE)
+            ->where('estado_finanzas', Contenedor::CONTEDOR_PENDIENTE)
             ->where(function ($q) {
                 $q->whereNull('excel_seguimiento_drive_link')
                     ->orWhere('excel_seguimiento_drive_link', '');
@@ -193,7 +193,7 @@ class SeguimientoConsolidadoVincularEligibility
         if (!self::estaEstadoFinanzasPendiente($contenedor)) {
             return sprintf(
                 'Estado finanzas "%s" (solo se sincroniza en PENDIENTE)',
-                (string) ($contenedor->estado ?? '')
+                (string) ($contenedor->estado_finanzas ?? '')
             );
         }
 
