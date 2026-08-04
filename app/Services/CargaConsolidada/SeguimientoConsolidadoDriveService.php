@@ -790,7 +790,8 @@ class SeguimientoConsolidadoDriveService
                 'nuevo_archivo_drive' => $isInitialLink,
             ]);
 
-            if (!$isInitialLink && !empty($contenedor->excel_seguimiento_drive_file_id)) {
+            // Siempre pull notas manuales si ya hay archivo en Drive (también en re-vincular).
+            if (!empty($contenedor->excel_seguimiento_drive_file_id)) {
                 $pullResult = app(SeguimientoConsolidadoDriveCellSyncService::class)
                     ->pullFromDrive($idContenedor, 'pre_sync');
                 if (empty($pullResult['success'])) {

@@ -40,10 +40,26 @@ class SeguimientoConsolidadoRegenerarCommand extends Command
             return 1;
         }
 
+        // Ya vinculado: sync (pull notas → regenerar → subir). Sin link: vincular inicial.
+        $yaVinculado = !empty($contenedor->excel_seguimiento_drive_link)
+            || !empty($contenedor->excel_seguimiento_drive_file_id);
+
         if ($this->option('sync')) {
-            $result = $service->executeVincular($idContenedor);
+            $result = $yaVinculado
+                ? $service->executeSync($idContenedor)
+                : $service->executeVincular($idContenedor);
         } else {
-            $result = $service->queueVincular($idContenedor);
+            if ($yaVinculado) {
+                $service->enqueueSyncJob($idContenedor, 'regenerar_manual');
+                $result = [
+                    'success' => true,
+                    'queued' => true,
+                    'message' => 'Sincronización de Excel encolada (preserva notas manuales).',
+                    'data' => $service->formatStatusData($contenedor),
+                ];
+            } else {
+                $result = $service->queueVincular($idContenedor);
+            }
         }
 
         if (empty($result['success'])) {
