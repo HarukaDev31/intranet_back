@@ -433,6 +433,12 @@ class SeguimientoConsolidadoExcelService
                     continue;
                 }
 
+                $cbmYiwu = (float) ($proveedor['cbm_yiwu'] ?? 0);
+                // Sin CBM China no hay carga en YIWU que listar.
+                if ($cbmYiwu <= 0) {
+                    continue;
+                }
+
                 $yiwu[] = [
                     'id_cotizacion' => $idCotizacion,
                     'id_proveedor' => (int) ($proveedor['id_proveedor'] ?? 0),
@@ -441,7 +447,7 @@ class SeguimientoConsolidadoExcelService
                     'cliente' => $base['cliente'],
                     'code_supplier' => $proveedor['code_supplier'] ?? '',
                     'en_yiwu' => true,
-                    'cbm_yiwu' => (float) ($proveedor['cbm_yiwu'] ?? 0),
+                    'cbm_yiwu' => $cbmYiwu,
                     'cbm_cotizado' => (float) ($proveedor['cbm_cotizado'] ?? 0),
                     'tipo_carga' => $tipoCarga,
                     'estado_pago' => $estadoPago,
