@@ -58,13 +58,8 @@ class SeguimientoConsolidadoExcelService
         'CONS', 'VENDEDOR', 'CLIENTE', 'CBM', 'CELULAR', 'MOTIVO', 'ESTADO', 'NOTAS',
     ];
 
-    /** Estados de coordinación que ya tienen datos de proveedor cargados (o posteriores). */
-    private const ESTADOS_CON_DATOS_PROVEEDOR = [
-        'DATOS PROVEEDOR',
-        'COBRANDO',
-        'INSPECCIONADO',
-        'RESERVADO',
-    ];
+    /** estados_proveedor que van al bloque CONTACTAR CON URGENCIA. */
+    private const ESTADOS_URGENCIA_CHINA = ['NC', 'WAIT', 'NP'];
 
     /** @var CotizacionExportService */
     private $cotizacionExportService;
@@ -203,7 +198,7 @@ class SeguimientoConsolidadoExcelService
         $this->writeConfigSection(
             $sheet,
             $configRow,
-            'Seguimiento consolidado — CONTACTAR sin freeze; URGENCIA: sin datos proveedor y sin pago'
+            'Seguimiento consolidado — CONTACTAR sin freeze; URGENCIA: estados_proveedor NC / WAIT / NP'
         );
 
         $this->writeTableTitle($sheet, self::COL_YIWU, $titleRow, 'CARGA EN YIWU', self::COLOR_YIWU, self::TABLE_WIDTH_YIWU);
@@ -380,19 +375,13 @@ class SeguimientoConsolidadoExcelService
                 $contactar[] = $row;
             }
 
-            // URGENCIA: solo si faltan datos de proveedor Y no han pagado (fuera de YIWU).
-            // Con datos → CONTACTAR/RECIBIR/etc.; con pago y sin datos → no urgencia.
-            if (!$enYiwu) {
-                $sinDatos = $this->isSinDatosProveedor($estadoCoord);
-                $sinPago = $idCotizacion <= 0 || !isset($cotizacionesConPago[$idCotizacion]);
-
-                if ($sinDatos && $sinPago) {
-                    $urgencia[] = array_merge($row, [
-                        'motivo' => 'DATOS DEL PROVEEDOR / NO PAGA',
-                        'estado_urgencia' => $fueContactado ? 'CONTACTADO' : 'PENDIENTE',
-                        'notas' => '',
-                    ]);
-                }
+            // URGENCIA: solo NC / WAIT / NP en estados_proveedor (fuera de YIWU).
+            if (!$enYiwu && in_array($estadoChina, self::ESTADOS_URGENCIA_CHINA, true)) {
+                $urgencia[] = array_merge($row, [
+                    'motivo' => $estadoChina,
+                    'estado_urgencia' => $fueContactado ? 'CONTACTADO' : 'PENDIENTE',
+                    'notas' => '',
+                ]);
             }
         }
 
@@ -460,17 +449,6 @@ class SeguimientoConsolidadoExcelService
         }
 
         return compact('yiwu', 'recibir', 'contactar', 'urgencia');
-    }
-
-    /**
-     * @param string $estadoCoord
-     * @return bool
-     */
-    private function isSinDatosProveedor($estadoCoord)
-    {
-        $estado = strtoupper(trim((string) $estadoCoord));
-
-        return $estado === '' || !in_array($estado, self::ESTADOS_CON_DATOS_PROVEEDOR, true);
     }
 
     /**
