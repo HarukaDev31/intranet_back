@@ -523,7 +523,7 @@ class CalculadoraImportacionController extends Controller
                 'clienteInfo.whatsapp' => 'nullable|string',
                 'clienteInfo.correo' => 'nullable|string',
                 'clienteInfo.tipoCliente' => 'required|string',
-                'clienteInfo.origen_marketing' => 'nullable|string|in:Facebook,Instagram,Tiktok,Landing CC,Landing CI,Pagina web CC,Pagina web CI',
+                'clienteInfo.origen_marketing' => 'required|string|in:Facebook,Instagram,Tiktok,Landing CC,Landing CI,Pagina web CC,Pagina web CI',
                 'clienteInfo.qtyProveedores' => 'required|integer|min:1',
                 'proveedores' => 'required|array|min:1',
                 'proveedores.*.cbm' => 'required|numeric|min:0',
