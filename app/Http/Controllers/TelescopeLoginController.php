@@ -64,12 +64,6 @@ class TelescopeLoginController extends Controller
             ])->withInput($request->only('No_Usuario'));
         }
 
-        if (!$this->isUserAllowed($usuario)) {
-            return back()->withErrors([
-                'error' => 'No tienes permiso para acceder a Telescope',
-            ])->withInput($request->only('No_Usuario'));
-        }
-
         Session::put('telescope_authenticated', true);
         Session::put('telescope_user_id', $usuario->ID_Usuario);
         Session::put('telescope_user_name', $usuario->No_Usuario);
@@ -94,40 +88,5 @@ class TelescopeLoginController extends Controller
         Session::forget('telescope_user_email');
 
         return redirect()->route('telescope.login');
-    }
-
-    /**
-     * Si TELESCOPE_ALLOWED_EMAILS / TELESCOPE_ALLOWED_USERS están vacíos, cualquier interno activo.
-     *
-     * @param object $usuario
-     * @return bool
-     */
-    private function isUserAllowed($usuario)
-    {
-        $emails = array_values(array_filter(array_map(
-            'trim',
-            explode(',', (string) env('TELESCOPE_ALLOWED_EMAILS', ''))
-        )));
-        $users = array_values(array_filter(array_map(
-            'trim',
-            explode(',', (string) env('TELESCOPE_ALLOWED_USERS', ''))
-        )));
-
-        if ($emails === [] && $users === []) {
-            return true;
-        }
-
-        $email = trim((string) ($usuario->Txt_Email ?? ''));
-        $name = trim((string) ($usuario->No_Usuario ?? ''));
-
-        if ($emails !== [] && $email !== '' && in_array($email, $emails, true)) {
-            return true;
-        }
-
-        if ($users !== [] && $name !== '' && in_array($name, $users, true)) {
-            return true;
-        }
-
-        return false;
     }
 }

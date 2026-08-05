@@ -79,7 +79,7 @@ class TelescopeServiceProvider extends TelescopeApplicationServiceProvider
 
             $user = $request->user();
 
-            return $user !== null && Gate::check('viewTelescope', [$user]);
+            return $user !== null;
         });
     }
 
@@ -89,12 +89,7 @@ class TelescopeServiceProvider extends TelescopeApplicationServiceProvider
     protected function gate()
     {
         Gate::define('viewTelescope', function ($user) {
-            $emails = array_values(array_filter(array_map('trim', explode(',', (string) env('TELESCOPE_ALLOWED_EMAILS', '')))));
-
-            return $user !== null
-                && isset($user->email)
-                && $emails !== []
-                && in_array($user->email, $emails, true);
+            return $user !== null;
         });
     }
 }
