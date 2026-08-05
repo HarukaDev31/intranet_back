@@ -15,14 +15,7 @@ Login con usuarios internos (`tabla usuario`), igual que el visor de logs. La se
 3. Credenciales: `No_Usuario` / password (CodeIgniter)
 4. Logout: `/telescope-logout`
 
-Opcional — restringir quién puede entrar (si están vacíos, cualquier interno activo):
-
-```env
-TELESCOPE_ALLOWED_USERS=haruka,admin
-TELESCOPE_ALLOWED_EMAILS=alguien@probusiness.pe
-```
-
-Fallbacks (opcionales, sin login):
+Opcional — fallbacks sin formulario (token / IP):
 
 ```env
 TELESCOPE_DASHBOARD_TOKEN=secreto   # ?token= o header X-Telescope-Token
