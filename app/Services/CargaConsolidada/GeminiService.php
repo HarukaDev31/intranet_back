@@ -45,22 +45,23 @@ class GeminiService
     public function extractFromComprobante($filePath, $mimeType)
     {
         $prompt = 'Analiza este documento que es una factura electrónica o boleta de venta peruana. ' .
-            'Extrae los datos indicados y devuelve ÚNICAMENTE un JSON válido con esta estructura exacta: ' .
-            '{"tipo_comprobante": "Factura" | "Boleta" | null, ' .
-            '"valor_comprobante": numero | null, ' .
-            '"tiene_detraccion": true | false, ' .
-            '"monto_detraccion_dolares": numero | null, ' .
-            '"monto_detraccion_soles": numero | null}. ' .
+            'Extrae los datos indicados. ' .
             'Reglas: ' .
             '- tipo_comprobante: "Factura" si es FACTURA ELECTRÓNICA, "Boleta" si es BOLETA DE VENTA, null si no aplica. ' .
-            '- valor_comprobante: el importe TOTAL del comprobante (el campo TOTAL que incluye IGV). Solo el número, sin símbolo de moneda. null si no se encuentra. ' .
-            '- tiene_detraccion: true si el documento menciona detracción o "Sistema de Pago de Obligaciones Tributarias", false en caso contrario. ' .
-            '- monto_detraccion_dolares: si tiene_detraccion es true, el monto de la detracción en la moneda del comprobante (usualmente USD). Solo el número. null si no hay detracción. ' .
-            '- monto_detraccion_soles: si tiene_detraccion es true, el monto de la detracción en soles (campo "Importe de la detracción (SOLES)" o similar). Solo el número. null si no hay detracción. ' .
-            'Responde ÚNICAMENTE con el objeto JSON en una sola línea (sin saltos de línea ni espacios extra). No escribas frases como "Here is the JSON" ni ningún texto antes o después del JSON.';
+            '- valor_comprobante: el importe TOTAL del comprobante (TOTAL con IGV). Solo el número, sin símbolo de moneda. null si no se encuentra. ' .
+            '- tiene_detraccion: true si menciona detracción o "Sistema de Pago de Obligaciones Tributarias", false si no. ' .
+            '- monto_detraccion_dolares: si hay detracción, monto en moneda del comprobante (usualmente USD); si no, null. ' .
+            '- monto_detraccion_soles: si hay detracción, monto en soles ("Importe de la detracción (SOLES)"); si no, null. ' .
+            'Responde solo con el JSON del schema (una línea, compacto).';
 
-        // 1024 tokens para evitar truncado del JSON (Gemini a veces devuelve JSON formateado con muchos espacios)
-        $result = $this->callGemini($filePath, $mimeType, $prompt, 1024);
+        // Schema + tokens altos: Gemini 2.5 gasta output en "thinking" y truncaba el JSON (MAX_TOKENS).
+        $result = $this->callGemini(
+            $filePath,
+            $mimeType,
+            $prompt,
+            (int) env('GEMINI_COMPROBANTE_MAX_TOKENS', 4096),
+            self::comprobanteResponseSchema()
+        );
 
         if (!$result['success']) {
             return array_merge($this->errorResultComprobante(), ['error' => $result['error']]);
@@ -221,6 +222,15 @@ class GeminiService
 
         $textContent = preg_replace('/```(?:json)?\s*/', '', trim($textContent));
         $extracted = self::parseJsonPayload($textContent);
+        if (!$extracted) {
+            $extracted = self::salvageTruncatedJsonObject($textContent);
+            if ($extracted) {
+                Log::warning('GeminiService analyzeTextAsJson: JSON truncado recuperado parcialmente', [
+                    'finish_reason' => $finishReason,
+                    'keys' => array_keys($extracted),
+                ]);
+            }
+        }
 
         if (!$extracted || !is_array($extracted)) {
             Log::warning('GeminiService analyzeTextAsJson: JSON inválido', [
@@ -270,11 +280,52 @@ class GeminiService
     // ─────────────────────────────────────────────────────────────────────────
 
     /**
+     * Schema Gemini para comprobantes (fuerza JSON compacto y completo).
+     *
+     * @return array<string, mixed>
+     */
+    private static function comprobanteResponseSchema()
+    {
+        return [
+            'type' => 'OBJECT',
+            'properties' => [
+                'tipo_comprobante' => [
+                    'type' => 'STRING',
+                    'nullable' => true,
+                ],
+                'valor_comprobante' => [
+                    'type' => 'NUMBER',
+                    'nullable' => true,
+                ],
+                'tiene_detraccion' => [
+                    'type' => 'BOOLEAN',
+                ],
+                'monto_detraccion_dolares' => [
+                    'type' => 'NUMBER',
+                    'nullable' => true,
+                ],
+                'monto_detraccion_soles' => [
+                    'type' => 'NUMBER',
+                    'nullable' => true,
+                ],
+            ],
+            'required' => [
+                'tipo_comprobante',
+                'valor_comprobante',
+                'tiene_detraccion',
+                'monto_detraccion_dolares',
+                'monto_detraccion_soles',
+            ],
+        ];
+    }
+
+    /**
      * Realiza la llamada HTTP a la API de Gemini y retorna el JSON extraído.
      *
+     * @param  array<string, mixed>|null  $responseSchema
      * @return array ['success' => bool, 'data' => array|null, 'error' => string|null]
      */
-    private function callGemini($filePath, $mimeType, $prompt, $maxOutputTokens = 256)
+    private function callGemini($filePath, $mimeType, $prompt, $maxOutputTokens = 256, $responseSchema = null)
     {
         $apiKey = env('GEMINI_API_KEY');
 
@@ -293,6 +344,75 @@ class GeminiService
             return ['success' => false, 'data' => null, 'error' => 'No se pudo leer el archivo'];
         }
 
+        $fileBase64 = base64_encode($fileContent);
+        $result = $this->requestGeminiJson(
+            $mimeType,
+            $prompt,
+            $maxOutputTokens,
+            $responseSchema,
+            $fileBase64
+        );
+
+        // Reintento solo si Gemini cortó por MAX_TOKENS.
+        if (
+            empty($result['success'])
+            && ($result['finish_reason'] ?? null) === 'MAX_TOKENS'
+            && $maxOutputTokens < 8192
+        ) {
+            $retryTokens = min(8192, max(4096, (int) $maxOutputTokens * 2));
+            Log::warning('GeminiService: reintento por MAX_TOKENS', [
+                'max_output_tokens' => $retryTokens,
+            ]);
+
+            $retry = $this->requestGeminiJson(
+                $mimeType,
+                $prompt,
+                $retryTokens,
+                $responseSchema,
+                $fileBase64
+            );
+            if (!empty($retry['success'])) {
+                return $retry;
+            }
+
+            return $retry;
+        }
+
+        return $result;
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $responseSchema
+     * @return array{success: bool, data: array|null, error: string|null, finish_reason?: string|null}
+     */
+    private function requestGeminiJson(
+        $mimeType,
+        $prompt,
+        $maxOutputTokens,
+        $responseSchema,
+        $fileBase64,
+        $useThinkingBudgetZero = true
+    ) {
+        $apiKey = env('GEMINI_API_KEY');
+
+        $generationConfig = [
+            'temperature' => 0,
+            'maxOutputTokens' => (int) $maxOutputTokens,
+            'responseMimeType' => 'application/json',
+        ];
+        if (is_array($responseSchema) && $responseSchema !== []) {
+            $generationConfig['responseSchema'] = $responseSchema;
+        }
+
+        // Gemini 2.5: thinking consume maxOutputTokens y deja el JSON a medias.
+        $model = strtolower(self::getModel());
+        $supportsThinkingConfig = str_contains($model, '2.5') || str_contains($model, '2.0');
+        if ($useThinkingBudgetZero && $supportsThinkingConfig) {
+            $generationConfig['thinkingConfig'] = [
+                'thinkingBudget' => 0,
+            ];
+        }
+
         $payload = [
             'contents' => [
                 [
@@ -300,18 +420,14 @@ class GeminiService
                         [
                             'inline_data' => [
                                 'mime_type' => $mimeType,
-                                'data'      => base64_encode($fileContent),
+                                'data' => $fileBase64,
                             ],
                         ],
                         ['text' => $prompt],
                     ],
                 ],
             ],
-            'generationConfig' => [
-                'temperature'      => 0,
-                'maxOutputTokens'  => $maxOutputTokens,
-                'responseMimeType' => 'application/json',
-            ],
+            'generationConfig' => $generationConfig,
         ];
 
         $url = self::getApiUrl() . '?key=' . $apiKey;
@@ -322,33 +438,57 @@ class GeminiService
         curl_setopt($ch, CURLOPT_POST, true);
         curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
         curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 60);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 90);
         curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 15);
 
-        $response  = curl_exec($ch);
-        $httpCode  = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $curlError = curl_error($ch);
         curl_close($ch);
 
         if ($curlError) {
             Log::error('GeminiService: Error cURL: ' . $curlError);
-            return ['success' => false, 'data' => null, 'error' => 'Error de conexión: ' . $curlError];
+
+            return ['success' => false, 'data' => null, 'error' => 'Error de conexión: ' . $curlError, 'finish_reason' => null];
         }
 
         if ($httpCode !== 200) {
+            // Si thinkingConfig no es soportado por el modelo, reintentar sin él.
+            if (
+                $httpCode === 400
+                && $useThinkingBudgetZero
+                && $supportsThinkingConfig
+                && isset($generationConfig['thinkingConfig'])
+            ) {
+                Log::warning('GeminiService: thinkingConfig rechazado, reintento sin thinkingBudget');
+
+                return $this->requestGeminiJson(
+                    $mimeType,
+                    $prompt,
+                    $maxOutputTokens,
+                    $responseSchema,
+                    $fileBase64,
+                    false
+                );
+            }
+
             Log::error('GeminiService: Error HTTP ' . $httpCode, ['response' => $response]);
-            return ['success' => false, 'data' => null, 'error' => 'Error de API Gemini (HTTP ' . $httpCode . ')'];
+
+            return ['success' => false, 'data' => null, 'error' => 'Error de API Gemini (HTTP ' . $httpCode . ')', 'finish_reason' => null];
         }
 
         $decoded = json_decode($response, true);
         if (!$decoded) {
             Log::error('GeminiService: Respuesta inválida de Gemini', ['response' => $response]);
-            return ['success' => false, 'data' => null, 'error' => 'Respuesta inválida de Gemini'];
+
+            return ['success' => false, 'data' => null, 'error' => 'Respuesta inválida de Gemini', 'finish_reason' => null];
         }
 
-        // Concatenar todos los parts (Gemini a veces devuelve "Here is the JSON:" en part[0] y el JSON en part[1])
+        $candidate = isset($decoded['candidates'][0]) ? $decoded['candidates'][0] : [];
+        $finishReason = isset($candidate['finishReason']) ? (string) $candidate['finishReason'] : null;
+
         $textContent = '';
-        $parts = $decoded['candidates'][0]['content']['parts'] ?? [];
+        $parts = isset($candidate['content']['parts']) ? $candidate['content']['parts'] : [];
         foreach ($parts as $part) {
             if (!empty($part['text'])) {
                 $textContent .= $part['text'];
@@ -356,26 +496,81 @@ class GeminiService
         }
 
         if (trim($textContent) === '') {
-            Log::warning('GeminiService: Respuesta vacía', ['decoded' => $decoded]);
-            return ['success' => false, 'data' => null, 'error' => 'Respuesta vacía de Gemini'];
+            Log::warning('GeminiService: Respuesta vacía', [
+                'finish_reason' => $finishReason,
+                'decoded' => $decoded,
+            ]);
+
+            return ['success' => false, 'data' => null, 'error' => 'Respuesta vacía de Gemini', 'finish_reason' => $finishReason];
         }
 
-        // Limpiar posibles markdown code blocks y texto previo/posterior al JSON
         $textContent = preg_replace('/```(?:json)?\s*/', '', $textContent);
         $textContent = trim($textContent);
 
-        $jsonString = self::extractJsonFromText($textContent);
-        $extracted = $jsonString !== null ? json_decode($jsonString, true) : null;
+        $extracted = self::parseJsonPayload($textContent);
+        if (!$extracted) {
+            $extracted = self::salvageTruncatedJsonObject($textContent);
+            if ($extracted) {
+                Log::warning('GeminiService: JSON truncado recuperado parcialmente', [
+                    'finish_reason' => $finishReason,
+                    'keys' => array_keys($extracted),
+                    'text_preview' => mb_substr($textContent, 0, 400),
+                ]);
+            }
+        }
 
         if (!$extracted || !is_array($extracted)) {
             Log::warning('GeminiService: No se pudo parsear JSON', [
                 'text' => $textContent,
                 'parts_count' => count($parts),
+                'finish_reason' => $finishReason,
             ]);
-            return ['success' => false, 'data' => null, 'error' => 'No se pudo parsear el JSON extraído'];
+
+            $error = 'No se pudo parsear el JSON extraído';
+            if ($finishReason === 'MAX_TOKENS') {
+                $error = 'Respuesta Gemini truncada (MAX_TOKENS)';
+            }
+
+            return ['success' => false, 'data' => null, 'error' => $error, 'finish_reason' => $finishReason];
         }
 
-        return ['success' => true, 'data' => $extracted, 'error' => null];
+        return ['success' => true, 'data' => $extracted, 'error' => null, 'finish_reason' => $finishReason];
+    }
+
+    /**
+     * Recupera un objeto JSON cortado a mitad (p. ej. ..."monto_detraccion_dolares": 106.00, "monto_).
+     *
+     * @return array<string, mixed>|null
+     */
+    private static function salvageTruncatedJsonObject($text)
+    {
+        $text = trim((string) $text);
+        $first = strpos($text, '{');
+        if ($first === false) {
+            return null;
+        }
+
+        $chunk = substr($text, $first);
+
+        // Quitar solo basura incompleta al final (no borrar el último campo válido).
+        $chunk = preg_replace('/,\s*"[^"]*$/', '', $chunk);                 // ,"monto_
+        $chunk = preg_replace('/,\s*"[^"]+"\s*:\s*"[^"]*$/', '', $chunk); // ,"k": "inc
+        $chunk = preg_replace('/,\s*"[^"]+"\s*:\s*-?\d*\.$/', '', $chunk); // ,"k": 12.
+        $chunk = preg_replace('/,\s*"[^"]+"\s*:\s*-$/', '', $chunk);       // ,"k": -
+        $chunk = preg_replace('/,\s*"[^"]+"\s*:\s*$/', '', $chunk);        // ,"k":
+        $chunk = rtrim((string) $chunk, ", \n\r\t");
+
+        if ($chunk === '' || $chunk[0] !== '{') {
+            return null;
+        }
+
+        if (substr($chunk, -1) !== '}') {
+            $chunk .= '}';
+        }
+
+        $decoded = json_decode($chunk, true);
+
+        return is_array($decoded) && $decoded !== [] ? $decoded : null;
     }
 
     /**
