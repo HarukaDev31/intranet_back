@@ -16,18 +16,9 @@ class TelescopeServiceProvider extends TelescopeApplicationServiceProvider
     {
         $this->hideSensitiveRequestDetails();
 
+        // En prod también grabamos todo (requests, queries, jobs). El prune semanal limita la BD.
         Telescope::filter(function (IncomingEntry $entry) {
-            // Con Telescope activo en prod queremos ver tráfico real (requests, queries, jobs).
-            // El prune semanal (Kernel) limita el crecimiento de la BD.
-            if ($this->app->environment('local') || (bool) config('telescope.record_all', true)) {
-                return true;
-            }
-
-            return $entry->isReportableException() ||
-                   $entry->isFailedRequest() ||
-                   $entry->isFailedJob() ||
-                   $entry->isScheduledTask() ||
-                   $entry->hasMonitoredTag();
+            return true;
         });
     }
 
