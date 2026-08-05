@@ -35,7 +35,10 @@ En `.env` del servidor:
 
 ```env
 TELESCOPE_ENABLED=true
+TELESCOPE_RECORD_ALL=true
 ```
+
+`TELESCOPE_RECORD_ALL=true` (default) graba requests/queries/jobs. Con `false` solo excepciones y fallos (filtro clásico de Laravel en prod).
 
 ## Limpieza de BD (prod)
 
