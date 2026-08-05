@@ -128,15 +128,16 @@ class FacturaGuiaController extends Controller
         $razonSocial = $datosFacturacion['razon_social'] ?? '-';
         $domicilio = $datosFacturacion['domicilio_fiscal'] ?? '-';
         $destino = $datosFacturacion['destino'] ?? '-';
-
+        $dni = $datosFacturacion['dni'] ?? '-';
+        $nombreCompleto = $datosFacturacion['nombre_completo'] ?? '-';
         return "Hola {$cotizacion->nombre} 🙋🏻‍♀️,\n\n" .
             "Somos del área contable de Pro Business.\n" .
             "Tu carga del consolidado #{$carga} ya está rumbo a Perú 🚢.\n\n" .
             "✅ Para enviarte tu comprobante al momento de la entrega, confirma tus datos:\n\n" .
             "Datos de facturación:\n" .
             "- Tipo de comprobante: {$tipoComprobante}\n" .
-            "- RUC: {$ruc}\n" .
-            "- Razón social: {$razonSocial}\n" .
+            ($tipoComprobante === 'FACTURA' ? "- RUC: {$ruc}\n" : "- DNI: {$dni}\n") .
+            ($tipoComprobante === 'FACTURA' ? "- Razón social: {$razonSocial}\n" : "- Nombre completo: {$nombreCompleto}\n") .
             "- Domicilio fiscal: {$domicilio}\n\n" .
             "Datos logísticos:\n" .
             "- Entrega: {$destino}\n\n" .
