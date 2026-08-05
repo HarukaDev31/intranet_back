@@ -255,7 +255,7 @@ class SeguimientoConsolidadoExcelService
             $contactarFooterRow,
             $carga,
             $groups['contactar'],
-            '*DATOS PROVEEDOR sin fecha vigente; al pasar a C (China) salen de este bloque*'
+            '*DATOS PROVEEDOR: pendiente de contactar; al pasar a C / INSPECCIONADO / LOADED van a YIWU o RECIBIR*'
         );
         $this->writeUrgenciaFooter($sheet, self::COL_URGENCIA, $urgenciaFooterRow, $carga, $groups['urgencia']);
 
@@ -364,13 +364,11 @@ class SeguimientoConsolidadoExcelService
                 $recibir[] = $row;
             }
 
-            // CONTACTAR: DATOS PROVEEDOR sin fecha vigente.
-            // Al pasar a C (China contactó) salen. No usar historial ni fechas históricas:
-            // al pedir datos vuelven a NC y deben reaparecer aquí.
+            // CONTACTAR: coordinación en DATOS PROVEEDOR (pendiente de contactar China).
+            // Al pasar a C / INSPECCIONADO / LOADED (u otros estados YIWU) salen hacia YIWU o RECIBIR.
             if (
-                !$enYiwu
-                && $estadoCoord === 'DATOS PROVEEDOR'
-                && !$this->hasFechaLlegadaActual($row)
+                $estadoCoord === 'DATOS PROVEEDOR'
+                && !$enYiwu
                 && $estadoChina !== 'C'
             ) {
                 $row['fecha_hora_registro'] = $this->formatFechaHoraRegistro($row['fecha_datos_proveedor'] ?? null);
