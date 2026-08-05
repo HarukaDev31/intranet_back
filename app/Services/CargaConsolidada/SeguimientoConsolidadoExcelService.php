@@ -255,7 +255,7 @@ class SeguimientoConsolidadoExcelService
             $contactarFooterRow,
             $carga,
             $groups['contactar'],
-            '*DATOS PROVEEDOR sin fecha de llegada; al contactar (China) desaparecen de este bloque*'
+            '*DATOS PROVEEDOR sin fecha vigente; al pasar a C (China) salen de este bloque*'
         );
         $this->writeUrgenciaFooter($sheet, self::COL_URGENCIA, $urgenciaFooterRow, $carga, $groups['urgencia']);
 
@@ -364,12 +364,14 @@ class SeguimientoConsolidadoExcelService
                 $recibir[] = $row;
             }
 
-            // CONTACTAR: DATOS PROVEEDOR sin fecha; al contactar China desaparecen.
+            // CONTACTAR: DATOS PROVEEDOR sin fecha vigente.
+            // Al pasar a C (China contactó) salen. No usar historial ni fechas históricas:
+            // al pedir datos vuelven a NC y deben reaparecer aquí.
             if (
                 !$enYiwu
                 && $estadoCoord === 'DATOS PROVEEDOR'
-                && !$this->hasFechaLlegada($row)
-                && !$fueContactado
+                && !$this->hasFechaLlegadaActual($row)
+                && $estadoChina !== 'C'
             ) {
                 $row['fecha_hora_registro'] = $this->formatFechaHoraRegistro($row['fecha_datos_proveedor'] ?? null);
                 $contactar[] = $row;
@@ -686,6 +688,7 @@ class SeguimientoConsolidadoExcelService
 
     /**
      * Por recibir / contactar: tiene fecha de llegada china o Perú.
+     * Incluye fecha_recibir enriquecida desde historial (para bloque RECIBIR).
      *
      * @param array<string, mixed> $row
      * @return bool
@@ -697,6 +700,18 @@ class SeguimientoConsolidadoExcelService
             return true;
         }
 
+        return $this->hasFechaLlegadaActual($row);
+    }
+
+    /**
+     * Fechas vigentes en el proveedor (sin historial). Usado por CONTACTAR:
+     * si solo hay fecha histórica, igual deben aparecer hasta cargar fecha actual.
+     *
+     * @param array<string, mixed> $row
+     * @return bool
+     */
+    private function hasFechaLlegadaActual(array $row)
+    {
         $fechaPeru = ProveedorArriveDateHistoryService::normalizeDate($row['fecha_llegada_peru'] ?? null);
         $fechaChina = ProveedorArriveDateHistoryService::normalizeDate($row['fecha_llegada_china'] ?? null);
 
