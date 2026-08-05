@@ -66,6 +66,14 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Grabar todas las entries (no solo excepciones)
+    |--------------------------------------------------------------------------
+    | false = filtro estricto de prod (exceptions / failed / schedule / tags).
+    */
+    'record_all' => env('TELESCOPE_RECORD_ALL', true),
+
+    /*
+    |--------------------------------------------------------------------------
     | Acceso al panel (producción, sin login web)
     |--------------------------------------------------------------------------
     | TELESCOPE_DASHBOARD_TOKEN: ?token=... o header X-Telescope-Token
@@ -109,7 +117,9 @@ return [
 
     'ignore_paths' => [
         'nova-api*',
+        'telescope*',
         'telescope-login*',
+        'telescope-logout*',
     ],
 
     'ignore_commands' => [

@@ -22,7 +22,7 @@ class AppServiceProvider extends ServiceProvider
     {
         if (
             class_exists(\Laravel\Telescope\Telescope::class)
-            && filter_var(env('TELESCOPE_ENABLED', false), FILTER_VALIDATE_BOOLEAN)
+            && filter_var(config('telescope.enabled', false), FILTER_VALIDATE_BOOLEAN)
         ) {
             $this->app->register(\Laravel\Telescope\TelescopeServiceProvider::class);
             $this->app->register(\App\Providers\TelescopeServiceProvider::class);

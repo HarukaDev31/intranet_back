@@ -17,7 +17,9 @@ class TelescopeServiceProvider extends TelescopeApplicationServiceProvider
         $this->hideSensitiveRequestDetails();
 
         Telescope::filter(function (IncomingEntry $entry) {
-            if ($this->app->environment('local')) {
+            // Con Telescope activo en prod queremos ver tráfico real (requests, queries, jobs).
+            // El prune semanal (Kernel) limita el crecimiento de la BD.
+            if ($this->app->environment('local') || (bool) config('telescope.record_all', true)) {
                 return true;
             }
 
