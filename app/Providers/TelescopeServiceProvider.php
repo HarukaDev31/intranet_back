@@ -59,6 +59,11 @@ class TelescopeServiceProvider extends TelescopeApplicationServiceProvider
                 return true;
             }
 
+            // Sesión de login interno (cookie) — sin token en la URL
+            if ($request->session()->get('telescope_authenticated')) {
+                return true;
+            }
+
             $token = (string) config('telescope.dashboard_token', '');
             if ($token !== '') {
                 $provided = (string) ($request->query('token') ?? $request->header('X-Telescope-Token', ''));
