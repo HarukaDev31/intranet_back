@@ -63,6 +63,15 @@ class Kernel extends ConsoleKernel
                 return Carbon::now($settings['timezone'])->format('H:i') === $settings['hora'];
             })
             ->withoutOverlapping();
+
+        // Telescope: borrar entries > 7 días (domingo 04:00 Lima) para no inflar la BD en prod
+        $schedule->command('telescope:prune --hours=168')
+            ->weeklyOn(0, '04:00')
+            ->timezone('America/Lima')
+            ->withoutOverlapping()
+            ->when(function () {
+                return (bool) config('telescope.enabled', false);
+            });
     }
 
     /**

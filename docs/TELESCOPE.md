@@ -28,6 +28,20 @@ Abrir:
 
 Sin token verás **403** (no 404). Con token correcto carga el panel.
 
+## Limpieza de BD (prod)
+
+Con Telescope activo, el schedule borra entries con más de **7 días**:
+
+```text
+telescope:prune --hours=168   # domingo 04:00 America/Lima (solo si TELESCOPE_ENABLED=true)
+```
+
+Manual:
+
+```bash
+php artisan telescope:prune --hours=168
+```
+
 ## Nginx
 
 El `root` debe ser la carpeta `public/` y las rutas no-API deben pasar por `index.php` (igual que Horizon).
