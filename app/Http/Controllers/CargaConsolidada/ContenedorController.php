@@ -161,9 +161,11 @@ class ContenedorController extends Controller
                 });
             }
 
-            //order by int(carga) desc y en base al año y mes de f_inicio
+            //order by int(carga) desc; subconsolidados: C → B → A (letra DESC)
             $query->orderBy(DB::raw('YEAR(f_inicio)'), 'DESC');
             $query->orderByRaw('CAST(carga AS UNSIGNED) DESC');
+            $query->orderByRaw("CASE WHEN parte IS NULL OR parte = '' THEN 0 ELSE 1 END ASC");
+            $query->orderByRaw('parte DESC');
             $data = $query->paginate(100);
 
             // Optimización: obtener todos los ids de la página y hacer agregaciones en lote.
@@ -887,6 +889,8 @@ class ContenedorController extends Controller
         $data = Contenedor::where('empresa', '!=', 1)
             ->where('estado_documentacion', '!=', Contenedor::ESTADOS_DOCUMENTACION['COMPLETADO'])
             ->orderByRaw('CAST(carga AS UNSIGNED) DESC')
+            ->orderByRaw("CASE WHEN parte IS NULL OR parte = '' THEN 0 ELSE 1 END ASC")
+            ->orderByRaw('parte DESC')
             ->get(['id', 'carga', 'parte', 'f_inicio'])
             ->map(function ($c) {
                 return [
@@ -917,7 +921,9 @@ class ContenedorController extends Controller
         $query = Contenedor::where('empresa', '!=', 1)
         //where estado_documentacion is not COMPLETED
             ->where('estado_documentacion', '!=', Contenedor::ESTADOS_DOCUMENTACION['COMPLETADO'])
-            ->orderByRaw('CAST(carga AS UNSIGNED) DESC');
+            ->orderByRaw('CAST(carga AS UNSIGNED) DESC')
+            ->orderByRaw("CASE WHEN parte IS NULL OR parte = '' THEN 0 ELSE 1 END ASC")
+            ->orderByRaw('parte DESC');
 
         return $query->get();
     }
@@ -944,6 +950,8 @@ class ContenedorController extends Controller
             })
             ->where('estado_china', '!=', Contenedor::CONTEDOR_CERRADO)
             ->orderByRaw('CAST(carga AS UNSIGNED) DESC')
+            ->orderByRaw("CASE WHEN parte IS NULL OR parte = '' THEN 0 ELSE 1 END ASC")
+            ->orderByRaw('parte DESC')
             ->get();
         $data = $cargas->map(function($carga){
             return [
