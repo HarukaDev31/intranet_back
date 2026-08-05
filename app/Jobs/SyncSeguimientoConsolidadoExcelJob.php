@@ -68,25 +68,33 @@ class SyncSeguimientoConsolidadoExcelJob implements ShouldQueue, ShouldBeUnique
             'attempt' => $this->attempts(),
         ]);
 
-        $result = $service->executeSync($this->idContenedor);
-        if (empty($result['success'])) {
-            Log::warning('[SeguimientoDrive] Job Sync falló', [
+        $ok = false;
+
+        try {
+            $result = $service->executeSync($this->idContenedor);
+            $ok = !empty($result['success']);
+
+            if (!$ok) {
+                Log::warning('[SeguimientoDrive] Job Sync falló', [
+                    'id_contenedor' => $this->idContenedor,
+                    'message' => $result['message'] ?? 'unknown',
+                ]);
+
+                return;
+            }
+
+            Log::info('[SeguimientoDrive] Job Sync finalizado OK', [
                 'id_contenedor' => $this->idContenedor,
-                'message' => $result['message'] ?? 'unknown',
             ]);
-
+        } finally {
+            // Siempre liberar debounce al terminar: si queda activo tras un sync OK,
+            // cambios posteriores solo marcan dirty y nunca se re-encolan.
             $service->releaseSyncDebounce($this->idContenedor);
-            $service->requeueIfDirty($this->idContenedor, 'dirty_after_fail');
-
-            return;
+            $service->requeueIfDirty(
+                $this->idContenedor,
+                $ok ? 'dirty_retry' : 'dirty_after_fail'
+            );
         }
-
-        Log::info('[SeguimientoDrive] Job Sync finalizado OK', [
-            'id_contenedor' => $this->idContenedor,
-        ]);
-
-        // Pagos u otros cambios durante debounce/ejecución: regenerar de nuevo (URGENCIA, YIWU, etc.).
-        $service->requeueIfDirty($this->idContenedor, 'dirty_retry');
     }
 
     /**
