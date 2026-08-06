@@ -25,12 +25,11 @@ APP_PORT=8082
 # Opcional; por defecto el compose usa name: intranet_back (no uses intranet_prod — duplica stack en el mismo path)
 # COMPOSE_PROJECT_NAME=intranet_back
 
-# MySQL en el mismo host (socket Unix — no TCP público).
-# Socket persistente /opt/mysql-socket (NO /run/mysqld: systemd lo recrea).
-# Setup una vez: sudo bash scripts/setup-mysql-docker-socket.sh
-DB_HOST=localhost
-DB_SOCKET=/opt/mysql-socket/mysqld.sock
-MYSQL_SOCKET_DIR_HOST=/opt/mysql-socket
+# MySQL en el mismo host por TCP al gateway fijo de la red Docker (sin socket).
+# Overlay: docker-compose.prod.yml (subnet 172.22.0.0/16, gateway 172.22.0.1).
+# MySQL host: bind-address incluye 172.22.0.1; usuario permitido desde 172.22.%.
+DB_HOST=172.22.0.1
+# No uses DB_SOCKET en PROD Docker (TCP al gateway).
 
 # Redis del contenedor compose (no el Redis del host)
 DOCKER_REDIS_HOST=redis
@@ -58,13 +57,22 @@ CACHE_DRIVER=redis
 SESSION_DRIVER=file
 ```
 
-Verifica la ruta del socket MySQL:
+En el host, fija el overlay y recrea la red si venía de otra subred:
 
 ```bash
-ls -la /opt/mysql-socket/mysqld.sock
+cd /var/www/html/intranet_back
+cp docker-compose.prod.yml.example docker-compose.prod.yml
+# Importante: down recrea la red con gateway estable 172.22.0.1
+docker compose -f docker-compose.yml -f docker-compose.prod.yml down
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 ```
 
-Si el directorio no es `/opt/mysql-socket`, define `MYSQL_SOCKET_DIR_HOST` y `DB_SOCKET` en `.env`, y ejecutá el setup con esa ruta.
+Verifica conectividad MySQL desde el contenedor:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml exec app \
+  php -r 'try { new PDO("mysql:host=172.22.0.1;port=3306;dbname=".getenv("DB_DATABASE"), getenv("DB_USERNAME"), getenv("DB_PASSWORD")); echo "OK\n"; } catch (Throwable $e) { fwrite(STDERR, $e->getMessage()."\n"); exit(1); }'
+```
 
 ## 2. Nginx del host
 
@@ -89,8 +97,8 @@ curl -I -X OPTIONS "https://intranetback.probusiness.pe/api/calendar/my-role-gro
 Limpia config cache de Laravel en Docker:
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.host-mysql.yml exec -u www-data app php artisan config:clear
-docker compose -f docker-compose.yml -f docker-compose.host-mysql.yml exec -u www-data app php artisan config:cache
+docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -u www-data app php artisan config:clear
+docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -u www-data app php artisan config:cache
 ```
 
 ## 3. Detener Supervisor del host (solo este proyecto)
@@ -119,9 +127,9 @@ DEPLOY_PATH=/var/www/html/intranet_back GIT_BRANCH=main DEPLOY_MODE=docker \
 Comprobar:
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.host-mysql.yml ps
+docker compose -f docker-compose.yml -f docker-compose.prod.yml ps
 curl -I http://127.0.0.1:8082
-docker compose -f docker-compose.yml -f docker-compose.host-mysql.yml exec app php artisan migrate:status
+docker compose -f docker-compose.yml -f docker-compose.prod.yml exec app php artisan migrate:status
 docker compose logs -f horizon
 ```
 
@@ -170,8 +178,8 @@ HORIZON_ALLOWED_IPS=203.0.113.10,198.51.100.5
 Tras cambiar `.env`:
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.host-mysql.yml exec -u www-data app php artisan config:clear
-docker compose -f docker-compose.yml -f docker-compose.host-mysql.yml exec -u www-data app php artisan config:cache
+docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -u www-data app php artisan config:clear
+docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -u www-data app php artisan config:cache
 ```
 
 ## 6. Rollback rápido (si algo falla)

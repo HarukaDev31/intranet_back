@@ -2,24 +2,27 @@
 #
 # En el servidor PROD:
 #   cp docker-compose.prod.yml.example docker-compose.prod.yml
+#   # Si ya existía el stack con otra subred: down primero para recrear la red
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml down
 #   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 #
-# .env típico PROD:
+# .env típico PROD (MySQL del host por TCP al gateway fijo — sin socket):
 #   APP_PORT=8082
 #   COMPOSE_PROJECT_NAME=intranet_back
 #   APP_ENV=production
 #   APP_DEBUG=false
-#   DB_HOST=localhost
-#   DB_SOCKET=/opt/mysql-socket/mysqld.sock
-#   MYSQL_SOCKET_DIR_HOST=/opt/mysql-socket
+#   DB_HOST=172.22.0.1
+#   # sin DB_SOCKET / MYSQL_SOCKET_DIR_HOST
 #   DOCKER_REDIS_HOST=redis
 #   FORWARD_REDIS_PORT=6381
 #   REDIS_PREFIX=intranet_back_
 #   LARAVEL_WEBSOCKETS_PORT=6001
 #   HORIZON_PREFIX=intranet_horizon:
 #
-# MySQL: socket en /opt/mysql-socket (persistente). No uses /run/mysqld:
-# systemd recrea ese dir en cada restart y el bind mount de Docker queda stale.
+# MySQL en el host (solo accesible desde el server / red Docker):
+#   bind-address = 127.0.0.1,172.22.0.1   (o equivalente)
+#   GRANT ... TO 'user'@'172.22.%' ...
+# La subnet/gateway están FIJAS: un `compose down` no cambia 172.22.0.1.
 
 name: intranet_back
 
@@ -28,14 +31,10 @@ services:
     ports:
       - "127.0.0.1:${FORWARD_REDIS_PORT:-6381}:6379"
 
-  app:
-    volumes:
-      - ${MYSQL_SOCKET_DIR_HOST:-/opt/mysql-socket}:/opt/mysql-socket
-
-  horizon:
-    volumes:
-      - ${MYSQL_SOCKET_DIR_HOST:-/opt/mysql-socket}:/opt/mysql-socket
-
-  scheduler:
-    volumes:
-      - ${MYSQL_SOCKET_DIR_HOST:-/opt/mysql-socket}:/opt/mysql-socket
+networks:
+  intranet:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.22.0.0/16
+          gateway: 172.22.0.1

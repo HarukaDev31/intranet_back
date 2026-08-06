@@ -13,6 +13,7 @@ DEPLOY_MODE="${DEPLOY_MODE:-docker}"
 PHP_FPM_SERVICE="${PHP_FPM_SERVICE:-php8.3-fpm}"
 RUN_MIGRATIONS="${RUN_MIGRATIONS:-true}"
 COMPOSE_LOCAL="${COMPOSE_LOCAL:-false}"
+# Legacy: overlay socket host-mysql. Preferí docker-compose.prod.yml / .qa.yml si existen.
 COMPOSE_HOST_MYSQL="${COMPOSE_HOST_MYSQL:-true}"
 # auto = solo si cambió Dockerfile/compose/docker/* | true/false fuerzan
 DOCKER_REBUILD="${DOCKER_REBUILD:-auto}"
@@ -24,13 +25,29 @@ log() {
   echo "[deploy] $*"
 }
 
+# Orden: local → prod.yml → qa.yml → host-mysql (legacy socket).
+resolve_compose_files() {
+  COMPOSE_FILES=(-f docker-compose.yml)
+  if [[ "${COMPOSE_LOCAL}" == "true" ]]; then
+    COMPOSE_FILES+=(-f docker-compose.local.yml)
+  elif [[ -f docker-compose.prod.yml ]]; then
+    COMPOSE_FILES+=(-f docker-compose.prod.yml)
+  elif [[ -f docker-compose.qa.yml ]]; then
+    COMPOSE_FILES+=(-f docker-compose.qa.yml)
+  elif [[ "${COMPOSE_HOST_MYSQL}" == "true" ]]; then
+    COMPOSE_FILES+=(-f docker-compose.host-mysql.yml)
+  fi
+}
+
 state_dir() {
   mkdir -p "${DEPLOY_PATH}/.deploy"
 }
 
 docker_context_hash() {
   {
-    cat Dockerfile docker-compose.yml docker-compose.host-mysql.yml docker-compose.local.yml 2>/dev/null || true
+    cat Dockerfile docker-compose.yml docker-compose.host-mysql.yml docker-compose.local.yml \
+      docker-compose.prod.yml.example docker-compose.qa.yml.example \
+      docker-compose.prod.yml docker-compose.qa.yml 2>/dev/null || true
     if [[ -d docker ]]; then
       find docker -type f -print0 2>/dev/null | sort -z | xargs -0 cat 2>/dev/null || true
     fi
@@ -125,22 +142,12 @@ restart_all_workers() {
 }
 
 compose() {
-  local files=(-f docker-compose.yml)
-  if [[ "${COMPOSE_LOCAL}" == "true" ]]; then
-    files+=(-f docker-compose.local.yml)
-  elif [[ "${COMPOSE_HOST_MYSQL}" == "true" ]]; then
-    files+=(-f docker-compose.host-mysql.yml)
-  fi
-  docker compose "${files[@]}" "$@"
+  resolve_compose_files
+  docker compose "${COMPOSE_FILES[@]}" "$@"
 }
 
 compose_files_array() {
-  COMPOSE_FILES=(-f docker-compose.yml)
-  if [[ "${COMPOSE_LOCAL}" == "true" ]]; then
-    COMPOSE_FILES+=(-f docker-compose.local.yml)
-  elif [[ "${COMPOSE_HOST_MYSQL}" == "true" ]]; then
-    COMPOSE_FILES+=(-f docker-compose.host-mysql.yml)
-  fi
+  resolve_compose_files
 }
 
 # Un solo stack por path: si .env cambió COMPOSE_PROJECT_NAME, baja el proyecto anterior.
