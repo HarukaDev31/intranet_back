@@ -746,6 +746,7 @@ class CalculadoraImportacionService
             'Facebook',
             'Instagram',
             'Tiktok',
+            'WhatsApp',
             'Landing CC',
             'Landing CI',
             'Pagina web CC',
