@@ -78,6 +78,19 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
+    # Caja ~4GB: sin límite Redis crece (htop ~869M) y satura swap.
+    # allkeys-lru libera bajo presión; volatile-lru no baja si Horizon no pone TTL.
+    # Ajuste en .env sin redeploy de imagen: REDIS_MAXMEMORY / REDIS_MAXMEMORY_POLICY
+    command:
+      - redis-server
+      - --maxmemory
+      - ${REDIS_MAXMEMORY:-384mb}
+      - --maxmemory-policy
+      - ${REDIS_MAXMEMORY_POLICY:-allkeys-lru}
+      - --save
+      - ""
+      - --appendonly
+      - "no"
     networks:
       - intranet
 

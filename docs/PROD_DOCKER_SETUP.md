@@ -40,6 +40,9 @@ REDIS_PREFIX=intranet_back_
 FORWARD_REDIS_PORT=6381
 # Redis Docker no tiene password — no reutilices la de Redis del host
 REDIS_PASSWORD=null
+# Tope de RAM (caja ~4GB). Tras cambiar: docker compose ... up -d --force-recreate redis
+REDIS_MAXMEMORY=384mb
+REDIS_MAXMEMORY_POLICY=allkeys-lru
 
 # WebSockets / Reverb (puerto 6001 en prod)
 LARAVEL_WEBSOCKETS_PORT=6001
