@@ -363,7 +363,7 @@ class CotizacionFinalCobranzaWhatsappService
         }
 
         $contenedor = Contenedor::query()
-            ->select('fecha_arribo', 'carga')
+            ->select('fecha_arribo', 'f_puerto', 'carga')
             ->where('id', $cotizacion->id_contenedor)
             ->first();
 
@@ -380,6 +380,7 @@ class CotizacionFinalCobranzaWhatsappService
         $total = $logisticaFinal + $impuestosFinal + $serviciosExtraFinal;
         $totalPagos = (float) ($cotizacion->total_pagos ?? 0);
         $phoneDigits = $this->normalizePhoneDigits((string) ($cotizacion->telefono ?? ''));
+        $ultimoDiaPago = $this->formatUltimoDiaPago($contenedor->fecha_arribo, $contenedor->f_puerto);
 
         return [
             'id_cotizacion' => $idCotizacion,
@@ -387,6 +388,7 @@ class CotizacionFinalCobranzaWhatsappService
             'nombre' => (string) ($cotizacion->nombre ?? ''),
             'carga' => (string) $contenedor->carga,
             'fecha_arribo' => $contenedor->fecha_arribo,
+            'ultimo_dia_pago' => $ultimoDiaPago,
             'logistica_final' => $logisticaFinal,
             'impuestos_final' => $impuestosFinal,
             'servicios_extra_final' => $serviciosExtraFinal,
@@ -397,10 +399,44 @@ class CotizacionFinalCobranzaWhatsappService
     }
 
     /**
+     * Formatea último día de pago. Evita 01/01/1970 cuando fecha_arribo es null/vacía.
+     * Preferencia: fecha_arribo → f_puerto (igual que CotizacionFinalController).
+     */
+    private function formatUltimoDiaPago(mixed $fechaArribo, mixed $fPuerto = null): string
+    {
+        foreach ([$fechaArribo, $fPuerto] as $raw) {
+            if ($raw === null || $raw === '') {
+                continue;
+            }
+
+            $asString = trim((string) $raw);
+            if ($asString === '' || str_starts_with($asString, '0000-00-00')) {
+                continue;
+            }
+
+            try {
+                $dt = $raw instanceof Carbon ? $raw->copy() : Carbon::parse($asString);
+                if ((int) $dt->year < 1971) {
+                    continue;
+                }
+
+                return $dt->format('d/m/Y');
+            } catch (\Throwable $e) {
+                continue;
+            }
+        }
+
+        return 'Por confirmar';
+    }
+
+    /**
      * @param  array<string, mixed>  $ctx
      */
     private function buildCotizacionFinalPreviewText(array $ctx): string
     {
+        $ultimoDiaPago = (string) ($ctx['ultimo_dia_pago']
+            ?? $this->formatUltimoDiaPago($ctx['fecha_arribo'] ?? null));
+
         return "📦 *Consolidado #" . $ctx['carga'] . "*\n" .
             "Hola " . $ctx['nombre'] . " 😁 un gusto saludarte! \n" .
             "A continuación te envio la cotización final de tu importación📋📦.\n" .
@@ -412,7 +448,7 @@ class CotizacionFinalCobranzaWhatsappService
                 : '') .
             "✅Total: $" . number_format((float) $ctx['total'], 2) . "\n" .
             "Pronto le aviso nuevos avances, que tengan buen dia \n" .
-            "Último día de pago: " . date('d/m/Y', strtotime((string) $ctx['fecha_arribo'])) . "\n";
+            "Último día de pago: " . $ultimoDiaPago . "\n";
     }
 
     /**
@@ -454,7 +490,8 @@ class CotizacionFinalCobranzaWhatsappService
                 number_format((float) $ctx['impuestos_final'], 2, '.', ''),
                 $serviciosExtrasLine,
                 number_format((float) $ctx['total'], 2, '.', ''),
-                date('d/m/Y', strtotime((string) $ctx['fecha_arribo'])),
+                (string) ($ctx['ultimo_dia_pago']
+                    ?? $this->formatUltimoDiaPago($ctx['fecha_arribo'] ?? null)),
                 $pathPdf ? (string) $pathPdf : '',
                 $message,
                 $sleep
