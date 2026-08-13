@@ -202,8 +202,9 @@
 
         .media { margin: 4px 0; text-align: center; }
         .media img {
-            max-width: 92%;
-            max-height: 320px;
+            max-width: 70%;
+            max-height: 200px;
+            width: auto;
             height: auto;
             border: 1px solid #e2e8f0;
         }
