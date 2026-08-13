@@ -125,15 +125,20 @@
         .callout-danger { border-color: #fecaca; background: #fef2f2; }
         .callout-title { font-weight: bold; margin-bottom: 2px; }
 
-        .toolbar { margin: 2px 0 6px; }
+        /* Chips vía <table>: DomPDF estira inline-block con fondo a toda la hoja */
+        .chip-row, .tabs-table {
+            border-collapse: separate;
+            border-spacing: 4px 0;
+            margin: 2px 0 8px;
+        }
         .btn {
-            display: inline-block;
             border: 1px solid #cbd5e1;
             background: #f8fafc;
             color: #334155;
-            padding: 2px 7px;
+            padding: 3px 8px;
             font-size: 8.5px;
-            margin: 0 3px 3px 0;
+            white-space: nowrap;
+            vertical-align: middle;
         }
         .btn-primary {
             background: #2563eb;
@@ -141,15 +146,14 @@
             color: #ffffff;
         }
 
-        .tabs { margin: 2px 0 8px; }
         .tab {
-            display: inline-block;
             border: 1px solid #e2e8f0;
             background: #f8fafc;
-            padding: 2px 8px;
+            padding: 3px 10px;
             font-size: 8.5px;
-            margin-right: 3px;
             color: #475569;
+            white-space: nowrap;
+            vertical-align: middle;
         }
         .tab-active {
             background: #2563eb;
@@ -158,13 +162,8 @@
             font-weight: bold;
         }
 
-        .filters { margin: 2px 0 6px; }
-        .filter-field {
-            display: inline-block;
-            width: 31%;
-            vertical-align: top;
-            margin: 0 1% 6px 0;
-        }
+        .filters-table { margin: 2px 0 6px; border-collapse: separate; border-spacing: 6px 4px; }
+        .filter-field { width: 33%; vertical-align: top; }
         .filter-label { font-size: 8px; color: #64748b; margin-bottom: 1px; }
         .filter-control {
             border: 1px solid #e2e8f0;
@@ -195,7 +194,6 @@
             vertical-align: top;
         }
         .pill {
-            display: inline-block;
             background: #eff6ff;
             color: #1d4ed8;
             padding: 1px 5px;
@@ -230,9 +228,9 @@
 
         .flow { margin: 4px 0; }
         .flow-step { margin-bottom: 6px; }
+        .flow-table { width: 100%; border-collapse: collapse; margin-bottom: 6px; }
         .flow-num {
-            display: inline-block;
-            width: 16px;
+            width: 18px;
             height: 16px;
             line-height: 16px;
             text-align: center;
@@ -241,9 +239,8 @@
             font-size: 8px;
             font-weight: bold;
             vertical-align: top;
-            margin-right: 5px;
         }
-        .flow-body { display: inline-block; width: 90%; vertical-align: top; }
+        .flow-body { vertical-align: top; padding-left: 6px; }
         .flow-step-title { font-weight: bold; margin-bottom: 1px; }
 
         .timeline { margin: 6px 0; }

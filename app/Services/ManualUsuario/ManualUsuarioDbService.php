@@ -453,7 +453,8 @@ class ManualUsuarioDbService
                 break;
 
             case ManualBloque::TIPO_TOOLBAR:
-                $out[] = '<div class="toolbar">';
+                // DomPDF estira inline-block con fondo; usamos tabla.
+                $out[] = '<table class="chip-row" cellpadding="0" cellspacing="0"><tr>';
                 foreach ((array) ($snap['buttons'] ?? []) as $btn) {
                     if (!is_array($btn)) {
                         continue;
@@ -462,9 +463,9 @@ class ManualUsuarioDbService
                     if ($label === '') {
                         continue;
                     }
-                    $out[] = '<span class="btn">' . e($label) . '</span>';
+                    $out[] = '<td class="btn">' . e($label) . '</td>';
                 }
-                $out[] = '</div>';
+                $out[] = '</tr></table>';
                 break;
 
             case ManualBloque::TIPO_ACCION:
@@ -472,38 +473,53 @@ class ManualUsuarioDbService
                 if ($label === '') {
                     $label = $titulo !== '' ? $titulo : 'Acción';
                 }
-                $out[] = '<span class="btn btn-primary">' . e($label) . '</span>';
+                $out[] = '<table class="chip-row" cellpadding="0" cellspacing="0"><tr>';
+                $out[] = '<td class="btn btn-primary">' . e($label) . '</td>';
+                $out[] = '</tr></table>';
                 break;
 
             case ManualBloque::TIPO_FILTROS:
-                $out[] = '<div class="filters">';
-                foreach ((array) ($snap['fields'] ?? []) as $f) {
-                    if (!is_array($f)) {
-                        continue;
-                    }
-                    $label = (string) ($f['label'] ?? $f['key'] ?? 'Filtro');
-                    $value = (string) ($f['value'] ?? '');
-                    $opts = is_array($f['options'] ?? null) ? $f['options'] : [];
-                    $optLabels = [];
-                    foreach ($opts as $o) {
-                        if (is_array($o)) {
-                            $optLabels[] = (string) ($o['label'] ?? $o['value'] ?? '');
+                $fields = array_values(array_filter(
+                    (array) ($snap['fields'] ?? []),
+                    static fn ($f) => is_array($f)
+                ));
+                if ($fields !== []) {
+                    $out[] = '<table class="filters-table" width="100%" cellpadding="0" cellspacing="0"><tr>';
+                    $cols = min(3, count($fields));
+                    $i = 0;
+                    foreach ($fields as $f) {
+                        if ($i > 0 && $i % $cols === 0) {
+                            $out[] = '</tr><tr>';
                         }
+                        $label = (string) ($f['label'] ?? $f['key'] ?? 'Filtro');
+                        $value = (string) ($f['value'] ?? '');
+                        $opts = is_array($f['options'] ?? null) ? $f['options'] : [];
+                        $optLabels = [];
+                        foreach ($opts as $o) {
+                            if (is_array($o)) {
+                                $optLabels[] = (string) ($o['label'] ?? $o['value'] ?? '');
+                            }
+                        }
+                        $shown = $value !== ''
+                            ? $value
+                            : (implode(' / ', array_slice(array_filter($optLabels), 0, 3)) ?: '—');
+                        $out[] = '<td class="filter-field">';
+                        $out[] = '<div class="filter-label">' . e($label) . '</div>';
+                        $out[] = '<div class="filter-control">' . e($shown) . '</div>';
+                        $out[] = '</td>';
+                        $i++;
                     }
-                    $out[] = '<div class="filter-field">';
-                    $out[] = '<div class="filter-label">' . e($label) . '</div>';
-                    $out[] = '<div class="filter-control">' . e($value !== '' ? $value : (implode(' / ', array_slice(array_filter($optLabels), 0, 3)) ?: '—')) . '</div>';
-                    $out[] = '</div>';
+                    $out[] = '</tr></table>';
                 }
                 if (!empty($snap['hint'])) {
                     $out[] = '<div class="muted">' . e((string) $snap['hint']) . '</div>';
                 }
-                $out[] = '</div>';
                 break;
 
             case ManualBloque::TIPO_TABS:
+                // DomPDF: inline-block + background se estira a toda la página.
                 $active = (string) ($snap['active'] ?? '');
-                $out[] = '<div class="tabs">';
+                $out[] = '<table class="tabs-table" cellpadding="0" cellspacing="0"><tr>';
                 foreach ((array) ($snap['tabs'] ?? []) as $tab) {
                     if (!is_array($tab)) {
                         continue;
@@ -511,9 +527,9 @@ class ManualUsuarioDbService
                     $key = (string) ($tab['key'] ?? '');
                     $label = (string) ($tab['label'] ?? $key);
                     $cls = ($active !== '' && $key === $active) ? 'tab tab-active' : 'tab';
-                    $out[] = '<span class="' . $cls . '">' . e($label) . '</span>';
+                    $out[] = '<td class="' . $cls . '">' . e($label) . '</td>';
                 }
-                $out[] = '</div>';
+                $out[] = '</tr></table>';
                 break;
 
             case ManualBloque::TIPO_TABLA:
@@ -546,7 +562,7 @@ class ManualUsuarioDbService
                                 $mime = 'image/png';
                             }
                             $out[] = '<div class="media"><img src="data:' . $mime . ';base64,' . base64_encode($bin)
-                                . '" alt="' . e($caption) . '"></div>';
+                                . '" alt="' . e($caption) . '" style="max-width:92%;max-height:280px;"></div>';
                             $embedded = true;
                         }
                     }
@@ -602,11 +618,11 @@ class ManualUsuarioDbService
                 }
                 $actions = is_array($snap['actions'] ?? null) ? $snap['actions'] : [];
                 if ($actions !== []) {
-                    $out[] = '<div class="toolbar">';
+                    $out[] = '<table class="chip-row" cellpadding="0" cellspacing="0"><tr>';
                     foreach ($actions as $a) {
-                        $out[] = '<span class="btn">' . e(is_string($a) ? $a : (string) ($a['label'] ?? '')) . '</span>';
+                        $out[] = '<td class="btn">' . e(is_string($a) ? $a : (string) ($a['label'] ?? '')) . '</td>';
                     }
-                    $out[] = '</div>';
+                    $out[] = '</tr></table>';
                 }
                 $out[] = '</div>';
                 break;
@@ -621,11 +637,11 @@ class ManualUsuarioDbService
                     if (!is_array($step)) {
                         continue;
                     }
-                    $out[] = '<div class="flow-step">';
-                    $out[] = '<div class="flow-num">' . $n . '</div>';
-                    $out[] = '<div class="flow-body"><div class="flow-step-title">' . e((string) ($step['title'] ?? '')) . '</div>'
-                        . '<div>' . nl2br(e((string) ($step['body'] ?? ''))) . '</div></div>';
-                    $out[] = '</div>';
+                    $out[] = '<table class="flow-table" cellpadding="0" cellspacing="0"><tr>';
+                    $out[] = '<td class="flow-num">' . $n . '</td>';
+                    $out[] = '<td class="flow-body"><div class="flow-step-title">' . e((string) ($step['title'] ?? '')) . '</div>'
+                        . '<div>' . nl2br(e((string) ($step['body'] ?? ''))) . '</div></td>';
+                    $out[] = '</tr></table>';
                     $n++;
                 }
                 $out[] = '</div>';
