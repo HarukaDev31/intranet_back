@@ -88,6 +88,7 @@ return [
 
     'middleware' => [
         'web',
+        'telescope.session',
         Authorize::class,
     ],
 
@@ -108,6 +109,9 @@ return [
 
     'ignore_paths' => [
         'nova-api*',
+        'telescope*',
+        'telescope-login*',
+        'telescope-logout*',
     ],
 
     'ignore_commands' => [

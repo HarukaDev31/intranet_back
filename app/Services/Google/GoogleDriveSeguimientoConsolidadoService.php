@@ -19,9 +19,10 @@ class GoogleDriveSeguimientoConsolidadoService extends GoogleDriveExcelConfirmac
     }
 
     /**
+     * @param string|null $existingFileId file_id ya vinculado (actualiza ese archivo)
      * @return string|null URL pública edit?usp=sharing
      */
-    public function uploadForConsolidado($mesFolder, $localPath, $fileName)
+    public function uploadForConsolidado($mesFolder, $localPath, $fileName, $existingFileId = null)
     {
         if (!$this->isConfigured() || !is_file($localPath)) {
             Log::warning('[SeguimientoDrive] Subida omitida: Drive no configurado o archivo inexistente', [
@@ -38,6 +39,7 @@ class GoogleDriveSeguimientoConsolidadoService extends GoogleDriveExcelConfirmac
             Log::info('[SeguimientoDrive] Subiendo Excel a Drive', [
                 'mes_folder' => $mesFolder,
                 'file' => $fileName,
+                'existing_file_id' => $existingFileId,
                 'size_bytes' => filesize($localPath),
             ]);
 
@@ -48,7 +50,13 @@ class GoogleDriveSeguimientoConsolidadoService extends GoogleDriveExcelConfirmac
                 $this->sanitizeName((string) $mesFolder)
             );
 
-            $driveLink = $this->uploadOrReplaceWithRetry($mesFolderId, $localPath, $fileName);
+            $driveLink = $this->uploadOrReplaceWithRetry(
+                $mesFolderId,
+                $localPath,
+                $fileName,
+                3,
+                $existingFileId
+            );
 
             Log::info('[SeguimientoDrive] Excel subido a carpeta del mes', [
                 'mes_folder' => $mesFolder,
@@ -167,13 +175,18 @@ class GoogleDriveSeguimientoConsolidadoService extends GoogleDriveExcelConfirmac
     /**
      * Reintenta subidas ante errores transitorios de Google (503, rate limit, etc.).
      */
-    private function uploadOrReplaceWithRetry(string $folderId, string $localPath, string $fileName, int $maxAttempts = 3): string
-    {
+    private function uploadOrReplaceWithRetry(
+        string $folderId,
+        string $localPath,
+        string $fileName,
+        int $maxAttempts = 3,
+        ?string $existingFileId = null
+    ): string {
         $lastException = null;
 
         for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
             try {
-                return $this->uploadOrReplace($folderId, $localPath, $fileName);
+                return $this->uploadOrReplace($folderId, $localPath, $fileName, $existingFileId);
             } catch (\Throwable $e) {
                 $lastException = $e;
 

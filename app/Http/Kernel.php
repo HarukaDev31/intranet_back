@@ -69,6 +69,7 @@ class Kernel extends HttpKernel
         'jwt.auth' => \App\Http\Middleware\JWTMiddleware::class,
         'jwt.external' => \App\Http\Middleware\JWTExternalMiddleware::class,
         'logviewer.auth' => \App\Http\Middleware\LogViewerAuth::class,
+        'telescope.session' => \App\Http\Middleware\TelescopeSessionAuth::class,
         'landing.consolidado.form_token' => \App\Http\Middleware\VerifyLandingConsolidadoFormToken::class,
         'landing.curso.form_token' => \App\Http\Middleware\VerifyLandingCursoFormToken::class,
         'role.coordinacion' => \App\Http\Middleware\EnsureCoordinacionRole::class,

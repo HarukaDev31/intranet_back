@@ -16,16 +16,9 @@ class TelescopeServiceProvider extends TelescopeApplicationServiceProvider
     {
         $this->hideSensitiveRequestDetails();
 
+        // En prod también grabamos todo (requests, queries, jobs). El prune semanal limita la BD.
         Telescope::filter(function (IncomingEntry $entry) {
-            if ($this->app->environment('local')) {
-                return true;
-            }
-
-            return $entry->isReportableException() ||
-                   $entry->isFailedRequest() ||
-                   $entry->isFailedJob() ||
-                   $entry->isScheduledTask() ||
-                   $entry->hasMonitoredTag();
+            return true;
         });
     }
 
@@ -59,6 +52,11 @@ class TelescopeServiceProvider extends TelescopeApplicationServiceProvider
                 return true;
             }
 
+            // Sesión de login interno (cookie) — sin token en la URL
+            if ($request->session()->get('telescope_authenticated')) {
+                return true;
+            }
+
             $token = (string) config('telescope.dashboard_token', '');
             if ($token !== '') {
                 $provided = (string) ($request->query('token') ?? $request->header('X-Telescope-Token', ''));
@@ -74,7 +72,7 @@ class TelescopeServiceProvider extends TelescopeApplicationServiceProvider
 
             $user = $request->user();
 
-            return $user !== null && Gate::check('viewTelescope', [$user]);
+            return $user !== null;
         });
     }
 
@@ -84,12 +82,7 @@ class TelescopeServiceProvider extends TelescopeApplicationServiceProvider
     protected function gate()
     {
         Gate::define('viewTelescope', function ($user) {
-            $emails = array_values(array_filter(array_map('trim', explode(',', (string) env('TELESCOPE_ALLOWED_EMAILS', '')))));
-
-            return $user !== null
-                && isset($user->email)
-                && $emails !== []
-                && in_array($user->email, $emails, true);
+            return $user !== null;
         });
     }
 }

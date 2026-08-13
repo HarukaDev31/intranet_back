@@ -488,7 +488,7 @@ class SeguimientoConsolidadoDriveService
 
     /**
      * Evita encolar el mismo consolidado varias veces seguidas (observers + scheduler).
-     * Si el debounce está activo, marca dirty para re-encolar al terminar el sync en curso.
+     * Si el debounce está activo, marca dirty; el job libera el debounce al terminar y re-encola.
      *
      * @param int $idContenedor
      * @param string $reason
@@ -824,7 +824,8 @@ class SeguimientoConsolidadoDriveService
             $driveLink = $this->driveService->uploadForConsolidado(
                 $mesFolder,
                 $tmpPath,
-                $fileName
+                $fileName,
+                $contenedor->excel_seguimiento_drive_file_id ?? null
             );
 
             if (!$driveLink) {

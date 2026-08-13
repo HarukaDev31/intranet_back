@@ -208,42 +208,146 @@ class GoogleDriveExcelConfirmacionService
         return !empty($files) ? (string) $files[0]->getId() : null;
     }
 
-    protected function uploadOrReplace(string $folderId, string $localPath, string $fileName): string
-    {
+    /**
+     * @param string|null $preferFileId Si ya está vinculado, actualiza ese ID (evita duplicados por nombre).
+     */
+    protected function uploadOrReplace(
+        string $folderId,
+        string $localPath,
+        string $fileName,
+        ?string $preferFileId = null
+    ): string {
         $mime = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
         $content = file_get_contents($localPath);
         if ($content === false) {
             throw new \RuntimeException('No se pudo leer el archivo local: ' . $localPath);
         }
 
-        $existingId = $this->findFileId($folderId, $fileName);
+        $preferFileId = trim((string) $preferFileId);
+        $mode = 'create';
+        $fileId = null;
 
-        if ($existingId !== null) {
-            $meta = new DriveFile(['name' => $fileName]);
-            $file = $this->drive->files->update($existingId, $meta, $this->driveWriteParams([
-                'data' => $content,
-                'mimeType' => $mime,
-                'uploadType' => 'multipart',
-                'fields' => 'id',
-            ]));
-            $fileId = (string) $file->getId();
-        } else {
-            $meta = new DriveFile([
-                'name' => $fileName,
-                'parents' => [$folderId],
-            ]);
-            $file = $this->drive->files->create($meta, $this->driveWriteParams([
-                'data' => $content,
-                'mimeType' => $mime,
-                'uploadType' => 'multipart',
-                'fields' => 'id',
-            ]));
-            $fileId = (string) $file->getId();
+        // 1) Preferir el file_id ya vinculado (mismo link que ve el usuario).
+        if ($preferFileId !== '') {
+            $metaInfo = $this->getDriveFileMeta($preferFileId);
+            if ($metaInfo !== null) {
+                $currentMime = (string) ($metaInfo['mimeType'] ?? '');
+                // Si lo convirtieron a Google Sheets, el update binario xlsx no aplica a ese ID.
+                if ($currentMime === 'application/vnd.google-apps.spreadsheet') {
+                    Log::warning('GoogleDriveExcelConfirmacionService: file_id es Google Sheets; se reemplaza por xlsx nuevo', [
+                        'file_id' => $preferFileId,
+                        'file' => $fileName,
+                        'modifiedTime' => $metaInfo['modifiedTime'] ?? null,
+                    ]);
+                } else {
+                    try {
+                        $meta = new DriveFile(['name' => $fileName]);
+                        $file = $this->drive->files->update($preferFileId, $meta, $this->driveWriteParams([
+                            'data' => $content,
+                            'mimeType' => $mime,
+                            'uploadType' => 'multipart',
+                            'fields' => 'id,modifiedTime,mimeType,size',
+                        ]));
+                        $fileId = (string) $file->getId();
+                        $mode = 'update_by_id';
+                        Log::info('GoogleDriveExcelConfirmacionService: Excel actualizado por file_id', [
+                            'file_id' => $fileId,
+                            'file' => $fileName,
+                            'modifiedTime' => $file->getModifiedTime(),
+                            'size' => $file->getSize(),
+                            'before_modifiedTime' => $metaInfo['modifiedTime'] ?? null,
+                        ]);
+                    } catch (\Throwable $e) {
+                        Log::warning('GoogleDriveExcelConfirmacionService: update por file_id falló', [
+                            'file_id' => $preferFileId,
+                            'file' => $fileName,
+                            'error' => $e->getMessage(),
+                        ]);
+                    }
+                }
+            } else {
+                Log::warning('GoogleDriveExcelConfirmacionService: file_id vinculado no existe en Drive', [
+                    'file_id' => $preferFileId,
+                    'file' => $fileName,
+                ]);
+            }
+        }
+
+        // 2) Fallback: mismo nombre en la carpeta (xlsx nativo, el más reciente).
+        if ($fileId === null) {
+            $byNameId = $this->findXlsxFileId($folderId, $fileName);
+            if ($byNameId !== null) {
+                $meta = new DriveFile(['name' => $fileName]);
+                $file = $this->drive->files->update($byNameId, $meta, $this->driveWriteParams([
+                    'data' => $content,
+                    'mimeType' => $mime,
+                    'uploadType' => 'multipart',
+                    'fields' => 'id,modifiedTime,size',
+                ]));
+                $fileId = (string) $file->getId();
+                $mode = 'update_by_name';
+                Log::info('GoogleDriveExcelConfirmacionService: Excel actualizado por nombre', [
+                    'file_id' => $fileId,
+                    'file' => $fileName,
+                    'modifiedTime' => $file->getModifiedTime(),
+                    'size' => $file->getSize(),
+                ]);
+            } else {
+                $meta = new DriveFile([
+                    'name' => $fileName,
+                    'parents' => [$folderId],
+                ]);
+                $file = $this->drive->files->create($meta, $this->driveWriteParams([
+                    'data' => $content,
+                    'mimeType' => $mime,
+                    'uploadType' => 'multipart',
+                    'fields' => 'id,modifiedTime,size',
+                ]));
+                $fileId = (string) $file->getId();
+                $mode = 'create';
+                Log::info('GoogleDriveExcelConfirmacionService: Excel creado en Drive', [
+                    'file_id' => $fileId,
+                    'file' => $fileName,
+                    'modifiedTime' => $file->getModifiedTime(),
+                    'size' => $file->getSize(),
+                    'prefer_file_id' => $preferFileId !== '' ? $preferFileId : null,
+                ]);
+            }
         }
 
         $this->ensureAnyoneWriter($fileId);
 
+        Log::info('GoogleDriveExcelConfirmacionService: uploadOrReplace OK', [
+            'mode' => $mode,
+            'file_id' => $fileId,
+            'file' => $fileName,
+        ]);
+
         return 'https://drive.google.com/file/d/' . $fileId . '/edit?usp=sharing';
+    }
+
+    /**
+     * @return array{id?:string,mimeType?:string,modifiedTime?:string,name?:string}|null
+     */
+    private function getDriveFileMeta(string $fileId): ?array
+    {
+        try {
+            $file = $this->drive->files->get($fileId, $this->driveListParams() + [
+                'fields' => 'id,name,mimeType,modifiedTime,size,trashed',
+            ]);
+            if ($file->getTrashed()) {
+                return null;
+            }
+
+            return [
+                'id' => (string) $file->getId(),
+                'name' => (string) $file->getName(),
+                'mimeType' => (string) $file->getMimeType(),
+                'modifiedTime' => (string) $file->getModifiedTime(),
+            ];
+        } catch (\Throwable $e) {
+            return null;
+        }
     }
 
     /**
@@ -301,6 +405,25 @@ class GoogleDriveExcelConfirmacionService
             'q' => $this->buildNameInParentQuery($fileName, $folderId, null),
             'fields' => 'files(id)',
             'pageSize' => 1,
+            'orderBy' => 'modifiedTime desc',
+        ]));
+
+        $files = $results->getFiles();
+
+        return !empty($files) ? (string) $files[0]->getId() : null;
+    }
+
+    /**
+     * Busca solo xlsx nativo (ignora copias convertidas a Google Sheets con el mismo nombre).
+     */
+    private function findXlsxFileId(string $folderId, string $fileName): ?string
+    {
+        $mime = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+        $results = $this->drive->files->listFiles(array_merge($this->driveListParams(), [
+            'q' => $this->buildNameInParentQuery($fileName, $folderId, $mime),
+            'fields' => 'files(id,modifiedTime)',
+            'pageSize' => 1,
+            'orderBy' => 'modifiedTime desc',
         ]));
 
         $files = $results->getFiles();
@@ -310,7 +433,12 @@ class GoogleDriveExcelConfirmacionService
 
     private function buildNameInParentQuery(string $name, string $parentId, ?string $mimeType): string
     {
-        $escapedName = str_replace("'", "\\'", $name);
+        // Drive query: escapar \ ' y # dentro del valor entre comillas.
+        $escapedName = str_replace(
+            ['\\', "'", '#'],
+            ['\\\\', "\\'", '\\#'],
+            $name
+        );
         $query = sprintf("name='%s' and '%s' in parents and trashed=false", $escapedName, $parentId);
 
         if ($mimeType !== null) {

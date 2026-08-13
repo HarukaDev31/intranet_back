@@ -131,7 +131,21 @@ class SeguimientoConsolidadoDriveCellSyncService
                 'id_contenedor' => $idContenedor,
                 'trigger' => $trigger,
                 'error' => $e->getMessage(),
+                'exception' => $e,
             ]);
+            // Asegura alerta Slack aunque LOG_STACK_CHANNELS no incluya el canal slack.
+            try {
+                Log::channel('slack')->error(self::LOG_PREFIX . ' Pull fallido', [
+                    'id_contenedor' => $idContenedor,
+                    'trigger' => $trigger,
+                    'error' => $e->getMessage(),
+                    'file' => $e->getFile() . ':' . $e->getLine(),
+                ]);
+            } catch (\Throwable $slackError) {
+                Log::warning(self::LOG_PREFIX . ' No se pudo notificar a Slack', [
+                    'error' => $slackError->getMessage(),
+                ]);
+            }
 
             return ['success' => false, 'message' => $e->getMessage()];
         } finally {
@@ -404,7 +418,7 @@ class SeguimientoConsolidadoDriveCellSyncService
         $history = 0;
 
         for ($row = 1; $row <= $highestRow; $row++) {
-            $consLabel = trim((string) $sheet->getCellByColumnAndRow($startCol, $row)->getCalculatedValue());
+            $consLabel = trim((string) $sheet->getCell(Coordinate::stringFromColumnIndex($startCol) . $row)->getCalculatedValue());
             if ($consLabel !== '' && stripos($consLabel, 'TOTAL EN YIWU') !== false) {
                 continue;
             }
@@ -532,14 +546,14 @@ class SeguimientoConsolidadoDriveCellSyncService
         $history = 0;
 
         for ($row = 1; $row <= $highestRow; $row++) {
-            $consLabel = trim((string) $sheet->getCellByColumnAndRow($startCol, $row)->getCalculatedValue());
+            $consLabel = trim((string) $sheet->getCell(Coordinate::stringFromColumnIndex($startCol) . $row)->getCalculatedValue());
             if ($consLabel !== '' && stripos($consLabel, 'TOTAL POR CONTACTAR') !== false) {
                 continue;
             }
 
-            $cliente = trim((string) $sheet->getCellByColumnAndRow($clienteColIndex, $row)->getCalculatedValue());
-            $note = trim((string) $sheet->getCellByColumnAndRow($noteColIndex, $row)->getCalculatedValue());
-            $cbm = trim((string) $sheet->getCellByColumnAndRow($cbmColIndex, $row)->getCalculatedValue());
+            $cliente = trim((string) $this->cellDisplayValue($sheet, $clienteColIndex, $row));
+            $note = trim((string) $this->cellDisplayValue($sheet, $noteColIndex, $row));
+            $cbm = trim((string) $this->cellDisplayValue($sheet, $cbmColIndex, $row));
 
             if ($cliente === '' || $note === '') {
                 continue;
@@ -830,15 +844,22 @@ class SeguimientoConsolidadoDriveCellSyncService
      */
     private function cellDisplayValue(Worksheet $sheet, int $colIndex, int $row)
     {
-        $cell = $sheet->getCellByColumnAndRow($colIndex, $row);
+        $cellRef = Coordinate::stringFromColumnIndex($colIndex) . $row;
+        $cell = $sheet->getCell($cellRef);
         if ($cell->isInMergeRange()) {
             $mergeRange = $cell->getMergeRange();
             if (is_string($mergeRange) && $mergeRange !== '') {
                 $boundaries = Coordinate::rangeBoundaries($mergeRange);
-                $masterColLetter = (string) $boundaries[0][0];
-                $masterRow = (int) $boundaries[0][1];
+                // PhpSpreadsheet 1.30+ devuelve índice numérico de columna (ej. 21), no letra (U).
+                $masterCol = $boundaries[0][0] ?? null;
+                $masterRow = (int) ($boundaries[0][1] ?? 0);
+                if ($masterCol !== null && $masterRow > 0) {
+                    $masterColLetter = is_numeric($masterCol)
+                        ? Coordinate::stringFromColumnIndex((int) $masterCol)
+                        : (string) $masterCol;
 
-                return $sheet->getCell($masterColLetter . $masterRow)->getCalculatedValue();
+                    return $sheet->getCell($masterColLetter . $masterRow)->getCalculatedValue();
+                }
             }
         }
 

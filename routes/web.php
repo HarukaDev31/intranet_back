@@ -60,6 +60,16 @@ Route::post('logviewer/login', [\App\Http\Controllers\LogViewerLoginController::
 Route::get('logviewer/logout', [\App\Http\Controllers\LogViewerLoginController::class, 'logout'])
     ->name('logviewer.logout');
 
+// Login de Telescope (usuarios internos → sesión cookie; sin token en URL)
+Route::get('telescope-login', [\App\Http\Controllers\TelescopeLoginController::class, 'showLoginForm'])
+    ->name('telescope.login');
+
+Route::post('telescope-login', [\App\Http\Controllers\TelescopeLoginController::class, 'login'])
+    ->name('telescope.login.post');
+
+Route::get('telescope-logout', [\App\Http\Controllers\TelescopeLoginController::class, 'logout'])
+    ->name('telescope.logout');
+
 // Ruta para el visor de logs (protegida con autenticación por sesión)
 Route::get('logs', [\Rap2hpoutre\LaravelLogViewer\LogViewerController::class, 'index'])
     ->middleware('logviewer.auth')
