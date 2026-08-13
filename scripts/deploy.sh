@@ -130,6 +130,32 @@ refresh_app_caches() {
   compose exec -T -u www-data app php artisan config:cache
 }
 
+# Tras cambiar IPAM/red en compose, un `up -d` no reatacha DNS (hostname redis falla).
+needs_compose_recreate() {
+  is_first_deploy && return 0
+  [[ -n "${CHANGED_FILES:-}" ]] && echo "${CHANGED_FILES}" | grep -qE '^(docker-compose|Dockerfile|docker/)' && return 0
+  return 1
+}
+
+wait_for_redis() {
+  log "Esperar Redis (PONG + DNS hostname redis desde app)"
+  local i
+  for i in $(seq 1 45); do
+    if compose exec -T redis redis-cli ping 2>/dev/null | grep -qi PONG; then
+      if compose exec -T app getent hosts redis >/dev/null 2>&1 \
+        || compose exec -T -u www-data app php -r 'exit(gethostbyname("redis") === "redis" ? 1 : 0);' 2>/dev/null; then
+        log "Redis listo"
+        return 0
+      fi
+    fi
+    sleep 2
+  done
+  log "ERROR: Redis no resolvió a tiempo (¿red Docker desincronizada?)"
+  compose ps || true
+  compose logs --tail=40 redis || true
+  return 1
+}
+
 restart_horizon_workers() {
   compose exec -T -u www-data app php artisan horizon:terminate || true
 }
@@ -254,7 +280,15 @@ if [[ "${DEPLOY_MODE}" == "docker" ]]; then
     log "Omitiendo docker build (sin cambios en Dockerfile/compose/docker/*)"
   fi
   down_stale_compose_projects
-  compose up -d
+
+  if needs_compose_recreate; then
+    log "compose up --force-recreate (cambio Docker/compose o primer deploy)"
+    compose up -d --force-recreate --remove-orphans
+  else
+    compose up -d
+  fi
+
+  wait_for_redis
 
   compose exec -T -u root app git config --global --add safe.directory /var/www/html || true
 
