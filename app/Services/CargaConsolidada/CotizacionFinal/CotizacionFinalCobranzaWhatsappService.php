@@ -372,9 +372,7 @@ class CotizacionFinalCobranzaWhatsappService
         }
 
         $extrasCalc = $this->getCalculadoraImportacionExtrasByCotizacion($idCotizacion);
-        $logisticaFinal = (float) ($cotizacion->logistica_final ?? 0)
-            + (float) ($extrasCalc['recargos'] ?? 0)
-            - (float) ($extrasCalc['descuento'] ?? 0);
+        $logisticaFinal = (float) ($cotizacion->logistica_final ?? 0);
         $impuestosFinal = (float) ($cotizacion->impuestos_final ?? 0);
         $serviciosExtraFinal = (float) ($cotizacion->servicios_extra_final ?? 0);
         $total = $logisticaFinal + $impuestosFinal + $serviciosExtraFinal;
