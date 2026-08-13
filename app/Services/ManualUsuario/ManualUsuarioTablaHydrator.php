@@ -302,38 +302,43 @@ class ManualUsuarioTablaHydrator
 
     /**
      * @param  array<int, mixed>  $columns
-     * @return array<int, array{accessorKey: string, header: string}>
+     * @return array<int, array<string, mixed>>
      */
     private function normalizeColumns(array $columns): array
     {
         $out = [];
         foreach ($columns as $i => $col) {
             if (is_string($col)) {
-                $key = 'c' . $i;
-                $header = $col;
-            } elseif (is_array($col)) {
-                $key = (string) ($col['accessorKey'] ?? $col['key'] ?? ('c' . $i));
-                $header = (string) ($col['header'] ?? $col['label'] ?? $key);
-            } else {
+                $out[] = [
+                    'accessorKey' => 'c' . $i,
+                    'header' => $col,
+                    'type' => 'text',
+                ];
                 continue;
             }
-            if (in_array(strtolower($key), ['acciones', 'action', 'actions'], true)
-                || strtolower($header) === 'acciones') {
+            if (!is_array($col)) {
                 continue;
             }
-            $out[] = ['accessorKey' => $key, 'header' => $header];
+            $key = (string) ($col['accessorKey'] ?? $col['key'] ?? ('c' . $i));
+            $header = (string) ($col['header'] ?? $col['label'] ?? $key);
+            $normalized = array_merge($col, [
+                'accessorKey' => $key,
+                'header' => $header,
+                'type' => (string) ($col['type'] ?? 'text'),
+            ]);
+            $out[] = $normalized;
         }
 
         return $out ?: [
-            ['accessorKey' => 'c0', 'header' => 'Columna 1'],
-            ['accessorKey' => 'c1', 'header' => 'Columna 2'],
-            ['accessorKey' => 'c2', 'header' => 'Columna 3'],
+            ['accessorKey' => 'c0', 'header' => 'Columna 1', 'type' => 'text'],
+            ['accessorKey' => 'c1', 'header' => 'Columna 2', 'type' => 'text'],
+            ['accessorKey' => 'c2', 'header' => 'Columna 3', 'type' => 'text'],
         ];
     }
 
     /**
      * @param  array<int, array<string, mixed>>  $rows
-     * @param  array<int, array{accessorKey: string, header: string}>  $columns
+     * @param  array<int, array<string, mixed>>  $columns
      * @return array<int, array<string, mixed>>
      */
     private function mapRows(array $rows, array $columns): array
@@ -343,15 +348,133 @@ class ManualUsuarioTablaHydrator
             if (!is_array($row)) {
                 continue;
             }
-            $mapped = ['id' => $row['id'] ?? $row['ID_Pedido_Curso'] ?? $i];
+            // Conservar fila original para selects/value_key + campos de display
+            $mapped = $row;
+            $mapped['id'] = $row['id'] ?? $row['ID_Pedido_Curso'] ?? $i;
             foreach ($columns as $col) {
-                $key = $col['accessorKey'];
-                $mapped[$key] = $this->cellValue($row, $key, $i);
+                $key = (string) ($col['accessorKey'] ?? '');
+                if ($key === '') {
+                    continue;
+                }
+                $type = (string) ($col['type'] ?? 'text');
+                // Selects/inputs/botones: conservar valores crudos para el renderer UI
+                if (in_array($type, ['select', 'input', 'buttons'], true)) {
+                    $valueKey = (string) ($col['value_key'] ?? $key);
+                    if (($col['compute'] ?? '') === 'pago_estado') {
+                        $mapped[$valueKey] = $this->computePagoEstado($row);
+                        $mapped[$key] = $mapped[$valueKey];
+                    } else {
+                        if (!array_key_exists($valueKey, $mapped) && array_key_exists($valueKey, $row)) {
+                            $mapped[$valueKey] = $row[$valueKey];
+                        }
+                        if ($key !== $valueKey && !array_key_exists($key, $mapped) && array_key_exists($key, $row)) {
+                            $mapped[$key] = $row[$key];
+                        }
+                    }
+                    continue;
+                }
+                $mapped[$key] = $this->cellValueForColumn($row, $col, $i);
             }
             $out[] = $mapped;
         }
 
         return $out;
+    }
+
+    /**
+     * @param  array<string, mixed>  $row
+     */
+    private function computePagoEstado(array $row): string
+    {
+        $importe = (float) ($row['Ss_Total'] ?? 0);
+        $pagos = (float) ($row['total_pagos'] ?? 0);
+        if ($pagos > $importe) {
+            return 'sobrepago';
+        }
+        if ($pagos < $importe && $pagos !== 0.0) {
+            return 'adelanto';
+        }
+        if ($pagos === $importe && $importe !== 0.0) {
+            return 'pagado';
+        }
+
+        return 'pendiente';
+    }
+
+    /**
+     * @param  array<string, mixed>  $row
+     * @param  array<string, mixed>  $col
+     */
+    private function cellValueForColumn(array $row, array $col, int $index): string
+    {
+        $type = (string) ($col['type'] ?? 'text');
+        $key = (string) ($col['accessorKey'] ?? '');
+        $valueKey = (string) ($col['value_key'] ?? $key);
+
+        if ($type === 'multiline') {
+            $fields = is_array($col['fields'] ?? null) ? $col['fields'] : [];
+            if ($fields === []) {
+                return $this->cellValue($row, $key, $index);
+            }
+
+            return $this->joinFields($row, $fields, "\n");
+        }
+
+        if ($type === 'currency') {
+            $raw = $row[$valueKey] ?? $row[$key] ?? $row['Ss_Total'] ?? 0;
+
+            return $this->formatMoney($raw, (string) ($col['currency'] ?? 'PEN'));
+        }
+
+        if ($type === 'select' || $type === 'input') {
+            $raw = $row[$valueKey] ?? $row[$key] ?? null;
+            if ($type === 'select' && is_array($col['options'] ?? null)) {
+                foreach ($col['options'] as $opt) {
+                    if (!is_array($opt)) {
+                        continue;
+                    }
+                    if ((string) ($opt['value'] ?? '') === (string) $raw) {
+                        return (string) ($opt['label'] ?? $raw);
+                    }
+                }
+            }
+
+            return $this->stringify($raw);
+        }
+
+        if ($type === 'buttons') {
+            return '';
+        }
+
+        return $this->cellValue($row, $key, $index);
+    }
+
+    /**
+     * @param  array<string, mixed>  $row
+     * @param  array<int, string>  $fields
+     */
+    private function joinFields(array $row, array $fields, string $sep = ' · '): string
+    {
+        $parts = [];
+        foreach ($fields as $f) {
+            $v = $row[$f] ?? null;
+            if ($v !== null && $v !== '') {
+                $parts[] = $this->stringify($v);
+            }
+        }
+
+        return implode($sep, $parts);
+    }
+
+    private function formatMoney($value, string $currency = 'PEN'): string
+    {
+        if (!is_numeric($value)) {
+            return $this->stringify($value);
+        }
+        $n = (float) $value;
+        $prefix = strtoupper($currency) === 'USD' ? 'US$ ' : 'S/ ';
+
+        return $prefix . number_format($n, 2, '.', ',');
     }
 
     /**
@@ -369,11 +492,11 @@ class ManualUsuarioTablaHydrator
 
         return match (strtolower($accessorKey)) {
             'cliente', 'contacto' => $this->joinFields($row, [
-                'No_Entidad', 'Nu_Documento_Identidad', 'Nu_Celular_Entidad', 'Txt_Email_Entidad',
-            ]),
+                'No_Entidad', 'Nu_Documento_Identidad', 'Nu_Celular_Entidad', 'Txt_Email_Entidad', 'No_Provincia',
+            ], "\n"),
             'fecha' => $this->stringify($row['Fe_Registro'] ?? $row['fecha'] ?? $row['Fecha'] ?? ''),
-            'precio' => $this->stringify($row['Ss_Total'] ?? $row['precio'] ?? ''),
-            'pagado' => $this->stringify($row['total_pagos'] ?? $row['pagado'] ?? ''),
+            'precio', 'importe' => $this->formatMoney($row['Ss_Total'] ?? $row['precio'] ?? $row['importe'] ?? 0),
+            'pagado' => $this->formatMoney($row['total_pagos'] ?? $row['pagado'] ?? 0),
             'adelanto' => $this->stringify($row['adelanto'] ?? (is_array($row['pagos_details'] ?? null) ? count($row['pagos_details']) . ' pago(s)' : '')),
             'campana', 'campaña' => $this->stringify($row['No_Campana'] ?? $row['campana'] ?? $row['ID_Campana'] ?? ''),
             'usuario' => $this->stringify($row['Nu_Estado_Usuario_Externo'] ?? $row['usuario'] ?? ''),
@@ -381,23 +504,6 @@ class ManualUsuarioTablaHydrator
             'estado', 'estado_pago' => $this->stringify($row['estado_pago'] ?? $row['Estado'] ?? $row['estado'] ?? ''),
             default => $this->stringify(data_get($row, $accessorKey, '')),
         };
-    }
-
-    /**
-     * @param  array<string, mixed>  $row
-     * @param  array<int, string>  $fields
-     */
-    private function joinFields(array $row, array $fields): string
-    {
-        $parts = [];
-        foreach ($fields as $f) {
-            $v = $row[$f] ?? null;
-            if ($v !== null && $v !== '') {
-                $parts[] = $this->stringify($v);
-            }
-        }
-
-        return implode(' · ', $parts);
     }
 
     private function stringify($value): string

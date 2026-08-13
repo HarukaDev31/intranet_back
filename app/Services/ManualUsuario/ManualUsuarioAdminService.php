@@ -109,6 +109,7 @@ class ManualUsuarioAdminService
                 $tipo = ManualBloque::normalizeTipo((string) ($w['tipo'] ?? 'tabla'));
                 $liveApi = is_array($w['live_api'] ?? null) ? $w['live_api'] : null;
                 $snapshot = is_array($w['snapshot'] ?? null) ? $w['snapshot'] : [];
+                $snapshot = $this->applyRoleToSnapshot($snapshot, $roleSlug, $tipo);
                 if ($liveApi || in_array($tipo, [ManualBloque::TIPO_TABLA, ManualBloque::TIPO_FILTROS, ManualBloque::TIPO_MODAL], true)) {
                     $snapshot = $this->tablaHydrator->hydrate($snapshot, $liveApi, $bearerToken, $roleSlug, $tipo);
                 }
@@ -137,6 +138,83 @@ class ManualUsuarioAdminService
     }
 
     /**
+     * Ajusta columnas/filtros al rol de la página CMS.
+     * Si no hay override para ese rol, se conserva la definición default de la page.
+     *
+     * @param  array<string, mixed>  $snapshot
+     * @return array<string, mixed>
+     */
+    private function applyRoleToSnapshot(array $snapshot, ?string $roleSlug, string $tipo): array
+    {
+        if ($roleSlug === null || $roleSlug === '') {
+            return $snapshot;
+        }
+
+        $slug = Str::slug($roleSlug);
+        $aliases = array_values(array_unique(array_filter([
+            $slug,
+            $roleSlug,
+            str_replace('_', '-', strtolower($roleSlug)),
+        ])));
+
+        // columns_by_role[slug] explícito
+        $byRole = is_array($snapshot['columns_by_role'] ?? null) ? $snapshot['columns_by_role'] : [];
+        foreach ($aliases as $alias) {
+            if (isset($byRole[$alias]) && is_array($byRole[$alias]) && $byRole[$alias] !== []) {
+                $snapshot['columns'] = $byRole[$alias];
+                break;
+            }
+        }
+
+        $rulesMap = is_array($snapshot['role_column_rules'] ?? null) ? $snapshot['role_column_rules'] : [];
+        $rules = null;
+        foreach ($aliases as $alias) {
+            if (isset($rulesMap[$alias]) && is_array($rulesMap[$alias])) {
+                $rules = $rulesMap[$alias];
+                break;
+            }
+        }
+
+        $columns = is_array($snapshot['columns'] ?? null) ? $snapshot['columns'] : [];
+        foreach ($columns as &$col) {
+            if (!is_array($col)) {
+                continue;
+            }
+            $readonlyRoles = is_array($col['readonly_roles'] ?? null) ? $col['readonly_roles'] : [];
+            foreach ($aliases as $alias) {
+                if (in_array($alias, $readonlyRoles, true)) {
+                    $col['readonly'] = true;
+                    break;
+                }
+            }
+            if ($rules && !empty($rules['readonly'])) {
+                $col['readonly'] = true;
+            }
+            $key = (string) ($col['accessorKey'] ?? $col['key'] ?? '');
+            $overrides = is_array($rules['column_overrides'] ?? null) ? $rules['column_overrides'] : [];
+            if ($key !== '' && isset($overrides[$key]) && is_array($overrides[$key])) {
+                $col = array_merge($col, $overrides[$key]);
+            }
+        }
+        unset($col);
+        $snapshot['columns'] = $columns;
+        $snapshot['applied_role_slug'] = $slug;
+
+        // Filtros: fields_by_role si existe; si no, default
+        if ($tipo === ManualBloque::TIPO_FILTROS || isset($snapshot['fields'])) {
+            $fieldsByRole = is_array($snapshot['fields_by_role'] ?? null) ? $snapshot['fields_by_role'] : [];
+            foreach ($aliases as $alias) {
+                if (isset($fieldsByRole[$alias]) && is_array($fieldsByRole[$alias]) && $fieldsByRole[$alias] !== []) {
+                    $snapshot['fields'] = $fieldsByRole[$alias];
+                    break;
+                }
+            }
+        }
+
+        return $snapshot;
+    }
+
+    /**
      * Re-hidrata snapshot de un bloque con live_api (tabla/filtros/modal/…).
          *
      * @param  array<string, mixed>  $payload
@@ -150,11 +228,14 @@ class ManualUsuarioAdminService
             ? $source['live_api']
             : (is_array($snapshot['live_api'] ?? null) ? $snapshot['live_api'] : null);
 
+        $effectiveRole = $roleSlug ?? ($source['role_slug'] ?? null);
+        $snapshot = $this->applyRoleToSnapshot($snapshot, $effectiveRole, $tipo);
+
         $payload['snapshot'] = $this->tablaHydrator->hydrate(
             $snapshot,
             $liveApi,
             $bearerToken,
-            $roleSlug ?? ($source['role_slug'] ?? null),
+            $effectiveRole,
             $tipo
         );
         if ($liveApi) {

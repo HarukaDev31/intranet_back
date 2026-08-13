@@ -305,6 +305,7 @@ class ManualUsuarioFrontWidgetScanner
                 if ($liveApi) {
                     $liveApi['kind'] = 'list';
                 }
+                $roleRules = $this->extractRoleColumnRules($content);
                 $widgets[] = [
                     'key' => $key,
                     'label' => 'Tabla — ' . $title,
@@ -317,6 +318,7 @@ class ManualUsuarioFrontWidgetScanner
                         'filters' => $filters,
                         'rows' => [],
                         'live_api' => $liveApi,
+                        'role_column_rules' => $roleRules,
                     ],
                 ];
             }
@@ -886,26 +888,45 @@ class ManualUsuarioFrontWidgetScanner
         if (preg_match('/:columns\\s*=\\s*["\']([^"\']+)["\']/', $attrs, $m)) {
             $ref = trim($m[1]);
             if (preg_match('/get([A-Za-z0-9_]+)Columns\\s*\\(/', $ref, $g)) {
-                // getAlumnosColumns() suele envolver `columns`
+                $getter = 'get' . $g[1] . 'Columns';
+                // Seguir return columns.value / return columnsXxx.value del getter
+                foreach ($this->resolveColumnSourceNames($content, $getter) as $src) {
+                    $candidates[] = $src;
+                }
                 $candidates[] = 'columns';
                 $candidates[] = 'columns' . $g[1];
-                $candidates[] = 'get' . $g[1] . 'Columns';
+                $candidates[] = $getter;
             } elseif (preg_match('/\\b([A-Za-z0-9_]+)\\b/', $ref, $g)) {
                 $candidates[] = $g[1];
             }
         }
 
+        $candidates = array_values(array_unique(array_filter($candidates)));
+        $best = [];
         foreach ($candidates as $name) {
             $cols = $this->parseColumnObjectsNearName($content, $name);
-            if (count($cols) > 0) {
+            if (count($cols) > count($best)) {
+                $best = $cols;
+            }
+            // Preferir el primer match “rico” (>= 3 cols con tipos UI)
+            $rich = 0;
+            foreach ($cols as $c) {
+                if (in_array(($c['type'] ?? 'text'), ['select', 'multiline', 'currency', 'buttons', 'input'], true)) {
+                    $rich++;
+                }
+            }
+            if (count($cols) >= 4 && $rich >= 2) {
                 return $cols;
             }
+        }
+        if (count($best) > 0) {
+            return $best;
         }
 
         // Fallback: primer bloque grande de accessorKey/header en el archivo
         $cols = $this->parseColumnObjectsInSlice($content);
         if (count($cols) >= 2) {
-            return array_slice($cols, 0, 12);
+            return array_slice($cols, 0, 16);
         }
 
         return [
@@ -916,12 +937,47 @@ class ManualUsuarioFrontWidgetScanner
     }
 
     /**
+     * Nombres de arrays/refs que realmente definen columnas (p. ej. getAlumnosColumns → columns).
+     *
+     * @return array<int, string>
+     */
+    private function resolveColumnSourceNames(string $content, string $getterName): array
+    {
+        $names = [];
+        if (!preg_match(
+            '/(?:const|let)\\s+' . preg_quote($getterName, '/') . '\\s*=\\s*(?:async\\s*)?\\([^)]*\\)\\s*(?::\\s*[^=]+)?\\s*=>/',
+            $content,
+            $m,
+            PREG_OFFSET_CAPTURE
+        ) && !preg_match(
+            '/function\\s+' . preg_quote($getterName, '/') . '\\s*\\(/',
+            $content,
+            $m,
+            PREG_OFFSET_CAPTURE
+        )) {
+            return $names;
+        }
+
+        $slice = substr($content, $m[0][1], 4000);
+        if (preg_match_all('/return\\s+([A-Za-z0-9_]+)(?:\\.value)?\\b/', $slice, $rm)) {
+            foreach ($rm[1] as $id) {
+                if (!preg_match('/^(true|false|null|undefined|column)$/i', $id)) {
+                    $names[] = $id;
+                }
+            }
+        }
+
+        return $names;
+    }
+
+    /**
      * @return array<int, array{accessorKey: string, header: string}>
      */
     private function parseColumnObjectsNearName(string $content, string $name): array
     {
+        // ref<TableColumn<CursoItem>[]>([  — genéricos anidados
         $patterns = [
-            '/(?:const|let)\\s+' . preg_quote($name, '/') . '\\s*=\\s*ref\\s*(?:<[^>]*>)?\\s*\\(\\s*\\[/',
+            '/(?:const|let)\\s+' . preg_quote($name, '/') . '\\s*=\\s*ref\\b/',
             '/(?:const|let)\\s+' . preg_quote($name, '/') . '\\s*=\\s*\\[/',
             '/(?:const|let)\\s+' . preg_quote($name, '/') . '\\s*=\\s*(?:async\\s*)?\\([^)]*\\)\\s*(?::\\s*[^=]+)?\\s*=>/',
             '/function\\s+' . preg_quote($name, '/') . '\\s*\\(/',
@@ -933,7 +989,15 @@ class ManualUsuarioFrontWidgetScanner
                 continue;
             }
             $start = $m[0][1];
-            $slice = substr($content, $start, 20000);
+            $window = substr($content, $start, 60000);
+            $arrayBody = null;
+            if (str_contains($m[0][0], 'ref')) {
+                $arrayBody = $this->extractRefArrayBody($window);
+            }
+            if ($arrayBody === null) {
+                $arrayBody = $this->extractFirstValueArrayBody($window);
+            }
+            $slice = $arrayBody !== null ? $arrayBody : substr($window, 0, 25000);
             $cols = $this->parseColumnObjectsInSlice($slice);
             if (count($cols) > 0) {
                 return $cols;
@@ -944,44 +1008,413 @@ class ManualUsuarioFrontWidgetScanner
     }
 
     /**
-     * @return array<int, array{accessorKey: string, header: string}>
+     * Cuerpo del array pasado a ref([...]) ignorando genéricos TS anidados.
+     */
+    private function extractRefArrayBody(string $window): ?string
+    {
+        if (!preg_match('/\\bref\\b/', $window, $m, PREG_OFFSET_CAPTURE)) {
+            return null;
+        }
+        $i = $m[0][1] + strlen('ref');
+        $len = strlen($window);
+        while ($i < $len && ctype_space($window[$i])) {
+            $i++;
+        }
+        if ($i < $len && $window[$i] === '<') {
+            $depth = 0;
+            for (; $i < $len; $i++) {
+                $ch = $window[$i];
+                if ($ch === '<') {
+                    $depth++;
+                } elseif ($ch === '>') {
+                    $depth--;
+                    if ($depth === 0) {
+                        $i++;
+                        break;
+                    }
+                }
+            }
+        }
+        while ($i < $len && ctype_space($window[$i])) {
+            $i++;
+        }
+        if ($i >= $len || $window[$i] !== '(') {
+            return null;
+        }
+        $i++;
+        while ($i < $len && ctype_space($window[$i])) {
+            $i++;
+        }
+        if ($i >= $len || $window[$i] !== '[') {
+            return null;
+        }
+
+        return $this->extractArrayBodyAt($window, $i);
+    }
+
+    /**
+     * Primer array de valor tras `= [` (no el `[]` de un tipo TS).
+     */
+    private function extractFirstValueArrayBody(string $window): ?string
+    {
+        if (preg_match('/=\\s*\\[/', $window, $m, PREG_OFFSET_CAPTURE)) {
+            $bracket = $m[0][1] + strlen($m[0][0]) - 1;
+
+            return $this->extractArrayBodyAt($window, $bracket);
+        }
+        // Función getter: buscar return [ o primer [ significativo más adelante
+        if (preg_match('/\\[[\\s\\n]*\\{/', $window, $m, PREG_OFFSET_CAPTURE)) {
+            return $this->extractArrayBodyAt($window, $m[0][1]);
+        }
+
+        return $this->extractFirstArrayBody($window);
+    }
+
+    /**
+     * Cuerpo del array `[...]` empezando en la posición del `[`.
+     */
+    private function extractArrayBodyAt(string $slice, int $start): ?string
+    {
+        if (!isset($slice[$start]) || $slice[$start] !== '[') {
+            return null;
+        }
+        $depth = 0;
+        $len = strlen($slice);
+        $inStr = null;
+        $escape = false;
+        for ($i = $start; $i < $len; $i++) {
+            $ch = $slice[$i];
+            if ($inStr !== null) {
+                if ($escape) {
+                    $escape = false;
+                    continue;
+                }
+                if ($ch === '\\') {
+                    $escape = true;
+                    continue;
+                }
+                if ($ch === $inStr) {
+                    $inStr = null;
+                }
+                continue;
+            }
+            if ($ch === '"' || $ch === "'" || $ch === '`') {
+                $inStr = $ch;
+                continue;
+            }
+            if ($ch === '[') {
+                $depth++;
+            } elseif ($ch === ']') {
+                $depth--;
+                if ($depth === 0) {
+                    return substr($slice, $start + 1, $i - $start - 1);
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Cuerpo del primer array `[...]` con brackets balanceados (sin incluir los corchetes).
+     */
+    private function extractFirstArrayBody(string $slice): ?string
+    {
+        $start = strpos($slice, '[');
+        if ($start === false) {
+            return null;
+        }
+
+        return $this->extractArrayBodyAt($slice, $start);
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
      */
     private function parseColumnObjectsInSlice(string $slice): array
     {
         $cols = [];
-        if (!preg_match_all(
-            '/accessorKey\\s*:\\s*[\'"]([^\'"]+)[\'"][\\s\\S]{0,400}?header\\s*:\\s*[\'"]([^\'"]+)[\'"]/u',
+        $offset = 0;
+        $len = strlen($slice);
+        while ($offset < $len && count($cols) < 20) {
+            if (!preg_match('/\\{[\\s\\n]*accessorKey\\s*:/', $slice, $m, PREG_OFFSET_CAPTURE, $offset)
+                && !preg_match('/\\{[\\s\\n]*header\\s*:/', $slice, $m, PREG_OFFSET_CAPTURE, $offset)) {
+                break;
+            }
+            $braceStart = $m[0][1];
+            $obj = $this->extractBalancedBraceObject($slice, $braceStart);
+            if ($obj === null) {
+                $offset = $braceStart + 1;
+                continue;
+            }
+            $offset = $braceStart + strlen($obj);
+
+            $accessorKey = null;
+            $header = null;
+            if (preg_match('/accessorKey\\s*:\\s*[\'"]([^\'"]+)[\'"]/', $obj, $am)) {
+                $accessorKey = $am[1];
+            }
+            if (preg_match('/header\\s*:\\s*[\'"]([^\'"]+)[\'"]/', $obj, $hm)) {
+                $header = $hm[1];
+            }
+            if ($accessorKey === null || $header === null) {
+                continue;
+            }
+            $cols[] = $this->enrichColumnDef($accessorKey, $header, $obj);
+        }
+
+        if ($cols !== []) {
+            return $cols;
+        }
+
+        // Fallback regex (páginas con columnas muy simples)
+        if (preg_match_all(
+            '/accessorKey\\s*:\\s*[\'"]([^\'"]+)[\'"][\\s\\S]{0,240}?header\\s*:\\s*[\'"]([^\'"]+)[\'"]([\\s\\S]{0,2800}?)(?=\\n\\s*\\{|,?\\s*\\n\\s*\\])/u',
             $slice,
             $matches,
             PREG_SET_ORDER
         )) {
-            // header primero
-            if (!preg_match_all(
-                '/header\\s*:\\s*[\'"]([^\'"]+)[\'"][\\s\\S]{0,400}?accessorKey\\s*:\\s*[\'"]([^\'"]+)[\'"]/u',
-                $slice,
-                $matches2,
-                PREG_SET_ORDER
-            )) {
-                return [];
-            }
-            foreach ($matches2 as $m) {
-                $cols[] = ['accessorKey' => $m[2], 'header' => $m[1]];
-                if (count($cols) >= 14) {
+            foreach ($matches as $m) {
+                $cols[] = $this->enrichColumnDef($m[1], $m[2], $m[3] ?? '');
+                if (count($cols) >= 16) {
                     break;
                 }
-            }
-
-            return $cols;
-        }
-
-        foreach ($matches as $m) {
-            $cols[] = ['accessorKey' => $m[1], 'header' => $m[2]];
-            if (count($cols) >= 14) {
-                break;
             }
         }
 
         return $cols;
+    }
+
+    /**
+     * Extrae un objeto `{...}` con llaves balanceadas desde $start (posición de `{`).
+     */
+    private function extractBalancedBraceObject(string $src, int $start): ?string
+    {
+        if (!isset($src[$start]) || $src[$start] !== '{') {
+            return null;
+        }
+        $depth = 0;
+        $len = strlen($src);
+        $inStr = null;
+        $escape = false;
+        for ($i = $start; $i < $len; $i++) {
+            $ch = $src[$i];
+            if ($inStr !== null) {
+                if ($escape) {
+                    $escape = false;
+                    continue;
+                }
+                if ($ch === '\\') {
+                    $escape = true;
+                    continue;
+                }
+                if ($ch === $inStr) {
+                    $inStr = null;
+                }
+                continue;
+            }
+            if ($ch === '"' || $ch === "'" || $ch === '`') {
+                $inStr = $ch;
+                continue;
+            }
+            if ($ch === '{') {
+                $depth++;
+            } elseif ($ch === '}') {
+                $depth--;
+                if ($depth === 0) {
+                    return substr($src, $start, $i - $start + 1);
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function enrichColumnDef(string $accessorKey, string $header, string $body): array
+    {
+        $col = [
+            'accessorKey' => $accessorKey,
+            'header' => $header,
+            'type' => 'text',
+        ];
+
+        $readonlyRoles = [];
+        if (preg_match('/disabled\\s*:\\s*isJefeMarketing/i', $body)
+            || preg_match('/ROLES\\.JEFE_MARKETING/i', $body) && preg_match('/disabled\\s*:/i', $body)) {
+            $readonlyRoles[] = 'jefe-marketing';
+        }
+        if ($readonlyRoles) {
+            $col['readonly_roles'] = array_values(array_unique($readonlyRoles));
+        }
+
+        if (preg_match('/h\\(\\s*USelect\\b/i', $body)) {
+            $col['type'] = 'select';
+            $col['options'] = $this->parseInlineSelectOptions($body);
+            if ($col['options'] === [] && preg_match(
+                '/filterConfig[\\s\\S]{0,120}?key\\s*===\\s*[\'"]([^\'"]+)[\'"]/',
+                $body,
+                $fm
+            )) {
+                $col['options_from_filter'] = $fm[1];
+            }
+            if (preg_match('/modelValue\\s*:\\s*row\\.original\\.([A-Za-z0-9_]+)/', $body, $vm)) {
+                $col['value_key'] = $vm[1];
+            } elseif (preg_match(
+                '/[\'"]onUpdate:modelValue[\'"]\\s*:[\\s\\S]{0,120}?row\\.original\\.([A-Za-z0-9_]+)\\s*=/',
+                $body,
+                $vm
+            )) {
+                $col['value_key'] = $vm[1];
+            } elseif (preg_match('/row\\.original\\.([A-Za-z0-9_]+)/', $body, $vm)) {
+                $col['value_key'] = $vm[1];
+            }
+            // Estado de pago calculado (pendiente/adelanto/pagado/sobrepago)
+            $optValues = array_map(fn ($o) => (string) ($o['value'] ?? ''), $col['options']);
+            if (count(array_intersect($optValues, ['pendiente', 'adelanto', 'pagado', 'sobrepago'])) >= 3) {
+                $col['compute'] = 'pago_estado';
+                $col['value_key'] = 'estado_pago';
+                $col['readonly'] = true;
+            }
+            // disabled: true en props del select (antes de items), no en opciones internas
+            if (preg_match('/h\\(\\s*USelect\\b([\\s\\S]*?)\\bitems\\s*:/i', $body, $sm)
+                && preg_match('/disabled\\s*:\\s*true\\b/', $sm[1])) {
+                $col['readonly'] = true;
+            }
+        } elseif (preg_match('/formatCurrency\\s*\\(/i', $body)) {
+            $col['type'] = 'currency';
+            $col['currency'] = preg_match('/[\'"]USD[\'"]/', $body) ? 'USD' : 'PEN';
+            if (preg_match('/row\\.original\\.([A-Za-z0-9_]+)/', $body, $vm)) {
+                $col['value_key'] = $vm[1];
+            }
+        } elseif (preg_match('/h\\(\\s*[\'"]div[\'"][\\s\\S]{0,200}?h\\(\\s*[\'"]p[\'"]/i', $body)
+            || (substr_count($body, "h('p'") + substr_count($body, 'h("p"') >= 2)) {
+            $col['type'] = 'multiline';
+            if (preg_match_all('/row\\.original\\.([A-Za-z0-9_]+)/', $body, $fm)) {
+                $col['fields'] = array_values(array_unique($fm[1]));
+            }
+        } elseif (preg_match('/h\\(\\s*UButton\\b/i', $body)
+            || preg_match('/^(acciones|actions?)$/i', $accessorKey)
+            || preg_match('/^acciones$/i', $header)) {
+            $col['type'] = 'buttons';
+            $col['buttons'] = $this->extractButtonsFromColumnBody($body);
+        } elseif (preg_match('/h\\(\\s*UInput\\b/i', $body)) {
+            $col['type'] = 'input';
+            if (preg_match('/row\\.original\\.([A-Za-z0-9_]+)/', $body, $vm)) {
+                $col['value_key'] = $vm[1];
+            }
+        }
+
+        return $col;
+    }
+
+    /**
+     * @return array<int, array{label: string, value: string|int}>
+     */
+    private function parseInlineSelectOptions(string $body): array
+    {
+        $options = [];
+        // const items = [ { label: 'Virtual', value: "0", ...}, ...]
+        if (preg_match('/items\\s*=\\s*\\[([\\s\\S]{0,2000}?)\\]/', $body, $m)
+            || preg_match('/items\\s*:\\s*\\[([\\s\\S]{0,2000}?)\\]/', $body, $m)) {
+            if (preg_match_all(
+                '/label\\s*:\\s*[\'"]([^\'"]+)[\'"][\\s\\S]{0,120}?value\\s*:\\s*[\'"]?([^\'",\\s}]+)[\'"]?/u',
+                $m[1],
+                $pairs,
+                PREG_SET_ORDER
+            )) {
+                foreach ($pairs as $p) {
+                    $options[] = ['label' => $p[1], 'value' => $p[2]];
+                }
+            }
+        }
+
+        return $options;
+    }
+
+    /**
+     * @return array<int, array{label: string, icon: ?string, color: string, variant: string}>
+     */
+    private function extractButtonsFromColumnBody(string $body): array
+    {
+        $buttons = [];
+        $offset = 0;
+        while (preg_match('/h\\(\\s*UButton\\s*,\\s*\\{/', $body, $m, PREG_OFFSET_CAPTURE, $offset)) {
+            $start = $m[0][1] + strlen($m[0][0]);
+            $depth = 1;
+            $len = strlen($body);
+            $end = $start;
+            for ($i = $start; $i < $len && $i < $start + 800; $i++) {
+                if ($body[$i] === '{') {
+                    $depth++;
+                } elseif ($body[$i] === '}') {
+                    $depth--;
+                    if ($depth === 0) {
+                        $end = $i;
+                        break;
+                    }
+                }
+            }
+            if ($depth !== 0) {
+                break;
+            }
+            $props = substr($body, $start, $end - $start);
+            $offset = $end + 1;
+            $icon = null;
+            $variant = 'outline';
+            $color = 'primary';
+            if (preg_match('/icon\\s*:\\s*[\'"]([^\'"]+)[\'"]/', $props, $im)) {
+                $icon = $im[1];
+            }
+            if (preg_match('/variant\\s*:\\s*[\'"]([^\'"]+)[\'"]/', $props, $vm)) {
+                $variant = $vm[1];
+            }
+            if (preg_match('/color\\s*:\\s*[\'"]([^\'"]+)[\'"]/', $props, $cm)) {
+                $color = $cm[1];
+            }
+            if (!$icon) {
+                continue;
+            }
+            $buttons[] = [
+                'label' => $this->labelFromIcon($icon),
+                'icon' => $icon,
+                'color' => $color,
+                'variant' => $variant,
+            ];
+        }
+
+        return $this->uniqueToolbarButtons($buttons);
+    }
+
+    /**
+     * Reglas por rol detectadas en getters tipo getAlumnosColumns().
+     *
+     * @return array<string, array<string, mixed>>
+     */
+    private function extractRoleColumnRules(string $content): array
+    {
+        $rules = [];
+        // if (isJefeMarketing…) { … solo eye en acciones }
+        if (preg_match('/isJefeMarketing[\\s\\S]{0,800}?i-heroicons-eye/i', $content)) {
+            $rules['jefe-marketing'] = [
+                'readonly' => true,
+                'column_overrides' => [
+                    'acciones' => [
+                        'type' => 'buttons',
+                        'buttons' => [[
+                            'label' => 'Ver',
+                            'icon' => 'i-heroicons-eye',
+                            'color' => 'primary',
+                            'variant' => 'solid',
+                        ]],
+                    ],
+                ],
+            ];
+        }
+
+        return $rules;
     }
 
     /**

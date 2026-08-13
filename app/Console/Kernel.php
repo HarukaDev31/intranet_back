@@ -65,7 +65,7 @@ class Kernel extends ConsoleKernel
             ->withoutOverlapping();
 
         // Telescope: borrar entries > 7 días (domingo 04:00 Lima) para no inflar la BD en prod
-        $schedule->command('telescope:prune --hours=168')
+        $schedule->command('telescope:prune --hours=48')
             ->weeklyOn(0, '04:00')
             ->timezone('America/Lima')
             ->withoutOverlapping()

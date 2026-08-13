@@ -19312,31 +19312,175 @@ return array (
             array (
               'accessorKey' => 'index',
               'header' => 'N.',
+              'type' => 'text',
             ),
             1 => 
             array (
-              'accessorKey' => 'fecha',
+              'accessorKey' => 'Fe_Registro',
               'header' => 'Fecha',
+              'type' => 'text',
             ),
             2 => 
             array (
-              'accessorKey' => 'contacto',
-              'header' => 'Contacto',
+              'accessorKey' => 'cliente',
+              'header' => 'Cliente',
+              'type' => 'multiline',
+              'fields' => 
+              array (
+                0 => 'No_Entidad',
+                1 => 'Nu_Documento_Identidad',
+                2 => 'Nu_Celular_Entidad',
+                3 => 'Txt_Email_Entidad',
+                4 => 'No_Provincia',
+              ),
             ),
             3 => 
             array (
-              'accessorKey' => 'precio',
-              'header' => 'Precio',
+              'accessorKey' => 'tipo_curso',
+              'header' => 'Curso',
+              'type' => 'select',
+              'readonly_roles' => 
+              array (
+                0 => 'jefe-marketing',
+              ),
+              'options' => 
+              array (
+                0 => 
+                array (
+                  'label' => 'Virtual',
+                  'value' => '0',
+                ),
+                1 => 
+                array (
+                  'label' => 'En vivo',
+                  'value' => '1',
+                ),
+              ),
+              'value_key' => 'tipo_curso',
             ),
             4 => 
             array (
-              'accessorKey' => 'pagado',
-              'header' => 'Pagado',
+              'accessorKey' => 'campana',
+              'header' => 'Campaña',
+              'type' => 'select',
+              'readonly_roles' => 
+              array (
+                0 => 'jefe-marketing',
+              ),
+              'options' => 
+              array (
+              ),
+              'options_from_filter' => 'campanas',
+              'value_key' => 'ID_Campana',
             ),
             5 => 
             array (
-              'accessorKey' => 'adelanto',
-              'header' => 'Adelanto',
+              'accessorKey' => 'usuario',
+              'header' => 'Usuario',
+              'type' => 'select',
+              'readonly_roles' => 
+              array (
+                0 => 'jefe-marketing',
+              ),
+              'options' => 
+              array (
+                0 => 
+                array (
+                  'label' => 'Pendiente',
+                  'value' => '3',
+                ),
+                1 => 
+                array (
+                  'label' => 'Creado',
+                  'value' => '2',
+                ),
+                2 => 
+                array (
+                  'label' => 'Constancia',
+                  'value' => '4',
+                ),
+              ),
+              'value_key' => 'Nu_Estado_Usuario_Externo',
+            ),
+            6 => 
+            array (
+              'accessorKey' => 'importe',
+              'header' => 'Importe',
+              'type' => 'input',
+              'readonly_roles' => 
+              array (
+                0 => 'jefe-marketing',
+              ),
+              'value_key' => 'Ss_Total',
+            ),
+            7 => 
+            array (
+              'accessorKey' => 'estado',
+              'header' => 'Estado',
+              'type' => 'select',
+              'options' => 
+              array (
+                0 => 
+                array (
+                  'label' => 'Pendiente',
+                  'value' => 'pendiente',
+                ),
+                1 => 
+                array (
+                  'label' => 'Adelanto',
+                  'value' => 'adelanto',
+                ),
+                2 => 
+                array (
+                  'label' => 'Pagado',
+                  'value' => 'pagado',
+                ),
+                3 => 
+                array (
+                  'label' => 'Sobrepago',
+                  'value' => 'sobrepago',
+                ),
+              ),
+              'value_key' => 'estado_pago',
+              'compute' => 'pago_estado',
+              'readonly' => true,
+            ),
+            8 => 
+            array (
+              'accessorKey' => 'acciones',
+              'header' => 'Acciones',
+              'type' => 'buttons',
+              'buttons' => 
+              array (
+                0 => 
+                array (
+                  'label' => 'Ver',
+                  'icon' => 'i-heroicons-eye',
+                  'color' => 'primary',
+                  'variant' => 'solid',
+                ),
+                1 => 
+                array (
+                  'label' => 'Eliminar',
+                  'icon' => 'i-heroicons-trash',
+                  'color' => 'primary',
+                  'variant' => 'outline',
+                ),
+                2 => 
+                array (
+                  'label' => 'Guardar',
+                  'icon' => 'ic:outline-save',
+                  'color' => 'primary',
+                  'variant' => 'outline',
+                ),
+                3 => 
+                array (
+                  'label' => 'Mensaje',
+                  'icon' => 'i-heroicons-chat-bubble-left-right',
+                  'color' => 'primary',
+                  'variant' => 'outline',
+                ),
+              ),
             ),
           ),
           'filters' => 
@@ -19356,6 +19500,30 @@ return array (
             ),
             'data_key' => 'data',
             'kind' => 'list',
+          ),
+          'role_column_rules' => 
+          array (
+            'jefe-marketing' => 
+            array (
+              'readonly' => true,
+              'column_overrides' => 
+              array (
+                'acciones' => 
+                array (
+                  'type' => 'buttons',
+                  'buttons' => 
+                  array (
+                    0 => 
+                    array (
+                      'label' => 'Ver',
+                      'icon' => 'i-heroicons-eye',
+                      'color' => 'primary',
+                      'variant' => 'solid',
+                    ),
+                  ),
+                ),
+              ),
+            ),
           ),
         ),
       ),
@@ -19386,61 +19554,41 @@ return array (
             array (
               'accessorKey' => 'index',
               'header' => 'N.',
+              'type' => 'text',
             ),
             1 => 
             array (
-              'accessorKey' => 'Fe_Registro',
+              'accessorKey' => 'fecha',
               'header' => 'Fecha',
+              'type' => 'text',
             ),
             2 => 
             array (
-              'accessorKey' => 'cliente',
-              'header' => 'Cliente',
+              'accessorKey' => 'contacto',
+              'header' => 'Contacto',
+              'type' => 'text',
             ),
             3 => 
             array (
-              'accessorKey' => 'tipo_curso',
-              'header' => 'Curso',
+              'accessorKey' => 'precio',
+              'header' => 'Precio',
+              'type' => 'currency',
+              'currency' => 'PEN',
+              'value_key' => 'Ss_Total',
             ),
             4 => 
             array (
-              'accessorKey' => 'campana',
-              'header' => 'Campaña',
+              'accessorKey' => 'pagado',
+              'header' => 'Pagado',
+              'type' => 'currency',
+              'currency' => 'PEN',
+              'value_key' => 'total_pagos',
             ),
             5 => 
             array (
-              'accessorKey' => 'usuario',
-              'header' => 'Usuario',
-            ),
-            6 => 
-            array (
-              'accessorKey' => 'importe',
-              'header' => 'Importe',
-            ),
-            7 => 
-            array (
-              'accessorKey' => 'estado',
-              'header' => 'Estado',
-            ),
-            8 => 
-            array (
-              'accessorKey' => 'acciones',
-              'header' => 'Acciones',
-            ),
-            9 => 
-            array (
-              'accessorKey' => 'index',
-              'header' => 'N.',
-            ),
-            10 => 
-            array (
-              'accessorKey' => 'fecha',
-              'header' => 'Fecha',
-            ),
-            11 => 
-            array (
-              'accessorKey' => 'contacto',
-              'header' => 'Contacto',
+              'accessorKey' => 'adelanto',
+              'header' => 'Adelanto',
+              'type' => 'text',
             ),
           ),
           'filters' => 
@@ -19460,6 +19608,30 @@ return array (
             ),
             'data_key' => 'data',
             'kind' => 'list',
+          ),
+          'role_column_rules' => 
+          array (
+            'jefe-marketing' => 
+            array (
+              'readonly' => true,
+              'column_overrides' => 
+              array (
+                'acciones' => 
+                array (
+                  'type' => 'buttons',
+                  'buttons' => 
+                  array (
+                    0 => 
+                    array (
+                      'label' => 'Ver',
+                      'icon' => 'i-heroicons-eye',
+                      'color' => 'primary',
+                      'variant' => 'solid',
+                    ),
+                  ),
+                ),
+              ),
+            ),
           ),
         ),
       ),
@@ -20041,31 +20213,37 @@ return array (
             array (
               'accessorKey' => 'id',
               'header' => 'ID',
+              'type' => 'text',
             ),
             1 => 
             array (
               'accessorKey' => 'fecha_creacion',
               'header' => 'Fecha de Creación',
+              'type' => 'text',
             ),
             2 => 
             array (
               'accessorKey' => 'nombre_campana',
               'header' => 'Nombre de Campaña',
+              'type' => 'text',
             ),
             3 => 
             array (
               'accessorKey' => 'fecha_inicio',
               'header' => 'Fecha de Inicio',
+              'type' => 'text',
             ),
             4 => 
             array (
               'accessorKey' => 'fecha_fin',
               'header' => 'Fecha Fin',
+              'type' => 'text',
             ),
             5 => 
             array (
               'accessorKey' => 'cantidad_personas',
               'header' => 'Cantidad de Personas',
+              'type' => 'text',
             ),
           ),
           'filters' => 
@@ -20180,6 +20358,9 @@ return array (
             ),
             'data_key' => 'data',
             'kind' => 'list',
+          ),
+          'role_column_rules' => 
+          array (
           ),
         ),
       ),
@@ -20452,41 +20633,69 @@ return array (
             array (
               'accessorKey' => 'numero',
               'header' => 'N.',
+              'type' => 'text',
             ),
             1 => 
             array (
               'accessorKey' => 'Fe_Registro',
               'header' => 'Fecha',
+              'type' => 'text',
             ),
             2 => 
             array (
               'accessorKey' => 'cliente',
               'header' => 'Cliente',
+              'type' => 'multiline',
+              'fields' => 
+              array (
+                0 => 'No_Entidad',
+                1 => 'id_cliente',
+                2 => 'Nu_Documento_Identidad',
+                3 => 'Nu_Celular_Entidad',
+                4 => 'Txt_Email_Entidad',
+              ),
             ),
             3 => 
             array (
               'accessorKey' => 'tipo_curso',
               'header' => 'Curso',
+              'type' => 'buttons',
+              'buttons' => 
+              array (
+              ),
             ),
             4 => 
             array (
               'accessorKey' => 'campana',
               'header' => 'Campaña',
+              'type' => 'buttons',
+              'buttons' => 
+              array (
+              ),
             ),
             5 => 
             array (
               'accessorKey' => 'usuario',
               'header' => 'Usuario',
+              'type' => 'buttons',
+              'buttons' => 
+              array (
+              ),
             ),
             6 => 
             array (
               'accessorKey' => 'importe',
               'header' => 'Importe',
+              'type' => 'text',
             ),
             7 => 
             array (
               'accessorKey' => 'estado',
               'header' => 'Estado',
+              'type' => 'buttons',
+              'buttons' => 
+              array (
+              ),
             ),
           ),
           'filters' => 
@@ -20531,6 +20740,9 @@ return array (
             ),
             'data_key' => 'data',
             'kind' => 'list',
+          ),
+          'role_column_rules' => 
+          array (
           ),
         ),
       ),
@@ -20950,21 +21162,25 @@ return array (
             array (
               'accessorKey' => 'sort_order',
               'header' => 'Orden',
+              'type' => 'text',
             ),
             1 => 
             array (
               'accessorKey' => 'title',
               'header' => 'Título',
+              'type' => 'text',
             ),
             2 => 
             array (
               'accessorKey' => 'subtitle',
               'header' => 'Subtítulo',
+              'type' => 'text',
             ),
             3 => 
             array (
               'accessorKey' => 'price_amount',
               'header' => 'Monto',
+              'type' => 'text',
             ),
           ),
           'filters' => 
@@ -20984,6 +21200,9 @@ return array (
             ),
             'data_key' => 'data',
             'kind' => 'list',
+          ),
+          'role_column_rules' => 
+          array (
           ),
         ),
       ),
