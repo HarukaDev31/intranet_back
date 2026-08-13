@@ -199,6 +199,67 @@ return array (
       ),
       1 => 
       array (
+        'key' => 'toolbar-datatable',
+        'label' => 'Toolbar — Controles de tabla',
+        'tipo' => 'toolbar',
+        'component' => 'pages/basedatos/boletin-quimico/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Nuevo',
+              'icon' => 'i-heroicons-plus',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+            1 => 
+            array (
+              'label' => 'Buscar',
+              'icon' => 'i-heroicons-magnifying-glass',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+          ),
+        ),
+      ),
+      2 => 
+      array (
+        'key' => 'accion-nuevo',
+        'label' => 'Acción — Nuevo',
+        'tipo' => 'accion',
+        'component' => 'pages/basedatos/boletin-quimico/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Nuevo',
+          'icon' => 'i-heroicons-plus',
+          'color' => 'primary',
+          'variant' => 'solid',
+        ),
+      ),
+      3 => 
+      array (
+        'key' => 'accion-buscar',
+        'label' => 'Acción — Buscar',
+        'tipo' => 'accion',
+        'component' => 'pages/basedatos/boletin-quimico/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Buscar',
+          'icon' => 'i-heroicons-magnifying-glass',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
+      4 => 
+      array (
         'key' => 'tabla-filtered',
         'label' => 'Tabla — Filtered',
         'tipo' => 'tabla',
@@ -234,7 +295,7 @@ return array (
           'live_api' => NULL,
         ),
       ),
-      2 => 
+      5 => 
       array (
         'key' => 'modal-nuevo-boletin-quimico',
         'label' => 'Modal — Nuevo Boletín Químico',
@@ -533,6 +594,174 @@ return array (
           'live_api' => NULL,
         ),
       ),
+      2 => 
+      array (
+        'key' => 'toolbar-acciones',
+        'label' => 'Toolbar — Acciones',
+        'tipo' => 'toolbar',
+        'component' => 'pages/basedatos/clientes/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Importar Facturacion',
+              'icon' => 'i-heroicons-document-arrow-up',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+            1 => 
+            array (
+              'label' => 'Exportar Excel',
+              'icon' => 'i-heroicons-arrow-down-tray',
+              'color' => 'success',
+              'variant' => 'outline',
+            ),
+          ),
+        ),
+      ),
+      3 => 
+      array (
+        'key' => 'accion-importar-facturacion',
+        'label' => 'Acción — Importar Facturacion',
+        'tipo' => 'accion',
+        'component' => 'pages/basedatos/clientes/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Importar Facturacion',
+          'icon' => 'i-heroicons-document-arrow-up',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
+      4 => 
+      array (
+        'key' => 'accion-exportar-excel',
+        'label' => 'Acción — Exportar Excel',
+        'tipo' => 'accion',
+        'component' => 'pages/basedatos/clientes/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Exportar Excel',
+          'icon' => 'i-heroicons-arrow-down-tray',
+          'color' => 'success',
+          'variant' => 'outline',
+        ),
+      ),
+      5 => 
+      array (
+        'key' => 'toolbar-datatable',
+        'label' => 'Toolbar — Controles de tabla',
+        'tipo' => 'toolbar',
+        'component' => 'pages/basedatos/clientes/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Exportar',
+              'icon' => 'i-heroicons-arrow-up-tray',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+            1 => 
+            array (
+              'label' => 'Filtros',
+              'icon' => 'i-heroicons-funnel',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+            2 => 
+            array (
+              'label' => 'Nuevo',
+              'icon' => 'i-heroicons-plus',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+            3 => 
+            array (
+              'label' => 'Buscar',
+              'icon' => 'i-heroicons-magnifying-glass',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+          ),
+        ),
+      ),
+      6 => 
+      array (
+        'key' => 'accion-exportar',
+        'label' => 'Acción — Exportar',
+        'tipo' => 'accion',
+        'component' => 'pages/basedatos/clientes/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Exportar',
+          'icon' => 'i-heroicons-arrow-up-tray',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
+      7 => 
+      array (
+        'key' => 'accion-filtros',
+        'label' => 'Acción — Filtros',
+        'tipo' => 'accion',
+        'component' => 'pages/basedatos/clientes/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Filtros',
+          'icon' => 'i-heroicons-funnel',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
+      8 => 
+      array (
+        'key' => 'accion-nuevo',
+        'label' => 'Acción — Nuevo',
+        'tipo' => 'accion',
+        'component' => 'pages/basedatos/clientes/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Nuevo',
+          'icon' => 'i-heroicons-plus',
+          'color' => 'primary',
+          'variant' => 'solid',
+        ),
+      ),
+      9 => 
+      array (
+        'key' => 'accion-buscar',
+        'label' => 'Acción — Buscar',
+        'tipo' => 'accion',
+        'component' => 'pages/basedatos/clientes/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Buscar',
+          'icon' => 'i-heroicons-magnifying-glass',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
     ),
   ),
   3 => 
@@ -637,6 +866,103 @@ return array (
           'live_api' => NULL,
         ),
       ),
+      2 => 
+      array (
+        'key' => 'toolbar-acciones',
+        'label' => 'Toolbar — Acciones',
+        'tipo' => 'toolbar',
+        'component' => 'pages/basedatos/clientes/archivos',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'i-heroicons-x-mark',
+              'color' => 'error',
+              'variant' => 'ghost',
+            ),
+          ),
+        ),
+      ),
+      3 => 
+      array (
+        'key' => 'accion-accion',
+        'label' => 'Acción — Acción',
+        'tipo' => 'accion',
+        'component' => 'pages/basedatos/clientes/archivos',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Acción',
+          'icon' => 'i-heroicons-x-mark',
+          'color' => 'error',
+          'variant' => 'ghost',
+        ),
+      ),
+      4 => 
+      array (
+        'key' => 'toolbar-acciones-fila',
+        'label' => 'Toolbar — Acciones de fila',
+        'tipo' => 'toolbar',
+        'component' => 'pages/basedatos/clientes/archivos',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Eliminar',
+              'icon' => 'i-heroicons-trash',
+              'color' => 'error',
+              'variant' => 'ghost',
+            ),
+          ),
+        ),
+      ),
+      5 => 
+      array (
+        'key' => 'accion-eliminar',
+        'label' => 'Acción — Eliminar',
+        'tipo' => 'accion',
+        'component' => 'pages/basedatos/clientes/archivos',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Eliminar',
+          'icon' => 'i-heroicons-trash',
+          'color' => 'error',
+          'variant' => 'ghost',
+        ),
+      ),
+      6 => 
+      array (
+        'key' => 'card-tabla',
+        'label' => 'Card — Tabla',
+        'tipo' => 'card',
+        'component' => 'pages/basedatos/clientes/archivos',
+        'api_hint' => 'contiene tabla',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Tabla',
+          'icon' => 'i-heroicons-arrow-path',
+          'body' => 'No se encontraron archivos de clientes.',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
     ),
   ),
   4 => 
@@ -716,6 +1042,48 @@ return array (
         ),
       ),
       1 => 
+      array (
+        'key' => 'card-card-1',
+        'label' => 'Card — Card 1',
+        'tipo' => 'card',
+        'component' => 'pages/basedatos/clientes/[id]',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 1',
+          'icon' => NULL,
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      2 => 
+      array (
+        'key' => 'card-card-2',
+        'label' => 'Card — Card 2',
+        'tipo' => 'card',
+        'component' => 'pages/basedatos/clientes/[id]',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 2',
+          'icon' => NULL,
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      3 => 
       array (
         'key' => 'tabla-filtered',
         'label' => 'Tabla — Filtered',
@@ -891,6 +1259,90 @@ return array (
       ),
       2 => 
       array (
+        'key' => 'toolbar-datatable',
+        'label' => 'Toolbar — Controles de tabla',
+        'tipo' => 'toolbar',
+        'component' => 'pages/basedatos/permisos/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Filtros',
+              'icon' => 'i-heroicons-funnel',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+            1 => 
+            array (
+              'label' => 'Nuevo',
+              'icon' => 'i-heroicons-plus',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+            2 => 
+            array (
+              'label' => 'Buscar',
+              'icon' => 'i-heroicons-magnifying-glass',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+          ),
+        ),
+      ),
+      3 => 
+      array (
+        'key' => 'accion-filtros',
+        'label' => 'Acción — Filtros',
+        'tipo' => 'accion',
+        'component' => 'pages/basedatos/permisos/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Filtros',
+          'icon' => 'i-heroicons-funnel',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
+      4 => 
+      array (
+        'key' => 'accion-nuevo',
+        'label' => 'Acción — Nuevo',
+        'tipo' => 'accion',
+        'component' => 'pages/basedatos/permisos/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Nuevo',
+          'icon' => 'i-heroicons-plus',
+          'color' => 'primary',
+          'variant' => 'solid',
+        ),
+      ),
+      5 => 
+      array (
+        'key' => 'accion-buscar',
+        'label' => 'Acción — Buscar',
+        'tipo' => 'accion',
+        'component' => 'pages/basedatos/permisos/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Buscar',
+          'icon' => 'i-heroicons-magnifying-glass',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
+      6 => 
+      array (
         'key' => 'tabla-filtered',
         'label' => 'Tabla — Filtered',
         'tipo' => 'tabla',
@@ -926,7 +1378,7 @@ return array (
           'live_api' => NULL,
         ),
       ),
-      3 => 
+      7 => 
       array (
         'key' => 'modal-readonly-ver-permiso-isedit-editar-permiso-crear-tramite',
         'label' => 'Modal — {{ readOnly ? \'Ver permiso\' : (isEdit ? \'Editar permiso\' : \'Crear trámite\') }}',
@@ -1009,7 +1461,7 @@ return array (
           'live_api' => NULL,
         ),
       ),
-      4 => 
+      8 => 
       array (
         'key' => 'modal-editar-tipo-de-permiso',
         'label' => 'Modal — Editar tipo de permiso',
@@ -1041,7 +1493,7 @@ return array (
           'live_api' => NULL,
         ),
       ),
-      5 => 
+      9 => 
       array (
         'key' => 'modal-editar-entidad',
         'label' => 'Modal — Editar entidad',
@@ -1126,6 +1578,197 @@ return array (
       ),
       1 => 
       array (
+        'key' => 'card-documentos-por-tramite',
+        'label' => 'Card — Documentos por trámite',
+        'tipo' => 'card',
+        'component' => 'pages/basedatos/permisos/documentos/[id]',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Documentos por trámite',
+          'icon' => 'i-heroicons-document-minus',
+          'body' => 'Sin categorías',
+          'fields' => 
+          array (
+            0 => 
+            array (
+              'key' => 'catnombre',
+              'label' => '{{ cat.nombre }}',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            1 => 
+            array (
+              'key' => 'fotos',
+              'label' => 'Fotos',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Nuevo documento',
+              'icon' => 'i-heroicons-document-plus',
+              'color' => 'primary',
+              'variant' => 'soft',
+            ),
+          ),
+        ),
+      ),
+      2 => 
+      array (
+        'key' => 'card-seguimiento',
+        'label' => 'Card — Seguimiento',
+        'tipo' => 'card',
+        'component' => 'pages/basedatos/permisos/documentos/[id]',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Seguimiento',
+          'icon' => 'i-heroicons-calendar-days',
+          'body' => '',
+          'fields' => 
+          array (
+            0 => 
+            array (
+              'key' => 'catnombre',
+              'label' => '{{ cat.nombre }}',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            1 => 
+            array (
+              'key' => 'rh-o-factura-del-tramitador',
+              'label' => 'RH o Factura del tramitador',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => '{{ fCaducidadDate ? dfCaducidad.format(fCaducidadDate.toDate(getLocalTimeZone())) : \'Sin fecha\' }}',
+              'icon' => NULL,
+              'color' => 'neutral',
+              'variant' => 'link',
+            ),
+            1 => 
+            array (
+              'label' => 'Nuevo documento',
+              'icon' => 'i-heroicons-document-plus',
+              'color' => 'primary',
+              'variant' => 'soft',
+            ),
+          ),
+        ),
+      ),
+      3 => 
+      array (
+        'key' => 'card-pagos',
+        'label' => 'Card — Pagos',
+        'tipo' => 'card',
+        'component' => 'pages/basedatos/permisos/documentos/[id]',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Pagos',
+          'icon' => 'i-heroicons-document',
+          'body' => 'Sin pagos registrados',
+          'fields' => 
+          array (
+            0 => 
+            array (
+              'key' => 'monto',
+              'label' => 'Monto',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            1 => 
+            array (
+              'key' => 'banco',
+              'label' => 'Banco',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            2 => 
+            array (
+              'key' => 'f-cierre',
+              'label' => 'F. cierre',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            3 => 
+            array (
+              'key' => 'monto',
+              'label' => 'Monto',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            4 => 
+            array (
+              'key' => 'banco',
+              'label' => 'Banco',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            5 => 
+            array (
+              'key' => 'f-cierre',
+              'label' => 'F. cierre',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Agregar',
+              'icon' => 'i-heroicons-plus',
+              'color' => 'primary',
+              'variant' => 'soft',
+            ),
+          ),
+        ),
+      ),
+      4 => 
+      array (
         'key' => 'modal-registrar-pago',
         'label' => 'Modal — Registrar Pago ',
         'tipo' => 'modal',
@@ -1186,7 +1829,7 @@ return array (
           'live_api' => NULL,
         ),
       ),
-      2 => 
+      5 => 
       array (
         'key' => 'modal-vista-previa-del-archivo',
         'label' => 'Modal — Vista previa del archivo',
@@ -1412,6 +2055,90 @@ return array (
       ),
       2 => 
       array (
+        'key' => 'toolbar-acciones-fila',
+        'label' => 'Toolbar — Acciones de fila',
+        'tipo' => 'toolbar',
+        'component' => 'pages/basedatos/productos/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Ver',
+              'icon' => 'i-heroicons-eye',
+              'color' => 'neutral',
+              'variant' => 'soft',
+            ),
+            1 => 
+            array (
+              'label' => 'Eliminar',
+              'icon' => 'i-heroicons-trash',
+              'color' => 'error',
+              'variant' => 'soft',
+            ),
+            2 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'i-heroicons-bell',
+              'color' => 'primary',
+              'variant' => 'soft',
+            ),
+          ),
+        ),
+      ),
+      3 => 
+      array (
+        'key' => 'accion-ver',
+        'label' => 'Acción — Ver',
+        'tipo' => 'accion',
+        'component' => 'pages/basedatos/productos/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Ver',
+          'icon' => 'i-heroicons-eye',
+          'color' => 'neutral',
+          'variant' => 'soft',
+        ),
+      ),
+      4 => 
+      array (
+        'key' => 'accion-eliminar',
+        'label' => 'Acción — Eliminar',
+        'tipo' => 'accion',
+        'component' => 'pages/basedatos/productos/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Eliminar',
+          'icon' => 'i-heroicons-trash',
+          'color' => 'error',
+          'variant' => 'soft',
+        ),
+      ),
+      5 => 
+      array (
+        'key' => 'accion-accion',
+        'label' => 'Acción — Acción',
+        'tipo' => 'accion',
+        'component' => 'pages/basedatos/productos/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Acción',
+          'icon' => 'i-heroicons-bell',
+          'color' => 'primary',
+          'variant' => 'soft',
+        ),
+      ),
+      6 => 
+      array (
         'key' => 'tabla-filtered',
         'label' => 'Tabla — Filtered',
         'tipo' => 'tabla',
@@ -1529,9 +2256,244 @@ return array (
           'live_api' => NULL,
         ),
       ),
+      2 => 
+      array (
+        'key' => 'toolbar-acciones',
+        'label' => 'Toolbar — Acciones',
+        'tipo' => 'toolbar',
+        'component' => 'pages/basedatos/productos/archivos',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'i-heroicons-x-mark',
+              'color' => 'error',
+              'variant' => 'ghost',
+            ),
+          ),
+        ),
+      ),
+      3 => 
+      array (
+        'key' => 'accion-accion',
+        'label' => 'Acción — Acción',
+        'tipo' => 'accion',
+        'component' => 'pages/basedatos/productos/archivos',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Acción',
+          'icon' => 'i-heroicons-x-mark',
+          'color' => 'error',
+          'variant' => 'ghost',
+        ),
+      ),
+      4 => 
+      array (
+        'key' => 'toolbar-acciones-fila',
+        'label' => 'Toolbar — Acciones de fila',
+        'tipo' => 'toolbar',
+        'component' => 'pages/basedatos/productos/archivos',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Eliminar',
+              'icon' => 'i-heroicons-trash',
+              'color' => 'error',
+              'variant' => 'ghost',
+            ),
+          ),
+        ),
+      ),
+      5 => 
+      array (
+        'key' => 'accion-eliminar',
+        'label' => 'Acción — Eliminar',
+        'tipo' => 'accion',
+        'component' => 'pages/basedatos/productos/archivos',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Eliminar',
+          'icon' => 'i-heroicons-trash',
+          'color' => 'error',
+          'variant' => 'ghost',
+        ),
+      ),
+      6 => 
+      array (
+        'key' => 'card-tabla',
+        'label' => 'Card — Tabla',
+        'tipo' => 'card',
+        'component' => 'pages/basedatos/productos/archivos',
+        'api_hint' => 'contiene tabla',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Tabla',
+          'icon' => 'i-heroicons-arrow-path',
+          'body' => 'No se encontraron archivos de clientes.',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
     ),
   ),
   9 => 
+  array (
+    'key' => 'basedatos.productos.id',
+    'label' => 'Basedatos → Productos → Id',
+    'page_path' => 'pages/basedatos/productos/[id].vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'card-card-1',
+        'label' => 'Card — Card 1',
+        'tipo' => 'card',
+        'component' => 'pages/basedatos/productos/[id]',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 1',
+          'icon' => NULL,
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      1 => 
+      array (
+        'key' => 'card-card-2',
+        'label' => 'Card — Card 2',
+        'tipo' => 'card',
+        'component' => 'pages/basedatos/productos/[id]',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 2',
+          'icon' => NULL,
+          'body' => '',
+          'fields' => 
+          array (
+            0 => 
+            array (
+              'key' => 'enlace-producto',
+              'label' => 'Enlace producto:',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            1 => 
+            array (
+              'key' => 'arancel-sunat',
+              'label' => 'Arancel Sunat:',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            2 => 
+            array (
+              'key' => 'arancel-tlc',
+              'label' => 'Arancel TLC:',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            3 => 
+            array (
+              'key' => 'correlativo',
+              'label' => 'Correlativo:',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            4 => 
+            array (
+              'key' => 'antidumping',
+              'label' => 'Antidumping:',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            5 => 
+            array (
+              'key' => 'valor-antidumping',
+              'label' => 'Valor Antidumping:',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            6 => 
+            array (
+              'key' => 'tipo-de-producto',
+              'label' => 'Tipo de producto:',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            7 => 
+            array (
+              'key' => 'etiquetado',
+              'label' => 'Etiquetado:',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Abrir',
+              'icon' => 'i-heroicons-arrow-top-right-on-square',
+              'color' => 'primary',
+              'variant' => 'outline',
+            ),
+          ),
+        ),
+      ),
+    ),
+  ),
+  10 => 
   array (
     'key' => 'basedatos.regulaciones',
     'label' => 'Basedatos → Regulaciones',
@@ -1780,9 +2742,238 @@ return array (
           'live_api' => NULL,
         ),
       ),
+      4 => 
+      array (
+        'key' => 'tabs-antidumping-permisos-etiquetado',
+        'label' => 'Tabs — Antidumping / Permisos / Etiquetado / Doc. Especiales',
+        'tipo' => 'tabs',
+        'component' => 'pages/basedatos/regulaciones/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'active' => 'antidumping',
+          'tabs' => 
+          array (
+            0 => 
+            array (
+              'key' => 'antidumping',
+              'label' => 'Antidumping',
+              'content' => '',
+            ),
+            1 => 
+            array (
+              'key' => 'permisos',
+              'label' => 'Permisos',
+              'content' => '',
+            ),
+            2 => 
+            array (
+              'key' => 'etiquetado',
+              'label' => 'Etiquetado',
+              'content' => '',
+            ),
+            3 => 
+            array (
+              'key' => 'doc-especiales',
+              'label' => 'Doc. Especiales',
+              'content' => '',
+            ),
+          ),
+        ),
+      ),
+      5 => 
+      array (
+        'key' => 'toolbar-acciones-fila',
+        'label' => 'Toolbar — Acciones de fila',
+        'tipo' => 'toolbar',
+        'component' => 'pages/basedatos/regulaciones/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Ver',
+              'icon' => 'i-heroicons-eye',
+              'color' => 'blue',
+              'variant' => 'ghost',
+            ),
+            1 => 
+            array (
+              'label' => 'Editar',
+              'icon' => 'i-heroicons-pencil-square',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+            2 => 
+            array (
+              'label' => 'Eliminar',
+              'icon' => 'i-heroicons-trash',
+              'color' => 'red',
+              'variant' => 'ghost',
+            ),
+          ),
+        ),
+      ),
+      6 => 
+      array (
+        'key' => 'accion-ver',
+        'label' => 'Acción — Ver',
+        'tipo' => 'accion',
+        'component' => 'pages/basedatos/regulaciones/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Ver',
+          'icon' => 'i-heroicons-eye',
+          'color' => 'blue',
+          'variant' => 'ghost',
+        ),
+      ),
+      7 => 
+      array (
+        'key' => 'accion-editar',
+        'label' => 'Acción — Editar',
+        'tipo' => 'accion',
+        'component' => 'pages/basedatos/regulaciones/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Editar',
+          'icon' => 'i-heroicons-pencil-square',
+          'color' => 'primary',
+          'variant' => 'ghost',
+        ),
+      ),
+      8 => 
+      array (
+        'key' => 'accion-eliminar',
+        'label' => 'Acción — Eliminar',
+        'tipo' => 'accion',
+        'component' => 'pages/basedatos/regulaciones/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Eliminar',
+          'icon' => 'i-heroicons-trash',
+          'color' => 'red',
+          'variant' => 'ghost',
+        ),
+      ),
+      9 => 
+      array (
+        'key' => 'card-tabla',
+        'label' => 'Card — Tabla',
+        'tipo' => 'card',
+        'component' => 'pages/basedatos/regulaciones/index',
+        'api_hint' => 'contiene tabla',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Tabla',
+          'icon' => NULL,
+          'body' => 'Sin imagenes',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'saveLabel',
+              'icon' => 'ic:baseline-save',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+            1 => 
+            array (
+              'label' => 'Cancelar',
+              'icon' => 'ic:outline-close',
+              'color' => 'neutral',
+              'variant' => 'ghost',
+            ),
+            2 => 
+            array (
+              'label' => 'Editar',
+              'icon' => 'i-heroicons-pencil-square',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+            3 => 
+            array (
+              'label' => 'Eliminar',
+              'icon' => 'i-heroicons-trash',
+              'color' => 'red',
+              'variant' => 'ghost',
+            ),
+          ),
+        ),
+      ),
+      10 => 
+      array (
+        'key' => 'card-card-4',
+        'label' => 'Card — Card 4',
+        'tipo' => 'card',
+        'component' => 'pages/basedatos/regulaciones/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 4',
+          'icon' => NULL,
+          'body' => '{{ doc.nombre_original }}',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'saveLabel',
+              'icon' => 'ic:baseline-save',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+            1 => 
+            array (
+              'label' => 'Cancelar',
+              'icon' => 'ic:outline-close',
+              'color' => 'neutral',
+              'variant' => 'ghost',
+            ),
+            2 => 
+            array (
+              'label' => 'Editar',
+              'icon' => 'i-heroicons-pencil-square',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+            3 => 
+            array (
+              'label' => 'Descargar',
+              'icon' => 'i-heroicons-arrow-down-tray',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+            4 => 
+            array (
+              'label' => 'Eliminar',
+              'icon' => 'i-heroicons-trash',
+              'color' => 'red',
+              'variant' => 'outline',
+            ),
+          ),
+        ),
+      ),
     ),
   ),
-  10 => 
+  11 => 
   array (
     'key' => 'basedatos.regulaciones.antidumping.crear',
     'label' => 'Basedatos → Regulaciones → Antidumping → Crear',
@@ -1811,9 +3002,57 @@ return array (
           'live_api' => NULL,
         ),
       ),
+      1 => 
+      array (
+        'key' => 'card-card-1',
+        'label' => 'Card — Card 1',
+        'tipo' => 'card',
+        'component' => 'pages/basedatos/regulaciones/antidumping/crear',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 1',
+          'icon' => 'i-heroicons-magnifying-glass',
+          'body' => '{{ validationErrors.producto }}',
+          'fields' => 
+          array (
+            0 => 
+            array (
+              'key' => 'imagenes-del-producto',
+              'label' => 'Imágenes del producto',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            1 => 
+            array (
+              'key' => 'comentarios',
+              'label' => 'Comentarios',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Agregar imagen',
+              'icon' => 'i-heroicons-plus',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
     ),
   ),
-  11 => 
+  12 => 
   array (
     'key' => 'basedatos.regulaciones.antidumping.editar.id',
     'label' => 'Basedatos → Regulaciones → Antidumping → Editar → Id',
@@ -1842,9 +3081,150 @@ return array (
           'live_api' => NULL,
         ),
       ),
+      1 => 
+      array (
+        'key' => 'card-card-1',
+        'label' => 'Card — Card 1',
+        'tipo' => 'card',
+        'component' => 'pages/basedatos/regulaciones/antidumping/editar/[id]',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 1',
+          'icon' => NULL,
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      2 => 
+      array (
+        'key' => 'card-card-2',
+        'label' => 'Card — Card 2',
+        'tipo' => 'card',
+        'component' => 'pages/basedatos/regulaciones/antidumping/editar/[id]',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 2',
+          'icon' => 'i-heroicons-magnifying-glass',
+          'body' => '{{ validationErrors.producto }}',
+          'fields' => 
+          array (
+            0 => 
+            array (
+              'key' => 'imagenes-del-producto',
+              'label' => 'Imágenes del producto',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            1 => 
+            array (
+              'key' => 'observaciones',
+              'label' => 'Observaciones',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Agregar imagen',
+              'icon' => 'i-heroicons-plus',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
     ),
   ),
-  12 => 
+  13 => 
+  array (
+    'key' => 'basedatos.regulaciones.antidumping.id',
+    'label' => 'Basedatos → Regulaciones → Antidumping → Id',
+    'page_path' => 'pages/basedatos/regulaciones/antidumping/[id].vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'card-comentarios',
+        'label' => 'Card — Comentarios',
+        'tipo' => 'card',
+        'component' => 'pages/basedatos/regulaciones/antidumping/[id]',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Comentarios',
+          'icon' => 'i-heroicons-chat-bubble-left-right',
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      1 => 
+      array (
+        'key' => 'card-imgenes',
+        'label' => 'Card — Im?genes ()',
+        'tipo' => 'card',
+        'component' => 'pages/basedatos/regulaciones/antidumping/[id]',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Im?genes ()',
+          'icon' => 'i-heroicons-photo',
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      2 => 
+      array (
+        'key' => 'card-card-3',
+        'label' => 'Card — Card 3',
+        'tipo' => 'card',
+        'component' => 'pages/basedatos/regulaciones/antidumping/[id]',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 3',
+          'icon' => 'i-heroicons-information-circle',
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+    ),
+  ),
+  14 => 
   array (
     'key' => 'basedatos.regulaciones.documentos.crear',
     'label' => 'Basedatos → Regulaciones → Documentos → Crear',
@@ -1873,9 +3253,57 @@ return array (
           'live_api' => NULL,
         ),
       ),
+      1 => 
+      array (
+        'key' => 'card-card-1',
+        'label' => 'Card — Card 1',
+        'tipo' => 'card',
+        'component' => 'pages/basedatos/regulaciones/documentos/crear',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 1',
+          'icon' => 'i-heroicons-magnifying-glass',
+          'body' => '{{ validationErrors.producto }}',
+          'fields' => 
+          array (
+            0 => 
+            array (
+              'key' => 'documentos',
+              'label' => 'Documentos',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            1 => 
+            array (
+              'key' => 'observaciones',
+              'label' => 'Observaciones',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Agregar documento',
+              'icon' => 'i-heroicons-plus',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
     ),
   ),
-  13 => 
+  15 => 
   array (
     'key' => 'basedatos.regulaciones.documentos.editar.id',
     'label' => 'Basedatos → Regulaciones → Documentos → Editar → Id',
@@ -1904,9 +3332,109 @@ return array (
           'live_api' => NULL,
         ),
       ),
+      1 => 
+      array (
+        'key' => 'card-card-1',
+        'label' => 'Card — Card 1',
+        'tipo' => 'card',
+        'component' => 'pages/basedatos/regulaciones/documentos/editar/[id]',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 1',
+          'icon' => NULL,
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      2 => 
+      array (
+        'key' => 'card-card-2',
+        'label' => 'Card — Card 2',
+        'tipo' => 'card',
+        'component' => 'pages/basedatos/regulaciones/documentos/editar/[id]',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 2',
+          'icon' => 'i-heroicons-magnifying-glass',
+          'body' => '{{ validationErrors.producto }}',
+          'fields' => 
+          array (
+            0 => 
+            array (
+              'key' => 'documentos-existentes',
+              'label' => 'Documentos Existentes',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            1 => 
+            array (
+              'key' => 'nuevos-documentos',
+              'label' => 'Nuevos Documentos',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            2 => 
+            array (
+              'key' => 'observaciones',
+              'label' => 'Observaciones',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Eliminar seleccionados',
+              'icon' => 'i-heroicons-trash',
+              'color' => 'error',
+              'variant' => 'outline',
+            ),
+            1 => 
+            array (
+              'label' => 'Deseleccionar todas',
+              'icon' => 'i-heroicons-x-mark',
+              'color' => 'primary',
+              'variant' => 'outline',
+            ),
+            2 => 
+            array (
+              'label' => 'Agregar documento',
+              'icon' => 'i-heroicons-plus',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+            3 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'i-heroicons-x-mark',
+              'color' => 'error',
+              'variant' => 'ghost',
+            ),
+          ),
+        ),
+      ),
     ),
   ),
-  14 => 
+  16 => 
   array (
     'key' => 'basedatos.regulaciones.etiquetado.crear',
     'label' => 'Basedatos → Regulaciones → Etiquetado → Crear',
@@ -1935,9 +3463,280 @@ return array (
           'live_api' => NULL,
         ),
       ),
+      1 => 
+      array (
+        'key' => 'card-card-1',
+        'label' => 'Card — Card 1',
+        'tipo' => 'card',
+        'component' => 'pages/basedatos/regulaciones/etiquetado/crear',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 1',
+          'icon' => 'i-heroicons-magnifying-glass',
+          'body' => '{{ validationErrors.producto }}',
+          'fields' => 
+          array (
+            0 => 
+            array (
+              'key' => 'imagenes-del-producto',
+              'label' => 'Imágenes del producto',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            1 => 
+            array (
+              'key' => 'descripciones-minimas',
+              'label' => 'Descripciones minimas',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Agregar imagen',
+              'icon' => 'i-heroicons-plus',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
     ),
   ),
-  15 => 
+  17 => 
+  array (
+    'key' => 'basedatos.regulaciones.etiquetado.editar.id',
+    'label' => 'Basedatos → Regulaciones → Etiquetado → Editar → Id',
+    'page_path' => 'pages/basedatos/regulaciones/etiquetado/editar/[id].vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'card-card-1',
+        'label' => 'Card — Card 1',
+        'tipo' => 'card',
+        'component' => 'pages/basedatos/regulaciones/etiquetado/editar/[id]',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 1',
+          'icon' => NULL,
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+    ),
+  ),
+  18 => 
+  array (
+    'key' => 'basedatos.regulaciones.permisos.crear',
+    'label' => 'Basedatos → Regulaciones → Permisos → Crear',
+    'page_path' => 'pages/basedatos/regulaciones/permisos/crear.vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'card-card-1',
+        'label' => 'Card — Card 1',
+        'tipo' => 'card',
+        'component' => 'pages/basedatos/regulaciones/permisos/crear',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 1',
+          'icon' => 'i-heroicons-building-office',
+          'body' => '',
+          'fields' => 
+          array (
+            0 => 
+            array (
+              'key' => 'documentos',
+              'label' => 'Documentos',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            1 => 
+            array (
+              'key' => 'comentarios',
+              'label' => 'Comentarios',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Agregar documento',
+              'icon' => 'i-heroicons-plus',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+    ),
+  ),
+  19 => 
+  array (
+    'key' => 'basedatos.regulaciones.permisos.editar.id',
+    'label' => 'Basedatos → Regulaciones → Permisos → Editar → Id',
+    'page_path' => 'pages/basedatos/regulaciones/permisos/editar/[id].vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'card-card-1',
+        'label' => 'Card — Card 1',
+        'tipo' => 'card',
+        'component' => 'pages/basedatos/regulaciones/permisos/editar/[id]',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 1',
+          'icon' => 'i-heroicons-building-office',
+          'body' => '',
+          'fields' => 
+          array (
+            0 => 
+            array (
+              'key' => 'documentos',
+              'label' => 'Documentos',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            1 => 
+            array (
+              'key' => 'observaciones',
+              'label' => 'Observaciones',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Agregar documento',
+              'icon' => 'i-heroicons-plus',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+            1 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'i-heroicons-x-mark',
+              'color' => 'error',
+              'variant' => 'ghost',
+            ),
+          ),
+        ),
+      ),
+    ),
+  ),
+  20 => 
+  array (
+    'key' => 'basedatos.regulaciones.permisos.id',
+    'label' => 'Basedatos → Regulaciones → Permisos → Id',
+    'page_path' => 'pages/basedatos/regulaciones/permisos/[id].vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'card-comentarios',
+        'label' => 'Card — Comentarios',
+        'tipo' => 'card',
+        'component' => 'pages/basedatos/regulaciones/permisos/[id]',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Comentarios',
+          'icon' => 'i-heroicons-chat-bubble-left-right',
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      1 => 
+      array (
+        'key' => 'card-documentos',
+        'label' => 'Card — Documentos ()',
+        'tipo' => 'card',
+        'component' => 'pages/basedatos/regulaciones/permisos/[id]',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Documentos ()',
+          'icon' => 'i-heroicons-document',
+          'body' => '{{ mediaItem.nombre_original }}',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      2 => 
+      array (
+        'key' => 'card-card-3',
+        'label' => 'Card — Card 3',
+        'tipo' => 'card',
+        'component' => 'pages/basedatos/regulaciones/permisos/[id]',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 3',
+          'icon' => 'i-heroicons-information-circle',
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+    ),
+  ),
+  21 => 
   array (
     'key' => 'calendar',
     'label' => 'Calendar',
@@ -2230,7 +4029,7 @@ return array (
       ),
     ),
   ),
-  16 => 
+  22 => 
   array (
     'key' => 'calendar.actividades',
     'label' => 'Calendar → Actividades',
@@ -2238,6 +4037,41 @@ return array (
     'widgets' => 
     array (
       0 => 
+      array (
+        'key' => 'card-card-1',
+        'label' => 'Card — Card 1',
+        'tipo' => 'card',
+        'component' => 'pages/calendar/actividades',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 1',
+          'icon' => NULL,
+          'body' => '{{ eventsPagination.total }} registros',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Editar',
+              'icon' => 'i-heroicons-pencil-square',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+            1 => 
+            array (
+              'label' => 'Eliminar',
+              'icon' => 'i-heroicons-trash',
+              'color' => 'error',
+              'variant' => 'ghost',
+            ),
+          ),
+        ),
+      ),
+      1 => 
       array (
         'key' => 'modal-isedit-editar-actividad-nueva-actividad',
         'label' => 'Modal — {{ isEdit ? \'Editar Actividad\' : \'Nueva Actividad\' }}',
@@ -2333,7 +4167,478 @@ return array (
       ),
     ),
   ),
-  17 => 
+  23 => 
+  array (
+    'key' => 'calendar.actividades.catalogo',
+    'label' => 'Calendar → Actividades Catalogo',
+    'page_path' => 'pages/calendar/actividades-catalogo.vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'card-card-1',
+        'label' => 'Card — Card 1',
+        'tipo' => 'card',
+        'component' => 'pages/calendar/actividades-catalogo',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 1',
+          'icon' => NULL,
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Agregar',
+              'icon' => 'i-heroicons-plus',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      1 => 
+      array (
+        'key' => 'card-actividades',
+        'label' => 'Card — Actividades',
+        'tipo' => 'card',
+        'component' => 'pages/calendar/actividades-catalogo',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Actividades',
+          'icon' => 'i-heroicons-bars-3',
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Guardar cambios',
+              'icon' => 'i-heroicons-check',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+            1 => 
+            array (
+              'label' => 'Guardar orden',
+              'icon' => NULL,
+              'color' => 'primary',
+              'variant' => 'outline',
+            ),
+            2 => 
+            array (
+              'label' => 'Acción',
+              'icon' => NULL,
+              'color' => 'primary',
+              'variant' => 'outline',
+            ),
+            3 => 
+            array (
+              'label' => 'Cancelar',
+              'icon' => NULL,
+              'color' => 'neutral',
+              'variant' => 'ghost',
+            ),
+            4 => 
+            array (
+              'label' => 'Aplicar',
+              'icon' => NULL,
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+            5 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'i-heroicons-check',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+            6 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'i-heroicons-x-mark',
+              'color' => 'neutral',
+              'variant' => 'ghost',
+            ),
+            7 => 
+            array (
+              'label' => 'Editar',
+              'icon' => 'i-heroicons-pencil-square',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+            8 => 
+            array (
+              'label' => 'Eliminar',
+              'icon' => 'i-heroicons-trash',
+              'color' => 'error',
+              'variant' => 'ghost',
+            ),
+          ),
+        ),
+      ),
+    ),
+  ),
+  24 => 
+  array (
+    'key' => 'calendar.colores',
+    'label' => 'Calendar → Colores',
+    'page_path' => 'pages/calendar/colores.vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'card-card-1',
+        'label' => 'Card — Card 1',
+        'tipo' => 'card',
+        'component' => 'pages/calendar/colores',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 1',
+          'icon' => NULL,
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      1 => 
+      array (
+        'key' => 'card-card-2',
+        'label' => 'Card — Card 2',
+        'tipo' => 'card',
+        'component' => 'pages/calendar/colores',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 2',
+          'icon' => 'i-heroicons-cube-transparent',
+          'body' => 'La configuración de colores por consolidado solo está disponible cuando el grupo de calendario tiene activada la opción "Usar consolidado".',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Volver a Configuración',
+              'icon' => NULL,
+              'color' => 'primary',
+              'variant' => 'outline',
+            ),
+          ),
+        ),
+      ),
+      2 => 
+      array (
+        'key' => 'card-colores-por-consolidado',
+        'label' => 'Card — Colores por Consolidado',
+        'tipo' => 'card',
+        'component' => 'pages/calendar/colores',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Colores por Consolidado',
+          'icon' => 'i-heroicons-paint-brush',
+          'body' => 'Asigna un color único a cada consolidado. Este color se usará para identificar sus actividades en el calendario.',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Guardar cambios',
+              'icon' => NULL,
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+            1 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'i-heroicons-chevron-down',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+          ),
+        ),
+      ),
+    ),
+  ),
+  25 => 
+  array (
+    'key' => 'calendar.colores.usuarios',
+    'label' => 'Calendar → Colores Usuarios',
+    'page_path' => 'pages/calendar/colores-usuarios.vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'card-colores-de-responsables',
+        'label' => 'Card — Colores de responsables',
+        'tipo' => 'card',
+        'component' => 'pages/calendar/colores-usuarios',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Colores de responsables',
+          'icon' => 'i-heroicons-user-circle',
+          'body' => 'El color definido aquí se usa para los indicadores y avatares de cada responsable, y también cuando la
+            prioridad de color está configurada en',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'i-heroicons-chevron-down',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+          ),
+        ),
+      ),
+    ),
+  ),
+  26 => 
+  array (
+    'key' => 'calendar.config',
+    'label' => 'Calendar → Config',
+    'page_path' => 'pages/calendar/config.vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'card-card-1',
+        'label' => 'Card — Card 1',
+        'tipo' => 'card',
+        'component' => 'pages/calendar/config',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 1',
+          'icon' => 'i-heroicons-clipboard-document-list',
+          'body' => 'Ver y crear actividades del equipo',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Ver',
+              'icon' => NULL,
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      1 => 
+      array (
+        'key' => 'card-card-2',
+        'label' => 'Card — Card 2',
+        'tipo' => 'card',
+        'component' => 'pages/calendar/config',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 2',
+          'icon' => 'i-heroicons-chart-bar',
+          'body' => 'Ver progreso del equipo y actividades',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Ver',
+              'icon' => NULL,
+              'color' => 'success',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      2 => 
+      array (
+        'key' => 'card-progreso-del-equipo',
+        'label' => 'Card — Progreso del Equipo',
+        'tipo' => 'card',
+        'component' => 'pages/calendar/config',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Progreso del Equipo',
+          'icon' => 'i-heroicons-user-group',
+          'body' => 'Total',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      3 => 
+      array (
+        'key' => 'card-progreso-por-responsable',
+        'label' => 'Card — Progreso por Responsable',
+        'tipo' => 'card',
+        'component' => 'pages/calendar/config',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Progreso por Responsable',
+          'icon' => 'i-heroicons-users',
+          'body' => '{{ responsable.nombre }}',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      4 => 
+      array (
+        'key' => 'card-card-5',
+        'label' => 'Card — Card 5',
+        'tipo' => 'card',
+        'component' => 'pages/calendar/config',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 5',
+          'icon' => 'i-heroicons-paint-brush',
+          'body' => 'Personalizar colores por consolidado',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Configurar',
+              'icon' => NULL,
+              'color' => 'primary',
+              'variant' => 'outline',
+            ),
+          ),
+        ),
+      ),
+      5 => 
+      array (
+        'key' => 'card-card-6',
+        'label' => 'Card — Card 6',
+        'tipo' => 'card',
+        'component' => 'pages/calendar/config',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 6',
+          'icon' => 'i-heroicons-user-circle',
+          'body' => 'Definir el color de cada responsable en el calendario',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Configurar',
+              'icon' => NULL,
+              'color' => 'primary',
+              'variant' => 'outline',
+            ),
+          ),
+        ),
+      ),
+      6 => 
+      array (
+        'key' => 'card-card-7',
+        'label' => 'Card — Card 7',
+        'tipo' => 'card',
+        'component' => 'pages/calendar/config',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 7',
+          'icon' => 'i-heroicons-user-group',
+          'body' => 'Definir jefes y roles secundarios por grupo para el calendario',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Administrar',
+              'icon' => NULL,
+              'color' => 'primary',
+              'variant' => 'outline',
+            ),
+          ),
+        ),
+      ),
+      7 => 
+      array (
+        'key' => 'card-card-8',
+        'label' => 'Card — Card 8',
+        'tipo' => 'card',
+        'component' => 'pages/calendar/config',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 8',
+          'icon' => 'i-heroicons-bars-3',
+          'body' => 'Ordenar y editar las actividades del calendario',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Administrar',
+              'icon' => NULL,
+              'color' => 'primary',
+              'variant' => 'outline',
+            ),
+          ),
+        ),
+      ),
+    ),
+  ),
+  27 => 
   array (
     'key' => 'calendar.progreso',
     'label' => 'Calendar → Progreso',
@@ -2375,6 +4680,88 @@ return array (
       ),
       1 => 
       array (
+        'key' => 'card-card-1',
+        'label' => 'Card — Card 1',
+        'tipo' => 'card',
+        'component' => 'pages/calendar/progreso',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 1',
+          'icon' => 'expandedActivityId === activity.id ? ',
+          'body' => '{{ (item as any)?.label }}',
+          'fields' => 
+          array (
+            0 => 
+            array (
+              'key' => 'nombre',
+              'label' => 'Nombre',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            1 => 
+            array (
+              'key' => 'duracion-h',
+              'label' => 'Duración (h)',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            2 => 
+            array (
+              'key' => 'fecha-fin',
+              'label' => 'Fecha fin',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            3 => 
+            array (
+              'key' => 'estado',
+              'label' => 'Estado',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'dateFilterLabel',
+              'icon' => 'i-heroicons-calendar',
+              'color' => 'primary',
+              'variant' => 'outline',
+            ),
+            1 => 
+            array (
+              'label' => 'Aplicar',
+              'icon' => NULL,
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+            2 => 
+            array (
+              'label' => 'Cancelar',
+              'icon' => NULL,
+              'color' => 'primary',
+              'variant' => 'outline',
+            ),
+          ),
+        ),
+      ),
+      2 => 
+      array (
         'key' => 'modal-activityname-sin-titulo',
         'label' => 'Modal — {{ activity?.name || \'Sin título\' }}',
         'tipo' => 'modal',
@@ -2394,7 +4781,7 @@ return array (
           'live_api' => NULL,
         ),
       ),
-      2 => 
+      3 => 
       array (
         'key' => 'modal-crear-subtareas',
         'label' => 'Modal — Crear Subtareas',
@@ -2449,7 +4836,210 @@ return array (
       ),
     ),
   ),
-  18 => 
+  28 => 
+  array (
+    'key' => 'calendar.role.groups',
+    'label' => 'Calendar → Role Groups',
+    'page_path' => 'pages/calendar/role-groups.vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'card-grupos',
+        'label' => 'Card — Grupos',
+        'tipo' => 'card',
+        'component' => 'pages/calendar/role-groups',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Grupos',
+          'icon' => NULL,
+          'body' => 'No hay grupos definidos aún. Crea uno nuevo.',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Nuevo',
+              'icon' => 'i-heroicons-plus',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+            1 => 
+            array (
+              'label' => 'Editar',
+              'icon' => 'i-heroicons-pencil-square',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+            2 => 
+            array (
+              'label' => 'Eliminar',
+              'icon' => 'i-heroicons-trash',
+              'color' => 'red',
+              'variant' => 'ghost',
+            ),
+          ),
+        ),
+      ),
+      1 => 
+      array (
+        'key' => 'card-card-2',
+        'label' => 'Card — Card 2',
+        'tipo' => 'card',
+        'component' => 'pages/calendar/role-groups',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 2',
+          'icon' => NULL,
+          'body' => '',
+          'fields' => 
+          array (
+            0 => 
+            array (
+              'key' => 'nombre',
+              'label' => 'Nombre',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            1 => 
+            array (
+              'key' => 'codigo-opcional',
+              'label' => 'Código (opcional)',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Cancelar',
+              'icon' => NULL,
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+            1 => 
+            array (
+              'label' => 'editingGroupId ? \'Guardar cambios\' : \'Crear grupo\'',
+              'icon' => NULL,
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      2 => 
+      array (
+        'key' => 'card-miembros-del-grupo',
+        'label' => 'Card — Miembros del grupo',
+        'tipo' => 'card',
+        'component' => 'pages/calendar/role-groups',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Miembros del grupo',
+          'icon' => 'i-heroicons-users',
+          'body' => 'No hay miembros asignados a este grupo.',
+          'fields' => 
+          array (
+            0 => 
+            array (
+              'key' => 'usuario',
+              'label' => 'Usuario',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            1 => 
+            array (
+              'key' => 'rol-en-el-grupo',
+              'label' => 'Rol en el grupo',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'i-heroicons-arrow-path',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+            1 => 
+            array (
+              'label' => 'Agregar / actualizar',
+              'icon' => NULL,
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+            2 => 
+            array (
+              'label' => 'Eliminar',
+              'icon' => 'i-heroicons-trash',
+              'color' => 'red',
+              'variant' => 'ghost',
+            ),
+          ),
+        ),
+      ),
+      3 => 
+      array (
+        'key' => 'card-prioridad-de-colores',
+        'label' => 'Card — Prioridad de colores',
+        'tipo' => 'card',
+        'component' => 'pages/calendar/role-groups',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Prioridad de colores',
+          'icon' => 'i-heroicons-paint-brush',
+          'body' => '{{ element.label }}',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'i-heroicons-arrow-path',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+            1 => 
+            array (
+              'label' => 'Guardar configuración',
+              'icon' => NULL,
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+    ),
+  ),
+  29 => 
   array (
     'key' => 'campanas',
     'label' => 'Campanas',
@@ -2738,6 +5328,105 @@ return array (
       ),
       2 => 
       array (
+        'key' => 'toolbar-acciones-fila',
+        'label' => 'Toolbar — Acciones de fila',
+        'tipo' => 'toolbar',
+        'component' => 'pages/campanas/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Eliminar',
+              'icon' => 'i-heroicons-trash',
+              'color' => 'error',
+              'variant' => 'ghost',
+            ),
+            1 => 
+            array (
+              'label' => 'Ver',
+              'icon' => 'i-heroicons-eye',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+          ),
+        ),
+      ),
+      3 => 
+      array (
+        'key' => 'accion-eliminar',
+        'label' => 'Acción — Eliminar',
+        'tipo' => 'accion',
+        'component' => 'pages/campanas/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Eliminar',
+          'icon' => 'i-heroicons-trash',
+          'color' => 'error',
+          'variant' => 'ghost',
+        ),
+      ),
+      4 => 
+      array (
+        'key' => 'accion-ver',
+        'label' => 'Acción — Ver',
+        'tipo' => 'accion',
+        'component' => 'pages/campanas/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Ver',
+          'icon' => 'i-heroicons-eye',
+          'color' => 'primary',
+          'variant' => 'ghost',
+        ),
+      ),
+      5 => 
+      array (
+        'key' => 'toolbar-datatable',
+        'label' => 'Toolbar — Controles de tabla',
+        'tipo' => 'toolbar',
+        'component' => 'pages/campanas/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Nuevo',
+              'icon' => 'i-heroicons-plus',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      6 => 
+      array (
+        'key' => 'accion-nuevo',
+        'label' => 'Acción — Nuevo',
+        'tipo' => 'accion',
+        'component' => 'pages/campanas/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Nuevo',
+          'icon' => 'i-heroicons-plus',
+          'color' => 'primary',
+          'variant' => 'solid',
+        ),
+      ),
+      7 => 
+      array (
         'key' => 'modal-crear-campana',
         'label' => 'Modal — Crear Campaña',
         'tipo' => 'modal',
@@ -2761,7 +5450,7 @@ return array (
       ),
     ),
   ),
-  19 => 
+  30 => 
   array (
     'key' => 'cargaconsolidada.abiertos',
     'label' => 'Cargaconsolidada → Abiertos',
@@ -2872,9 +5561,762 @@ return array (
           ),
         ),
       ),
+      1 => 
+      array (
+        'key' => 'toolbar-acciones-fila',
+        'label' => 'Toolbar — Acciones de fila',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/consolidado/CargaConsolidadaAbiertaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Ver',
+              'icon' => 'i-heroicons-eye',
+              'color' => 'info',
+              'variant' => 'ghost',
+            ),
+            1 => 
+            array (
+              'label' => 'Editar',
+              'icon' => 'i-heroicons-pencil',
+              'color' => 'warning',
+              'variant' => 'ghost',
+            ),
+            2 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'i-heroicons-document-duplicate',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+            3 => 
+            array (
+              'label' => 'Eliminar',
+              'icon' => 'i-heroicons-trash',
+              'color' => 'error',
+              'variant' => 'ghost',
+            ),
+          ),
+        ),
+      ),
+      2 => 
+      array (
+        'key' => 'accion-ver',
+        'label' => 'Acción — Ver',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/consolidado/CargaConsolidadaAbiertaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Ver',
+          'icon' => 'i-heroicons-eye',
+          'color' => 'info',
+          'variant' => 'ghost',
+        ),
+      ),
+      3 => 
+      array (
+        'key' => 'accion-editar',
+        'label' => 'Acción — Editar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/consolidado/CargaConsolidadaAbiertaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Editar',
+          'icon' => 'i-heroicons-pencil',
+          'color' => 'warning',
+          'variant' => 'ghost',
+        ),
+      ),
+      4 => 
+      array (
+        'key' => 'accion-accion',
+        'label' => 'Acción — Acción',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/consolidado/CargaConsolidadaAbiertaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Acción',
+          'icon' => 'i-heroicons-document-duplicate',
+          'color' => 'primary',
+          'variant' => 'ghost',
+        ),
+      ),
+      5 => 
+      array (
+        'key' => 'accion-eliminar',
+        'label' => 'Acción — Eliminar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/consolidado/CargaConsolidadaAbiertaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Eliminar',
+          'icon' => 'i-heroicons-trash',
+          'color' => 'error',
+          'variant' => 'ghost',
+        ),
+      ),
+      6 => 
+      array (
+        'key' => 'toolbar-datatable',
+        'label' => 'Toolbar — Controles de tabla',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/consolidado/CargaConsolidadaAbiertaView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Filtros',
+              'icon' => 'i-heroicons-funnel',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+          ),
+        ),
+      ),
+      7 => 
+      array (
+        'key' => 'accion-filtros',
+        'label' => 'Acción — Filtros',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/consolidado/CargaConsolidadaAbiertaView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Filtros',
+          'icon' => 'i-heroicons-funnel',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
     ),
   ),
-  20 => 
+  31 => 
+  array (
+    'key' => 'cargaconsolidada.abiertos.aduana.id',
+    'label' => 'Cargaconsolidada → Abiertos → Aduana → Id',
+    'page_path' => 'pages/cargaconsolidada/abiertos/aduana/[id].vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'card-card-1',
+        'label' => 'Card — Card 1',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/consolidado/ConsolidadoAduanaView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 1',
+          'icon' => 'i-heroicons-cube-transparent',
+          'body' => '',
+          'fields' => 
+          array (
+            0 => 
+            array (
+              'key' => 'naviera',
+              'label' => 'Naviera',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            1 => 
+            array (
+              'key' => 'multa',
+              'label' => 'Multa',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            2 => 
+            array (
+              'key' => 'observaciones',
+              'label' => 'Observaciones',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            3 => 
+            array (
+              'key' => 'toneladas-contenedor',
+              'label' => 'Toneladas contenedor',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            4 => 
+            array (
+              'key' => 'fecha-levante',
+              'label' => 'Fecha levante',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            5 => 
+            array (
+              'key' => 'fecha-zarpe',
+              'label' => 'Fecha zarpe',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            6 => 
+            array (
+              'key' => 'numero-dua',
+              'label' => 'Número Dua',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            7 => 
+            array (
+              'key' => 'fecha-arribo',
+              'label' => 'Fecha arribo',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            8 => 
+            array (
+              'key' => 'valor-fob',
+              'label' => 'Valor FOB',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            9 => 
+            array (
+              'key' => 'doc-tributos-y-ajustes',
+              'label' => 'DOC. TRIBUTOS Y AJUSTES',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            10 => 
+            array (
+              'key' => 'fecha-declaracion',
+              'label' => 'Fecha declaración',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            11 => 
+            array (
+              'key' => 'valor-flete',
+              'label' => 'Valor flete',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            12 => 
+            array (
+              'key' => 'canal-de-control',
+              'label' => 'Canal de Control',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            13 => 
+            array (
+              'key' => 'costo-destino',
+              'label' => 'Costo destino',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            14 => 
+            array (
+              'key' => 'resumen-de-impuestos-pagados',
+              'label' => 'RESUMEN DE IMPUESTOS PAGADOS',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            15 => 
+            array (
+              'key' => 'ajuste-de-valor',
+              'label' => 'Ajuste de valor',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => '{{ aduanaData ? \'Actualizar\' : \'Guardar\' }}',
+              'icon' => NULL,
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+    ),
+  ),
+  32 => 
+  array (
+    'key' => 'cargaconsolidada.abiertos.clientes.documentacion.id',
+    'label' => 'Cargaconsolidada → Abiertos → Clientes → Documentacion → Id',
+    'page_path' => 'pages/cargaconsolidada/abiertos/clientes/documentacion/[id].vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'toolbar-acciones',
+        'label' => 'Toolbar — Acciones',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/clientes/ClientesDocumentacionView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Guardar cambios',
+              'icon' => 'i-heroicons-check',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+            1 => 
+            array (
+              'label' => 'Descargar Excel',
+              'icon' => 'i-heroicons-arrow-down-tray',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+            2 => 
+            array (
+              'label' => 'Guardar',
+              'icon' => 'i-heroicons-check',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      1 => 
+      array (
+        'key' => 'accion-guardar-cambios',
+        'label' => 'Acción — Guardar cambios',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/clientes/ClientesDocumentacionView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Guardar cambios',
+          'icon' => 'i-heroicons-check',
+          'color' => 'primary',
+          'variant' => 'solid',
+        ),
+      ),
+      2 => 
+      array (
+        'key' => 'accion-descargar-excel',
+        'label' => 'Acción — Descargar Excel',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/clientes/ClientesDocumentacionView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Descargar Excel',
+          'icon' => 'i-heroicons-arrow-down-tray',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
+      3 => 
+      array (
+        'key' => 'accion-guardar',
+        'label' => 'Acción — Guardar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/clientes/ClientesDocumentacionView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Guardar',
+          'icon' => 'i-heroicons-check',
+          'color' => 'primary',
+          'variant' => 'solid',
+        ),
+      ),
+      4 => 
+      array (
+        'key' => 'card-card-1',
+        'label' => 'Card — Card 1',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/clientes/ClientesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 1',
+          'icon' => NULL,
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      5 => 
+      array (
+        'key' => 'card-card-2',
+        'label' => 'Card — Card 2',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/clientes/ClientesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 2',
+          'icon' => NULL,
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      6 => 
+      array (
+        'key' => 'card-card-3',
+        'label' => 'Card — Card 3',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/clientes/ClientesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 3',
+          'icon' => NULL,
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      7 => 
+      array (
+        'key' => 'card-card-4',
+        'label' => 'Card — Card 4',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/clientes/ClientesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 4',
+          'icon' => NULL,
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      8 => 
+      array (
+        'key' => 'card-card-5',
+        'label' => 'Card — Card 5',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/clientes/ClientesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 5',
+          'icon' => 'i-heroicons-exclamation-triangle',
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      9 => 
+      array (
+        'key' => 'card-documentacion',
+        'label' => 'Card — Documentación  -',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/clientes/ClientesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Documentación  -',
+          'icon' => 'i-heroicons-folder',
+          'body' => '',
+          'fields' => 
+          array (
+            0 => 
+            array (
+              'key' => 'volumen-documento',
+              'label' => 'Volumen documento',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            1 => 
+            array (
+              'key' => 'valor-documento',
+              'label' => 'Valor documento',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            2 => 
+            array (
+              'key' => 'factura-comercial',
+              'label' => 'Factura Comercial',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            3 => 
+            array (
+              'key' => 'packing-list',
+              'label' => 'Packing List',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            4 => 
+            array (
+              'key' => 'excel-confirmacion',
+              'label' => 'Excel Confirmación',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Nuevo Documento',
+              'icon' => 'i-heroicons-plus',
+              'color' => 'warning',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      10 => 
+      array (
+        'key' => 'card-documentacion-china',
+        'label' => 'Card — Documentación China',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/clientes/ClientesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Documentación China',
+          'icon' => 'i-heroicons-folder',
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Guardar cambios',
+              'icon' => 'i-heroicons-check',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      11 => 
+      array (
+        'key' => 'card-inspeccion',
+        'label' => 'Card — Inspección',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/clientes/ClientesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Inspección',
+          'icon' => 'i-heroicons-folder',
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Guardar cambios',
+              'icon' => 'i-heroicons-check',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      12 => 
+      array (
+        'key' => 'card-card-9',
+        'label' => 'Card — Card 9',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/clientes/ClientesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 9',
+          'icon' => NULL,
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Descargar cotización inicial',
+              'icon' => 'i-heroicons-arrow-down-tray',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+            1 => 
+            array (
+              'label' => 'Descargar cotización final',
+              'icon' => 'i-heroicons-arrow-down-tray',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+          ),
+        ),
+      ),
+    ),
+  ),
+  33 => 
+  array (
+    'key' => 'cargaconsolidada.abiertos.clientes.excel.confirmacion.uuid.guardado',
+    'label' => 'Cargaconsolidada → Abiertos → Clientes → Excel Confirmacion → Uuid → Guardado',
+    'page_path' => 'pages/cargaconsolidada/abiertos/clientes/excel-confirmacion/[uuid]/guardado.vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'card-card-1',
+        'label' => 'Card — Card 1',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/clientes/ExcelConfirmacionGuardadoView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 1',
+          'icon' => 'i-heroicons-check-circle',
+          'body' => '{{ mensaje || \'La confirmación del cliente se actualizó correctamente.\' }}',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Volver a editar',
+              'icon' => 'i-heroicons-pencil-square',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+            1 => 
+            array (
+              'label' => 'Volver a clientes',
+              'icon' => 'i-heroicons-arrow-left',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+          ),
+        ),
+      ),
+    ),
+  ),
+  34 => 
   array (
     'key' => 'cargaconsolidada.abiertos.clientes.id',
     'label' => 'Cargaconsolidada → Abiertos → Clientes → Id',
@@ -3329,35 +6771,366 @@ return array (
       ),
       4 => 
       array (
-        'key' => 'tabs-documentacion-documentacion',
-        'label' => 'Tabs — Documentación / Documentacion',
-        'tipo' => 'tabs',
+        'key' => 'toolbar-acciones-fila',
+        'label' => 'Toolbar — Acciones de fila',
+        'tipo' => 'toolbar',
         'component' => 'components/cargaconsolidada/clientes/ClientesView/index',
-        'api_hint' => NULL,
+        'api_hint' => 'column:acciones',
         'live_api' => NULL,
         'snapshot' => 
         array (
-          'active' => 'documentacion',
-          'tabs' => 
+          'buttons' => 
           array (
             0 => 
             array (
-              'key' => 'documentacion',
-              'label' => 'Documentación',
-              'content' => '',
+              'label' => 'Ver',
+              'icon' => 'i-heroicons-eye',
+              'color' => 'primary',
+              'variant' => 'ghost',
             ),
             1 => 
             array (
-              'key' => 'documentacion',
-              'label' => 'Documentacion',
-              'content' => '',
+              'label' => 'Acción',
+              'icon' => 'i-heroicons-document-text',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+            2 => 
+            array (
+              'label' => 'Eliminar',
+              'icon' => 'i-heroicons-trash',
+              'color' => 'error',
+              'variant' => 'ghost',
+            ),
+            3 => 
+            array (
+              'label' => 'Exportar',
+              'icon' => 'i-heroicons-arrow-up-tray',
+              'color' => 'primary',
+              'variant' => 'outline',
+            ),
+            4 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'iconamoon:menu-burger-horizontal',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+          ),
+        ),
+      ),
+      5 => 
+      array (
+        'key' => 'accion-ver',
+        'label' => 'Acción — Ver',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/clientes/ClientesView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Ver',
+          'icon' => 'i-heroicons-eye',
+          'color' => 'primary',
+          'variant' => 'ghost',
+        ),
+      ),
+      6 => 
+      array (
+        'key' => 'accion-accion',
+        'label' => 'Acción — Acción',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/clientes/ClientesView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Acción',
+          'icon' => 'i-heroicons-document-text',
+          'color' => 'primary',
+          'variant' => 'ghost',
+        ),
+      ),
+      7 => 
+      array (
+        'key' => 'accion-eliminar',
+        'label' => 'Acción — Eliminar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/clientes/ClientesView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Eliminar',
+          'icon' => 'i-heroicons-trash',
+          'color' => 'error',
+          'variant' => 'ghost',
+        ),
+      ),
+      8 => 
+      array (
+        'key' => 'accion-exportar',
+        'label' => 'Acción — Exportar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/clientes/ClientesView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Exportar',
+          'icon' => 'i-heroicons-arrow-up-tray',
+          'color' => 'primary',
+          'variant' => 'outline',
+        ),
+      ),
+      9 => 
+      array (
+        'key' => 'toolbar-datatable',
+        'label' => 'Toolbar — Controles de tabla',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/clientes/ClientesView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Exportar',
+              'icon' => 'i-heroicons-arrow-up-tray',
+              'color' => 'neutral',
+              'variant' => 'outline',
             ),
           ),
         ),
       ),
     ),
   ),
-  21 => 
+  35 => 
+  array (
+    'key' => 'cargaconsolidada.abiertos.cotizacion.final.documentacion.id',
+    'label' => 'Cargaconsolidada → Abiertos → Cotizacion Final → Documentacion → Id',
+    'page_path' => 'pages/cargaconsolidada/abiertos/cotizacion-final/documentacion/[id].vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'toolbar-acciones',
+        'label' => 'Toolbar — Acciones',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/documentacion/ClienteDocumentacionView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Guardar cambios',
+              'icon' => 'i-heroicons-arrow-down-tray',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      1 => 
+      array (
+        'key' => 'accion-guardar-cambios',
+        'label' => 'Acción — Guardar cambios',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/documentacion/ClienteDocumentacionView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Guardar cambios',
+          'icon' => 'i-heroicons-arrow-down-tray',
+          'color' => 'primary',
+          'variant' => 'solid',
+        ),
+      ),
+      2 => 
+      array (
+        'key' => 'card-card-1',
+        'label' => 'Card — Card 1',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/documentacion/ClienteDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 1',
+          'icon' => NULL,
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      3 => 
+      array (
+        'key' => 'card-card-2',
+        'label' => 'Card — Card 2',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/documentacion/ClienteDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 2',
+          'icon' => 'i-heroicons-exclamation-triangle',
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      4 => 
+      array (
+        'key' => 'card-',
+        'label' => 'Card — -',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/documentacion/ClienteDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => '-',
+          'icon' => 'i-heroicons-folder',
+          'body' => '',
+          'fields' => 
+          array (
+            0 => 
+            array (
+              'key' => 'volumen-documento',
+              'label' => 'Volumen documento',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            1 => 
+            array (
+              'key' => 'valor-documento',
+              'label' => 'Valor documento',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            2 => 
+            array (
+              'key' => 'factura-comercial',
+              'label' => 'Factura Comercial',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            3 => 
+            array (
+              'key' => 'packing-list',
+              'label' => 'Packing List',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            4 => 
+            array (
+              'key' => 'excel-confirmacion',
+              'label' => 'Excel Confirmación',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Nuevo Documento',
+              'icon' => 'i-heroicons-plus',
+              'color' => 'warning',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      5 => 
+      array (
+        'key' => 'card-card-4',
+        'label' => 'Card — Card 4',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/documentacion/ClienteDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 4',
+          'icon' => 'i-heroicons-folder',
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Guardar cambios',
+              'icon' => 'i-heroicons-check',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      6 => 
+      array (
+        'key' => 'card-card-5',
+        'label' => 'Card — Card 5',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/documentacion/ClienteDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 5',
+          'icon' => 'i-heroicons-folder',
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Guardar cambios',
+              'icon' => 'i-heroicons-check',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+    ),
+  ),
+  36 => 
   array (
     'key' => 'cargaconsolidada.abiertos.cotizacion.final.id',
     'label' => 'Cargaconsolidada → Abiertos → Cotizacion Final → Id',
@@ -3719,9 +7492,359 @@ return array (
           ),
         ),
       ),
+      4 => 
+      array (
+        'key' => 'toolbar-acciones-fila',
+        'label' => 'Toolbar — Acciones de fila',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/cotizacion-final/CotizacionFinalView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'vscode-icons:file-type-excel',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+            1 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'vscode-icons:file-type-pdf2',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+            2 => 
+            array (
+              'label' => 'Eliminar',
+              'icon' => 'i-heroicons-trash',
+              'color' => 'error',
+              'variant' => 'ghost',
+            ),
+            3 => 
+            array (
+              'label' => 'Exportar',
+              'icon' => 'i-heroicons-arrow-up-tray',
+              'color' => 'primary',
+              'variant' => 'outline',
+            ),
+            4 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'i-heroicons-arrow-trending-up',
+              'color' => 'info',
+              'variant' => 'ghost',
+            ),
+            5 => 
+            array (
+              'label' => 'Ver',
+              'icon' => 'i-heroicons-eye',
+              'color' => 'neutral',
+              'variant' => 'ghost',
+            ),
+          ),
+        ),
+      ),
+      5 => 
+      array (
+        'key' => 'accion-accion',
+        'label' => 'Acción — Acción',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizacion-final/CotizacionFinalView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Acción',
+          'icon' => 'vscode-icons:file-type-excel',
+          'color' => 'primary',
+          'variant' => 'ghost',
+        ),
+      ),
+      6 => 
+      array (
+        'key' => 'accion-eliminar',
+        'label' => 'Acción — Eliminar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizacion-final/CotizacionFinalView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Eliminar',
+          'icon' => 'i-heroicons-trash',
+          'color' => 'error',
+          'variant' => 'ghost',
+        ),
+      ),
+      7 => 
+      array (
+        'key' => 'accion-exportar',
+        'label' => 'Acción — Exportar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizacion-final/CotizacionFinalView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Exportar',
+          'icon' => 'i-heroicons-arrow-up-tray',
+          'color' => 'primary',
+          'variant' => 'outline',
+        ),
+      ),
+      8 => 
+      array (
+        'key' => 'accion-ver',
+        'label' => 'Acción — Ver',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizacion-final/CotizacionFinalView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Ver',
+          'icon' => 'i-heroicons-eye',
+          'color' => 'neutral',
+          'variant' => 'ghost',
+        ),
+      ),
+      9 => 
+      array (
+        'key' => 'toolbar-datatable',
+        'label' => 'Toolbar — Controles de tabla',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/cotizacion-final/CotizacionFinalView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Exportar',
+              'icon' => 'i-heroicons-arrow-up-tray',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+            1 => 
+            array (
+              'label' => 'Filtros',
+              'icon' => 'i-heroicons-funnel',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+            2 => 
+            array (
+              'label' => 'Buscar',
+              'icon' => 'i-heroicons-magnifying-glass',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+          ),
+        ),
+      ),
+      10 => 
+      array (
+        'key' => 'accion-filtros',
+        'label' => 'Acción — Filtros',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizacion-final/CotizacionFinalView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Filtros',
+          'icon' => 'i-heroicons-funnel',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
+      11 => 
+      array (
+        'key' => 'accion-buscar',
+        'label' => 'Acción — Buscar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizacion-final/CotizacionFinalView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Buscar',
+          'icon' => 'i-heroicons-magnifying-glass',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
     ),
   ),
-  22 => 
+  37 => 
+  array (
+    'key' => 'cargaconsolidada.abiertos.cotizaciones.documentacion.id',
+    'label' => 'Cargaconsolidada → Abiertos → Cotizaciones → Documentacion → Id',
+    'page_path' => 'pages/cargaconsolidada/abiertos/cotizaciones/documentacion/[id].vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'card-card-1',
+        'label' => 'Card — Card 1',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 1',
+          'icon' => NULL,
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      1 => 
+      array (
+        'key' => 'card-card-2',
+        'label' => 'Card — Card 2',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 2',
+          'icon' => NULL,
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      2 => 
+      array (
+        'key' => 'card-card-3',
+        'label' => 'Card — Card 3',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 3',
+          'icon' => 'i-heroicons-exclamation-triangle',
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      3 => 
+      array (
+        'key' => 'card-documentacion',
+        'label' => 'Card — Documentación —',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Documentación —',
+          'icon' => NULL,
+          'body' => 'Los cambios se aplican al hacer clic en «Guardar todo». Cada pestaña de proveedor tiene su propia documentación pendiente.',
+          'fields' => 
+          array (
+            0 => 
+            array (
+              'key' => 'tipolabel',
+              'label' => '{{ tipo.label }}',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            1 => 
+            array (
+              'key' => 'docfolder-name-doctipo-documento',
+              'label' => '{{ doc.folder_name || doc.tipo_documento }}',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            2 => 
+            array (
+              'key' => 'documentos-nuevos-pendientes-de-guardar',
+              'label' => 'Documentos nuevos (pendientes de guardar)',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Nuevo documento',
+              'icon' => 'i-heroicons-plus',
+              'color' => 'warning',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      4 => 
+      array (
+        'key' => 'card-imagenes',
+        'label' => 'Card — Imágenes —',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Imágenes —',
+          'icon' => NULL,
+          'body' => '',
+          'fields' => 
+          array (
+            0 => 
+            array (
+              'key' => 'agregar-imagenes-multiple',
+              'label' => 'Agregar imágenes (múltiple)',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+    ),
+  ),
+  38 => 
   array (
     'key' => 'cargaconsolidada.abiertos.cotizaciones.id',
     'label' => 'Cargaconsolidada → Abiertos → Cotizaciones → Id',
@@ -5053,9 +9176,500 @@ return array (
           ),
         ),
       ),
+      8 => 
+      array (
+        'key' => 'toolbar-acciones',
+        'label' => 'Toolbar — Acciones',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Crear Prospecto',
+              'icon' => 'i-heroicons-plus',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      9 => 
+      array (
+        'key' => 'accion-crear-prospecto',
+        'label' => 'Acción — Crear Prospecto',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Crear Prospecto',
+          'icon' => 'i-heroicons-plus',
+          'color' => 'primary',
+          'variant' => 'solid',
+        ),
+      ),
+      10 => 
+      array (
+        'key' => 'toolbar-acciones-2',
+        'label' => 'Toolbar — Acciones 2',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Upload',
+              'icon' => 'i-heroicons-arrow-up-tray',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+            1 => 
+            array (
+              'label' => 'Packing List',
+              'icon' => 'i-heroicons-arrow-up-tray',
+              'color' => 'secondary',
+              'variant' => 'ghost',
+            ),
+            2 => 
+            array (
+              'label' => 'Eliminar',
+              'icon' => 'i-heroicons-trash',
+              'color' => 'error',
+              'variant' => 'ghost',
+            ),
+            3 => 
+            array (
+              'label' => 'Crear Prospecto',
+              'icon' => 'i-heroicons-plus',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+            4 => 
+            array (
+              'label' => 'Descargar Embarque',
+              'icon' => 'i-heroicons-arrow-down-tray',
+              'color' => 'success',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      11 => 
+      array (
+        'key' => 'accion-upload',
+        'label' => 'Acción — Upload',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Upload',
+          'icon' => 'i-heroicons-arrow-up-tray',
+          'color' => 'primary',
+          'variant' => 'solid',
+        ),
+      ),
+      12 => 
+      array (
+        'key' => 'accion-packing-list',
+        'label' => 'Acción — Packing List',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Packing List',
+          'icon' => 'i-heroicons-arrow-up-tray',
+          'color' => 'secondary',
+          'variant' => 'ghost',
+        ),
+      ),
+      13 => 
+      array (
+        'key' => 'accion-eliminar',
+        'label' => 'Acción — Eliminar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Eliminar',
+          'icon' => 'i-heroicons-trash',
+          'color' => 'error',
+          'variant' => 'ghost',
+        ),
+      ),
+      14 => 
+      array (
+        'key' => 'accion-descargar-embarque',
+        'label' => 'Acción — Descargar Embarque',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Descargar Embarque',
+          'icon' => 'i-heroicons-arrow-down-tray',
+          'color' => 'success',
+          'variant' => 'solid',
+        ),
+      ),
+      15 => 
+      array (
+        'key' => 'toolbar-acciones-fila',
+        'label' => 'Toolbar — Acciones de fila',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Exportar',
+              'icon' => 'i-heroicons-arrow-up-tray',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+            1 => 
+            array (
+              'label' => 'Eliminar',
+              'icon' => 'i-heroicons-trash',
+              'color' => 'error',
+              'variant' => 'ghost',
+            ),
+            2 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'i-heroicons-document-text',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+            3 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'i-heroicons-document-duplicate',
+              'color' => 'info',
+              'variant' => 'ghost',
+            ),
+            4 => 
+            array (
+              'label' => 'Ver',
+              'icon' => 'i-heroicons-eye',
+              'color' => 'info',
+              'variant' => 'ghost',
+            ),
+            5 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'i-heroicons-arrow-path',
+              'color' => 'secondary',
+              'variant' => 'ghost',
+            ),
+            6 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'i-heroicons-arrow-right',
+              'color' => 'info',
+              'variant' => 'ghost',
+            ),
+            7 => 
+            array (
+              'label' => 'Guardar',
+              'icon' => 'material-symbols:save-sharp',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+            8 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'iconamoon:menu-burger-horizontal',
+              'color' => 'success',
+              'variant' => 'ghost',
+            ),
+            9 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'material-symbols:send-outline',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+          ),
+        ),
+      ),
+      16 => 
+      array (
+        'key' => 'accion-exportar',
+        'label' => 'Acción — Exportar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Exportar',
+          'icon' => 'i-heroicons-arrow-up-tray',
+          'color' => 'primary',
+          'variant' => 'ghost',
+        ),
+      ),
+      17 => 
+      array (
+        'key' => 'accion-accion',
+        'label' => 'Acción — Acción',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Acción',
+          'icon' => 'i-heroicons-document-text',
+          'color' => 'primary',
+          'variant' => 'ghost',
+        ),
+      ),
+      18 => 
+      array (
+        'key' => 'accion-ver',
+        'label' => 'Acción — Ver',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Ver',
+          'icon' => 'i-heroicons-eye',
+          'color' => 'info',
+          'variant' => 'ghost',
+        ),
+      ),
+      19 => 
+      array (
+        'key' => 'accion-guardar',
+        'label' => 'Acción — Guardar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Guardar',
+          'icon' => 'material-symbols:save-sharp',
+          'color' => 'primary',
+          'variant' => 'ghost',
+        ),
+      ),
+      20 => 
+      array (
+        'key' => 'toolbar-datatable',
+        'label' => 'Toolbar — Controles de tabla',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Exportar',
+              'icon' => 'i-heroicons-arrow-up-tray',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+            1 => 
+            array (
+              'label' => 'Filtros',
+              'icon' => 'i-heroicons-funnel',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+          ),
+        ),
+      ),
+      21 => 
+      array (
+        'key' => 'accion-filtros',
+        'label' => 'Acción — Filtros',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Filtros',
+          'icon' => 'i-heroicons-funnel',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
     ),
   ),
-  23 => 
+  39 => 
+  array (
+    'key' => 'cargaconsolidada.abiertos.cotizaciones.proveedor.documentacion.id',
+    'label' => 'Cargaconsolidada → Abiertos → Cotizaciones → Proveedor → Documentacion → Id',
+    'page_path' => 'pages/cargaconsolidada/abiertos/cotizaciones/proveedor/documentacion/[id].vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'toolbar-acciones',
+        'label' => 'Toolbar — Acciones',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesProveedorDocumentacionView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Guardar',
+              'icon' => 'material-symbols:save',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      1 => 
+      array (
+        'key' => 'accion-guardar',
+        'label' => 'Acción — Guardar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesProveedorDocumentacionView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Guardar',
+          'icon' => 'material-symbols:save',
+          'color' => 'primary',
+          'variant' => 'solid',
+        ),
+      ),
+    ),
+  ),
+  40 => 
+  array (
+    'key' => 'cargaconsolidada.abiertos.documentacion.id',
+    'label' => 'Cargaconsolidada → Abiertos → Documentacion → Id',
+    'page_path' => 'pages/cargaconsolidada/abiertos/documentacion/[id].vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'card-card-1',
+        'label' => 'Card — Card 1',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/consolidado/ConsolidadoDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 1',
+          'icon' => 'i-heroicons-exclamation-triangle',
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      1 => 
+      array (
+        'key' => 'card-card-2',
+        'label' => 'Card — Card 2',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/consolidado/ConsolidadoDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 2',
+          'icon' => 'i-heroicons-folder',
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+    ),
+  ),
+  41 => 
+  array (
+    'key' => 'cargaconsolidada.abiertos.entrega.clientes.id',
+    'label' => 'Cargaconsolidada → Abiertos → Entrega → Clientes → Id',
+    'page_path' => 'pages/cargaconsolidada/abiertos/entrega/clientes/[id].vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'toolbar-acciones',
+        'label' => 'Toolbar — Acciones',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/entrega/EntregaClientesView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Editar',
+              'icon' => 'i-heroicons-pencil-square',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      1 => 
+      array (
+        'key' => 'accion-editar',
+        'label' => 'Acción — Editar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/entrega/EntregaClientesView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Editar',
+          'icon' => 'i-heroicons-pencil-square',
+          'color' => 'primary',
+          'variant' => 'solid',
+        ),
+      ),
+    ),
+  ),
+  42 => 
   array (
     'key' => 'cargaconsolidada.abiertos.entrega.id',
     'label' => 'Cargaconsolidada → Abiertos → Entrega → Id',
@@ -5308,9 +9922,432 @@ return array (
           'live_api' => NULL,
         ),
       ),
+      3 => 
+      array (
+        'key' => 'tabs-clientes-entregas-delivery',
+        'label' => 'Tabs — Clientes / Entregas / Delivery',
+        'tipo' => 'tabs',
+        'component' => 'components/cargaconsolidada/entrega/EntregaView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'active' => 'clientes',
+          'tabs' => 
+          array (
+            0 => 
+            array (
+              'key' => 'clientes',
+              'label' => 'Clientes',
+              'content' => '',
+            ),
+            1 => 
+            array (
+              'key' => 'entregas',
+              'label' => 'Entregas',
+              'content' => '',
+            ),
+            2 => 
+            array (
+              'key' => 'delivery',
+              'label' => 'Delivery',
+              'content' => '',
+            ),
+          ),
+        ),
+      ),
+      4 => 
+      array (
+        'key' => 'toolbar-acciones',
+        'label' => 'Toolbar — Acciones',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/entrega/EntregaView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Fechas y Horarios',
+              'icon' => 'i-heroicons-calendar',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      5 => 
+      array (
+        'key' => 'accion-fechas-y-horarios',
+        'label' => 'Acción — Fechas y Horarios',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/entrega/EntregaView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Fechas y Horarios',
+          'icon' => 'i-heroicons-calendar',
+          'color' => 'primary',
+          'variant' => 'solid',
+        ),
+      ),
+      6 => 
+      array (
+        'key' => 'toolbar-acciones-fila',
+        'label' => 'Toolbar — Acciones de fila',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/entrega/EntregaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Editar',
+              'icon' => 'i-heroicons-pencil-square',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+            1 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'iconamoon:menu-burger-horizontal',
+              'color' => 'neutral',
+              'variant' => 'ghost',
+            ),
+            2 => 
+            array (
+              'label' => 'Ver',
+              'icon' => 'i-heroicons-eye',
+              'color' => 'neutral',
+              'variant' => 'ghost',
+            ),
+            3 => 
+            array (
+              'label' => 'Eliminar',
+              'icon' => 'i-heroicons-trash',
+              'color' => 'error',
+              'variant' => 'ghost',
+            ),
+            4 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'i-heroicons-paper-airplane',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+          ),
+        ),
+      ),
+      7 => 
+      array (
+        'key' => 'accion-editar',
+        'label' => 'Acción — Editar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/entrega/EntregaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Editar',
+          'icon' => 'i-heroicons-pencil-square',
+          'color' => 'primary',
+          'variant' => 'ghost',
+        ),
+      ),
+      8 => 
+      array (
+        'key' => 'accion-accion',
+        'label' => 'Acción — Acción',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/entrega/EntregaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Acción',
+          'icon' => 'iconamoon:menu-burger-horizontal',
+          'color' => 'neutral',
+          'variant' => 'ghost',
+        ),
+      ),
+      9 => 
+      array (
+        'key' => 'accion-ver',
+        'label' => 'Acción — Ver',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/entrega/EntregaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Ver',
+          'icon' => 'i-heroicons-eye',
+          'color' => 'neutral',
+          'variant' => 'ghost',
+        ),
+      ),
+      10 => 
+      array (
+        'key' => 'accion-eliminar',
+        'label' => 'Acción — Eliminar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/entrega/EntregaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Eliminar',
+          'icon' => 'i-heroicons-trash',
+          'color' => 'error',
+          'variant' => 'ghost',
+        ),
+      ),
+      11 => 
+      array (
+        'key' => 'toolbar-datatable',
+        'label' => 'Toolbar — Controles de tabla',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/entrega/EntregaView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Exportar',
+              'icon' => 'i-heroicons-arrow-up-tray',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+            1 => 
+            array (
+              'label' => 'Filtros',
+              'icon' => 'i-heroicons-funnel',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+            2 => 
+            array (
+              'label' => 'Buscar',
+              'icon' => 'i-heroicons-magnifying-glass',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+          ),
+        ),
+      ),
+      12 => 
+      array (
+        'key' => 'accion-exportar',
+        'label' => 'Acción — Exportar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/entrega/EntregaView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Exportar',
+          'icon' => 'i-heroicons-arrow-up-tray',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
+      13 => 
+      array (
+        'key' => 'accion-filtros',
+        'label' => 'Acción — Filtros',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/entrega/EntregaView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Filtros',
+          'icon' => 'i-heroicons-funnel',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
+      14 => 
+      array (
+        'key' => 'accion-buscar',
+        'label' => 'Acción — Buscar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/entrega/EntregaView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Buscar',
+          'icon' => 'i-heroicons-magnifying-glass',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
     ),
   ),
-  24 => 
+  43 => 
+  array (
+    'key' => 'cargaconsolidada.abiertos.factura.guia.formulario.comprobante.id',
+    'label' => 'Cargaconsolidada → Abiertos → Factura Guia → Formulario Comprobante → Id',
+    'page_path' => 'pages/cargaconsolidada/abiertos/factura-guia/formulario-comprobante/[id].vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'card-card-1',
+        'label' => 'Card — Card 1',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/factura-guia/FacturaGuiaFormularioComprobanteView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 1',
+          'icon' => 'i-heroicons-document-text',
+          'body' => 'Cuando el cliente complete el formulario de comprobante, los datos aparecerán aquí.',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      1 => 
+      array (
+        'key' => 'card-datos-enviados-por-el-cliente',
+        'label' => 'Card — Datos enviados por el cliente',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/factura-guia/FacturaGuiaFormularioComprobanteView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Datos enviados por el cliente',
+          'icon' => 'i-heroicons-document-check',
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Editar',
+              'icon' => 'i-heroicons-pencil-square',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+          ),
+        ),
+      ),
+      2 => 
+      array (
+        'key' => 'card-editar-formulario',
+        'label' => 'Card — Editar formulario',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/factura-guia/FacturaGuiaFormularioComprobanteView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Editar formulario',
+          'icon' => 'i-heroicons-pencil-square',
+          'body' => '',
+          'fields' => 
+          array (
+            0 => 
+            array (
+              'key' => 'tipo-comprobante',
+              'label' => 'Tipo comprobante',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            1 => 
+            array (
+              'key' => 'destino-de-entrega',
+              'label' => 'Destino de entrega',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            2 => 
+            array (
+              'key' => 'razon-social',
+              'label' => 'Razón social',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            3 => 
+            array (
+              'key' => 'ruc',
+              'label' => 'RUC',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            4 => 
+            array (
+              'key' => 'nombre-completo',
+              'label' => 'Nombre completo',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            5 => 
+            array (
+              'key' => 'dni-carnet',
+              'label' => 'DNI / Carnet',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Cancelar',
+              'icon' => NULL,
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+            1 => 
+            array (
+              'label' => 'Guardar cambios',
+              'icon' => NULL,
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+    ),
+  ),
+  44 => 
   array (
     'key' => 'cargaconsolidada.abiertos.factura.guia.id',
     'label' => 'Cargaconsolidada → Abiertos → Factura Guia → Id',
@@ -5449,9 +10486,253 @@ return array (
           ),
         ),
       ),
+      2 => 
+      array (
+        'key' => 'toolbar-acciones-fila',
+        'label' => 'Toolbar — Acciones de fila',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/factura-guia/FacturaGuiaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'vscode-icons:file-type-excel',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+            1 => 
+            array (
+              'label' => 'Descargar',
+              'icon' => 'i-heroicons-arrow-down-tray',
+              'color' => 'primary',
+              'variant' => 'outline',
+            ),
+            2 => 
+            array (
+              'label' => 'Eliminar',
+              'icon' => 'i-heroicons-trash',
+              'color' => 'error',
+              'variant' => 'outline',
+            ),
+            3 => 
+            array (
+              'label' => 'Exportar',
+              'icon' => 'i-heroicons-arrow-up-tray',
+              'color' => 'primary',
+              'variant' => 'outline',
+            ),
+            4 => 
+            array (
+              'label' => 'Mensaje',
+              'icon' => 'i-heroicons-chat-bubble-left-right',
+              'color' => 'success',
+              'variant' => 'ghost',
+            ),
+            5 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'iconamoon:menu-burger-horizontal',
+              'color' => 'success',
+              'variant' => 'ghost',
+            ),
+            6 => 
+            array (
+              'label' => 'Ver',
+              'icon' => 'i-heroicons-eye',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+            7 => 
+            array (
+              'label' => 'Editar',
+              'icon' => 'i-heroicons-pencil-square',
+              'color' => 'neutral',
+              'variant' => 'ghost',
+            ),
+          ),
+        ),
+      ),
+      3 => 
+      array (
+        'key' => 'accion-accion',
+        'label' => 'Acción — Acción',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/factura-guia/FacturaGuiaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Acción',
+          'icon' => 'vscode-icons:file-type-excel',
+          'color' => 'primary',
+          'variant' => 'ghost',
+        ),
+      ),
+      4 => 
+      array (
+        'key' => 'accion-descargar',
+        'label' => 'Acción — Descargar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/factura-guia/FacturaGuiaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Descargar',
+          'icon' => 'i-heroicons-arrow-down-tray',
+          'color' => 'primary',
+          'variant' => 'outline',
+        ),
+      ),
+      5 => 
+      array (
+        'key' => 'accion-eliminar',
+        'label' => 'Acción — Eliminar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/factura-guia/FacturaGuiaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Eliminar',
+          'icon' => 'i-heroicons-trash',
+          'color' => 'error',
+          'variant' => 'outline',
+        ),
+      ),
+      6 => 
+      array (
+        'key' => 'accion-exportar',
+        'label' => 'Acción — Exportar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/factura-guia/FacturaGuiaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Exportar',
+          'icon' => 'i-heroicons-arrow-up-tray',
+          'color' => 'primary',
+          'variant' => 'outline',
+        ),
+      ),
+      7 => 
+      array (
+        'key' => 'accion-mensaje',
+        'label' => 'Acción — Mensaje',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/factura-guia/FacturaGuiaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Mensaje',
+          'icon' => 'i-heroicons-chat-bubble-left-right',
+          'color' => 'success',
+          'variant' => 'ghost',
+        ),
+      ),
+      8 => 
+      array (
+        'key' => 'accion-ver',
+        'label' => 'Acción — Ver',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/factura-guia/FacturaGuiaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Ver',
+          'icon' => 'i-heroicons-eye',
+          'color' => 'primary',
+          'variant' => 'ghost',
+        ),
+      ),
+      9 => 
+      array (
+        'key' => 'accion-editar',
+        'label' => 'Acción — Editar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/factura-guia/FacturaGuiaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Editar',
+          'icon' => 'i-heroicons-pencil-square',
+          'color' => 'neutral',
+          'variant' => 'ghost',
+        ),
+      ),
+      10 => 
+      array (
+        'key' => 'toolbar-datatable',
+        'label' => 'Toolbar — Controles de tabla',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/factura-guia/FacturaGuiaView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Filtros',
+              'icon' => 'i-heroicons-funnel',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+            1 => 
+            array (
+              'label' => 'Buscar',
+              'icon' => 'i-heroicons-magnifying-glass',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+          ),
+        ),
+      ),
+      11 => 
+      array (
+        'key' => 'accion-filtros',
+        'label' => 'Acción — Filtros',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/factura-guia/FacturaGuiaView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Filtros',
+          'icon' => 'i-heroicons-funnel',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
+      12 => 
+      array (
+        'key' => 'accion-buscar',
+        'label' => 'Acción — Buscar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/factura-guia/FacturaGuiaView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Buscar',
+          'icon' => 'i-heroicons-magnifying-glass',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
     ),
   ),
-  25 => 
+  45 => 
   array (
     'key' => 'cargaconsolidada.completados',
     'label' => 'Cargaconsolidada → Completados',
@@ -5562,9 +10843,785 @@ return array (
           ),
         ),
       ),
+      1 => 
+      array (
+        'key' => 'toolbar-acciones-fila',
+        'label' => 'Toolbar — Acciones de fila',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/consolidado/CargaConsolidadaCompletadosView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Ver',
+              'icon' => 'i-heroicons-eye',
+              'color' => 'info',
+              'variant' => 'ghost',
+            ),
+            1 => 
+            array (
+              'label' => 'Editar',
+              'icon' => 'i-heroicons-pencil',
+              'color' => 'warning',
+              'variant' => 'ghost',
+            ),
+            2 => 
+            array (
+              'label' => 'Eliminar',
+              'icon' => 'i-heroicons-trash',
+              'color' => 'error',
+              'variant' => 'ghost',
+            ),
+            3 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'i-heroicons-envelope',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+          ),
+        ),
+      ),
+      2 => 
+      array (
+        'key' => 'accion-ver',
+        'label' => 'Acción — Ver',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/consolidado/CargaConsolidadaCompletadosView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Ver',
+          'icon' => 'i-heroicons-eye',
+          'color' => 'info',
+          'variant' => 'ghost',
+        ),
+      ),
+      3 => 
+      array (
+        'key' => 'accion-editar',
+        'label' => 'Acción — Editar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/consolidado/CargaConsolidadaCompletadosView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Editar',
+          'icon' => 'i-heroicons-pencil',
+          'color' => 'warning',
+          'variant' => 'ghost',
+        ),
+      ),
+      4 => 
+      array (
+        'key' => 'accion-eliminar',
+        'label' => 'Acción — Eliminar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/consolidado/CargaConsolidadaCompletadosView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Eliminar',
+          'icon' => 'i-heroicons-trash',
+          'color' => 'error',
+          'variant' => 'ghost',
+        ),
+      ),
+      5 => 
+      array (
+        'key' => 'accion-accion',
+        'label' => 'Acción — Acción',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/consolidado/CargaConsolidadaCompletadosView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Acción',
+          'icon' => 'i-heroicons-envelope',
+          'color' => 'primary',
+          'variant' => 'ghost',
+        ),
+      ),
+      6 => 
+      array (
+        'key' => 'toolbar-datatable',
+        'label' => 'Toolbar — Controles de tabla',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/consolidado/CargaConsolidadaCompletadosView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Exportar',
+              'icon' => 'i-heroicons-arrow-up-tray',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+            1 => 
+            array (
+              'label' => 'Filtros',
+              'icon' => 'i-heroicons-funnel',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+          ),
+        ),
+      ),
+      7 => 
+      array (
+        'key' => 'accion-exportar',
+        'label' => 'Acción — Exportar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/consolidado/CargaConsolidadaCompletadosView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Exportar',
+          'icon' => 'i-heroicons-arrow-up-tray',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
+      8 => 
+      array (
+        'key' => 'accion-filtros',
+        'label' => 'Acción — Filtros',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/consolidado/CargaConsolidadaCompletadosView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Filtros',
+          'icon' => 'i-heroicons-funnel',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
     ),
   ),
-  26 => 
+  46 => 
+  array (
+    'key' => 'cargaconsolidada.completados.aduana.id',
+    'label' => 'Cargaconsolidada → Completados → Aduana → Id',
+    'page_path' => 'pages/cargaconsolidada/completados/aduana/[id].vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'card-card-1',
+        'label' => 'Card — Card 1',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/consolidado/ConsolidadoAduanaView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 1',
+          'icon' => 'i-heroicons-cube-transparent',
+          'body' => '',
+          'fields' => 
+          array (
+            0 => 
+            array (
+              'key' => 'naviera',
+              'label' => 'Naviera',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            1 => 
+            array (
+              'key' => 'multa',
+              'label' => 'Multa',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            2 => 
+            array (
+              'key' => 'observaciones',
+              'label' => 'Observaciones',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            3 => 
+            array (
+              'key' => 'toneladas-contenedor',
+              'label' => 'Toneladas contenedor',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            4 => 
+            array (
+              'key' => 'fecha-levante',
+              'label' => 'Fecha levante',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            5 => 
+            array (
+              'key' => 'fecha-zarpe',
+              'label' => 'Fecha zarpe',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            6 => 
+            array (
+              'key' => 'numero-dua',
+              'label' => 'Número Dua',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            7 => 
+            array (
+              'key' => 'fecha-arribo',
+              'label' => 'Fecha arribo',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            8 => 
+            array (
+              'key' => 'valor-fob',
+              'label' => 'Valor FOB',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            9 => 
+            array (
+              'key' => 'doc-tributos-y-ajustes',
+              'label' => 'DOC. TRIBUTOS Y AJUSTES',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            10 => 
+            array (
+              'key' => 'fecha-declaracion',
+              'label' => 'Fecha declaración',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            11 => 
+            array (
+              'key' => 'valor-flete',
+              'label' => 'Valor flete',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            12 => 
+            array (
+              'key' => 'canal-de-control',
+              'label' => 'Canal de Control',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            13 => 
+            array (
+              'key' => 'costo-destino',
+              'label' => 'Costo destino',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            14 => 
+            array (
+              'key' => 'resumen-de-impuestos-pagados',
+              'label' => 'RESUMEN DE IMPUESTOS PAGADOS',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            15 => 
+            array (
+              'key' => 'ajuste-de-valor',
+              'label' => 'Ajuste de valor',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => '{{ aduanaData ? \'Actualizar\' : \'Guardar\' }}',
+              'icon' => NULL,
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+    ),
+  ),
+  47 => 
+  array (
+    'key' => 'cargaconsolidada.completados.clientes.documentacion.id',
+    'label' => 'Cargaconsolidada → Completados → Clientes → Documentacion → Id',
+    'page_path' => 'pages/cargaconsolidada/completados/clientes/documentacion/[id].vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'toolbar-acciones',
+        'label' => 'Toolbar — Acciones',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/clientes/ClientesDocumentacionView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Guardar cambios',
+              'icon' => 'i-heroicons-check',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+            1 => 
+            array (
+              'label' => 'Descargar Excel',
+              'icon' => 'i-heroicons-arrow-down-tray',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+            2 => 
+            array (
+              'label' => 'Guardar',
+              'icon' => 'i-heroicons-check',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      1 => 
+      array (
+        'key' => 'accion-guardar-cambios',
+        'label' => 'Acción — Guardar cambios',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/clientes/ClientesDocumentacionView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Guardar cambios',
+          'icon' => 'i-heroicons-check',
+          'color' => 'primary',
+          'variant' => 'solid',
+        ),
+      ),
+      2 => 
+      array (
+        'key' => 'accion-descargar-excel',
+        'label' => 'Acción — Descargar Excel',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/clientes/ClientesDocumentacionView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Descargar Excel',
+          'icon' => 'i-heroicons-arrow-down-tray',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
+      3 => 
+      array (
+        'key' => 'accion-guardar',
+        'label' => 'Acción — Guardar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/clientes/ClientesDocumentacionView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Guardar',
+          'icon' => 'i-heroicons-check',
+          'color' => 'primary',
+          'variant' => 'solid',
+        ),
+      ),
+      4 => 
+      array (
+        'key' => 'card-card-1',
+        'label' => 'Card — Card 1',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/clientes/ClientesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 1',
+          'icon' => NULL,
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      5 => 
+      array (
+        'key' => 'card-card-2',
+        'label' => 'Card — Card 2',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/clientes/ClientesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 2',
+          'icon' => NULL,
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      6 => 
+      array (
+        'key' => 'card-card-3',
+        'label' => 'Card — Card 3',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/clientes/ClientesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 3',
+          'icon' => NULL,
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      7 => 
+      array (
+        'key' => 'card-card-4',
+        'label' => 'Card — Card 4',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/clientes/ClientesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 4',
+          'icon' => NULL,
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      8 => 
+      array (
+        'key' => 'card-card-5',
+        'label' => 'Card — Card 5',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/clientes/ClientesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 5',
+          'icon' => 'i-heroicons-exclamation-triangle',
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      9 => 
+      array (
+        'key' => 'card-documentacion',
+        'label' => 'Card — Documentación  -',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/clientes/ClientesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Documentación  -',
+          'icon' => 'i-heroicons-folder',
+          'body' => '',
+          'fields' => 
+          array (
+            0 => 
+            array (
+              'key' => 'volumen-documento',
+              'label' => 'Volumen documento',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            1 => 
+            array (
+              'key' => 'valor-documento',
+              'label' => 'Valor documento',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            2 => 
+            array (
+              'key' => 'factura-comercial',
+              'label' => 'Factura Comercial',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            3 => 
+            array (
+              'key' => 'packing-list',
+              'label' => 'Packing List',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            4 => 
+            array (
+              'key' => 'excel-confirmacion',
+              'label' => 'Excel Confirmación',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Nuevo Documento',
+              'icon' => 'i-heroicons-plus',
+              'color' => 'warning',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      10 => 
+      array (
+        'key' => 'card-documentacion-china',
+        'label' => 'Card — Documentación China',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/clientes/ClientesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Documentación China',
+          'icon' => 'i-heroicons-folder',
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Guardar cambios',
+              'icon' => 'i-heroicons-check',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      11 => 
+      array (
+        'key' => 'card-inspeccion',
+        'label' => 'Card — Inspección',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/clientes/ClientesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Inspección',
+          'icon' => 'i-heroicons-folder',
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Guardar cambios',
+              'icon' => 'i-heroicons-check',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      12 => 
+      array (
+        'key' => 'card-card-9',
+        'label' => 'Card — Card 9',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/clientes/ClientesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 9',
+          'icon' => NULL,
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Descargar cotización inicial',
+              'icon' => 'i-heroicons-arrow-down-tray',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+            1 => 
+            array (
+              'label' => 'Descargar cotización final',
+              'icon' => 'i-heroicons-arrow-down-tray',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+          ),
+        ),
+      ),
+    ),
+  ),
+  48 => 
+  array (
+    'key' => 'cargaconsolidada.completados.clientes.excel.confirmacion.uuid.guardado',
+    'label' => 'Cargaconsolidada → Completados → Clientes → Excel Confirmacion → Uuid → Guardado',
+    'page_path' => 'pages/cargaconsolidada/completados/clientes/excel-confirmacion/[uuid]/guardado.vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'card-card-1',
+        'label' => 'Card — Card 1',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/clientes/ExcelConfirmacionGuardadoView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 1',
+          'icon' => 'i-heroicons-check-circle',
+          'body' => '{{ mensaje || \'La confirmación del cliente se actualizó correctamente.\' }}',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Volver a editar',
+              'icon' => 'i-heroicons-pencil-square',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+            1 => 
+            array (
+              'label' => 'Volver a clientes',
+              'icon' => 'i-heroicons-arrow-left',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+          ),
+        ),
+      ),
+    ),
+  ),
+  49 => 
   array (
     'key' => 'cargaconsolidada.completados.clientes.id',
     'label' => 'Cargaconsolidada → Completados → Clientes → Id',
@@ -6019,35 +12076,366 @@ return array (
       ),
       4 => 
       array (
-        'key' => 'tabs-documentacion-documentacion',
-        'label' => 'Tabs — Documentación / Documentacion',
-        'tipo' => 'tabs',
+        'key' => 'toolbar-acciones-fila',
+        'label' => 'Toolbar — Acciones de fila',
+        'tipo' => 'toolbar',
         'component' => 'components/cargaconsolidada/clientes/ClientesView/index',
-        'api_hint' => NULL,
+        'api_hint' => 'column:acciones',
         'live_api' => NULL,
         'snapshot' => 
         array (
-          'active' => 'documentacion',
-          'tabs' => 
+          'buttons' => 
           array (
             0 => 
             array (
-              'key' => 'documentacion',
-              'label' => 'Documentación',
-              'content' => '',
+              'label' => 'Ver',
+              'icon' => 'i-heroicons-eye',
+              'color' => 'primary',
+              'variant' => 'ghost',
             ),
             1 => 
             array (
-              'key' => 'documentacion',
-              'label' => 'Documentacion',
-              'content' => '',
+              'label' => 'Acción',
+              'icon' => 'i-heroicons-document-text',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+            2 => 
+            array (
+              'label' => 'Eliminar',
+              'icon' => 'i-heroicons-trash',
+              'color' => 'error',
+              'variant' => 'ghost',
+            ),
+            3 => 
+            array (
+              'label' => 'Exportar',
+              'icon' => 'i-heroicons-arrow-up-tray',
+              'color' => 'primary',
+              'variant' => 'outline',
+            ),
+            4 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'iconamoon:menu-burger-horizontal',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+          ),
+        ),
+      ),
+      5 => 
+      array (
+        'key' => 'accion-ver',
+        'label' => 'Acción — Ver',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/clientes/ClientesView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Ver',
+          'icon' => 'i-heroicons-eye',
+          'color' => 'primary',
+          'variant' => 'ghost',
+        ),
+      ),
+      6 => 
+      array (
+        'key' => 'accion-accion',
+        'label' => 'Acción — Acción',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/clientes/ClientesView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Acción',
+          'icon' => 'i-heroicons-document-text',
+          'color' => 'primary',
+          'variant' => 'ghost',
+        ),
+      ),
+      7 => 
+      array (
+        'key' => 'accion-eliminar',
+        'label' => 'Acción — Eliminar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/clientes/ClientesView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Eliminar',
+          'icon' => 'i-heroicons-trash',
+          'color' => 'error',
+          'variant' => 'ghost',
+        ),
+      ),
+      8 => 
+      array (
+        'key' => 'accion-exportar',
+        'label' => 'Acción — Exportar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/clientes/ClientesView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Exportar',
+          'icon' => 'i-heroicons-arrow-up-tray',
+          'color' => 'primary',
+          'variant' => 'outline',
+        ),
+      ),
+      9 => 
+      array (
+        'key' => 'toolbar-datatable',
+        'label' => 'Toolbar — Controles de tabla',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/clientes/ClientesView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Exportar',
+              'icon' => 'i-heroicons-arrow-up-tray',
+              'color' => 'neutral',
+              'variant' => 'outline',
             ),
           ),
         ),
       ),
     ),
   ),
-  27 => 
+  50 => 
+  array (
+    'key' => 'cargaconsolidada.completados.cotizacion.final.documentacion.id',
+    'label' => 'Cargaconsolidada → Completados → Cotizacion Final → Documentacion → Id',
+    'page_path' => 'pages/cargaconsolidada/completados/cotizacion-final/documentacion/[id].vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'toolbar-acciones',
+        'label' => 'Toolbar — Acciones',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/documentacion/ClienteDocumentacionView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Guardar cambios',
+              'icon' => 'i-heroicons-arrow-down-tray',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      1 => 
+      array (
+        'key' => 'accion-guardar-cambios',
+        'label' => 'Acción — Guardar cambios',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/documentacion/ClienteDocumentacionView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Guardar cambios',
+          'icon' => 'i-heroicons-arrow-down-tray',
+          'color' => 'primary',
+          'variant' => 'solid',
+        ),
+      ),
+      2 => 
+      array (
+        'key' => 'card-card-1',
+        'label' => 'Card — Card 1',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/documentacion/ClienteDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 1',
+          'icon' => NULL,
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      3 => 
+      array (
+        'key' => 'card-card-2',
+        'label' => 'Card — Card 2',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/documentacion/ClienteDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 2',
+          'icon' => 'i-heroicons-exclamation-triangle',
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      4 => 
+      array (
+        'key' => 'card-',
+        'label' => 'Card — -',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/documentacion/ClienteDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => '-',
+          'icon' => 'i-heroicons-folder',
+          'body' => '',
+          'fields' => 
+          array (
+            0 => 
+            array (
+              'key' => 'volumen-documento',
+              'label' => 'Volumen documento',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            1 => 
+            array (
+              'key' => 'valor-documento',
+              'label' => 'Valor documento',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            2 => 
+            array (
+              'key' => 'factura-comercial',
+              'label' => 'Factura Comercial',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            3 => 
+            array (
+              'key' => 'packing-list',
+              'label' => 'Packing List',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            4 => 
+            array (
+              'key' => 'excel-confirmacion',
+              'label' => 'Excel Confirmación',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Nuevo Documento',
+              'icon' => 'i-heroicons-plus',
+              'color' => 'warning',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      5 => 
+      array (
+        'key' => 'card-card-4',
+        'label' => 'Card — Card 4',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/documentacion/ClienteDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 4',
+          'icon' => 'i-heroicons-folder',
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Guardar cambios',
+              'icon' => 'i-heroicons-check',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      6 => 
+      array (
+        'key' => 'card-card-5',
+        'label' => 'Card — Card 5',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/documentacion/ClienteDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 5',
+          'icon' => 'i-heroicons-folder',
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Guardar cambios',
+              'icon' => 'i-heroicons-check',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+    ),
+  ),
+  51 => 
   array (
     'key' => 'cargaconsolidada.completados.cotizacion.final.id',
     'label' => 'Cargaconsolidada → Completados → Cotizacion Final → Id',
@@ -6409,9 +12797,359 @@ return array (
           ),
         ),
       ),
+      4 => 
+      array (
+        'key' => 'toolbar-acciones-fila',
+        'label' => 'Toolbar — Acciones de fila',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/cotizacion-final/CotizacionFinalView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'vscode-icons:file-type-excel',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+            1 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'vscode-icons:file-type-pdf2',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+            2 => 
+            array (
+              'label' => 'Eliminar',
+              'icon' => 'i-heroicons-trash',
+              'color' => 'error',
+              'variant' => 'ghost',
+            ),
+            3 => 
+            array (
+              'label' => 'Exportar',
+              'icon' => 'i-heroicons-arrow-up-tray',
+              'color' => 'primary',
+              'variant' => 'outline',
+            ),
+            4 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'i-heroicons-arrow-trending-up',
+              'color' => 'info',
+              'variant' => 'ghost',
+            ),
+            5 => 
+            array (
+              'label' => 'Ver',
+              'icon' => 'i-heroicons-eye',
+              'color' => 'neutral',
+              'variant' => 'ghost',
+            ),
+          ),
+        ),
+      ),
+      5 => 
+      array (
+        'key' => 'accion-accion',
+        'label' => 'Acción — Acción',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizacion-final/CotizacionFinalView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Acción',
+          'icon' => 'vscode-icons:file-type-excel',
+          'color' => 'primary',
+          'variant' => 'ghost',
+        ),
+      ),
+      6 => 
+      array (
+        'key' => 'accion-eliminar',
+        'label' => 'Acción — Eliminar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizacion-final/CotizacionFinalView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Eliminar',
+          'icon' => 'i-heroicons-trash',
+          'color' => 'error',
+          'variant' => 'ghost',
+        ),
+      ),
+      7 => 
+      array (
+        'key' => 'accion-exportar',
+        'label' => 'Acción — Exportar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizacion-final/CotizacionFinalView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Exportar',
+          'icon' => 'i-heroicons-arrow-up-tray',
+          'color' => 'primary',
+          'variant' => 'outline',
+        ),
+      ),
+      8 => 
+      array (
+        'key' => 'accion-ver',
+        'label' => 'Acción — Ver',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizacion-final/CotizacionFinalView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Ver',
+          'icon' => 'i-heroicons-eye',
+          'color' => 'neutral',
+          'variant' => 'ghost',
+        ),
+      ),
+      9 => 
+      array (
+        'key' => 'toolbar-datatable',
+        'label' => 'Toolbar — Controles de tabla',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/cotizacion-final/CotizacionFinalView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Exportar',
+              'icon' => 'i-heroicons-arrow-up-tray',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+            1 => 
+            array (
+              'label' => 'Filtros',
+              'icon' => 'i-heroicons-funnel',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+            2 => 
+            array (
+              'label' => 'Buscar',
+              'icon' => 'i-heroicons-magnifying-glass',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+          ),
+        ),
+      ),
+      10 => 
+      array (
+        'key' => 'accion-filtros',
+        'label' => 'Acción — Filtros',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizacion-final/CotizacionFinalView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Filtros',
+          'icon' => 'i-heroicons-funnel',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
+      11 => 
+      array (
+        'key' => 'accion-buscar',
+        'label' => 'Acción — Buscar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizacion-final/CotizacionFinalView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Buscar',
+          'icon' => 'i-heroicons-magnifying-glass',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
     ),
   ),
-  28 => 
+  52 => 
+  array (
+    'key' => 'cargaconsolidada.completados.cotizaciones.documentacion.id',
+    'label' => 'Cargaconsolidada → Completados → Cotizaciones → Documentacion → Id',
+    'page_path' => 'pages/cargaconsolidada/completados/cotizaciones/documentacion/[id].vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'card-card-1',
+        'label' => 'Card — Card 1',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 1',
+          'icon' => NULL,
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      1 => 
+      array (
+        'key' => 'card-card-2',
+        'label' => 'Card — Card 2',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 2',
+          'icon' => NULL,
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      2 => 
+      array (
+        'key' => 'card-card-3',
+        'label' => 'Card — Card 3',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 3',
+          'icon' => 'i-heroicons-exclamation-triangle',
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      3 => 
+      array (
+        'key' => 'card-documentacion',
+        'label' => 'Card — Documentación —',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Documentación —',
+          'icon' => NULL,
+          'body' => 'Los cambios se aplican al hacer clic en «Guardar todo». Cada pestaña de proveedor tiene su propia documentación pendiente.',
+          'fields' => 
+          array (
+            0 => 
+            array (
+              'key' => 'tipolabel',
+              'label' => '{{ tipo.label }}',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            1 => 
+            array (
+              'key' => 'docfolder-name-doctipo-documento',
+              'label' => '{{ doc.folder_name || doc.tipo_documento }}',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            2 => 
+            array (
+              'key' => 'documentos-nuevos-pendientes-de-guardar',
+              'label' => 'Documentos nuevos (pendientes de guardar)',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Nuevo documento',
+              'icon' => 'i-heroicons-plus',
+              'color' => 'warning',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      4 => 
+      array (
+        'key' => 'card-imagenes',
+        'label' => 'Card — Imágenes —',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Imágenes —',
+          'icon' => NULL,
+          'body' => '',
+          'fields' => 
+          array (
+            0 => 
+            array (
+              'key' => 'agregar-imagenes-multiple',
+              'label' => 'Agregar imágenes (múltiple)',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+    ),
+  ),
+  53 => 
   array (
     'key' => 'cargaconsolidada.completados.cotizaciones.id',
     'label' => 'Cargaconsolidada → Completados → Cotizaciones → Id',
@@ -7743,9 +14481,924 @@ return array (
           ),
         ),
       ),
+      8 => 
+      array (
+        'key' => 'toolbar-acciones',
+        'label' => 'Toolbar — Acciones',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Crear Prospecto',
+              'icon' => 'i-heroicons-plus',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      9 => 
+      array (
+        'key' => 'accion-crear-prospecto',
+        'label' => 'Acción — Crear Prospecto',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Crear Prospecto',
+          'icon' => 'i-heroicons-plus',
+          'color' => 'primary',
+          'variant' => 'solid',
+        ),
+      ),
+      10 => 
+      array (
+        'key' => 'toolbar-acciones-2',
+        'label' => 'Toolbar — Acciones 2',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Upload',
+              'icon' => 'i-heroicons-arrow-up-tray',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+            1 => 
+            array (
+              'label' => 'Packing List',
+              'icon' => 'i-heroicons-arrow-up-tray',
+              'color' => 'secondary',
+              'variant' => 'ghost',
+            ),
+            2 => 
+            array (
+              'label' => 'Eliminar',
+              'icon' => 'i-heroicons-trash',
+              'color' => 'error',
+              'variant' => 'ghost',
+            ),
+            3 => 
+            array (
+              'label' => 'Crear Prospecto',
+              'icon' => 'i-heroicons-plus',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+            4 => 
+            array (
+              'label' => 'Descargar Embarque',
+              'icon' => 'i-heroicons-arrow-down-tray',
+              'color' => 'success',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      11 => 
+      array (
+        'key' => 'accion-upload',
+        'label' => 'Acción — Upload',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Upload',
+          'icon' => 'i-heroicons-arrow-up-tray',
+          'color' => 'primary',
+          'variant' => 'solid',
+        ),
+      ),
+      12 => 
+      array (
+        'key' => 'accion-packing-list',
+        'label' => 'Acción — Packing List',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Packing List',
+          'icon' => 'i-heroicons-arrow-up-tray',
+          'color' => 'secondary',
+          'variant' => 'ghost',
+        ),
+      ),
+      13 => 
+      array (
+        'key' => 'accion-eliminar',
+        'label' => 'Acción — Eliminar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Eliminar',
+          'icon' => 'i-heroicons-trash',
+          'color' => 'error',
+          'variant' => 'ghost',
+        ),
+      ),
+      14 => 
+      array (
+        'key' => 'accion-descargar-embarque',
+        'label' => 'Acción — Descargar Embarque',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Descargar Embarque',
+          'icon' => 'i-heroicons-arrow-down-tray',
+          'color' => 'success',
+          'variant' => 'solid',
+        ),
+      ),
+      15 => 
+      array (
+        'key' => 'toolbar-acciones-fila',
+        'label' => 'Toolbar — Acciones de fila',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Exportar',
+              'icon' => 'i-heroicons-arrow-up-tray',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+            1 => 
+            array (
+              'label' => 'Eliminar',
+              'icon' => 'i-heroicons-trash',
+              'color' => 'error',
+              'variant' => 'ghost',
+            ),
+            2 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'i-heroicons-document-text',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+            3 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'i-heroicons-document-duplicate',
+              'color' => 'info',
+              'variant' => 'ghost',
+            ),
+            4 => 
+            array (
+              'label' => 'Ver',
+              'icon' => 'i-heroicons-eye',
+              'color' => 'info',
+              'variant' => 'ghost',
+            ),
+            5 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'i-heroicons-arrow-path',
+              'color' => 'secondary',
+              'variant' => 'ghost',
+            ),
+            6 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'i-heroicons-arrow-right',
+              'color' => 'info',
+              'variant' => 'ghost',
+            ),
+            7 => 
+            array (
+              'label' => 'Guardar',
+              'icon' => 'material-symbols:save-sharp',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+            8 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'iconamoon:menu-burger-horizontal',
+              'color' => 'success',
+              'variant' => 'ghost',
+            ),
+            9 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'material-symbols:send-outline',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+          ),
+        ),
+      ),
+      16 => 
+      array (
+        'key' => 'accion-exportar',
+        'label' => 'Acción — Exportar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Exportar',
+          'icon' => 'i-heroicons-arrow-up-tray',
+          'color' => 'primary',
+          'variant' => 'ghost',
+        ),
+      ),
+      17 => 
+      array (
+        'key' => 'accion-accion',
+        'label' => 'Acción — Acción',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Acción',
+          'icon' => 'i-heroicons-document-text',
+          'color' => 'primary',
+          'variant' => 'ghost',
+        ),
+      ),
+      18 => 
+      array (
+        'key' => 'accion-ver',
+        'label' => 'Acción — Ver',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Ver',
+          'icon' => 'i-heroicons-eye',
+          'color' => 'info',
+          'variant' => 'ghost',
+        ),
+      ),
+      19 => 
+      array (
+        'key' => 'accion-guardar',
+        'label' => 'Acción — Guardar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Guardar',
+          'icon' => 'material-symbols:save-sharp',
+          'color' => 'primary',
+          'variant' => 'ghost',
+        ),
+      ),
+      20 => 
+      array (
+        'key' => 'toolbar-datatable',
+        'label' => 'Toolbar — Controles de tabla',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Exportar',
+              'icon' => 'i-heroicons-arrow-up-tray',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+            1 => 
+            array (
+              'label' => 'Filtros',
+              'icon' => 'i-heroicons-funnel',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+          ),
+        ),
+      ),
+      21 => 
+      array (
+        'key' => 'accion-filtros',
+        'label' => 'Acción — Filtros',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Filtros',
+          'icon' => 'i-heroicons-funnel',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
     ),
   ),
-  29 => 
+  54 => 
+  array (
+    'key' => 'cargaconsolidada.completados.cotizaciones.proveedor.documentacion.china.id',
+    'label' => 'Cargaconsolidada → Completados → Cotizaciones → Proveedor → Documentacion China → Id',
+    'page_path' => 'pages/cargaconsolidada/completados/cotizaciones/proveedor/documentacion-china/[id].vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'toolbar-acciones',
+        'label' => 'Toolbar — Acciones',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesProveedorDocumentacionChinaView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Guardar',
+              'icon' => 'material-symbols:save',
+              'color' => 'warning',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      1 => 
+      array (
+        'key' => 'accion-guardar',
+        'label' => 'Acción — Guardar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesProveedorDocumentacionChinaView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Guardar',
+          'icon' => 'material-symbols:save',
+          'color' => 'warning',
+          'variant' => 'solid',
+        ),
+      ),
+    ),
+  ),
+  55 => 
+  array (
+    'key' => 'cargaconsolidada.completados.cotizaciones.proveedor.documentacion.id',
+    'label' => 'Cargaconsolidada → Completados → Cotizaciones → Proveedor → Documentacion → Id',
+    'page_path' => 'pages/cargaconsolidada/completados/cotizaciones/proveedor/documentacion/[id].vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'toolbar-acciones',
+        'label' => 'Toolbar — Acciones',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesProveedorDocumentacionView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Guardar',
+              'icon' => 'material-symbols:save',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      1 => 
+      array (
+        'key' => 'accion-guardar',
+        'label' => 'Acción — Guardar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesProveedorDocumentacionView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Guardar',
+          'icon' => 'material-symbols:save',
+          'color' => 'primary',
+          'variant' => 'solid',
+        ),
+      ),
+    ),
+  ),
+  56 => 
+  array (
+    'key' => 'cargaconsolidada.completados.documentacion.id',
+    'label' => 'Cargaconsolidada → Completados → Documentacion → Id',
+    'page_path' => 'pages/cargaconsolidada/completados/documentacion/[id].vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'card-card-1',
+        'label' => 'Card — Card 1',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/consolidado/ConsolidadoDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 1',
+          'icon' => 'i-heroicons-exclamation-triangle',
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      1 => 
+      array (
+        'key' => 'card-card-2',
+        'label' => 'Card — Card 2',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/consolidado/ConsolidadoDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 2',
+          'icon' => 'i-heroicons-folder',
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+    ),
+  ),
+  57 => 
+  array (
+    'key' => 'cargaconsolidada.completados.entrega.clientes.id',
+    'label' => 'Cargaconsolidada → Completados → Entrega → Clientes → Id',
+    'page_path' => 'pages/cargaconsolidada/completados/entrega/clientes/[id].vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'toolbar-acciones',
+        'label' => 'Toolbar — Acciones',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/entrega/EntregaClientesView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Editar',
+              'icon' => 'i-heroicons-pencil-square',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      1 => 
+      array (
+        'key' => 'accion-editar',
+        'label' => 'Acción — Editar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/entrega/EntregaClientesView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Editar',
+          'icon' => 'i-heroicons-pencil-square',
+          'color' => 'primary',
+          'variant' => 'solid',
+        ),
+      ),
+    ),
+  ),
+  58 => 
+  array (
+    'key' => 'cargaconsolidada.completados.entrega.fechas.horarios.id',
+    'label' => 'Cargaconsolidada → Completados → Entrega → Fechas Horarios → Id',
+    'page_path' => 'pages/cargaconsolidada/completados/entrega/fechas-horarios/[id].vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'card-card-1',
+        'label' => 'Card — Card 1',
+        'tipo' => 'card',
+        'component' => 'components/admin/HorariosAdmin',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 1',
+          'icon' => NULL,
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Nuevo Horario ({{ selectedDates.length }})',
+              'icon' => 'i-heroicons-plus',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+            1 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'i-heroicons-chevron-left',
+              'color' => 'neutral',
+              'variant' => 'ghost',
+            ),
+            2 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'i-heroicons-chevron-right',
+              'color' => 'neutral',
+              'variant' => 'ghost',
+            ),
+          ),
+        ),
+      ),
+      1 => 
+      array (
+        'key' => 'card-fechas-seleccionadas',
+        'label' => 'Card — Fechas Seleccionadas',
+        'tipo' => 'card',
+        'component' => 'components/admin/HorariosAdmin',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Fechas Seleccionadas',
+          'icon' => 'i-heroicons-x-mark',
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      2 => 
+      array (
+        'key' => 'card-card-3',
+        'label' => 'Card — Card 3',
+        'tipo' => 'card',
+        'component' => 'components/admin/HorariosAdmin',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 3',
+          'icon' => 'i-heroicons-clock',
+          'body' => 'No hay horarios configurados',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Editar',
+              'icon' => 'i-heroicons-pencil-square',
+              'color' => 'neutral',
+              'variant' => 'ghost',
+            ),
+            1 => 
+            array (
+              'label' => 'Eliminar',
+              'icon' => 'i-heroicons-trash',
+              'color' => 'error',
+              'variant' => 'ghost',
+            ),
+            2 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'isGroupOpen(schedule.id, timeSlotGroup.id) ? \'i-heroicons-arrow-up\' : \'i-heroicons-arrow-down\'',
+              'color' => 'neutral',
+              'variant' => 'ghost',
+            ),
+            3 => 
+            array (
+              'label' => 'Ocultar/Mostrar ({{ selectedTimeSlotIds.length }})',
+              'icon' => NULL,
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      3 => 
+      array (
+        'key' => 'filtros-filterconfig',
+        'label' => 'Filtros — General',
+        'tipo' => 'filtros',
+        'component' => 'composables/cargaconsolidada/entrega/useEntrega.ts',
+        'api_hint' => 'filterConfig',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'fields' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Fecha inicio',
+              'key' => 'fecha_inicio',
+              'type' => 'date',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            1 => 
+            array (
+              'label' => 'Fecha fin',
+              'key' => 'fecha_fin',
+              'type' => 'date',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            2 => 
+            array (
+              'label' => 'Tipo de entrega',
+              'key' => 'tipo_entrega',
+              'type' => 'select',
+              'value' => 'todos',
+              'options' => 
+              array (
+                0 => 
+                array (
+                  'label' => 'Todos',
+                  'value' => 'todos',
+                ),
+                1 => 
+                array (
+                  'label' => 'Lima',
+                  'value' => 'Lima',
+                ),
+                2 => 
+                array (
+                  'label' => 'Provincia',
+                  'value' => 'Provincia',
+                ),
+              ),
+            ),
+            3 => 
+            array (
+              'label' => 'Tipo de servicio',
+              'key' => 'tipo_servicio',
+              'type' => 'select',
+              'value' => 'todos',
+              'options' => 
+              array (
+                0 => 
+                array (
+                  'label' => 'Todos',
+                  'value' => 'todos',
+                ),
+                1 => 
+                array (
+                  'label' => 'Delivery',
+                  'value' => 'DELIVERY',
+                ),
+                2 => 
+                array (
+                  'label' => 'Montacarga',
+                  'value' => 'MONTACARGA',
+                ),
+              ),
+            ),
+            4 => 
+            array (
+              'label' => 'Estado de entrega',
+              'key' => 'estado_entrega',
+              'type' => 'select',
+              'value' => 'todos',
+              'options' => 
+              array (
+                0 => 
+                array (
+                  'label' => 'Todos',
+                  'value' => 'todos',
+                ),
+                1 => 
+                array (
+                  'label' => 'Pendiente',
+                  'value' => 'PENDIENTE',
+                ),
+                2 => 
+                array (
+                  'label' => 'Entregado',
+                  'value' => 'ENTREGADO',
+                ),
+              ),
+            ),
+            5 => 
+            array (
+              'label' => 'Registrado',
+              'key' => 'registrado',
+              'type' => 'select',
+              'value' => 'todos',
+              'options' => 
+              array (
+                0 => 
+                array (
+                  'label' => 'Todos',
+                  'value' => 'todos',
+                ),
+                1 => 
+                array (
+                  'label' => 'Si',
+                  'value' => 'Si',
+                ),
+                2 => 
+                array (
+                  'label' => 'No',
+                  'value' => 'No',
+                ),
+              ),
+            ),
+            6 => 
+            array (
+              'label' => 'Entregado',
+              'key' => 'entregado',
+              'type' => 'select',
+              'value' => 'todos',
+              'options' => 
+              array (
+                0 => 
+                array (
+                  'label' => 'Todos',
+                  'value' => 'todos',
+                ),
+                1 => 
+                array (
+                  'label' => 'Si',
+                  'value' => 'Si',
+                ),
+                2 => 
+                array (
+                  'label' => 'No',
+                  'value' => 'No',
+                ),
+              ),
+            ),
+            7 => 
+            array (
+              'label' => 'Estado',
+              'key' => 'estado',
+              'type' => 'select',
+              'value' => 'todos',
+              'options' => 
+              array (
+                0 => 
+                array (
+                  'label' => 'Todos',
+                  'value' => 'todos',
+                ),
+                1 => 
+                array (
+                  'label' => 'Pagado',
+                  'value' => 'Pagado',
+                ),
+                2 => 
+                array (
+                  'label' => 'Pendiente',
+                  'value' => 'Pendiente',
+                ),
+              ),
+            ),
+            8 => 
+            array (
+              'label' => 'Fecha inicio',
+              'key' => 'fecha_inicio',
+              'type' => 'date',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            9 => 
+            array (
+              'label' => 'Fecha fin',
+              'key' => 'fecha_fin',
+              'type' => 'date',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            10 => 
+            array (
+              'label' => 'Tipo de entrega',
+              'key' => 'tipo_entrega',
+              'type' => 'select',
+              'value' => 'todos',
+              'options' => 
+              array (
+                0 => 
+                array (
+                  'label' => 'Todos',
+                  'value' => 'todos',
+                ),
+                1 => 
+                array (
+                  'label' => 'Lima',
+                  'value' => 'LIMA',
+                ),
+                2 => 
+                array (
+                  'label' => 'Provincia',
+                  'value' => 'PROVINCIA',
+                ),
+              ),
+            ),
+            11 => 
+            array (
+              'label' => 'Tipo de servicio',
+              'key' => 'tipo_servicio',
+              'type' => 'select',
+              'value' => 'todos',
+              'options' => 
+              array (
+                0 => 
+                array (
+                  'label' => 'Todos',
+                  'value' => 'todos',
+                ),
+                1 => 
+                array (
+                  'label' => 'Delivery',
+                  'value' => 'DELIVERY',
+                ),
+                2 => 
+                array (
+                  'label' => 'Montacarga',
+                  'value' => 'MONTACARGA',
+                ),
+              ),
+            ),
+          ),
+          'live_api' => NULL,
+        ),
+      ),
+    ),
+  ),
+  59 => 
   array (
     'key' => 'cargaconsolidada.completados.entrega.id',
     'label' => 'Cargaconsolidada → Completados → Entrega → Id',
@@ -7998,9 +15651,432 @@ return array (
           'live_api' => NULL,
         ),
       ),
+      3 => 
+      array (
+        'key' => 'tabs-clientes-entregas-delivery',
+        'label' => 'Tabs — Clientes / Entregas / Delivery',
+        'tipo' => 'tabs',
+        'component' => 'components/cargaconsolidada/entrega/EntregaView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'active' => 'clientes',
+          'tabs' => 
+          array (
+            0 => 
+            array (
+              'key' => 'clientes',
+              'label' => 'Clientes',
+              'content' => '',
+            ),
+            1 => 
+            array (
+              'key' => 'entregas',
+              'label' => 'Entregas',
+              'content' => '',
+            ),
+            2 => 
+            array (
+              'key' => 'delivery',
+              'label' => 'Delivery',
+              'content' => '',
+            ),
+          ),
+        ),
+      ),
+      4 => 
+      array (
+        'key' => 'toolbar-acciones',
+        'label' => 'Toolbar — Acciones',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/entrega/EntregaView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Fechas y Horarios',
+              'icon' => 'i-heroicons-calendar',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      5 => 
+      array (
+        'key' => 'accion-fechas-y-horarios',
+        'label' => 'Acción — Fechas y Horarios',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/entrega/EntregaView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Fechas y Horarios',
+          'icon' => 'i-heroicons-calendar',
+          'color' => 'primary',
+          'variant' => 'solid',
+        ),
+      ),
+      6 => 
+      array (
+        'key' => 'toolbar-acciones-fila',
+        'label' => 'Toolbar — Acciones de fila',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/entrega/EntregaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Editar',
+              'icon' => 'i-heroicons-pencil-square',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+            1 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'iconamoon:menu-burger-horizontal',
+              'color' => 'neutral',
+              'variant' => 'ghost',
+            ),
+            2 => 
+            array (
+              'label' => 'Ver',
+              'icon' => 'i-heroicons-eye',
+              'color' => 'neutral',
+              'variant' => 'ghost',
+            ),
+            3 => 
+            array (
+              'label' => 'Eliminar',
+              'icon' => 'i-heroicons-trash',
+              'color' => 'error',
+              'variant' => 'ghost',
+            ),
+            4 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'i-heroicons-paper-airplane',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+          ),
+        ),
+      ),
+      7 => 
+      array (
+        'key' => 'accion-editar',
+        'label' => 'Acción — Editar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/entrega/EntregaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Editar',
+          'icon' => 'i-heroicons-pencil-square',
+          'color' => 'primary',
+          'variant' => 'ghost',
+        ),
+      ),
+      8 => 
+      array (
+        'key' => 'accion-accion',
+        'label' => 'Acción — Acción',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/entrega/EntregaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Acción',
+          'icon' => 'iconamoon:menu-burger-horizontal',
+          'color' => 'neutral',
+          'variant' => 'ghost',
+        ),
+      ),
+      9 => 
+      array (
+        'key' => 'accion-ver',
+        'label' => 'Acción — Ver',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/entrega/EntregaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Ver',
+          'icon' => 'i-heroicons-eye',
+          'color' => 'neutral',
+          'variant' => 'ghost',
+        ),
+      ),
+      10 => 
+      array (
+        'key' => 'accion-eliminar',
+        'label' => 'Acción — Eliminar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/entrega/EntregaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Eliminar',
+          'icon' => 'i-heroicons-trash',
+          'color' => 'error',
+          'variant' => 'ghost',
+        ),
+      ),
+      11 => 
+      array (
+        'key' => 'toolbar-datatable',
+        'label' => 'Toolbar — Controles de tabla',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/entrega/EntregaView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Exportar',
+              'icon' => 'i-heroicons-arrow-up-tray',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+            1 => 
+            array (
+              'label' => 'Filtros',
+              'icon' => 'i-heroicons-funnel',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+            2 => 
+            array (
+              'label' => 'Buscar',
+              'icon' => 'i-heroicons-magnifying-glass',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+          ),
+        ),
+      ),
+      12 => 
+      array (
+        'key' => 'accion-exportar',
+        'label' => 'Acción — Exportar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/entrega/EntregaView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Exportar',
+          'icon' => 'i-heroicons-arrow-up-tray',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
+      13 => 
+      array (
+        'key' => 'accion-filtros',
+        'label' => 'Acción — Filtros',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/entrega/EntregaView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Filtros',
+          'icon' => 'i-heroicons-funnel',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
+      14 => 
+      array (
+        'key' => 'accion-buscar',
+        'label' => 'Acción — Buscar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/entrega/EntregaView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Buscar',
+          'icon' => 'i-heroicons-magnifying-glass',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
     ),
   ),
-  30 => 
+  60 => 
+  array (
+    'key' => 'cargaconsolidada.completados.factura.guia.formulario.comprobante.id',
+    'label' => 'Cargaconsolidada → Completados → Factura Guia → Formulario Comprobante → Id',
+    'page_path' => 'pages/cargaconsolidada/completados/factura-guia/formulario-comprobante/[id].vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'card-card-1',
+        'label' => 'Card — Card 1',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/factura-guia/FacturaGuiaFormularioComprobanteView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 1',
+          'icon' => 'i-heroicons-document-text',
+          'body' => 'Cuando el cliente complete el formulario de comprobante, los datos aparecerán aquí.',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      1 => 
+      array (
+        'key' => 'card-datos-enviados-por-el-cliente',
+        'label' => 'Card — Datos enviados por el cliente',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/factura-guia/FacturaGuiaFormularioComprobanteView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Datos enviados por el cliente',
+          'icon' => 'i-heroicons-document-check',
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Editar',
+              'icon' => 'i-heroicons-pencil-square',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+          ),
+        ),
+      ),
+      2 => 
+      array (
+        'key' => 'card-editar-formulario',
+        'label' => 'Card — Editar formulario',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/factura-guia/FacturaGuiaFormularioComprobanteView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Editar formulario',
+          'icon' => 'i-heroicons-pencil-square',
+          'body' => '',
+          'fields' => 
+          array (
+            0 => 
+            array (
+              'key' => 'tipo-comprobante',
+              'label' => 'Tipo comprobante',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            1 => 
+            array (
+              'key' => 'destino-de-entrega',
+              'label' => 'Destino de entrega',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            2 => 
+            array (
+              'key' => 'razon-social',
+              'label' => 'Razón social',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            3 => 
+            array (
+              'key' => 'ruc',
+              'label' => 'RUC',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            4 => 
+            array (
+              'key' => 'nombre-completo',
+              'label' => 'Nombre completo',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            5 => 
+            array (
+              'key' => 'dni-carnet',
+              'label' => 'DNI / Carnet',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Cancelar',
+              'icon' => NULL,
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+            1 => 
+            array (
+              'label' => 'Guardar cambios',
+              'icon' => NULL,
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+    ),
+  ),
+  61 => 
   array (
     'key' => 'cargaconsolidada.completados.factura.guia.id',
     'label' => 'Cargaconsolidada → Completados → Factura Guia → Id',
@@ -8139,9 +16215,253 @@ return array (
           ),
         ),
       ),
+      2 => 
+      array (
+        'key' => 'toolbar-acciones-fila',
+        'label' => 'Toolbar — Acciones de fila',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/factura-guia/FacturaGuiaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'vscode-icons:file-type-excel',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+            1 => 
+            array (
+              'label' => 'Descargar',
+              'icon' => 'i-heroicons-arrow-down-tray',
+              'color' => 'primary',
+              'variant' => 'outline',
+            ),
+            2 => 
+            array (
+              'label' => 'Eliminar',
+              'icon' => 'i-heroicons-trash',
+              'color' => 'error',
+              'variant' => 'outline',
+            ),
+            3 => 
+            array (
+              'label' => 'Exportar',
+              'icon' => 'i-heroicons-arrow-up-tray',
+              'color' => 'primary',
+              'variant' => 'outline',
+            ),
+            4 => 
+            array (
+              'label' => 'Mensaje',
+              'icon' => 'i-heroicons-chat-bubble-left-right',
+              'color' => 'success',
+              'variant' => 'ghost',
+            ),
+            5 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'iconamoon:menu-burger-horizontal',
+              'color' => 'success',
+              'variant' => 'ghost',
+            ),
+            6 => 
+            array (
+              'label' => 'Ver',
+              'icon' => 'i-heroicons-eye',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+            7 => 
+            array (
+              'label' => 'Editar',
+              'icon' => 'i-heroicons-pencil-square',
+              'color' => 'neutral',
+              'variant' => 'ghost',
+            ),
+          ),
+        ),
+      ),
+      3 => 
+      array (
+        'key' => 'accion-accion',
+        'label' => 'Acción — Acción',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/factura-guia/FacturaGuiaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Acción',
+          'icon' => 'vscode-icons:file-type-excel',
+          'color' => 'primary',
+          'variant' => 'ghost',
+        ),
+      ),
+      4 => 
+      array (
+        'key' => 'accion-descargar',
+        'label' => 'Acción — Descargar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/factura-guia/FacturaGuiaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Descargar',
+          'icon' => 'i-heroicons-arrow-down-tray',
+          'color' => 'primary',
+          'variant' => 'outline',
+        ),
+      ),
+      5 => 
+      array (
+        'key' => 'accion-eliminar',
+        'label' => 'Acción — Eliminar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/factura-guia/FacturaGuiaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Eliminar',
+          'icon' => 'i-heroicons-trash',
+          'color' => 'error',
+          'variant' => 'outline',
+        ),
+      ),
+      6 => 
+      array (
+        'key' => 'accion-exportar',
+        'label' => 'Acción — Exportar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/factura-guia/FacturaGuiaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Exportar',
+          'icon' => 'i-heroicons-arrow-up-tray',
+          'color' => 'primary',
+          'variant' => 'outline',
+        ),
+      ),
+      7 => 
+      array (
+        'key' => 'accion-mensaje',
+        'label' => 'Acción — Mensaje',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/factura-guia/FacturaGuiaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Mensaje',
+          'icon' => 'i-heroicons-chat-bubble-left-right',
+          'color' => 'success',
+          'variant' => 'ghost',
+        ),
+      ),
+      8 => 
+      array (
+        'key' => 'accion-ver',
+        'label' => 'Acción — Ver',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/factura-guia/FacturaGuiaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Ver',
+          'icon' => 'i-heroicons-eye',
+          'color' => 'primary',
+          'variant' => 'ghost',
+        ),
+      ),
+      9 => 
+      array (
+        'key' => 'accion-editar',
+        'label' => 'Acción — Editar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/factura-guia/FacturaGuiaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Editar',
+          'icon' => 'i-heroicons-pencil-square',
+          'color' => 'neutral',
+          'variant' => 'ghost',
+        ),
+      ),
+      10 => 
+      array (
+        'key' => 'toolbar-datatable',
+        'label' => 'Toolbar — Controles de tabla',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/factura-guia/FacturaGuiaView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Filtros',
+              'icon' => 'i-heroicons-funnel',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+            1 => 
+            array (
+              'label' => 'Buscar',
+              'icon' => 'i-heroicons-magnifying-glass',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+          ),
+        ),
+      ),
+      11 => 
+      array (
+        'key' => 'accion-filtros',
+        'label' => 'Acción — Filtros',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/factura-guia/FacturaGuiaView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Filtros',
+          'icon' => 'i-heroicons-funnel',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
+      12 => 
+      array (
+        'key' => 'accion-buscar',
+        'label' => 'Acción — Buscar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/factura-guia/FacturaGuiaView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Buscar',
+          'icon' => 'i-heroicons-magnifying-glass',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
     ),
   ),
-  31 => 
+  62 => 
   array (
     'key' => 'cargaconsolidada.completados.plantillas.finales.id',
     'label' => 'Cargaconsolidada → Completados → Plantillas Finales → Id',
@@ -8229,7 +16549,7 @@ return array (
       ),
     ),
   ),
-  32 => 
+  63 => 
   array (
     'key' => 'cargaconsolidada.coordinacion.abiertos',
     'label' => 'Cargaconsolidada → Coordinacion → Abiertos',
@@ -8340,9 +16660,762 @@ return array (
           ),
         ),
       ),
+      1 => 
+      array (
+        'key' => 'toolbar-acciones-fila',
+        'label' => 'Toolbar — Acciones de fila',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/consolidado/CargaConsolidadaAbiertaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Ver',
+              'icon' => 'i-heroicons-eye',
+              'color' => 'info',
+              'variant' => 'ghost',
+            ),
+            1 => 
+            array (
+              'label' => 'Editar',
+              'icon' => 'i-heroicons-pencil',
+              'color' => 'warning',
+              'variant' => 'ghost',
+            ),
+            2 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'i-heroicons-document-duplicate',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+            3 => 
+            array (
+              'label' => 'Eliminar',
+              'icon' => 'i-heroicons-trash',
+              'color' => 'error',
+              'variant' => 'ghost',
+            ),
+          ),
+        ),
+      ),
+      2 => 
+      array (
+        'key' => 'accion-ver',
+        'label' => 'Acción — Ver',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/consolidado/CargaConsolidadaAbiertaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Ver',
+          'icon' => 'i-heroicons-eye',
+          'color' => 'info',
+          'variant' => 'ghost',
+        ),
+      ),
+      3 => 
+      array (
+        'key' => 'accion-editar',
+        'label' => 'Acción — Editar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/consolidado/CargaConsolidadaAbiertaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Editar',
+          'icon' => 'i-heroicons-pencil',
+          'color' => 'warning',
+          'variant' => 'ghost',
+        ),
+      ),
+      4 => 
+      array (
+        'key' => 'accion-accion',
+        'label' => 'Acción — Acción',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/consolidado/CargaConsolidadaAbiertaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Acción',
+          'icon' => 'i-heroicons-document-duplicate',
+          'color' => 'primary',
+          'variant' => 'ghost',
+        ),
+      ),
+      5 => 
+      array (
+        'key' => 'accion-eliminar',
+        'label' => 'Acción — Eliminar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/consolidado/CargaConsolidadaAbiertaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Eliminar',
+          'icon' => 'i-heroicons-trash',
+          'color' => 'error',
+          'variant' => 'ghost',
+        ),
+      ),
+      6 => 
+      array (
+        'key' => 'toolbar-datatable',
+        'label' => 'Toolbar — Controles de tabla',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/consolidado/CargaConsolidadaAbiertaView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Filtros',
+              'icon' => 'i-heroicons-funnel',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+          ),
+        ),
+      ),
+      7 => 
+      array (
+        'key' => 'accion-filtros',
+        'label' => 'Acción — Filtros',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/consolidado/CargaConsolidadaAbiertaView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Filtros',
+          'icon' => 'i-heroicons-funnel',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
     ),
   ),
-  33 => 
+  64 => 
+  array (
+    'key' => 'cargaconsolidada.coordinacion.abiertos.aduana.id',
+    'label' => 'Cargaconsolidada → Coordinacion → Abiertos → Aduana → Id',
+    'page_path' => 'pages/cargaconsolidada/coordinacion/abiertos/aduana/[id].vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'card-card-1',
+        'label' => 'Card — Card 1',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/consolidado/ConsolidadoAduanaView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 1',
+          'icon' => 'i-heroicons-cube-transparent',
+          'body' => '',
+          'fields' => 
+          array (
+            0 => 
+            array (
+              'key' => 'naviera',
+              'label' => 'Naviera',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            1 => 
+            array (
+              'key' => 'multa',
+              'label' => 'Multa',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            2 => 
+            array (
+              'key' => 'observaciones',
+              'label' => 'Observaciones',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            3 => 
+            array (
+              'key' => 'toneladas-contenedor',
+              'label' => 'Toneladas contenedor',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            4 => 
+            array (
+              'key' => 'fecha-levante',
+              'label' => 'Fecha levante',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            5 => 
+            array (
+              'key' => 'fecha-zarpe',
+              'label' => 'Fecha zarpe',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            6 => 
+            array (
+              'key' => 'numero-dua',
+              'label' => 'Número Dua',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            7 => 
+            array (
+              'key' => 'fecha-arribo',
+              'label' => 'Fecha arribo',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            8 => 
+            array (
+              'key' => 'valor-fob',
+              'label' => 'Valor FOB',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            9 => 
+            array (
+              'key' => 'doc-tributos-y-ajustes',
+              'label' => 'DOC. TRIBUTOS Y AJUSTES',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            10 => 
+            array (
+              'key' => 'fecha-declaracion',
+              'label' => 'Fecha declaración',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            11 => 
+            array (
+              'key' => 'valor-flete',
+              'label' => 'Valor flete',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            12 => 
+            array (
+              'key' => 'canal-de-control',
+              'label' => 'Canal de Control',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            13 => 
+            array (
+              'key' => 'costo-destino',
+              'label' => 'Costo destino',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            14 => 
+            array (
+              'key' => 'resumen-de-impuestos-pagados',
+              'label' => 'RESUMEN DE IMPUESTOS PAGADOS',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            15 => 
+            array (
+              'key' => 'ajuste-de-valor',
+              'label' => 'Ajuste de valor',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => '{{ aduanaData ? \'Actualizar\' : \'Guardar\' }}',
+              'icon' => NULL,
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+    ),
+  ),
+  65 => 
+  array (
+    'key' => 'cargaconsolidada.coordinacion.abiertos.clientes.documentacion.id',
+    'label' => 'Cargaconsolidada → Coordinacion → Abiertos → Clientes → Documentacion → Id',
+    'page_path' => 'pages/cargaconsolidada/coordinacion/abiertos/clientes/documentacion/[id].vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'toolbar-acciones',
+        'label' => 'Toolbar — Acciones',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/clientes/ClientesDocumentacionView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Guardar cambios',
+              'icon' => 'i-heroicons-check',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+            1 => 
+            array (
+              'label' => 'Descargar Excel',
+              'icon' => 'i-heroicons-arrow-down-tray',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+            2 => 
+            array (
+              'label' => 'Guardar',
+              'icon' => 'i-heroicons-check',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      1 => 
+      array (
+        'key' => 'accion-guardar-cambios',
+        'label' => 'Acción — Guardar cambios',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/clientes/ClientesDocumentacionView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Guardar cambios',
+          'icon' => 'i-heroicons-check',
+          'color' => 'primary',
+          'variant' => 'solid',
+        ),
+      ),
+      2 => 
+      array (
+        'key' => 'accion-descargar-excel',
+        'label' => 'Acción — Descargar Excel',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/clientes/ClientesDocumentacionView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Descargar Excel',
+          'icon' => 'i-heroicons-arrow-down-tray',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
+      3 => 
+      array (
+        'key' => 'accion-guardar',
+        'label' => 'Acción — Guardar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/clientes/ClientesDocumentacionView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Guardar',
+          'icon' => 'i-heroicons-check',
+          'color' => 'primary',
+          'variant' => 'solid',
+        ),
+      ),
+      4 => 
+      array (
+        'key' => 'card-card-1',
+        'label' => 'Card — Card 1',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/clientes/ClientesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 1',
+          'icon' => NULL,
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      5 => 
+      array (
+        'key' => 'card-card-2',
+        'label' => 'Card — Card 2',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/clientes/ClientesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 2',
+          'icon' => NULL,
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      6 => 
+      array (
+        'key' => 'card-card-3',
+        'label' => 'Card — Card 3',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/clientes/ClientesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 3',
+          'icon' => NULL,
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      7 => 
+      array (
+        'key' => 'card-card-4',
+        'label' => 'Card — Card 4',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/clientes/ClientesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 4',
+          'icon' => NULL,
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      8 => 
+      array (
+        'key' => 'card-card-5',
+        'label' => 'Card — Card 5',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/clientes/ClientesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 5',
+          'icon' => 'i-heroicons-exclamation-triangle',
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      9 => 
+      array (
+        'key' => 'card-documentacion',
+        'label' => 'Card — Documentación  -',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/clientes/ClientesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Documentación  -',
+          'icon' => 'i-heroicons-folder',
+          'body' => '',
+          'fields' => 
+          array (
+            0 => 
+            array (
+              'key' => 'volumen-documento',
+              'label' => 'Volumen documento',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            1 => 
+            array (
+              'key' => 'valor-documento',
+              'label' => 'Valor documento',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            2 => 
+            array (
+              'key' => 'factura-comercial',
+              'label' => 'Factura Comercial',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            3 => 
+            array (
+              'key' => 'packing-list',
+              'label' => 'Packing List',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            4 => 
+            array (
+              'key' => 'excel-confirmacion',
+              'label' => 'Excel Confirmación',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Nuevo Documento',
+              'icon' => 'i-heroicons-plus',
+              'color' => 'warning',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      10 => 
+      array (
+        'key' => 'card-documentacion-china',
+        'label' => 'Card — Documentación China',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/clientes/ClientesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Documentación China',
+          'icon' => 'i-heroicons-folder',
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Guardar cambios',
+              'icon' => 'i-heroicons-check',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      11 => 
+      array (
+        'key' => 'card-inspeccion',
+        'label' => 'Card — Inspección',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/clientes/ClientesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Inspección',
+          'icon' => 'i-heroicons-folder',
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Guardar cambios',
+              'icon' => 'i-heroicons-check',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      12 => 
+      array (
+        'key' => 'card-card-9',
+        'label' => 'Card — Card 9',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/clientes/ClientesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 9',
+          'icon' => NULL,
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Descargar cotización inicial',
+              'icon' => 'i-heroicons-arrow-down-tray',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+            1 => 
+            array (
+              'label' => 'Descargar cotización final',
+              'icon' => 'i-heroicons-arrow-down-tray',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+          ),
+        ),
+      ),
+    ),
+  ),
+  66 => 
+  array (
+    'key' => 'cargaconsolidada.coordinacion.abiertos.clientes.excel.confirmacion.uuid.guardado',
+    'label' => 'Cargaconsolidada → Coordinacion → Abiertos → Clientes → Excel Confirmacion → Uuid → Guardado',
+    'page_path' => 'pages/cargaconsolidada/coordinacion/abiertos/clientes/excel-confirmacion/[uuid]/guardado.vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'card-card-1',
+        'label' => 'Card — Card 1',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/clientes/ExcelConfirmacionGuardadoView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 1',
+          'icon' => 'i-heroicons-check-circle',
+          'body' => '{{ mensaje || \'La confirmación del cliente se actualizó correctamente.\' }}',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Volver a editar',
+              'icon' => 'i-heroicons-pencil-square',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+            1 => 
+            array (
+              'label' => 'Volver a clientes',
+              'icon' => 'i-heroicons-arrow-left',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+          ),
+        ),
+      ),
+    ),
+  ),
+  67 => 
   array (
     'key' => 'cargaconsolidada.coordinacion.abiertos.clientes.id',
     'label' => 'Cargaconsolidada → Coordinacion → Abiertos → Clientes → Id',
@@ -8797,35 +17870,143 @@ return array (
       ),
       4 => 
       array (
-        'key' => 'tabs-documentacion-documentacion',
-        'label' => 'Tabs — Documentación / Documentacion',
-        'tipo' => 'tabs',
+        'key' => 'toolbar-acciones-fila',
+        'label' => 'Toolbar — Acciones de fila',
+        'tipo' => 'toolbar',
         'component' => 'components/cargaconsolidada/clientes/ClientesView/index',
-        'api_hint' => NULL,
+        'api_hint' => 'column:acciones',
         'live_api' => NULL,
         'snapshot' => 
         array (
-          'active' => 'documentacion',
-          'tabs' => 
+          'buttons' => 
           array (
             0 => 
             array (
-              'key' => 'documentacion',
-              'label' => 'Documentación',
-              'content' => '',
+              'label' => 'Ver',
+              'icon' => 'i-heroicons-eye',
+              'color' => 'primary',
+              'variant' => 'ghost',
             ),
             1 => 
             array (
-              'key' => 'documentacion',
-              'label' => 'Documentacion',
-              'content' => '',
+              'label' => 'Acción',
+              'icon' => 'i-heroicons-document-text',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+            2 => 
+            array (
+              'label' => 'Eliminar',
+              'icon' => 'i-heroicons-trash',
+              'color' => 'error',
+              'variant' => 'ghost',
+            ),
+            3 => 
+            array (
+              'label' => 'Exportar',
+              'icon' => 'i-heroicons-arrow-up-tray',
+              'color' => 'primary',
+              'variant' => 'outline',
+            ),
+            4 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'iconamoon:menu-burger-horizontal',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+          ),
+        ),
+      ),
+      5 => 
+      array (
+        'key' => 'accion-ver',
+        'label' => 'Acción — Ver',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/clientes/ClientesView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Ver',
+          'icon' => 'i-heroicons-eye',
+          'color' => 'primary',
+          'variant' => 'ghost',
+        ),
+      ),
+      6 => 
+      array (
+        'key' => 'accion-accion',
+        'label' => 'Acción — Acción',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/clientes/ClientesView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Acción',
+          'icon' => 'i-heroicons-document-text',
+          'color' => 'primary',
+          'variant' => 'ghost',
+        ),
+      ),
+      7 => 
+      array (
+        'key' => 'accion-eliminar',
+        'label' => 'Acción — Eliminar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/clientes/ClientesView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Eliminar',
+          'icon' => 'i-heroicons-trash',
+          'color' => 'error',
+          'variant' => 'ghost',
+        ),
+      ),
+      8 => 
+      array (
+        'key' => 'accion-exportar',
+        'label' => 'Acción — Exportar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/clientes/ClientesView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Exportar',
+          'icon' => 'i-heroicons-arrow-up-tray',
+          'color' => 'primary',
+          'variant' => 'outline',
+        ),
+      ),
+      9 => 
+      array (
+        'key' => 'toolbar-datatable',
+        'label' => 'Toolbar — Controles de tabla',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/clientes/ClientesView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Exportar',
+              'icon' => 'i-heroicons-arrow-up-tray',
+              'color' => 'neutral',
+              'variant' => 'outline',
             ),
           ),
         ),
       ),
     ),
   ),
-  34 => 
+  68 => 
   array (
     'key' => 'cargaconsolidada.coordinacion.abiertos.cotizacion.final.id',
     'label' => 'Cargaconsolidada → Coordinacion → Abiertos → Cotizacion Final → Id',
@@ -9187,9 +18368,359 @@ return array (
           ),
         ),
       ),
+      4 => 
+      array (
+        'key' => 'toolbar-acciones-fila',
+        'label' => 'Toolbar — Acciones de fila',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/cotizacion-final/CotizacionFinalView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'vscode-icons:file-type-excel',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+            1 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'vscode-icons:file-type-pdf2',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+            2 => 
+            array (
+              'label' => 'Eliminar',
+              'icon' => 'i-heroicons-trash',
+              'color' => 'error',
+              'variant' => 'ghost',
+            ),
+            3 => 
+            array (
+              'label' => 'Exportar',
+              'icon' => 'i-heroicons-arrow-up-tray',
+              'color' => 'primary',
+              'variant' => 'outline',
+            ),
+            4 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'i-heroicons-arrow-trending-up',
+              'color' => 'info',
+              'variant' => 'ghost',
+            ),
+            5 => 
+            array (
+              'label' => 'Ver',
+              'icon' => 'i-heroicons-eye',
+              'color' => 'neutral',
+              'variant' => 'ghost',
+            ),
+          ),
+        ),
+      ),
+      5 => 
+      array (
+        'key' => 'accion-accion',
+        'label' => 'Acción — Acción',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizacion-final/CotizacionFinalView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Acción',
+          'icon' => 'vscode-icons:file-type-excel',
+          'color' => 'primary',
+          'variant' => 'ghost',
+        ),
+      ),
+      6 => 
+      array (
+        'key' => 'accion-eliminar',
+        'label' => 'Acción — Eliminar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizacion-final/CotizacionFinalView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Eliminar',
+          'icon' => 'i-heroicons-trash',
+          'color' => 'error',
+          'variant' => 'ghost',
+        ),
+      ),
+      7 => 
+      array (
+        'key' => 'accion-exportar',
+        'label' => 'Acción — Exportar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizacion-final/CotizacionFinalView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Exportar',
+          'icon' => 'i-heroicons-arrow-up-tray',
+          'color' => 'primary',
+          'variant' => 'outline',
+        ),
+      ),
+      8 => 
+      array (
+        'key' => 'accion-ver',
+        'label' => 'Acción — Ver',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizacion-final/CotizacionFinalView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Ver',
+          'icon' => 'i-heroicons-eye',
+          'color' => 'neutral',
+          'variant' => 'ghost',
+        ),
+      ),
+      9 => 
+      array (
+        'key' => 'toolbar-datatable',
+        'label' => 'Toolbar — Controles de tabla',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/cotizacion-final/CotizacionFinalView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Exportar',
+              'icon' => 'i-heroicons-arrow-up-tray',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+            1 => 
+            array (
+              'label' => 'Filtros',
+              'icon' => 'i-heroicons-funnel',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+            2 => 
+            array (
+              'label' => 'Buscar',
+              'icon' => 'i-heroicons-magnifying-glass',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+          ),
+        ),
+      ),
+      10 => 
+      array (
+        'key' => 'accion-filtros',
+        'label' => 'Acción — Filtros',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizacion-final/CotizacionFinalView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Filtros',
+          'icon' => 'i-heroicons-funnel',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
+      11 => 
+      array (
+        'key' => 'accion-buscar',
+        'label' => 'Acción — Buscar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizacion-final/CotizacionFinalView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Buscar',
+          'icon' => 'i-heroicons-magnifying-glass',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
     ),
   ),
-  35 => 
+  69 => 
+  array (
+    'key' => 'cargaconsolidada.coordinacion.abiertos.cotizaciones.documentacion.id',
+    'label' => 'Cargaconsolidada → Coordinacion → Abiertos → Cotizaciones → Documentacion → Id',
+    'page_path' => 'pages/cargaconsolidada/coordinacion/abiertos/cotizaciones/documentacion/[id].vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'card-card-1',
+        'label' => 'Card — Card 1',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 1',
+          'icon' => NULL,
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      1 => 
+      array (
+        'key' => 'card-card-2',
+        'label' => 'Card — Card 2',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 2',
+          'icon' => NULL,
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      2 => 
+      array (
+        'key' => 'card-card-3',
+        'label' => 'Card — Card 3',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 3',
+          'icon' => 'i-heroicons-exclamation-triangle',
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      3 => 
+      array (
+        'key' => 'card-documentacion',
+        'label' => 'Card — Documentación —',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Documentación —',
+          'icon' => NULL,
+          'body' => 'Los cambios se aplican al hacer clic en «Guardar todo». Cada pestaña de proveedor tiene su propia documentación pendiente.',
+          'fields' => 
+          array (
+            0 => 
+            array (
+              'key' => 'tipolabel',
+              'label' => '{{ tipo.label }}',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            1 => 
+            array (
+              'key' => 'docfolder-name-doctipo-documento',
+              'label' => '{{ doc.folder_name || doc.tipo_documento }}',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            2 => 
+            array (
+              'key' => 'documentos-nuevos-pendientes-de-guardar',
+              'label' => 'Documentos nuevos (pendientes de guardar)',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Nuevo documento',
+              'icon' => 'i-heroicons-plus',
+              'color' => 'warning',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      4 => 
+      array (
+        'key' => 'card-imagenes',
+        'label' => 'Card — Imágenes —',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Imágenes —',
+          'icon' => NULL,
+          'body' => '',
+          'fields' => 
+          array (
+            0 => 
+            array (
+              'key' => 'agregar-imagenes-multiple',
+              'label' => 'Agregar imágenes (múltiple)',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+    ),
+  ),
+  70 => 
   array (
     'key' => 'cargaconsolidada.coordinacion.abiertos.cotizaciones.id',
     'label' => 'Cargaconsolidada → Coordinacion → Abiertos → Cotizaciones → Id',
@@ -10521,9 +20052,500 @@ return array (
           ),
         ),
       ),
+      8 => 
+      array (
+        'key' => 'toolbar-acciones',
+        'label' => 'Toolbar — Acciones',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Crear Prospecto',
+              'icon' => 'i-heroicons-plus',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      9 => 
+      array (
+        'key' => 'accion-crear-prospecto',
+        'label' => 'Acción — Crear Prospecto',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Crear Prospecto',
+          'icon' => 'i-heroicons-plus',
+          'color' => 'primary',
+          'variant' => 'solid',
+        ),
+      ),
+      10 => 
+      array (
+        'key' => 'toolbar-acciones-2',
+        'label' => 'Toolbar — Acciones 2',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Upload',
+              'icon' => 'i-heroicons-arrow-up-tray',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+            1 => 
+            array (
+              'label' => 'Packing List',
+              'icon' => 'i-heroicons-arrow-up-tray',
+              'color' => 'secondary',
+              'variant' => 'ghost',
+            ),
+            2 => 
+            array (
+              'label' => 'Eliminar',
+              'icon' => 'i-heroicons-trash',
+              'color' => 'error',
+              'variant' => 'ghost',
+            ),
+            3 => 
+            array (
+              'label' => 'Crear Prospecto',
+              'icon' => 'i-heroicons-plus',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+            4 => 
+            array (
+              'label' => 'Descargar Embarque',
+              'icon' => 'i-heroicons-arrow-down-tray',
+              'color' => 'success',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      11 => 
+      array (
+        'key' => 'accion-upload',
+        'label' => 'Acción — Upload',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Upload',
+          'icon' => 'i-heroicons-arrow-up-tray',
+          'color' => 'primary',
+          'variant' => 'solid',
+        ),
+      ),
+      12 => 
+      array (
+        'key' => 'accion-packing-list',
+        'label' => 'Acción — Packing List',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Packing List',
+          'icon' => 'i-heroicons-arrow-up-tray',
+          'color' => 'secondary',
+          'variant' => 'ghost',
+        ),
+      ),
+      13 => 
+      array (
+        'key' => 'accion-eliminar',
+        'label' => 'Acción — Eliminar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Eliminar',
+          'icon' => 'i-heroicons-trash',
+          'color' => 'error',
+          'variant' => 'ghost',
+        ),
+      ),
+      14 => 
+      array (
+        'key' => 'accion-descargar-embarque',
+        'label' => 'Acción — Descargar Embarque',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Descargar Embarque',
+          'icon' => 'i-heroicons-arrow-down-tray',
+          'color' => 'success',
+          'variant' => 'solid',
+        ),
+      ),
+      15 => 
+      array (
+        'key' => 'toolbar-acciones-fila',
+        'label' => 'Toolbar — Acciones de fila',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Exportar',
+              'icon' => 'i-heroicons-arrow-up-tray',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+            1 => 
+            array (
+              'label' => 'Eliminar',
+              'icon' => 'i-heroicons-trash',
+              'color' => 'error',
+              'variant' => 'ghost',
+            ),
+            2 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'i-heroicons-document-text',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+            3 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'i-heroicons-document-duplicate',
+              'color' => 'info',
+              'variant' => 'ghost',
+            ),
+            4 => 
+            array (
+              'label' => 'Ver',
+              'icon' => 'i-heroicons-eye',
+              'color' => 'info',
+              'variant' => 'ghost',
+            ),
+            5 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'i-heroicons-arrow-path',
+              'color' => 'secondary',
+              'variant' => 'ghost',
+            ),
+            6 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'i-heroicons-arrow-right',
+              'color' => 'info',
+              'variant' => 'ghost',
+            ),
+            7 => 
+            array (
+              'label' => 'Guardar',
+              'icon' => 'material-symbols:save-sharp',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+            8 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'iconamoon:menu-burger-horizontal',
+              'color' => 'success',
+              'variant' => 'ghost',
+            ),
+            9 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'material-symbols:send-outline',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+          ),
+        ),
+      ),
+      16 => 
+      array (
+        'key' => 'accion-exportar',
+        'label' => 'Acción — Exportar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Exportar',
+          'icon' => 'i-heroicons-arrow-up-tray',
+          'color' => 'primary',
+          'variant' => 'ghost',
+        ),
+      ),
+      17 => 
+      array (
+        'key' => 'accion-accion',
+        'label' => 'Acción — Acción',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Acción',
+          'icon' => 'i-heroicons-document-text',
+          'color' => 'primary',
+          'variant' => 'ghost',
+        ),
+      ),
+      18 => 
+      array (
+        'key' => 'accion-ver',
+        'label' => 'Acción — Ver',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Ver',
+          'icon' => 'i-heroicons-eye',
+          'color' => 'info',
+          'variant' => 'ghost',
+        ),
+      ),
+      19 => 
+      array (
+        'key' => 'accion-guardar',
+        'label' => 'Acción — Guardar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Guardar',
+          'icon' => 'material-symbols:save-sharp',
+          'color' => 'primary',
+          'variant' => 'ghost',
+        ),
+      ),
+      20 => 
+      array (
+        'key' => 'toolbar-datatable',
+        'label' => 'Toolbar — Controles de tabla',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Exportar',
+              'icon' => 'i-heroicons-arrow-up-tray',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+            1 => 
+            array (
+              'label' => 'Filtros',
+              'icon' => 'i-heroicons-funnel',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+          ),
+        ),
+      ),
+      21 => 
+      array (
+        'key' => 'accion-filtros',
+        'label' => 'Acción — Filtros',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Filtros',
+          'icon' => 'i-heroicons-funnel',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
     ),
   ),
-  36 => 
+  71 => 
+  array (
+    'key' => 'cargaconsolidada.coordinacion.abiertos.cotizaciones.proveedor.documentacion.id',
+    'label' => 'Cargaconsolidada → Coordinacion → Abiertos → Cotizaciones → Proveedor → Documentacion → Id',
+    'page_path' => 'pages/cargaconsolidada/coordinacion/abiertos/cotizaciones/proveedor/documentacion/[id].vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'toolbar-acciones',
+        'label' => 'Toolbar — Acciones',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesProveedorDocumentacionView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Guardar',
+              'icon' => 'material-symbols:save',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      1 => 
+      array (
+        'key' => 'accion-guardar',
+        'label' => 'Acción — Guardar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesProveedorDocumentacionView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Guardar',
+          'icon' => 'material-symbols:save',
+          'color' => 'primary',
+          'variant' => 'solid',
+        ),
+      ),
+    ),
+  ),
+  72 => 
+  array (
+    'key' => 'cargaconsolidada.coordinacion.abiertos.documentacion.id',
+    'label' => 'Cargaconsolidada → Coordinacion → Abiertos → Documentacion → Id',
+    'page_path' => 'pages/cargaconsolidada/coordinacion/abiertos/documentacion/[id].vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'card-card-1',
+        'label' => 'Card — Card 1',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/consolidado/ConsolidadoDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 1',
+          'icon' => 'i-heroicons-exclamation-triangle',
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      1 => 
+      array (
+        'key' => 'card-card-2',
+        'label' => 'Card — Card 2',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/consolidado/ConsolidadoDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 2',
+          'icon' => 'i-heroicons-folder',
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+    ),
+  ),
+  73 => 
+  array (
+    'key' => 'cargaconsolidada.coordinacion.abiertos.entrega.clientes.id',
+    'label' => 'Cargaconsolidada → Coordinacion → Abiertos → Entrega → Clientes → Id',
+    'page_path' => 'pages/cargaconsolidada/coordinacion/abiertos/entrega/clientes/[id].vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'toolbar-acciones',
+        'label' => 'Toolbar — Acciones',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/entrega/EntregaClientesView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Editar',
+              'icon' => 'i-heroicons-pencil-square',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      1 => 
+      array (
+        'key' => 'accion-editar',
+        'label' => 'Acción — Editar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/entrega/EntregaClientesView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Editar',
+          'icon' => 'i-heroicons-pencil-square',
+          'color' => 'primary',
+          'variant' => 'solid',
+        ),
+      ),
+    ),
+  ),
+  74 => 
   array (
     'key' => 'cargaconsolidada.coordinacion.abiertos.entrega.id',
     'label' => 'Cargaconsolidada → Coordinacion → Abiertos → Entrega → Id',
@@ -10776,9 +20798,279 @@ return array (
           'live_api' => NULL,
         ),
       ),
+      3 => 
+      array (
+        'key' => 'tabs-clientes-entregas-delivery',
+        'label' => 'Tabs — Clientes / Entregas / Delivery',
+        'tipo' => 'tabs',
+        'component' => 'components/cargaconsolidada/entrega/EntregaView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'active' => 'clientes',
+          'tabs' => 
+          array (
+            0 => 
+            array (
+              'key' => 'clientes',
+              'label' => 'Clientes',
+              'content' => '',
+            ),
+            1 => 
+            array (
+              'key' => 'entregas',
+              'label' => 'Entregas',
+              'content' => '',
+            ),
+            2 => 
+            array (
+              'key' => 'delivery',
+              'label' => 'Delivery',
+              'content' => '',
+            ),
+          ),
+        ),
+      ),
+      4 => 
+      array (
+        'key' => 'toolbar-acciones',
+        'label' => 'Toolbar — Acciones',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/entrega/EntregaView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Fechas y Horarios',
+              'icon' => 'i-heroicons-calendar',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      5 => 
+      array (
+        'key' => 'accion-fechas-y-horarios',
+        'label' => 'Acción — Fechas y Horarios',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/entrega/EntregaView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Fechas y Horarios',
+          'icon' => 'i-heroicons-calendar',
+          'color' => 'primary',
+          'variant' => 'solid',
+        ),
+      ),
+      6 => 
+      array (
+        'key' => 'toolbar-acciones-fila',
+        'label' => 'Toolbar — Acciones de fila',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/entrega/EntregaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Editar',
+              'icon' => 'i-heroicons-pencil-square',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+            1 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'iconamoon:menu-burger-horizontal',
+              'color' => 'neutral',
+              'variant' => 'ghost',
+            ),
+            2 => 
+            array (
+              'label' => 'Ver',
+              'icon' => 'i-heroicons-eye',
+              'color' => 'neutral',
+              'variant' => 'ghost',
+            ),
+            3 => 
+            array (
+              'label' => 'Eliminar',
+              'icon' => 'i-heroicons-trash',
+              'color' => 'error',
+              'variant' => 'ghost',
+            ),
+            4 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'i-heroicons-paper-airplane',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+          ),
+        ),
+      ),
+      7 => 
+      array (
+        'key' => 'accion-editar',
+        'label' => 'Acción — Editar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/entrega/EntregaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Editar',
+          'icon' => 'i-heroicons-pencil-square',
+          'color' => 'primary',
+          'variant' => 'ghost',
+        ),
+      ),
+      8 => 
+      array (
+        'key' => 'accion-accion',
+        'label' => 'Acción — Acción',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/entrega/EntregaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Acción',
+          'icon' => 'iconamoon:menu-burger-horizontal',
+          'color' => 'neutral',
+          'variant' => 'ghost',
+        ),
+      ),
+      9 => 
+      array (
+        'key' => 'accion-ver',
+        'label' => 'Acción — Ver',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/entrega/EntregaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Ver',
+          'icon' => 'i-heroicons-eye',
+          'color' => 'neutral',
+          'variant' => 'ghost',
+        ),
+      ),
+      10 => 
+      array (
+        'key' => 'accion-eliminar',
+        'label' => 'Acción — Eliminar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/entrega/EntregaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Eliminar',
+          'icon' => 'i-heroicons-trash',
+          'color' => 'error',
+          'variant' => 'ghost',
+        ),
+      ),
+      11 => 
+      array (
+        'key' => 'toolbar-datatable',
+        'label' => 'Toolbar — Controles de tabla',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/entrega/EntregaView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Exportar',
+              'icon' => 'i-heroicons-arrow-up-tray',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+            1 => 
+            array (
+              'label' => 'Filtros',
+              'icon' => 'i-heroicons-funnel',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+            2 => 
+            array (
+              'label' => 'Buscar',
+              'icon' => 'i-heroicons-magnifying-glass',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+          ),
+        ),
+      ),
+      12 => 
+      array (
+        'key' => 'accion-exportar',
+        'label' => 'Acción — Exportar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/entrega/EntregaView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Exportar',
+          'icon' => 'i-heroicons-arrow-up-tray',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
+      13 => 
+      array (
+        'key' => 'accion-filtros',
+        'label' => 'Acción — Filtros',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/entrega/EntregaView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Filtros',
+          'icon' => 'i-heroicons-funnel',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
+      14 => 
+      array (
+        'key' => 'accion-buscar',
+        'label' => 'Acción — Buscar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/entrega/EntregaView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Buscar',
+          'icon' => 'i-heroicons-magnifying-glass',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
     ),
   ),
-  37 => 
+  75 => 
   array (
     'key' => 'cargaconsolidada.coordinacion.abiertos.factura.guia.id',
     'label' => 'Cargaconsolidada → Coordinacion → Abiertos → Factura Guia → Id',
@@ -10917,9 +21209,253 @@ return array (
           ),
         ),
       ),
+      2 => 
+      array (
+        'key' => 'toolbar-acciones-fila',
+        'label' => 'Toolbar — Acciones de fila',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/factura-guia/FacturaGuiaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'vscode-icons:file-type-excel',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+            1 => 
+            array (
+              'label' => 'Descargar',
+              'icon' => 'i-heroicons-arrow-down-tray',
+              'color' => 'primary',
+              'variant' => 'outline',
+            ),
+            2 => 
+            array (
+              'label' => 'Eliminar',
+              'icon' => 'i-heroicons-trash',
+              'color' => 'error',
+              'variant' => 'outline',
+            ),
+            3 => 
+            array (
+              'label' => 'Exportar',
+              'icon' => 'i-heroicons-arrow-up-tray',
+              'color' => 'primary',
+              'variant' => 'outline',
+            ),
+            4 => 
+            array (
+              'label' => 'Mensaje',
+              'icon' => 'i-heroicons-chat-bubble-left-right',
+              'color' => 'success',
+              'variant' => 'ghost',
+            ),
+            5 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'iconamoon:menu-burger-horizontal',
+              'color' => 'success',
+              'variant' => 'ghost',
+            ),
+            6 => 
+            array (
+              'label' => 'Ver',
+              'icon' => 'i-heroicons-eye',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+            7 => 
+            array (
+              'label' => 'Editar',
+              'icon' => 'i-heroicons-pencil-square',
+              'color' => 'neutral',
+              'variant' => 'ghost',
+            ),
+          ),
+        ),
+      ),
+      3 => 
+      array (
+        'key' => 'accion-accion',
+        'label' => 'Acción — Acción',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/factura-guia/FacturaGuiaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Acción',
+          'icon' => 'vscode-icons:file-type-excel',
+          'color' => 'primary',
+          'variant' => 'ghost',
+        ),
+      ),
+      4 => 
+      array (
+        'key' => 'accion-descargar',
+        'label' => 'Acción — Descargar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/factura-guia/FacturaGuiaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Descargar',
+          'icon' => 'i-heroicons-arrow-down-tray',
+          'color' => 'primary',
+          'variant' => 'outline',
+        ),
+      ),
+      5 => 
+      array (
+        'key' => 'accion-eliminar',
+        'label' => 'Acción — Eliminar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/factura-guia/FacturaGuiaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Eliminar',
+          'icon' => 'i-heroicons-trash',
+          'color' => 'error',
+          'variant' => 'outline',
+        ),
+      ),
+      6 => 
+      array (
+        'key' => 'accion-exportar',
+        'label' => 'Acción — Exportar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/factura-guia/FacturaGuiaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Exportar',
+          'icon' => 'i-heroicons-arrow-up-tray',
+          'color' => 'primary',
+          'variant' => 'outline',
+        ),
+      ),
+      7 => 
+      array (
+        'key' => 'accion-mensaje',
+        'label' => 'Acción — Mensaje',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/factura-guia/FacturaGuiaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Mensaje',
+          'icon' => 'i-heroicons-chat-bubble-left-right',
+          'color' => 'success',
+          'variant' => 'ghost',
+        ),
+      ),
+      8 => 
+      array (
+        'key' => 'accion-ver',
+        'label' => 'Acción — Ver',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/factura-guia/FacturaGuiaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Ver',
+          'icon' => 'i-heroicons-eye',
+          'color' => 'primary',
+          'variant' => 'ghost',
+        ),
+      ),
+      9 => 
+      array (
+        'key' => 'accion-editar',
+        'label' => 'Acción — Editar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/factura-guia/FacturaGuiaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Editar',
+          'icon' => 'i-heroicons-pencil-square',
+          'color' => 'neutral',
+          'variant' => 'ghost',
+        ),
+      ),
+      10 => 
+      array (
+        'key' => 'toolbar-datatable',
+        'label' => 'Toolbar — Controles de tabla',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/factura-guia/FacturaGuiaView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Filtros',
+              'icon' => 'i-heroicons-funnel',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+            1 => 
+            array (
+              'label' => 'Buscar',
+              'icon' => 'i-heroicons-magnifying-glass',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+          ),
+        ),
+      ),
+      11 => 
+      array (
+        'key' => 'accion-filtros',
+        'label' => 'Acción — Filtros',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/factura-guia/FacturaGuiaView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Filtros',
+          'icon' => 'i-heroicons-funnel',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
+      12 => 
+      array (
+        'key' => 'accion-buscar',
+        'label' => 'Acción — Buscar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/factura-guia/FacturaGuiaView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Buscar',
+          'icon' => 'i-heroicons-magnifying-glass',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
     ),
   ),
-  38 => 
+  76 => 
   array (
     'key' => 'cargaconsolidada.coordinacion.abiertos.plantillas.finales.id',
     'label' => 'Cargaconsolidada → Coordinacion → Abiertos → Plantillas Finales → Id',
@@ -11007,7 +21543,7 @@ return array (
       ),
     ),
   ),
-  39 => 
+  77 => 
   array (
     'key' => 'cargaconsolidada.coordinacion.completados',
     'label' => 'Cargaconsolidada → Coordinacion → Completados',
@@ -11118,9 +21654,785 @@ return array (
           ),
         ),
       ),
+      1 => 
+      array (
+        'key' => 'toolbar-acciones-fila',
+        'label' => 'Toolbar — Acciones de fila',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/consolidado/CargaConsolidadaCompletadosView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Ver',
+              'icon' => 'i-heroicons-eye',
+              'color' => 'info',
+              'variant' => 'ghost',
+            ),
+            1 => 
+            array (
+              'label' => 'Editar',
+              'icon' => 'i-heroicons-pencil',
+              'color' => 'warning',
+              'variant' => 'ghost',
+            ),
+            2 => 
+            array (
+              'label' => 'Eliminar',
+              'icon' => 'i-heroicons-trash',
+              'color' => 'error',
+              'variant' => 'ghost',
+            ),
+            3 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'i-heroicons-envelope',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+          ),
+        ),
+      ),
+      2 => 
+      array (
+        'key' => 'accion-ver',
+        'label' => 'Acción — Ver',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/consolidado/CargaConsolidadaCompletadosView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Ver',
+          'icon' => 'i-heroicons-eye',
+          'color' => 'info',
+          'variant' => 'ghost',
+        ),
+      ),
+      3 => 
+      array (
+        'key' => 'accion-editar',
+        'label' => 'Acción — Editar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/consolidado/CargaConsolidadaCompletadosView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Editar',
+          'icon' => 'i-heroicons-pencil',
+          'color' => 'warning',
+          'variant' => 'ghost',
+        ),
+      ),
+      4 => 
+      array (
+        'key' => 'accion-eliminar',
+        'label' => 'Acción — Eliminar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/consolidado/CargaConsolidadaCompletadosView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Eliminar',
+          'icon' => 'i-heroicons-trash',
+          'color' => 'error',
+          'variant' => 'ghost',
+        ),
+      ),
+      5 => 
+      array (
+        'key' => 'accion-accion',
+        'label' => 'Acción — Acción',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/consolidado/CargaConsolidadaCompletadosView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Acción',
+          'icon' => 'i-heroicons-envelope',
+          'color' => 'primary',
+          'variant' => 'ghost',
+        ),
+      ),
+      6 => 
+      array (
+        'key' => 'toolbar-datatable',
+        'label' => 'Toolbar — Controles de tabla',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/consolidado/CargaConsolidadaCompletadosView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Exportar',
+              'icon' => 'i-heroicons-arrow-up-tray',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+            1 => 
+            array (
+              'label' => 'Filtros',
+              'icon' => 'i-heroicons-funnel',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+          ),
+        ),
+      ),
+      7 => 
+      array (
+        'key' => 'accion-exportar',
+        'label' => 'Acción — Exportar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/consolidado/CargaConsolidadaCompletadosView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Exportar',
+          'icon' => 'i-heroicons-arrow-up-tray',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
+      8 => 
+      array (
+        'key' => 'accion-filtros',
+        'label' => 'Acción — Filtros',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/consolidado/CargaConsolidadaCompletadosView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Filtros',
+          'icon' => 'i-heroicons-funnel',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
     ),
   ),
-  40 => 
+  78 => 
+  array (
+    'key' => 'cargaconsolidada.coordinacion.completados.aduana.id',
+    'label' => 'Cargaconsolidada → Coordinacion → Completados → Aduana → Id',
+    'page_path' => 'pages/cargaconsolidada/coordinacion/completados/aduana/[id].vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'card-card-1',
+        'label' => 'Card — Card 1',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/consolidado/ConsolidadoAduanaView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 1',
+          'icon' => 'i-heroicons-cube-transparent',
+          'body' => '',
+          'fields' => 
+          array (
+            0 => 
+            array (
+              'key' => 'naviera',
+              'label' => 'Naviera',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            1 => 
+            array (
+              'key' => 'multa',
+              'label' => 'Multa',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            2 => 
+            array (
+              'key' => 'observaciones',
+              'label' => 'Observaciones',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            3 => 
+            array (
+              'key' => 'toneladas-contenedor',
+              'label' => 'Toneladas contenedor',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            4 => 
+            array (
+              'key' => 'fecha-levante',
+              'label' => 'Fecha levante',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            5 => 
+            array (
+              'key' => 'fecha-zarpe',
+              'label' => 'Fecha zarpe',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            6 => 
+            array (
+              'key' => 'numero-dua',
+              'label' => 'Número Dua',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            7 => 
+            array (
+              'key' => 'fecha-arribo',
+              'label' => 'Fecha arribo',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            8 => 
+            array (
+              'key' => 'valor-fob',
+              'label' => 'Valor FOB',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            9 => 
+            array (
+              'key' => 'doc-tributos-y-ajustes',
+              'label' => 'DOC. TRIBUTOS Y AJUSTES',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            10 => 
+            array (
+              'key' => 'fecha-declaracion',
+              'label' => 'Fecha declaración',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            11 => 
+            array (
+              'key' => 'valor-flete',
+              'label' => 'Valor flete',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            12 => 
+            array (
+              'key' => 'canal-de-control',
+              'label' => 'Canal de Control',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            13 => 
+            array (
+              'key' => 'costo-destino',
+              'label' => 'Costo destino',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            14 => 
+            array (
+              'key' => 'resumen-de-impuestos-pagados',
+              'label' => 'RESUMEN DE IMPUESTOS PAGADOS',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            15 => 
+            array (
+              'key' => 'ajuste-de-valor',
+              'label' => 'Ajuste de valor',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => '{{ aduanaData ? \'Actualizar\' : \'Guardar\' }}',
+              'icon' => NULL,
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+    ),
+  ),
+  79 => 
+  array (
+    'key' => 'cargaconsolidada.coordinacion.completados.clientes.documentacion.id',
+    'label' => 'Cargaconsolidada → Coordinacion → Completados → Clientes → Documentacion → Id',
+    'page_path' => 'pages/cargaconsolidada/coordinacion/completados/clientes/documentacion/[id].vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'toolbar-acciones',
+        'label' => 'Toolbar — Acciones',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/clientes/ClientesDocumentacionView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Guardar cambios',
+              'icon' => 'i-heroicons-check',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+            1 => 
+            array (
+              'label' => 'Descargar Excel',
+              'icon' => 'i-heroicons-arrow-down-tray',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+            2 => 
+            array (
+              'label' => 'Guardar',
+              'icon' => 'i-heroicons-check',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      1 => 
+      array (
+        'key' => 'accion-guardar-cambios',
+        'label' => 'Acción — Guardar cambios',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/clientes/ClientesDocumentacionView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Guardar cambios',
+          'icon' => 'i-heroicons-check',
+          'color' => 'primary',
+          'variant' => 'solid',
+        ),
+      ),
+      2 => 
+      array (
+        'key' => 'accion-descargar-excel',
+        'label' => 'Acción — Descargar Excel',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/clientes/ClientesDocumentacionView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Descargar Excel',
+          'icon' => 'i-heroicons-arrow-down-tray',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
+      3 => 
+      array (
+        'key' => 'accion-guardar',
+        'label' => 'Acción — Guardar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/clientes/ClientesDocumentacionView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Guardar',
+          'icon' => 'i-heroicons-check',
+          'color' => 'primary',
+          'variant' => 'solid',
+        ),
+      ),
+      4 => 
+      array (
+        'key' => 'card-card-1',
+        'label' => 'Card — Card 1',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/clientes/ClientesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 1',
+          'icon' => NULL,
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      5 => 
+      array (
+        'key' => 'card-card-2',
+        'label' => 'Card — Card 2',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/clientes/ClientesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 2',
+          'icon' => NULL,
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      6 => 
+      array (
+        'key' => 'card-card-3',
+        'label' => 'Card — Card 3',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/clientes/ClientesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 3',
+          'icon' => NULL,
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      7 => 
+      array (
+        'key' => 'card-card-4',
+        'label' => 'Card — Card 4',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/clientes/ClientesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 4',
+          'icon' => NULL,
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      8 => 
+      array (
+        'key' => 'card-card-5',
+        'label' => 'Card — Card 5',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/clientes/ClientesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 5',
+          'icon' => 'i-heroicons-exclamation-triangle',
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      9 => 
+      array (
+        'key' => 'card-documentacion',
+        'label' => 'Card — Documentación  -',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/clientes/ClientesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Documentación  -',
+          'icon' => 'i-heroicons-folder',
+          'body' => '',
+          'fields' => 
+          array (
+            0 => 
+            array (
+              'key' => 'volumen-documento',
+              'label' => 'Volumen documento',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            1 => 
+            array (
+              'key' => 'valor-documento',
+              'label' => 'Valor documento',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            2 => 
+            array (
+              'key' => 'factura-comercial',
+              'label' => 'Factura Comercial',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            3 => 
+            array (
+              'key' => 'packing-list',
+              'label' => 'Packing List',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            4 => 
+            array (
+              'key' => 'excel-confirmacion',
+              'label' => 'Excel Confirmación',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Nuevo Documento',
+              'icon' => 'i-heroicons-plus',
+              'color' => 'warning',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      10 => 
+      array (
+        'key' => 'card-documentacion-china',
+        'label' => 'Card — Documentación China',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/clientes/ClientesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Documentación China',
+          'icon' => 'i-heroicons-folder',
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Guardar cambios',
+              'icon' => 'i-heroicons-check',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      11 => 
+      array (
+        'key' => 'card-inspeccion',
+        'label' => 'Card — Inspección',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/clientes/ClientesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Inspección',
+          'icon' => 'i-heroicons-folder',
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Guardar cambios',
+              'icon' => 'i-heroicons-check',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      12 => 
+      array (
+        'key' => 'card-card-9',
+        'label' => 'Card — Card 9',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/clientes/ClientesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 9',
+          'icon' => NULL,
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Descargar cotización inicial',
+              'icon' => 'i-heroicons-arrow-down-tray',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+            1 => 
+            array (
+              'label' => 'Descargar cotización final',
+              'icon' => 'i-heroicons-arrow-down-tray',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+          ),
+        ),
+      ),
+    ),
+  ),
+  80 => 
+  array (
+    'key' => 'cargaconsolidada.coordinacion.completados.clientes.excel.confirmacion.uuid.guardado',
+    'label' => 'Cargaconsolidada → Coordinacion → Completados → Clientes → Excel Confirmacion → Uuid → Guardado',
+    'page_path' => 'pages/cargaconsolidada/coordinacion/completados/clientes/excel-confirmacion/[uuid]/guardado.vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'card-card-1',
+        'label' => 'Card — Card 1',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/clientes/ExcelConfirmacionGuardadoView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 1',
+          'icon' => 'i-heroicons-check-circle',
+          'body' => '{{ mensaje || \'La confirmación del cliente se actualizó correctamente.\' }}',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Volver a editar',
+              'icon' => 'i-heroicons-pencil-square',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+            1 => 
+            array (
+              'label' => 'Volver a clientes',
+              'icon' => 'i-heroicons-arrow-left',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+          ),
+        ),
+      ),
+    ),
+  ),
+  81 => 
   array (
     'key' => 'cargaconsolidada.coordinacion.completados.clientes.id',
     'label' => 'Cargaconsolidada → Coordinacion → Completados → Clientes → Id',
@@ -11575,35 +22887,143 @@ return array (
       ),
       4 => 
       array (
-        'key' => 'tabs-documentacion-documentacion',
-        'label' => 'Tabs — Documentación / Documentacion',
-        'tipo' => 'tabs',
+        'key' => 'toolbar-acciones-fila',
+        'label' => 'Toolbar — Acciones de fila',
+        'tipo' => 'toolbar',
         'component' => 'components/cargaconsolidada/clientes/ClientesView/index',
-        'api_hint' => NULL,
+        'api_hint' => 'column:acciones',
         'live_api' => NULL,
         'snapshot' => 
         array (
-          'active' => 'documentacion',
-          'tabs' => 
+          'buttons' => 
           array (
             0 => 
             array (
-              'key' => 'documentacion',
-              'label' => 'Documentación',
-              'content' => '',
+              'label' => 'Ver',
+              'icon' => 'i-heroicons-eye',
+              'color' => 'primary',
+              'variant' => 'ghost',
             ),
             1 => 
             array (
-              'key' => 'documentacion',
-              'label' => 'Documentacion',
-              'content' => '',
+              'label' => 'Acción',
+              'icon' => 'i-heroicons-document-text',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+            2 => 
+            array (
+              'label' => 'Eliminar',
+              'icon' => 'i-heroicons-trash',
+              'color' => 'error',
+              'variant' => 'ghost',
+            ),
+            3 => 
+            array (
+              'label' => 'Exportar',
+              'icon' => 'i-heroicons-arrow-up-tray',
+              'color' => 'primary',
+              'variant' => 'outline',
+            ),
+            4 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'iconamoon:menu-burger-horizontal',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+          ),
+        ),
+      ),
+      5 => 
+      array (
+        'key' => 'accion-ver',
+        'label' => 'Acción — Ver',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/clientes/ClientesView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Ver',
+          'icon' => 'i-heroicons-eye',
+          'color' => 'primary',
+          'variant' => 'ghost',
+        ),
+      ),
+      6 => 
+      array (
+        'key' => 'accion-accion',
+        'label' => 'Acción — Acción',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/clientes/ClientesView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Acción',
+          'icon' => 'i-heroicons-document-text',
+          'color' => 'primary',
+          'variant' => 'ghost',
+        ),
+      ),
+      7 => 
+      array (
+        'key' => 'accion-eliminar',
+        'label' => 'Acción — Eliminar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/clientes/ClientesView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Eliminar',
+          'icon' => 'i-heroicons-trash',
+          'color' => 'error',
+          'variant' => 'ghost',
+        ),
+      ),
+      8 => 
+      array (
+        'key' => 'accion-exportar',
+        'label' => 'Acción — Exportar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/clientes/ClientesView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Exportar',
+          'icon' => 'i-heroicons-arrow-up-tray',
+          'color' => 'primary',
+          'variant' => 'outline',
+        ),
+      ),
+      9 => 
+      array (
+        'key' => 'toolbar-datatable',
+        'label' => 'Toolbar — Controles de tabla',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/clientes/ClientesView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Exportar',
+              'icon' => 'i-heroicons-arrow-up-tray',
+              'color' => 'neutral',
+              'variant' => 'outline',
             ),
           ),
         ),
       ),
     ),
   ),
-  41 => 
+  82 => 
   array (
     'key' => 'cargaconsolidada.coordinacion.completados.cotizacion.final.id',
     'label' => 'Cargaconsolidada → Coordinacion → Completados → Cotizacion Final → Id',
@@ -11965,9 +23385,359 @@ return array (
           ),
         ),
       ),
+      4 => 
+      array (
+        'key' => 'toolbar-acciones-fila',
+        'label' => 'Toolbar — Acciones de fila',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/cotizacion-final/CotizacionFinalView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'vscode-icons:file-type-excel',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+            1 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'vscode-icons:file-type-pdf2',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+            2 => 
+            array (
+              'label' => 'Eliminar',
+              'icon' => 'i-heroicons-trash',
+              'color' => 'error',
+              'variant' => 'ghost',
+            ),
+            3 => 
+            array (
+              'label' => 'Exportar',
+              'icon' => 'i-heroicons-arrow-up-tray',
+              'color' => 'primary',
+              'variant' => 'outline',
+            ),
+            4 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'i-heroicons-arrow-trending-up',
+              'color' => 'info',
+              'variant' => 'ghost',
+            ),
+            5 => 
+            array (
+              'label' => 'Ver',
+              'icon' => 'i-heroicons-eye',
+              'color' => 'neutral',
+              'variant' => 'ghost',
+            ),
+          ),
+        ),
+      ),
+      5 => 
+      array (
+        'key' => 'accion-accion',
+        'label' => 'Acción — Acción',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizacion-final/CotizacionFinalView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Acción',
+          'icon' => 'vscode-icons:file-type-excel',
+          'color' => 'primary',
+          'variant' => 'ghost',
+        ),
+      ),
+      6 => 
+      array (
+        'key' => 'accion-eliminar',
+        'label' => 'Acción — Eliminar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizacion-final/CotizacionFinalView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Eliminar',
+          'icon' => 'i-heroicons-trash',
+          'color' => 'error',
+          'variant' => 'ghost',
+        ),
+      ),
+      7 => 
+      array (
+        'key' => 'accion-exportar',
+        'label' => 'Acción — Exportar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizacion-final/CotizacionFinalView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Exportar',
+          'icon' => 'i-heroicons-arrow-up-tray',
+          'color' => 'primary',
+          'variant' => 'outline',
+        ),
+      ),
+      8 => 
+      array (
+        'key' => 'accion-ver',
+        'label' => 'Acción — Ver',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizacion-final/CotizacionFinalView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Ver',
+          'icon' => 'i-heroicons-eye',
+          'color' => 'neutral',
+          'variant' => 'ghost',
+        ),
+      ),
+      9 => 
+      array (
+        'key' => 'toolbar-datatable',
+        'label' => 'Toolbar — Controles de tabla',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/cotizacion-final/CotizacionFinalView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Exportar',
+              'icon' => 'i-heroicons-arrow-up-tray',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+            1 => 
+            array (
+              'label' => 'Filtros',
+              'icon' => 'i-heroicons-funnel',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+            2 => 
+            array (
+              'label' => 'Buscar',
+              'icon' => 'i-heroicons-magnifying-glass',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+          ),
+        ),
+      ),
+      10 => 
+      array (
+        'key' => 'accion-filtros',
+        'label' => 'Acción — Filtros',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizacion-final/CotizacionFinalView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Filtros',
+          'icon' => 'i-heroicons-funnel',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
+      11 => 
+      array (
+        'key' => 'accion-buscar',
+        'label' => 'Acción — Buscar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizacion-final/CotizacionFinalView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Buscar',
+          'icon' => 'i-heroicons-magnifying-glass',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
     ),
   ),
-  42 => 
+  83 => 
+  array (
+    'key' => 'cargaconsolidada.coordinacion.completados.cotizaciones.documentacion.id',
+    'label' => 'Cargaconsolidada → Coordinacion → Completados → Cotizaciones → Documentacion → Id',
+    'page_path' => 'pages/cargaconsolidada/coordinacion/completados/cotizaciones/documentacion/[id].vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'card-card-1',
+        'label' => 'Card — Card 1',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 1',
+          'icon' => NULL,
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      1 => 
+      array (
+        'key' => 'card-card-2',
+        'label' => 'Card — Card 2',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 2',
+          'icon' => NULL,
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      2 => 
+      array (
+        'key' => 'card-card-3',
+        'label' => 'Card — Card 3',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 3',
+          'icon' => 'i-heroicons-exclamation-triangle',
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      3 => 
+      array (
+        'key' => 'card-documentacion',
+        'label' => 'Card — Documentación —',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Documentación —',
+          'icon' => NULL,
+          'body' => 'Los cambios se aplican al hacer clic en «Guardar todo». Cada pestaña de proveedor tiene su propia documentación pendiente.',
+          'fields' => 
+          array (
+            0 => 
+            array (
+              'key' => 'tipolabel',
+              'label' => '{{ tipo.label }}',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            1 => 
+            array (
+              'key' => 'docfolder-name-doctipo-documento',
+              'label' => '{{ doc.folder_name || doc.tipo_documento }}',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            2 => 
+            array (
+              'key' => 'documentos-nuevos-pendientes-de-guardar',
+              'label' => 'Documentos nuevos (pendientes de guardar)',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Nuevo documento',
+              'icon' => 'i-heroicons-plus',
+              'color' => 'warning',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      4 => 
+      array (
+        'key' => 'card-imagenes',
+        'label' => 'Card — Imágenes —',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Imágenes —',
+          'icon' => NULL,
+          'body' => '',
+          'fields' => 
+          array (
+            0 => 
+            array (
+              'key' => 'agregar-imagenes-multiple',
+              'label' => 'Agregar imágenes (múltiple)',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+    ),
+  ),
+  84 => 
   array (
     'key' => 'cargaconsolidada.coordinacion.completados.cotizaciones.id',
     'label' => 'Cargaconsolidada → Coordinacion → Completados → Cotizaciones → Id',
@@ -13299,9 +25069,924 @@ return array (
           ),
         ),
       ),
+      8 => 
+      array (
+        'key' => 'toolbar-acciones',
+        'label' => 'Toolbar — Acciones',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Crear Prospecto',
+              'icon' => 'i-heroicons-plus',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      9 => 
+      array (
+        'key' => 'accion-crear-prospecto',
+        'label' => 'Acción — Crear Prospecto',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Crear Prospecto',
+          'icon' => 'i-heroicons-plus',
+          'color' => 'primary',
+          'variant' => 'solid',
+        ),
+      ),
+      10 => 
+      array (
+        'key' => 'toolbar-acciones-2',
+        'label' => 'Toolbar — Acciones 2',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Upload',
+              'icon' => 'i-heroicons-arrow-up-tray',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+            1 => 
+            array (
+              'label' => 'Packing List',
+              'icon' => 'i-heroicons-arrow-up-tray',
+              'color' => 'secondary',
+              'variant' => 'ghost',
+            ),
+            2 => 
+            array (
+              'label' => 'Eliminar',
+              'icon' => 'i-heroicons-trash',
+              'color' => 'error',
+              'variant' => 'ghost',
+            ),
+            3 => 
+            array (
+              'label' => 'Crear Prospecto',
+              'icon' => 'i-heroicons-plus',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+            4 => 
+            array (
+              'label' => 'Descargar Embarque',
+              'icon' => 'i-heroicons-arrow-down-tray',
+              'color' => 'success',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      11 => 
+      array (
+        'key' => 'accion-upload',
+        'label' => 'Acción — Upload',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Upload',
+          'icon' => 'i-heroicons-arrow-up-tray',
+          'color' => 'primary',
+          'variant' => 'solid',
+        ),
+      ),
+      12 => 
+      array (
+        'key' => 'accion-packing-list',
+        'label' => 'Acción — Packing List',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Packing List',
+          'icon' => 'i-heroicons-arrow-up-tray',
+          'color' => 'secondary',
+          'variant' => 'ghost',
+        ),
+      ),
+      13 => 
+      array (
+        'key' => 'accion-eliminar',
+        'label' => 'Acción — Eliminar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Eliminar',
+          'icon' => 'i-heroicons-trash',
+          'color' => 'error',
+          'variant' => 'ghost',
+        ),
+      ),
+      14 => 
+      array (
+        'key' => 'accion-descargar-embarque',
+        'label' => 'Acción — Descargar Embarque',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Descargar Embarque',
+          'icon' => 'i-heroicons-arrow-down-tray',
+          'color' => 'success',
+          'variant' => 'solid',
+        ),
+      ),
+      15 => 
+      array (
+        'key' => 'toolbar-acciones-fila',
+        'label' => 'Toolbar — Acciones de fila',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Exportar',
+              'icon' => 'i-heroicons-arrow-up-tray',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+            1 => 
+            array (
+              'label' => 'Eliminar',
+              'icon' => 'i-heroicons-trash',
+              'color' => 'error',
+              'variant' => 'ghost',
+            ),
+            2 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'i-heroicons-document-text',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+            3 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'i-heroicons-document-duplicate',
+              'color' => 'info',
+              'variant' => 'ghost',
+            ),
+            4 => 
+            array (
+              'label' => 'Ver',
+              'icon' => 'i-heroicons-eye',
+              'color' => 'info',
+              'variant' => 'ghost',
+            ),
+            5 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'i-heroicons-arrow-path',
+              'color' => 'secondary',
+              'variant' => 'ghost',
+            ),
+            6 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'i-heroicons-arrow-right',
+              'color' => 'info',
+              'variant' => 'ghost',
+            ),
+            7 => 
+            array (
+              'label' => 'Guardar',
+              'icon' => 'material-symbols:save-sharp',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+            8 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'iconamoon:menu-burger-horizontal',
+              'color' => 'success',
+              'variant' => 'ghost',
+            ),
+            9 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'material-symbols:send-outline',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+          ),
+        ),
+      ),
+      16 => 
+      array (
+        'key' => 'accion-exportar',
+        'label' => 'Acción — Exportar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Exportar',
+          'icon' => 'i-heroicons-arrow-up-tray',
+          'color' => 'primary',
+          'variant' => 'ghost',
+        ),
+      ),
+      17 => 
+      array (
+        'key' => 'accion-accion',
+        'label' => 'Acción — Acción',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Acción',
+          'icon' => 'i-heroicons-document-text',
+          'color' => 'primary',
+          'variant' => 'ghost',
+        ),
+      ),
+      18 => 
+      array (
+        'key' => 'accion-ver',
+        'label' => 'Acción — Ver',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Ver',
+          'icon' => 'i-heroicons-eye',
+          'color' => 'info',
+          'variant' => 'ghost',
+        ),
+      ),
+      19 => 
+      array (
+        'key' => 'accion-guardar',
+        'label' => 'Acción — Guardar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Guardar',
+          'icon' => 'material-symbols:save-sharp',
+          'color' => 'primary',
+          'variant' => 'ghost',
+        ),
+      ),
+      20 => 
+      array (
+        'key' => 'toolbar-datatable',
+        'label' => 'Toolbar — Controles de tabla',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Exportar',
+              'icon' => 'i-heroicons-arrow-up-tray',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+            1 => 
+            array (
+              'label' => 'Filtros',
+              'icon' => 'i-heroicons-funnel',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+          ),
+        ),
+      ),
+      21 => 
+      array (
+        'key' => 'accion-filtros',
+        'label' => 'Acción — Filtros',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Filtros',
+          'icon' => 'i-heroicons-funnel',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
     ),
   ),
-  43 => 
+  85 => 
+  array (
+    'key' => 'cargaconsolidada.coordinacion.completados.cotizaciones.proveedor.documentacion.china.id',
+    'label' => 'Cargaconsolidada → Coordinacion → Completados → Cotizaciones → Proveedor → Documentacion China → Id',
+    'page_path' => 'pages/cargaconsolidada/coordinacion/completados/cotizaciones/proveedor/documentacion-china/[id].vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'toolbar-acciones',
+        'label' => 'Toolbar — Acciones',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesProveedorDocumentacionChinaView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Guardar',
+              'icon' => 'material-symbols:save',
+              'color' => 'warning',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      1 => 
+      array (
+        'key' => 'accion-guardar',
+        'label' => 'Acción — Guardar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesProveedorDocumentacionChinaView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Guardar',
+          'icon' => 'material-symbols:save',
+          'color' => 'warning',
+          'variant' => 'solid',
+        ),
+      ),
+    ),
+  ),
+  86 => 
+  array (
+    'key' => 'cargaconsolidada.coordinacion.completados.cotizaciones.proveedor.documentacion.id',
+    'label' => 'Cargaconsolidada → Coordinacion → Completados → Cotizaciones → Proveedor → Documentacion → Id',
+    'page_path' => 'pages/cargaconsolidada/coordinacion/completados/cotizaciones/proveedor/documentacion/[id].vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'toolbar-acciones',
+        'label' => 'Toolbar — Acciones',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesProveedorDocumentacionView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Guardar',
+              'icon' => 'material-symbols:save',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      1 => 
+      array (
+        'key' => 'accion-guardar',
+        'label' => 'Acción — Guardar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesProveedorDocumentacionView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Guardar',
+          'icon' => 'material-symbols:save',
+          'color' => 'primary',
+          'variant' => 'solid',
+        ),
+      ),
+    ),
+  ),
+  87 => 
+  array (
+    'key' => 'cargaconsolidada.coordinacion.completados.documentacion.id',
+    'label' => 'Cargaconsolidada → Coordinacion → Completados → Documentacion → Id',
+    'page_path' => 'pages/cargaconsolidada/coordinacion/completados/documentacion/[id].vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'card-card-1',
+        'label' => 'Card — Card 1',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/consolidado/ConsolidadoDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 1',
+          'icon' => 'i-heroicons-exclamation-triangle',
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      1 => 
+      array (
+        'key' => 'card-card-2',
+        'label' => 'Card — Card 2',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/consolidado/ConsolidadoDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 2',
+          'icon' => 'i-heroicons-folder',
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+    ),
+  ),
+  88 => 
+  array (
+    'key' => 'cargaconsolidada.coordinacion.completados.entrega.clientes.id',
+    'label' => 'Cargaconsolidada → Coordinacion → Completados → Entrega → Clientes → Id',
+    'page_path' => 'pages/cargaconsolidada/coordinacion/completados/entrega/clientes/[id].vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'toolbar-acciones',
+        'label' => 'Toolbar — Acciones',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/entrega/EntregaClientesView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Editar',
+              'icon' => 'i-heroicons-pencil-square',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      1 => 
+      array (
+        'key' => 'accion-editar',
+        'label' => 'Acción — Editar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/entrega/EntregaClientesView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Editar',
+          'icon' => 'i-heroicons-pencil-square',
+          'color' => 'primary',
+          'variant' => 'solid',
+        ),
+      ),
+    ),
+  ),
+  89 => 
+  array (
+    'key' => 'cargaconsolidada.coordinacion.completados.entrega.fechas.horarios.id',
+    'label' => 'Cargaconsolidada → Coordinacion → Completados → Entrega → Fechas Horarios → Id',
+    'page_path' => 'pages/cargaconsolidada/coordinacion/completados/entrega/fechas-horarios/[id].vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'card-card-1',
+        'label' => 'Card — Card 1',
+        'tipo' => 'card',
+        'component' => 'components/admin/HorariosAdmin',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 1',
+          'icon' => NULL,
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Nuevo Horario ({{ selectedDates.length }})',
+              'icon' => 'i-heroicons-plus',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+            1 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'i-heroicons-chevron-left',
+              'color' => 'neutral',
+              'variant' => 'ghost',
+            ),
+            2 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'i-heroicons-chevron-right',
+              'color' => 'neutral',
+              'variant' => 'ghost',
+            ),
+          ),
+        ),
+      ),
+      1 => 
+      array (
+        'key' => 'card-fechas-seleccionadas',
+        'label' => 'Card — Fechas Seleccionadas',
+        'tipo' => 'card',
+        'component' => 'components/admin/HorariosAdmin',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Fechas Seleccionadas',
+          'icon' => 'i-heroicons-x-mark',
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      2 => 
+      array (
+        'key' => 'card-card-3',
+        'label' => 'Card — Card 3',
+        'tipo' => 'card',
+        'component' => 'components/admin/HorariosAdmin',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 3',
+          'icon' => 'i-heroicons-clock',
+          'body' => 'No hay horarios configurados',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Editar',
+              'icon' => 'i-heroicons-pencil-square',
+              'color' => 'neutral',
+              'variant' => 'ghost',
+            ),
+            1 => 
+            array (
+              'label' => 'Eliminar',
+              'icon' => 'i-heroicons-trash',
+              'color' => 'error',
+              'variant' => 'ghost',
+            ),
+            2 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'isGroupOpen(schedule.id, timeSlotGroup.id) ? \'i-heroicons-arrow-up\' : \'i-heroicons-arrow-down\'',
+              'color' => 'neutral',
+              'variant' => 'ghost',
+            ),
+            3 => 
+            array (
+              'label' => 'Ocultar/Mostrar ({{ selectedTimeSlotIds.length }})',
+              'icon' => NULL,
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      3 => 
+      array (
+        'key' => 'filtros-filterconfig',
+        'label' => 'Filtros — General',
+        'tipo' => 'filtros',
+        'component' => 'composables/cargaconsolidada/entrega/useEntrega.ts',
+        'api_hint' => 'filterConfig',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'fields' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Fecha inicio',
+              'key' => 'fecha_inicio',
+              'type' => 'date',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            1 => 
+            array (
+              'label' => 'Fecha fin',
+              'key' => 'fecha_fin',
+              'type' => 'date',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            2 => 
+            array (
+              'label' => 'Tipo de entrega',
+              'key' => 'tipo_entrega',
+              'type' => 'select',
+              'value' => 'todos',
+              'options' => 
+              array (
+                0 => 
+                array (
+                  'label' => 'Todos',
+                  'value' => 'todos',
+                ),
+                1 => 
+                array (
+                  'label' => 'Lima',
+                  'value' => 'Lima',
+                ),
+                2 => 
+                array (
+                  'label' => 'Provincia',
+                  'value' => 'Provincia',
+                ),
+              ),
+            ),
+            3 => 
+            array (
+              'label' => 'Tipo de servicio',
+              'key' => 'tipo_servicio',
+              'type' => 'select',
+              'value' => 'todos',
+              'options' => 
+              array (
+                0 => 
+                array (
+                  'label' => 'Todos',
+                  'value' => 'todos',
+                ),
+                1 => 
+                array (
+                  'label' => 'Delivery',
+                  'value' => 'DELIVERY',
+                ),
+                2 => 
+                array (
+                  'label' => 'Montacarga',
+                  'value' => 'MONTACARGA',
+                ),
+              ),
+            ),
+            4 => 
+            array (
+              'label' => 'Estado de entrega',
+              'key' => 'estado_entrega',
+              'type' => 'select',
+              'value' => 'todos',
+              'options' => 
+              array (
+                0 => 
+                array (
+                  'label' => 'Todos',
+                  'value' => 'todos',
+                ),
+                1 => 
+                array (
+                  'label' => 'Pendiente',
+                  'value' => 'PENDIENTE',
+                ),
+                2 => 
+                array (
+                  'label' => 'Entregado',
+                  'value' => 'ENTREGADO',
+                ),
+              ),
+            ),
+            5 => 
+            array (
+              'label' => 'Registrado',
+              'key' => 'registrado',
+              'type' => 'select',
+              'value' => 'todos',
+              'options' => 
+              array (
+                0 => 
+                array (
+                  'label' => 'Todos',
+                  'value' => 'todos',
+                ),
+                1 => 
+                array (
+                  'label' => 'Si',
+                  'value' => 'Si',
+                ),
+                2 => 
+                array (
+                  'label' => 'No',
+                  'value' => 'No',
+                ),
+              ),
+            ),
+            6 => 
+            array (
+              'label' => 'Entregado',
+              'key' => 'entregado',
+              'type' => 'select',
+              'value' => 'todos',
+              'options' => 
+              array (
+                0 => 
+                array (
+                  'label' => 'Todos',
+                  'value' => 'todos',
+                ),
+                1 => 
+                array (
+                  'label' => 'Si',
+                  'value' => 'Si',
+                ),
+                2 => 
+                array (
+                  'label' => 'No',
+                  'value' => 'No',
+                ),
+              ),
+            ),
+            7 => 
+            array (
+              'label' => 'Estado',
+              'key' => 'estado',
+              'type' => 'select',
+              'value' => 'todos',
+              'options' => 
+              array (
+                0 => 
+                array (
+                  'label' => 'Todos',
+                  'value' => 'todos',
+                ),
+                1 => 
+                array (
+                  'label' => 'Pagado',
+                  'value' => 'Pagado',
+                ),
+                2 => 
+                array (
+                  'label' => 'Pendiente',
+                  'value' => 'Pendiente',
+                ),
+              ),
+            ),
+            8 => 
+            array (
+              'label' => 'Fecha inicio',
+              'key' => 'fecha_inicio',
+              'type' => 'date',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            9 => 
+            array (
+              'label' => 'Fecha fin',
+              'key' => 'fecha_fin',
+              'type' => 'date',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            10 => 
+            array (
+              'label' => 'Tipo de entrega',
+              'key' => 'tipo_entrega',
+              'type' => 'select',
+              'value' => 'todos',
+              'options' => 
+              array (
+                0 => 
+                array (
+                  'label' => 'Todos',
+                  'value' => 'todos',
+                ),
+                1 => 
+                array (
+                  'label' => 'Lima',
+                  'value' => 'LIMA',
+                ),
+                2 => 
+                array (
+                  'label' => 'Provincia',
+                  'value' => 'PROVINCIA',
+                ),
+              ),
+            ),
+            11 => 
+            array (
+              'label' => 'Tipo de servicio',
+              'key' => 'tipo_servicio',
+              'type' => 'select',
+              'value' => 'todos',
+              'options' => 
+              array (
+                0 => 
+                array (
+                  'label' => 'Todos',
+                  'value' => 'todos',
+                ),
+                1 => 
+                array (
+                  'label' => 'Delivery',
+                  'value' => 'DELIVERY',
+                ),
+                2 => 
+                array (
+                  'label' => 'Montacarga',
+                  'value' => 'MONTACARGA',
+                ),
+              ),
+            ),
+          ),
+          'live_api' => NULL,
+        ),
+      ),
+    ),
+  ),
+  90 => 
   array (
     'key' => 'cargaconsolidada.coordinacion.completados.entrega.id',
     'label' => 'Cargaconsolidada → Coordinacion → Completados → Entrega → Id',
@@ -13554,9 +26239,279 @@ return array (
           'live_api' => NULL,
         ),
       ),
+      3 => 
+      array (
+        'key' => 'tabs-clientes-entregas-delivery',
+        'label' => 'Tabs — Clientes / Entregas / Delivery',
+        'tipo' => 'tabs',
+        'component' => 'components/cargaconsolidada/entrega/EntregaView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'active' => 'clientes',
+          'tabs' => 
+          array (
+            0 => 
+            array (
+              'key' => 'clientes',
+              'label' => 'Clientes',
+              'content' => '',
+            ),
+            1 => 
+            array (
+              'key' => 'entregas',
+              'label' => 'Entregas',
+              'content' => '',
+            ),
+            2 => 
+            array (
+              'key' => 'delivery',
+              'label' => 'Delivery',
+              'content' => '',
+            ),
+          ),
+        ),
+      ),
+      4 => 
+      array (
+        'key' => 'toolbar-acciones',
+        'label' => 'Toolbar — Acciones',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/entrega/EntregaView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Fechas y Horarios',
+              'icon' => 'i-heroicons-calendar',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      5 => 
+      array (
+        'key' => 'accion-fechas-y-horarios',
+        'label' => 'Acción — Fechas y Horarios',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/entrega/EntregaView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Fechas y Horarios',
+          'icon' => 'i-heroicons-calendar',
+          'color' => 'primary',
+          'variant' => 'solid',
+        ),
+      ),
+      6 => 
+      array (
+        'key' => 'toolbar-acciones-fila',
+        'label' => 'Toolbar — Acciones de fila',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/entrega/EntregaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Editar',
+              'icon' => 'i-heroicons-pencil-square',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+            1 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'iconamoon:menu-burger-horizontal',
+              'color' => 'neutral',
+              'variant' => 'ghost',
+            ),
+            2 => 
+            array (
+              'label' => 'Ver',
+              'icon' => 'i-heroicons-eye',
+              'color' => 'neutral',
+              'variant' => 'ghost',
+            ),
+            3 => 
+            array (
+              'label' => 'Eliminar',
+              'icon' => 'i-heroicons-trash',
+              'color' => 'error',
+              'variant' => 'ghost',
+            ),
+            4 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'i-heroicons-paper-airplane',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+          ),
+        ),
+      ),
+      7 => 
+      array (
+        'key' => 'accion-editar',
+        'label' => 'Acción — Editar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/entrega/EntregaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Editar',
+          'icon' => 'i-heroicons-pencil-square',
+          'color' => 'primary',
+          'variant' => 'ghost',
+        ),
+      ),
+      8 => 
+      array (
+        'key' => 'accion-accion',
+        'label' => 'Acción — Acción',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/entrega/EntregaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Acción',
+          'icon' => 'iconamoon:menu-burger-horizontal',
+          'color' => 'neutral',
+          'variant' => 'ghost',
+        ),
+      ),
+      9 => 
+      array (
+        'key' => 'accion-ver',
+        'label' => 'Acción — Ver',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/entrega/EntregaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Ver',
+          'icon' => 'i-heroicons-eye',
+          'color' => 'neutral',
+          'variant' => 'ghost',
+        ),
+      ),
+      10 => 
+      array (
+        'key' => 'accion-eliminar',
+        'label' => 'Acción — Eliminar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/entrega/EntregaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Eliminar',
+          'icon' => 'i-heroicons-trash',
+          'color' => 'error',
+          'variant' => 'ghost',
+        ),
+      ),
+      11 => 
+      array (
+        'key' => 'toolbar-datatable',
+        'label' => 'Toolbar — Controles de tabla',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/entrega/EntregaView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Exportar',
+              'icon' => 'i-heroicons-arrow-up-tray',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+            1 => 
+            array (
+              'label' => 'Filtros',
+              'icon' => 'i-heroicons-funnel',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+            2 => 
+            array (
+              'label' => 'Buscar',
+              'icon' => 'i-heroicons-magnifying-glass',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+          ),
+        ),
+      ),
+      12 => 
+      array (
+        'key' => 'accion-exportar',
+        'label' => 'Acción — Exportar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/entrega/EntregaView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Exportar',
+          'icon' => 'i-heroicons-arrow-up-tray',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
+      13 => 
+      array (
+        'key' => 'accion-filtros',
+        'label' => 'Acción — Filtros',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/entrega/EntregaView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Filtros',
+          'icon' => 'i-heroicons-funnel',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
+      14 => 
+      array (
+        'key' => 'accion-buscar',
+        'label' => 'Acción — Buscar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/entrega/EntregaView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Buscar',
+          'icon' => 'i-heroicons-magnifying-glass',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
     ),
   ),
-  44 => 
+  91 => 
   array (
     'key' => 'cargaconsolidada.coordinacion.completados.factura.guia.id',
     'label' => 'Cargaconsolidada → Coordinacion → Completados → Factura Guia → Id',
@@ -13695,9 +26650,253 @@ return array (
           ),
         ),
       ),
+      2 => 
+      array (
+        'key' => 'toolbar-acciones-fila',
+        'label' => 'Toolbar — Acciones de fila',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/factura-guia/FacturaGuiaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'vscode-icons:file-type-excel',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+            1 => 
+            array (
+              'label' => 'Descargar',
+              'icon' => 'i-heroicons-arrow-down-tray',
+              'color' => 'primary',
+              'variant' => 'outline',
+            ),
+            2 => 
+            array (
+              'label' => 'Eliminar',
+              'icon' => 'i-heroicons-trash',
+              'color' => 'error',
+              'variant' => 'outline',
+            ),
+            3 => 
+            array (
+              'label' => 'Exportar',
+              'icon' => 'i-heroicons-arrow-up-tray',
+              'color' => 'primary',
+              'variant' => 'outline',
+            ),
+            4 => 
+            array (
+              'label' => 'Mensaje',
+              'icon' => 'i-heroicons-chat-bubble-left-right',
+              'color' => 'success',
+              'variant' => 'ghost',
+            ),
+            5 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'iconamoon:menu-burger-horizontal',
+              'color' => 'success',
+              'variant' => 'ghost',
+            ),
+            6 => 
+            array (
+              'label' => 'Ver',
+              'icon' => 'i-heroicons-eye',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+            7 => 
+            array (
+              'label' => 'Editar',
+              'icon' => 'i-heroicons-pencil-square',
+              'color' => 'neutral',
+              'variant' => 'ghost',
+            ),
+          ),
+        ),
+      ),
+      3 => 
+      array (
+        'key' => 'accion-accion',
+        'label' => 'Acción — Acción',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/factura-guia/FacturaGuiaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Acción',
+          'icon' => 'vscode-icons:file-type-excel',
+          'color' => 'primary',
+          'variant' => 'ghost',
+        ),
+      ),
+      4 => 
+      array (
+        'key' => 'accion-descargar',
+        'label' => 'Acción — Descargar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/factura-guia/FacturaGuiaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Descargar',
+          'icon' => 'i-heroicons-arrow-down-tray',
+          'color' => 'primary',
+          'variant' => 'outline',
+        ),
+      ),
+      5 => 
+      array (
+        'key' => 'accion-eliminar',
+        'label' => 'Acción — Eliminar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/factura-guia/FacturaGuiaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Eliminar',
+          'icon' => 'i-heroicons-trash',
+          'color' => 'error',
+          'variant' => 'outline',
+        ),
+      ),
+      6 => 
+      array (
+        'key' => 'accion-exportar',
+        'label' => 'Acción — Exportar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/factura-guia/FacturaGuiaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Exportar',
+          'icon' => 'i-heroicons-arrow-up-tray',
+          'color' => 'primary',
+          'variant' => 'outline',
+        ),
+      ),
+      7 => 
+      array (
+        'key' => 'accion-mensaje',
+        'label' => 'Acción — Mensaje',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/factura-guia/FacturaGuiaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Mensaje',
+          'icon' => 'i-heroicons-chat-bubble-left-right',
+          'color' => 'success',
+          'variant' => 'ghost',
+        ),
+      ),
+      8 => 
+      array (
+        'key' => 'accion-ver',
+        'label' => 'Acción — Ver',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/factura-guia/FacturaGuiaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Ver',
+          'icon' => 'i-heroicons-eye',
+          'color' => 'primary',
+          'variant' => 'ghost',
+        ),
+      ),
+      9 => 
+      array (
+        'key' => 'accion-editar',
+        'label' => 'Acción — Editar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/factura-guia/FacturaGuiaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Editar',
+          'icon' => 'i-heroicons-pencil-square',
+          'color' => 'neutral',
+          'variant' => 'ghost',
+        ),
+      ),
+      10 => 
+      array (
+        'key' => 'toolbar-datatable',
+        'label' => 'Toolbar — Controles de tabla',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/factura-guia/FacturaGuiaView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Filtros',
+              'icon' => 'i-heroicons-funnel',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+            1 => 
+            array (
+              'label' => 'Buscar',
+              'icon' => 'i-heroicons-magnifying-glass',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+          ),
+        ),
+      ),
+      11 => 
+      array (
+        'key' => 'accion-filtros',
+        'label' => 'Acción — Filtros',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/factura-guia/FacturaGuiaView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Filtros',
+          'icon' => 'i-heroicons-funnel',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
+      12 => 
+      array (
+        'key' => 'accion-buscar',
+        'label' => 'Acción — Buscar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/factura-guia/FacturaGuiaView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Buscar',
+          'icon' => 'i-heroicons-magnifying-glass',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
     ),
   ),
-  45 => 
+  92 => 
   array (
     'key' => 'cargaconsolidada.coordinacion.completados.plantillas.finales.id',
     'label' => 'Cargaconsolidada → Coordinacion → Completados → Plantillas Finales → Id',
@@ -13785,7 +26984,7 @@ return array (
       ),
     ),
   ),
-  46 => 
+  93 => 
   array (
     'key' => 'cargaconsolidada.documentacion.abiertos',
     'label' => 'Cargaconsolidada → Documentacion → Abiertos',
@@ -13896,9 +27095,762 @@ return array (
           ),
         ),
       ),
+      1 => 
+      array (
+        'key' => 'toolbar-acciones-fila',
+        'label' => 'Toolbar — Acciones de fila',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/consolidado/CargaConsolidadaAbiertaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Ver',
+              'icon' => 'i-heroicons-eye',
+              'color' => 'info',
+              'variant' => 'ghost',
+            ),
+            1 => 
+            array (
+              'label' => 'Editar',
+              'icon' => 'i-heroicons-pencil',
+              'color' => 'warning',
+              'variant' => 'ghost',
+            ),
+            2 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'i-heroicons-document-duplicate',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+            3 => 
+            array (
+              'label' => 'Eliminar',
+              'icon' => 'i-heroicons-trash',
+              'color' => 'error',
+              'variant' => 'ghost',
+            ),
+          ),
+        ),
+      ),
+      2 => 
+      array (
+        'key' => 'accion-ver',
+        'label' => 'Acción — Ver',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/consolidado/CargaConsolidadaAbiertaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Ver',
+          'icon' => 'i-heroicons-eye',
+          'color' => 'info',
+          'variant' => 'ghost',
+        ),
+      ),
+      3 => 
+      array (
+        'key' => 'accion-editar',
+        'label' => 'Acción — Editar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/consolidado/CargaConsolidadaAbiertaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Editar',
+          'icon' => 'i-heroicons-pencil',
+          'color' => 'warning',
+          'variant' => 'ghost',
+        ),
+      ),
+      4 => 
+      array (
+        'key' => 'accion-accion',
+        'label' => 'Acción — Acción',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/consolidado/CargaConsolidadaAbiertaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Acción',
+          'icon' => 'i-heroicons-document-duplicate',
+          'color' => 'primary',
+          'variant' => 'ghost',
+        ),
+      ),
+      5 => 
+      array (
+        'key' => 'accion-eliminar',
+        'label' => 'Acción — Eliminar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/consolidado/CargaConsolidadaAbiertaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Eliminar',
+          'icon' => 'i-heroicons-trash',
+          'color' => 'error',
+          'variant' => 'ghost',
+        ),
+      ),
+      6 => 
+      array (
+        'key' => 'toolbar-datatable',
+        'label' => 'Toolbar — Controles de tabla',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/consolidado/CargaConsolidadaAbiertaView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Filtros',
+              'icon' => 'i-heroicons-funnel',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+          ),
+        ),
+      ),
+      7 => 
+      array (
+        'key' => 'accion-filtros',
+        'label' => 'Acción — Filtros',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/consolidado/CargaConsolidadaAbiertaView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Filtros',
+          'icon' => 'i-heroicons-funnel',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
     ),
   ),
-  47 => 
+  94 => 
+  array (
+    'key' => 'cargaconsolidada.documentacion.abiertos.aduana.id',
+    'label' => 'Cargaconsolidada → Documentacion → Abiertos → Aduana → Id',
+    'page_path' => 'pages/cargaconsolidada/documentacion/abiertos/aduana/[id].vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'card-card-1',
+        'label' => 'Card — Card 1',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/consolidado/ConsolidadoAduanaView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 1',
+          'icon' => 'i-heroicons-cube-transparent',
+          'body' => '',
+          'fields' => 
+          array (
+            0 => 
+            array (
+              'key' => 'naviera',
+              'label' => 'Naviera',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            1 => 
+            array (
+              'key' => 'multa',
+              'label' => 'Multa',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            2 => 
+            array (
+              'key' => 'observaciones',
+              'label' => 'Observaciones',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            3 => 
+            array (
+              'key' => 'toneladas-contenedor',
+              'label' => 'Toneladas contenedor',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            4 => 
+            array (
+              'key' => 'fecha-levante',
+              'label' => 'Fecha levante',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            5 => 
+            array (
+              'key' => 'fecha-zarpe',
+              'label' => 'Fecha zarpe',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            6 => 
+            array (
+              'key' => 'numero-dua',
+              'label' => 'Número Dua',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            7 => 
+            array (
+              'key' => 'fecha-arribo',
+              'label' => 'Fecha arribo',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            8 => 
+            array (
+              'key' => 'valor-fob',
+              'label' => 'Valor FOB',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            9 => 
+            array (
+              'key' => 'doc-tributos-y-ajustes',
+              'label' => 'DOC. TRIBUTOS Y AJUSTES',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            10 => 
+            array (
+              'key' => 'fecha-declaracion',
+              'label' => 'Fecha declaración',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            11 => 
+            array (
+              'key' => 'valor-flete',
+              'label' => 'Valor flete',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            12 => 
+            array (
+              'key' => 'canal-de-control',
+              'label' => 'Canal de Control',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            13 => 
+            array (
+              'key' => 'costo-destino',
+              'label' => 'Costo destino',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            14 => 
+            array (
+              'key' => 'resumen-de-impuestos-pagados',
+              'label' => 'RESUMEN DE IMPUESTOS PAGADOS',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            15 => 
+            array (
+              'key' => 'ajuste-de-valor',
+              'label' => 'Ajuste de valor',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => '{{ aduanaData ? \'Actualizar\' : \'Guardar\' }}',
+              'icon' => NULL,
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+    ),
+  ),
+  95 => 
+  array (
+    'key' => 'cargaconsolidada.documentacion.abiertos.clientes.documentacion.id',
+    'label' => 'Cargaconsolidada → Documentacion → Abiertos → Clientes → Documentacion → Id',
+    'page_path' => 'pages/cargaconsolidada/documentacion/abiertos/clientes/documentacion/[id].vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'toolbar-acciones',
+        'label' => 'Toolbar — Acciones',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/clientes/ClientesDocumentacionView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Guardar cambios',
+              'icon' => 'i-heroicons-check',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+            1 => 
+            array (
+              'label' => 'Descargar Excel',
+              'icon' => 'i-heroicons-arrow-down-tray',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+            2 => 
+            array (
+              'label' => 'Guardar',
+              'icon' => 'i-heroicons-check',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      1 => 
+      array (
+        'key' => 'accion-guardar-cambios',
+        'label' => 'Acción — Guardar cambios',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/clientes/ClientesDocumentacionView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Guardar cambios',
+          'icon' => 'i-heroicons-check',
+          'color' => 'primary',
+          'variant' => 'solid',
+        ),
+      ),
+      2 => 
+      array (
+        'key' => 'accion-descargar-excel',
+        'label' => 'Acción — Descargar Excel',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/clientes/ClientesDocumentacionView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Descargar Excel',
+          'icon' => 'i-heroicons-arrow-down-tray',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
+      3 => 
+      array (
+        'key' => 'accion-guardar',
+        'label' => 'Acción — Guardar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/clientes/ClientesDocumentacionView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Guardar',
+          'icon' => 'i-heroicons-check',
+          'color' => 'primary',
+          'variant' => 'solid',
+        ),
+      ),
+      4 => 
+      array (
+        'key' => 'card-card-1',
+        'label' => 'Card — Card 1',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/clientes/ClientesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 1',
+          'icon' => NULL,
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      5 => 
+      array (
+        'key' => 'card-card-2',
+        'label' => 'Card — Card 2',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/clientes/ClientesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 2',
+          'icon' => NULL,
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      6 => 
+      array (
+        'key' => 'card-card-3',
+        'label' => 'Card — Card 3',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/clientes/ClientesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 3',
+          'icon' => NULL,
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      7 => 
+      array (
+        'key' => 'card-card-4',
+        'label' => 'Card — Card 4',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/clientes/ClientesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 4',
+          'icon' => NULL,
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      8 => 
+      array (
+        'key' => 'card-card-5',
+        'label' => 'Card — Card 5',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/clientes/ClientesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 5',
+          'icon' => 'i-heroicons-exclamation-triangle',
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      9 => 
+      array (
+        'key' => 'card-documentacion',
+        'label' => 'Card — Documentación  -',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/clientes/ClientesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Documentación  -',
+          'icon' => 'i-heroicons-folder',
+          'body' => '',
+          'fields' => 
+          array (
+            0 => 
+            array (
+              'key' => 'volumen-documento',
+              'label' => 'Volumen documento',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            1 => 
+            array (
+              'key' => 'valor-documento',
+              'label' => 'Valor documento',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            2 => 
+            array (
+              'key' => 'factura-comercial',
+              'label' => 'Factura Comercial',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            3 => 
+            array (
+              'key' => 'packing-list',
+              'label' => 'Packing List',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            4 => 
+            array (
+              'key' => 'excel-confirmacion',
+              'label' => 'Excel Confirmación',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Nuevo Documento',
+              'icon' => 'i-heroicons-plus',
+              'color' => 'warning',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      10 => 
+      array (
+        'key' => 'card-documentacion-china',
+        'label' => 'Card — Documentación China',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/clientes/ClientesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Documentación China',
+          'icon' => 'i-heroicons-folder',
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Guardar cambios',
+              'icon' => 'i-heroicons-check',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      11 => 
+      array (
+        'key' => 'card-inspeccion',
+        'label' => 'Card — Inspección',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/clientes/ClientesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Inspección',
+          'icon' => 'i-heroicons-folder',
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Guardar cambios',
+              'icon' => 'i-heroicons-check',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      12 => 
+      array (
+        'key' => 'card-card-9',
+        'label' => 'Card — Card 9',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/clientes/ClientesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 9',
+          'icon' => NULL,
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Descargar cotización inicial',
+              'icon' => 'i-heroicons-arrow-down-tray',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+            1 => 
+            array (
+              'label' => 'Descargar cotización final',
+              'icon' => 'i-heroicons-arrow-down-tray',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+          ),
+        ),
+      ),
+    ),
+  ),
+  96 => 
+  array (
+    'key' => 'cargaconsolidada.documentacion.abiertos.clientes.excel.confirmacion.uuid.guardado',
+    'label' => 'Cargaconsolidada → Documentacion → Abiertos → Clientes → Excel Confirmacion → Uuid → Guardado',
+    'page_path' => 'pages/cargaconsolidada/documentacion/abiertos/clientes/excel-confirmacion/[uuid]/guardado.vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'card-card-1',
+        'label' => 'Card — Card 1',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/clientes/ExcelConfirmacionGuardadoView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 1',
+          'icon' => 'i-heroicons-check-circle',
+          'body' => '{{ mensaje || \'La confirmación del cliente se actualizó correctamente.\' }}',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Volver a editar',
+              'icon' => 'i-heroicons-pencil-square',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+            1 => 
+            array (
+              'label' => 'Volver a clientes',
+              'icon' => 'i-heroicons-arrow-left',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+          ),
+        ),
+      ),
+    ),
+  ),
+  97 => 
   array (
     'key' => 'cargaconsolidada.documentacion.abiertos.clientes.id',
     'label' => 'Cargaconsolidada → Documentacion → Abiertos → Clientes → Id',
@@ -14353,35 +28305,143 @@ return array (
       ),
       4 => 
       array (
-        'key' => 'tabs-documentacion-documentacion',
-        'label' => 'Tabs — Documentación / Documentacion',
-        'tipo' => 'tabs',
+        'key' => 'toolbar-acciones-fila',
+        'label' => 'Toolbar — Acciones de fila',
+        'tipo' => 'toolbar',
         'component' => 'components/cargaconsolidada/clientes/ClientesView/index',
-        'api_hint' => NULL,
+        'api_hint' => 'column:acciones',
         'live_api' => NULL,
         'snapshot' => 
         array (
-          'active' => 'documentacion',
-          'tabs' => 
+          'buttons' => 
           array (
             0 => 
             array (
-              'key' => 'documentacion',
-              'label' => 'Documentación',
-              'content' => '',
+              'label' => 'Ver',
+              'icon' => 'i-heroicons-eye',
+              'color' => 'primary',
+              'variant' => 'ghost',
             ),
             1 => 
             array (
-              'key' => 'documentacion',
-              'label' => 'Documentacion',
-              'content' => '',
+              'label' => 'Acción',
+              'icon' => 'i-heroicons-document-text',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+            2 => 
+            array (
+              'label' => 'Eliminar',
+              'icon' => 'i-heroicons-trash',
+              'color' => 'error',
+              'variant' => 'ghost',
+            ),
+            3 => 
+            array (
+              'label' => 'Exportar',
+              'icon' => 'i-heroicons-arrow-up-tray',
+              'color' => 'primary',
+              'variant' => 'outline',
+            ),
+            4 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'iconamoon:menu-burger-horizontal',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+          ),
+        ),
+      ),
+      5 => 
+      array (
+        'key' => 'accion-ver',
+        'label' => 'Acción — Ver',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/clientes/ClientesView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Ver',
+          'icon' => 'i-heroicons-eye',
+          'color' => 'primary',
+          'variant' => 'ghost',
+        ),
+      ),
+      6 => 
+      array (
+        'key' => 'accion-accion',
+        'label' => 'Acción — Acción',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/clientes/ClientesView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Acción',
+          'icon' => 'i-heroicons-document-text',
+          'color' => 'primary',
+          'variant' => 'ghost',
+        ),
+      ),
+      7 => 
+      array (
+        'key' => 'accion-eliminar',
+        'label' => 'Acción — Eliminar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/clientes/ClientesView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Eliminar',
+          'icon' => 'i-heroicons-trash',
+          'color' => 'error',
+          'variant' => 'ghost',
+        ),
+      ),
+      8 => 
+      array (
+        'key' => 'accion-exportar',
+        'label' => 'Acción — Exportar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/clientes/ClientesView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Exportar',
+          'icon' => 'i-heroicons-arrow-up-tray',
+          'color' => 'primary',
+          'variant' => 'outline',
+        ),
+      ),
+      9 => 
+      array (
+        'key' => 'toolbar-datatable',
+        'label' => 'Toolbar — Controles de tabla',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/clientes/ClientesView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Exportar',
+              'icon' => 'i-heroicons-arrow-up-tray',
+              'color' => 'neutral',
+              'variant' => 'outline',
             ),
           ),
         ),
       ),
     ),
   ),
-  48 => 
+  98 => 
   array (
     'key' => 'cargaconsolidada.documentacion.abiertos.cotizacion.final.id',
     'label' => 'Cargaconsolidada → Documentacion → Abiertos → Cotizacion Final → Id',
@@ -14743,9 +28803,359 @@ return array (
           ),
         ),
       ),
+      4 => 
+      array (
+        'key' => 'toolbar-acciones-fila',
+        'label' => 'Toolbar — Acciones de fila',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/cotizacion-final/CotizacionFinalView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'vscode-icons:file-type-excel',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+            1 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'vscode-icons:file-type-pdf2',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+            2 => 
+            array (
+              'label' => 'Eliminar',
+              'icon' => 'i-heroicons-trash',
+              'color' => 'error',
+              'variant' => 'ghost',
+            ),
+            3 => 
+            array (
+              'label' => 'Exportar',
+              'icon' => 'i-heroicons-arrow-up-tray',
+              'color' => 'primary',
+              'variant' => 'outline',
+            ),
+            4 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'i-heroicons-arrow-trending-up',
+              'color' => 'info',
+              'variant' => 'ghost',
+            ),
+            5 => 
+            array (
+              'label' => 'Ver',
+              'icon' => 'i-heroicons-eye',
+              'color' => 'neutral',
+              'variant' => 'ghost',
+            ),
+          ),
+        ),
+      ),
+      5 => 
+      array (
+        'key' => 'accion-accion',
+        'label' => 'Acción — Acción',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizacion-final/CotizacionFinalView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Acción',
+          'icon' => 'vscode-icons:file-type-excel',
+          'color' => 'primary',
+          'variant' => 'ghost',
+        ),
+      ),
+      6 => 
+      array (
+        'key' => 'accion-eliminar',
+        'label' => 'Acción — Eliminar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizacion-final/CotizacionFinalView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Eliminar',
+          'icon' => 'i-heroicons-trash',
+          'color' => 'error',
+          'variant' => 'ghost',
+        ),
+      ),
+      7 => 
+      array (
+        'key' => 'accion-exportar',
+        'label' => 'Acción — Exportar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizacion-final/CotizacionFinalView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Exportar',
+          'icon' => 'i-heroicons-arrow-up-tray',
+          'color' => 'primary',
+          'variant' => 'outline',
+        ),
+      ),
+      8 => 
+      array (
+        'key' => 'accion-ver',
+        'label' => 'Acción — Ver',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizacion-final/CotizacionFinalView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Ver',
+          'icon' => 'i-heroicons-eye',
+          'color' => 'neutral',
+          'variant' => 'ghost',
+        ),
+      ),
+      9 => 
+      array (
+        'key' => 'toolbar-datatable',
+        'label' => 'Toolbar — Controles de tabla',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/cotizacion-final/CotizacionFinalView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Exportar',
+              'icon' => 'i-heroicons-arrow-up-tray',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+            1 => 
+            array (
+              'label' => 'Filtros',
+              'icon' => 'i-heroicons-funnel',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+            2 => 
+            array (
+              'label' => 'Buscar',
+              'icon' => 'i-heroicons-magnifying-glass',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+          ),
+        ),
+      ),
+      10 => 
+      array (
+        'key' => 'accion-filtros',
+        'label' => 'Acción — Filtros',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizacion-final/CotizacionFinalView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Filtros',
+          'icon' => 'i-heroicons-funnel',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
+      11 => 
+      array (
+        'key' => 'accion-buscar',
+        'label' => 'Acción — Buscar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizacion-final/CotizacionFinalView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Buscar',
+          'icon' => 'i-heroicons-magnifying-glass',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
     ),
   ),
-  49 => 
+  99 => 
+  array (
+    'key' => 'cargaconsolidada.documentacion.abiertos.cotizaciones.documentacion.id',
+    'label' => 'Cargaconsolidada → Documentacion → Abiertos → Cotizaciones → Documentacion → Id',
+    'page_path' => 'pages/cargaconsolidada/documentacion/abiertos/cotizaciones/documentacion/[id].vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'card-card-1',
+        'label' => 'Card — Card 1',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 1',
+          'icon' => NULL,
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      1 => 
+      array (
+        'key' => 'card-card-2',
+        'label' => 'Card — Card 2',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 2',
+          'icon' => NULL,
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      2 => 
+      array (
+        'key' => 'card-card-3',
+        'label' => 'Card — Card 3',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 3',
+          'icon' => 'i-heroicons-exclamation-triangle',
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      3 => 
+      array (
+        'key' => 'card-documentacion',
+        'label' => 'Card — Documentación —',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Documentación —',
+          'icon' => NULL,
+          'body' => 'Los cambios se aplican al hacer clic en «Guardar todo». Cada pestaña de proveedor tiene su propia documentación pendiente.',
+          'fields' => 
+          array (
+            0 => 
+            array (
+              'key' => 'tipolabel',
+              'label' => '{{ tipo.label }}',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            1 => 
+            array (
+              'key' => 'docfolder-name-doctipo-documento',
+              'label' => '{{ doc.folder_name || doc.tipo_documento }}',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            2 => 
+            array (
+              'key' => 'documentos-nuevos-pendientes-de-guardar',
+              'label' => 'Documentos nuevos (pendientes de guardar)',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Nuevo documento',
+              'icon' => 'i-heroicons-plus',
+              'color' => 'warning',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      4 => 
+      array (
+        'key' => 'card-imagenes',
+        'label' => 'Card — Imágenes —',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Imágenes —',
+          'icon' => NULL,
+          'body' => '',
+          'fields' => 
+          array (
+            0 => 
+            array (
+              'key' => 'agregar-imagenes-multiple',
+              'label' => 'Agregar imágenes (múltiple)',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+    ),
+  ),
+  100 => 
   array (
     'key' => 'cargaconsolidada.documentacion.abiertos.cotizaciones.id',
     'label' => 'Cargaconsolidada → Documentacion → Abiertos → Cotizaciones → Id',
@@ -16077,9 +30487,500 @@ return array (
           ),
         ),
       ),
+      8 => 
+      array (
+        'key' => 'toolbar-acciones',
+        'label' => 'Toolbar — Acciones',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Crear Prospecto',
+              'icon' => 'i-heroicons-plus',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      9 => 
+      array (
+        'key' => 'accion-crear-prospecto',
+        'label' => 'Acción — Crear Prospecto',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Crear Prospecto',
+          'icon' => 'i-heroicons-plus',
+          'color' => 'primary',
+          'variant' => 'solid',
+        ),
+      ),
+      10 => 
+      array (
+        'key' => 'toolbar-acciones-2',
+        'label' => 'Toolbar — Acciones 2',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Upload',
+              'icon' => 'i-heroicons-arrow-up-tray',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+            1 => 
+            array (
+              'label' => 'Packing List',
+              'icon' => 'i-heroicons-arrow-up-tray',
+              'color' => 'secondary',
+              'variant' => 'ghost',
+            ),
+            2 => 
+            array (
+              'label' => 'Eliminar',
+              'icon' => 'i-heroicons-trash',
+              'color' => 'error',
+              'variant' => 'ghost',
+            ),
+            3 => 
+            array (
+              'label' => 'Crear Prospecto',
+              'icon' => 'i-heroicons-plus',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+            4 => 
+            array (
+              'label' => 'Descargar Embarque',
+              'icon' => 'i-heroicons-arrow-down-tray',
+              'color' => 'success',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      11 => 
+      array (
+        'key' => 'accion-upload',
+        'label' => 'Acción — Upload',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Upload',
+          'icon' => 'i-heroicons-arrow-up-tray',
+          'color' => 'primary',
+          'variant' => 'solid',
+        ),
+      ),
+      12 => 
+      array (
+        'key' => 'accion-packing-list',
+        'label' => 'Acción — Packing List',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Packing List',
+          'icon' => 'i-heroicons-arrow-up-tray',
+          'color' => 'secondary',
+          'variant' => 'ghost',
+        ),
+      ),
+      13 => 
+      array (
+        'key' => 'accion-eliminar',
+        'label' => 'Acción — Eliminar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Eliminar',
+          'icon' => 'i-heroicons-trash',
+          'color' => 'error',
+          'variant' => 'ghost',
+        ),
+      ),
+      14 => 
+      array (
+        'key' => 'accion-descargar-embarque',
+        'label' => 'Acción — Descargar Embarque',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Descargar Embarque',
+          'icon' => 'i-heroicons-arrow-down-tray',
+          'color' => 'success',
+          'variant' => 'solid',
+        ),
+      ),
+      15 => 
+      array (
+        'key' => 'toolbar-acciones-fila',
+        'label' => 'Toolbar — Acciones de fila',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Exportar',
+              'icon' => 'i-heroicons-arrow-up-tray',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+            1 => 
+            array (
+              'label' => 'Eliminar',
+              'icon' => 'i-heroicons-trash',
+              'color' => 'error',
+              'variant' => 'ghost',
+            ),
+            2 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'i-heroicons-document-text',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+            3 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'i-heroicons-document-duplicate',
+              'color' => 'info',
+              'variant' => 'ghost',
+            ),
+            4 => 
+            array (
+              'label' => 'Ver',
+              'icon' => 'i-heroicons-eye',
+              'color' => 'info',
+              'variant' => 'ghost',
+            ),
+            5 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'i-heroicons-arrow-path',
+              'color' => 'secondary',
+              'variant' => 'ghost',
+            ),
+            6 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'i-heroicons-arrow-right',
+              'color' => 'info',
+              'variant' => 'ghost',
+            ),
+            7 => 
+            array (
+              'label' => 'Guardar',
+              'icon' => 'material-symbols:save-sharp',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+            8 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'iconamoon:menu-burger-horizontal',
+              'color' => 'success',
+              'variant' => 'ghost',
+            ),
+            9 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'material-symbols:send-outline',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+          ),
+        ),
+      ),
+      16 => 
+      array (
+        'key' => 'accion-exportar',
+        'label' => 'Acción — Exportar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Exportar',
+          'icon' => 'i-heroicons-arrow-up-tray',
+          'color' => 'primary',
+          'variant' => 'ghost',
+        ),
+      ),
+      17 => 
+      array (
+        'key' => 'accion-accion',
+        'label' => 'Acción — Acción',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Acción',
+          'icon' => 'i-heroicons-document-text',
+          'color' => 'primary',
+          'variant' => 'ghost',
+        ),
+      ),
+      18 => 
+      array (
+        'key' => 'accion-ver',
+        'label' => 'Acción — Ver',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Ver',
+          'icon' => 'i-heroicons-eye',
+          'color' => 'info',
+          'variant' => 'ghost',
+        ),
+      ),
+      19 => 
+      array (
+        'key' => 'accion-guardar',
+        'label' => 'Acción — Guardar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Guardar',
+          'icon' => 'material-symbols:save-sharp',
+          'color' => 'primary',
+          'variant' => 'ghost',
+        ),
+      ),
+      20 => 
+      array (
+        'key' => 'toolbar-datatable',
+        'label' => 'Toolbar — Controles de tabla',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Exportar',
+              'icon' => 'i-heroicons-arrow-up-tray',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+            1 => 
+            array (
+              'label' => 'Filtros',
+              'icon' => 'i-heroicons-funnel',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+          ),
+        ),
+      ),
+      21 => 
+      array (
+        'key' => 'accion-filtros',
+        'label' => 'Acción — Filtros',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Filtros',
+          'icon' => 'i-heroicons-funnel',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
     ),
   ),
-  50 => 
+  101 => 
+  array (
+    'key' => 'cargaconsolidada.documentacion.abiertos.cotizaciones.proveedor.documentacion.id',
+    'label' => 'Cargaconsolidada → Documentacion → Abiertos → Cotizaciones → Proveedor → Documentacion → Id',
+    'page_path' => 'pages/cargaconsolidada/documentacion/abiertos/cotizaciones/proveedor/documentacion/[id].vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'toolbar-acciones',
+        'label' => 'Toolbar — Acciones',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesProveedorDocumentacionView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Guardar',
+              'icon' => 'material-symbols:save',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      1 => 
+      array (
+        'key' => 'accion-guardar',
+        'label' => 'Acción — Guardar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesProveedorDocumentacionView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Guardar',
+          'icon' => 'material-symbols:save',
+          'color' => 'primary',
+          'variant' => 'solid',
+        ),
+      ),
+    ),
+  ),
+  102 => 
+  array (
+    'key' => 'cargaconsolidada.documentacion.abiertos.documentacion.id',
+    'label' => 'Cargaconsolidada → Documentacion → Abiertos → Documentacion → Id',
+    'page_path' => 'pages/cargaconsolidada/documentacion/abiertos/documentacion/[id].vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'card-card-1',
+        'label' => 'Card — Card 1',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/consolidado/ConsolidadoDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 1',
+          'icon' => 'i-heroicons-exclamation-triangle',
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      1 => 
+      array (
+        'key' => 'card-card-2',
+        'label' => 'Card — Card 2',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/consolidado/ConsolidadoDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 2',
+          'icon' => 'i-heroicons-folder',
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+    ),
+  ),
+  103 => 
+  array (
+    'key' => 'cargaconsolidada.documentacion.abiertos.entrega.clientes.id',
+    'label' => 'Cargaconsolidada → Documentacion → Abiertos → Entrega → Clientes → Id',
+    'page_path' => 'pages/cargaconsolidada/documentacion/abiertos/entrega/clientes/[id].vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'toolbar-acciones',
+        'label' => 'Toolbar — Acciones',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/entrega/EntregaClientesView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Editar',
+              'icon' => 'i-heroicons-pencil-square',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      1 => 
+      array (
+        'key' => 'accion-editar',
+        'label' => 'Acción — Editar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/entrega/EntregaClientesView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Editar',
+          'icon' => 'i-heroicons-pencil-square',
+          'color' => 'primary',
+          'variant' => 'solid',
+        ),
+      ),
+    ),
+  ),
+  104 => 
   array (
     'key' => 'cargaconsolidada.documentacion.abiertos.entrega.id',
     'label' => 'Cargaconsolidada → Documentacion → Abiertos → Entrega → Id',
@@ -16332,9 +31233,279 @@ return array (
           'live_api' => NULL,
         ),
       ),
+      3 => 
+      array (
+        'key' => 'tabs-clientes-entregas-delivery',
+        'label' => 'Tabs — Clientes / Entregas / Delivery',
+        'tipo' => 'tabs',
+        'component' => 'components/cargaconsolidada/entrega/EntregaView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'active' => 'clientes',
+          'tabs' => 
+          array (
+            0 => 
+            array (
+              'key' => 'clientes',
+              'label' => 'Clientes',
+              'content' => '',
+            ),
+            1 => 
+            array (
+              'key' => 'entregas',
+              'label' => 'Entregas',
+              'content' => '',
+            ),
+            2 => 
+            array (
+              'key' => 'delivery',
+              'label' => 'Delivery',
+              'content' => '',
+            ),
+          ),
+        ),
+      ),
+      4 => 
+      array (
+        'key' => 'toolbar-acciones',
+        'label' => 'Toolbar — Acciones',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/entrega/EntregaView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Fechas y Horarios',
+              'icon' => 'i-heroicons-calendar',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      5 => 
+      array (
+        'key' => 'accion-fechas-y-horarios',
+        'label' => 'Acción — Fechas y Horarios',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/entrega/EntregaView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Fechas y Horarios',
+          'icon' => 'i-heroicons-calendar',
+          'color' => 'primary',
+          'variant' => 'solid',
+        ),
+      ),
+      6 => 
+      array (
+        'key' => 'toolbar-acciones-fila',
+        'label' => 'Toolbar — Acciones de fila',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/entrega/EntregaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Editar',
+              'icon' => 'i-heroicons-pencil-square',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+            1 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'iconamoon:menu-burger-horizontal',
+              'color' => 'neutral',
+              'variant' => 'ghost',
+            ),
+            2 => 
+            array (
+              'label' => 'Ver',
+              'icon' => 'i-heroicons-eye',
+              'color' => 'neutral',
+              'variant' => 'ghost',
+            ),
+            3 => 
+            array (
+              'label' => 'Eliminar',
+              'icon' => 'i-heroicons-trash',
+              'color' => 'error',
+              'variant' => 'ghost',
+            ),
+            4 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'i-heroicons-paper-airplane',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+          ),
+        ),
+      ),
+      7 => 
+      array (
+        'key' => 'accion-editar',
+        'label' => 'Acción — Editar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/entrega/EntregaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Editar',
+          'icon' => 'i-heroicons-pencil-square',
+          'color' => 'primary',
+          'variant' => 'ghost',
+        ),
+      ),
+      8 => 
+      array (
+        'key' => 'accion-accion',
+        'label' => 'Acción — Acción',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/entrega/EntregaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Acción',
+          'icon' => 'iconamoon:menu-burger-horizontal',
+          'color' => 'neutral',
+          'variant' => 'ghost',
+        ),
+      ),
+      9 => 
+      array (
+        'key' => 'accion-ver',
+        'label' => 'Acción — Ver',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/entrega/EntregaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Ver',
+          'icon' => 'i-heroicons-eye',
+          'color' => 'neutral',
+          'variant' => 'ghost',
+        ),
+      ),
+      10 => 
+      array (
+        'key' => 'accion-eliminar',
+        'label' => 'Acción — Eliminar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/entrega/EntregaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Eliminar',
+          'icon' => 'i-heroicons-trash',
+          'color' => 'error',
+          'variant' => 'ghost',
+        ),
+      ),
+      11 => 
+      array (
+        'key' => 'toolbar-datatable',
+        'label' => 'Toolbar — Controles de tabla',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/entrega/EntregaView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Exportar',
+              'icon' => 'i-heroicons-arrow-up-tray',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+            1 => 
+            array (
+              'label' => 'Filtros',
+              'icon' => 'i-heroicons-funnel',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+            2 => 
+            array (
+              'label' => 'Buscar',
+              'icon' => 'i-heroicons-magnifying-glass',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+          ),
+        ),
+      ),
+      12 => 
+      array (
+        'key' => 'accion-exportar',
+        'label' => 'Acción — Exportar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/entrega/EntregaView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Exportar',
+          'icon' => 'i-heroicons-arrow-up-tray',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
+      13 => 
+      array (
+        'key' => 'accion-filtros',
+        'label' => 'Acción — Filtros',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/entrega/EntregaView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Filtros',
+          'icon' => 'i-heroicons-funnel',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
+      14 => 
+      array (
+        'key' => 'accion-buscar',
+        'label' => 'Acción — Buscar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/entrega/EntregaView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Buscar',
+          'icon' => 'i-heroicons-magnifying-glass',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
     ),
   ),
-  51 => 
+  105 => 
   array (
     'key' => 'cargaconsolidada.documentacion.abiertos.factura.guia.id',
     'label' => 'Cargaconsolidada → Documentacion → Abiertos → Factura Guia → Id',
@@ -16473,9 +31644,253 @@ return array (
           ),
         ),
       ),
+      2 => 
+      array (
+        'key' => 'toolbar-acciones-fila',
+        'label' => 'Toolbar — Acciones de fila',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/factura-guia/FacturaGuiaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'vscode-icons:file-type-excel',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+            1 => 
+            array (
+              'label' => 'Descargar',
+              'icon' => 'i-heroicons-arrow-down-tray',
+              'color' => 'primary',
+              'variant' => 'outline',
+            ),
+            2 => 
+            array (
+              'label' => 'Eliminar',
+              'icon' => 'i-heroicons-trash',
+              'color' => 'error',
+              'variant' => 'outline',
+            ),
+            3 => 
+            array (
+              'label' => 'Exportar',
+              'icon' => 'i-heroicons-arrow-up-tray',
+              'color' => 'primary',
+              'variant' => 'outline',
+            ),
+            4 => 
+            array (
+              'label' => 'Mensaje',
+              'icon' => 'i-heroicons-chat-bubble-left-right',
+              'color' => 'success',
+              'variant' => 'ghost',
+            ),
+            5 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'iconamoon:menu-burger-horizontal',
+              'color' => 'success',
+              'variant' => 'ghost',
+            ),
+            6 => 
+            array (
+              'label' => 'Ver',
+              'icon' => 'i-heroicons-eye',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+            7 => 
+            array (
+              'label' => 'Editar',
+              'icon' => 'i-heroicons-pencil-square',
+              'color' => 'neutral',
+              'variant' => 'ghost',
+            ),
+          ),
+        ),
+      ),
+      3 => 
+      array (
+        'key' => 'accion-accion',
+        'label' => 'Acción — Acción',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/factura-guia/FacturaGuiaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Acción',
+          'icon' => 'vscode-icons:file-type-excel',
+          'color' => 'primary',
+          'variant' => 'ghost',
+        ),
+      ),
+      4 => 
+      array (
+        'key' => 'accion-descargar',
+        'label' => 'Acción — Descargar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/factura-guia/FacturaGuiaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Descargar',
+          'icon' => 'i-heroicons-arrow-down-tray',
+          'color' => 'primary',
+          'variant' => 'outline',
+        ),
+      ),
+      5 => 
+      array (
+        'key' => 'accion-eliminar',
+        'label' => 'Acción — Eliminar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/factura-guia/FacturaGuiaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Eliminar',
+          'icon' => 'i-heroicons-trash',
+          'color' => 'error',
+          'variant' => 'outline',
+        ),
+      ),
+      6 => 
+      array (
+        'key' => 'accion-exportar',
+        'label' => 'Acción — Exportar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/factura-guia/FacturaGuiaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Exportar',
+          'icon' => 'i-heroicons-arrow-up-tray',
+          'color' => 'primary',
+          'variant' => 'outline',
+        ),
+      ),
+      7 => 
+      array (
+        'key' => 'accion-mensaje',
+        'label' => 'Acción — Mensaje',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/factura-guia/FacturaGuiaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Mensaje',
+          'icon' => 'i-heroicons-chat-bubble-left-right',
+          'color' => 'success',
+          'variant' => 'ghost',
+        ),
+      ),
+      8 => 
+      array (
+        'key' => 'accion-ver',
+        'label' => 'Acción — Ver',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/factura-guia/FacturaGuiaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Ver',
+          'icon' => 'i-heroicons-eye',
+          'color' => 'primary',
+          'variant' => 'ghost',
+        ),
+      ),
+      9 => 
+      array (
+        'key' => 'accion-editar',
+        'label' => 'Acción — Editar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/factura-guia/FacturaGuiaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Editar',
+          'icon' => 'i-heroicons-pencil-square',
+          'color' => 'neutral',
+          'variant' => 'ghost',
+        ),
+      ),
+      10 => 
+      array (
+        'key' => 'toolbar-datatable',
+        'label' => 'Toolbar — Controles de tabla',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/factura-guia/FacturaGuiaView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Filtros',
+              'icon' => 'i-heroicons-funnel',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+            1 => 
+            array (
+              'label' => 'Buscar',
+              'icon' => 'i-heroicons-magnifying-glass',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+          ),
+        ),
+      ),
+      11 => 
+      array (
+        'key' => 'accion-filtros',
+        'label' => 'Acción — Filtros',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/factura-guia/FacturaGuiaView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Filtros',
+          'icon' => 'i-heroicons-funnel',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
+      12 => 
+      array (
+        'key' => 'accion-buscar',
+        'label' => 'Acción — Buscar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/factura-guia/FacturaGuiaView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Buscar',
+          'icon' => 'i-heroicons-magnifying-glass',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
     ),
   ),
-  52 => 
+  106 => 
   array (
     'key' => 'cargaconsolidada.documentacion.completados',
     'label' => 'Cargaconsolidada → Documentacion → Completados',
@@ -16586,9 +32001,785 @@ return array (
           ),
         ),
       ),
+      1 => 
+      array (
+        'key' => 'toolbar-acciones-fila',
+        'label' => 'Toolbar — Acciones de fila',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/consolidado/CargaConsolidadaCompletadosView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Ver',
+              'icon' => 'i-heroicons-eye',
+              'color' => 'info',
+              'variant' => 'ghost',
+            ),
+            1 => 
+            array (
+              'label' => 'Editar',
+              'icon' => 'i-heroicons-pencil',
+              'color' => 'warning',
+              'variant' => 'ghost',
+            ),
+            2 => 
+            array (
+              'label' => 'Eliminar',
+              'icon' => 'i-heroicons-trash',
+              'color' => 'error',
+              'variant' => 'ghost',
+            ),
+            3 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'i-heroicons-envelope',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+          ),
+        ),
+      ),
+      2 => 
+      array (
+        'key' => 'accion-ver',
+        'label' => 'Acción — Ver',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/consolidado/CargaConsolidadaCompletadosView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Ver',
+          'icon' => 'i-heroicons-eye',
+          'color' => 'info',
+          'variant' => 'ghost',
+        ),
+      ),
+      3 => 
+      array (
+        'key' => 'accion-editar',
+        'label' => 'Acción — Editar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/consolidado/CargaConsolidadaCompletadosView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Editar',
+          'icon' => 'i-heroicons-pencil',
+          'color' => 'warning',
+          'variant' => 'ghost',
+        ),
+      ),
+      4 => 
+      array (
+        'key' => 'accion-eliminar',
+        'label' => 'Acción — Eliminar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/consolidado/CargaConsolidadaCompletadosView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Eliminar',
+          'icon' => 'i-heroicons-trash',
+          'color' => 'error',
+          'variant' => 'ghost',
+        ),
+      ),
+      5 => 
+      array (
+        'key' => 'accion-accion',
+        'label' => 'Acción — Acción',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/consolidado/CargaConsolidadaCompletadosView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Acción',
+          'icon' => 'i-heroicons-envelope',
+          'color' => 'primary',
+          'variant' => 'ghost',
+        ),
+      ),
+      6 => 
+      array (
+        'key' => 'toolbar-datatable',
+        'label' => 'Toolbar — Controles de tabla',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/consolidado/CargaConsolidadaCompletadosView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Exportar',
+              'icon' => 'i-heroicons-arrow-up-tray',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+            1 => 
+            array (
+              'label' => 'Filtros',
+              'icon' => 'i-heroicons-funnel',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+          ),
+        ),
+      ),
+      7 => 
+      array (
+        'key' => 'accion-exportar',
+        'label' => 'Acción — Exportar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/consolidado/CargaConsolidadaCompletadosView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Exportar',
+          'icon' => 'i-heroicons-arrow-up-tray',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
+      8 => 
+      array (
+        'key' => 'accion-filtros',
+        'label' => 'Acción — Filtros',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/consolidado/CargaConsolidadaCompletadosView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Filtros',
+          'icon' => 'i-heroicons-funnel',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
     ),
   ),
-  53 => 
+  107 => 
+  array (
+    'key' => 'cargaconsolidada.documentacion.completados.aduana.id',
+    'label' => 'Cargaconsolidada → Documentacion → Completados → Aduana → Id',
+    'page_path' => 'pages/cargaconsolidada/documentacion/completados/aduana/[id].vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'card-card-1',
+        'label' => 'Card — Card 1',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/consolidado/ConsolidadoAduanaView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 1',
+          'icon' => 'i-heroicons-cube-transparent',
+          'body' => '',
+          'fields' => 
+          array (
+            0 => 
+            array (
+              'key' => 'naviera',
+              'label' => 'Naviera',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            1 => 
+            array (
+              'key' => 'multa',
+              'label' => 'Multa',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            2 => 
+            array (
+              'key' => 'observaciones',
+              'label' => 'Observaciones',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            3 => 
+            array (
+              'key' => 'toneladas-contenedor',
+              'label' => 'Toneladas contenedor',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            4 => 
+            array (
+              'key' => 'fecha-levante',
+              'label' => 'Fecha levante',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            5 => 
+            array (
+              'key' => 'fecha-zarpe',
+              'label' => 'Fecha zarpe',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            6 => 
+            array (
+              'key' => 'numero-dua',
+              'label' => 'Número Dua',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            7 => 
+            array (
+              'key' => 'fecha-arribo',
+              'label' => 'Fecha arribo',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            8 => 
+            array (
+              'key' => 'valor-fob',
+              'label' => 'Valor FOB',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            9 => 
+            array (
+              'key' => 'doc-tributos-y-ajustes',
+              'label' => 'DOC. TRIBUTOS Y AJUSTES',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            10 => 
+            array (
+              'key' => 'fecha-declaracion',
+              'label' => 'Fecha declaración',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            11 => 
+            array (
+              'key' => 'valor-flete',
+              'label' => 'Valor flete',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            12 => 
+            array (
+              'key' => 'canal-de-control',
+              'label' => 'Canal de Control',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            13 => 
+            array (
+              'key' => 'costo-destino',
+              'label' => 'Costo destino',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            14 => 
+            array (
+              'key' => 'resumen-de-impuestos-pagados',
+              'label' => 'RESUMEN DE IMPUESTOS PAGADOS',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            15 => 
+            array (
+              'key' => 'ajuste-de-valor',
+              'label' => 'Ajuste de valor',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => '{{ aduanaData ? \'Actualizar\' : \'Guardar\' }}',
+              'icon' => NULL,
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+    ),
+  ),
+  108 => 
+  array (
+    'key' => 'cargaconsolidada.documentacion.completados.clientes.documentacion.id',
+    'label' => 'Cargaconsolidada → Documentacion → Completados → Clientes → Documentacion → Id',
+    'page_path' => 'pages/cargaconsolidada/documentacion/completados/clientes/documentacion/[id].vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'toolbar-acciones',
+        'label' => 'Toolbar — Acciones',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/clientes/ClientesDocumentacionView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Guardar cambios',
+              'icon' => 'i-heroicons-check',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+            1 => 
+            array (
+              'label' => 'Descargar Excel',
+              'icon' => 'i-heroicons-arrow-down-tray',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+            2 => 
+            array (
+              'label' => 'Guardar',
+              'icon' => 'i-heroicons-check',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      1 => 
+      array (
+        'key' => 'accion-guardar-cambios',
+        'label' => 'Acción — Guardar cambios',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/clientes/ClientesDocumentacionView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Guardar cambios',
+          'icon' => 'i-heroicons-check',
+          'color' => 'primary',
+          'variant' => 'solid',
+        ),
+      ),
+      2 => 
+      array (
+        'key' => 'accion-descargar-excel',
+        'label' => 'Acción — Descargar Excel',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/clientes/ClientesDocumentacionView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Descargar Excel',
+          'icon' => 'i-heroicons-arrow-down-tray',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
+      3 => 
+      array (
+        'key' => 'accion-guardar',
+        'label' => 'Acción — Guardar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/clientes/ClientesDocumentacionView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Guardar',
+          'icon' => 'i-heroicons-check',
+          'color' => 'primary',
+          'variant' => 'solid',
+        ),
+      ),
+      4 => 
+      array (
+        'key' => 'card-card-1',
+        'label' => 'Card — Card 1',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/clientes/ClientesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 1',
+          'icon' => NULL,
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      5 => 
+      array (
+        'key' => 'card-card-2',
+        'label' => 'Card — Card 2',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/clientes/ClientesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 2',
+          'icon' => NULL,
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      6 => 
+      array (
+        'key' => 'card-card-3',
+        'label' => 'Card — Card 3',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/clientes/ClientesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 3',
+          'icon' => NULL,
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      7 => 
+      array (
+        'key' => 'card-card-4',
+        'label' => 'Card — Card 4',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/clientes/ClientesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 4',
+          'icon' => NULL,
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      8 => 
+      array (
+        'key' => 'card-card-5',
+        'label' => 'Card — Card 5',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/clientes/ClientesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 5',
+          'icon' => 'i-heroicons-exclamation-triangle',
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      9 => 
+      array (
+        'key' => 'card-documentacion',
+        'label' => 'Card — Documentación  -',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/clientes/ClientesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Documentación  -',
+          'icon' => 'i-heroicons-folder',
+          'body' => '',
+          'fields' => 
+          array (
+            0 => 
+            array (
+              'key' => 'volumen-documento',
+              'label' => 'Volumen documento',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            1 => 
+            array (
+              'key' => 'valor-documento',
+              'label' => 'Valor documento',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            2 => 
+            array (
+              'key' => 'factura-comercial',
+              'label' => 'Factura Comercial',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            3 => 
+            array (
+              'key' => 'packing-list',
+              'label' => 'Packing List',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            4 => 
+            array (
+              'key' => 'excel-confirmacion',
+              'label' => 'Excel Confirmación',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Nuevo Documento',
+              'icon' => 'i-heroicons-plus',
+              'color' => 'warning',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      10 => 
+      array (
+        'key' => 'card-documentacion-china',
+        'label' => 'Card — Documentación China',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/clientes/ClientesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Documentación China',
+          'icon' => 'i-heroicons-folder',
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Guardar cambios',
+              'icon' => 'i-heroicons-check',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      11 => 
+      array (
+        'key' => 'card-inspeccion',
+        'label' => 'Card — Inspección',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/clientes/ClientesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Inspección',
+          'icon' => 'i-heroicons-folder',
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Guardar cambios',
+              'icon' => 'i-heroicons-check',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      12 => 
+      array (
+        'key' => 'card-card-9',
+        'label' => 'Card — Card 9',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/clientes/ClientesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 9',
+          'icon' => NULL,
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Descargar cotización inicial',
+              'icon' => 'i-heroicons-arrow-down-tray',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+            1 => 
+            array (
+              'label' => 'Descargar cotización final',
+              'icon' => 'i-heroicons-arrow-down-tray',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+          ),
+        ),
+      ),
+    ),
+  ),
+  109 => 
+  array (
+    'key' => 'cargaconsolidada.documentacion.completados.clientes.excel.confirmacion.uuid.guardado',
+    'label' => 'Cargaconsolidada → Documentacion → Completados → Clientes → Excel Confirmacion → Uuid → Guardado',
+    'page_path' => 'pages/cargaconsolidada/documentacion/completados/clientes/excel-confirmacion/[uuid]/guardado.vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'card-card-1',
+        'label' => 'Card — Card 1',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/clientes/ExcelConfirmacionGuardadoView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 1',
+          'icon' => 'i-heroicons-check-circle',
+          'body' => '{{ mensaje || \'La confirmación del cliente se actualizó correctamente.\' }}',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Volver a editar',
+              'icon' => 'i-heroicons-pencil-square',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+            1 => 
+            array (
+              'label' => 'Volver a clientes',
+              'icon' => 'i-heroicons-arrow-left',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+          ),
+        ),
+      ),
+    ),
+  ),
+  110 => 
   array (
     'key' => 'cargaconsolidada.documentacion.completados.clientes.id',
     'label' => 'Cargaconsolidada → Documentacion → Completados → Clientes → Id',
@@ -17043,35 +33234,143 @@ return array (
       ),
       4 => 
       array (
-        'key' => 'tabs-documentacion-documentacion',
-        'label' => 'Tabs — Documentación / Documentacion',
-        'tipo' => 'tabs',
+        'key' => 'toolbar-acciones-fila',
+        'label' => 'Toolbar — Acciones de fila',
+        'tipo' => 'toolbar',
         'component' => 'components/cargaconsolidada/clientes/ClientesView/index',
-        'api_hint' => NULL,
+        'api_hint' => 'column:acciones',
         'live_api' => NULL,
         'snapshot' => 
         array (
-          'active' => 'documentacion',
-          'tabs' => 
+          'buttons' => 
           array (
             0 => 
             array (
-              'key' => 'documentacion',
-              'label' => 'Documentación',
-              'content' => '',
+              'label' => 'Ver',
+              'icon' => 'i-heroicons-eye',
+              'color' => 'primary',
+              'variant' => 'ghost',
             ),
             1 => 
             array (
-              'key' => 'documentacion',
-              'label' => 'Documentacion',
-              'content' => '',
+              'label' => 'Acción',
+              'icon' => 'i-heroicons-document-text',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+            2 => 
+            array (
+              'label' => 'Eliminar',
+              'icon' => 'i-heroicons-trash',
+              'color' => 'error',
+              'variant' => 'ghost',
+            ),
+            3 => 
+            array (
+              'label' => 'Exportar',
+              'icon' => 'i-heroicons-arrow-up-tray',
+              'color' => 'primary',
+              'variant' => 'outline',
+            ),
+            4 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'iconamoon:menu-burger-horizontal',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+          ),
+        ),
+      ),
+      5 => 
+      array (
+        'key' => 'accion-ver',
+        'label' => 'Acción — Ver',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/clientes/ClientesView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Ver',
+          'icon' => 'i-heroicons-eye',
+          'color' => 'primary',
+          'variant' => 'ghost',
+        ),
+      ),
+      6 => 
+      array (
+        'key' => 'accion-accion',
+        'label' => 'Acción — Acción',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/clientes/ClientesView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Acción',
+          'icon' => 'i-heroicons-document-text',
+          'color' => 'primary',
+          'variant' => 'ghost',
+        ),
+      ),
+      7 => 
+      array (
+        'key' => 'accion-eliminar',
+        'label' => 'Acción — Eliminar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/clientes/ClientesView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Eliminar',
+          'icon' => 'i-heroicons-trash',
+          'color' => 'error',
+          'variant' => 'ghost',
+        ),
+      ),
+      8 => 
+      array (
+        'key' => 'accion-exportar',
+        'label' => 'Acción — Exportar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/clientes/ClientesView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Exportar',
+          'icon' => 'i-heroicons-arrow-up-tray',
+          'color' => 'primary',
+          'variant' => 'outline',
+        ),
+      ),
+      9 => 
+      array (
+        'key' => 'toolbar-datatable',
+        'label' => 'Toolbar — Controles de tabla',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/clientes/ClientesView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Exportar',
+              'icon' => 'i-heroicons-arrow-up-tray',
+              'color' => 'neutral',
+              'variant' => 'outline',
             ),
           ),
         ),
       ),
     ),
   ),
-  54 => 
+  111 => 
   array (
     'key' => 'cargaconsolidada.documentacion.completados.cotizacion.final.id',
     'label' => 'Cargaconsolidada → Documentacion → Completados → Cotizacion Final → Id',
@@ -17433,9 +33732,359 @@ return array (
           ),
         ),
       ),
+      4 => 
+      array (
+        'key' => 'toolbar-acciones-fila',
+        'label' => 'Toolbar — Acciones de fila',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/cotizacion-final/CotizacionFinalView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'vscode-icons:file-type-excel',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+            1 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'vscode-icons:file-type-pdf2',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+            2 => 
+            array (
+              'label' => 'Eliminar',
+              'icon' => 'i-heroicons-trash',
+              'color' => 'error',
+              'variant' => 'ghost',
+            ),
+            3 => 
+            array (
+              'label' => 'Exportar',
+              'icon' => 'i-heroicons-arrow-up-tray',
+              'color' => 'primary',
+              'variant' => 'outline',
+            ),
+            4 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'i-heroicons-arrow-trending-up',
+              'color' => 'info',
+              'variant' => 'ghost',
+            ),
+            5 => 
+            array (
+              'label' => 'Ver',
+              'icon' => 'i-heroicons-eye',
+              'color' => 'neutral',
+              'variant' => 'ghost',
+            ),
+          ),
+        ),
+      ),
+      5 => 
+      array (
+        'key' => 'accion-accion',
+        'label' => 'Acción — Acción',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizacion-final/CotizacionFinalView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Acción',
+          'icon' => 'vscode-icons:file-type-excel',
+          'color' => 'primary',
+          'variant' => 'ghost',
+        ),
+      ),
+      6 => 
+      array (
+        'key' => 'accion-eliminar',
+        'label' => 'Acción — Eliminar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizacion-final/CotizacionFinalView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Eliminar',
+          'icon' => 'i-heroicons-trash',
+          'color' => 'error',
+          'variant' => 'ghost',
+        ),
+      ),
+      7 => 
+      array (
+        'key' => 'accion-exportar',
+        'label' => 'Acción — Exportar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizacion-final/CotizacionFinalView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Exportar',
+          'icon' => 'i-heroicons-arrow-up-tray',
+          'color' => 'primary',
+          'variant' => 'outline',
+        ),
+      ),
+      8 => 
+      array (
+        'key' => 'accion-ver',
+        'label' => 'Acción — Ver',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizacion-final/CotizacionFinalView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Ver',
+          'icon' => 'i-heroicons-eye',
+          'color' => 'neutral',
+          'variant' => 'ghost',
+        ),
+      ),
+      9 => 
+      array (
+        'key' => 'toolbar-datatable',
+        'label' => 'Toolbar — Controles de tabla',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/cotizacion-final/CotizacionFinalView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Exportar',
+              'icon' => 'i-heroicons-arrow-up-tray',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+            1 => 
+            array (
+              'label' => 'Filtros',
+              'icon' => 'i-heroicons-funnel',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+            2 => 
+            array (
+              'label' => 'Buscar',
+              'icon' => 'i-heroicons-magnifying-glass',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+          ),
+        ),
+      ),
+      10 => 
+      array (
+        'key' => 'accion-filtros',
+        'label' => 'Acción — Filtros',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizacion-final/CotizacionFinalView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Filtros',
+          'icon' => 'i-heroicons-funnel',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
+      11 => 
+      array (
+        'key' => 'accion-buscar',
+        'label' => 'Acción — Buscar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizacion-final/CotizacionFinalView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Buscar',
+          'icon' => 'i-heroicons-magnifying-glass',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
     ),
   ),
-  55 => 
+  112 => 
+  array (
+    'key' => 'cargaconsolidada.documentacion.completados.cotizaciones.documentacion.id',
+    'label' => 'Cargaconsolidada → Documentacion → Completados → Cotizaciones → Documentacion → Id',
+    'page_path' => 'pages/cargaconsolidada/documentacion/completados/cotizaciones/documentacion/[id].vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'card-card-1',
+        'label' => 'Card — Card 1',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 1',
+          'icon' => NULL,
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      1 => 
+      array (
+        'key' => 'card-card-2',
+        'label' => 'Card — Card 2',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 2',
+          'icon' => NULL,
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      2 => 
+      array (
+        'key' => 'card-card-3',
+        'label' => 'Card — Card 3',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 3',
+          'icon' => 'i-heroicons-exclamation-triangle',
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      3 => 
+      array (
+        'key' => 'card-documentacion',
+        'label' => 'Card — Documentación —',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Documentación —',
+          'icon' => NULL,
+          'body' => 'Los cambios se aplican al hacer clic en «Guardar todo». Cada pestaña de proveedor tiene su propia documentación pendiente.',
+          'fields' => 
+          array (
+            0 => 
+            array (
+              'key' => 'tipolabel',
+              'label' => '{{ tipo.label }}',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            1 => 
+            array (
+              'key' => 'docfolder-name-doctipo-documento',
+              'label' => '{{ doc.folder_name || doc.tipo_documento }}',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            2 => 
+            array (
+              'key' => 'documentos-nuevos-pendientes-de-guardar',
+              'label' => 'Documentos nuevos (pendientes de guardar)',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Nuevo documento',
+              'icon' => 'i-heroicons-plus',
+              'color' => 'warning',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      4 => 
+      array (
+        'key' => 'card-imagenes',
+        'label' => 'Card — Imágenes —',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Imágenes —',
+          'icon' => NULL,
+          'body' => '',
+          'fields' => 
+          array (
+            0 => 
+            array (
+              'key' => 'agregar-imagenes-multiple',
+              'label' => 'Agregar imágenes (múltiple)',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+    ),
+  ),
+  113 => 
   array (
     'key' => 'cargaconsolidada.documentacion.completados.cotizaciones.id',
     'label' => 'Cargaconsolidada → Documentacion → Completados → Cotizaciones → Id',
@@ -18767,9 +35416,924 @@ return array (
           ),
         ),
       ),
+      8 => 
+      array (
+        'key' => 'toolbar-acciones',
+        'label' => 'Toolbar — Acciones',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Crear Prospecto',
+              'icon' => 'i-heroicons-plus',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      9 => 
+      array (
+        'key' => 'accion-crear-prospecto',
+        'label' => 'Acción — Crear Prospecto',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Crear Prospecto',
+          'icon' => 'i-heroicons-plus',
+          'color' => 'primary',
+          'variant' => 'solid',
+        ),
+      ),
+      10 => 
+      array (
+        'key' => 'toolbar-acciones-2',
+        'label' => 'Toolbar — Acciones 2',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Upload',
+              'icon' => 'i-heroicons-arrow-up-tray',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+            1 => 
+            array (
+              'label' => 'Packing List',
+              'icon' => 'i-heroicons-arrow-up-tray',
+              'color' => 'secondary',
+              'variant' => 'ghost',
+            ),
+            2 => 
+            array (
+              'label' => 'Eliminar',
+              'icon' => 'i-heroicons-trash',
+              'color' => 'error',
+              'variant' => 'ghost',
+            ),
+            3 => 
+            array (
+              'label' => 'Crear Prospecto',
+              'icon' => 'i-heroicons-plus',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+            4 => 
+            array (
+              'label' => 'Descargar Embarque',
+              'icon' => 'i-heroicons-arrow-down-tray',
+              'color' => 'success',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      11 => 
+      array (
+        'key' => 'accion-upload',
+        'label' => 'Acción — Upload',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Upload',
+          'icon' => 'i-heroicons-arrow-up-tray',
+          'color' => 'primary',
+          'variant' => 'solid',
+        ),
+      ),
+      12 => 
+      array (
+        'key' => 'accion-packing-list',
+        'label' => 'Acción — Packing List',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Packing List',
+          'icon' => 'i-heroicons-arrow-up-tray',
+          'color' => 'secondary',
+          'variant' => 'ghost',
+        ),
+      ),
+      13 => 
+      array (
+        'key' => 'accion-eliminar',
+        'label' => 'Acción — Eliminar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Eliminar',
+          'icon' => 'i-heroicons-trash',
+          'color' => 'error',
+          'variant' => 'ghost',
+        ),
+      ),
+      14 => 
+      array (
+        'key' => 'accion-descargar-embarque',
+        'label' => 'Acción — Descargar Embarque',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Descargar Embarque',
+          'icon' => 'i-heroicons-arrow-down-tray',
+          'color' => 'success',
+          'variant' => 'solid',
+        ),
+      ),
+      15 => 
+      array (
+        'key' => 'toolbar-acciones-fila',
+        'label' => 'Toolbar — Acciones de fila',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Exportar',
+              'icon' => 'i-heroicons-arrow-up-tray',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+            1 => 
+            array (
+              'label' => 'Eliminar',
+              'icon' => 'i-heroicons-trash',
+              'color' => 'error',
+              'variant' => 'ghost',
+            ),
+            2 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'i-heroicons-document-text',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+            3 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'i-heroicons-document-duplicate',
+              'color' => 'info',
+              'variant' => 'ghost',
+            ),
+            4 => 
+            array (
+              'label' => 'Ver',
+              'icon' => 'i-heroicons-eye',
+              'color' => 'info',
+              'variant' => 'ghost',
+            ),
+            5 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'i-heroicons-arrow-path',
+              'color' => 'secondary',
+              'variant' => 'ghost',
+            ),
+            6 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'i-heroicons-arrow-right',
+              'color' => 'info',
+              'variant' => 'ghost',
+            ),
+            7 => 
+            array (
+              'label' => 'Guardar',
+              'icon' => 'material-symbols:save-sharp',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+            8 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'iconamoon:menu-burger-horizontal',
+              'color' => 'success',
+              'variant' => 'ghost',
+            ),
+            9 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'material-symbols:send-outline',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+          ),
+        ),
+      ),
+      16 => 
+      array (
+        'key' => 'accion-exportar',
+        'label' => 'Acción — Exportar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Exportar',
+          'icon' => 'i-heroicons-arrow-up-tray',
+          'color' => 'primary',
+          'variant' => 'ghost',
+        ),
+      ),
+      17 => 
+      array (
+        'key' => 'accion-accion',
+        'label' => 'Acción — Acción',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Acción',
+          'icon' => 'i-heroicons-document-text',
+          'color' => 'primary',
+          'variant' => 'ghost',
+        ),
+      ),
+      18 => 
+      array (
+        'key' => 'accion-ver',
+        'label' => 'Acción — Ver',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Ver',
+          'icon' => 'i-heroicons-eye',
+          'color' => 'info',
+          'variant' => 'ghost',
+        ),
+      ),
+      19 => 
+      array (
+        'key' => 'accion-guardar',
+        'label' => 'Acción — Guardar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Guardar',
+          'icon' => 'material-symbols:save-sharp',
+          'color' => 'primary',
+          'variant' => 'ghost',
+        ),
+      ),
+      20 => 
+      array (
+        'key' => 'toolbar-datatable',
+        'label' => 'Toolbar — Controles de tabla',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Exportar',
+              'icon' => 'i-heroicons-arrow-up-tray',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+            1 => 
+            array (
+              'label' => 'Filtros',
+              'icon' => 'i-heroicons-funnel',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+          ),
+        ),
+      ),
+      21 => 
+      array (
+        'key' => 'accion-filtros',
+        'label' => 'Acción — Filtros',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Filtros',
+          'icon' => 'i-heroicons-funnel',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
     ),
   ),
-  56 => 
+  114 => 
+  array (
+    'key' => 'cargaconsolidada.documentacion.completados.cotizaciones.proveedor.documentacion.china.id',
+    'label' => 'Cargaconsolidada → Documentacion → Completados → Cotizaciones → Proveedor → Documentacion China → Id',
+    'page_path' => 'pages/cargaconsolidada/documentacion/completados/cotizaciones/proveedor/documentacion-china/[id].vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'toolbar-acciones',
+        'label' => 'Toolbar — Acciones',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesProveedorDocumentacionChinaView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Guardar',
+              'icon' => 'material-symbols:save',
+              'color' => 'warning',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      1 => 
+      array (
+        'key' => 'accion-guardar',
+        'label' => 'Acción — Guardar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesProveedorDocumentacionChinaView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Guardar',
+          'icon' => 'material-symbols:save',
+          'color' => 'warning',
+          'variant' => 'solid',
+        ),
+      ),
+    ),
+  ),
+  115 => 
+  array (
+    'key' => 'cargaconsolidada.documentacion.completados.cotizaciones.proveedor.documentacion.id',
+    'label' => 'Cargaconsolidada → Documentacion → Completados → Cotizaciones → Proveedor → Documentacion → Id',
+    'page_path' => 'pages/cargaconsolidada/documentacion/completados/cotizaciones/proveedor/documentacion/[id].vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'toolbar-acciones',
+        'label' => 'Toolbar — Acciones',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesProveedorDocumentacionView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Guardar',
+              'icon' => 'material-symbols:save',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      1 => 
+      array (
+        'key' => 'accion-guardar',
+        'label' => 'Acción — Guardar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/cotizaciones/CotizacionesProveedorDocumentacionView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Guardar',
+          'icon' => 'material-symbols:save',
+          'color' => 'primary',
+          'variant' => 'solid',
+        ),
+      ),
+    ),
+  ),
+  116 => 
+  array (
+    'key' => 'cargaconsolidada.documentacion.completados.documentacion.id',
+    'label' => 'Cargaconsolidada → Documentacion → Completados → Documentacion → Id',
+    'page_path' => 'pages/cargaconsolidada/documentacion/completados/documentacion/[id].vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'card-card-1',
+        'label' => 'Card — Card 1',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/consolidado/ConsolidadoDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 1',
+          'icon' => 'i-heroicons-exclamation-triangle',
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      1 => 
+      array (
+        'key' => 'card-card-2',
+        'label' => 'Card — Card 2',
+        'tipo' => 'card',
+        'component' => 'components/cargaconsolidada/consolidado/ConsolidadoDocumentacionView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 2',
+          'icon' => 'i-heroicons-folder',
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+    ),
+  ),
+  117 => 
+  array (
+    'key' => 'cargaconsolidada.documentacion.completados.entrega.clientes.id',
+    'label' => 'Cargaconsolidada → Documentacion → Completados → Entrega → Clientes → Id',
+    'page_path' => 'pages/cargaconsolidada/documentacion/completados/entrega/clientes/[id].vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'toolbar-acciones',
+        'label' => 'Toolbar — Acciones',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/entrega/EntregaClientesView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Editar',
+              'icon' => 'i-heroicons-pencil-square',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      1 => 
+      array (
+        'key' => 'accion-editar',
+        'label' => 'Acción — Editar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/entrega/EntregaClientesView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Editar',
+          'icon' => 'i-heroicons-pencil-square',
+          'color' => 'primary',
+          'variant' => 'solid',
+        ),
+      ),
+    ),
+  ),
+  118 => 
+  array (
+    'key' => 'cargaconsolidada.documentacion.completados.entrega.fechas.horarios.id',
+    'label' => 'Cargaconsolidada → Documentacion → Completados → Entrega → Fechas Horarios → Id',
+    'page_path' => 'pages/cargaconsolidada/documentacion/completados/entrega/fechas-horarios/[id].vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'card-card-1',
+        'label' => 'Card — Card 1',
+        'tipo' => 'card',
+        'component' => 'components/admin/HorariosAdmin',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 1',
+          'icon' => NULL,
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Nuevo Horario ({{ selectedDates.length }})',
+              'icon' => 'i-heroicons-plus',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+            1 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'i-heroicons-chevron-left',
+              'color' => 'neutral',
+              'variant' => 'ghost',
+            ),
+            2 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'i-heroicons-chevron-right',
+              'color' => 'neutral',
+              'variant' => 'ghost',
+            ),
+          ),
+        ),
+      ),
+      1 => 
+      array (
+        'key' => 'card-fechas-seleccionadas',
+        'label' => 'Card — Fechas Seleccionadas',
+        'tipo' => 'card',
+        'component' => 'components/admin/HorariosAdmin',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Fechas Seleccionadas',
+          'icon' => 'i-heroicons-x-mark',
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      2 => 
+      array (
+        'key' => 'card-card-3',
+        'label' => 'Card — Card 3',
+        'tipo' => 'card',
+        'component' => 'components/admin/HorariosAdmin',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 3',
+          'icon' => 'i-heroicons-clock',
+          'body' => 'No hay horarios configurados',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Editar',
+              'icon' => 'i-heroicons-pencil-square',
+              'color' => 'neutral',
+              'variant' => 'ghost',
+            ),
+            1 => 
+            array (
+              'label' => 'Eliminar',
+              'icon' => 'i-heroicons-trash',
+              'color' => 'error',
+              'variant' => 'ghost',
+            ),
+            2 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'isGroupOpen(schedule.id, timeSlotGroup.id) ? \'i-heroicons-arrow-up\' : \'i-heroicons-arrow-down\'',
+              'color' => 'neutral',
+              'variant' => 'ghost',
+            ),
+            3 => 
+            array (
+              'label' => 'Ocultar/Mostrar ({{ selectedTimeSlotIds.length }})',
+              'icon' => NULL,
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      3 => 
+      array (
+        'key' => 'filtros-filterconfig',
+        'label' => 'Filtros — General',
+        'tipo' => 'filtros',
+        'component' => 'composables/cargaconsolidada/entrega/useEntrega.ts',
+        'api_hint' => 'filterConfig',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'fields' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Fecha inicio',
+              'key' => 'fecha_inicio',
+              'type' => 'date',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            1 => 
+            array (
+              'label' => 'Fecha fin',
+              'key' => 'fecha_fin',
+              'type' => 'date',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            2 => 
+            array (
+              'label' => 'Tipo de entrega',
+              'key' => 'tipo_entrega',
+              'type' => 'select',
+              'value' => 'todos',
+              'options' => 
+              array (
+                0 => 
+                array (
+                  'label' => 'Todos',
+                  'value' => 'todos',
+                ),
+                1 => 
+                array (
+                  'label' => 'Lima',
+                  'value' => 'Lima',
+                ),
+                2 => 
+                array (
+                  'label' => 'Provincia',
+                  'value' => 'Provincia',
+                ),
+              ),
+            ),
+            3 => 
+            array (
+              'label' => 'Tipo de servicio',
+              'key' => 'tipo_servicio',
+              'type' => 'select',
+              'value' => 'todos',
+              'options' => 
+              array (
+                0 => 
+                array (
+                  'label' => 'Todos',
+                  'value' => 'todos',
+                ),
+                1 => 
+                array (
+                  'label' => 'Delivery',
+                  'value' => 'DELIVERY',
+                ),
+                2 => 
+                array (
+                  'label' => 'Montacarga',
+                  'value' => 'MONTACARGA',
+                ),
+              ),
+            ),
+            4 => 
+            array (
+              'label' => 'Estado de entrega',
+              'key' => 'estado_entrega',
+              'type' => 'select',
+              'value' => 'todos',
+              'options' => 
+              array (
+                0 => 
+                array (
+                  'label' => 'Todos',
+                  'value' => 'todos',
+                ),
+                1 => 
+                array (
+                  'label' => 'Pendiente',
+                  'value' => 'PENDIENTE',
+                ),
+                2 => 
+                array (
+                  'label' => 'Entregado',
+                  'value' => 'ENTREGADO',
+                ),
+              ),
+            ),
+            5 => 
+            array (
+              'label' => 'Registrado',
+              'key' => 'registrado',
+              'type' => 'select',
+              'value' => 'todos',
+              'options' => 
+              array (
+                0 => 
+                array (
+                  'label' => 'Todos',
+                  'value' => 'todos',
+                ),
+                1 => 
+                array (
+                  'label' => 'Si',
+                  'value' => 'Si',
+                ),
+                2 => 
+                array (
+                  'label' => 'No',
+                  'value' => 'No',
+                ),
+              ),
+            ),
+            6 => 
+            array (
+              'label' => 'Entregado',
+              'key' => 'entregado',
+              'type' => 'select',
+              'value' => 'todos',
+              'options' => 
+              array (
+                0 => 
+                array (
+                  'label' => 'Todos',
+                  'value' => 'todos',
+                ),
+                1 => 
+                array (
+                  'label' => 'Si',
+                  'value' => 'Si',
+                ),
+                2 => 
+                array (
+                  'label' => 'No',
+                  'value' => 'No',
+                ),
+              ),
+            ),
+            7 => 
+            array (
+              'label' => 'Estado',
+              'key' => 'estado',
+              'type' => 'select',
+              'value' => 'todos',
+              'options' => 
+              array (
+                0 => 
+                array (
+                  'label' => 'Todos',
+                  'value' => 'todos',
+                ),
+                1 => 
+                array (
+                  'label' => 'Pagado',
+                  'value' => 'Pagado',
+                ),
+                2 => 
+                array (
+                  'label' => 'Pendiente',
+                  'value' => 'Pendiente',
+                ),
+              ),
+            ),
+            8 => 
+            array (
+              'label' => 'Fecha inicio',
+              'key' => 'fecha_inicio',
+              'type' => 'date',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            9 => 
+            array (
+              'label' => 'Fecha fin',
+              'key' => 'fecha_fin',
+              'type' => 'date',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            10 => 
+            array (
+              'label' => 'Tipo de entrega',
+              'key' => 'tipo_entrega',
+              'type' => 'select',
+              'value' => 'todos',
+              'options' => 
+              array (
+                0 => 
+                array (
+                  'label' => 'Todos',
+                  'value' => 'todos',
+                ),
+                1 => 
+                array (
+                  'label' => 'Lima',
+                  'value' => 'LIMA',
+                ),
+                2 => 
+                array (
+                  'label' => 'Provincia',
+                  'value' => 'PROVINCIA',
+                ),
+              ),
+            ),
+            11 => 
+            array (
+              'label' => 'Tipo de servicio',
+              'key' => 'tipo_servicio',
+              'type' => 'select',
+              'value' => 'todos',
+              'options' => 
+              array (
+                0 => 
+                array (
+                  'label' => 'Todos',
+                  'value' => 'todos',
+                ),
+                1 => 
+                array (
+                  'label' => 'Delivery',
+                  'value' => 'DELIVERY',
+                ),
+                2 => 
+                array (
+                  'label' => 'Montacarga',
+                  'value' => 'MONTACARGA',
+                ),
+              ),
+            ),
+          ),
+          'live_api' => NULL,
+        ),
+      ),
+    ),
+  ),
+  119 => 
   array (
     'key' => 'cargaconsolidada.documentacion.completados.entrega.id',
     'label' => 'Cargaconsolidada → Documentacion → Completados → Entrega → Id',
@@ -19022,9 +36586,279 @@ return array (
           'live_api' => NULL,
         ),
       ),
+      3 => 
+      array (
+        'key' => 'tabs-clientes-entregas-delivery',
+        'label' => 'Tabs — Clientes / Entregas / Delivery',
+        'tipo' => 'tabs',
+        'component' => 'components/cargaconsolidada/entrega/EntregaView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'active' => 'clientes',
+          'tabs' => 
+          array (
+            0 => 
+            array (
+              'key' => 'clientes',
+              'label' => 'Clientes',
+              'content' => '',
+            ),
+            1 => 
+            array (
+              'key' => 'entregas',
+              'label' => 'Entregas',
+              'content' => '',
+            ),
+            2 => 
+            array (
+              'key' => 'delivery',
+              'label' => 'Delivery',
+              'content' => '',
+            ),
+          ),
+        ),
+      ),
+      4 => 
+      array (
+        'key' => 'toolbar-acciones',
+        'label' => 'Toolbar — Acciones',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/entrega/EntregaView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Fechas y Horarios',
+              'icon' => 'i-heroicons-calendar',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      5 => 
+      array (
+        'key' => 'accion-fechas-y-horarios',
+        'label' => 'Acción — Fechas y Horarios',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/entrega/EntregaView/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Fechas y Horarios',
+          'icon' => 'i-heroicons-calendar',
+          'color' => 'primary',
+          'variant' => 'solid',
+        ),
+      ),
+      6 => 
+      array (
+        'key' => 'toolbar-acciones-fila',
+        'label' => 'Toolbar — Acciones de fila',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/entrega/EntregaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Editar',
+              'icon' => 'i-heroicons-pencil-square',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+            1 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'iconamoon:menu-burger-horizontal',
+              'color' => 'neutral',
+              'variant' => 'ghost',
+            ),
+            2 => 
+            array (
+              'label' => 'Ver',
+              'icon' => 'i-heroicons-eye',
+              'color' => 'neutral',
+              'variant' => 'ghost',
+            ),
+            3 => 
+            array (
+              'label' => 'Eliminar',
+              'icon' => 'i-heroicons-trash',
+              'color' => 'error',
+              'variant' => 'ghost',
+            ),
+            4 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'i-heroicons-paper-airplane',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+          ),
+        ),
+      ),
+      7 => 
+      array (
+        'key' => 'accion-editar',
+        'label' => 'Acción — Editar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/entrega/EntregaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Editar',
+          'icon' => 'i-heroicons-pencil-square',
+          'color' => 'primary',
+          'variant' => 'ghost',
+        ),
+      ),
+      8 => 
+      array (
+        'key' => 'accion-accion',
+        'label' => 'Acción — Acción',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/entrega/EntregaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Acción',
+          'icon' => 'iconamoon:menu-burger-horizontal',
+          'color' => 'neutral',
+          'variant' => 'ghost',
+        ),
+      ),
+      9 => 
+      array (
+        'key' => 'accion-ver',
+        'label' => 'Acción — Ver',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/entrega/EntregaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Ver',
+          'icon' => 'i-heroicons-eye',
+          'color' => 'neutral',
+          'variant' => 'ghost',
+        ),
+      ),
+      10 => 
+      array (
+        'key' => 'accion-eliminar',
+        'label' => 'Acción — Eliminar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/entrega/EntregaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Eliminar',
+          'icon' => 'i-heroicons-trash',
+          'color' => 'error',
+          'variant' => 'ghost',
+        ),
+      ),
+      11 => 
+      array (
+        'key' => 'toolbar-datatable',
+        'label' => 'Toolbar — Controles de tabla',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/entrega/EntregaView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Exportar',
+              'icon' => 'i-heroicons-arrow-up-tray',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+            1 => 
+            array (
+              'label' => 'Filtros',
+              'icon' => 'i-heroicons-funnel',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+            2 => 
+            array (
+              'label' => 'Buscar',
+              'icon' => 'i-heroicons-magnifying-glass',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+          ),
+        ),
+      ),
+      12 => 
+      array (
+        'key' => 'accion-exportar',
+        'label' => 'Acción — Exportar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/entrega/EntregaView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Exportar',
+          'icon' => 'i-heroicons-arrow-up-tray',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
+      13 => 
+      array (
+        'key' => 'accion-filtros',
+        'label' => 'Acción — Filtros',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/entrega/EntregaView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Filtros',
+          'icon' => 'i-heroicons-funnel',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
+      14 => 
+      array (
+        'key' => 'accion-buscar',
+        'label' => 'Acción — Buscar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/entrega/EntregaView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Buscar',
+          'icon' => 'i-heroicons-magnifying-glass',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
     ),
   ),
-  57 => 
+  120 => 
   array (
     'key' => 'cargaconsolidada.documentacion.completados.factura.guia.id',
     'label' => 'Cargaconsolidada → Documentacion → Completados → Factura Guia → Id',
@@ -19163,9 +36997,654 @@ return array (
           ),
         ),
       ),
+      2 => 
+      array (
+        'key' => 'toolbar-acciones-fila',
+        'label' => 'Toolbar — Acciones de fila',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/factura-guia/FacturaGuiaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'vscode-icons:file-type-excel',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+            1 => 
+            array (
+              'label' => 'Descargar',
+              'icon' => 'i-heroicons-arrow-down-tray',
+              'color' => 'primary',
+              'variant' => 'outline',
+            ),
+            2 => 
+            array (
+              'label' => 'Eliminar',
+              'icon' => 'i-heroicons-trash',
+              'color' => 'error',
+              'variant' => 'outline',
+            ),
+            3 => 
+            array (
+              'label' => 'Exportar',
+              'icon' => 'i-heroicons-arrow-up-tray',
+              'color' => 'primary',
+              'variant' => 'outline',
+            ),
+            4 => 
+            array (
+              'label' => 'Mensaje',
+              'icon' => 'i-heroicons-chat-bubble-left-right',
+              'color' => 'success',
+              'variant' => 'ghost',
+            ),
+            5 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'iconamoon:menu-burger-horizontal',
+              'color' => 'success',
+              'variant' => 'ghost',
+            ),
+            6 => 
+            array (
+              'label' => 'Ver',
+              'icon' => 'i-heroicons-eye',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+            7 => 
+            array (
+              'label' => 'Editar',
+              'icon' => 'i-heroicons-pencil-square',
+              'color' => 'neutral',
+              'variant' => 'ghost',
+            ),
+          ),
+        ),
+      ),
+      3 => 
+      array (
+        'key' => 'accion-accion',
+        'label' => 'Acción — Acción',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/factura-guia/FacturaGuiaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Acción',
+          'icon' => 'vscode-icons:file-type-excel',
+          'color' => 'primary',
+          'variant' => 'ghost',
+        ),
+      ),
+      4 => 
+      array (
+        'key' => 'accion-descargar',
+        'label' => 'Acción — Descargar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/factura-guia/FacturaGuiaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Descargar',
+          'icon' => 'i-heroicons-arrow-down-tray',
+          'color' => 'primary',
+          'variant' => 'outline',
+        ),
+      ),
+      5 => 
+      array (
+        'key' => 'accion-eliminar',
+        'label' => 'Acción — Eliminar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/factura-guia/FacturaGuiaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Eliminar',
+          'icon' => 'i-heroicons-trash',
+          'color' => 'error',
+          'variant' => 'outline',
+        ),
+      ),
+      6 => 
+      array (
+        'key' => 'accion-exportar',
+        'label' => 'Acción — Exportar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/factura-guia/FacturaGuiaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Exportar',
+          'icon' => 'i-heroicons-arrow-up-tray',
+          'color' => 'primary',
+          'variant' => 'outline',
+        ),
+      ),
+      7 => 
+      array (
+        'key' => 'accion-mensaje',
+        'label' => 'Acción — Mensaje',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/factura-guia/FacturaGuiaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Mensaje',
+          'icon' => 'i-heroicons-chat-bubble-left-right',
+          'color' => 'success',
+          'variant' => 'ghost',
+        ),
+      ),
+      8 => 
+      array (
+        'key' => 'accion-ver',
+        'label' => 'Acción — Ver',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/factura-guia/FacturaGuiaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Ver',
+          'icon' => 'i-heroicons-eye',
+          'color' => 'primary',
+          'variant' => 'ghost',
+        ),
+      ),
+      9 => 
+      array (
+        'key' => 'accion-editar',
+        'label' => 'Acción — Editar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/factura-guia/FacturaGuiaView/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Editar',
+          'icon' => 'i-heroicons-pencil-square',
+          'color' => 'neutral',
+          'variant' => 'ghost',
+        ),
+      ),
+      10 => 
+      array (
+        'key' => 'toolbar-datatable',
+        'label' => 'Toolbar — Controles de tabla',
+        'tipo' => 'toolbar',
+        'component' => 'components/cargaconsolidada/factura-guia/FacturaGuiaView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Filtros',
+              'icon' => 'i-heroicons-funnel',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+            1 => 
+            array (
+              'label' => 'Buscar',
+              'icon' => 'i-heroicons-magnifying-glass',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+          ),
+        ),
+      ),
+      11 => 
+      array (
+        'key' => 'accion-filtros',
+        'label' => 'Acción — Filtros',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/factura-guia/FacturaGuiaView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Filtros',
+          'icon' => 'i-heroicons-funnel',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
+      12 => 
+      array (
+        'key' => 'accion-buscar',
+        'label' => 'Acción — Buscar',
+        'tipo' => 'accion',
+        'component' => 'components/cargaconsolidada/factura-guia/FacturaGuiaView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Buscar',
+          'icon' => 'i-heroicons-magnifying-glass',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
     ),
   ),
-  58 => 
+  121 => 
+  array (
+    'key' => 'coordinacion.whatsapp.inbox.conversation',
+    'label' => 'Coordinacion → Whatsapp Inbox → Conversation',
+    'page_path' => 'pages/coordinacion/whatsapp-inbox/[[conversation]].vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'card-card-1',
+        'label' => 'Card — Card 1',
+        'tipo' => 'card',
+        'component' => 'components/whatsapp-inbox/WhatsappInboxView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 1',
+          'icon' => NULL,
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      1 => 
+      array (
+        'key' => 'card-card-2',
+        'label' => 'Card — Card 2',
+        'tipo' => 'card',
+        'component' => 'components/whatsapp-inbox/WhatsappInboxView/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 2',
+          'icon' => NULL,
+          'body' => 'Cargando…',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Nuevo contacto',
+              'icon' => 'i-heroicons-user-plus',
+              'color' => 'primary',
+              'variant' => 'soft',
+            ),
+            1 => 
+            array (
+              'label' => 'f.label',
+              'icon' => NULL,
+              'color' => 'filter === f.value ? \'primary\' : \'neutral\'',
+              'variant' => 'filter === f.value ? \'solid\' : \'ghost\'',
+            ),
+          ),
+        ),
+      ),
+    ),
+  ),
+  122 => 
+  array (
+    'key' => 'copiloto',
+    'label' => 'Copiloto',
+    'page_path' => 'pages/copiloto/index.vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'card-card-1',
+        'label' => 'Card — Card 1',
+        'tipo' => 'card',
+        'component' => 'pages/copiloto/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 1',
+          'icon' => NULL,
+          'body' => 'No tienes acceso a Copiloto IA.',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Ir al inicio',
+              'icon' => NULL,
+              'color' => 'primary',
+              'variant' => 'soft',
+            ),
+          ),
+        ),
+      ),
+      1 => 
+      array (
+        'key' => 'toolbar-datatable',
+        'label' => 'Toolbar — Controles de tabla',
+        'tipo' => 'toolbar',
+        'component' => 'components/copiloto/CopilotoCotizadorView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Nuevo',
+              'icon' => 'i-heroicons-plus',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      2 => 
+      array (
+        'key' => 'accion-nuevo',
+        'label' => 'Acción — Nuevo',
+        'tipo' => 'accion',
+        'component' => 'components/copiloto/CopilotoCotizadorView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Nuevo',
+          'icon' => 'i-heroicons-plus',
+          'color' => 'primary',
+          'variant' => 'solid',
+        ),
+      ),
+    ),
+  ),
+  123 => 
+  array (
+    'key' => 'copiloto.equipo',
+    'label' => 'Copiloto → Equipo',
+    'page_path' => 'pages/copiloto/equipo/index.vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'card-card-1',
+        'label' => 'Card — Card 1',
+        'tipo' => 'card',
+        'component' => 'pages/copiloto/equipo/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 1',
+          'icon' => NULL,
+          'body' => 'Solo el jefe de ventas puede ver esta vista.',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Ir al inicio',
+              'icon' => NULL,
+              'color' => 'primary',
+              'variant' => 'soft',
+            ),
+          ),
+        ),
+      ),
+    ),
+  ),
+  124 => 
+  array (
+    'key' => 'copiloto.equipo.id',
+    'label' => 'Copiloto → Equipo → Id',
+    'page_path' => 'pages/copiloto/equipo/[id].vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'card-card-1',
+        'label' => 'Card — Card 1',
+        'tipo' => 'card',
+        'component' => 'pages/copiloto/equipo/[id]',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 1',
+          'icon' => NULL,
+          'body' => 'Solo el jefe de ventas puede ver esta vista.',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Ir al inicio',
+              'icon' => NULL,
+              'color' => 'primary',
+              'variant' => 'soft',
+            ),
+          ),
+        ),
+      ),
+    ),
+  ),
+  125 => 
+  array (
+    'key' => 'copiloto.equipo.pipeline',
+    'label' => 'Copiloto → Equipo → Pipeline',
+    'page_path' => 'pages/copiloto/equipo/pipeline.vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'card-card-1',
+        'label' => 'Card — Card 1',
+        'tipo' => 'card',
+        'component' => 'pages/copiloto/equipo/pipeline',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 1',
+          'icon' => NULL,
+          'body' => 'Solo el jefe de ventas puede ver esta vista.',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Ir al inicio',
+              'icon' => NULL,
+              'color' => 'primary',
+              'variant' => 'soft',
+            ),
+          ),
+        ),
+      ),
+    ),
+  ),
+  126 => 
+  array (
+    'key' => 'copiloto.id',
+    'label' => 'Copiloto → Id',
+    'page_path' => 'pages/copiloto/[id].vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'card-card-1',
+        'label' => 'Card — Card 1',
+        'tipo' => 'card',
+        'component' => 'pages/copiloto/[id]',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 1',
+          'icon' => NULL,
+          'body' => 'No tienes acceso a Copiloto IA.',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Ir al inicio',
+              'icon' => NULL,
+              'color' => 'primary',
+              'variant' => 'soft',
+            ),
+          ),
+        ),
+      ),
+      1 => 
+      array (
+        'key' => 'toolbar-datatable',
+        'label' => 'Toolbar — Controles de tabla',
+        'tipo' => 'toolbar',
+        'component' => 'components/copiloto/CopilotoCotizadorView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Nuevo',
+              'icon' => 'i-heroicons-plus',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      2 => 
+      array (
+        'key' => 'accion-nuevo',
+        'label' => 'Acción — Nuevo',
+        'tipo' => 'accion',
+        'component' => 'components/copiloto/CopilotoCotizadorView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Nuevo',
+          'icon' => 'i-heroicons-plus',
+          'color' => 'primary',
+          'variant' => 'solid',
+        ),
+      ),
+    ),
+  ),
+  127 => 
+  array (
+    'key' => 'copiloto.pipeline',
+    'label' => 'Copiloto → Pipeline',
+    'page_path' => 'pages/copiloto/pipeline.vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'card-card-1',
+        'label' => 'Card — Card 1',
+        'tipo' => 'card',
+        'component' => 'pages/copiloto/pipeline',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 1',
+          'icon' => NULL,
+          'body' => 'No tienes acceso a Copiloto IA.',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Ir al inicio',
+              'icon' => NULL,
+              'color' => 'primary',
+              'variant' => 'soft',
+            ),
+          ),
+        ),
+      ),
+      1 => 
+      array (
+        'key' => 'toolbar-datatable',
+        'label' => 'Toolbar — Controles de tabla',
+        'tipo' => 'toolbar',
+        'component' => 'components/copiloto/CopilotoCotizadorView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Nuevo',
+              'icon' => 'i-heroicons-plus',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      2 => 
+      array (
+        'key' => 'accion-nuevo',
+        'label' => 'Acción — Nuevo',
+        'tipo' => 'accion',
+        'component' => 'components/copiloto/CopilotoCotizadorView/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Nuevo',
+          'icon' => 'i-heroicons-plus',
+          'color' => 'primary',
+          'variant' => 'solid',
+        ),
+      ),
+    ),
+  ),
+  128 => 
   array (
     'key' => 'cotizaciones',
     'label' => 'Cotizaciones',
@@ -19276,9 +37755,817 @@ return array (
           ),
         ),
       ),
+      1 => 
+      array (
+        'key' => 'toolbar-acciones',
+        'label' => 'Toolbar — Acciones',
+        'tipo' => 'toolbar',
+        'component' => 'pages/cotizaciones/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Gestionar tarifas de calculadora',
+              'icon' => 'i-heroicons-calculator',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+          ),
+        ),
+      ),
+      2 => 
+      array (
+        'key' => 'accion-gestionar-tarifas-de-calculadora',
+        'label' => 'Acción — Gestionar tarifas de calculadora',
+        'tipo' => 'accion',
+        'component' => 'pages/cotizaciones/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Gestionar tarifas de calculadora',
+          'icon' => 'i-heroicons-calculator',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
+      3 => 
+      array (
+        'key' => 'toolbar-acciones-fila',
+        'label' => 'Toolbar — Acciones de fila',
+        'tipo' => 'toolbar',
+        'component' => 'pages/cotizaciones/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'vscode-icons:file-type-excel',
+              'color' => 'success',
+              'variant' => 'ghost',
+            ),
+            1 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'vscode-icons:file-type-pdf2',
+              'color' => 'error',
+              'variant' => 'ghost',
+            ),
+            2 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'i-heroicons-arrow-top-right-on-square',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+            3 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'i-heroicons-link',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+            4 => 
+            array (
+              'label' => 'Eliminar',
+              'icon' => 'i-heroicons-trash',
+              'color' => 'error',
+              'variant' => 'ghost',
+            ),
+            5 => 
+            array (
+              'label' => 'Editar',
+              'icon' => 'i-heroicons-pencil',
+              'color' => 'warning',
+              'variant' => 'ghost',
+            ),
+            6 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'i-heroicons-document-duplicate',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+            7 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'i-heroicons-folder-open',
+              'color' => 'neutral',
+              'variant' => 'ghost',
+            ),
+          ),
+        ),
+      ),
+      4 => 
+      array (
+        'key' => 'accion-accion',
+        'label' => 'Acción — Acción',
+        'tipo' => 'accion',
+        'component' => 'pages/cotizaciones/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Acción',
+          'icon' => 'vscode-icons:file-type-excel',
+          'color' => 'success',
+          'variant' => 'ghost',
+        ),
+      ),
+      5 => 
+      array (
+        'key' => 'accion-eliminar',
+        'label' => 'Acción — Eliminar',
+        'tipo' => 'accion',
+        'component' => 'pages/cotizaciones/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Eliminar',
+          'icon' => 'i-heroicons-trash',
+          'color' => 'error',
+          'variant' => 'ghost',
+        ),
+      ),
+      6 => 
+      array (
+        'key' => 'accion-editar',
+        'label' => 'Acción — Editar',
+        'tipo' => 'accion',
+        'component' => 'pages/cotizaciones/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Editar',
+          'icon' => 'i-heroicons-pencil',
+          'color' => 'warning',
+          'variant' => 'ghost',
+        ),
+      ),
+      7 => 
+      array (
+        'key' => 'toolbar-datatable',
+        'label' => 'Toolbar — Controles de tabla',
+        'tipo' => 'toolbar',
+        'component' => 'pages/cotizaciones/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Exportar',
+              'icon' => 'i-heroicons-arrow-up-tray',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+            1 => 
+            array (
+              'label' => 'Filtros',
+              'icon' => 'i-heroicons-funnel',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+            2 => 
+            array (
+              'label' => 'Nuevo',
+              'icon' => 'i-heroicons-plus',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+            3 => 
+            array (
+              'label' => 'Buscar',
+              'icon' => 'i-heroicons-magnifying-glass',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+          ),
+        ),
+      ),
+      8 => 
+      array (
+        'key' => 'accion-exportar',
+        'label' => 'Acción — Exportar',
+        'tipo' => 'accion',
+        'component' => 'pages/cotizaciones/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Exportar',
+          'icon' => 'i-heroicons-arrow-up-tray',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
+      9 => 
+      array (
+        'key' => 'accion-filtros',
+        'label' => 'Acción — Filtros',
+        'tipo' => 'accion',
+        'component' => 'pages/cotizaciones/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Filtros',
+          'icon' => 'i-heroicons-funnel',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
+      10 => 
+      array (
+        'key' => 'accion-nuevo',
+        'label' => 'Acción — Nuevo',
+        'tipo' => 'accion',
+        'component' => 'pages/cotizaciones/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Nuevo',
+          'icon' => 'i-heroicons-plus',
+          'color' => 'primary',
+          'variant' => 'solid',
+        ),
+      ),
+      11 => 
+      array (
+        'key' => 'accion-buscar',
+        'label' => 'Acción — Buscar',
+        'tipo' => 'accion',
+        'component' => 'pages/cotizaciones/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Buscar',
+          'icon' => 'i-heroicons-magnifying-glass',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
     ),
   ),
-  59 => 
+  129 => 
+  array (
+    'key' => 'cotizaciones.crear',
+    'label' => 'Cotizaciones → Crear',
+    'page_path' => 'pages/cotizaciones/crear.vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'card-card-1',
+        'label' => 'Card — Card 1',
+        'tipo' => 'card',
+        'component' => 'pages/cotizaciones/crear',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 1',
+          'icon' => NULL,
+          'body' => '{{ getStepLabel(step) }}',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      1 => 
+      array (
+        'key' => 'card-card-2',
+        'label' => 'Card — Card 2',
+        'tipo' => 'card',
+        'component' => 'pages/cotizaciones/crear',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 2',
+          'icon' => 'i-heroicons-plus',
+          'body' => '',
+          'fields' => 
+          array (
+            0 => 
+            array (
+              'key' => 'campo',
+              'label' => 'Campo',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            1 => 
+            array (
+              'key' => 'dni',
+              'label' => 'Dni:',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            2 => 
+            array (
+              'key' => 'campo',
+              'label' => 'Campo',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            3 => 
+            array (
+              'key' => 'correo',
+              'label' => 'Correo:',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            4 => 
+            array (
+              'key' => 'campo',
+              'label' => 'Campo',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            5 => 
+            array (
+              'key' => 'campo',
+              'label' => 'Campo',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            6 => 
+            array (
+              'key' => 'ruc',
+              'label' => 'Ruc:',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            7 => 
+            array (
+              'key' => 'campo',
+              'label' => 'Campo',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            8 => 
+            array (
+              'key' => 'correo',
+              'label' => 'Correo:',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            9 => 
+            array (
+              'key' => 'campo',
+              'label' => 'Campo',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'MAX_PROVEEDORES" color="warning" variant="soft" size="sm"
+                    @click="proveedor.extraProveedor = 1" class="ml-2">
+                    
+                    {{ formatCurrency(TARIFA_EXTRA_PROVEEDOR) }}',
+              'icon' => NULL,
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+            1 => 
+            array (
+              'label' => '1" @click="removeProveedor(proveedor.id)" color="error"
+                    variant="outline" title="Eliminar proveedor">',
+              'icon' => NULL,
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+            2 => 
+            array (
+              'label' => 'Acción',
+              'icon' => NULL,
+              'color' => 'primary',
+              'variant' => 'outline',
+            ),
+            3 => 
+            array (
+              'label' => 'Configurar',
+              'icon' => 'i-heroicons-cog-6-tooth',
+              'color' => 'primary',
+              'variant' => 'soft',
+            ),
+            4 => 
+            array (
+              'label' => '1"
+                            @click="removeProducto(proveedor.id, producto.id)" color="error" variant="soft"
+                            size="sm" icon="i-heroicons-trash" title="Eliminar producto" />
+                        
+
+                      
+                    
+
+                    
+                      + item',
+              'icon' => NULL,
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+            5 => 
+            array (
+              'label' => '= MAX_PROVEEDORES + MAX_PROVEEDORES_EXTRA || !canAddMoreItems()">
+              + Agregar Proveedor',
+              'icon' => NULL,
+              'color' => 'success',
+              'variant' => 'solid',
+            ),
+            6 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'i-heroicons-chevron-down',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+          ),
+        ),
+      ),
+    ),
+  ),
+  130 => 
+  array (
+    'key' => 'cotizaciones.documentos.id',
+    'label' => 'Cotizaciones → Documentos → Id',
+    'page_path' => 'pages/cotizaciones/documentos/[id].vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'card-card-1',
+        'label' => 'Card — Card 1',
+        'tipo' => 'card',
+        'component' => 'pages/cotizaciones/documentos/[id]',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 1',
+          'icon' => NULL,
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      1 => 
+      array (
+        'key' => 'card-card-2',
+        'label' => 'Card — Card 2',
+        'tipo' => 'card',
+        'component' => 'pages/cotizaciones/documentos/[id]',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 2',
+          'icon' => 'i-heroicons-exclamation-triangle',
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      2 => 
+      array (
+        'key' => 'card-documentos-asociados',
+        'label' => 'Card — Documentos asociados',
+        'tipo' => 'card',
+        'component' => 'pages/cotizaciones/documentos/[id]',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Documentos asociados',
+          'icon' => NULL,
+          'body' => 'Selecciona uno o más archivos y haz clic en «Guardar todo» para subirlos. También puedes subir cada archivo por separado con el botón de subir.',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+    ),
+  ),
+  131 => 
+  array (
+    'key' => 'cotizaciones.id',
+    'label' => 'Cotizaciones → Id',
+    'page_path' => 'pages/cotizaciones/[id].vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'card-card-1',
+        'label' => 'Card — Card 1',
+        'tipo' => 'card',
+        'component' => 'pages/cotizaciones/[id]',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 1',
+          'icon' => NULL,
+          'body' => '{{ getStepLabel(step) }}',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      1 => 
+      array (
+        'key' => 'card-card-2',
+        'label' => 'Card — Card 2',
+        'tipo' => 'card',
+        'component' => 'pages/cotizaciones/[id]',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 2',
+          'icon' => 'i-heroicons-plus',
+          'body' => '',
+          'fields' => 
+          array (
+            0 => 
+            array (
+              'key' => 'campo',
+              'label' => 'Campo',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            1 => 
+            array (
+              'key' => 'dni',
+              'label' => 'Dni:',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            2 => 
+            array (
+              'key' => 'campo',
+              'label' => 'Campo',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            3 => 
+            array (
+              'key' => 'correo',
+              'label' => 'Correo:',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            4 => 
+            array (
+              'key' => 'campo',
+              'label' => 'Campo',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            5 => 
+            array (
+              'key' => 'campo',
+              'label' => 'Campo',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            6 => 
+            array (
+              'key' => 'ruc',
+              'label' => 'Ruc:',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            7 => 
+            array (
+              'key' => 'campo',
+              'label' => 'Campo',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            8 => 
+            array (
+              'key' => 'correo',
+              'label' => 'Correo:',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            9 => 
+            array (
+              'key' => 'campo',
+              'label' => 'Campo',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Al crear',
+              'icon' => NULL,
+              'color' => 'primary',
+              'variant' => 'outline',
+            ),
+            1 => 
+            array (
+              'label' => 'Global',
+              'icon' => NULL,
+              'color' => 'primary',
+              'variant' => 'outline',
+            ),
+            2 => 
+            array (
+              'label' => 'MAX_PROVEEDORES" color="warning" variant="soft" size="sm"
+                    @click="proveedor.extraProveedor = 1" class="ml-2">
+                    
+                    {{ formatCurrency(TARIFA_EXTRA_PROVEEDOR) }}',
+              'icon' => NULL,
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+            3 => 
+            array (
+              'label' => '1" @click="removeProveedor(proveedor.id)" color="error"
+                  variant="outline" title="Eliminar proveedor">',
+              'icon' => NULL,
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+            4 => 
+            array (
+              'label' => 'Configurar',
+              'icon' => 'i-heroicons-cog-6-tooth',
+              'color' => 'primary',
+              'variant' => 'soft',
+            ),
+            5 => 
+            array (
+              'label' => '1"
+                        @click="removeProducto(proveedor.id, producto.id)" color="error" variant="soft" size="sm"
+                        icon="i-heroicons-trash" title="Eliminar producto" />
+                    
+                  
+                
+              
+
+              
+                + item',
+              'icon' => NULL,
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+            6 => 
+            array (
+              'label' => '= MAX_PROVEEDORES + MAX_PROVEEDORES_EXTRA || !canAddMoreItems()">
+              + Agregar Proveedor',
+              'icon' => NULL,
+              'color' => 'success',
+              'variant' => 'solid',
+            ),
+            7 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'i-heroicons-chevron-down',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+          ),
+        ),
+      ),
+    ),
+  ),
+  132 => 
+  array (
+    'key' => 'cotizaciones.tarifas.calculadora',
+    'label' => 'Cotizaciones → Tarifas Calculadora',
+    'page_path' => 'pages/cotizaciones/tarifas-calculadora.vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'card-grouplabel',
+        'label' => 'Card — {{ group.label }}',
+        'tipo' => 'card',
+        'component' => 'pages/cotizaciones/tarifas-calculadora',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => '{{ group.label }}',
+          'icon' => NULL,
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Guardar',
+              'icon' => NULL,
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+    ),
+  ),
+  133 => 
   array (
     'key' => 'curso',
     'label' => 'Curso',
@@ -20007,7 +39294,7 @@ return array (
       ),
     ),
   ),
-  60 => 
+  134 => 
   array (
     'key' => 'curso.campanas',
     'label' => 'Curso → Campanas',
@@ -20418,7 +39705,7 @@ return array (
       ),
     ),
   ),
-  61 => 
+  135 => 
   array (
     'key' => 'curso.campanas.id',
     'label' => 'Curso → Campanas → Id',
@@ -20753,7 +40040,7 @@ return array (
       ),
     ),
   ),
-  62 => 
+  136 => 
   array (
     'key' => 'curso.id',
     'label' => 'Curso → Id',
@@ -20916,7 +40203,7 @@ return array (
       ),
     ),
   ),
-  63 => 
+  137 => 
   array (
     'key' => 'curso.planes.web',
     'label' => 'Curso → Planes Web',
@@ -21153,7 +40440,7 @@ return array (
       ),
     ),
   ),
-  64 => 
+  138 => 
   array (
     'key' => 'dashboard',
     'label' => 'Dashboard',
@@ -21244,9 +40531,327 @@ return array (
           ),
         ),
       ),
+      1 => 
+      array (
+        'key' => 'toolbar-datatable',
+        'label' => 'Toolbar — Controles de tabla',
+        'tipo' => 'toolbar',
+        'component' => 'pages/dashboard/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Exportar',
+              'icon' => 'i-heroicons-arrow-up-tray',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+            1 => 
+            array (
+              'label' => 'Buscar',
+              'icon' => 'i-heroicons-magnifying-glass',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+          ),
+        ),
+      ),
+      2 => 
+      array (
+        'key' => 'accion-exportar',
+        'label' => 'Acción — Exportar',
+        'tipo' => 'accion',
+        'component' => 'pages/dashboard/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Exportar',
+          'icon' => 'i-heroicons-arrow-up-tray',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
+      3 => 
+      array (
+        'key' => 'accion-buscar',
+        'label' => 'Acción — Buscar',
+        'tipo' => 'accion',
+        'component' => 'pages/dashboard/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Buscar',
+          'icon' => 'i-heroicons-magnifying-glass',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
+      4 => 
+      array (
+        'key' => 'card-filtros',
+        'label' => 'Card — Filtros',
+        'tipo' => 'card',
+        'component' => 'pages/dashboard/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Filtros',
+          'icon' => NULL,
+          'body' => '',
+          'fields' => 
+          array (
+            0 => 
+            array (
+              'key' => 'contenedor',
+              'label' => 'Contenedor',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            1 => 
+            array (
+              'key' => 'vendedor',
+              'label' => 'Vendedor',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            2 => 
+            array (
+              'key' => 'fecha-inicio',
+              'label' => 'Fecha Inicio',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            3 => 
+            array (
+              'key' => 'fecha-fin',
+              'label' => 'Fecha Fin',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Aplicar Filtros',
+              'icon' => 'i-heroicons-funnel',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      5 => 
+      array (
+        'key' => 'card-card-3',
+        'label' => 'Card — Card 3',
+        'tipo' => 'card',
+        'component' => 'pages/dashboard/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 3',
+          'icon' => 'i-heroicons-arrow-trending-up',
+          'body' => 'Volumen China',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      6 => 
+      array (
+        'key' => 'card-card-4',
+        'label' => 'Card — Card 4',
+        'tipo' => 'card',
+        'component' => 'pages/dashboard/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 4',
+          'icon' => 'i-heroicons-arrow-trending-up',
+          'body' => 'Volumen Vendido',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      7 => 
+      array (
+        'key' => 'card-card-5',
+        'label' => 'Card — Card 5',
+        'tipo' => 'card',
+        'component' => 'pages/dashboard/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 5',
+          'icon' => 'i-heroicons-arrow-trending-down',
+          'body' => 'Volumen Pendiente',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      8 => 
+      array (
+        'key' => 'card-card-6',
+        'label' => 'Card — Card 6',
+        'tipo' => 'card',
+        'component' => 'pages/dashboard/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 6',
+          'icon' => 'i-heroicons-arrow-trending-up',
+          'body' => 'Total Fob',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      9 => 
+      array (
+        'key' => 'card-card-7',
+        'label' => 'Card — Card 7',
+        'tipo' => 'card',
+        'component' => 'pages/dashboard/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 7',
+          'icon' => 'i-heroicons-arrow-trending-down',
+          'body' => 'Total Impuestos',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      10 => 
+      array (
+        'key' => 'card-card-8',
+        'label' => 'Card — Card 8',
+        'tipo' => 'card',
+        'component' => 'pages/dashboard/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 8',
+          'icon' => 'i-heroicons-arrow-trending-down',
+          'body' => 'Total Logística',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      11 => 
+      array (
+        'key' => 'card-evolucion-de-volumenes-por-contenedor',
+        'label' => 'Card — Evolución de Volúmenes por Contenedor',
+        'tipo' => 'card',
+        'component' => 'pages/dashboard/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Evolución de Volúmenes por Contenedor',
+          'icon' => 'i-heroicons-chart-bar',
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      12 => 
+      array (
+        'key' => 'card-distribucion-de-ventas-por-vendedor',
+        'label' => 'Card — Distribución de Ventas por Vendedor',
+        'tipo' => 'card',
+        'component' => 'pages/dashboard/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Distribución de Ventas por Vendedor',
+          'icon' => 'i-heroicons-chart-pie',
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      13 => 
+      array (
+        'key' => 'card-progreso-diario-de-cotizaciones-confirmadas',
+        'label' => 'Card — Progreso Diario de Cotizaciones Confirmadas',
+        'tipo' => 'card',
+        'component' => 'pages/dashboard/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Progreso Diario de Cotizaciones Confirmadas',
+          'icon' => 'i-heroicons-chart-line',
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
     ),
   ),
-  65 => 
+  139 => 
   array (
     'key' => 'datos.facturacion',
     'label' => 'Datos Facturacion',
@@ -21322,9 +40927,51 @@ return array (
           ),
         ),
       ),
+      1 => 
+      array (
+        'key' => 'card-card-1',
+        'label' => 'Card — Card 1',
+        'tipo' => 'card',
+        'component' => 'pages/datos-facturacion',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 1',
+          'icon' => NULL,
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      2 => 
+      array (
+        'key' => 'card-tabla',
+        'label' => 'Card — Tabla',
+        'tipo' => 'card',
+        'component' => 'pages/datos-facturacion',
+        'api_hint' => 'contiene tabla',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Tabla',
+          'icon' => NULL,
+          'body' => 'No hay importaciones registradas.',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
     ),
   ),
-  66 => 
+  140 => 
   array (
     'key' => 'inspeccionados',
     'label' => 'Inspeccionados',
@@ -21616,9 +41263,108 @@ return array (
           'live_api' => NULL,
         ),
       ),
+      2 => 
+      array (
+        'key' => 'toolbar-acciones-fila',
+        'label' => 'Toolbar — Acciones de fila',
+        'tipo' => 'toolbar',
+        'component' => 'pages/inspeccionados/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'material-symbols:send-outline',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+            1 => 
+            array (
+              'label' => 'Ver',
+              'icon' => 'i-heroicons-eye',
+              'color' => 'neutral',
+              'variant' => 'ghost',
+            ),
+          ),
+        ),
+      ),
+      3 => 
+      array (
+        'key' => 'accion-accion',
+        'label' => 'Acción — Acción',
+        'tipo' => 'accion',
+        'component' => 'pages/inspeccionados/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Acción',
+          'icon' => 'material-symbols:send-outline',
+          'color' => 'primary',
+          'variant' => 'ghost',
+        ),
+      ),
+      4 => 
+      array (
+        'key' => 'accion-ver',
+        'label' => 'Acción — Ver',
+        'tipo' => 'accion',
+        'component' => 'pages/inspeccionados/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Ver',
+          'icon' => 'i-heroicons-eye',
+          'color' => 'neutral',
+          'variant' => 'ghost',
+        ),
+      ),
+      5 => 
+      array (
+        'key' => 'toolbar-datatable',
+        'label' => 'Toolbar — Controles de tabla',
+        'tipo' => 'toolbar',
+        'component' => 'pages/inspeccionados/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Filtros',
+              'icon' => 'i-heroicons-funnel',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+          ),
+        ),
+      ),
+      6 => 
+      array (
+        'key' => 'accion-filtros',
+        'label' => 'Acción — Filtros',
+        'tipo' => 'accion',
+        'component' => 'pages/inspeccionados/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Filtros',
+          'icon' => 'i-heroicons-funnel',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
     ),
   ),
-  67 => 
+  141 => 
   array (
     'key' => 'landing.leads',
     'label' => 'Landing → Leads',
@@ -21729,9 +41475,98 @@ return array (
           ),
         ),
       ),
+      1 => 
+      array (
+        'key' => 'tabs-landing-consolidado-landing-curso',
+        'label' => 'Tabs — Landing consolidado / Landing curso',
+        'tipo' => 'tabs',
+        'component' => 'pages/landing/leads',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'active' => 'consolidado',
+          'tabs' => 
+          array (
+            0 => 
+            array (
+              'key' => 'consolidado',
+              'label' => 'Landing consolidado',
+              'content' => '',
+            ),
+            1 => 
+            array (
+              'key' => 'curso',
+              'label' => 'Landing curso',
+              'content' => '',
+            ),
+          ),
+        ),
+      ),
+      2 => 
+      array (
+        'key' => 'toolbar-datatable',
+        'label' => 'Toolbar — Controles de tabla',
+        'tipo' => 'toolbar',
+        'component' => 'pages/landing/leads',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Exportar',
+              'icon' => 'i-heroicons-arrow-up-tray',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+            1 => 
+            array (
+              'label' => 'Buscar',
+              'icon' => 'i-heroicons-magnifying-glass',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+          ),
+        ),
+      ),
+      3 => 
+      array (
+        'key' => 'accion-exportar',
+        'label' => 'Acción — Exportar',
+        'tipo' => 'accion',
+        'component' => 'pages/landing/leads',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Exportar',
+          'icon' => 'i-heroicons-arrow-up-tray',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
+      4 => 
+      array (
+        'key' => 'accion-buscar',
+        'label' => 'Acción — Buscar',
+        'tipo' => 'accion',
+        'component' => 'pages/landing/leads',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Buscar',
+          'icon' => 'i-heroicons-magnifying-glass',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
     ),
   ),
-  68 => 
+  142 => 
   array (
     'key' => 'manual.usuario',
     'label' => 'Manual Usuario',
@@ -21739,6 +41574,27 @@ return array (
     'widgets' => 
     array (
       0 => 
+      array (
+        'key' => 'card-card-1',
+        'label' => 'Card — Card 1',
+        'tipo' => 'card',
+        'component' => 'pages/manual-usuario/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 1',
+          'icon' => NULL,
+          'body' => '{{ sec.description }}',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      1 => 
       array (
         'key' => 'tabla-blocktitulo',
         'label' => 'Tabla — block.titulo || \'\'',
@@ -21775,9 +41631,357 @@ return array (
           'live_api' => NULL,
         ),
       ),
+      2 => 
+      array (
+        'key' => 'toolbar-datatable',
+        'label' => 'Toolbar — Controles de tabla',
+        'tipo' => 'toolbar',
+        'component' => 'components/manual/ManualBlockRenderer',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Exportar',
+              'icon' => 'i-heroicons-arrow-up-tray',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+            1 => 
+            array (
+              'label' => 'Filtros',
+              'icon' => 'i-heroicons-funnel',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+            2 => 
+            array (
+              'label' => 'Buscar',
+              'icon' => 'i-heroicons-magnifying-glass',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+          ),
+        ),
+      ),
+      3 => 
+      array (
+        'key' => 'accion-exportar',
+        'label' => 'Acción — Exportar',
+        'tipo' => 'accion',
+        'component' => 'components/manual/ManualBlockRenderer',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Exportar',
+          'icon' => 'i-heroicons-arrow-up-tray',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
+      4 => 
+      array (
+        'key' => 'accion-filtros',
+        'label' => 'Acción — Filtros',
+        'tipo' => 'accion',
+        'component' => 'components/manual/ManualBlockRenderer',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Filtros',
+          'icon' => 'i-heroicons-funnel',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
+      5 => 
+      array (
+        'key' => 'accion-buscar',
+        'label' => 'Acción — Buscar',
+        'tipo' => 'accion',
+        'component' => 'components/manual/ManualBlockRenderer',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Buscar',
+          'icon' => 'i-heroicons-magnifying-glass',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
     ),
   ),
-  69 => 
+  143 => 
+  array (
+    'key' => 'manual.usuario.admin',
+    'label' => 'Manual Usuario → Admin',
+    'page_path' => 'pages/manual-usuario/admin/index.vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'card-card-1',
+        'label' => 'Card — Card 1',
+        'tipo' => 'card',
+        'component' => 'pages/manual-usuario/admin/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 1',
+          'icon' => NULL,
+          'body' => 'No hay páginas CMS para este filtro.',
+          'fields' => 
+          array (
+            0 => 
+            array (
+              'key' => 'rol',
+              'label' => 'Rol',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Actualizar',
+              'icon' => 'i-heroicons-arrow-path',
+              'color' => 'neutral',
+              'variant' => 'soft',
+            ),
+            1 => 
+            array (
+              'label' => 'Editar',
+              'icon' => 'i-heroicons-pencil-square',
+              'color' => 'primary',
+              'variant' => 'soft',
+            ),
+            2 => 
+            array (
+              'label' => 'Eliminar',
+              'icon' => 'i-heroicons-trash',
+              'color' => 'error',
+              'variant' => 'ghost',
+            ),
+          ),
+        ),
+      ),
+    ),
+  ),
+  144 => 
+  array (
+    'key' => 'manual.usuario.admin.id',
+    'label' => 'Manual Usuario → Admin → Id',
+    'page_path' => 'pages/manual-usuario/admin/[id].vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'card-datos-de-la-pagina',
+        'label' => 'Card — Datos de la página',
+        'tipo' => 'card',
+        'component' => 'pages/manual-usuario/admin/[id]',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Datos de la página',
+          'icon' => NULL,
+          'body' => 'Publicado',
+          'fields' => 
+          array (
+            0 => 
+            array (
+              'key' => 'titulo',
+              'label' => 'Título',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            1 => 
+            array (
+              'key' => 'clave-modulo',
+              'label' => 'Clave módulo',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            2 => 
+            array (
+              'key' => 'descripcion',
+              'label' => 'Descripción',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      1 => 
+      array (
+        'key' => 'card-card-1',
+        'label' => 'Card — Card 1',
+        'tipo' => 'card',
+        'component' => 'components/manual/ManualAdminBlockNode',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 1',
+          'icon' => 'i-heroicons-bars-3',
+          'body' => '{{ draft[block.id]?.titulo || \'(sin título)\' }}',
+          'fields' => 
+          array (
+            0 => 
+            array (
+              'key' => 'titulo',
+              'label' => 'Título',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            1 => 
+            array (
+              'key' => 'clave-ruta',
+              'label' => 'Clave (ruta)',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            2 => 
+            array (
+              'key' => 'subtitulo-opcional',
+              'label' => 'Subtítulo (opcional)',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            3 => 
+            array (
+              'key' => 'cuerpo',
+              'label' => 'Cuerpo',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            4 => 
+            array (
+              'key' => 'imagen',
+              'label' => 'Imagen',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            5 => 
+            array (
+              'key' => 'tab-activo-se-guarda-al-guardar',
+              'label' => 'Tab activo (se guarda al Guardar)',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            6 => 
+            array (
+              'key' => 'etiquetas',
+              'label' => 'Etiquetas',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            7 => 
+            array (
+              'key' => 'snapshot-json',
+              'label' => 'Snapshot JSON',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Guardar',
+              'icon' => NULL,
+              'color' => 'primary',
+              'variant' => 'soft',
+            ),
+            1 => 
+            array (
+              'label' => 'Eliminar',
+              'icon' => 'i-heroicons-trash',
+              'color' => 'error',
+              'variant' => 'ghost',
+            ),
+            2 => 
+            array (
+              'label' => 'Quitar',
+              'icon' => NULL,
+              'color' => 'error',
+              'variant' => 'ghost',
+            ),
+            3 => 
+            array (
+              'label' => '+ Paso',
+              'icon' => NULL,
+              'color' => 'primary',
+              'variant' => 'soft',
+            ),
+            4 => 
+            array (
+              'label' => 'Agregar',
+              'icon' => 'i-heroicons-plus',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+            5 => 
+            array (
+              'label' => 'Importar snapshot',
+              'icon' => NULL,
+              'color' => 'primary',
+              'variant' => 'soft',
+            ),
+          ),
+        ),
+      ),
+    ),
+  ),
+  145 => 
   array (
     'key' => 'mi.progreso',
     'label' => 'Mi Progreso',
@@ -21863,9 +42067,317 @@ return array (
           ),
         ),
       ),
+      1 => 
+      array (
+        'key' => 'toolbar-datatable',
+        'label' => 'Toolbar — Controles de tabla',
+        'tipo' => 'toolbar',
+        'component' => 'pages/mi-progreso',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Exportar',
+              'icon' => 'i-heroicons-arrow-up-tray',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+            1 => 
+            array (
+              'label' => 'Buscar',
+              'icon' => 'i-heroicons-magnifying-glass',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+          ),
+        ),
+      ),
+      2 => 
+      array (
+        'key' => 'accion-exportar',
+        'label' => 'Acción — Exportar',
+        'tipo' => 'accion',
+        'component' => 'pages/mi-progreso',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Exportar',
+          'icon' => 'i-heroicons-arrow-up-tray',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
+      3 => 
+      array (
+        'key' => 'accion-buscar',
+        'label' => 'Acción — Buscar',
+        'tipo' => 'accion',
+        'component' => 'pages/mi-progreso',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Buscar',
+          'icon' => 'i-heroicons-magnifying-glass',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
+      4 => 
+      array (
+        'key' => 'card-filtros',
+        'label' => 'Card — Filtros',
+        'tipo' => 'card',
+        'component' => 'pages/mi-progreso',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Filtros',
+          'icon' => NULL,
+          'body' => '',
+          'fields' => 
+          array (
+            0 => 
+            array (
+              'key' => 'contenedor',
+              'label' => 'Contenedor',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            1 => 
+            array (
+              'key' => 'fecha-inicio',
+              'label' => 'Fecha Inicio',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            2 => 
+            array (
+              'key' => 'fecha-fin',
+              'label' => 'Fecha Fin',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Resetear',
+              'icon' => 'i-heroicons-arrow-path',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+            1 => 
+            array (
+              'label' => 'Aplicar Filtros',
+              'icon' => 'i-heroicons-funnel',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+            2 => 
+            array (
+              'label' => '{{ fechaInicio ? formatCalendarDateDisplay(fechaInicio) : \'Seleccionar fecha\' }}',
+              'icon' => 'i-heroicons-calendar',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+            3 => 
+            array (
+              'label' => '{{ fechaFin ? formatCalendarDateDisplay(fechaFin) : \'Seleccionar fecha\' }}',
+              'icon' => 'i-heroicons-calendar',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+          ),
+        ),
+      ),
+      5 => 
+      array (
+        'key' => 'card-card-3',
+        'label' => 'Card — Card 3',
+        'tipo' => 'card',
+        'component' => 'pages/mi-progreso',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 3',
+          'icon' => 'i-heroicons-arrow-trending-up',
+          'body' => 'Volumen China',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      6 => 
+      array (
+        'key' => 'card-card-4',
+        'label' => 'Card — Card 4',
+        'tipo' => 'card',
+        'component' => 'pages/mi-progreso',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 4',
+          'icon' => 'i-heroicons-arrow-trending-up',
+          'body' => 'Volumen Vendido',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      7 => 
+      array (
+        'key' => 'card-card-5',
+        'label' => 'Card — Card 5',
+        'tipo' => 'card',
+        'component' => 'pages/mi-progreso',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 5',
+          'icon' => 'i-heroicons-arrow-trending-down',
+          'body' => 'Volumen Pendiente',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      8 => 
+      array (
+        'key' => 'card-card-6',
+        'label' => 'Card — Card 6',
+        'tipo' => 'card',
+        'component' => 'pages/mi-progreso',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 6',
+          'icon' => 'i-heroicons-arrow-trending-up',
+          'body' => 'Total Fob',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      9 => 
+      array (
+        'key' => 'card-card-7',
+        'label' => 'Card — Card 7',
+        'tipo' => 'card',
+        'component' => 'pages/mi-progreso',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 7',
+          'icon' => 'i-heroicons-arrow-trending-down',
+          'body' => 'Total Impuestos',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      10 => 
+      array (
+        'key' => 'card-card-8',
+        'label' => 'Card — Card 8',
+        'tipo' => 'card',
+        'component' => 'pages/mi-progreso',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 8',
+          'icon' => 'i-heroicons-arrow-trending-down',
+          'body' => 'Total Logística',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      11 => 
+      array (
+        'key' => 'card-evolucion-de-volumenes-por-contenedor',
+        'label' => 'Card — Evolución de Volúmenes por Contenedor',
+        'tipo' => 'card',
+        'component' => 'pages/mi-progreso',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Evolución de Volúmenes por Contenedor',
+          'icon' => 'i-heroicons-chart-bar',
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      12 => 
+      array (
+        'key' => 'card-progreso-diario-de-cotizaciones-confirmadas',
+        'label' => 'Card — Progreso Diario de Cotizaciones Confirmadas',
+        'tipo' => 'card',
+        'component' => 'pages/mi-progreso',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Progreso Diario de Cotizaciones Confirmadas',
+          'icon' => 'i-heroicons-chart-line',
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
     ),
   ),
-  70 => 
+  146 => 
   array (
     'key' => 'panel.acceso.cargos',
     'label' => 'Panel Acceso → Cargos',
@@ -21976,9 +42488,51 @@ return array (
           'live_api' => NULL,
         ),
       ),
+      2 => 
+      array (
+        'key' => 'card-card-1',
+        'label' => 'Card — Card 1',
+        'tipo' => 'card',
+        'component' => 'pages/panel-acceso/cargos',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 1',
+          'icon' => 'i-heroicons-arrow-path',
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'g.notificacion === 1 ? \'Activa\' : \'Inactiva\'',
+              'icon' => NULL,
+              'color' => 'g.notificacion === 1 ? \'success\' : \'neutral\'',
+              'variant' => 'g.notificacion === 1 ? \'soft\' : \'outline\'',
+            ),
+            1 => 
+            array (
+              'label' => 'Editar',
+              'icon' => 'i-heroicons-pencil',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+            2 => 
+            array (
+              'label' => 'Eliminar',
+              'icon' => 'i-heroicons-trash',
+              'color' => 'error',
+              'variant' => 'ghost',
+            ),
+          ),
+        ),
+      ),
     ),
   ),
-  71 => 
+  147 => 
   array (
     'key' => 'panel.acceso.menus',
     'label' => 'Panel Acceso → Menus',
@@ -22188,9 +42742,85 @@ return array (
           'live_api' => NULL,
         ),
       ),
+      5 => 
+      array (
+        'key' => 'toolbar-acciones',
+        'label' => 'Toolbar — Acciones',
+        'tipo' => 'toolbar',
+        'component' => 'pages/panel-acceso/menus',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Agregar Menú',
+              'icon' => 'i-heroicons-plus',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      6 => 
+      array (
+        'key' => 'accion-agregar-menu',
+        'label' => 'Acción — Agregar Menú',
+        'tipo' => 'accion',
+        'component' => 'pages/panel-acceso/menus',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Agregar Menú',
+          'icon' => 'i-heroicons-plus',
+          'color' => 'primary',
+          'variant' => 'solid',
+        ),
+      ),
+      7 => 
+      array (
+        'key' => 'toolbar-datatable',
+        'label' => 'Toolbar — Controles de tabla',
+        'tipo' => 'toolbar',
+        'component' => 'pages/panel-acceso/menus',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Buscar',
+              'icon' => 'i-heroicons-magnifying-glass',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+          ),
+        ),
+      ),
+      8 => 
+      array (
+        'key' => 'accion-buscar',
+        'label' => 'Acción — Buscar',
+        'tipo' => 'accion',
+        'component' => 'pages/panel-acceso/menus',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Buscar',
+          'icon' => 'i-heroicons-magnifying-glass',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
     ),
   ),
-  72 => 
+  148 => 
   array (
     'key' => 'panel.acceso.menus.externos',
     'label' => 'Panel Acceso → Menus Externos',
@@ -22405,9 +43035,248 @@ return array (
           'live_api' => NULL,
         ),
       ),
+      5 => 
+      array (
+        'key' => 'toolbar-acciones',
+        'label' => 'Toolbar — Acciones',
+        'tipo' => 'toolbar',
+        'component' => 'pages/panel-acceso/menus-externos',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Agregar Menú',
+              'icon' => 'i-heroicons-plus',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      6 => 
+      array (
+        'key' => 'accion-agregar-menu',
+        'label' => 'Acción — Agregar Menú',
+        'tipo' => 'accion',
+        'component' => 'pages/panel-acceso/menus-externos',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Agregar Menú',
+          'icon' => 'i-heroicons-plus',
+          'color' => 'primary',
+          'variant' => 'solid',
+        ),
+      ),
+      7 => 
+      array (
+        'key' => 'toolbar-datatable',
+        'label' => 'Toolbar — Controles de tabla',
+        'tipo' => 'toolbar',
+        'component' => 'pages/panel-acceso/menus-externos',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Buscar',
+              'icon' => 'i-heroicons-magnifying-glass',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+          ),
+        ),
+      ),
+      8 => 
+      array (
+        'key' => 'accion-buscar',
+        'label' => 'Acción — Buscar',
+        'tipo' => 'accion',
+        'component' => 'pages/panel-acceso/menus-externos',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Buscar',
+          'icon' => 'i-heroicons-magnifying-glass',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
     ),
   ),
-  73 => 
+  149 => 
+  array (
+    'key' => 'panel.acceso.permisos',
+    'label' => 'Panel Acceso → Permisos',
+    'page_path' => 'pages/panel-acceso/permisos.vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'card-card-1',
+        'label' => 'Card — Card 1',
+        'tipo' => 'card',
+        'component' => 'pages/panel-acceso/permisos',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 1',
+          'icon' => NULL,
+          'body' => '',
+          'fields' => 
+          array (
+            0 => 
+            array (
+              'key' => 'empresa',
+              'label' => 'Empresa',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            1 => 
+            array (
+              'key' => 'organizacion',
+              'label' => 'Organización',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            2 => 
+            array (
+              'key' => 'cargo',
+              'label' => 'Cargo',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      1 => 
+      array (
+        'key' => 'card-card-2',
+        'label' => 'Card — Card 2',
+        'tipo' => 'card',
+        'component' => 'pages/panel-acceso/permisos',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 2',
+          'icon' => 'i-mdi-youtube',
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Guardar',
+              'icon' => 'i-heroicons-check',
+              'color' => 'success',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+    ),
+  ),
+  150 => 
+  array (
+    'key' => 'panel.acceso.permisos.usuario',
+    'label' => 'Panel Acceso → Permisos Usuario',
+    'page_path' => 'pages/panel-acceso/permisos-usuario.vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'card-card-1',
+        'label' => 'Card — Card 1',
+        'tipo' => 'card',
+        'component' => 'pages/panel-acceso/permisos-usuario',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 1',
+          'icon' => NULL,
+          'body' => '',
+          'fields' => 
+          array (
+            0 => 
+            array (
+              'key' => 'usuario-externo',
+              'label' => 'Usuario Externo',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Recargar',
+              'icon' => 'i-heroicons-arrow-path',
+              'color' => 'primary',
+              'variant' => 'outline',
+            ),
+          ),
+        ),
+      ),
+      1 => 
+      array (
+        'key' => 'card-card-2',
+        'label' => 'Card — Card 2',
+        'tipo' => 'card',
+        'component' => 'pages/panel-acceso/permisos-usuario',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 2',
+          'icon' => 'i-mdi-youtube',
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Guardar',
+              'icon' => 'i-heroicons-check',
+              'color' => 'success',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+    ),
+  ),
+  151 => 
   array (
     'key' => 'panel.acceso.usuarios',
     'label' => 'Panel Acceso → Usuarios',
@@ -22565,9 +43434,70 @@ return array (
           'live_api' => NULL,
         ),
       ),
+      3 => 
+      array (
+        'key' => 'toolbar-datatable',
+        'label' => 'Toolbar — Controles de tabla',
+        'tipo' => 'toolbar',
+        'component' => 'pages/panel-acceso/usuarios',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Nuevo',
+              'icon' => 'i-heroicons-plus',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+            1 => 
+            array (
+              'label' => 'Buscar',
+              'icon' => 'i-heroicons-magnifying-glass',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+          ),
+        ),
+      ),
+      4 => 
+      array (
+        'key' => 'accion-nuevo',
+        'label' => 'Acción — Nuevo',
+        'tipo' => 'accion',
+        'component' => 'pages/panel-acceso/usuarios',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Nuevo',
+          'icon' => 'i-heroicons-plus',
+          'color' => 'primary',
+          'variant' => 'solid',
+        ),
+      ),
+      5 => 
+      array (
+        'key' => 'accion-buscar',
+        'label' => 'Acción — Buscar',
+        'tipo' => 'accion',
+        'component' => 'pages/panel-acceso/usuarios',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Buscar',
+          'icon' => 'i-heroicons-magnifying-glass',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
     ),
   ),
-  74 => 
+  152 => 
   array (
     'key' => 'panel.acceso.usuarios.externos',
     'label' => 'Panel Acceso → Usuarios Externos',
@@ -22720,9 +43650,70 @@ return array (
           'live_api' => NULL,
         ),
       ),
+      3 => 
+      array (
+        'key' => 'toolbar-datatable',
+        'label' => 'Toolbar — Controles de tabla',
+        'tipo' => 'toolbar',
+        'component' => 'pages/panel-acceso/usuarios-externos',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Nuevo',
+              'icon' => 'i-heroicons-plus',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+            1 => 
+            array (
+              'label' => 'Buscar',
+              'icon' => 'i-heroicons-magnifying-glass',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+          ),
+        ),
+      ),
+      4 => 
+      array (
+        'key' => 'accion-nuevo',
+        'label' => 'Acción — Nuevo',
+        'tipo' => 'accion',
+        'component' => 'pages/panel-acceso/usuarios-externos',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Nuevo',
+          'icon' => 'i-heroicons-plus',
+          'color' => 'primary',
+          'variant' => 'solid',
+        ),
+      ),
+      5 => 
+      array (
+        'key' => 'accion-buscar',
+        'label' => 'Acción — Buscar',
+        'tipo' => 'accion',
+        'component' => 'pages/panel-acceso/usuarios-externos',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Buscar',
+          'icon' => 'i-heroicons-magnifying-glass',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
     ),
   ),
-  75 => 
+  153 => 
   array (
     'key' => 'soporte.ti',
     'label' => 'Soporte Ti',
@@ -22813,6 +43804,149 @@ return array (
       ),
       1 => 
       array (
+        'key' => 'toolbar-acciones',
+        'label' => 'Toolbar — Acciones',
+        'tipo' => 'toolbar',
+        'component' => 'pages/soporte-ti/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Horas tipo B',
+              'icon' => 'i-heroicons-clock',
+              'color' => 'primary',
+              'variant' => 'outline',
+            ),
+            1 => 
+            array (
+              'label' => 'Horas tipo A',
+              'icon' => 'i-heroicons-cog-6-tooth',
+              'color' => 'primary',
+              'variant' => 'outline',
+            ),
+            2 => 
+            array (
+              'label' => 'Nueva solicitud',
+              'icon' => 'i-heroicons-plus',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      2 => 
+      array (
+        'key' => 'accion-horas-tipo-b',
+        'label' => 'Acción — Horas tipo B',
+        'tipo' => 'accion',
+        'component' => 'pages/soporte-ti/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Horas tipo B',
+          'icon' => 'i-heroicons-clock',
+          'color' => 'primary',
+          'variant' => 'outline',
+        ),
+      ),
+      3 => 
+      array (
+        'key' => 'accion-horas-tipo-a',
+        'label' => 'Acción — Horas tipo A',
+        'tipo' => 'accion',
+        'component' => 'pages/soporte-ti/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Horas tipo A',
+          'icon' => 'i-heroicons-cog-6-tooth',
+          'color' => 'primary',
+          'variant' => 'outline',
+        ),
+      ),
+      4 => 
+      array (
+        'key' => 'accion-nueva-solicitud',
+        'label' => 'Acción — Nueva solicitud',
+        'tipo' => 'accion',
+        'component' => 'pages/soporte-ti/index',
+        'api_hint' => '#actions',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Nueva solicitud',
+          'icon' => 'i-heroicons-plus',
+          'color' => 'primary',
+          'variant' => 'solid',
+        ),
+      ),
+      5 => 
+      array (
+        'key' => 'toolbar-datatable',
+        'label' => 'Toolbar — Controles de tabla',
+        'tipo' => 'toolbar',
+        'component' => 'pages/soporte-ti/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Filtros',
+              'icon' => 'i-heroicons-funnel',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+          ),
+        ),
+      ),
+      6 => 
+      array (
+        'key' => 'accion-filtros',
+        'label' => 'Acción — Filtros',
+        'tipo' => 'accion',
+        'component' => 'pages/soporte-ti/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Filtros',
+          'icon' => 'i-heroicons-funnel',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
+      7 => 
+      array (
+        'key' => 'card-card-1',
+        'label' => 'Card — Card 1',
+        'tipo' => 'card',
+        'component' => 'pages/soporte-ti/index',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 1',
+          'icon' => NULL,
+          'body' => '{{ error }}',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      8 => 
+      array (
         'key' => 'tabla-filtered',
         'label' => 'Tabla — Filtered',
         'tipo' => 'tabla',
@@ -22848,7 +43982,7 @@ return array (
           'live_api' => NULL,
         ),
       ),
-      2 => 
+      9 => 
       array (
         'key' => 'modal-nueva-solicitud',
         'label' => 'Modal — Nueva solicitud',
@@ -22932,7 +44066,209 @@ return array (
       ),
     ),
   ),
-  76 => 
+  154 => 
+  array (
+    'key' => 'soporte.ti.configuracion.horas.tipo.a',
+    'label' => 'Soporte Ti → Configuracion → Horas Tipo A',
+    'page_path' => 'pages/soporte-ti/configuracion/horas-tipo-a.vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'card-card-1',
+        'label' => 'Card — Card 1',
+        'tipo' => 'card',
+        'component' => 'pages/soporte-ti/configuracion/horas-tipo-a',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 1',
+          'icon' => NULL,
+          'body' => '{{ errorMatriz }}',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      1 => 
+      array (
+        'key' => 'card-card-2',
+        'label' => 'Card — Card 2',
+        'tipo' => 'card',
+        'component' => 'pages/soporte-ti/configuracion/horas-tipo-a',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 2',
+          'icon' => NULL,
+          'body' => '{{ celdaEdit(crit, f.codigo)!.horas }}',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Guardar',
+              'icon' => NULL,
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      2 => 
+      array (
+        'key' => 'card-card-3',
+        'label' => 'Card — Card 3',
+        'tipo' => 'card',
+        'component' => 'pages/soporte-ti/configuracion/horas-tipo-a',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 3',
+          'icon' => NULL,
+          'body' => '{{ row.horas }}',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Guardar',
+              'icon' => NULL,
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+    ),
+  ),
+  155 => 
+  array (
+    'key' => 'soporte.ti.configuracion.horas.tipo.b',
+    'label' => 'Soporte Ti → Configuracion → Horas Tipo B',
+    'page_path' => 'pages/soporte-ti/configuracion/horas-tipo-b.vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'card-card-1',
+        'label' => 'Card — Card 1',
+        'tipo' => 'card',
+        'component' => 'pages/soporte-ti/configuracion/horas-tipo-b',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 1',
+          'icon' => NULL,
+          'body' => '{{ error }}',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      1 => 
+      array (
+        'key' => 'card-card-2',
+        'label' => 'Card — Card 2',
+        'tipo' => 'card',
+        'component' => 'pages/soporte-ti/configuracion/horas-tipo-b',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 2',
+          'icon' => NULL,
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Guardar',
+              'icon' => NULL,
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+    ),
+  ),
+  156 => 
+  array (
+    'key' => 'soporte.ti.id',
+    'label' => 'Soporte Ti → Id',
+    'page_path' => 'pages/soporte-ti/[id].vue',
+    'widgets' => 
+    array (
+      0 => 
+      array (
+        'key' => 'card-card-1',
+        'label' => 'Card — Card 1',
+        'tipo' => 'card',
+        'component' => 'pages/soporte-ti/[id]',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 1',
+          'icon' => NULL,
+          'body' => '{{ error }}',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      1 => 
+      array (
+        'key' => 'card-card-2',
+        'label' => 'Card — Card 2',
+        'tipo' => 'card',
+        'component' => 'pages/soporte-ti/[id]',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Card 2',
+          'icon' => NULL,
+          'body' => 'No existe esta solicitud o no tienes acceso.',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Regresar al listado',
+              'icon' => NULL,
+              'color' => 'primary',
+              'variant' => 'outline',
+            ),
+          ),
+        ),
+      ),
+    ),
+  ),
+  157 => 
   array (
     'key' => 'verificacion',
     'label' => 'Verificacion',
@@ -24427,9 +45763,364 @@ return array (
           'live_api' => NULL,
         ),
       ),
+      8 => 
+      array (
+        'key' => 'toolbar-acciones-fila',
+        'label' => 'Toolbar — Acciones de fila',
+        'tipo' => 'toolbar',
+        'component' => 'pages/verificacion/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Ver',
+              'icon' => 'i-heroicons-eye',
+              'color' => 'primary',
+              'variant' => 'soft',
+            ),
+          ),
+        ),
+      ),
+      9 => 
+      array (
+        'key' => 'accion-ver',
+        'label' => 'Acción — Ver',
+        'tipo' => 'accion',
+        'component' => 'pages/verificacion/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Ver',
+          'icon' => 'i-heroicons-eye',
+          'color' => 'primary',
+          'variant' => 'soft',
+        ),
+      ),
+      10 => 
+      array (
+        'key' => 'toolbar-datatable',
+        'label' => 'Toolbar — Controles de tabla',
+        'tipo' => 'toolbar',
+        'component' => 'pages/verificacion/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Filtros',
+              'icon' => 'i-heroicons-funnel',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+            1 => 
+            array (
+              'label' => 'Buscar',
+              'icon' => 'i-heroicons-magnifying-glass',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+          ),
+        ),
+      ),
+      11 => 
+      array (
+        'key' => 'accion-filtros',
+        'label' => 'Acción — Filtros',
+        'tipo' => 'accion',
+        'component' => 'pages/verificacion/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Filtros',
+          'icon' => 'i-heroicons-funnel',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
+      12 => 
+      array (
+        'key' => 'accion-buscar',
+        'label' => 'Acción — Buscar',
+        'tipo' => 'accion',
+        'component' => 'pages/verificacion/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Buscar',
+          'icon' => 'i-heroicons-magnifying-glass',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
+      13 => 
+      array (
+        'key' => 'filtros-filterconfig',
+        'label' => 'Filtros — General',
+        'tipo' => 'filtros',
+        'component' => 'composables/cargaconsolidada/entrega/useEntrega.ts',
+        'api_hint' => 'filterConfig',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'fields' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Fecha inicio',
+              'key' => 'fecha_inicio',
+              'type' => 'date',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            1 => 
+            array (
+              'label' => 'Fecha fin',
+              'key' => 'fecha_fin',
+              'type' => 'date',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            2 => 
+            array (
+              'label' => 'Tipo de entrega',
+              'key' => 'tipo_entrega',
+              'type' => 'select',
+              'value' => 'todos',
+              'options' => 
+              array (
+                0 => 
+                array (
+                  'label' => 'Todos',
+                  'value' => 'todos',
+                ),
+                1 => 
+                array (
+                  'label' => 'Lima',
+                  'value' => 'Lima',
+                ),
+                2 => 
+                array (
+                  'label' => 'Provincia',
+                  'value' => 'Provincia',
+                ),
+              ),
+            ),
+            3 => 
+            array (
+              'label' => 'Tipo de servicio',
+              'key' => 'tipo_servicio',
+              'type' => 'select',
+              'value' => 'todos',
+              'options' => 
+              array (
+                0 => 
+                array (
+                  'label' => 'Todos',
+                  'value' => 'todos',
+                ),
+                1 => 
+                array (
+                  'label' => 'Delivery',
+                  'value' => 'DELIVERY',
+                ),
+                2 => 
+                array (
+                  'label' => 'Montacarga',
+                  'value' => 'MONTACARGA',
+                ),
+              ),
+            ),
+            4 => 
+            array (
+              'label' => 'Estado de entrega',
+              'key' => 'estado_entrega',
+              'type' => 'select',
+              'value' => 'todos',
+              'options' => 
+              array (
+                0 => 
+                array (
+                  'label' => 'Todos',
+                  'value' => 'todos',
+                ),
+                1 => 
+                array (
+                  'label' => 'Pendiente',
+                  'value' => 'PENDIENTE',
+                ),
+                2 => 
+                array (
+                  'label' => 'Entregado',
+                  'value' => 'ENTREGADO',
+                ),
+              ),
+            ),
+            5 => 
+            array (
+              'label' => 'Registrado',
+              'key' => 'registrado',
+              'type' => 'select',
+              'value' => 'todos',
+              'options' => 
+              array (
+                0 => 
+                array (
+                  'label' => 'Todos',
+                  'value' => 'todos',
+                ),
+                1 => 
+                array (
+                  'label' => 'Si',
+                  'value' => 'Si',
+                ),
+                2 => 
+                array (
+                  'label' => 'No',
+                  'value' => 'No',
+                ),
+              ),
+            ),
+            6 => 
+            array (
+              'label' => 'Entregado',
+              'key' => 'entregado',
+              'type' => 'select',
+              'value' => 'todos',
+              'options' => 
+              array (
+                0 => 
+                array (
+                  'label' => 'Todos',
+                  'value' => 'todos',
+                ),
+                1 => 
+                array (
+                  'label' => 'Si',
+                  'value' => 'Si',
+                ),
+                2 => 
+                array (
+                  'label' => 'No',
+                  'value' => 'No',
+                ),
+              ),
+            ),
+            7 => 
+            array (
+              'label' => 'Estado',
+              'key' => 'estado',
+              'type' => 'select',
+              'value' => 'todos',
+              'options' => 
+              array (
+                0 => 
+                array (
+                  'label' => 'Todos',
+                  'value' => 'todos',
+                ),
+                1 => 
+                array (
+                  'label' => 'Pagado',
+                  'value' => 'Pagado',
+                ),
+                2 => 
+                array (
+                  'label' => 'Pendiente',
+                  'value' => 'Pendiente',
+                ),
+              ),
+            ),
+            8 => 
+            array (
+              'label' => 'Fecha inicio',
+              'key' => 'fecha_inicio',
+              'type' => 'date',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            9 => 
+            array (
+              'label' => 'Fecha fin',
+              'key' => 'fecha_fin',
+              'type' => 'date',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            10 => 
+            array (
+              'label' => 'Tipo de entrega',
+              'key' => 'tipo_entrega',
+              'type' => 'select',
+              'value' => 'todos',
+              'options' => 
+              array (
+                0 => 
+                array (
+                  'label' => 'Todos',
+                  'value' => 'todos',
+                ),
+                1 => 
+                array (
+                  'label' => 'Lima',
+                  'value' => 'LIMA',
+                ),
+                2 => 
+                array (
+                  'label' => 'Provincia',
+                  'value' => 'PROVINCIA',
+                ),
+              ),
+            ),
+            11 => 
+            array (
+              'label' => 'Tipo de servicio',
+              'key' => 'tipo_servicio',
+              'type' => 'select',
+              'value' => 'todos',
+              'options' => 
+              array (
+                0 => 
+                array (
+                  'label' => 'Todos',
+                  'value' => 'todos',
+                ),
+                1 => 
+                array (
+                  'label' => 'Delivery',
+                  'value' => 'DELIVERY',
+                ),
+                2 => 
+                array (
+                  'label' => 'Montacarga',
+                  'value' => 'MONTACARGA',
+                ),
+              ),
+            ),
+          ),
+          'live_api' => NULL,
+        ),
+      ),
     ),
   ),
-  77 => 
+  158 => 
   array (
     'key' => 'verificacion.permisos.id',
     'label' => 'Verificacion → Permisos → Id',
@@ -24437,6 +46128,127 @@ return array (
     'widgets' => 
     array (
       0 => 
+      array (
+        'key' => 'card-derecho-tramite',
+        'label' => 'Card — Derecho trámite',
+        'tipo' => 'card',
+        'component' => 'pages/verificacion/permisos/[id]',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Derecho trámite',
+          'icon' => '(totalPagadoDerechoByTipo[tipo.id] || 0) >= Number(tipo.derecho_entidad || 0) ? ',
+          'body' => '{{ tipo.nombre_permiso }}',
+          'fields' => 
+          array (
+            0 => 
+            array (
+              'key' => 'expediente-o-cpb',
+              'label' => 'Expediente o CPB',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            1 => 
+            array (
+              'key' => 'comprobantes',
+              'label' => 'Comprobantes',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Eliminar',
+              'icon' => 'i-heroicons-trash',
+              'color' => 'error',
+              'variant' => 'ghost',
+            ),
+            1 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'i-heroicons-x-mark',
+              'color' => 'neutral',
+              'variant' => 'ghost',
+            ),
+          ),
+        ),
+      ),
+      1 => 
+      array (
+        'key' => 'card-tramitador',
+        'label' => 'Card — Tramitador',
+        'tipo' => 'card',
+        'component' => 'pages/verificacion/permisos/[id]',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Tramitador',
+          'icon' => 'totalPagadoTramitador >= Number(tramite?.tramitador || 0) ? ',
+          'body' => '',
+          'fields' => 
+          array (
+            0 => 
+            array (
+              'key' => 'comprobantes',
+              'label' => 'Comprobantes',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Eliminar',
+              'icon' => 'i-heroicons-trash',
+              'color' => 'error',
+              'variant' => 'ghost',
+            ),
+            1 => 
+            array (
+              'label' => 'Acción',
+              'icon' => 'i-heroicons-x-mark',
+              'color' => 'neutral',
+              'variant' => 'ghost',
+            ),
+          ),
+        ),
+      ),
+      2 => 
+      array (
+        'key' => 'card-verificacion-pagos',
+        'label' => 'Card — Verificación pagos',
+        'tipo' => 'card',
+        'component' => 'pages/verificacion/permisos/[id]',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Verificación pagos',
+          'icon' => 'i-heroicons-banknotes',
+          'body' => 'Sin pagos registrados',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      3 => 
       array (
         'key' => 'modal-vista-previa-del-archivo',
         'label' => 'Modal — Vista previa del archivo',
@@ -24461,7 +46273,7 @@ return array (
           'live_api' => NULL,
         ),
       ),
-      1 => 
+      4 => 
       array (
         'key' => 'modal-registrar-pago',
         'label' => 'Modal — Registrar Pago ',
@@ -24525,7 +46337,7 @@ return array (
       ),
     ),
   ),
-  78 => 
+  159 => 
   array (
     'key' => 'viaticos',
     'label' => 'Viaticos',
@@ -24633,6 +46445,151 @@ return array (
       ),
       1 => 
       array (
+        'key' => 'toolbar-acciones-fila',
+        'label' => 'Toolbar — Acciones de fila',
+        'tipo' => 'toolbar',
+        'component' => 'pages/viaticos/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Ver',
+              'icon' => 'i-heroicons-eye',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+            1 => 
+            array (
+              'label' => 'Eliminar',
+              'icon' => 'i-heroicons-trash',
+              'color' => 'error',
+              'variant' => 'ghost',
+            ),
+          ),
+        ),
+      ),
+      2 => 
+      array (
+        'key' => 'accion-ver',
+        'label' => 'Acción — Ver',
+        'tipo' => 'accion',
+        'component' => 'pages/viaticos/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Ver',
+          'icon' => 'i-heroicons-eye',
+          'color' => 'primary',
+          'variant' => 'ghost',
+        ),
+      ),
+      3 => 
+      array (
+        'key' => 'accion-eliminar',
+        'label' => 'Acción — Eliminar',
+        'tipo' => 'accion',
+        'component' => 'pages/viaticos/index',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Eliminar',
+          'icon' => 'i-heroicons-trash',
+          'color' => 'error',
+          'variant' => 'ghost',
+        ),
+      ),
+      4 => 
+      array (
+        'key' => 'toolbar-datatable',
+        'label' => 'Toolbar — Controles de tabla',
+        'tipo' => 'toolbar',
+        'component' => 'pages/viaticos/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Filtros',
+              'icon' => 'i-heroicons-funnel',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+            1 => 
+            array (
+              'label' => 'Nuevo',
+              'icon' => 'i-heroicons-plus',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+            2 => 
+            array (
+              'label' => 'Buscar',
+              'icon' => 'i-heroicons-magnifying-glass',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+          ),
+        ),
+      ),
+      5 => 
+      array (
+        'key' => 'accion-filtros',
+        'label' => 'Acción — Filtros',
+        'tipo' => 'accion',
+        'component' => 'pages/viaticos/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Filtros',
+          'icon' => 'i-heroicons-funnel',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
+      6 => 
+      array (
+        'key' => 'accion-nuevo',
+        'label' => 'Acción — Nuevo',
+        'tipo' => 'accion',
+        'component' => 'pages/viaticos/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Nuevo',
+          'icon' => 'i-heroicons-plus',
+          'color' => 'primary',
+          'variant' => 'solid',
+        ),
+      ),
+      7 => 
+      array (
+        'key' => 'accion-buscar',
+        'label' => 'Acción — Buscar',
+        'tipo' => 'accion',
+        'component' => 'pages/viaticos/index',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Buscar',
+          'icon' => 'i-heroicons-magnifying-glass',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
+      8 => 
+      array (
         'key' => 'modal-vista-previa-del-archivo',
         'label' => 'Modal — Vista previa del archivo',
         'tipo' => 'modal',
@@ -24658,7 +46615,7 @@ return array (
       ),
     ),
   ),
-  79 => 
+  160 => 
   array (
     'key' => 'viaticos.completados',
     'label' => 'Viaticos → Completados',
@@ -24761,6 +46718,128 @@ return array (
       ),
       1 => 
       array (
+        'key' => 'toolbar-acciones-fila',
+        'label' => 'Toolbar — Acciones de fila',
+        'tipo' => 'toolbar',
+        'component' => 'pages/viaticos/completados',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Ver',
+              'icon' => 'i-heroicons-eye',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+          ),
+        ),
+      ),
+      2 => 
+      array (
+        'key' => 'accion-ver',
+        'label' => 'Acción — Ver',
+        'tipo' => 'accion',
+        'component' => 'pages/viaticos/completados',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Ver',
+          'icon' => 'i-heroicons-eye',
+          'color' => 'primary',
+          'variant' => 'ghost',
+        ),
+      ),
+      3 => 
+      array (
+        'key' => 'toolbar-datatable',
+        'label' => 'Toolbar — Controles de tabla',
+        'tipo' => 'toolbar',
+        'component' => 'pages/viaticos/completados',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Exportar',
+              'icon' => 'i-heroicons-arrow-up-tray',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+            1 => 
+            array (
+              'label' => 'Filtros',
+              'icon' => 'i-heroicons-funnel',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+            2 => 
+            array (
+              'label' => 'Buscar',
+              'icon' => 'i-heroicons-magnifying-glass',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+          ),
+        ),
+      ),
+      4 => 
+      array (
+        'key' => 'accion-exportar',
+        'label' => 'Acción — Exportar',
+        'tipo' => 'accion',
+        'component' => 'pages/viaticos/completados',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Exportar',
+          'icon' => 'i-heroicons-arrow-up-tray',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
+      5 => 
+      array (
+        'key' => 'accion-filtros',
+        'label' => 'Acción — Filtros',
+        'tipo' => 'accion',
+        'component' => 'pages/viaticos/completados',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Filtros',
+          'icon' => 'i-heroicons-funnel',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
+      6 => 
+      array (
+        'key' => 'accion-buscar',
+        'label' => 'Acción — Buscar',
+        'tipo' => 'accion',
+        'component' => 'pages/viaticos/completados',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Buscar',
+          'icon' => 'i-heroicons-magnifying-glass',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
+      7 => 
+      array (
         'key' => 'modal-vista-previa-del-archivo',
         'label' => 'Modal — Vista previa del archivo',
         'tipo' => 'modal',
@@ -24786,7 +46865,7 @@ return array (
       ),
     ),
   ),
-  80 => 
+  161 => 
   array (
     'key' => 'viaticos.id',
     'label' => 'Viaticos → Id',
@@ -24794,6 +46873,230 @@ return array (
     'widgets' => 
     array (
       0 => 
+      array (
+        'key' => 'card-informacion-general',
+        'label' => 'Card — Información General',
+        'tipo' => 'card',
+        'component' => 'pages/viaticos/[id]',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Información General',
+          'icon' => 'i-heroicons-information-circle',
+          'body' => '{{ formatDateTimeToDmy(viatico.reimbursement_date) }}',
+          'fields' => 
+          array (
+            0 => 
+            array (
+              'key' => 'asunto',
+              'label' => 'Asunto',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            1 => 
+            array (
+              'key' => 'fecha-de-reintegro',
+              'label' => 'Fecha de Reintegro',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            2 => 
+            array (
+              'key' => 'fecha-de-devolucion',
+              'label' => 'Fecha de devolución',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            3 => 
+            array (
+              'key' => 'area-solicitante',
+              'label' => 'Área Solicitante',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            4 => 
+            array (
+              'key' => 'monto-total',
+              'label' => 'Monto Total',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            5 => 
+            array (
+              'key' => 'solicitante',
+              'label' => 'Solicitante',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            6 => 
+            array (
+              'key' => 'codigo-de-confirmacion',
+              'label' => 'Código de confirmación',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      1 => 
+      array (
+        'key' => 'card-descripcion-del-gasto',
+        'label' => 'Card — Descripción del Gasto',
+        'tipo' => 'card',
+        'component' => 'pages/viaticos/[id]',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Descripción del Gasto',
+          'icon' => 'i-heroicons-document-text',
+          'body' => '',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+          ),
+        ),
+      ),
+      2 => 
+      array (
+        'key' => 'card-evidencia',
+        'label' => 'Card — Evidencia',
+        'tipo' => 'card',
+        'component' => 'pages/viaticos/[id]',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Evidencia',
+          'icon' => 'i-heroicons-document-duplicate',
+          'body' => '{{ index + 1 }}',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Abrir en nueva pestaña',
+              'icon' => NULL,
+              'color' => 'primary',
+              'variant' => 'soft',
+            ),
+            1 => 
+            array (
+              'label' => 'Ver',
+              'icon' => NULL,
+              'color' => 'primary',
+              'variant' => 'soft',
+            ),
+          ),
+        ),
+      ),
+      3 => 
+      array (
+        'key' => 'card-comprobantes-de-retribucion',
+        'label' => 'Card — Comprobantes de Retribución',
+        'tipo' => 'card',
+        'component' => 'pages/viaticos/[id]',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Comprobantes de Retribución',
+          'icon' => 'i-heroicons-check-circle',
+          'body' => 'Total: {{ formatCurrency(sumaExistentes, \'PEN\') }}',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Eliminar',
+              'icon' => 'i-heroicons-trash',
+              'color' => 'error',
+              'variant' => 'soft',
+            ),
+            1 => 
+            array (
+              'label' => 'Ver',
+              'icon' => NULL,
+              'color' => 'primary',
+              'variant' => 'soft',
+            ),
+          ),
+        ),
+      ),
+      4 => 
+      array (
+        'key' => 'card-subir-comprobantes-de-retribucion',
+        'label' => 'Card — Subir Comprobantes de Retribución',
+        'tipo' => 'card',
+        'component' => 'pages/viaticos/[id]',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Subir Comprobantes de Retribución',
+          'icon' => 'i-heroicons-cog-6-tooth',
+          'body' => 'Total a pagar:',
+          'fields' => 
+          array (
+          ),
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Agregar pago',
+              'icon' => 'i-heroicons-plus-circle',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+            1 => 
+            array (
+              'label' => 'Eliminar',
+              'icon' => 'i-heroicons-trash',
+              'color' => 'error',
+              'variant' => 'ghost',
+            ),
+            2 => 
+            array (
+              'label' => 'Guardar',
+              'icon' => 'i-heroicons-check',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+          ),
+        ),
+      ),
+      5 => 
       array (
         'key' => 'modal-registrar-pago',
         'label' => 'Modal — Registrar Pago ',
@@ -24855,7 +47158,7 @@ return array (
           'live_api' => NULL,
         ),
       ),
-      1 => 
+      6 => 
       array (
         'key' => 'modal-vista-previa-del-archivo',
         'label' => 'Modal — Vista previa del archivo',
@@ -24882,7 +47185,7 @@ return array (
       ),
     ),
   ),
-  81 => 
+  162 => 
   array (
     'key' => 'viaticos.pendientes',
     'label' => 'Viaticos → Pendientes',
@@ -24989,6 +47292,151 @@ return array (
         ),
       ),
       1 => 
+      array (
+        'key' => 'toolbar-acciones-fila',
+        'label' => 'Toolbar — Acciones de fila',
+        'tipo' => 'toolbar',
+        'component' => 'pages/viaticos/pendientes',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Ver',
+              'icon' => 'i-heroicons-eye',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+            1 => 
+            array (
+              'label' => 'Editar',
+              'icon' => 'i-heroicons-pencil',
+              'color' => 'primary',
+              'variant' => 'ghost',
+            ),
+          ),
+        ),
+      ),
+      2 => 
+      array (
+        'key' => 'accion-ver',
+        'label' => 'Acción — Ver',
+        'tipo' => 'accion',
+        'component' => 'pages/viaticos/pendientes',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Ver',
+          'icon' => 'i-heroicons-eye',
+          'color' => 'primary',
+          'variant' => 'ghost',
+        ),
+      ),
+      3 => 
+      array (
+        'key' => 'accion-editar',
+        'label' => 'Acción — Editar',
+        'tipo' => 'accion',
+        'component' => 'pages/viaticos/pendientes',
+        'api_hint' => 'column:acciones',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Editar',
+          'icon' => 'i-heroicons-pencil',
+          'color' => 'primary',
+          'variant' => 'ghost',
+        ),
+      ),
+      4 => 
+      array (
+        'key' => 'toolbar-datatable',
+        'label' => 'Toolbar — Controles de tabla',
+        'tipo' => 'toolbar',
+        'component' => 'pages/viaticos/pendientes',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'buttons' => 
+          array (
+            0 => 
+            array (
+              'label' => 'Filtros',
+              'icon' => 'i-heroicons-funnel',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+            1 => 
+            array (
+              'label' => 'Nuevo',
+              'icon' => 'i-heroicons-plus',
+              'color' => 'primary',
+              'variant' => 'solid',
+            ),
+            2 => 
+            array (
+              'label' => 'Buscar',
+              'icon' => 'i-heroicons-magnifying-glass',
+              'color' => 'neutral',
+              'variant' => 'outline',
+            ),
+          ),
+        ),
+      ),
+      5 => 
+      array (
+        'key' => 'accion-filtros',
+        'label' => 'Acción — Filtros',
+        'tipo' => 'accion',
+        'component' => 'pages/viaticos/pendientes',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Filtros',
+          'icon' => 'i-heroicons-funnel',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
+      6 => 
+      array (
+        'key' => 'accion-nuevo',
+        'label' => 'Acción — Nuevo',
+        'tipo' => 'accion',
+        'component' => 'pages/viaticos/pendientes',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Nuevo',
+          'icon' => 'i-heroicons-plus',
+          'color' => 'primary',
+          'variant' => 'solid',
+        ),
+      ),
+      7 => 
+      array (
+        'key' => 'accion-buscar',
+        'label' => 'Acción — Buscar',
+        'tipo' => 'accion',
+        'component' => 'pages/viaticos/pendientes',
+        'api_hint' => 'DataTable chrome',
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'label' => 'Buscar',
+          'icon' => 'i-heroicons-magnifying-glass',
+          'color' => 'neutral',
+          'variant' => 'outline',
+        ),
+      ),
+      8 => 
       array (
         'key' => 'modal-vista-previa-del-archivo',
         'label' => 'Modal — Vista previa del archivo',
