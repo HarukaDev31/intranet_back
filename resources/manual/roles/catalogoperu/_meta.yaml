@@ -1,0 +1,29 @@
+slug: catalogoperu
+id_grupo: 1218
+nombre: CatalogoPeru
+descripcion: 'Manual del rol CatalogoPeru'
+menus:
+  -
+    id_menu: 1
+    titulo: Inicio
+    url: InicioController
+  -
+    id_menu: 194
+    titulo: Catalogo
+    url: '#'
+  -
+    id_menu: 195
+    titulo: 'Catalogo → Productos'
+    url: CatalogoController/listar
+  -
+    id_menu: 199
+    titulo: 'Catalogo → Seleccionados'
+    url: CatalogoController/listarSeleccionados
+  -
+    id_menu: 203
+    titulo: Órdenes
+    url: '#'
+  -
+    id_menu: 205
+    titulo: 'Órdenes → Confirmados'
+    url: OrdersController/listarConfirmados

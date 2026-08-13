@@ -1,0 +1,25 @@
+slug: gerencia-carga-consolidada
+id_grupo: 1208
+nombre: 'Gerencia Carga Consolidada'
+descripcion: 'Manual del rol Gerencia Carga Consolidada'
+menus:
+  -
+    id_menu: 1
+    titulo: Inicio
+    url: InicioController
+  -
+    id_menu: 5
+    titulo: 'Ventas y Clientes'
+    url: '#'
+  -
+    id_menu: 40
+    titulo: 'Ventas y Clientes → Reglas de Clientes'
+    url: '#'
+  -
+    id_menu: 184
+    titulo: 'Carga Consolidada'
+    url: '#'
+  -
+    id_menu: 192
+    titulo: 'Carga Consolidada → Carga Consolidada'
+    url: cargaconsolidada/abiertos

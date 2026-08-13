@@ -101,6 +101,9 @@ require __DIR__.'/modules/soporte-ti.php';
 // Módulo de Noticias del Sistema
 require __DIR__.'/modules/news.php';
 
+// Manual de usuario (contenido MD por rol + PDF)
+require __DIR__.'/modules/manual-usuario.php';
+
 // Módulo de Vi?ticos
 require __DIR__.'/modules/viaticos.php';
 

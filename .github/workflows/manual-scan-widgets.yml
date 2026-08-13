@@ -1,0 +1,119 @@
+name: Scan manual widgets
+
+# Regenera el catálogo de widgets Vue y abre PR en el back.
+# No corre en el server de prod ni contra Netlify: clona el repo front (sources).
+#
+# Uso: Actions → Scan manual widgets → Run workflow
+# Secrets opcionales:
+#   MANUAL_FRONT_REPO_TOKEN — PAT si el front es privado y github.token no alcanza
+# Vars opcionales:
+#   MANUAL_FRONT_REPO — default HarukaDev31/probusiness_intranetv3
+
+on:
+  workflow_dispatch:
+    inputs:
+      front_ref:
+        description: 'Branch/tag del front (probusiness_intranetv3)'
+        required: false
+        default: 'main'
+        type: string
+      only:
+        description: 'Prefijo opcional (ej. pages/curso). Vacío = full scan'
+        required: false
+        default: ''
+        type: string
+      open_pr:
+        description: 'Abrir PR con el catálogo actualizado'
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: manual-scan-widgets
+  cancel-in-progress: true
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout back
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Checkout front (sources)
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.MANUAL_FRONT_REPO || 'HarukaDev31/probusiness_intranetv3' }}
+          ref: ${{ inputs.front_ref }}
+          path: .front-intranetv3
+          token: ${{ secrets.MANUAL_FRONT_REPO_TOKEN || github.token }}
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, pdo_mysql, redis, gd, zip, bcmath, intl
+          coverage: none
+
+      - name: Install composer deps
+        env:
+          REVERB_APP_ID: ci
+          REVERB_APP_KEY: ci-key
+          REVERB_APP_SECRET: ci-secret
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Prepare Laravel env
+        run: |
+          cp .env.example .env
+          php artisan key:generate --no-interaction
+          php artisan config:clear
+
+      - name: Scan front widgets
+        env:
+          MANUAL_USUARIO_FRONT_PATH: ${{ github.workspace }}/.front-intranetv3
+        run: |
+          set -euo pipefail
+          EXTRA=()
+          if [ -n "${{ inputs.only }}" ]; then
+            EXTRA+=(--only="${{ inputs.only }}")
+          fi
+          php artisan manual:scan-front-widgets \
+            --front="$MANUAL_USUARIO_FRONT_PATH" \
+            --write \
+            --no-backup \
+            "${EXTRA[@]}"
+          php artisan config:clear
+
+      - name: Detect catalog changes
+        id: diff
+        run: |
+          if git diff --quiet -- config/manual_usuario_page_widgets.php; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Sin cambios en el catálogo."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            git diff --stat -- config/manual_usuario_page_widgets.php
+          fi
+
+      - name: Create Pull Request
+        if: ${{ inputs.open_pr && steps.diff.outputs.changed == 'true' }}
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ github.token }}
+          commit-message: 'chore(manual): regenerar catálogo de widgets del front'
+          branch: chore/manual-scan-widgets
+          delete-branch: true
+          title: 'chore(manual): regenerar catálogo de widgets'
+          body: |
+            Catálogo regenerado con `php artisan manual:scan-front-widgets`.
+
+            - Front: `${{ vars.MANUAL_FRONT_REPO || 'HarukaDev31/probusiness_intranetv3' }}` @ `${{ inputs.front_ref }}`
+            - Only: `${{ inputs.only || '(full)' }}`
+
+            Tras merge + deploy del back, el mantenedor CMS ya puede importar los widgets nuevos.
+            Netlify no interviene: el scanner lee el repo Vue, no el build.

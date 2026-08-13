@@ -1,0 +1,25 @@
+slug: jefe-china
+id_grupo: 1211
+nombre: 'Jefe China'
+descripcion: 'Jefe de actividades en China'
+menus:
+  -
+    id_menu: 1
+    titulo: Inicio
+    url: InicioController
+  -
+    id_menu: 175
+    titulo: 'Agente de Compra'
+    url: '#'
+  -
+    id_menu: 178
+    titulo: 'Agente de Compra → Cotización Garantizada'
+    url: AgenteCompra/PedidosGarantizados/listar
+  -
+    id_menu: 180
+    titulo: 'Agente de Compra → Orden de Compra'
+    url: AgenteCompra/PedidosPagados/listar
+  -
+    id_menu: 191
+    titulo: 'Agente de Compra → Estado de Contenedor'
+    url: AgenteCompra/EstadoContenedor/listar
