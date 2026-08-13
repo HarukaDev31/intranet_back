@@ -10,7 +10,7 @@
 #   APP_PORT=8085
 #   APP_URL=https://qa.intranetback.probusiness.pe
 #   COMPOSE_PROJECT_NAME=intranet_qa
-#   DB_HOST=172.23.0.1
+#   DB_HOST=172.19.0.1
 #   # sin DB_SOCKET / MYSQL_SOCKET_DIR_HOST (borrarlos o dejarlos vacíos)
 #   DOCKER_REDIS_HOST=redis
 #   REDIS_HOST=redis
@@ -20,9 +20,12 @@
 #   PUSHER_PORT=6002
 #   HORIZON_PREFIX=qa_horizon:
 #
-# MySQL en el host (PROD usa 172.22; QA usa 172.23):
-#   bind-address = 127.0.0.1,172.22.0.1,172.23.0.1
-#   GRANT ... TO 'user'@'172.23.%' ...
+# Subnet QA = la que Docker ya asignó al stack (172.19).
+# PROD usa otra (p. ej. 172.22) — no reutilizar la misma.
+#
+# MySQL en el host:
+#   bind-address = 127.0.0.1,172.19.0.1,172.22.0.1
+#   GRANT ... TO 'user'@'172.19.%' ...
 #
 # name: intranet_qa = stack actual (intranet_qa-app-1, etc.)
 
@@ -38,5 +41,5 @@ networks:
     driver: bridge
     ipam:
       config:
-        - subnet: 172.23.0.0/16
-          gateway: 172.23.0.1
+        - subnet: 172.19.0.0/16
+          gateway: 172.19.0.1
