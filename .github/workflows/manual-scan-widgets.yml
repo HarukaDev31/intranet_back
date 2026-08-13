@@ -15,7 +15,7 @@ on:
       front_ref:
         description: 'Branch/tag del front (probusiness_intranetv3)'
         required: false
-        default: 'main'
+        default: 'master'
         type: string
       only:
         description: 'Prefijo opcional (ej. pages/curso). Vacío = full scan'
@@ -41,12 +41,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout back
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
       - name: Checkout front (sources)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: ${{ vars.MANUAL_FRONT_REPO || 'HarukaDev31/probusiness_intranetv3' }}
           ref: ${{ inputs.front_ref }}
@@ -102,7 +102,7 @@ jobs:
 
       - name: Create Pull Request
         if: ${{ inputs.open_pr && steps.diff.outputs.changed == 'true' }}
-        uses: peter-evans/create-pull-request@v6
+        uses: peter-evans/create-pull-request@v7
         with:
           token: ${{ github.token }}
           commit-message: 'chore(manual): regenerar catálogo de widgets del front'
