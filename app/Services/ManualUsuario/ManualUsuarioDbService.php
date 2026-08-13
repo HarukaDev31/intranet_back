@@ -444,7 +444,8 @@ class ManualUsuarioDbService
             $out[] = '<div class="widget-title">' . e($titulo) . '</div>';
         }
         if (!empty($payload['subtitulo'])) {
-            $out[] = '<div class="muted">' . e((string) $payload['subtitulo']) . '</div>';
+            $subClass = $tipo === ManualBloque::TIPO_MEDIA ? 'media-subtitle' : 'muted';
+            $out[] = '<div class="' . $subClass . '">' . e((string) $payload['subtitulo']) . '</div>';
         }
 
         switch ($tipo) {

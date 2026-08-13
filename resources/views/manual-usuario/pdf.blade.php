@@ -112,6 +112,13 @@
 
         .widget { margin: 0 0 10px; }
         .widget-title { font-size: 10px; font-weight: bold; color: #0f172a; margin-bottom: 3px; }
+        .media-subtitle {
+            font-size: 12px;
+            font-weight: bold;
+            color: #1e293b;
+            margin: 0 0 8px;
+            line-height: 1.35;
+        }
         .muted { color: #64748b; font-size: 9px; margin-bottom: 4px; }
         .texto { font-size: 10px; color: #334155; }
 
