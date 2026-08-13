@@ -197,12 +197,12 @@ class ManualUsuarioDbService
 
         $html = '<div class="' . $levelClass . '">';
         if ($titulo !== '') {
-            $html .= '<div class="grupo-title">' . e($titulo) . '</div>';
+            $html .= $this->linkedTitleHtml($titulo, $clave, 'grupo-title');
         }
-        if ($clave !== '') {
+        if ($clave !== '' && !$this->isRouteLike($clave)) {
             $html .= '<div class="grupo-clave">' . e($clave) . '</div>';
         }
-        if ($subtitulo !== '') {
+        if ($subtitulo !== '' && !$this->isRouteLike($subtitulo)) {
             $html .= '<div class="grupo-sub">' . e($subtitulo) . '</div>';
         }
         $children = is_array($block['children'] ?? null) ? $block['children'] : [];
@@ -230,9 +230,9 @@ class ManualUsuarioDbService
         $subtitulo = trim((string) ($payload['subtitulo'] ?? ''));
         $html = '<div class="timeline">';
         if ($titulo !== '') {
-            $html .= '<div class="widget-title">' . e($titulo) . '</div>';
+            $html .= $this->linkedTitleHtml($titulo, $subtitulo, 'widget-title');
         }
-        if ($subtitulo !== '') {
+        if ($subtitulo !== '' && !$this->isRouteLike($subtitulo)) {
             $html .= '<div class="muted">' . e($subtitulo) . '</div>';
         }
         $html .= '<table class="timeline-table" width="100%" cellpadding="0" cellspacing="0"><tr>';
@@ -441,9 +441,9 @@ class ManualUsuarioDbService
         $out = [];
 
         if ($titulo !== '' && $tipo !== ManualBloque::TIPO_GRUPO) {
-            $out[] = '<div class="widget-title">' . e($titulo) . '</div>';
+            $out[] = $this->linkedTitleHtml($titulo, (string) ($payload['subtitulo'] ?? ''), 'widget-title');
         }
-        if (!empty($payload['subtitulo'])) {
+        if (!empty($payload['subtitulo']) && !$this->isRouteLike((string) $payload['subtitulo'])) {
             $subClass = $tipo === ManualBloque::TIPO_MEDIA ? 'media-subtitle' : 'muted';
             $out[] = '<div class="' . $subClass . '">' . e((string) $payload['subtitulo']) . '</div>';
         }
@@ -727,6 +727,55 @@ class ManualUsuarioDbService
         }
 
         return $html;
+    }
+
+    private function isRouteLike(string $raw): bool
+    {
+        $t = trim($raw);
+        if ($t === '' || preg_match('/\s/', $t)) {
+            return false;
+        }
+        if (preg_match('#^https?://#i', $t)) {
+            return true;
+        }
+        if (str_starts_with($t, '/') && strlen($t) > 1) {
+            return true;
+        }
+
+        return (bool) (preg_match('#^[a-z0-9][\w\-./?=&%#]*$#i', $t)
+            && (str_contains($t, '/') || str_contains($t, '?')));
+    }
+
+    /**
+     * @return array{href: string, external: bool}|null
+     */
+    private function parseManualRoute(string $raw): ?array
+    {
+        $t = trim($raw);
+        if (!$this->isRouteLike($t)) {
+            return null;
+        }
+        if (preg_match('#^https?://#i', $t)) {
+            return ['href' => $t, 'external' => true];
+        }
+        $path = str_starts_with($t, '/') ? $t : '/' . $t;
+        $base = rtrim((string) config('manual_usuario.front_public_url', ''), '/');
+        if ($base !== '') {
+            return ['href' => $base . $path, 'external' => true];
+        }
+
+        return ['href' => $path, 'external' => false];
+    }
+
+    private function linkedTitleHtml(string $titulo, string $routeCandidate, string $cssClass): string
+    {
+        $link = $this->parseManualRoute($routeCandidate);
+        if ($link) {
+            return '<div class="' . $cssClass . '"><a class="title-link" href="' . e($link['href']) . '">'
+                . e($titulo) . '</a></div>';
+        }
+
+        return '<div class="' . $cssClass . '">' . e($titulo) . '</div>';
     }
 
     /**

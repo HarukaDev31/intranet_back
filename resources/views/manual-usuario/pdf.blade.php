@@ -112,6 +112,7 @@
 
         .widget { margin: 0 0 10px; }
         .widget-title { font-size: 10px; font-weight: bold; color: #0f172a; margin-bottom: 3px; }
+        .title-link { color: #2563eb; text-decoration: underline; }
         .media-subtitle {
             font-size: 12px;
             font-weight: bold;

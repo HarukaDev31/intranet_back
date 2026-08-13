@@ -32,4 +32,10 @@ return [
     | Por defecto intenta ../probusiness_intranetv3 relativo al back.
     */
     'front_path' => env('MANUAL_USUARIO_FRONT_PATH', ''),
+
+    /*
+    | URL pública del front (para enlaces absolutos en el PDF cuando clave/subtítulo es ruta).
+    | Ej: https://intranet.probusiness.pe
+    */
+    'front_public_url' => rtrim((string) env('MANUAL_USUARIO_FRONT_URL', env('FRONTEND_URL', '')), '/'),
 ];
