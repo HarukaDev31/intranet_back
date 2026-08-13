@@ -43,6 +43,7 @@ class SendReminderPagoWhatsAppJob implements ShouldQueue
                     'CC.logistica_final',
                     'CC.recargos_descuentos_final',
                     'CC.servicios_extra_final',
+                    'CC.descuento',
                     DB::raw('(
                         SELECT IFNULL(SUM(cccp.monto), 0)
                         FROM contenedor_consolidado_cotizacion_coordinacion_pagos cccp
@@ -72,13 +73,9 @@ class SendReminderPagoWhatsAppJob implements ShouldQueue
             $serviciosExtraFinal = (float) ($cotizacion->servicios_extra_final ?? 0);
             $logisticaFinal = (float) ($cotizacion->logistica_final ?? 0);
             $impuestosFinal = (float) ($cotizacion->impuestos_final ?? 0);
-
-            $totalCotizacion = $logisticaFinal + $impuestosFinal + $serviciosExtraFinal;
-            if($recargos > 0 ){
-                $totalCotizacion += $recargos;
-            }else{
-                $totalCotizacion += $recargosDescuentosFinal;
-            }
+            $descuento = (float) ($cotizacion->descuento ?? 0);
+            $totalCotizacion = $logisticaFinal + $impuestosFinal + $serviciosExtraFinal - $descuento;
+            
             $totalPagos = (float) ($cotizacion->total_pagos ?? 0);
             $pendiente = $totalCotizacion - $totalPagos;
             $isAjustado = $cotizacion->estado_cotizacion_final == 'AJUSTADO';

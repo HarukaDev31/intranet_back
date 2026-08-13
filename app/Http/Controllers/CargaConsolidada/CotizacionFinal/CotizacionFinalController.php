@@ -386,12 +386,16 @@ class CotizacionFinalController extends Controller
                 }, $pagos);
                 $totalLi = (float)($row->total_logistica_impuestos ?? 0);
                 $recargos = (float)($row->recargos ?? 0);
-                $descuento = (float)($row->descuento ?? 0);
                 $recargosDescuentosFinal = (float)($row->recargos_descuentos_final ?? 0);
                 $serviciosExtraFinal = (float)($row->servicios_extra_final ?? 0);
                 $totalPag = (float)($row->total_pagos ?? 0);
-                $importeTotal = $totalLi + $serviciosExtraFinal - $descuento;
-                
+                $importeTotal = $totalLi + $serviciosExtraFinal;
+                if($recargos > 0 ){
+                    $importeTotal += $recargos ;
+                }else{
+                    $importeTotal += $recargosDescuentosFinal;
+                }
+
                 $transformedData->push([
                     'index' => $index,
                     'id_contenedor_pago' => $row->id_contenedor_pago,
