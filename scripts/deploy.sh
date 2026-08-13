@@ -13,6 +13,7 @@ DEPLOY_MODE="${DEPLOY_MODE:-docker}"
 PHP_FPM_SERVICE="${PHP_FPM_SERVICE:-php8.3-fpm}"
 RUN_MIGRATIONS="${RUN_MIGRATIONS:-true}"
 COMPOSE_LOCAL="${COMPOSE_LOCAL:-false}"
+# Legacy: overlay socket host-mysql. Preferí docker-compose.prod.yml / .qa.yml si existen.
 COMPOSE_HOST_MYSQL="${COMPOSE_HOST_MYSQL:-true}"
 # auto = solo si cambió Dockerfile/compose/docker/* | true/false fuerzan
 DOCKER_REBUILD="${DOCKER_REBUILD:-auto}"
@@ -24,13 +25,29 @@ log() {
   echo "[deploy] $*"
 }
 
+# Orden: local → prod.yml → qa.yml → host-mysql (legacy socket).
+resolve_compose_files() {
+  COMPOSE_FILES=(-f docker-compose.yml)
+  if [[ "${COMPOSE_LOCAL}" == "true" ]]; then
+    COMPOSE_FILES+=(-f docker-compose.local.yml)
+  elif [[ -f docker-compose.prod.yml ]]; then
+    COMPOSE_FILES+=(-f docker-compose.prod.yml)
+  elif [[ -f docker-compose.qa.yml ]]; then
+    COMPOSE_FILES+=(-f docker-compose.qa.yml)
+  elif [[ "${COMPOSE_HOST_MYSQL}" == "true" ]]; then
+    COMPOSE_FILES+=(-f docker-compose.host-mysql.yml)
+  fi
+}
+
 state_dir() {
   mkdir -p "${DEPLOY_PATH}/.deploy"
 }
 
 docker_context_hash() {
   {
-    cat Dockerfile docker-compose.yml docker-compose.host-mysql.yml docker-compose.local.yml 2>/dev/null || true
+    cat Dockerfile docker-compose.yml docker-compose.host-mysql.yml docker-compose.local.yml \
+      docker-compose.prod.yml.example docker-compose.qa.yml.example \
+      docker-compose.prod.yml docker-compose.qa.yml 2>/dev/null || true
     if [[ -d docker ]]; then
       find docker -type f -print0 2>/dev/null | sort -z | xargs -0 cat 2>/dev/null || true
     fi
@@ -113,6 +130,32 @@ refresh_app_caches() {
   compose exec -T -u www-data app php artisan config:cache
 }
 
+# Tras cambiar IPAM/red en compose, un `up -d` no reatacha DNS (hostname redis falla).
+needs_compose_recreate() {
+  is_first_deploy && return 0
+  [[ -n "${CHANGED_FILES:-}" ]] && echo "${CHANGED_FILES}" | grep -qE '^(docker-compose|Dockerfile|docker/)' && return 0
+  return 1
+}
+
+wait_for_redis() {
+  log "Esperar Redis (PONG + DNS hostname redis desde app)"
+  local i
+  for i in $(seq 1 45); do
+    if compose exec -T redis redis-cli ping 2>/dev/null | grep -qi PONG; then
+      if compose exec -T app getent hosts redis >/dev/null 2>&1 \
+        || compose exec -T -u www-data app php -r 'exit(gethostbyname("redis") === "redis" ? 1 : 0);' 2>/dev/null; then
+        log "Redis listo"
+        return 0
+      fi
+    fi
+    sleep 2
+  done
+  log "ERROR: Redis no resolvió a tiempo (¿red Docker desincronizada?)"
+  compose ps || true
+  compose logs --tail=40 redis || true
+  return 1
+}
+
 restart_horizon_workers() {
   compose exec -T -u www-data app php artisan horizon:terminate || true
 }
@@ -125,22 +168,12 @@ restart_all_workers() {
 }
 
 compose() {
-  local files=(-f docker-compose.yml)
-  if [[ "${COMPOSE_LOCAL}" == "true" ]]; then
-    files+=(-f docker-compose.local.yml)
-  elif [[ "${COMPOSE_HOST_MYSQL}" == "true" ]]; then
-    files+=(-f docker-compose.host-mysql.yml)
-  fi
-  docker compose "${files[@]}" "$@"
+  resolve_compose_files
+  docker compose "${COMPOSE_FILES[@]}" "$@"
 }
 
 compose_files_array() {
-  COMPOSE_FILES=(-f docker-compose.yml)
-  if [[ "${COMPOSE_LOCAL}" == "true" ]]; then
-    COMPOSE_FILES+=(-f docker-compose.local.yml)
-  elif [[ "${COMPOSE_HOST_MYSQL}" == "true" ]]; then
-    COMPOSE_FILES+=(-f docker-compose.host-mysql.yml)
-  fi
+  resolve_compose_files
 }
 
 # Un solo stack por path: si .env cambió COMPOSE_PROJECT_NAME, baja el proyecto anterior.
@@ -247,7 +280,15 @@ if [[ "${DEPLOY_MODE}" == "docker" ]]; then
     log "Omitiendo docker build (sin cambios en Dockerfile/compose/docker/*)"
   fi
   down_stale_compose_projects
-  compose up -d
+
+  if needs_compose_recreate; then
+    log "compose up --force-recreate (cambio Docker/compose o primer deploy)"
+    compose up -d --force-recreate --remove-orphans
+  else
+    compose up -d
+  fi
+
+  wait_for_redis
 
   compose exec -T -u root app git config --global --add safe.directory /var/www/html || true
 
@@ -261,8 +302,6 @@ if [[ "${DEPLOY_MODE}" == "docker" ]]; then
     record_composer_lock_hash
   else
     log "Omitiendo composer install (composer.lock sin cambios)"
-    log "Regenerar autoload (polyfills / classmap)"
-    compose exec -T -u root app composer dump-autoload --optimize --no-interaction
   fi
 
   if is_first_deploy; then
