@@ -2,28 +2,31 @@
 #
 # En el servidor QA:
 #   cp docker-compose.qa.yml.example docker-compose.qa.yml
+#   # Obligatorio down: restart NO recrea la red ni el IPAM
 #   docker compose -f docker-compose.yml -f docker-compose.qa.yml down
-#   docker compose -f docker-compose.yml -f docker-compose.qa.yml up -d --build
+#   docker compose -f docker-compose.yml -f docker-compose.qa.yml up -d
 #
 # .env típico QA (MySQL del host por TCP al gateway fijo — sin socket):
 #   APP_PORT=8085
 #   APP_URL=https://qa.intranetback.probusiness.pe
-#   COMPOSE_PROJECT_NAME=intranet_back_qa
+#   COMPOSE_PROJECT_NAME=intranet_qa
 #   DB_HOST=172.23.0.1
 #   # sin DB_SOCKET / MYSQL_SOCKET_DIR_HOST (borrarlos o dejarlos vacíos)
 #   DOCKER_REDIS_HOST=redis
+#   REDIS_HOST=redis
 #   FORWARD_REDIS_PORT=6380
 #   REDIS_PREFIX=qa_
 #   LARAVEL_WEBSOCKETS_PORT=6002
 #   PUSHER_PORT=6002
 #   HORIZON_PREFIX=qa_horizon:
 #
-# MySQL en el host (mismo server que PROD usa 172.22; QA usa 172.23):
+# MySQL en el host (PROD usa 172.22; QA usa 172.23):
 #   bind-address = 127.0.0.1,172.22.0.1,172.23.0.1
 #   GRANT ... TO 'user'@'172.23.%' ...
-# La subnet/gateway quedan FIJAS: un `compose down` no cambia 172.23.0.1.
+#
+# name: intranet_qa = stack actual (intranet_qa-app-1, etc.)
 
-name: intranet_back_qa
+name: intranet_qa
 
 services:
   redis:
