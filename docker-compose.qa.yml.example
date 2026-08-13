@@ -2,14 +2,15 @@
 #
 # En el servidor QA:
 #   cp docker-compose.qa.yml.example docker-compose.qa.yml
+#   docker compose -f docker-compose.yml -f docker-compose.qa.yml down
 #   docker compose -f docker-compose.yml -f docker-compose.qa.yml up -d --build
 #
-# .env típico QA:
+# .env típico QA (MySQL del host por TCP al gateway fijo — sin socket):
 #   APP_PORT=8085
 #   APP_URL=https://qa.intranetback.probusiness.pe
-#   DB_HOST=localhost
-#   DB_SOCKET=/opt/mysql-socket/mysqld.sock
-#   MYSQL_SOCKET_DIR_HOST=/opt/mysql-socket
+#   COMPOSE_PROJECT_NAME=intranet_back_qa
+#   DB_HOST=172.23.0.1
+#   # sin DB_SOCKET / MYSQL_SOCKET_DIR_HOST (borrarlos o dejarlos vacíos)
 #   DOCKER_REDIS_HOST=redis
 #   FORWARD_REDIS_PORT=6380
 #   REDIS_PREFIX=qa_
@@ -17,8 +18,10 @@
 #   PUSHER_PORT=6002
 #   HORIZON_PREFIX=qa_horizon:
 #
-# MySQL: socket en /opt/mysql-socket (persistente). No uses /run/mysqld:
-# systemd recrea ese dir en cada restart y el bind mount de Docker queda stale.
+# MySQL en el host (mismo server que PROD usa 172.22; QA usa 172.23):
+#   bind-address = 127.0.0.1,172.22.0.1,172.23.0.1
+#   GRANT ... TO 'user'@'172.23.%' ...
+# La subnet/gateway quedan FIJAS: un `compose down` no cambia 172.23.0.1.
 
 name: intranet_back_qa
 
@@ -27,14 +30,10 @@ services:
     ports:
       - "127.0.0.1:${FORWARD_REDIS_PORT:-6380}:6379"
 
-  app:
-    volumes:
-      - ${MYSQL_SOCKET_DIR_HOST:-/opt/mysql-socket}:/opt/mysql-socket
-
-  horizon:
-    volumes:
-      - ${MYSQL_SOCKET_DIR_HOST:-/opt/mysql-socket}:/opt/mysql-socket
-
-  scheduler:
-    volumes:
-      - ${MYSQL_SOCKET_DIR_HOST:-/opt/mysql-socket}:/opt/mysql-socket
+networks:
+  intranet:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.23.0.0/16
+          gateway: 172.23.0.1
