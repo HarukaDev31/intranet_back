@@ -21,10 +21,11 @@ return [
     'root_usuario' => 'root',
 
     /*
-    | Disco y carpeta para uploads del CMS (storage/app/manual/...)
+    | Disco legacy (solo lectura de uploads antiguos en storage/app).
+    | Las subidas nuevas usan Object Storage (FILESYSTEM_UPLOAD_DISK / S3 + CDN).
     */
-    'storage_disk' => 'local',
-    'storage_dir' => 'manual',
+    'storage_disk' => env('MANUAL_USUARIO_STORAGE_DISK', 'local'),
+    'storage_dir' => env('MANUAL_USUARIO_STORAGE_DIR', 'manual'),
 
     /*
     | Ruta al front Nuxt (para php artisan manual:scan-front-widgets).

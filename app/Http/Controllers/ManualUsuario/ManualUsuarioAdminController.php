@@ -331,10 +331,16 @@ class ManualUsuarioAdminController extends Controller
     }
 
     /**
-     * Sirve un archivo de manual_media (JWT autenticado).
+     * Sirve un archivo de manual_media.
+     * Preferir redirect a CDN/S3; fallback a stream local autenticado.
      */
     public function showMedia(int $id): Response
     {
+        $publicUrl = $this->admin->publicMediaUrl($id);
+        if (is_string($publicUrl) && $publicUrl !== '' && !str_contains($publicUrl, '/api/manual-usuario/media/')) {
+            return redirect()->away($publicUrl);
+        }
+
         $absolute = $this->admin->absoluteMediaPath($id);
         if (!$absolute) {
             abort(404);

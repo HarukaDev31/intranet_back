@@ -3,11 +3,14 @@
 namespace App\Services\ManualUsuario;
 
 use App\Models\ManualUsuario\ManualBloque;
+use App\Models\ManualUsuario\ManualMedia;
 use App\Models\ManualUsuario\ManualPagina;
+use App\Traits\UsesObjectStorage;
 use Illuminate\Support\Str;
 
 class ManualUsuarioDbService
 {
+    use UsesObjectStorage;
     public function hasPublishedPages(string $roleSlug): bool
     {
         return ManualPagina::query()
@@ -72,17 +75,35 @@ class ManualUsuarioDbService
      */
     public function absoluteMediaPathForPdf(int $id): ?string
     {
-        $media = \App\Models\ManualUsuario\ManualMedia::query()->find($id);
+        $media = ManualMedia::query()->find($id);
         if (!$media || !$media->path) {
             return null;
         }
 
-        $disk = config('manual_usuario.storage_disk', 'local');
-        if (!\Illuminate\Support\Facades\Storage::disk($disk)->exists($media->path)) {
+        $uploadPath = $this->storageUploadPathFromDb((string) $media->path) ?: (string) $media->path;
+        try {
+            return $this->objectStorage()->localPath($uploadPath);
+        } catch (\Throwable $e) {
             return null;
         }
+    }
 
-        return \Illuminate\Support\Facades\Storage::disk($disk)->path($media->path);
+    /**
+     * URL pública CDN/S3 para media del manual (o fallback API).
+     */
+    public function resolveMediaPublicUrl(string $path, ?int $mediaId = null): ?string
+    {
+        $uploadPath = $this->storageUploadPathFromDb($path) ?: ltrim(str_replace('\\', '/', $path), '/');
+        try {
+            $url = $this->objectStorage()->url($uploadPath);
+            if (is_string($url) && $url !== '') {
+                return $url;
+            }
+        } catch (\Throwable $e) {
+            // fallback
+        }
+
+        return $mediaId ? url('/api/manual-usuario/media/' . $mediaId) : null;
     }
 
     /**
@@ -170,8 +191,17 @@ class ManualUsuarioDbService
         $payload = $this->normalizePayload($tipo, is_array($bloque->payload) ? $bloque->payload : []);
 
         $snap = $payload['snapshot'] ?? [];
-        if ($tipo === ManualBloque::TIPO_MEDIA && !empty($snap['media_id']) && empty($snap['url'])) {
-            $snap['url'] = url('/api/manual-usuario/media/' . (int) $snap['media_id']);
+        if ($tipo === ManualBloque::TIPO_MEDIA && !empty($snap['media_id'])) {
+            $mediaId = (int) $snap['media_id'];
+            $media = ManualMedia::query()->find($mediaId);
+            if ($media && $media->path) {
+                $publicUrl = $this->resolveMediaPublicUrl((string) $media->path, $mediaId);
+                if ($publicUrl) {
+                    $snap['url'] = $publicUrl;
+                }
+            } elseif (empty($snap['url'])) {
+                $snap['url'] = url('/api/manual-usuario/media/' . $mediaId);
+            }
             $payload['snapshot'] = $snap;
         }
 

@@ -5,14 +5,16 @@ namespace App\Services\ManualUsuario;
 use App\Models\ManualUsuario\ManualBloque;
 use App\Models\ManualUsuario\ManualMedia;
 use App\Models\ManualUsuario\ManualPagina;
+use App\Traits\UsesObjectStorage;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
 
 class ManualUsuarioAdminService
 {
+    use UsesObjectStorage;
+
     public function __construct(
         private ManualUsuarioCatalogService $catalog,
         private ManualUsuarioDbService $db,
@@ -589,7 +591,8 @@ class ManualUsuarioAdminService
 
         $ext = strtolower($file->getClientOriginalExtension() ?: 'png');
         $name = now()->format('YmdHis') . '_' . Str::random(8) . '.' . $ext;
-        $path = $file->storeAs($dir, $name, config('manual_usuario.storage_disk', 'local'));
+        $stored = $this->storageStoreUpload($file, $dir, $name);
+        $path = $this->storageFinalizeCdnPath($stored);
 
         $media = ManualMedia::query()->create([
             'path' => $path,
@@ -609,7 +612,10 @@ class ManualUsuarioAdminService
         $q = ManualMedia::query()->orderByDesc('id');
         if ($roleSlug) {
             $prefix = trim((string) config('manual_usuario.storage_dir', 'manual'), '/') . '/' . Str::slug($roleSlug) . '/';
-            $q->where('path', 'like', $prefix . '%');
+            $q->where(function ($qq) use ($prefix) {
+                $qq->where('path', 'like', $prefix . '%')
+                    ->orWhere('path', 'like', '%/' . $prefix . '%');
+            });
         }
 
         return $q->limit(200)->get()->map(fn (ManualMedia $m) => $this->mapMedia($m))->values()->all();
@@ -618,9 +624,13 @@ class ManualUsuarioAdminService
     public function deleteMedia(int $id): void
     {
         $media = ManualMedia::query()->findOrFail($id);
-        $disk = config('manual_usuario.storage_disk', 'local');
-        if ($media->path && Storage::disk($disk)->exists($media->path)) {
-            Storage::disk($disk)->delete($media->path);
+        $uploadPath = $this->storageUploadPathFromDb($media->path);
+        if ($uploadPath) {
+            try {
+                $this->objectStorage()->delete($uploadPath);
+            } catch (\Throwable $e) {
+                // best-effort
+            }
         }
         $media->delete();
     }
@@ -632,12 +642,22 @@ class ManualUsuarioAdminService
             return null;
         }
 
-        $disk = config('manual_usuario.storage_disk', 'local');
-        if (!Storage::disk($disk)->exists($media->path)) {
+        $uploadPath = $this->storageUploadPathFromDb($media->path) ?: $media->path;
+        try {
+            return $this->objectStorage()->localPath($uploadPath);
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
+
+    public function publicMediaUrl(int $id): ?string
+    {
+        $media = ManualMedia::query()->find($id);
+        if (!$media || !$media->path) {
             return null;
         }
 
-        return Storage::disk($disk)->path($media->path);
+        return $this->resolveMediaPublicUrl($media->path, $media->id);
     }
 
     public function findMedia(int $id): ?ManualMedia
@@ -791,8 +811,30 @@ class ManualUsuarioAdminService
             'alt' => $media->alt,
             'mime' => $media->mime,
             'uploaded_by' => $media->uploaded_by,
-            'url' => url('/api/manual-usuario/media/' . $media->id),
+            'url' => $this->resolveMediaPublicUrl((string) $media->path, (int) $media->id),
             'created_at' => optional($media->created_at)?->toIso8601String(),
         ];
+    }
+
+    /**
+     * URL pública (CDN/S3) o fallback autenticado a la API.
+     */
+    public function resolveMediaPublicUrl(string $path, ?int $mediaId = null): string
+    {
+        $uploadPath = $this->storageUploadPathFromDb($path) ?: ltrim(str_replace('\\', '/', $path), '/');
+        try {
+            $url = $this->objectStorage()->url($uploadPath);
+            if (is_string($url) && $url !== '') {
+                return $url;
+            }
+        } catch (\Throwable $e) {
+            // fallback
+        }
+
+        if ($mediaId) {
+            return url('/api/manual-usuario/media/' . $mediaId);
+        }
+
+        return url('/api/manual-usuario/media/0');
     }
 }

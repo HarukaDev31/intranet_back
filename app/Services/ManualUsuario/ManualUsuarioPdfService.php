@@ -87,7 +87,7 @@ class ManualUsuarioPdfService
         $options->setChroot($this->catalog->basePath());
 
         $dompdf = new Dompdf($options);
-        $dompdf->loadHtml($this->embedLocalImages($html));
+        $dompdf->loadHtml($this->embedRemoteHttpsImages($this->embedLocalImages($html)));
         $dompdf->setPaper('A4', 'portrait');
         $dompdf->render();
 
@@ -127,6 +127,41 @@ class ManualUsuarioPdfService
                 }
 
                 return $this->toDataUriSrc($absolute, $m[0]);
+            },
+            $html
+        ) ?? $html;
+    }
+
+    /**
+     * DomPDF no carga CDN externo de forma fiable → data URI.
+     */
+    private function embedRemoteHttpsImages(string $html): string
+    {
+        return preg_replace_callback(
+            '/src="(https?:\/\/[^"]+)"/i',
+            function ($m) {
+                $url = $m[1];
+                if (str_starts_with($url, 'data:')) {
+                    return $m[0];
+                }
+                try {
+                    $bin = @file_get_contents($url);
+                    if ($bin === false || $bin === '') {
+                        return $m[0];
+                    }
+                    $mime = 'image/png';
+                    if (preg_match('/\\.(jpe?g)(\\?|$)/i', $url)) {
+                        $mime = 'image/jpeg';
+                    } elseif (preg_match('/\\.webp(\\?|$)/i', $url)) {
+                        $mime = 'image/webp';
+                    } elseif (preg_match('/\\.gif(\\?|$)/i', $url)) {
+                        $mime = 'image/gif';
+                    }
+
+                    return 'src="data:' . $mime . ';base64,' . base64_encode($bin) . '"';
+                } catch (\Throwable $e) {
+                    return $m[0];
+                }
             },
             $html
         ) ?? $html;
