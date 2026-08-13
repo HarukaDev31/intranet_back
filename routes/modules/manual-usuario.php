@@ -32,6 +32,7 @@ Route::group(['prefix' => 'manual-usuario', 'middleware' => 'jwt.auth'], functio
         Route::post('/pages', [ManualUsuarioAdminController::class, 'storePage']);
         Route::get('/pages/{id}', [ManualUsuarioAdminController::class, 'showPage'])->whereNumber('id');
         Route::put('/pages/{id}', [ManualUsuarioAdminController::class, 'updatePage'])->whereNumber('id');
+        Route::post('/pages/{id}/copy', [ManualUsuarioAdminController::class, 'copyPage'])->whereNumber('id');
         Route::delete('/pages/{id}', [ManualUsuarioAdminController::class, 'destroyPage'])->whereNumber('id');
 
         Route::post('/pages/{paginaId}/bloques', [ManualUsuarioAdminController::class, 'storeBlock'])->whereNumber('paginaId');

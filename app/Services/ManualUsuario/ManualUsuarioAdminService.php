@@ -428,6 +428,97 @@ class ManualUsuarioAdminService
         return $this->getPage($page->id);
     }
 
+    /**
+     * Copia una página (y todo su árbol de bloques) a otro rol — registros nuevos e independientes.
+     *
+     * @param  array{role_slug: string, titulo?: string, modulo_key?: string, descripcion?: ?string, publicado?: bool}  $data
+     * @return array<string, mixed>
+     */
+    public function copyPage(int $id, array $data): array
+    {
+        return DB::transaction(function () use ($id, $data) {
+            $source = ManualPagina::query()->findOrFail($id);
+
+            $roleSlug = trim((string) ($data['role_slug'] ?? ''));
+            $role = $this->catalog->findRoleBySlug($roleSlug);
+            if (!$role) {
+                throw new InvalidArgumentException('Rol destino no encontrado en el catálogo del manual.');
+            }
+
+            $titulo = trim((string) ($data['titulo'] ?? $source->titulo));
+            if ($titulo === '') {
+                $titulo = (string) $source->titulo;
+            }
+
+            $moduloKey = trim((string) ($data['modulo_key'] ?? $source->modulo_key));
+            if ($moduloKey === '') {
+                $moduloKey = (string) $source->modulo_key;
+            }
+            $moduloKey = $this->ensureUniqueModuloKey($roleSlug, $moduloKey);
+
+            $descripcion = array_key_exists('descripcion', $data)
+                ? $data['descripcion']
+                : $source->descripcion;
+
+            $publicado = array_key_exists('publicado', $data)
+                ? (bool) $data['publicado']
+                : false;
+
+            $newPage = ManualPagina::query()->create([
+                'role_slug' => $roleSlug,
+                'id_grupo' => $role['id_grupo'] ?? $source->id_grupo,
+                'modulo_key' => $moduloKey,
+                'titulo' => $titulo,
+                'descripcion' => $descripcion,
+                'orden' => $this->nextPageOrden($roleSlug),
+                'publicado' => $publicado,
+            ]);
+
+            $blocks = ManualBloque::query()
+                ->where('pagina_id', $source->id)
+                ->orderBy('orden')
+                ->orderBy('id')
+                ->get();
+
+            $idMap = [];
+            $pending = $blocks->all();
+            $guard = 0;
+            while ($pending !== [] && $guard < 10000) {
+                $guard++;
+                $progress = false;
+                foreach ($pending as $idx => $block) {
+                    $oldParent = $block->parent_id !== null ? (int) $block->parent_id : null;
+                    if ($oldParent !== null && !isset($idMap[$oldParent])) {
+                        continue;
+                    }
+
+                    $payload = $block->payload;
+                    if (is_array($payload)) {
+                        $payload = json_decode(json_encode($payload), true);
+                    }
+
+                    $created = ManualBloque::query()->create([
+                        'pagina_id' => $newPage->id,
+                        'parent_id' => $oldParent !== null ? $idMap[$oldParent] : null,
+                        'tipo' => $block->tipo,
+                        'titulo' => $block->titulo,
+                        'clave' => $block->clave,
+                        'payload' => is_array($payload) ? $payload : [],
+                        'orden' => $block->orden,
+                    ]);
+                    $idMap[(int) $block->id] = (int) $created->id;
+                    unset($pending[$idx]);
+                    $progress = true;
+                }
+                if (!$progress) {
+                    throw new InvalidArgumentException('No se pudo copiar el árbol de bloques (referencia de padre inválida).');
+                }
+            }
+
+            return $this->getPage($newPage->id);
+        });
+    }
+
     public function deletePage(int $id): void
     {
         ManualPagina::query()->findOrFail($id)->delete();
@@ -668,6 +759,29 @@ class ManualUsuarioAdminService
     private function nextPageOrden(string $roleSlug): int
     {
         return ((int) ManualPagina::query()->where('role_slug', $roleSlug)->max('orden')) + 1;
+    }
+
+    private function ensureUniqueModuloKey(string $roleSlug, string $base): string
+    {
+        $base = trim(mb_substr($base, 0, 120));
+        if ($base === '') {
+            $base = 'pagina';
+        }
+        $candidate = $base;
+        $i = 2;
+        while (ManualPagina::query()
+            ->where('role_slug', $roleSlug)
+            ->where('modulo_key', $candidate)
+            ->exists()) {
+            $suffix = $i === 2 ? '-copia' : '-copia-' . $i;
+            $candidate = mb_substr($base, 0, max(1, 120 - strlen($suffix))) . $suffix;
+            $i++;
+            if ($i > 80) {
+                throw new InvalidArgumentException('No se pudo generar una clave de módulo única para el rol destino.');
+            }
+        }
+
+        return $candidate;
     }
 
     private function nextBlockOrden(int $paginaId, ?int $parentId = null): int

@@ -141,6 +141,31 @@ class ManualUsuarioAdminController extends Controller
         return response()->json(['status' => 'success', 'data' => $page]);
     }
 
+    public function copyPage(Request $request, int $id)
+    {
+        if ($deny = $this->denyUnlessRoot()) {
+            return $deny;
+        }
+
+        $data = $request->validate([
+            'role_slug' => 'required|string|max:64',
+            'titulo' => 'nullable|string|max:200',
+            'modulo_key' => 'nullable|string|max:120',
+            'descripcion' => 'nullable|string|max:500',
+            'publicado' => 'nullable|boolean',
+        ]);
+
+        try {
+            $page = $this->admin->copyPage($id, $data);
+        } catch (ModelNotFoundException $e) {
+            return response()->json(['status' => 'error', 'message' => 'Página no encontrada.'], 404);
+        } catch (InvalidArgumentException $e) {
+            return response()->json(['status' => 'error', 'message' => $e->getMessage()], 422);
+        }
+
+        return response()->json(['status' => 'success', 'data' => $page], 201);
+    }
+
     public function destroyPage(int $id)
     {
         if ($deny = $this->denyUnlessRoot()) {
