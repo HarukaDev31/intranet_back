@@ -19588,7 +19588,11 @@ return array (
             array (
               'accessorKey' => 'adelanto',
               'header' => 'Adelanto',
-              'type' => 'text',
+              'type' => 'pago_grid',
+              'value_key' => 'pagos_details',
+              'slots' => 4,
+              'currency' => 'PEN',
+              'modal_hint' => 'Registrar Pago',
             ),
           ),
           'filters' => 
@@ -19939,6 +19943,130 @@ return array (
       ),
       16 => 
       array (
+        'key' => 'modal-registrar-pago',
+        'label' => 'Modal — Registrar Pago ',
+        'tipo' => 'modal',
+        'component' => 'components/commons/CreatePagoModal',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Registrar Pago ',
+          'fields' => 
+          array (
+            0 => 
+            array (
+              'key' => 'monto',
+              'label' => 'Monto',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            1 => 
+            array (
+              'key' => 'banco',
+              'label' => 'Banco',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            2 => 
+            array (
+              'key' => 'fecha-cierre',
+              'label' => 'Fecha Cierre',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            3 => 
+            array (
+              'key' => 'voucher',
+              'label' => 'Voucher',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+          ),
+          'actions' => 
+          array (
+            0 => 'Cancelar',
+            1 => 'Guardar',
+          ),
+          'live_api' => NULL,
+        ),
+      ),
+      17 => 
+      array (
+        'key' => 'modal-detalle-del-adelanto',
+        'label' => 'Modal — Detalle del Adelanto',
+        'tipo' => 'modal',
+        'component' => 'components/commons/PagoDetailsModal',
+        'api_hint' => NULL,
+        'live_api' => NULL,
+        'snapshot' => 
+        array (
+          'title' => 'Detalle del Adelanto',
+          'fields' => 
+          array (
+            0 => 
+            array (
+              'key' => 'monto',
+              'label' => 'Monto',
+              'type' => 'text',
+              'value' => 'S/ 0.00',
+              'options' => 
+              array (
+              ),
+            ),
+            1 => 
+            array (
+              'key' => 'fecha',
+              'label' => 'Fecha',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            2 => 
+            array (
+              'key' => 'banco',
+              'label' => 'Banco',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+            3 => 
+            array (
+              'key' => 'archivo',
+              'label' => 'Archivo / Voucher',
+              'type' => 'text',
+              'value' => '',
+              'options' => 
+              array (
+              ),
+            ),
+          ),
+          'actions' => 
+          array (
+            0 => 'Cerrar',
+            1 => 'Eliminar',
+          ),
+          'live_api' => NULL,
+        ),
+      ),
+      18 => 
+      array (
         'key' => 'filtros-filterconfig',
         'label' => 'Filtros — General',
         'tipo' => 'filtros',
@@ -20066,7 +20194,7 @@ return array (
           ),
         ),
       ),
-      17 => 
+      19 => 
       array (
         'key' => 'filtros-filterconfigpagos',
         'label' => 'Filtros — Pagos',

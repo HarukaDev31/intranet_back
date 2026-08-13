@@ -357,12 +357,16 @@ class ManualUsuarioTablaHydrator
                     continue;
                 }
                 $type = (string) ($col['type'] ?? 'text');
-                // Selects/inputs/botones: conservar valores crudos para el renderer UI
-                if (in_array($type, ['select', 'input', 'buttons'], true)) {
+                // Selects/inputs/botones/grilla de adelantos: conservar valores crudos para el renderer UI
+                if (in_array($type, ['select', 'input', 'buttons', 'pago_grid'], true)) {
                     $valueKey = (string) ($col['value_key'] ?? $key);
                     if (($col['compute'] ?? '') === 'pago_estado') {
                         $mapped[$valueKey] = $this->computePagoEstado($row);
                         $mapped[$key] = $mapped[$valueKey];
+                    } elseif ($type === 'pago_grid') {
+                        $details = $row['pagos_details'] ?? $row[$valueKey] ?? [];
+                        $mapped['pagos_details'] = is_array($details) ? $details : [];
+                        $mapped[$key] = $mapped['pagos_details'];
                     } else {
                         if (!array_key_exists($valueKey, $mapped) && array_key_exists($valueKey, $row)) {
                             $mapped[$valueKey] = $row[$valueKey];
@@ -443,6 +447,10 @@ class ManualUsuarioTablaHydrator
         }
 
         if ($type === 'buttons') {
+            return '';
+        }
+
+        if ($type === 'pago_grid') {
             return '';
         }
 

@@ -702,6 +702,21 @@ class ManualUsuarioDbService
                     if ($type === 'buttons' && is_array($col['buttons'] ?? null)) {
                         $labels = collect($col['buttons'])->pluck('label')->filter()->implode(' · ');
                         $cell = $labels !== '' ? $labels : '⋯';
+                    } elseif ($type === 'pago_grid') {
+                        $details = is_array($row['pagos_details'] ?? null) ? $row['pagos_details'] : [];
+                        $slots = max(1, (int) ($col['slots'] ?? 4));
+                        $parts = [];
+                        foreach (array_slice($details, 0, $slots) as $p) {
+                            if (!is_array($p)) {
+                                continue;
+                            }
+                            $parts[] = e($this->scalarForPdf($p['monto'] ?? ''));
+                        }
+                        $empty = $slots - count($parts);
+                        for ($ei = 0; $ei < $empty; $ei++) {
+                            $parts[] = '+';
+                        }
+                        $cell = implode(' · ', $parts) ?: '+';
                     } elseif ($type === 'multiline') {
                         $cell = str_replace(["\n", ' · '], '<br>', e($this->scalarForPdf($val)));
                     } else {

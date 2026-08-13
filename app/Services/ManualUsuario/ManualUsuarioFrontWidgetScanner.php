@@ -61,7 +61,7 @@ class ManualUsuarioFrontWidgetScanner
                 continue;
             }
 
-            $componentPaths = $this->resolveImportedComponents($root, $content);
+            $componentPaths = $this->resolveImportedComponentsDeep($root, $content, 2);
             $composablePaths = $this->resolveImportedComposables($root, $content);
             $sources = array_merge(
                 [['path' => $rel, 'content' => $content]],
@@ -198,6 +198,34 @@ class ManualUsuarioFrontWidgetScanner
         }
 
         return $abs;
+    }
+
+    /**
+     * Importaciones de components (lazy + from), con profundidad (p. ej. PagoGrid → CreatePagoModal).
+     *
+     * @return array<int, array{path: string, content: string}>
+     */
+    private function resolveImportedComponentsDeep(string $root, string $pageContent, int $maxDepth = 2): array
+    {
+        $found = [];
+        $queue = [['content' => $pageContent, 'depth' => 0]];
+        while ($queue !== []) {
+            $item = array_shift($queue);
+            $depth = (int) $item['depth'];
+            if ($depth >= $maxDepth) {
+                continue;
+            }
+            foreach ($this->resolveImportedComponents($root, (string) $item['content']) as $comp) {
+                $path = (string) $comp['path'];
+                if (isset($found[$path])) {
+                    continue;
+                }
+                $found[$path] = $comp;
+                $queue[] = ['content' => (string) $comp['content'], 'depth' => $depth + 1];
+            }
+        }
+
+        return array_values($found);
     }
 
     /**
@@ -911,7 +939,7 @@ class ManualUsuarioFrontWidgetScanner
             // Preferir el primer match “rico” (>= 3 cols con tipos UI)
             $rich = 0;
             foreach ($cols as $c) {
-                if (in_array(($c['type'] ?? 'text'), ['select', 'multiline', 'currency', 'buttons', 'input'], true)) {
+                if (in_array(($c['type'] ?? 'text'), ['select', 'multiline', 'currency', 'buttons', 'input', 'pago_grid'], true)) {
                     $rich++;
                 }
             }
@@ -1283,6 +1311,19 @@ class ManualUsuarioFrontWidgetScanner
                 && preg_match('/disabled\\s*:\\s*true\\b/', $sm[1])) {
                 $col['readonly'] = true;
             }
+        } elseif (preg_match('/h\\(\\s*PagoGrid\\b/i', $body)
+            || preg_match('/^(adelanto|adelantos)$/i', $accessorKey)
+            || preg_match('/^adelantos?$/i', $header)) {
+            // Grilla + abre CreatePagoModal / PagoDetailsModal (overlay)
+            $col['type'] = 'pago_grid';
+            $col['value_key'] = 'pagos_details';
+            $slots = 4;
+            if (preg_match('/numberOfPagos\\s*:\\s*(\\d+)/', $body, $nm)) {
+                $slots = max(1, (int) $nm[1]);
+            }
+            $col['slots'] = $slots;
+            $col['currency'] = preg_match('/[\'"]USD[\'"]/', $body) ? 'USD' : 'PEN';
+            $col['modal_hint'] = 'Registrar Pago';
         } elseif (preg_match('/formatCurrency\\s*\\(/i', $body)) {
             $col['type'] = 'currency';
             $col['currency'] = preg_match('/[\'"]USD[\'"]/', $body) ? 'USD' : 'PEN';
@@ -1609,7 +1650,20 @@ class ManualUsuarioFrontWidgetScanner
             if (preg_match_all('/<UFormField\\b([^>]*)>/i', $block, $ffs, PREG_SET_ORDER)) {
                 foreach ($ffs as $ff) {
                     $attrs = $ff[1];
-                    $label = $this->attrString($attrs, 'label') ?: 'Campo';
+                    $label = $this->attrString($attrs, 'label');
+                    if ($label === '') {
+                        // :label="cond ? 'A' : 'B'" → toma el último literal (caso por defecto)
+                        if (preg_match_all('/[\'"]([^\'"]{2,60})[\'"]/', $attrs, $lm)) {
+                            $cands = array_values(array_filter(
+                                $lm[1],
+                                static fn ($s) => !preg_match('/^(true|false|null)$/i', $s)
+                            ));
+                            $label = $cands !== [] ? (string) end($cands) : '';
+                        }
+                    }
+                    if ($label === '' || preg_match('/^(editComprobante|soloComprobante|v-if)/i', $label)) {
+                        continue;
+                    }
                     $fields[] = [
                         'key' => Str::slug($label),
                         'label' => $label,
@@ -1621,8 +1675,51 @@ class ManualUsuarioFrontWidgetScanner
             }
 
             $actions = [];
-            if (preg_match_all('/<UButton\\b[^>]*label="([^"]+)"/i', $block, $btns)) {
-                $actions = array_values(array_unique($btns[1]));
+            if (preg_match_all('/<UButton\\b([^>]*)>/i', $block, $btns, PREG_SET_ORDER)) {
+                foreach ($btns as $btn) {
+                    $attrs = $btn[1];
+                    $label = trim((string) $this->attrString($attrs, 'label'));
+                    if ($label === '' && preg_match('/:label="([^"]+)"/i', $attrs, $dyn)) {
+                        if (preg_match_all('/[\'"]([^\'"]+)[\'"]/', $dyn[1], $lm)) {
+                            $label = trim((string) end($lm[1]));
+                        }
+                    }
+                    if ($label === '' || preg_match('/^(true|false|null)$/i', $label) || str_contains($label, '?')) {
+                        continue;
+                    }
+                    $actions[] = $label;
+                }
+                $actions = array_values(array_unique($actions));
+            }
+
+            // Modales de solo lectura (Detalle del Adelanto): sin form fields
+            if (count($fields) === 0 && preg_match('/Detalle del Adelanto/i', $title)) {
+                $fields = [
+                    ['key' => 'monto', 'label' => 'Monto', 'type' => 'text', 'value' => 'S/ 0.00', 'options' => []],
+                    ['key' => 'fecha', 'label' => 'Fecha', 'type' => 'text', 'value' => '', 'options' => []],
+                    ['key' => 'banco', 'label' => 'Banco', 'type' => 'text', 'value' => '', 'options' => []],
+                    ['key' => 'archivo', 'label' => 'Archivo / Voucher', 'type' => 'text', 'value' => '', 'options' => []],
+                ];
+                if ($actions === []) {
+                    $actions = ['Cerrar', 'Eliminar'];
+                }
+            }
+
+            if (preg_match('/Registrar Pago/i', $title)) {
+                if (!in_array('Guardar', $actions, true) && !in_array('Aceptar', $actions, true)) {
+                    $actions[] = 'Guardar';
+                }
+                if (count($fields) === 0) {
+                    $fields = [
+                        ['key' => 'monto', 'label' => 'Monto', 'type' => 'text', 'value' => '', 'options' => []],
+                        ['key' => 'banco', 'label' => 'Banco', 'type' => 'text', 'value' => '', 'options' => []],
+                        ['key' => 'fecha-cierre', 'label' => 'Fecha Cierre', 'type' => 'text', 'value' => '', 'options' => []],
+                        ['key' => 'voucher', 'label' => 'Voucher', 'type' => 'text', 'value' => '', 'options' => []],
+                    ];
+                } elseif (!collect($fields)->contains(fn ($f) => str_contains(strtolower((string) ($f['label'] ?? '')), 'voucher')
+                    || str_contains(strtolower((string) ($f['label'] ?? '')), 'comprobante'))) {
+                    $fields[] = ['key' => 'voucher', 'label' => 'Voucher', 'type' => 'text', 'value' => '', 'options' => []];
+                }
             }
 
             if (count($fields) === 0 && count($actions) === 0) {
