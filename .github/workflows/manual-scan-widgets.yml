@@ -100,20 +100,47 @@ jobs:
             git diff --stat -- config/manual_usuario_page_widgets.php
           fi
 
+      # Requiere en el repo: Settings → Actions → General → Workflow permissions
+      #   - Read and write permissions
+      #   - ✅ Allow GitHub Actions to create and approve pull requests
+      # Opcional: secret MANUAL_SCAN_PR_TOKEN (PAT con pull_requests) si el token default no puede crear PRs.
+      - name: Commit and push catalog branch
+        if: ${{ inputs.open_pr && steps.diff.outputs.changed == 'true' }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B chore/manual-scan-widgets
+          git add config/manual_usuario_page_widgets.php
+          git commit -m "chore(manual): regenerar catálogo de widgets del front"
+          git push -u origin chore/manual-scan-widgets --force
+          echo "COMPARE_URL=https://github.com/${{ github.repository }}/compare/main...chore/manual-scan-widgets?expand=1" >> "$GITHUB_ENV"
+
       - name: Create Pull Request
         if: ${{ inputs.open_pr && steps.diff.outputs.changed == 'true' }}
-        uses: peter-evans/create-pull-request@v7
-        with:
-          token: ${{ github.token }}
-          commit-message: 'chore(manual): regenerar catálogo de widgets del front'
-          branch: chore/manual-scan-widgets
-          delete-branch: true
-          title: 'chore(manual): regenerar catálogo de widgets'
-          body: |
-            Catálogo regenerado con `php artisan manual:scan-front-widgets`.
+        env:
+          GH_TOKEN: ${{ secrets.MANUAL_SCAN_PR_TOKEN || github.token }}
+        run: |
+          set -euo pipefail
+          BODY="$(cat <<EOF
+          Catálogo regenerado con \`php artisan manual:scan-front-widgets\`.
 
-            - Front: `${{ vars.MANUAL_FRONT_REPO || 'HarukaDev31/probusiness_intranetv3' }}` @ `${{ inputs.front_ref }}`
-            - Only: `${{ inputs.only || '(full)' }}`
+          - Front: \`${{ vars.MANUAL_FRONT_REPO || 'HarukaDev31/probusiness_intranetv3' }}\` @ \`${{ inputs.front_ref }}\`
+          - Only: \`${{ inputs.only || '(full)' }}\`
 
-            Tras merge + deploy del back, el mantenedor CMS ya puede importar los widgets nuevos.
-            Netlify no interviene: el scanner lee el repo Vue, no el build.
+          Tras merge + deploy del back, el mantenedor CMS ya puede importar los widgets nuevos.
+          EOF
+          )"
+          if gh pr create \
+            --base main \
+            --head chore/manual-scan-widgets \
+            --title "chore(manual): regenerar catálogo de widgets" \
+            --body "$BODY"; then
+            echo "PR creado."
+          else
+            echo "::warning::No se pudo crear el PR con el token actual."
+            echo "Activa: Settings → Actions → General → Workflow permissions → Allow GitHub Actions to create and approve pull requests"
+            echo "O abre manualmente: ${COMPARE_URL}"
+            echo "Opcional: secret MANUAL_SCAN_PR_TOKEN (PAT con permiso pull_requests)."
+            exit 0
+          fi
