@@ -757,7 +757,7 @@ class ManualUsuarioDbService
             return true;
         }
 
-        return (bool) (preg_match('#^[a-z0-9][\w\-./?=&%#]*$#i', $t)
+        return (bool) (preg_match('/^[a-z0-9][\w\-\\.\\/?=&%#]*$/i', $t)
             && (str_contains($t, '/') || str_contains($t, '?')));
     }
 
