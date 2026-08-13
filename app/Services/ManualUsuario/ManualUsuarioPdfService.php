@@ -119,6 +119,16 @@ class ManualUsuarioPdfService
         $dompdf->setPaper('A4', 'portrait');
         $dompdf->render();
 
+        // Pie de página con numeración real (CSS counter(pages) no funciona bien en DomPDF)
+        $canvas = $dompdf->getCanvas();
+        $font = $dompdf->getFontMetrics()->getFont('DejaVu Sans', 'normal');
+        $size = 7.0;
+        $color = [0.58, 0.64, 0.72];
+        $y = 820;
+        $footer = 'Probusiness · Manual de usuario · ' . now('America/Lima')->format('d/m/Y H:i');
+        $canvas->page_text(36, $y, $footer, $font, $size, $color);
+        $canvas->page_text(505, $y, 'Pág. {PAGE_NUM} / {PAGE_COUNT}', $font, $size, $color);
+
         $output = $dompdf->output();
         if ($output === '' || $output === false) {
             throw new \RuntimeException('DomPDF no generó contenido para el manual.');
