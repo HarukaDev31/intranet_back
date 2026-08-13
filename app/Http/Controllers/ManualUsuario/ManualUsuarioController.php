@@ -129,12 +129,24 @@ class ManualUsuarioController extends Controller
             ], 404);
         }
 
-        $binary = $this->pdf->renderRolePdf($slug);
+        try {
+            $binary = $this->pdf->renderRolePdf($slug);
+        } catch (\Throwable $e) {
+            report($e);
+
+            return response()->json([
+                'status' => 'error',
+                'message' => 'No se pudo generar el PDF: ' . $e->getMessage(),
+            ], 500);
+        }
+
         $filename = 'manual-' . $slug . '-' . now()->format('Ymd') . '.pdf';
 
         return response($binary, 200, [
             'Content-Type' => 'application/pdf',
             'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+            'Content-Length' => (string) strlen($binary),
+            'Cache-Control' => 'no-store, private',
         ]);
     }
 
@@ -148,12 +160,24 @@ class ManualUsuarioController extends Controller
             ], 403);
         }
 
-        $binary = $this->pdf->renderGlobalPdf();
+        try {
+            $binary = $this->pdf->renderGlobalPdf();
+        } catch (\Throwable $e) {
+            report($e);
+
+            return response()->json([
+                'status' => 'error',
+                'message' => 'No se pudo generar el PDF global: ' . $e->getMessage(),
+            ], 500);
+        }
+
         $filename = 'manual-global-' . now()->format('Ymd') . '.pdf';
 
         return response($binary, 200, [
             'Content-Type' => 'application/pdf',
             'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+            'Content-Length' => (string) strlen($binary),
+            'Cache-Control' => 'no-store, private',
         ]);
     }
 

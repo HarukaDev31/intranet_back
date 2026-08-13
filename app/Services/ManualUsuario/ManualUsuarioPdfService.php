@@ -82,9 +82,13 @@ class ManualUsuarioPdfService
 
         $options = new Options();
         $options->set('isHtml5ParserEnabled', true);
-        $options->set('isRemoteEnabled', true);
+        $options->set('isRemoteEnabled', false); // imágenes van como data URI
         $options->set('defaultFont', 'DejaVu Sans');
-        $options->setChroot($this->catalog->basePath());
+        $chroot = public_path();
+        if (is_dir($this->catalog->basePath())) {
+            $chroot = $this->catalog->basePath();
+        }
+        $options->setChroot($chroot);
 
         $dompdf = new Dompdf($options);
         $dompdf->loadHtml($this->embedRemoteHttpsImages($this->embedLocalImages($html)));
@@ -145,7 +149,11 @@ class ManualUsuarioPdfService
                     return $m[0];
                 }
                 try {
-                    $bin = @file_get_contents($url);
+                    $ctx = stream_context_create([
+                        'http' => ['timeout' => 8, 'follow_location' => 1],
+                        'ssl' => ['verify_peer' => false, 'verify_peer_name' => false],
+                    ]);
+                    $bin = @file_get_contents($url, false, $ctx);
                     if ($bin === false || $bin === '') {
                         return $m[0];
                     }

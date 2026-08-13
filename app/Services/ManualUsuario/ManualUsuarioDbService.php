@@ -362,15 +362,52 @@ class ManualUsuarioDbService
                 break;
 
             case ManualBloque::TIPO_TABLA:
-                $cols = $snap['columns'] ?? [];
-                if (is_array($cols) && count($cols) > 0) {
-                    $out[] = '<p><strong>' . e(implode(' | ', array_map('strval', $cols))) . '</strong></p>';
-                }
-                foreach ((array) ($snap['rows'] ?? []) as $row) {
-                    if (!is_array($row)) {
-                        continue;
+                $cols = is_array($snap['columns'] ?? null) ? $snap['columns'] : [];
+                $headers = [];
+                foreach ($cols as $i => $col) {
+                    if (is_string($col)) {
+                        $headers[] = $col;
+                    } elseif (is_array($col)) {
+                        $headers[] = (string) ($col['header'] ?? $col['label'] ?? $col['accessorKey'] ?? ('Col ' . ($i + 1)));
                     }
-                    $out[] = '<p>' . e(implode(' | ', array_map('strval', $row))) . '</p>';
+                }
+                $rows = is_array($snap['rows'] ?? null) ? $snap['rows'] : [];
+                if ($headers !== [] || $rows !== []) {
+                    $out[] = '<table width="100%" cellpadding="4" cellspacing="0" border="1" style="border-collapse:collapse;font-size:9px;">';
+                    if ($headers !== []) {
+                        $out[] = '<thead><tr>';
+                        foreach ($headers as $h) {
+                            $out[] = '<th align="left">' . e($h) . '</th>';
+                        }
+                        $out[] = '</tr></thead>';
+                    }
+                    $out[] = '<tbody>';
+                    foreach (array_slice($rows, 0, 40) as $row) {
+                        if (!is_array($row)) {
+                            continue;
+                        }
+                        $out[] = '<tr>';
+                        if ($cols !== []) {
+                            foreach ($cols as $i => $col) {
+                                $key = is_array($col) ? (string) ($col['accessorKey'] ?? $col['key'] ?? '') : '';
+                                $val = $key !== '' && array_key_exists($key, $row)
+                                    ? $row[$key]
+                                    : ($row[$i] ?? '');
+                                $out[] = '<td>' . e($this->scalarForPdf($val)) . '</td>';
+                            }
+                        } else {
+                            foreach ($row as $val) {
+                                if (is_string($val) || is_numeric($val) || is_bool($val) || $val === null) {
+                                    $out[] = '<td>' . e($this->scalarForPdf($val)) . '</td>';
+                                }
+                            }
+                        }
+                        $out[] = '</tr>';
+                    }
+                    $out[] = '</tbody></table>';
+                    if (count($rows) > 40) {
+                        $out[] = '<p><em>… y ' . (count($rows) - 40) . ' filas más (omitidas en PDF)</em></p>';
+                    }
                 }
                 break;
 
@@ -382,17 +419,39 @@ class ManualUsuarioDbService
 
             case ManualBloque::TIPO_MEDIA:
                 $caption = (string) ($snap['caption'] ?? $snap['alt'] ?? 'Captura');
-                $url = (string) ($snap['url'] ?? '');
-                if ($url !== '') {
-                    $out[] = '<p><img src="' . e($url) . '" alt="' . e($caption) . '"></p>';
+                $mediaId = (int) ($snap['media_id'] ?? 0);
+                $embedded = false;
+                if ($mediaId > 0) {
+                    $absolute = $this->absoluteMediaPathForPdf($mediaId);
+                    if ($absolute && is_readable($absolute)) {
+                        $bin = @file_get_contents($absolute);
+                        if ($bin !== false && $bin !== '') {
+                            $mime = @mime_content_type($absolute) ?: 'image/png';
+                            if (!str_starts_with((string) $mime, 'image/')) {
+                                $mime = 'image/png';
+                            }
+                            $out[] = '<p><img src="data:' . $mime . ';base64,' . base64_encode($bin)
+                                . '" alt="' . e($caption) . '" style="max-width:100%;"></p>';
+                            $embedded = true;
+                        }
+                    }
+                }
+                if (!$embedded) {
+                    $url = (string) ($snap['url'] ?? '');
+                    // Preferir ruta API media/{id} para el pipeline de embedLocalImages
+                    if ($mediaId > 0) {
+                        $out[] = '<p><img src="' . e(url('/api/manual-usuario/media/' . $mediaId))
+                            . '" alt="' . e($caption) . '"></p>';
+                    } elseif ($url !== '' && !str_starts_with($url, 'http')) {
+                        $out[] = '<p><img src="' . e($url) . '" alt="' . e($caption) . '"></p>';
+                    }
                 }
                 $out[] = '<p><em>Captura: ' . e($caption) . '</em></p>';
                 break;
 
             case ManualBloque::TIPO_EMBED:
                 $label = (string) ($snap['label'] ?? 'UI');
-                $html = (string) ($snap['html'] ?? '');
-                $out[] = '<div>' . $html . '</div>';
+                // No inyectar HTML de UI en DomPDF (rompe el render)
                 $out[] = '<p><em>Componente UI: ' . e($label) . '</em></p>';
                 break;
 
@@ -422,5 +481,33 @@ class ManualUsuarioDbService
         }
 
         return implode("\n", $out);
+    }
+
+    /**
+     * @param  mixed  $value
+     */
+    private function scalarForPdf($value): string
+    {
+        if ($value === null) {
+            return '';
+        }
+        if (is_bool($value)) {
+            return $value ? 'Sí' : 'No';
+        }
+        if (is_scalar($value)) {
+            return (string) $value;
+        }
+        if (is_array($value)) {
+            $flat = [];
+            foreach ($value as $v) {
+                if (is_scalar($v) || $v === null) {
+                    $flat[] = (string) ($v ?? '');
+                }
+            }
+
+            return implode(' · ', array_filter($flat, fn ($s) => $s !== ''));
+        }
+
+        return '';
     }
 }
