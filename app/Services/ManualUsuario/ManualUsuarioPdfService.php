@@ -2,6 +2,7 @@
 
 namespace App\Services\ManualUsuario;
 
+use App\Support\BrandLogoPaths;
 use Dompdf\Dompdf;
 use Dompdf\Options;
 
@@ -21,21 +22,21 @@ class ManualUsuarioPdfService
         }
 
         $pages = $this->db->pagesForRole($slug);
-        $chapters = array_map(function (array $page) {
-            return [
-                'html' => $this->db->pageToHtml($page),
-            ];
-        }, $pages);
+        $chapters = array_map(fn (array $page) => [
+            'title' => (string) ($page['titulo'] ?? ''),
+            'html' => $this->db->pageToHtml($page),
+        ], $pages);
 
         $html = view('manual-usuario.pdf', [
             'mode' => 'role',
-            'title' => 'Manual — ' . ($role['nombre'] ?? $slug),
-            'subtitle' => 'Rol: ' . ($role['nombre'] ?? $slug),
+            'title' => 'Manual de usuario',
+            'subtitle' => 'Guía operativa — Rol: ' . ($role['nombre'] ?? $slug),
             'generatedAt' => now('America/Lima')->format('d/m/Y H:i'),
-            'globalChapters' => [],
+            'logoDataUri' => $this->logoDataUri(),
             'roles' => [[
-                'role' => $role,
+                'role' => array_merge($role, ['meta' => $this->catalog->roleMeta($slug)]),
                 'chapters' => $chapters,
+                'toc' => $this->db->pagesToToc($pages),
             ]],
         ])->render();
 
@@ -53,24 +54,46 @@ class ManualUsuarioPdfService
             if ($slug === '' || empty($byRole[$slug])) {
                 continue;
             }
+            $pages = $byRole[$slug];
             $roles[] = [
-                'role' => $role,
-                'chapters' => array_map(function (array $page) {
-                    return ['html' => $this->db->pageToHtml($page)];
-                }, $byRole[$slug]),
+                'role' => array_merge($role, ['meta' => $this->catalog->roleMeta($slug)]),
+                'chapters' => array_map(fn (array $page) => [
+                    'title' => (string) ($page['titulo'] ?? ''),
+                    'html' => $this->db->pageToHtml($page),
+                ], $pages),
+                'toc' => $this->db->pagesToToc($pages),
             ];
         }
 
         $html = view('manual-usuario.pdf', [
             'mode' => 'global',
             'title' => $index['title'] ?? 'Manual de usuario',
-            'subtitle' => $index['description'] ?? 'Documentación por roles (CMS)',
+            'subtitle' => $index['description'] ?? 'Documentación por roles — compilación completa',
             'generatedAt' => now('America/Lima')->format('d/m/Y H:i'),
-            'globalChapters' => [],
+            'logoDataUri' => $this->logoDataUri(),
             'roles' => $roles,
         ])->render();
 
         return $this->dompdf($html);
+    }
+
+    private function logoDataUri(): ?string
+    {
+        foreach (['logo_probusiness.png', 'logo.png', 'probusiness.png', 'logo_white.png'] as $file) {
+            $path = BrandLogoPaths::resolve($file);
+            if (!$path || !is_readable($path)) {
+                continue;
+            }
+            $bin = @file_get_contents($path);
+            if ($bin === false || $bin === '') {
+                continue;
+            }
+            $mime = @mime_content_type($path) ?: 'image/png';
+
+            return 'data:' . $mime . ';base64,' . base64_encode($bin);
+        }
+
+        return null;
     }
 
     private function dompdf(string $html): string
@@ -82,7 +105,8 @@ class ManualUsuarioPdfService
 
         $options = new Options();
         $options->set('isHtml5ParserEnabled', true);
-        $options->set('isRemoteEnabled', false); // imágenes van como data URI
+        $options->set('isRemoteEnabled', false);
+        $options->set('isPhpEnabled', false);
         $options->set('defaultFont', 'DejaVu Sans');
         $chroot = public_path();
         if (is_dir($this->catalog->basePath())) {
@@ -103,9 +127,6 @@ class ManualUsuarioPdfService
         return $output;
     }
 
-    /**
-     * Convierte URLs /api/manual-usuario/assets/... y /media/{id} a data URI para DomPDF.
-     */
     private function embedLocalImages(string $html): string
     {
         $html = preg_replace_callback(
@@ -136,9 +157,6 @@ class ManualUsuarioPdfService
         ) ?? $html;
     }
 
-    /**
-     * DomPDF no carga CDN externo de forma fiable → data URI.
-     */
     private function embedRemoteHttpsImages(string $html): string
     {
         return preg_replace_callback(

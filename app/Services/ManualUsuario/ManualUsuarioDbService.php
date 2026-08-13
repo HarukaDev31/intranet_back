@@ -107,35 +107,152 @@ class ManualUsuarioDbService
     }
 
     /**
-     * HTML simple de una página CMS para DomPDF.
+     * HTML de una página CMS para DomPDF (misma jerarquía que el lector).
      */
     public function pageToHtml(array $page): string
     {
+        $titulo = e((string) ($page['titulo'] ?? ''));
+        $desc = trim((string) ($page['descripcion'] ?? ''));
         $parts = [];
-        $parts[] = '<h3>' . e($page['titulo'] ?? '') . '</h3>';
-        if (!empty($page['descripcion'])) {
-            $parts[] = '<p>' . e($page['descripcion']) . '</p>';
+        $parts[] = '<div class="page-card">';
+        $parts[] = '<div class="page-card-header">';
+        $parts[] = '<div class="page-card-title">' . $titulo . '</div>';
+        if ($desc !== '') {
+            $parts[] = '<div class="page-card-desc">' . e($desc) . '</div>';
         }
-
+        $parts[] = '</div>';
+        $parts[] = '<div class="page-card-body">';
         foreach ($page['blocks'] ?? [] as $block) {
-            $parts[] = $this->blockTreeToHtml($block);
+            if (is_array($block)) {
+                $parts[] = $this->blockTreeToHtml($block, 0);
+            }
         }
+        $parts[] = '</div></div>';
 
         return implode("\n", $parts);
     }
 
     /**
+     * Índice TOC: páginas → grupos (como el menú del lector).
+     *
+     * @param  array<int, array<string, mixed>>  $pages
+     * @return array<int, array{title: string, children: array<int, string>}>
+     */
+    public function pagesToToc(array $pages): array
+    {
+        $toc = [];
+        foreach ($pages as $page) {
+            if (!is_array($page)) {
+                continue;
+            }
+            $children = [];
+            foreach ($page['blocks'] ?? [] as $block) {
+                if (!is_array($block)) {
+                    continue;
+                }
+                if (ManualBloque::normalizeTipo((string) ($block['tipo'] ?? '')) !== ManualBloque::TIPO_GRUPO) {
+                    continue;
+                }
+                $t = trim((string) ($block['titulo'] ?? $block['clave'] ?? ''));
+                if ($t !== '') {
+                    $children[] = $t;
+                }
+            }
+            $toc[] = [
+                'title' => (string) ($page['titulo'] ?? 'Página'),
+                'children' => $children,
+            ];
+        }
+
+        return $toc;
+    }
+
+    /**
      * @param  array<string, mixed>  $block
      */
-    private function blockTreeToHtml(array $block): string
+    private function blockTreeToHtml(array $block, int $depth = 0): string
     {
-        $html = $this->blockToHtml($block);
-        foreach ($block['children'] ?? [] as $child) {
+        $tipo = ManualBloque::normalizeTipo((string) ($block['tipo'] ?? ''));
+
+        if ($tipo === ManualBloque::TIPO_GRUPO) {
+            return $this->grupoToHtml($block, $depth);
+        }
+        if ($tipo === ManualBloque::TIPO_TIMELINE) {
+            return $this->timelineToHtml($block);
+        }
+
+        return '<div class="widget">' . $this->blockToHtml($block) . '</div>';
+    }
+
+    /**
+     * @param  array<string, mixed>  $block
+     */
+    private function grupoToHtml(array $block, int $depth): string
+    {
+        $titulo = trim((string) ($block['titulo'] ?? ''));
+        $clave = trim((string) ($block['clave'] ?? ''));
+        $payload = is_array($block['payload'] ?? null) ? $block['payload'] : [];
+        $subtitulo = trim((string) ($payload['subtitulo'] ?? ''));
+        $levelClass = $depth === 0 ? 'grupo' : 'grupo grupo-nested';
+
+        $html = '<div class="' . $levelClass . '">';
+        if ($titulo !== '') {
+            $html .= '<div class="grupo-title">' . e($titulo) . '</div>';
+        }
+        if ($clave !== '') {
+            $html .= '<div class="grupo-clave">' . e($clave) . '</div>';
+        }
+        if ($subtitulo !== '') {
+            $html .= '<div class="grupo-sub">' . e($subtitulo) . '</div>';
+        }
+        $children = is_array($block['children'] ?? null) ? $block['children'] : [];
+        if ($children !== []) {
+            $html .= '<div class="grupo-children">';
+            foreach ($children as $child) {
+                if (is_array($child)) {
+                    $html .= $this->blockTreeToHtml($child, $depth + 1);
+                }
+            }
+            $html .= '</div>';
+        }
+        $html .= '</div>';
+
+        return $html;
+    }
+
+    /**
+     * @param  array<string, mixed>  $block
+     */
+    private function timelineToHtml(array $block): string
+    {
+        $titulo = trim((string) ($block['titulo'] ?? ''));
+        $payload = is_array($block['payload'] ?? null) ? $block['payload'] : [];
+        $subtitulo = trim((string) ($payload['subtitulo'] ?? ''));
+        $html = '<div class="timeline">';
+        if ($titulo !== '') {
+            $html .= '<div class="widget-title">' . e($titulo) . '</div>';
+        }
+        if ($subtitulo !== '') {
+            $html .= '<div class="muted">' . e($subtitulo) . '</div>';
+        }
+        $html .= '<table class="timeline-table" width="100%" cellpadding="0" cellspacing="0"><tr>';
+        $children = is_array($block['children'] ?? null) ? $block['children'] : [];
+        $n = count($children);
+        foreach ($children as $i => $child) {
             if (!is_array($child)) {
                 continue;
             }
-            $html .= "\n" . $this->blockTreeToHtml($child);
+            $stepTitle = trim((string) ($child['titulo'] ?? $child['tipo'] ?? 'Paso'));
+            $html .= '<td class="timeline-step" width="' . max(1, (int) floor(100 / max(1, $n))) . '%">';
+            $html .= '<div class="timeline-num">' . ($i + 1) . '</div>';
+            $html .= '<div class="timeline-step-title">' . e($stepTitle) . '</div>';
+            $html .= '<div class="timeline-step-body">' . $this->blockToHtml(array_merge($child, ['titulo' => ''])) . '</div>';
+            $html .= '</td>';
+            if ($i < $n - 1) {
+                $html .= '<td class="timeline-arrow" width="24">→</td>';
+            }
         }
+        $html .= '</tr></table></div>';
 
         return $html;
     }
@@ -323,98 +440,96 @@ class ManualUsuarioDbService
         $snap = is_array($payload['snapshot'] ?? null) ? $payload['snapshot'] : $payload;
         $out = [];
 
-        if ($titulo !== '') {
-            $out[] = '<h4>' . e($titulo) . '</h4>';
+        if ($titulo !== '' && $tipo !== ManualBloque::TIPO_GRUPO) {
+            $out[] = '<div class="widget-title">' . e($titulo) . '</div>';
         }
         if (!empty($payload['subtitulo'])) {
-            $out[] = '<p><em>' . e((string) $payload['subtitulo']) . '</em></p>';
+            $out[] = '<div class="muted">' . e((string) $payload['subtitulo']) . '</div>';
         }
 
         switch ($tipo) {
             case ManualBloque::TIPO_TEXTO:
-                $out[] = '<p>' . nl2br(e((string) ($snap['body'] ?? ''))) . '</p>';
+                $out[] = '<div class="texto">' . nl2br(e((string) ($snap['body'] ?? ''))) . '</div>';
                 break;
 
             case ManualBloque::TIPO_TOOLBAR:
-                $buttons = collect($snap['buttons'] ?? [])->pluck('label')->filter()->implode(', ');
-                if ($buttons !== '') {
-                    $out[] = '<p><strong>Botones:</strong> ' . e($buttons) . '</p>';
+                $out[] = '<div class="toolbar">';
+                foreach ((array) ($snap['buttons'] ?? []) as $btn) {
+                    if (!is_array($btn)) {
+                        continue;
+                    }
+                    $label = (string) ($btn['label'] ?? '');
+                    if ($label === '') {
+                        continue;
+                    }
+                    $out[] = '<span class="btn">' . e($label) . '</span>';
                 }
+                $out[] = '</div>';
+                break;
+
+            case ManualBloque::TIPO_ACCION:
+                $label = (string) ($snap['label'] ?? '');
+                if ($label === '') {
+                    $label = $titulo !== '' ? $titulo : 'Acción';
+                }
+                $out[] = '<span class="btn btn-primary">' . e($label) . '</span>';
                 break;
 
             case ManualBloque::TIPO_FILTROS:
-                $fields = collect($snap['fields'] ?? [])->map(function ($f) {
-                    $label = (string) ($f['label'] ?? '');
+                $out[] = '<div class="filters">';
+                foreach ((array) ($snap['fields'] ?? []) as $f) {
+                    if (!is_array($f)) {
+                        continue;
+                    }
+                    $label = (string) ($f['label'] ?? $f['key'] ?? 'Filtro');
                     $value = (string) ($f['value'] ?? '');
-
-                    return $label . ($value !== '' ? ': ' . $value : '');
-                })->filter()->implode('; ');
-                if ($fields !== '') {
-                    $out[] = '<p><strong>Filtros:</strong> ' . e($fields) . '</p>';
+                    $opts = is_array($f['options'] ?? null) ? $f['options'] : [];
+                    $optLabels = [];
+                    foreach ($opts as $o) {
+                        if (is_array($o)) {
+                            $optLabels[] = (string) ($o['label'] ?? $o['value'] ?? '');
+                        }
+                    }
+                    $out[] = '<div class="filter-field">';
+                    $out[] = '<div class="filter-label">' . e($label) . '</div>';
+                    $out[] = '<div class="filter-control">' . e($value !== '' ? $value : (implode(' / ', array_slice(array_filter($optLabels), 0, 3)) ?: '—')) . '</div>';
+                    $out[] = '</div>';
                 }
+                if (!empty($snap['hint'])) {
+                    $out[] = '<div class="muted">' . e((string) $snap['hint']) . '</div>';
+                }
+                $out[] = '</div>';
                 break;
 
             case ManualBloque::TIPO_TABS:
-                $tabs = collect($snap['tabs'] ?? [])->pluck('label')->filter()->implode(', ');
-                if ($tabs !== '') {
-                    $out[] = '<p><strong>Pestañas:</strong> ' . e($tabs) . '</p>';
+                $active = (string) ($snap['active'] ?? '');
+                $out[] = '<div class="tabs">';
+                foreach ((array) ($snap['tabs'] ?? []) as $tab) {
+                    if (!is_array($tab)) {
+                        continue;
+                    }
+                    $key = (string) ($tab['key'] ?? '');
+                    $label = (string) ($tab['label'] ?? $key);
+                    $cls = ($active !== '' && $key === $active) ? 'tab tab-active' : 'tab';
+                    $out[] = '<span class="' . $cls . '">' . e($label) . '</span>';
                 }
+                $out[] = '</div>';
                 break;
 
             case ManualBloque::TIPO_TABLA:
-                $cols = is_array($snap['columns'] ?? null) ? $snap['columns'] : [];
-                $headers = [];
-                foreach ($cols as $i => $col) {
-                    if (is_string($col)) {
-                        $headers[] = $col;
-                    } elseif (is_array($col)) {
-                        $headers[] = (string) ($col['header'] ?? $col['label'] ?? $col['accessorKey'] ?? ('Col ' . ($i + 1)));
-                    }
-                }
-                $rows = is_array($snap['rows'] ?? null) ? $snap['rows'] : [];
-                if ($headers !== [] || $rows !== []) {
-                    $out[] = '<table width="100%" cellpadding="4" cellspacing="0" border="1" style="border-collapse:collapse;font-size:9px;">';
-                    if ($headers !== []) {
-                        $out[] = '<thead><tr>';
-                        foreach ($headers as $h) {
-                            $out[] = '<th align="left">' . e($h) . '</th>';
-                        }
-                        $out[] = '</tr></thead>';
-                    }
-                    $out[] = '<tbody>';
-                    foreach (array_slice($rows, 0, 40) as $row) {
-                        if (!is_array($row)) {
-                            continue;
-                        }
-                        $out[] = '<tr>';
-                        if ($cols !== []) {
-                            foreach ($cols as $i => $col) {
-                                $key = is_array($col) ? (string) ($col['accessorKey'] ?? $col['key'] ?? '') : '';
-                                $val = $key !== '' && array_key_exists($key, $row)
-                                    ? $row[$key]
-                                    : ($row[$i] ?? '');
-                                $out[] = '<td>' . e($this->scalarForPdf($val)) . '</td>';
-                            }
-                        } else {
-                            foreach ($row as $val) {
-                                if (is_string($val) || is_numeric($val) || is_bool($val) || $val === null) {
-                                    $out[] = '<td>' . e($this->scalarForPdf($val)) . '</td>';
-                                }
-                            }
-                        }
-                        $out[] = '</tr>';
-                    }
-                    $out[] = '</tbody></table>';
-                    if (count($rows) > 40) {
-                        $out[] = '<p><em>… y ' . (count($rows) - 40) . ' filas más (omitidas en PDF)</em></p>';
-                    }
-                }
+                $out[] = $this->tablaToHtml($snap);
                 break;
 
             case ManualBloque::TIPO_CALLOUT:
                 $tone = (string) ($snap['tone'] ?? 'info');
+                $callTitle = (string) ($snap['title'] ?? '');
                 $text = (string) ($snap['body'] ?? '');
-                $out[] = '<p><strong>[' . e(Str::upper($tone)) . ']</strong> ' . nl2br(e($text)) . '</p>';
+                $out[] = '<div class="callout callout-' . e($tone) . '">';
+                if ($callTitle !== '') {
+                    $out[] = '<div class="callout-title">' . e($callTitle) . '</div>';
+                }
+                $out[] = '<div>' . nl2br(e($text)) . '</div>';
+                $out[] = '</div>';
                 break;
 
             case ManualBloque::TIPO_MEDIA:
@@ -430,57 +545,171 @@ class ManualUsuarioDbService
                             if (!str_starts_with((string) $mime, 'image/')) {
                                 $mime = 'image/png';
                             }
-                            $out[] = '<p><img src="data:' . $mime . ';base64,' . base64_encode($bin)
-                                . '" alt="' . e($caption) . '" style="max-width:100%;"></p>';
+                            $out[] = '<div class="media"><img src="data:' . $mime . ';base64,' . base64_encode($bin)
+                                . '" alt="' . e($caption) . '"></div>';
                             $embedded = true;
                         }
                     }
                 }
                 if (!$embedded) {
-                    $url = (string) ($snap['url'] ?? '');
-                    // Preferir ruta API media/{id} para el pipeline de embedLocalImages
                     if ($mediaId > 0) {
-                        $out[] = '<p><img src="' . e(url('/api/manual-usuario/media/' . $mediaId))
-                            . '" alt="' . e($caption) . '"></p>';
-                    } elseif ($url !== '' && !str_starts_with($url, 'http')) {
-                        $out[] = '<p><img src="' . e($url) . '" alt="' . e($caption) . '"></p>';
+                        $out[] = '<div class="media"><img src="' . e(url('/api/manual-usuario/media/' . $mediaId))
+                            . '" alt="' . e($caption) . '"></div>';
+                    } elseif (!empty($snap['url']) && !str_starts_with((string) $snap['url'], 'http')) {
+                        $out[] = '<div class="media"><img src="' . e((string) $snap['url']) . '" alt="' . e($caption) . '"></div>';
+                    } else {
+                        $out[] = '<div class="media-placeholder">Captura pendiente</div>';
                     }
                 }
-                $out[] = '<p><em>Captura: ' . e($caption) . '</em></p>';
+                if ($caption !== '') {
+                    $out[] = '<div class="media-caption">' . e($caption) . '</div>';
+                }
                 break;
 
             case ManualBloque::TIPO_EMBED:
-                $label = (string) ($snap['label'] ?? 'UI');
-                // No inyectar HTML de UI en DomPDF (rompe el render)
-                $out[] = '<p><em>Componente UI: ' . e($label) . '</em></p>';
+                $label = (string) ($snap['label'] ?? 'Componente UI');
+                $out[] = '<div class="embed-box"><strong>UI</strong> — ' . e($label) . '</div>';
+                break;
+
+            case ManualBloque::TIPO_CARD:
+                $out[] = '<div class="card-box">';
+                foreach ((array) ($snap['fields'] ?? []) as $f) {
+                    if (!is_array($f)) {
+                        continue;
+                    }
+                    $label = (string) ($f['label'] ?? $f['key'] ?? '');
+                    $value = (string) ($f['value'] ?? '');
+                    $out[] = '<div class="card-row"><span class="card-label">' . e($label) . '</span> '
+                        . '<span class="card-value">' . e($value) . '</span></div>';
+                }
+                $out[] = '</div>';
+                break;
+
+            case ManualBloque::TIPO_MODAL:
+                $modalTitle = (string) ($snap['title'] ?? '');
+                if ($modalTitle === '') {
+                    $modalTitle = $titulo !== '' ? $titulo : 'Modal';
+                }
+                $out[] = '<div class="modal-box">';
+                $out[] = '<div class="modal-title">' . e($modalTitle) . '</div>';
+                foreach ((array) ($snap['fields'] ?? []) as $f) {
+                    if (!is_array($f)) {
+                        continue;
+                    }
+                    $label = (string) ($f['label'] ?? $f['key'] ?? '');
+                    $out[] = '<div class="filter-field"><div class="filter-label">' . e($label) . '</div>'
+                        . '<div class="filter-control">' . e((string) ($f['value'] ?? '—')) . '</div></div>';
+                }
+                $actions = is_array($snap['actions'] ?? null) ? $snap['actions'] : [];
+                if ($actions !== []) {
+                    $out[] = '<div class="toolbar">';
+                    foreach ($actions as $a) {
+                        $out[] = '<span class="btn">' . e(is_string($a) ? $a : (string) ($a['label'] ?? '')) . '</span>';
+                    }
+                    $out[] = '</div>';
+                }
+                $out[] = '</div>';
                 break;
 
             case ManualBloque::TIPO_FLOW:
+                $out[] = '<div class="flow">';
+                if (!empty($snap['hint'])) {
+                    $out[] = '<div class="muted">' . e((string) $snap['hint']) . '</div>';
+                }
                 $n = 1;
                 foreach ((array) ($snap['steps'] ?? []) as $step) {
                     if (!is_array($step)) {
                         continue;
                     }
-                    $out[] = '<p><strong>' . $n . '. ' . e((string) ($step['title'] ?? '')) . '</strong><br>'
-                        . nl2br(e((string) ($step['body'] ?? ''))) . '</p>';
+                    $out[] = '<div class="flow-step">';
+                    $out[] = '<div class="flow-num">' . $n . '</div>';
+                    $out[] = '<div class="flow-body"><div class="flow-step-title">' . e((string) ($step['title'] ?? '')) . '</div>'
+                        . '<div>' . nl2br(e((string) ($step['body'] ?? ''))) . '</div></div>';
+                    $out[] = '</div>';
                     $n++;
                 }
+                $out[] = '</div>';
                 break;
 
             case ManualBloque::TIPO_GRUPO:
-                if (!empty($block['clave'])) {
-                    $out[] = '<p><code>' . e((string) $block['clave']) . '</code></p>';
-                }
                 break;
 
             default:
                 if (!empty($snap['body'])) {
-                    $out[] = '<p>' . nl2br(e((string) $snap['body'])) . '</p>';
+                    $out[] = '<div class="texto">' . nl2br(e((string) $snap['body'])) . '</div>';
                 }
                 break;
         }
 
         return implode("\n", $out);
+    }
+
+    /**
+     * @param  array<string, mixed>  $snap
+     */
+    private function tablaToHtml(array $snap): string
+    {
+        $cols = is_array($snap['columns'] ?? null) ? $snap['columns'] : [];
+        $headers = [];
+        foreach ($cols as $i => $col) {
+            if (is_string($col)) {
+                $headers[] = $col;
+            } elseif (is_array($col)) {
+                $headers[] = (string) ($col['header'] ?? $col['label'] ?? $col['accessorKey'] ?? ('Col ' . ($i + 1)));
+            }
+        }
+        $rows = is_array($snap['rows'] ?? null) ? $snap['rows'] : [];
+        if ($headers === [] && $rows === []) {
+            return '<div class="muted">Tabla sin datos</div>';
+        }
+
+        $html = '<table class="data-table" width="100%" cellpadding="0" cellspacing="0">';
+        if ($headers !== []) {
+            $html .= '<thead><tr>';
+            foreach ($headers as $h) {
+                $html .= '<th>' . e($h) . '</th>';
+            }
+            $html .= '</tr></thead>';
+        }
+        $html .= '<tbody>';
+        foreach (array_slice($rows, 0, 50) as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $html .= '<tr>';
+            if ($cols !== []) {
+                foreach ($cols as $i => $col) {
+                    $key = is_array($col) ? (string) ($col['accessorKey'] ?? $col['key'] ?? '') : '';
+                    $type = is_array($col) ? (string) ($col['type'] ?? 'text') : 'text';
+                    $val = $key !== '' && array_key_exists($key, $row) ? $row[$key] : ($row[$i] ?? '');
+                    if ($type === 'buttons' && is_array($col['buttons'] ?? null)) {
+                        $labels = collect($col['buttons'])->pluck('label')->filter()->implode(' · ');
+                        $cell = $labels !== '' ? $labels : '⋯';
+                    } elseif ($type === 'multiline') {
+                        $cell = str_replace(["\n", ' · '], '<br>', e($this->scalarForPdf($val)));
+                    } else {
+                        $cell = e($this->scalarForPdf($val));
+                        if ($type === 'select' && $cell !== '') {
+                            $cell = '<span class="pill">' . $cell . '</span>';
+                        }
+                    }
+                    $html .= '<td>' . $cell . '</td>';
+                }
+            } else {
+                foreach ($row as $val) {
+                    if (is_string($val) || is_numeric($val) || is_bool($val) || $val === null) {
+                        $html .= '<td>' . e($this->scalarForPdf($val)) . '</td>';
+                    }
+                }
+            }
+            $html .= '</tr>';
+        }
+        $html .= '</tbody></table>';
+        if (count($rows) > 50) {
+            $html .= '<div class="muted">… y ' . (count($rows) - 50) . ' filas más</div>';
+        }
+
+        return $html;
     }
 
     /**
