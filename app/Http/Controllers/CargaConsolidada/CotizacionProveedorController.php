@@ -2796,7 +2796,20 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
 
             foreach ($files as $file) {
                 if ($file->isValid()) {
-                    $filename = time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
+                    if (!$this->isValidInspectionUpload($file)) {
+                        Log::warning('Tipo de archivo de inspección no permitido', [
+                            'nombre' => $file->getClientOriginalName(),
+                            'mime' => $file->getMimeType(),
+                            'ext' => $file->getClientOriginalExtension(),
+                        ]);
+                        continue;
+                    }
+
+                    $extension = strtolower((string) $file->getClientOriginalExtension());
+                    if ($extension === '') {
+                        $extension = $this->inspectionExtensionFromMime((string) $file->getMimeType()) ?: 'bin';
+                    }
+                    $filename = time() . '_' . uniqid() . '.' . $extension;
                     $path = $this->storageStoreUpload($file, self::INSPECTION_PATH, $filename);
 
                     Log::info('Archivo de inspección guardado:', [
@@ -2808,10 +2821,10 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
 
                     $inspeccion = new AlmacenInspection();
                     $inspeccion->file_name = $file->getClientOriginalName();
-                    $inspeccion->file_type = $file->getMimeType();
+                    $inspeccion->file_type = $this->normalizeInspectionMime($file);
                     $inspeccion->file_size = $file->getSize();
                     $inspeccion->last_modified = now();
-                    $inspeccion->file_ext = $file->getClientOriginalExtension();
+                    $inspeccion->file_ext = $extension;
                     $inspeccion->send_status = 'PENDING';
                     $inspeccion->id_proveedor = $idProveedor;
                     $inspeccion->file_path = $path;
@@ -2832,7 +2845,7 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
             if (empty($archivosGuardados)) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'No se pudo guardar ningún archivo de inspección'
+                    'message' => 'No se pudo guardar ningún archivo de inspección. Formatos permitidos: JPG, PNG, GIF, HEIC, HEIF, DNG y videos.'
                 ], 400);
             }
             Log::info('Inspección guardada correctamente', ['idProveedor' => $idProveedor, 'idCotizacion' => $idCotizacion]);
@@ -3294,6 +3307,156 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
     }
 
     /**
+     * Extensiones de inspección (mismas que el FileUploader del intranet).
+     *
+     * @return array
+     */
+    private function allowedInspectionExtensions()
+    {
+        return [
+            'jpg', 'jpeg', 'png', 'gif', 'heic', 'heif', 'dng',
+            'mp4', 'mov', 'avi', 'mkv', 'webm', 'wmv', 'flv', 'vob',
+            'm4v', '3gp', '3g2', 'mj2', 'm2ts', 'm2t', 'm2v', 'm4p', 'm4b', 'm4r',
+        ];
+    }
+
+    /**
+     * MIME de fotos iPhone / DNG (finfo a veces reporta octet-stream).
+     *
+     * @return array
+     */
+    private function allowedInspectionMimes()
+    {
+        return [
+            'image/jpeg',
+            'image/jpg',
+            'image/png',
+            'image/gif',
+            'image/heic',
+            'image/heif',
+            'image/heic-sequence',
+            'image/heif-sequence',
+            'image/dng',
+            'image/x-adobe-dng',
+            'image/x-dng',
+            'video/mp4',
+            'video/quicktime',
+            'video/x-msvideo',
+            'video/x-matroska',
+            'video/webm',
+            'video/x-ms-wmv',
+            'video/x-flv',
+            'video/3gpp',
+            'video/3gpp2',
+        ];
+    }
+
+    /**
+     * @param  \Illuminate\Http\UploadedFile  $file
+     * @return bool
+     */
+    private function isValidInspectionUpload($file)
+    {
+        $ext = strtolower((string) $file->getClientOriginalExtension());
+        if ($ext !== '' && in_array($ext, $this->allowedInspectionExtensions(), true)) {
+            return true;
+        }
+
+        $mime = strtolower((string) $file->getMimeType());
+        if ($mime !== '' && in_array($mime, $this->allowedInspectionMimes(), true)) {
+            return true;
+        }
+
+        if ($this->looksLikeHeic($file) || $this->looksLikeDng($file)) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * @param  \Illuminate\Http\UploadedFile  $file
+     * @return string
+     */
+    private function normalizeInspectionMime($file)
+    {
+        $ext = strtolower((string) $file->getClientOriginalExtension());
+        $mime = strtolower((string) $file->getMimeType());
+
+        if (in_array($ext, ['heic', 'heif'], true) || $this->looksLikeHeic($file)) {
+            return $ext === 'heif' ? 'image/heif' : 'image/heic';
+        }
+        if ($ext === 'dng' || $this->looksLikeDng($file)) {
+            return 'image/x-adobe-dng';
+        }
+        if ($mime !== '' && $mime !== 'application/octet-stream') {
+            return $mime;
+        }
+
+        return $mime ?: 'application/octet-stream';
+    }
+
+    /**
+     * @param  string  $mime
+     * @return string|null
+     */
+    private function inspectionExtensionFromMime($mime)
+    {
+        $mime = strtolower(strtok($mime, ';'));
+        $map = [
+            'image/heic' => 'heic',
+            'image/heif' => 'heif',
+            'image/dng' => 'dng',
+            'image/x-adobe-dng' => 'dng',
+            'image/x-dng' => 'dng',
+            'image/jpeg' => 'jpg',
+            'image/jpg' => 'jpg',
+            'image/png' => 'png',
+            'image/gif' => 'gif',
+        ];
+
+        return isset($map[$mime]) ? $map[$mime] : null;
+    }
+
+    /**
+     * @param  \Illuminate\Http\UploadedFile  $file
+     * @return bool
+     */
+    private function looksLikeHeic($file)
+    {
+        $path = $file->getRealPath();
+        if (!$path || !is_readable($path)) {
+            return false;
+        }
+        $header = @file_get_contents($path, false, null, 0, 16);
+        if ($header === false || strlen($header) < 12) {
+            return false;
+        }
+        $brand = substr($header, 8, 4);
+
+        return substr($header, 4, 4) === 'ftyp'
+            && in_array($brand, ['heic', 'heix', 'heif', 'mif1', 'msf1'], true);
+    }
+
+    /**
+     * @param  \Illuminate\Http\UploadedFile  $file
+     * @return bool
+     */
+    private function looksLikeDng($file)
+    {
+        $path = $file->getRealPath();
+        if (!$path || !is_readable($path)) {
+            return false;
+        }
+        $header = @file_get_contents($path, false, null, 0, 4);
+        if ($header === false) {
+            return false;
+        }
+
+        return $header === "II*\x00" || $header === "MM\x00*";
+    }
+
+    /**
      * Obtiene la extensión de archivo basada en la URL y content-type
      * 
      * @param string $url URL del archivo
@@ -3315,6 +3478,10 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                 'image/png' => 'png',
                 'image/gif' => 'gif',
                 'image/webp' => 'webp',
+                'image/heic' => 'heic',
+                'image/heif' => 'heif',
+                'image/dng' => 'dng',
+                'image/x-adobe-dng' => 'dng',
                 'video/mp4' => 'mp4',
                 'video/avi' => 'avi',
                 'video/mov' => 'mov',
