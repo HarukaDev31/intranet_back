@@ -1024,12 +1024,13 @@ class SeguimientoConsolidadoExcelService
             $item['vendedor'],
             $item['cliente'],
             $this->formatNumber($item['cbm_recibir']),
-            $this->formatShortDate($item['fecha_recibir']),
+            '',
             $item['code_supplier'],
             $item['ultima_actualizacion'] ?? '',
         ];
 
         $this->writeRowValues($sheet, $startCol, $row, $values, $applyBorder);
+        $this->writeCalendarDateCell($sheet, $startCol + 4, $row, $item['fecha_recibir'] ?? null);
     }
 
     /**
@@ -1468,20 +1469,22 @@ class SeguimientoConsolidadoExcelService
     }
 
     /**
+     * FECHA de CARGA POR RECIBIR: serial Excel + dd/mm/yyyy (igual que Cotizaciones / CONTACTAR).
+     *
      * @param mixed $value
-     * @return string
      */
-    private function formatShortDate($value)
+    private function writeCalendarDateCell(Worksheet $sheet, $colIndex, $row, $value): void
     {
-        if (empty($value)) {
-            return '';
+        $cell = Coordinate::stringFromColumnIndex((int) $colIndex) . $row;
+        $serial = SeguimientoConsolidadoDateFormatter::calendarDateToExcelSerial($value);
+        if ($serial === null) {
+            $sheet->setCellValue($cell, '');
+
+            return;
         }
 
-        try {
-            return SeguimientoConsolidadoDateFormatter::formatCalendarDate($value);
-        } catch (\Exception $e) {
-            return (string) $value;
-        }
+        $sheet->setCellValue($cell, $serial);
+        $sheet->getStyle($cell)->getNumberFormat()->setFormatCode('dd/mm/yyyy');
     }
 
     /**

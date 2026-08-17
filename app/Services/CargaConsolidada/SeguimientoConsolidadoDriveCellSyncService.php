@@ -108,6 +108,15 @@ class SeguimientoConsolidadoDriveCellSyncService
                 );
                 $cellsUpserted += $upserted;
                 $cellsHistory += $history;
+
+                [$upserted, $history] = $this->syncSeguimientoRecibirFechas(
+                    $seguimientoSheet,
+                    $idContenedor,
+                    $snapshotId,
+                    $trigger
+                );
+                $cellsUpserted += $upserted;
+                $cellsHistory += $history;
             }
 
             $this->repository->finishSnapshot($snapshotId, $cellsUpserted, $cellsHistory, 'ok');
@@ -577,6 +586,77 @@ class SeguimientoConsolidadoDriveCellSyncService
                 'column_letter' => Coordinate::stringFromColumnIndex($noteColIndex),
                 'cell_value' => $note,
                 'is_manual' => true,
+                'change_source' => $trigger,
+                'snapshot_id' => $snapshotId,
+            ]);
+
+            $upserted++;
+            if ($result['changed']) {
+                $history++;
+            }
+        }
+
+        return [$upserted, $history];
+    }
+
+    /**
+     * Rastrea FECHA de CARGA POR RECIBIR en historial de celdas.
+     * No escribe arrive_date: la columna se regenera desde BD (como CONTACTAR).
+     *
+     * @return array{0:int,1:int}
+     */
+    private function syncSeguimientoRecibirFechas(
+        Worksheet $sheet,
+        int $idContenedor,
+        int $snapshotId,
+        string $trigger
+    ): array {
+        $config = (array) config('seguimiento_drive_cells.sheets.Seguimiento.recibir', []);
+        $startCol = (int) ($config['start_col'] ?? 14);
+        $fechaColIndex = $startCol + (int) data_get($config, 'columns.fecha', 4);
+        $codeColIndex = $startCol + (int) data_get($config, 'columns.code_supplier', 5);
+        $clienteColIndex = $startCol + (int) data_get($config, 'columns.cliente', 2);
+
+        $highestRow = (int) $sheet->getHighestDataRow();
+        $upserted = 0;
+        $history = 0;
+
+        for ($row = 1; $row <= $highestRow; $row++) {
+            $consLabel = trim((string) $sheet->getCell(Coordinate::stringFromColumnIndex($startCol) . $row)->getCalculatedValue());
+            if ($consLabel !== '' && stripos($consLabel, 'TOTAL POR RECIBIR') !== false) {
+                continue;
+            }
+
+            $codeSupplier = trim((string) $this->cellDisplayValue($sheet, $codeColIndex, $row));
+            if ($codeSupplier === '') {
+                continue;
+            }
+
+            $rawFecha = $this->cellDisplayValue($sheet, $fechaColIndex, $row);
+            $fechaYmd = SeguimientoConsolidadoDateFormatter::parseCellToYmd($rawFecha);
+            if ($fechaYmd === null) {
+                continue;
+            }
+
+            $cliente = trim((string) $this->cellDisplayValue($sheet, $clienteColIndex, $row));
+            $idProveedor = $this->resolveProveedorByCodeAndCliente($idContenedor, $codeSupplier, $cliente);
+            if ($idProveedor === null) {
+                continue;
+            }
+
+            $cellRef = Coordinate::stringFromColumnIndex($fechaColIndex) . $row;
+            $result = $this->repository->upsertCell([
+                'id_contenedor' => $idContenedor,
+                'sheet_name' => 'Seguimiento',
+                'row_key' => SeguimientoDriveCellRowKey::recibirProveedor($idProveedor),
+                'column_key' => 'fecha',
+                'id_cotizacion' => null,
+                'id_proveedor' => $idProveedor,
+                'cell_ref' => $cellRef,
+                'row_number' => $row,
+                'column_letter' => Coordinate::stringFromColumnIndex($fechaColIndex),
+                'cell_value' => $fechaYmd,
+                'is_manual' => false,
                 'change_source' => $trigger,
                 'snapshot_id' => $snapshotId,
             ]);

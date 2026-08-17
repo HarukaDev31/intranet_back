@@ -3,6 +3,8 @@
 namespace App\Services\CargaConsolidada;
 
 use Carbon\Carbon;
+use DateTimeInterface;
+use PhpOffice\PhpSpreadsheet\Shared\Date as ExcelDate;
 
 /**
  * Fechas del Excel seguimiento → Drive en hora Perú (America/Lima).
@@ -24,24 +26,98 @@ class SeguimientoConsolidadoDateFormatter
 
     /**
      * Fecha calendario (arrive_date_china, arrive_date).
+     * Mismo formato que Cotizaciones / CONTACTAR (d/m/Y), no j-M.
      */
-    public static function formatCalendarDate($value, string $format = 'j-M'): string
+    public static function formatCalendarDate($value, string $format = 'd/m/Y'): string
     {
-        if ($value === null || trim((string) $value) === '') {
+        $ymd = self::parseCellToYmd($value);
+        if ($ymd === null) {
             return '';
         }
 
-        $value = trim((string) $value);
         $tz = self::displayTimezone();
 
         try {
-            if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $value)) {
-                return Carbon::createFromFormat('Y-m-d', $value, $tz)->format($format);
-            }
-
-            return Carbon::parse($value, $tz)->format($format);
+            return Carbon::createFromFormat('Y-m-d', $ymd, $tz)->format($format);
         } catch (\Exception $e) {
-            return $value;
+            return $ymd;
+        }
+    }
+
+    /**
+     * Serial Excel para celda de fecha calendario (sin hora / sin corrimiento UTC).
+     *
+     * @return float|null
+     */
+    public static function calendarDateToExcelSerial($value)
+    {
+        $ymd = self::parseCellToYmd($value);
+        if ($ymd === null) {
+            return null;
+        }
+
+        try {
+            $dt = Carbon::createFromFormat('Y-m-d', $ymd, self::displayTimezone())->startOfDay();
+
+            return ExcelDate::PHPToExcel($dt);
+        } catch (\Exception $e) {
+            return null;
+        }
+    }
+
+    /**
+     * Valor de celda Drive/Excel → Y-m-d (serial, DateTime, d/m/Y, Y-m-d, j-M).
+     */
+    public static function parseCellToYmd($value): ?string
+    {
+        if ($value instanceof DateTimeInterface) {
+            return Carbon::parse($value)->format('Y-m-d');
+        }
+
+        if ($value === null) {
+            return null;
+        }
+
+        if (is_numeric($value) && !preg_match('/^\d{8}$/', (string) $value)) {
+            $number = (float) $value;
+            if ($number > 20000 && $number < 80000) {
+                try {
+                    return Carbon::instance(ExcelDate::excelToDateTimeObject($number))->format('Y-m-d');
+                } catch (\Exception $e) {
+                    // seguir con parse de texto
+                }
+            }
+        }
+
+        $text = trim((string) $value);
+        if ($text === '' || in_array($text, ['0000-00-00', '0000-00-00 00:00:00'], true)) {
+            return null;
+        }
+
+        $text = strtr(mb_strtolower($text, 'UTF-8'), [
+            'ene' => 'jan',
+            'abr' => 'apr',
+            'ago' => 'aug',
+            'dic' => 'dec',
+        ]);
+
+        if (preg_match('/^\d{4}-\d{2}-\d{2}/', $text)) {
+            return ProveedorArriveDateHistoryService::normalizeDate($text);
+        }
+
+        try {
+            $dt = Carbon::createFromFormat('d/m/Y', $text, self::displayTimezone());
+            if ($dt && $dt->format('d/m/Y') === $text) {
+                return $dt->format('Y-m-d');
+            }
+        } catch (\Exception $e) {
+            // fallback
+        }
+
+        try {
+            return Carbon::parse($text, self::displayTimezone())->format('Y-m-d');
+        } catch (\Exception $e) {
+            return ProveedorArriveDateHistoryService::normalizeDate($text);
         }
     }
 

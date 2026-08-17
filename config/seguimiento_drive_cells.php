@@ -52,6 +52,19 @@ return [
                     'yiwu_notas' => ['index' => 10, 'is_manual' => true],
                 ],
             ],
+            'recibir' => [
+                'start_col' => 14,
+                'width' => 7,
+                'columns' => [
+                    'cons' => 0,
+                    'vendedor' => 1,
+                    'cliente' => 2,
+                    'cbm' => 3,
+                    'fecha' => 4,
+                    'code_supplier' => 5,
+                    'ultima_actualizacion' => 6,
+                ],
+            ],
             'contactar' => [
                 'start_col' => 22,
                 'width' => 7,
