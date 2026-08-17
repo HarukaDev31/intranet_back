@@ -537,7 +537,7 @@ class ManualUsuarioScreensCatalog
                 : 'Tu lista de cargas que ya cerraron. Ya no das de alta ni partes un contenedor desde aquí; entras a los pasos que aún necesitas.';
             $quien = 'Tú, desde el menú Coordinación.';
             $paraQue = $abiertos
-                ? 'Dejar lista la carga y trabajarla: cotización, clientes, papeles, cierre de costos, entrega y factura.'
+                ? 'Dejar lista la carga y llevarla: clientes, papeles, cierre de costos, entrega y factura. Las cotizaciones las sube Ventas (cotizadores) desde su apartado, no desde aquí.'
                 : 'Terminar o consultar lo que queda de una carga que ya no está abierta.';
             $cuando = $abiertos
                 ? 'Cuando abres una carga nueva o trabajas una que todavía no cierra.'
@@ -648,14 +648,14 @@ class ManualUsuarioScreensCatalog
                     ? 'Tu lista de cargas en marcha. Aquí das de alta el contenedor, lo corriges y entras a cada paso.'
                     : 'Tu lista de cargas que ya cerraron. Ya no creas ni partes; entras a los pasos que faltan terminar.',
                 'para_que' => $abiertos
-                    ? 'Dejar lista la carga y llevarla: cotización, clientes, papeles, costos, entrega y factura.'
+                    ? 'Dejar lista la carga y llevarla: clientes, papeles, costos, entrega y factura. Las cotizaciones las sube Ventas (cotizadores) desde su apartado.'
                     : 'Cerrar lo que queda de una carga que ya no está abierta.',
                 'quien' => 'Tú.',
                 'cuando' => $abiertos
                     ? 'Al abrir una carga nueva o en el día a día de una que sigue abierta.'
                     : 'Cuando la carga ya está completada y queda el cierre.',
                 'consideraciones' => $abiertos
-                    ? "Crear da de alta el contenedor. El lápiz corrige. Partir saca copias vacías si sigue pendiente. El tacho borra, solo en pendiente.\n\nGuardar junto al tipo de cambio deja el TC Yuan. El ojo abre los pasos.\n\nCadena de papeles: en Documentación, Factura General solo arma el Excel si las carpetas Factura Comercial, Packing List y Lista de Partidas ya tienen un Excel guardado (con esos nombres exactos). Guarda ese archivo. En Cotización final lo subes con Subir Factura, bajas Plantilla General, la revisas en tu computadora y la subes como Plantilla Final. Eso genera las cotizaciones finales y un ZIP. Descargar plantillas en Documentación no sustituye ninguno de esos pasos.\n\nSi el recuadro de una carpeta no te deja adjuntar, no puedes cambiar ese archivo desde aquí: solo consultas o bajas lo que ya hay."
+                    ? "Crear da de alta el contenedor. El lápiz corrige. Partir saca copias vacías si sigue pendiente. El tacho borra, solo en pendiente.\n\nGuardar junto al tipo de cambio deja el TC Yuan. El ojo abre los pasos.\n\nEn Cotización no subes el archivo de cotización ni das de alta al prospecto: eso lo hace Ventas (cotizadores) desde su apartado de Carga consolidada. Tú sigues la fila, el cobro y el resto de pasos.\n\nCadena de papeles: en Documentación, Factura General solo arma el Excel si las carpetas Factura Comercial, Packing List y Lista de Partidas ya tienen un Excel guardado (con esos nombres exactos). Guarda ese archivo. En Cotización final lo subes con Subir Factura, bajas Plantilla General, la revisas en tu computadora y la subes como Plantilla Final. Eso genera las cotizaciones finales y un ZIP. Descargar plantillas en Documentación no sustituye ninguno de esos pasos.\n\nSi el recuadro de una carpeta no te deja adjuntar, no puedes cambiar ese archivo desde aquí: solo consultas o bajas lo que ya hay."
                     : "En Completados ya no creas ni partes. El ojo abre los mismos pasos para terminar o consultar.\n\nSi aún falta el lote de cotizaciones finales: Factura General (con las tres carpetas en Excel) → Subir Factura → Plantilla General → revisar en tu PC → Plantilla Final. Mientras el lote diga En proceso, no vuelvas a subir el mismo archivo.",
                 'ejemplo' => $abiertos
                     ? 'Creas la carga #101 con cierre 15-08-2026, guardas el tipo de cambio y entras con el ojo. En Documentación bajas Factura General (las tres carpetas ya tienen Excel), en Cotización final la subes, bajas Plantilla General, la revisas y la subes como Plantilla Final.'
@@ -666,6 +666,7 @@ class ManualUsuarioScreensCatalog
                 'ver_tambien' => 'Cómo bajar Factura General · Cómo subir la factura y armar la plantilla · Cómo generar las cotizaciones finales.',
                 'errores' => [
                     ['No veo Crear', 'Estás en Completados', 'Vuelve a Abiertos'],
+                    ['No puedo subir la cotización', 'Eso no se hace desde Coordinación', 'Pide a Ventas (cotizadores) que la suban desde su apartado de Carga consolidada'],
                     ['No puedo partir ni borrar', 'La carga ya no está pendiente, o ya se partió', 'Solo se parte y se borra en pendiente'],
                     ['Factura General no baja', 'Falta Factura Comercial, Packing List o Lista de Partidas, o no son Excel', 'Revisa que esas tres carpetas, con esos nombres, ya tengan un Excel guardado. Si el recuadro no te deja adjuntar, no puedes cambiar esos archivos desde aquí'],
                     ['Plantilla General no baja', 'Aún no subiste la Factura General en Cotización final', 'Usa Subir Factura con el Excel que te bajó Factura General en Documentación. No uses el ZIP de Descargar plantillas'],
@@ -905,7 +906,7 @@ class ManualUsuarioScreensCatalog
     {
         if ($sabor === 'coord') {
             return $abiertos
-                ? "Crear da de alta el contenedor. El lápiz corrige. Partir saca copias vacías si sigue pendiente. El tacho borra, también solo en pendiente.\n\nGuardar junto al tipo de cambio deja el TC Yuan.\n\nEl ojo abre los pasos: Cotización, Clientes, Documentación, Cotización final, Entrega y Factura.\n\nCadena de papeles: Factura General solo arma el Excel si Factura Comercial, Packing List y Lista de Partidas ya tienen Excel. Ese archivo se sube en Cotización final (Subir Factura), se baja Plantilla General, se revisa en tu PC y se sube como Plantilla Final para generar las cotizaciones finales."
+                ? "Crear da de alta el contenedor. El lápiz corrige. Partir saca copias vacías si sigue pendiente. El tacho borra, también solo en pendiente.\n\nGuardar junto al tipo de cambio deja el TC Yuan.\n\nEl ojo abre los pasos: Cotización, Clientes, Documentación, Cotización final, Entrega y Factura.\n\nEn Cotización no subes el archivo ni das de alta al prospecto: las cotizaciones las carga Ventas (cotizadores) desde su apartado. Tú sigues la fila y el resto de pasos.\n\nCadena de papeles: Factura General solo arma el Excel si Factura Comercial, Packing List y Lista de Partidas ya tienen Excel. Ese archivo se sube en Cotización final (Subir Factura), se baja Plantilla General, se revisa en tu PC y se sube como Plantilla Final para generar las cotizaciones finales."
                 : "En Completados ya no creas ni partes. El ojo abre los mismos pasos para terminar o consultar.\n\nSi falta el lote de cotizaciones: Factura General → Subir Factura → Plantilla General → revisar → Plantilla Final.";
         }
         if ($sabor === 'doc') {
@@ -931,7 +932,7 @@ class ManualUsuarioScreensCatalog
     {
         if ($sabor === 'coord') {
             return $abiertos
-                ? 'Creas la #101, guardas el tipo de cambio y entras con el ojo a Cotización.'
+                ? 'Creas la #101, guardas el tipo de cambio y entras con el ojo. En Cotización ves lo que ya subió Ventas; no adjuntas el archivo de cotización.'
                 : 'La #101 ya cerró. Entras a Entrega y a Factura para terminar el cierre.';
         }
         if ($sabor === 'doc') {
@@ -959,16 +960,16 @@ class ManualUsuarioScreensCatalog
         return [
             $this->pasoCarga(
                 'Cotización',
-                'Aquí ves quién cotizó en esa carga y cómo va cada fila. No armas el prospecto desde cero: sigues, mueves y bajas lo que ya está.',
+                'Aquí ves quién cotizó en esa carga y cómo va cada fila. No subes el archivo de cotización ni das de alta al prospecto: eso lo hace Ventas (cotizadores) desde su apartado de Carga consolidada.',
                 [
                     $this->itemFlujo(
                         'Cómo se ve y cómo interactúas',
-                        'Al entrar ves pestañas: Prospectos, Por Embarcar y Pagos. Buscar y los filtros solo encuentran la fila; no cambian la cotización. Si no ves a alguien, está en otra pestaña o un filtro lo esconde. Cambia a Todos antes de asumir que no está en la carga.',
+                        'Al entrar ves pestañas: Prospectos, Por Embarcar y Pagos. Buscar y los filtros solo encuentran la fila; no cambian la cotización. Si no ves a alguien, está en otra pestaña o un filtro lo esconde. Cambia a Todos antes de asumir que no está en la carga. Si no aparece Crear Prospecto ni el recuadro para adjuntar cotización, es correcto: no te toca.',
                         'Recorta el encabezado con las tres pestañas (Prospectos / Por Embarcar / Pagos), el buscador y las primeras filas. Datos ficticios.'
                     ),
                     $this->itemFlujo(
                         'Prospectos',
-                        'En cada fila ves el contacto y el estado. El ojo abre los papeles de esa cotización. Copiar enlace de firma sirve para mandárselo al cliente por otro medio: solo si ya hay contrato o enlace; si no hay, no copies nada. La flecha pasa esa cotización al siguiente estado cuando ya corresponde: no la uses si aún faltan datos o firma. Lo que no puedas editar en la fila está bloqueado a propósito.',
+                        'En cada fila ves el contacto, el estado y, si Ventas ya la cargó, la cotización. El ojo abre los papeles de esa fila. Copiar enlace de firma sirve para mandárselo al cliente por otro medio: solo si ya hay contrato o enlace; si no hay, no copies nada (aún falta que Ventas suba la cotización). La flecha pasa esa fila al siguiente estado cuando ya corresponde: no la uses si aún faltan datos o firma. Lo que no puedas editar en la fila está bloqueado a propósito.',
                         'Recorta una fila de Prospectos con el ojo, el enlace de firma y la flecha de estado. Datos ficticios.'
                     ),
                     $this->itemFlujo(
@@ -978,12 +979,12 @@ class ManualUsuarioScreensCatalog
                     ),
                     $this->itemFlujo(
                         'Por Embarcar y Descargar Embarque',
-                        'Por Embarcar lista lo que va en el contenedor. Descargar Embarque baja ese Excel. Si no hay datos, no genera archivo: no es un error de tu usuario, falta información en la carga. Úsalo para revisar, no para armar la cotización.',
+                        'Por Embarcar lista lo que va en el contenedor. Descargar Embarque baja ese Excel. Si no hay datos, no genera archivo: no es un error de tu usuario, falta información en la carga. Úsalo para revisar, no para armar ni subir la cotización.',
                         'Recorta la pestaña Por Embarcar activa y el botón Descargar Embarque. Datos ficticios.'
                     ),
                     $this->itemFlujo(
                         'Pagos',
-                        'Aquí ves importe, lo pagado y la diferencia de esa cotización. Sirve para seguir el cobro, no para crear prospectos ni subir la cotización inicial.',
+                        'Aquí ves importe, lo pagado y la diferencia. Sirve para seguir el cobro. No creas prospectos ni subes la cotización: si falta el archivo, avisa a Ventas (cotizadores) para que lo carguen desde su apartado.',
                         'Recorta la pestaña Pagos con columnas de importe, pagado y diferencia. Datos ficticios.'
                     ),
                 ]
@@ -1134,7 +1135,7 @@ class ManualUsuarioScreensCatalog
             ),
             $this->pasoCarga(
                 'Factura y guía',
-                'Aquí consultas factura y guía de esa carga. Desde esta vista no armas la cotización ni las plantillas finales.',
+                'Aquí consultas factura y guía de esa carga. Desde esta vista no armas ni subes la cotización: eso lo hace Ventas desde su apartado.',
                 [
                     $this->itemFlujo(
                         'Cómo se ve y cómo interactúas',
