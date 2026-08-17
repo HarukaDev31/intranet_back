@@ -25,6 +25,57 @@ class SeguimientoConsolidadoDateFormatter
     }
 
     /**
+     * Día calendario en Lima para arrive_date / arrive_date_china.
+     *
+     * - DATE `Y-m-d` o medianoche: se usa el día tal cual (sin corrimiento UTC).
+     * - DATETIME/timestamp (servidor UTC / us-east-2): se convierte a America/Lima
+     *   y se toma ese día.
+     */
+    public static function calendarDayYmd($value): ?string
+    {
+        if ($value instanceof DateTimeInterface) {
+            if ($value->format('H:i:s') === '00:00:00') {
+                $ymd = $value->format('Y-m-d');
+
+                return $ymd === '0000-00-00' ? null : $ymd;
+            }
+
+            try {
+                return Carbon::parse($value, 'UTC')->timezone(self::displayTimezone())->format('Y-m-d');
+            } catch (\Exception $e) {
+                return $value->format('Y-m-d');
+            }
+        }
+
+        if ($value === null) {
+            return null;
+        }
+
+        $text = trim((string) $value);
+        if ($text === '' || in_array($text, ['0000-00-00', '0000-00-00 00:00:00'], true)) {
+            return null;
+        }
+
+        if (preg_match('/^(\d{4}-\d{2}-\d{2})$/', $text, $m)) {
+            return $m[1];
+        }
+
+        if (preg_match('/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}:\d{2})/', $text, $m)) {
+            if ($m[2] === '00:00:00') {
+                return $m[1];
+            }
+
+            try {
+                return Carbon::parse($text, 'UTC')->timezone(self::displayTimezone())->format('Y-m-d');
+            } catch (\Exception $e) {
+                return $m[1];
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Fecha calendario (arrive_date_china, arrive_date).
      * Mismo formato que Cotizaciones / CONTACTAR (d/m/Y), no j-M.
      */
@@ -35,17 +86,15 @@ class SeguimientoConsolidadoDateFormatter
             return '';
         }
 
-        $tz = self::displayTimezone();
-
         try {
-            return Carbon::createFromFormat('Y-m-d', $ymd, $tz)->format($format);
+            return Carbon::createFromFormat('Y-m-d', $ymd, self::displayTimezone())->format($format);
         } catch (\Exception $e) {
             return $ymd;
         }
     }
 
     /**
-     * Serial Excel para celda de fecha calendario (sin hora / sin corrimiento UTC).
+     * Serial Excel del día calendario (Y/m/d, mediodía) sin zona horaria USA.
      *
      * @return float|null
      */
@@ -57,24 +106,31 @@ class SeguimientoConsolidadoDateFormatter
         }
 
         try {
-            $dt = \DateTime::createFromFormat('Y-m-d H:i:s', $ymd . ' 12:00:00', new \DateTimeZone('UTC'));
-            if ($dt === false) {
+            [$year, $month, $day] = array_map('intval', explode('-', $ymd));
+            if ($year < 1900 || $month < 1 || $day < 1) {
                 return null;
             }
 
-            return ExcelDate::PHPToExcel($dt);
+            if (method_exists(ExcelDate::class, 'formattedPHPToExcel')) {
+                return ExcelDate::formattedPHPToExcel($year, $month, $day, 12, 0, 0);
+            }
+
+            $dt = \DateTime::createFromFormat('!Y-m-d', $ymd);
+
+            return $dt ? ExcelDate::PHPToExcel($dt) : null;
         } catch (\Exception $e) {
             return null;
         }
     }
 
     /**
-     * Valor de celda Drive/Excel → Y-m-d (serial, DateTime, d/m/Y, Y-m-d, j-M).
+     * Valor de celda Drive/Excel / BD → Y-m-d (día Lima).
      */
     public static function parseCellToYmd($value): ?string
     {
-        if ($value instanceof DateTimeInterface) {
-            return Carbon::parse($value)->format('Y-m-d');
+        $fromCalendar = self::calendarDayYmd($value);
+        if ($fromCalendar !== null) {
+            return $fromCalendar;
         }
 
         if ($value === null) {
@@ -85,7 +141,9 @@ class SeguimientoConsolidadoDateFormatter
             $number = (float) $value;
             if ($number > 20000 && $number < 80000) {
                 try {
-                    return Carbon::instance(ExcelDate::excelToDateTimeObject($number))->format('Y-m-d');
+                    $dt = ExcelDate::excelToDateTimeObject($number);
+
+                    return Carbon::instance($dt)->format('Y-m-d');
                 } catch (\Exception $e) {
                     // seguir con parse de texto
                 }
@@ -93,7 +151,7 @@ class SeguimientoConsolidadoDateFormatter
         }
 
         $text = trim((string) $value);
-        if ($text === '' || in_array($text, ['0000-00-00', '0000-00-00 00:00:00'], true)) {
+        if ($text === '') {
             return null;
         }
 
@@ -103,10 +161,6 @@ class SeguimientoConsolidadoDateFormatter
             'ago' => 'aug',
             'dic' => 'dec',
         ]);
-
-        if (preg_match('/^\d{4}-\d{2}-\d{2}/', $text)) {
-            return ProveedorArriveDateHistoryService::normalizeDate($text);
-        }
 
         try {
             $dt = Carbon::createFromFormat('d/m/Y', $text, self::displayTimezone());
@@ -118,9 +172,9 @@ class SeguimientoConsolidadoDateFormatter
         }
 
         try {
-            return Carbon::parse($text, self::displayTimezone())->format('Y-m-d');
+            return Carbon::parse($text, 'UTC')->timezone(self::displayTimezone())->format('Y-m-d');
         } catch (\Exception $e) {
-            return ProveedorArriveDateHistoryService::normalizeDate($text);
+            return null;
         }
     }
 

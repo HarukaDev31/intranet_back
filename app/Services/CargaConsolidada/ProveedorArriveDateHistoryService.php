@@ -16,24 +16,8 @@ class ProveedorArriveDateHistoryService
      */
     public static function normalizeDate($value): ?string
     {
-        if ($value === null) {
-            return null;
-        }
-
-        $text = trim((string) $value);
-        if ($text === '' || in_array($text, ['0000-00-00', '0000-00-00 00:00:00'], true)) {
-            return null;
-        }
-
-        try {
-            if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $text)) {
-                return $text;
-            }
-
-            return \Carbon\Carbon::parse($text)->format('Y-m-d');
-        } catch (\Exception $e) {
-            return null;
-        }
+        return SeguimientoConsolidadoDateFormatter::calendarDayYmd($value)
+            ?: SeguimientoConsolidadoDateFormatter::parseCellToYmd($value);
     }
 
     public function record(int $idProveedor, ?int $idContenedor, string $field, $value, string $source = 'system'): void
