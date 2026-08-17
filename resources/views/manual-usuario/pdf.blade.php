@@ -38,7 +38,7 @@
         .cover-line {
             width: 56px;
             height: 3px;
-            background: #2563eb;
+            background: #E8672C;
             margin: 12px auto 16px;
         }
         .cover-sub {
@@ -61,10 +61,10 @@
         }
         .section-title {
             font-size: 14px;
-            color: #0f172a;
+            color: #1F2A44;
             margin: 0 0 12px;
             padding-bottom: 5px;
-            border-bottom: 2px solid #2563eb;
+            border-bottom: 2px solid #E8672C;
         }
         .toc-item { margin: 0 0 8px; }
         .toc-item-title { font-size: 11px; font-weight: bold; color: #0f172a; }
@@ -124,14 +124,46 @@
         .texto { font-size: 10px; color: #334155; }
 
         .callout {
-            border: 1px solid #bfdbfe;
-            background: #eff6ff;
+            border-left: 4px solid #9A5B00;
+            background: #FDF3E3;
             padding: 7px 9px;
             margin: 4px 0 8px;
+            color: #9A5B00;
         }
-        .callout-warning { border-color: #fde68a; background: #fffbeb; }
-        .callout-danger { border-color: #fecaca; background: #fef2f2; }
+        .callout-warning { border-left-color: #9A5B00; background: #FDF3E3; }
+        .callout-danger { border-left-color: #dc2626; background: #fef2f2; color: #991b1b; }
+        .callout-info, .callout-note { border-left-color: #2563EB; background: #EAF2FF; color: #1E3A8A; }
         .callout-title { font-weight: bold; margin-bottom: 2px; }
+
+        .qa { margin: 0 0 10px; }
+        .qa-q { font-size: 8px; font-weight: bold; text-transform: uppercase; color: #6B7280; margin-bottom: 2px; }
+        .qa-a { font-size: 10px; color: #1A1A1A; }
+        .result-box {
+            background: #EAF7EF;
+            border: 1px solid #BFE6CE;
+            padding: 8px 10px;
+            margin: 6px 0 10px;
+            color: #1B7A4B;
+            font-size: 10px;
+        }
+        .steps-group {
+            background: #F2F3F5;
+            padding: 8px 10px;
+            margin: 4px 0 10px;
+        }
+        .steps-title { font-size: 10px; font-weight: bold; color: #E8672C; margin-bottom: 4px; }
+        .steps-ol { margin: 0; padding-left: 16px; }
+        .breadcrumb { font-size: 8px; color: #6B7280; margin-bottom: 4px; }
+        .articulo-title { font-size: 13px; font-weight: bold; color: #1F2A44; margin-bottom: 4px; }
+        .tagrow { margin: 0 0 6px; }
+        .tag {
+            background: #F2F3F5;
+            color: #33415C;
+            padding: 1px 6px;
+            font-size: 7.5px;
+            font-weight: bold;
+        }
+        .grupo-articulo { border: 1px solid #E5E7EB; padding: 8px; }
 
         /* Chips vía <table>: DomPDF estira inline-block con fondo a toda la hoja */
         .chip-row, .tabs-table {
@@ -188,11 +220,11 @@
             margin: 4px 0 8px;
         }
         .data-table th {
-            background: #f1f5f9;
-            color: #0f172a;
+            background: #1F2A44;
+            color: #ffffff;
             text-align: left;
             padding: 4px 5px;
-            border: 1px solid #e2e8f0;
+            border: 1px solid #1F2A44;
             font-weight: bold;
         }
         .data-table td {

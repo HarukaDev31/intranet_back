@@ -193,17 +193,41 @@ class ManualUsuarioDbService
         $clave = trim((string) ($block['clave'] ?? ''));
         $payload = is_array($block['payload'] ?? null) ? $block['payload'] : [];
         $subtitulo = trim((string) ($payload['subtitulo'] ?? ''));
+        $snap = is_array($payload['snapshot'] ?? null) ? $payload['snapshot'] : [];
+        $isArticulo = (($snap['variant'] ?? '') === 'articulo');
         $levelClass = $depth === 0 ? 'grupo' : 'grupo grupo-nested';
+        if ($isArticulo) {
+            $levelClass .= ' grupo-articulo';
+        }
 
         $html = '<div class="' . $levelClass . '">';
-        if ($titulo !== '') {
-            $html .= $this->linkedTitleHtml($titulo, $clave, 'grupo-title');
-        }
-        if ($clave !== '' && !$this->isRouteLike($clave)) {
-            $html .= '<div class="grupo-clave">' . e($clave) . '</div>';
-        }
-        if ($subtitulo !== '' && !$this->isRouteLike($subtitulo)) {
-            $html .= '<div class="grupo-sub">' . e($subtitulo) . '</div>';
+        if ($isArticulo) {
+            $html .= '<div class="articulo-head">';
+            if (!empty($snap['breadcrumb'])) {
+                $html .= '<div class="breadcrumb">' . e((string) $snap['breadcrumb']) . '</div>';
+            }
+            if ($titulo !== '') {
+                $html .= '<div class="articulo-title">' . e($titulo) . '</div>';
+            }
+            $tags = is_array($snap['tags'] ?? null) ? $snap['tags'] : [];
+            if ($tags !== []) {
+                $html .= '<div class="tagrow">';
+                foreach ($tags as $tag) {
+                    $html .= '<span class="tag">' . e((string) $tag) . '</span> ';
+                }
+                $html .= '</div>';
+            }
+            $html .= '</div>';
+        } else {
+            if ($titulo !== '') {
+                $html .= $this->linkedTitleHtml($titulo, $clave, 'grupo-title');
+            }
+            if ($clave !== '' && !$this->isRouteLike($clave)) {
+                $html .= '<div class="grupo-clave">' . e($clave) . '</div>';
+            }
+            if ($subtitulo !== '' && !$this->isRouteLike($subtitulo)) {
+                $html .= '<div class="grupo-sub">' . e($subtitulo) . '</div>';
+            }
         }
         $children = is_array($block['children'] ?? null) ? $block['children'] : [];
         if ($children !== []) {
@@ -295,6 +319,7 @@ class ManualUsuarioDbService
             'titulo' => $page->titulo,
             'descripcion' => $page->descripcion,
             'orden' => $page->orden,
+            'updated_at' => optional($page->updated_at) ? $page->updated_at->toIso8601String() : null,
             'blocks' => $roots->map(fn (ManualBloque $bloque) => $this->mapBlock($bloque))->values()->all(),
         ];
     }
@@ -440,7 +465,10 @@ class ManualUsuarioDbService
         $snap = is_array($payload['snapshot'] ?? null) ? $payload['snapshot'] : $payload;
         $out = [];
 
-        if ($titulo !== '' && $tipo !== ManualBloque::TIPO_GRUPO) {
+        $isQa = $tipo === ManualBloque::TIPO_TEXTO && !empty($snap['qa']);
+        $isResult = $tipo === ManualBloque::TIPO_CALLOUT && in_array((string) ($snap['tone'] ?? ''), ['success', 'result'], true);
+
+        if ($titulo !== '' && $tipo !== ManualBloque::TIPO_GRUPO && $tipo !== ManualBloque::TIPO_FLOW && !$isQa && !$isResult) {
             $out[] = $this->linkedTitleHtml($titulo, (string) ($payload['subtitulo'] ?? ''), 'widget-title');
         }
         if (!empty($payload['subtitulo']) && !$this->isRouteLike((string) $payload['subtitulo'])) {
@@ -450,7 +478,16 @@ class ManualUsuarioDbService
 
         switch ($tipo) {
             case ManualBloque::TIPO_TEXTO:
-                $out[] = '<div class="texto">' . nl2br(e((string) ($snap['body'] ?? ''))) . '</div>';
+                if (!empty($snap['qa'])) {
+                    $out[] = '<div class="qa">';
+                    if ($titulo !== '') {
+                        $out[] = '<div class="qa-q">' . e($titulo) . '</div>';
+                    }
+                    $out[] = '<div class="qa-a">' . nl2br(e((string) ($snap['body'] ?? ''))) . '</div>';
+                    $out[] = '</div>';
+                } else {
+                    $out[] = '<div class="texto">' . nl2br(e((string) ($snap['body'] ?? ''))) . '</div>';
+                }
                 break;
 
             case ManualBloque::TIPO_TOOLBAR:
@@ -541,12 +578,17 @@ class ManualUsuarioDbService
                 $tone = (string) ($snap['tone'] ?? 'info');
                 $callTitle = (string) ($snap['title'] ?? '');
                 $text = (string) ($snap['body'] ?? '');
-                $out[] = '<div class="callout callout-' . e($tone) . '">';
-                if ($callTitle !== '') {
-                    $out[] = '<div class="callout-title">' . e($callTitle) . '</div>';
+                if ($tone === 'success' || $tone === 'result') {
+                    $out[] = '<div class="result-box"><strong>' . e($callTitle !== '' ? $callTitle : 'Resultado esperado:') . '</strong> '
+                        . nl2br(e($text)) . '</div>';
+                } else {
+                    $out[] = '<div class="callout callout-' . e($tone) . '">';
+                    if ($callTitle !== '') {
+                        $out[] = '<div class="callout-title">' . e($callTitle) . '</div>';
+                    }
+                    $out[] = '<div>' . nl2br(e($text)) . '</div>';
+                    $out[] = '</div>';
                 }
-                $out[] = '<div>' . nl2br(e($text)) . '</div>';
-                $out[] = '</div>';
                 break;
 
             case ManualBloque::TIPO_MEDIA:
@@ -629,23 +671,28 @@ class ManualUsuarioDbService
                 break;
 
             case ManualBloque::TIPO_FLOW:
-                $out[] = '<div class="flow">';
+                $out[] = '<div class="steps-group">';
+                if ($titulo !== '') {
+                    $out[] = '<div class="steps-title">' . e($titulo) . '</div>';
+                }
                 if (!empty($snap['hint'])) {
                     $out[] = '<div class="muted">' . e((string) $snap['hint']) . '</div>';
                 }
-                $n = 1;
+                $out[] = '<ol class="steps-ol">';
                 foreach ((array) ($snap['steps'] ?? []) as $step) {
                     if (!is_array($step)) {
                         continue;
                     }
-                    $out[] = '<table class="flow-table" cellpadding="0" cellspacing="0"><tr>';
-                    $out[] = '<td class="flow-num">' . $n . '</td>';
-                    $out[] = '<td class="flow-body"><div class="flow-step-title">' . e((string) ($step['title'] ?? '')) . '</div>'
-                        . '<div>' . nl2br(e((string) ($step['body'] ?? ''))) . '</div></td>';
-                    $out[] = '</tr></table>';
-                    $n++;
+                    $line = trim((string) ($step['title'] ?? ''));
+                    $body = trim((string) ($step['body'] ?? ''));
+                    if ($line !== '' && $body !== '') {
+                        $line .= ' — ' . $body;
+                    } elseif ($body !== '') {
+                        $line = $body;
+                    }
+                    $out[] = '<li>' . e($line) . '</li>';
                 }
-                $out[] = '</div>';
+                $out[] = '</ol></div>';
                 break;
 
             case ManualBloque::TIPO_GRUPO:
