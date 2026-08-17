@@ -50,11 +50,13 @@ class ManualUsuarioCapturasAttacher
             $parent = $bloque->parent_id
                 ? ManualBloque::query()->find($bloque->parent_id)
                 : null;
-            $key = $this->shotKey(
-                $pagina ? (string) $pagina->modulo_key : '',
-                $parent ? (string) $parent->titulo : '',
-                (string) $bloque->titulo
-            );
+            $modulo = $pagina ? (string) $pagina->modulo_key : '';
+            $flow = $parent ? (string) $parent->titulo : '';
+            $titulo = (string) $bloque->titulo;
+            $key = $this->shotKey($modulo, $flow, $titulo);
+            if ($key === null || empty($mediaIds[$key])) {
+                $key = $this->shotKeyGeneric($modulo, $flow, $titulo);
+            }
             if ($key === null || empty($mediaIds[$key])) {
                 $skipped++;
                 continue;
@@ -120,6 +122,57 @@ class ManualUsuarioCapturasAttacher
     }
 
     /**
+     * Clave de módulo si aún no hay recorte de esa acción.
+     *
+     * @return string|null
+     */
+    private function shotKeyGeneric($modulo, $flow, $titulo)
+    {
+        $m = mb_strtolower((string) $modulo);
+        $f = mb_strtolower((string) $flow);
+
+        if (strpos($m, 'cargaconsolidada') !== false) {
+            if (strpos($f, 'cotización final') !== false || strpos($f, 'cotizacion final') !== false) {
+                return 'carga-cotizacion-final';
+            }
+            if (strpos($f, 'cotización') !== false || strpos($f, 'cotizacion') !== false) {
+                return 'carga-cotizacion';
+            }
+            if (strpos($f, 'clientes') !== false) {
+                return 'carga-clientes';
+            }
+            if (strpos($f, 'documentaci') !== false) {
+                return 'carga-documentacion';
+            }
+            if (strpos($f, 'entrega') !== false) {
+                return 'carga-entrega';
+            }
+            if (strpos($f, 'factura') !== false) {
+                return 'carga-factura-guia';
+            }
+            if (strpos($f, 'aduana') !== false) {
+                return 'carga-aduana';
+            }
+
+            return strpos($m, 'completados') !== false ? 'carga-completados' : 'carga-abiertos';
+        }
+        if (strpos($m, 'curso/alumnos') !== false) {
+            return 'curso-alumnos';
+        }
+        if (strpos($m, 'curso/campanas') !== false) {
+            return 'curso-campanas';
+        }
+        if (strpos($m, 'curso/pagos') !== false) {
+            return 'curso-pagos';
+        }
+        if (strpos($m, 'curso/planes') !== false) {
+            return 'curso-planes';
+        }
+
+        return $this->shotKey($modulo, $flow, $titulo);
+    }
+
+    /**
      * @return string|null
      */
     private function shotKey($modulo, $flow, $titulo)
@@ -130,6 +183,19 @@ class ManualUsuarioCapturasAttacher
 
         if (strpos($m, 'cargaconsolidada') !== false) {
             if (strpos($f, 'cotización final') !== false || strpos($f, 'cotizacion final') !== false) {
+                if (strpos($t, 'subir factura') !== false) {
+                    return 'carga-cotizacion-final-subir';
+                }
+                if (strpos($t, 'plantilla general') !== false) {
+                    return 'carga-cotizacion-final-general';
+                }
+                if (strpos($t, 'plantilla final') !== false) {
+                    return 'carga-cotizacion-final-final';
+                }
+                if (strpos($t, 'ver plantillas') !== false) {
+                    return 'carga-cotizacion-final-ver';
+                }
+
                 return 'carga-cotizacion-final';
             }
             if (strpos($f, 'cotización') !== false || strpos($f, 'cotizacion') !== false) {
@@ -146,6 +212,19 @@ class ManualUsuarioCapturasAttacher
                 return 'carga-clientes';
             }
             if (strpos($f, 'documentaci') !== false) {
+                if (strpos($t, 'factura general') !== false) {
+                    return 'carga-documentacion-factura-general';
+                }
+                if (strpos($t, 'nuevo documento') !== false) {
+                    return 'carga-documentacion-nuevo';
+                }
+                if (strpos($t, 'carpeta') !== false || strpos($t, 'excel') !== false) {
+                    return 'carga-documentacion-carpetas';
+                }
+                if (strpos($t, 'descargar plantillas') !== false) {
+                    return 'carga-documentacion-plantillas';
+                }
+
                 return 'carga-documentacion';
             }
             if (strpos($f, 'entrega') !== false) {
@@ -195,6 +274,25 @@ class ManualUsuarioCapturasAttacher
             return 'ops-whatsapp';
         }
         if (strpos($m, 'curso/alumnos') !== false) {
+            if (strpos($t, 'importe') !== false || (strpos($t, 'estado') !== false && strpos($t, 'mensaje') === false)) {
+                return 'curso-alumnos-fila-importe';
+            }
+            if (strpos($t, 'mensaje') !== false || strpos($t, 'eliminar') !== false) {
+                return 'curso-alumnos-fila-mensaje';
+            }
+            if (strpos($t, 'curso y campaña') !== false || strpos($t, 'usuario a creado') !== false) {
+                return 'curso-alumnos-curso';
+            }
+            if (strpos($t, 'ficha') !== false || strpos($t, 'lápiz') !== false || strpos($t, 'lapiz') !== false) {
+                return 'curso-alumnos-ficha';
+            }
+            if (strpos($t, 'aula') !== false || strpos($t, 'crear la cuenta') !== false || strpos($t, 'crear usuario') !== false) {
+                return 'curso-alumnos-aula';
+            }
+            if (strpos($t, 'constancia') !== false || strpos($t, 'vista previa') !== false) {
+                return 'curso-alumnos-constancia';
+            }
+
             return 'curso-alumnos';
         }
         if (strpos($m, 'curso/campanas') !== false) {
