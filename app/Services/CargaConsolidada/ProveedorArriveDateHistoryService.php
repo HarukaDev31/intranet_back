@@ -126,7 +126,7 @@ class ProveedorArriveDateHistoryService
             ->orderBy('id_proveedor')
             ->orderByDesc('created_at')
             ->orderByDesc('id')
-            ->get(['id_proveedor', 'id_contenedor', 'field', 'value']);
+            ->get(['id_proveedor', 'id_contenedor', 'field', 'value', 'created_at']);
 
         $latestByProveedor = [];
         $latestByField = [];
@@ -140,6 +140,7 @@ class ProveedorArriveDateHistoryService
                 $latestByField[$idProveedor][$field] = [
                     'value' => $value,
                     'id_contenedor' => $rowContenedor,
+                    'created_at' => (string) ($row->created_at ?? ''),
                 ];
             }
 
@@ -172,7 +173,8 @@ class ProveedorArriveDateHistoryService
 
     /**
      * Prioridad: arrive_date si ambas existen; luego arrive_date; luego arrive_date_china.
-     * Fechas cuyo último historial es de otro contenedor (roleo) se ignoran.
+     * Solo se ignora una fecha actual si es el mismo valor que el último historial
+     * de otro contenedor (roleo). Si el usuario ya la cambió (p. ej. 17 vs 11), se usa.
      *
      * @param mixed $arriveDate
      * @param mixed $arriveChina
@@ -194,6 +196,12 @@ class ProveedorArriveDateHistoryService
         );
 
         if ($peru !== null && $china !== null) {
+            $peruAt = strtotime((string) (($context['latest_by_field'][self::FIELD_ARRIVE_DATE]['created_at'] ?? ''))) ?: 0;
+            $chinaAt = strtotime((string) (($context['latest_by_field'][self::FIELD_ARRIVE_DATE_CHINA]['created_at'] ?? ''))) ?: 0;
+            if ($chinaAt > $peruAt) {
+                return $china;
+            }
+
             return $peru;
         }
 
@@ -234,7 +242,9 @@ class ProveedorArriveDateHistoryService
         }
 
         $histContenedor = isset($latestField['id_contenedor']) ? (int) $latestField['id_contenedor'] : 0;
-        if ($histContenedor > 0 && $histContenedor !== $idContenedor) {
+        $histValue = self::normalizeDate($latestField['value'] ?? null);
+
+        if ($histContenedor > 0 && $histContenedor !== $idContenedor && $histValue === $current) {
             return null;
         }
 

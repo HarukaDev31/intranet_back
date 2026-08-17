@@ -57,7 +57,10 @@ class SeguimientoConsolidadoDateFormatter
         }
 
         try {
-            $dt = Carbon::createFromFormat('Y-m-d', $ymd, self::displayTimezone())->startOfDay();
+            $dt = \DateTime::createFromFormat('Y-m-d H:i:s', $ymd . ' 12:00:00', new \DateTimeZone('UTC'));
+            if ($dt === false) {
+                return null;
+            }
 
             return ExcelDate::PHPToExcel($dt);
         } catch (\Exception $e) {
