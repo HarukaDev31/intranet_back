@@ -171,7 +171,7 @@ class SeguimientoConsolidadoExcelService
         $carga = $contenedor ? (string) $contenedor->carga : '';
         $rows = $this->fetchProveedoresSeguimiento($idContenedor, $carga);
         $this->enrichFechasDatosProveedor($idContenedor, $rows);
-        $this->enrichFechasArriveProveedor($rows);
+        $this->enrichFechasArriveProveedor($rows, (int) $idContenedor);
 
         $cotizacionesConPago = $this->loadCotizacionesConPagoAsociado($idContenedor);
         $groups = $this->classifyRows($rows, $cotizacionesConPago);
@@ -551,12 +551,13 @@ class SeguimientoConsolidadoExcelService
     }
 
     /**
-     * Resuelve fecha_recibir: prioriza arrive_date si ambas existen; si no hay fechas
-     * vigentes en proveedor pero sí historial, usa la última registrada.
+     * Resuelve fecha_recibir del consolidado actual.
+     * Ignora arrive_date / arrive_date_china cuyo último historial es de otro
+     * contenedor (clientes roleados).
      *
      * @param array<int, array<string, mixed>> $rows
      */
-    private function enrichFechasArriveProveedor(array &$rows)
+    private function enrichFechasArriveProveedor(array &$rows, $idContenedor = 0)
     {
         if ($rows === []) {
             return;
@@ -566,18 +567,23 @@ class SeguimientoConsolidadoExcelService
             return (int) ($row['id_proveedor'] ?? 0);
         }, $rows);
 
+        $idContenedor = (int) $idContenedor;
         $historyService = app(ProveedorArriveDateHistoryService::class);
-        $historyContext = $historyService->historyContextByProveedor($idProveedores);
+        $historyContext = $historyService->historyContextByProveedor($idProveedores, $idContenedor);
 
         foreach ($rows as $index => $row) {
             $idProveedor = (int) ($row['id_proveedor'] ?? 0);
-            $context = $historyContext[$idProveedor] ?? ['has_history' => false, 'latest' => null];
+            $context = $historyContext[$idProveedor] ?? [
+                'has_history' => false,
+                'latest' => null,
+                'latest_by_field' => [],
+            ];
 
             $fechaRecibir = $historyService->resolveFechaRecibir(
                 $row['fecha_llegada_peru'] ?? null,
                 $row['fecha_llegada_china'] ?? null,
-                $context['latest'] ?? null,
-                !empty($context['has_history'])
+                $context,
+                $idContenedor
             );
 
             $rows[$index]['fecha_recibir'] = $fechaRecibir;

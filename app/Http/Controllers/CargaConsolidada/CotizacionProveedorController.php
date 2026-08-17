@@ -3652,6 +3652,10 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                 'user_id' => $user->ID_Usuario
             ]);
             DB::commit();
+
+            app(SeguimientoConsolidadoDriveService::class)->queueSyncIfLinked((int) $idContainer);
+            app(SeguimientoConsolidadoDriveService::class)->queueSyncIfLinked((int) $idContainerDestino);
+
             return response()->json([
                 'success' => true,
                 'message' => 'Cotización movida correctamente',

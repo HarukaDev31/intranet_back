@@ -102,9 +102,13 @@ class ProveedorArriveDateHistoryService
 
     /**
      * @param array<int> $idProveedores
-     * @return array<int, array{has_history:bool,latest:?string}>
+     * @return array<int, array{
+     *   has_history:bool,
+     *   latest:?string,
+     *   latest_by_field:array<string, array{value:?string,id_contenedor:?int}>
+     * }>
      */
-    public function historyContextByProveedor(array $idProveedores): array
+    public function historyContextByProveedor(array $idProveedores, ?int $idContenedor = null): array
     {
         $idProveedores = array_values(array_unique(array_filter(array_map('intval', $idProveedores))));
         if ($idProveedores === [] || !Schema::hasTable('contenedor_proveedor_arrive_date_history')) {
@@ -119,17 +123,38 @@ class ProveedorArriveDateHistoryService
 
         $latestRows = DB::table('contenedor_proveedor_arrive_date_history')
             ->whereIn('id_proveedor', $idProveedores)
-            ->whereNotNull('value')
             ->orderBy('id_proveedor')
             ->orderByDesc('created_at')
             ->orderByDesc('id')
-            ->get(['id_proveedor', 'value']);
+            ->get(['id_proveedor', 'id_contenedor', 'field', 'value']);
 
         $latestByProveedor = [];
+        $latestByField = [];
         foreach ($latestRows as $row) {
             $idProveedor = (int) $row->id_proveedor;
+            $field = (string) $row->field;
+            $rowContenedor = $row->id_contenedor !== null ? (int) $row->id_contenedor : null;
+            $value = self::normalizeDate($row->value);
+
+            if (!isset($latestByField[$idProveedor][$field])) {
+                $latestByField[$idProveedor][$field] = [
+                    'value' => $value,
+                    'id_contenedor' => $rowContenedor,
+                ];
+            }
+
+            if ($value === null) {
+                continue;
+            }
+
+            if ($idContenedor !== null && $idContenedor > 0) {
+                if ($rowContenedor !== $idContenedor) {
+                    continue;
+                }
+            }
+
             if (!isset($latestByProveedor[$idProveedor])) {
-                $latestByProveedor[$idProveedor] = (string) $row->value;
+                $latestByProveedor[$idProveedor] = $value;
             }
         }
 
@@ -138,6 +163,7 @@ class ProveedorArriveDateHistoryService
             $context[$idProveedor] = [
                 'has_history' => ((int) ($counts[$idProveedor] ?? 0)) > 0,
                 'latest' => $latestByProveedor[$idProveedor] ?? null,
+                'latest_by_field' => $latestByField[$idProveedor] ?? [],
             ];
         }
 
@@ -145,16 +171,27 @@ class ProveedorArriveDateHistoryService
     }
 
     /**
-     * Prioridad: arrive_date si ambas existen; luego arrive_date; luego arrive_date_china;
-     * si no hay fechas vigentes en proveedor pero sí historial, usa la última del tracking.
+     * Prioridad: arrive_date si ambas existen; luego arrive_date; luego arrive_date_china.
+     * Fechas cuyo último historial es de otro contenedor (roleo) se ignoran.
      *
      * @param mixed $arriveDate
      * @param mixed $arriveChina
+     * @param array{has_history?:bool,latest?:?string,latest_by_field?:array} $context
      */
-    public function resolveFechaRecibir($arriveDate, $arriveChina, ?string $latestHistory, bool $hasHistory): ?string
+    public function resolveFechaRecibir($arriveDate, $arriveChina, array $context, ?int $idContenedor = null): ?string
     {
-        $peru = self::normalizeDate($arriveDate);
-        $china = self::normalizeDate($arriveChina);
+        $peru = $this->currentDateIfForContenedor(
+            $arriveDate,
+            self::FIELD_ARRIVE_DATE,
+            $context,
+            $idContenedor
+        );
+        $china = $this->currentDateIfForContenedor(
+            $arriveChina,
+            self::FIELD_ARRIVE_DATE_CHINA,
+            $context,
+            $idContenedor
+        );
 
         if ($peru !== null && $china !== null) {
             return $peru;
@@ -168,10 +205,39 @@ class ProveedorArriveDateHistoryService
             return $china;
         }
 
-        if ($hasHistory && $latestHistory !== null) {
-            return self::normalizeDate($latestHistory);
+        $latestInContenedor = $context['latest'] ?? null;
+        if (!empty($context['has_history']) && $latestInContenedor !== null) {
+            return self::normalizeDate($latestInContenedor);
         }
 
         return null;
+    }
+
+    /**
+     * @param mixed $value
+     * @param array{latest_by_field?:array<string, array{value:?string,id_contenedor:?int}>} $context
+     */
+    private function currentDateIfForContenedor($value, string $field, array $context, ?int $idContenedor): ?string
+    {
+        $current = self::normalizeDate($value);
+        if ($current === null) {
+            return null;
+        }
+
+        if ($idContenedor === null || $idContenedor <= 0) {
+            return $current;
+        }
+
+        $latestField = $context['latest_by_field'][$field] ?? null;
+        if (!is_array($latestField)) {
+            return $current;
+        }
+
+        $histContenedor = isset($latestField['id_contenedor']) ? (int) $latestField['id_contenedor'] : 0;
+        if ($histContenedor > 0 && $histContenedor !== $idContenedor) {
+            return null;
+        }
+
+        return $current;
     }
 }
