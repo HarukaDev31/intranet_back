@@ -313,12 +313,6 @@ class ManualUsuarioCapturasAttacher
             ->where('alt', $key)
             ->orderByDesc('id')
             ->first();
-        if (!$media) {
-            $media = ManualMedia::query()
-                ->where('path', 'like', '%' . $relative)
-                ->orderByDesc('id')
-                ->first();
-        }
         if ($media) {
             $media->path = $dbPath;
             $media->mime = 'image/png';

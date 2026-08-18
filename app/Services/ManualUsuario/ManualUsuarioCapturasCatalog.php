@@ -103,10 +103,6 @@ class ManualUsuarioCapturasCatalog
                 $groups[$bucket]['media_id'] = (int) $row->id;
                 $groups[$bucket]['alt'] = $row->alt;
                 $groups[$bucket]['url'] = $this->publicUrl((string) $row->path, (int) $row->id);
-                $mediaNombre = trim((string) $row->nombre);
-                if ($mediaNombre !== '') {
-                    $groups[$bucket]['nombre'] = $mediaNombre;
-                }
             }
         }
 
@@ -121,7 +117,7 @@ class ManualUsuarioCapturasCatalog
                 ['nombre' => $item['derived_nombre'] ?? '']
             );
             unset($item['derived_nombre']);
-            $item['id'] = $item['media_id'] ?: $item['capture_key'];
+            $item['id'] = $item['capture_key'] ?: $item['media_id'];
             $item['label'] = $this->label($item);
 
             return $item;
@@ -136,7 +132,7 @@ class ManualUsuarioCapturasCatalog
      */
     public function assignToBlock(int $blockId, array $data): array
     {
-        $block = ManualBloque::query()->findOrFail($blockId);
+        $block = ManualBloque::query()->with('pagina')->findOrFail($blockId);
         if ($block->tipo !== ManualBloque::TIPO_MEDIA) {
             throw new InvalidArgumentException('Solo los bloques de imagen pueden usar el catálogo.');
         }
@@ -160,9 +156,12 @@ class ManualUsuarioCapturasCatalog
             if (empty($payload['snapshot']['alt']) && $media->alt) {
                 $payload['snapshot']['alt'] = $media->alt;
             }
-            $mediaNombre = trim((string) $media->nombre);
-            if ($mediaNombre !== '') {
-                $payload['snapshot']['nombre'] = $mediaNombre;
+            if (empty($payload['snapshot']['nombre'])) {
+                $payload['snapshot']['nombre'] = ManualUsuarioCapturaNombre::fromSnapshot(
+                    $payload['snapshot'],
+                    (string) $block->titulo,
+                    $block->pagina ? (string) $block->pagina->titulo : null
+                );
             }
         } elseif ($mediaId === null || $mediaId === 0) {
             $payload['snapshot']['media_id'] = null;
@@ -338,12 +337,9 @@ class ManualUsuarioCapturasCatalog
         $siblings = ManualBloque::query()
             ->where('tipo', ManualBloque::TIPO_MEDIA)
             ->where('id', '!=', $block->id)
-            ->where(function ($q) use ($identity, $mediaId) {
+            ->where(function ($q) use ($identity) {
                 $q->where('payload->snapshot->capture_key', $identity)
                     ->orWhere('payload->snapshot->capture_alias_of', $identity);
-                if ($mediaId) {
-                    $q->orWhere('payload->snapshot->media_id', $mediaId);
-                }
             })
             ->get();
 

@@ -297,6 +297,7 @@ class ManualUsuarioCursoAlumnosSeeder
             if (!empty($step['capture_alias_of'])) {
                 $snapshot['capture_alias_of'] = (string) $step['capture_alias_of'];
             }
+            $snapshot['nombre'] = ManualUsuarioCapturaNombre::fromSnapshot($snapshot, 'Foto ' . $m . ' — ' . $accion, null);
             $this->block($paginaId, $flow->id, ManualBloque::TIPO_MEDIA, 'Foto ' . $m . ' — ' . $accion, $m, [
                 'subtitulo' => 'Subir: ' . $titulo . ' — ' . $m . '. ' . $accion,
                 'snapshot' => $snapshot,

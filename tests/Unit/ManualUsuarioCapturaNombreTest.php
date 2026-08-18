@@ -36,6 +36,22 @@ class ManualUsuarioCapturaNombreTest extends TestCase
         $this->assertStringNotContainsString('news__', $nombre);
     }
 
+    public function test_does_not_use_page_title_when_flow_and_step_exist(): void
+    {
+        $nombre = ManualUsuarioCapturaNombre::fromSnapshot(
+            [
+                'capture_flow' => 'Documentación',
+                'capture_step' => ['number' => 1, 'title' => 'Cómo se ve y cómo interactúas'],
+            ],
+            'Foto 1 — Cómo se ve y cómo interactúas',
+            'Carga consolidada — Completados'
+        );
+
+        $this->assertSame('Documentación — Cómo se ve y cómo interactúas', $nombre);
+        $this->assertStringNotContainsString('Carga consolidada', $nombre);
+        $this->assertStringNotContainsString('Descargar plantillas', $nombre);
+    }
+
     public function test_strips_foto_prefix_from_block_title(): void
     {
         $this->assertSame(

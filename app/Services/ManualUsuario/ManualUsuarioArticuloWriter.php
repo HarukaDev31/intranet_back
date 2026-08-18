@@ -362,6 +362,7 @@ class ManualUsuarioArticuloWriter
                 $snapshot[$field === 'capture_key' ? 'capture_key' : 'capture_' . $field] = $value;
             }
         }
+        $snapshot['nombre'] = ManualUsuarioCapturaNombre::fromSnapshot($snapshot, $titulo, null);
 
         return $this->block($paginaId, $parentId, ManualBloque::TIPO_MEDIA, $titulo, $orden, [
             'subtitulo' => $subtitulo,
