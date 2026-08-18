@@ -160,6 +160,9 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
         
         // Documentación
         Route::group(['prefix' => 'documentacion'], function () {
+            Route::post('/factura-comercial-batches/{idContenedor}', [\App\Http\Controllers\CargaConsolidada\Documentacion\FacturaComercialBatchController::class, 'enqueue']);
+            Route::get('/factura-comercial-batches/{idContenedor}', [\App\Http\Controllers\CargaConsolidada\Documentacion\FacturaComercialBatchController::class, 'listByContenedor']);
+            Route::get('/factura-comercial-batches/{id}/download', [\App\Http\Controllers\CargaConsolidada\Documentacion\FacturaComercialBatchController::class, 'download']);
             Route::get('/download-factura-comercial/{idContenedor}', [DocumentacionController::class, 'downloadFacturaComercial']);
             Route::delete('/delete/{idFile}', [DocumentacionController::class, 'deleteFileDocumentation']);
             Route::post('/upload-file-documentation', [DocumentacionController::class, 'uploadFileDocumentation']);

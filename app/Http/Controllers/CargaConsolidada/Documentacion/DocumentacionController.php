@@ -589,89 +589,117 @@ class DocumentacionController extends Controller
     }
 
     /**
-     * Descarga la factura comercial procesada
+     * Descarga síncrona (compatibilidad). El flujo principal es el job en segundo plano.
      */
     public function downloadFacturaComercial($idContenedor)
     {
+        try {
+            $outputPath = $this->generateFacturaComercialToPath($idContenedor);
+
+            return response()->download($outputPath, 'factura_procesada_' . $idContenedor . '.xlsx')
+                ->deleteFileAfterSend();
+        } catch (\InvalidArgumentException $e) {
+            $status = stripos($e->getMessage(), 'no se encontró') !== false ? 404 : 400;
+
+            return response()->json([
+                'status' => 'error',
+                'message' => $e->getMessage(),
+            ], $status);
+        } catch (\Exception $e) {
+            Log::error('Error en downloadFacturaComercial: ' . $e->getMessage(), [
+                'id_contenedor' => $idContenedor,
+                'memory_peak' => memory_get_peak_usage(true),
+            ]);
+
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Error al procesar archivos: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Valida que existan Factura Comercial, Packing List y Lista de Partidas en Excel.
+     *
+     * @return array{factura: string, packing: string, lista: string}
+     */
+    public function assertFacturaComercialSources($idContenedor): array
+    {
+        $facturaComercial = $this->getDocumentacionFile($idContenedor, 'Factura Comercial');
+        if (!$facturaComercial) {
+            throw new \InvalidArgumentException('No se encontró la factura comercial');
+        }
+
+        $packingList = $this->getDocumentacionFile($idContenedor, 'Packing List');
+        if (!$packingList) {
+            throw new \InvalidArgumentException('No se encontró el packing list');
+        }
+
+        $listaPartidas = $this->getDocumentacionFile($idContenedor, 'Lista de Partidas');
+        if (!$listaPartidas) {
+            throw new \InvalidArgumentException('No se encontró la lista de partidas');
+        }
+
+        if (!$this->isExcelFile($facturaComercial->file_url)) {
+            throw new \InvalidArgumentException('La Factura Comercial no es un archivo de excel');
+        }
+
+        if (!$this->isExcelFile($packingList->file_url)) {
+            throw new \InvalidArgumentException('El Packing List no es un archivo de excel');
+        }
+
+        if (!$this->isExcelFile($listaPartidas->file_url)) {
+            throw new \InvalidArgumentException('La Lista de Partidas no es un archivo de excel');
+        }
+
+        return [
+            'factura' => $this->getLocalPath($facturaComercial->file_url),
+            'packing' => $this->getLocalPath($packingList->file_url),
+            'lista' => $this->getLocalPath($listaPartidas->file_url),
+        ];
+    }
+
+    /**
+     * Genera el Excel procesado y devuelve la ruta temporal local.
+     */
+    public function generateFacturaComercialToPath($idContenedor): string
+    {
         $originalMemoryLimit = ini_get('memory_limit');
         $originalMaxExecutionTime = ini_get('max_execution_time');
+        $paths = $this->assertFacturaComercialSources($idContenedor);
 
         try {
-            // Buscar archivos de documentación
-            $facturaComercial = $this->getDocumentacionFile($idContenedor, 'Factura Comercial');
-            if (!$facturaComercial) {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => 'No se encontró la factura comercial'
-                ], 404);
-            }
-
-            $packingList = $this->getDocumentacionFile($idContenedor, 'Packing List');
-            if (!$packingList) {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => 'No se encontró el packing list'
-                ], 404);
-            }
-
-            $listaPartidas = $this->getDocumentacionFile($idContenedor, 'Lista de Partidas');
-            if (!$listaPartidas) {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => 'No se encontró la lista de partidas'
-                ], 404);
-            }
-
-            // Validar extensiones de archivo
-            if (!$this->isExcelFile($facturaComercial->file_url)) {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => 'La Factura Comercial no es un archivo de excel'
-                ], 400);
-            }
-
-            if (!$this->isExcelFile($packingList->file_url)) {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => 'El Packing List no es un archivo de excel'
-                ], 400);
-            }
-
-            if (!$this->isExcelFile($listaPartidas->file_url)) {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => 'La Lista de Partidas no es un archivo de excel'
-                ], 400);
-            }
-
-            $facturaPath = $this->getLocalPath($facturaComercial->file_url);
-            $packingPath = $this->getLocalPath($packingList->file_url);
-            $listaPath = $this->getLocalPath($listaPartidas->file_url);
-
-            // Contenedores grandes agotan 512M con 3 workbooks + MemoryCache de Maatwebsite.
             ini_set('memory_limit', (string) env('EXCEL_MEMORY_LIMIT', '2048M'));
             ini_set('max_execution_time', '300');
 
-            return PhpSpreadsheetRuntime::run(function () use ($idContenedor, $facturaPath, $packingPath, $listaPath) {
-                $objPHPExcel = $this->loadSpreadsheet($facturaPath, false);
-                $objPHPExcelPacking = $this->loadSpreadsheet($packingPath, true);
-                $objPHPExcelListaPartidas = $this->loadSpreadsheet($listaPath, false);
+            return PhpSpreadsheetRuntime::run(function () use ($idContenedor, $paths) {
+                $packingExcel = $this->loadSpreadsheet($paths['packing'], true, false);
+                $itemToClientMap = $this->createItemToClientMap($packingExcel);
+                $packingExcel->disconnectWorksheets();
+                unset($packingExcel);
+
+                $listaPartidasExcel = $this->loadSpreadsheet($paths['lista'], false, true);
+                $customsIndex = $this->buildCustomsIndex($listaPartidasExcel);
+                $listaPartidasExcel->disconnectWorksheets();
+                unset($listaPartidasExcel);
+
+                $objPHPExcel = $this->loadSpreadsheet($paths['factura'], false, true);
 
                 $dataSystem = $this->getSystemData($idContenedor);
-                Log::info('downloadFacturaComercial: datos del sistema', [
+                Log::info('generateFacturaComercialToPath: datos del sistema', [
                     'id_contenedor' => $idContenedor,
                     'clientes' => is_countable($dataSystem) ? count($dataSystem) : 0,
                 ]);
 
                 $processedExcel = $this->processExcelFiles(
                     $objPHPExcel,
-                    $objPHPExcelPacking,
-                    $objPHPExcelListaPartidas,
+                    $itemToClientMap,
+                    $customsIndex,
                     $dataSystem
                 );
 
                 $writer = new Xlsx($processedExcel);
-                $outputPath = storage_path('app/public/temp/factura_procesada_' . $idContenedor . '.xlsx');
+                $outputPath = storage_path('app/public/temp/factura_procesada_' . $idContenedor . '_' . uniqid('', true) . '.xlsx');
 
                 if (!file_exists(dirname($outputPath))) {
                     mkdir(dirname($outputPath), 0755, true);
@@ -682,18 +710,8 @@ class DocumentacionController extends Controller
                 $processedExcel->disconnectWorksheets();
                 unset($processedExcel, $writer);
 
-                return response()->download($outputPath, 'factura_procesada_' . $idContenedor . '.xlsx')
-                    ->deleteFileAfterSend();
+                return $outputPath;
             });
-        } catch (\Exception $e) {
-            Log::error('Error en downloadFacturaComercial: ' . $e->getMessage(), [
-                'id_contenedor' => $idContenedor,
-                'memory_peak' => memory_get_peak_usage(true),
-            ]);
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Error al procesar archivos: ' . $e->getMessage()
-            ], 500);
         } finally {
             if ($originalMemoryLimit !== false && $originalMemoryLimit !== null) {
                 ini_set('memory_limit', $originalMemoryLimit);
@@ -705,15 +723,16 @@ class DocumentacionController extends Controller
     }
 
     /**
-     * Carga un spreadsheet con opciones de lectura para reducir memoria.
+     * Carga un spreadsheet. readEmptyCells=false ahorra memoria pero altera fórmulas,
+     * merges y el Excel de salida; solo usarlo en archivos auxiliares de solo datos.
      */
-    private function loadSpreadsheet(string $path, bool $readDataOnly = false): Spreadsheet
+    private function loadSpreadsheet(string $path, bool $readDataOnly = false, bool $readEmptyCells = true): Spreadsheet
     {
         $reader = IOFactory::createReaderForFile($path);
         if ($reader instanceof IReader) {
             $reader->setReadDataOnly($readDataOnly);
             if (method_exists($reader, 'setReadEmptyCells')) {
-                $reader->setReadEmptyCells(false);
+                $reader->setReadEmptyCells($readEmptyCells);
             }
         }
 
@@ -759,29 +778,14 @@ class DocumentacionController extends Controller
     }
 
     /**
-     * Procesa los archivos Excel
+     * Procesa la factura comercial con el mapeo de packing y el índice aduanero ya extraídos.
      */
-    private function processExcelFiles($facturaExcel, $packingExcel, $listaPartidasExcel, $dataSystem)
+    private function processExcelFiles($facturaExcel, array $itemToClientMap, array $customsIndex, $dataSystem)
     {
         try {
-            // Crear mapeo de items a clientes desde packing list y liberar el workbook
-            $itemToClientMap = $this->createItemToClientMap($packingExcel);
-            $packingExcel->disconnectWorksheets();
-            unset($packingExcel);
-
-            // Indexar lista de partidas una sola vez y liberar el workbook
-            $customsIndex = $this->buildCustomsIndex($listaPartidasExcel);
-            $listaPartidasExcel->disconnectWorksheets();
-            unset($listaPartidasExcel);
-
-            // Procesar primera hoja
             $sheet0 = $facturaExcel->getSheet(0);
             $lastClientInfo = $this->processFirstSheet($sheet0, $itemToClientMap, $dataSystem, $customsIndex);
-
-            // Procesar hojas adicionales
             $this->processAdditionalSheets($facturaExcel, $itemToClientMap, $dataSystem, $customsIndex, $lastClientInfo);
-
-            // Aplicar estilos finales
             $this->applyFinalStyles($sheet0);
 
             return $facturaExcel;
@@ -1097,18 +1101,41 @@ class DocumentacionController extends Controller
      */
     private function processCustomsInfo($sheet, $row, $itemN, array $customsIndex)
     {
-        $key = trim((string) $itemN);
-        if ($key === '' || !isset($customsIndex[$key])) {
+        $customs = $this->findCustomsForItem($customsIndex, $itemN);
+        if ($customs === null) {
             return;
         }
 
-        $customs = $customsIndex[$key];
         $isc = $customs['isc'];
         $antiDumping = $customs['antiDumping'];
 
         $sheet->setCellValue('R' . $row, $customs['adValorem']);
         $sheet->setCellValue('S' . $row, $isc == 0 ? '-' : $isc);
         $sheet->setCellValue('T' . $row, $antiDumping == 0 ? '-' : $antiDumping);
+    }
+
+    /**
+     * Busca aduana del ítem. Mantiene la igualdad suelta (==) del código original:
+     * "01" == 1 y "5.0" == 5 coinciden, el índice estricto no.
+     */
+    private function findCustomsForItem(array $customsIndex, $itemN): ?array
+    {
+        $key = trim((string) $itemN);
+        if ($key === '') {
+            return null;
+        }
+
+        if (isset($customsIndex[$key])) {
+            return $customsIndex[$key];
+        }
+
+        foreach ($customsIndex as $indexedItem => $customs) {
+            if ($indexedItem == $itemN || $indexedItem == $key) {
+                return $customs;
+            }
+        }
+
+        return null;
     }
 
     /**
