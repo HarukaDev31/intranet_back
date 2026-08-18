@@ -125,10 +125,10 @@ class CalendarController extends Controller
                 ]);
             }
 
-            // Respuesta sin paginación (Collection)
+            // Respuesta sin paginación (array plano)
             return response()->json([
                 'success' => true,
-                'data'    => $result->values()->all(),
+                'data'    => is_array($result) ? array_values($result) : $result->values()->all(),
                 'message' => 'Actividades obtenidas correctamente',
             ]);
         } catch (\Exception $e) {
