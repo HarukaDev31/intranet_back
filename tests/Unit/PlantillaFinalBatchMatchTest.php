@@ -45,6 +45,7 @@ class PlantillaFinalBatchMatchTest extends TestCase
         $this->assertTrue($svc->match('QCIMPORT E.I.R.L.', 'QCIMPORT EIRL'));
         $this->assertTrue($svc->match('JOSEMARIA WESTON PONCE DE LEON', 'JOSE MARIA WESTON PONCE DE LEON'));
         $this->assertTrue($svc->match('VLADIMIR GUERRERO CHUCHÓN', 'VLADIMIR GUERRERO CHUCHON'));
+        $this->assertTrue($svc->match('RENZO CLAUDIO TORRES UMIÑA', 'RENZO CLAUDIO TORRES UMINA'));
         $this->assertFalse($svc->match('EDUARDO DAZA', 'WILSON RIVEROS ESLAVA'));
     }
 
