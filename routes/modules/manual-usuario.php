@@ -43,8 +43,10 @@ Route::group(['prefix' => 'manual-usuario', 'middleware' => 'jwt.auth'], functio
 
         Route::get('/media', [ManualUsuarioAdminController::class, 'indexMedia']);
         Route::post('/media', [ManualUsuarioAdminController::class, 'storeMedia']);
+        Route::match(['patch', 'post'], '/media/{id}', [ManualUsuarioAdminController::class, 'updateCaptura'])->whereNumber('id');
         Route::delete('/media/{id}', [ManualUsuarioAdminController::class, 'destroyMedia'])->whereNumber('id');
         Route::get('/capturas', [ManualUsuarioAdminController::class, 'indexCapturas']);
+        Route::match(['patch', 'post'], '/capturas/update', [ManualUsuarioAdminController::class, 'updateCaptura']);
         Route::post('/bloques/{id}/asignar-captura', [ManualUsuarioAdminController::class, 'assignCaptura'])->whereNumber('id');
     });
 });

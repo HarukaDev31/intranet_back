@@ -328,6 +328,7 @@ class ManualUsuarioAdminController extends Controller
         $request->validate([
             'file' => 'required|file|mimes:jpeg,jpg,png,gif,webp|max:10240',
             'alt' => 'nullable|string|max:255',
+            'nombre' => 'nullable|string|max:200',
             'role_slug' => 'nullable|string|max:64',
         ]);
 
@@ -336,7 +337,8 @@ class ManualUsuarioAdminController extends Controller
             $request->file('file'),
             $request->input('alt'),
             $request->input('role_slug'),
-            $user ? (int) $user->ID_Usuario : null
+            $user ? (int) $user->ID_Usuario : null,
+            $request->input('nombre')
         );
 
         return response()->json(['status' => 'success', 'data' => $media], 201);
@@ -394,6 +396,69 @@ class ManualUsuarioAdminController extends Controller
             'message' => $result['updated'] > 1
                 ? 'Imagen aplicada a ' . $result['updated'] . ' hojas.'
                 : 'Imagen asignada.',
+        ]);
+    }
+
+    /**
+     * Actualiza nombre y/o archivo de una captura compartida.
+     * Propaga a todos los bloques con la misma capture_key.
+     */
+    public function updateCaptura(Request $request, ?int $id = null)
+    {
+        if ($deny = $this->denyUnlessRoot()) {
+            return $deny;
+        }
+
+        $data = $request->validate([
+            'media_id' => 'nullable|integer|min:1',
+            'capture_key' => 'nullable|string|max:180',
+            'block_id' => 'nullable|integer|min:1',
+            'nombre' => 'nullable|string|max:200',
+            'file' => 'nullable|file|mimes:jpeg,jpg,png,gif,webp|max:10240',
+            'role_slug' => 'nullable|string|max:64',
+        ]);
+
+        if ($id && empty($data['media_id'])) {
+            $data['media_id'] = $id;
+        }
+
+        if (empty($data['media_id']) && empty($data['capture_key']) && empty($data['block_id'])) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Indica la imagen a actualizar.',
+            ], 422);
+        }
+
+        if (!$request->hasFile('file') && !array_key_exists('nombre', $data)) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Nada que actualizar.',
+            ], 422);
+        }
+
+        $user = Auth::user();
+
+        try {
+            $result = $this->capturas->updateShared(
+                $data,
+                $request->file('file'),
+                $user ? (int) $user->ID_Usuario : null,
+                $this->admin
+            );
+        } catch (ModelNotFoundException $e) {
+            return response()->json(['status' => 'error', 'message' => 'Imagen no encontrada.'], 404);
+        } catch (InvalidArgumentException $e) {
+            return response()->json(['status' => 'error', 'message' => $e->getMessage()], 422);
+        }
+
+        $updated = (int) ($result['updated'] ?? 0);
+
+        return response()->json([
+            'status' => 'success',
+            'data' => $result,
+            'message' => $updated > 1
+                ? 'Imagen actualizada en ' . $updated . ' hojas.'
+                : 'Imagen actualizada.',
         ]);
     }
 

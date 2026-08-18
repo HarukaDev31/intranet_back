@@ -10,6 +10,7 @@ class ManualMedia extends Model
 
     protected $fillable = [
         'path',
+        'nombre',
         'alt',
         'mime',
         'uploaded_by',
