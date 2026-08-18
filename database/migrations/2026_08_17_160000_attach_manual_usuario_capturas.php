@@ -1,13 +1,14 @@
 <?php
 
-use App\Services\ManualUsuario\ManualUsuarioCapturasAttacher;
 use Illuminate\Database\Migrations\Migration;
 
 class AttachManualUsuarioCapturas extends Migration
 {
     public function up()
     {
-        (new ManualUsuarioCapturasAttacher())->attach();
+        // Sin efectos de red/storage durante migrate.
+        // Ejecutar manual:attach-capturas --dry-run --strict y luego
+        // manual:attach-capturas --strict como operación explícita.
     }
 
     public function down()

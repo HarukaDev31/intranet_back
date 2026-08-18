@@ -548,8 +548,18 @@ class ManualUsuarioOpsScreens
                             ),
                             $this->itemFlujo(
                                 'Enviar o plantilla',
-                                'Asignar o Renombrar. Escribe, adjunta (Fotos y videos, Documento, Audio) y Enviar o Programar. Si pasaron 24 h sin respuesta del cliente, no deja escribir libre: usa Plantillas. En un mensaje: Info, Responder, Reenviar plantilla, reacción.',
-                                'Recorta el compositor con Enviar / Programar o el listado de Plantillas. Datos ficticios.'
+                                'Asignar abre la lista de responsables; Renombrar abre un formulario y Guardar cambia el nombre del contacto. Escribe y pulsa Enviar, o Programar para elegir fecha y hora. Adjuntar permite Fotos y videos, Documento o Audio. Si pasaron 24 h sin respuesta, usa Plantillas: elige una, completa sus variables y confirma el envío.',
+                                'Recorta el compositor con Enviar/Programar y el modal de plantilla con variables ficticias.'
+                            ),
+                            $this->itemFlujo(
+                                'Acciones de un mensaje',
+                                'Abre el menú del mensaje. Info muestra estado y hora de entrega/lectura. Responder cita ese mensaje en el compositor. Reenviar plantilla vuelve a preparar la plantilla para otro envío. Reacción agrega el emoji elegido. Estas acciones no editan ni eliminan el mensaje ya enviado.',
+                                'Recorta el menú de un mensaje con Info, Responder, Reenviar plantilla y Reacción. Datos ficticios.'
+                            ),
+                            $this->itemFlujo(
+                                'Cerrar o reabrir la conversación',
+                                'Cuando el caso termine, usa Cerrar conversación y confirma; pasa a Cerradas. Desde el filtro Cerradas puedes abrirla y reanudarla si llega trabajo nuevo. Actualizar sincroniza la lista, no envía mensajes.',
+                                'Recorta la confirmación de cierre y el filtro Cerradas. Datos ficticios.'
                             ),
                         ],
                     ],
@@ -569,6 +579,170 @@ class ManualUsuarioOpsScreens
                 'ejemplo' => 'Chat ficticio “María Pérez”, sin asignar. Coordinación asigna a Luis, envía plantilla de cierre de carga #101.',
                 'resultado' => 'el chat queda asignado y el mensaje o la plantilla enviados.',
                 'ver_tambien' => 'Carga consolidada · Copiloto · Clientes.',
+            ],
+            'calendar/subpantallas' => [
+                'modulo_key' => 'calendar/subpantallas',
+                'titulo' => 'Calendario — progreso y configuración',
+                'descripcion' => '{rol} → Calendario → Subpantallas',
+                'articulo_titulo' => 'Progreso y configuración',
+                'articulo_clave' => '/calendar/progreso',
+                'tags' => ['Módulo: Calendario', 'progreso', 'actividades', 'configuración'],
+                'que_es' => 'Las pantallas auxiliares del Calendario: Progreso, Registro de actividades, Catálogo, Colores, Colores por usuario, Configuración y Grupos por rol.',
+                'para_que' => 'Consultar avance y, si eres jefe del grupo, mantener las opciones que usa el calendario.',
+                'quien' => 'Rol {rol}. Los miembros consultan Progreso y sus actividades. Los botones de configuración dependen de ser jefe del grupo.',
+                'cuando' => 'Cuando necesitas una tabla de avance o ajustar catálogos, colores y grupos del calendario.',
+                'flows' => [
+                    [
+                        'titulo' => 'Progreso y registro',
+                        'steps' => [
+                            $this->itemFlujo(
+                                'Abrir Progreso',
+                                'Desde Calendario pulsa Progreso. La página destino muestra tarjetas Completadas, En progreso y Pendientes, filtros y el listado de actividades. Allí puedes actualizar estados, desplegar subtareas y abrir Notas cuando ese control esté disponible. Regresar vuelve al mes.',
+                                'Recorta Progreso con tarjetas, filtros, estado y subtareas de una actividad ficticia.'
+                            ),
+                            $this->itemFlujo(
+                                'Actividades',
+                                'Desde Configuración abre Registro de Actividades. Nueva actividad abre el formulario; completa los datos solicitados y guarda. El lápiz abre la edición. La papelera pide confirmación antes de eliminar. Usa los filtros de fecha para encontrar un registro.',
+                                'Recorta Registro de Actividades con Nueva actividad, filtros, lápiz y papelera. Datos ficticios.'
+                            ),
+                        ],
+                    ],
+                    [
+                        'titulo' => 'Configurar (jefe del grupo)',
+                        'steps' => [
+                            $this->itemFlujo(
+                                'Catálogo de actividades',
+                                'En Catálogo escribe el nombre y pulsa Agregar. El lápiz permite cambiar el nombre en la misma fila; confirma con el check o cancela con la X. La papelera pide confirmación. También puedes aplicar un color, marcar sábado o domingo, elegir prioridad, reordenar y usar Guardar cambios o Guardar orden.',
+                                'Recorta Catálogo con Agregar, edición en fila, color, opciones y papelera. Datos ficticios.'
+                            ),
+                            $this->itemFlujo(
+                                'Colores y colores por usuario',
+                                'En Colores selecciona un color para cada consolidado y pulsa Guardar cambios. En Colores por usuario busca la fila del responsable y elige un color predefinido o personalizado; ese cambio se guarda al seleccionarlo. Comprueba el resultado al volver al mes.',
+                                'Recorta Colores con Guardar cambios o una fila de Colores por usuario. Datos ficticios.'
+                            ),
+                            $this->itemFlujo(
+                                'Configuración y grupos por rol',
+                                'Configuración reúne accesos a Registro, Progreso, Colores, Colores por usuario, Grupos de Roles y Catálogo. En Grupos de Roles puedes crear, editar o eliminar un grupo; asignar o quitar miembros y su rol; ordenar la prioridad de colores para jefe y miembros; y pulsar Guardar configuración.',
+                                'Recorta Configuración y un Grupo de Roles con miembros y Guardar configuración. Datos ficticios.'
+                            ),
+                        ],
+                    ],
+                ],
+                'campos' => [
+                    ['Actividad / prioridad / fechas', 'Formulario Crear o Editar', 'Enviar packing list · Alta · 18-08-2026'],
+                    ['Responsables / grupo', 'Formulario o Grupo de Roles', 'Ana Torres · Importaciones'],
+                    ['Color', 'Catálogo, consolidado o responsable', 'Naranja'],
+                    ['Miembro / rol en el grupo', 'Grupo de Roles', 'Ana Torres · Jefe'],
+                ],
+                'consideraciones' => "Los controles dependen del rol que ocupas dentro del grupo.\n\nColores por usuario guarda al elegir. Colores por consolidado requiere Guardar cambios. Las opciones y el orden del Catálogo tienen botones de guardado separados.",
+                'errores' => [
+                    ['No aparece Configuración', 'No eres jefe del grupo', 'Usa Progreso o pide al jefe que haga el ajuste'],
+                    ['El cambio no se ve en el mes', 'La vista conserva datos anteriores', 'Vuelve al Calendario y recarga'],
+                    ['No guarda una actividad', 'Faltan fechas, nombre o responsables', 'Completa los obligatorios del formulario'],
+                ],
+                'ejemplo' => 'El jefe agrega “Revisar BL” al Catálogo, define prioridad alta y color naranja. Ana abre Progreso, despliega la actividad y actualiza su seguimiento.',
+                'resultado' => 'el avance queda visible y la configuración guardada se refleja en el calendario.',
+                'ver_tambien' => 'Calendario · Carga consolidada.',
+            ],
+            'soporte-ti/configuracion' => [
+                'modulo_key' => 'soporte-ti/configuracion',
+                'titulo' => 'Soporte — configuración de horas SLA',
+                'descripcion' => '{rol} → Soporte TI → Configuración',
+                'articulo_titulo' => 'Horas SLA',
+                'articulo_clave' => '/soporte-ti/configuracion/horas-tipo-a',
+                'tags' => ['Módulo: Soporte', 'SLA', 'horas', 'PM'],
+                'que_es' => 'Las matrices de horas para tickets Tipo A (proyectos) y Tipo B (requerimientos).',
+                'para_que' => 'Definir las horas por complejidad y fase que usa el seguimiento de soporte.',
+                'quien' => 'Rol {rol}. PM edita la matriz de fases de Tipo A. El analista de Soporte edita configuración y las horas de Tipo B. El resto solo lee o vuelve a Soporte.',
+                'cuando' => 'Cuando cambian los tiempos acordados de una complejidad.',
+                'flows' => [
+                    [
+                        'titulo' => 'Actualizar horas',
+                        'steps' => [
+                            $this->itemFlujo(
+                                'Tipo A',
+                                'Abre Horas Tipo A. En Fases PM ubica la complejidad, cambia las horas de cada fase y pulsa Guardar en esa fila; el total es referencial. En Configuración, el analista cambia Horas config. y pulsa Guardar. Cada valor debe estar entre 1 y 9999.',
+                                'Recorta una fila de Fases PM y una de Configuración con Guardar. Datos ficticios.'
+                            ),
+                            $this->itemFlujo(
+                                'Tipo B',
+                                'Abre Horas Tipo B. Ubica B1 o B2 y su complejidad, cambia las horas permitidas y pulsa Guardar. Espera el aviso antes de salir. Volver regresa a Soporte TI.',
+                                'Recorta Horas Tipo B con B1/B2, complejidad y Guardar. Datos ficticios.'
+                            ),
+                        ],
+                    ],
+                ],
+                'campos' => [
+                    ['Complejidad', 'Fila de la matriz', 'M3'],
+                    ['Fase', 'Columna Tipo A', 'Desarrollo'],
+                    ['Horas', 'Número entre 1 y 9999', '16'],
+                ],
+                'consideraciones' => 'PM y analista editan secciones distintas. No cambies una matriz sin acuerdo del área.',
+                'errores' => [
+                    ['Guardar está deshabilitado', 'Hay una hora vacía, menor que 1 o mayor que 9999', 'Corrige toda la fila'],
+                    ['Solo lectura', 'Tu cargo no edita esa sección', 'Pide el cambio al PM o al analista'],
+                ],
+                'ejemplo' => 'PM cambia M3, fase Desarrollo, de 12 a 16 horas y pulsa Guardar. El total de la fila se actualiza.',
+                'resultado' => 'la matriz queda guardada y los nuevos tickets usan las horas configuradas.',
+                'ver_tambien' => 'Soporte TI — tickets.',
+            ],
+            'panel-acceso/administracion-avanzada' => [
+                'modulo_key' => 'panel-acceso/administracion-avanzada',
+                'titulo' => 'Panel acceso — menús y externos',
+                'descripcion' => '{rol} → Panel acceso → Menús y externos',
+                'articulo_titulo' => 'Menús y usuarios externos',
+                'articulo_clave' => '/panel-acceso/menus',
+                'tags' => ['Módulo: Panel acceso', 'menús', 'externos', 'permisos por usuario'],
+                'que_es' => 'Las pantallas para mantener el catálogo de menús, usuarios externos, menús externos y permisos individuales.',
+                'para_que' => 'Crear opciones de navegación y controlar el acceso de personas externas sin cambiar el cargo completo.',
+                'quien' => 'Rol {rol} (Subgerencia).',
+                'cuando' => 'Cuando aparece una pantalla nueva, se habilita un usuario externo o una persona necesita una excepción de menú.',
+                'flows' => [
+                    [
+                        'titulo' => 'Catálogos de menús',
+                        'steps' => [
+                            $this->itemFlujo(
+                                'Menús internos',
+                                'En Menús pulsa Agregar Menú. Elige si es principal o submenú y completa nombre, orden, ruta Nuxt, ícono, URL de video y estado; si es submenú, elige también el padre. Guardar crea. El lápiz abre el mismo formulario para editar. La papelera abre la confirmación de Eliminar.',
+                                'Recorta Menús con Agregar Menú, lápiz, papelera y el formulario. Datos ficticios.'
+                            ),
+                            $this->itemFlujo(
+                                'Menús externos',
+                                'En Menús externos repite el mantenimiento para la navegación externa. Usa una URL válida. Guardar crea o actualiza; Eliminar pide confirmación. Después asigna el menú en Permisos por usuario.',
+                                'Recorta Menús externos con un formulario ficticio y Guardar.'
+                            ),
+                        ],
+                    ],
+                    [
+                        'titulo' => 'Usuarios y permisos externos',
+                        'steps' => [
+                            $this->itemFlujo(
+                                'Usuarios externos',
+                                'Pulsa Agregar Usuario. Completa nombre, apellido, email, contraseña, WhatsApp y DNI. Guardar crea. El lápiz abre el mismo formulario; deja la nueva contraseña vacía si no deseas cambiarla. La papelera abre la confirmación de Eliminar. No uses contraseñas reales en capturas.',
+                                'Recorta Usuarios externos con Agregar Usuario, lápiz y formulario. Datos ficticios.'
+                            ),
+                            $this->itemFlujo(
+                                'Permisos por usuario',
+                                'En Permisos de Menú por Usuario elige Usuario Externo. Marca cada menú o usa el check general. Pulsa Guardar en la cabecera. Recargar descarta la vista actual y vuelve a traer permisos guardados; la persona debe recargar su sesión.',
+                                'Recorta el selector de usuario, grupos de menú, check general y Guardar. Datos ficticios.'
+                            ),
+                        ],
+                    ],
+                ],
+                'campos' => [
+                    ['Nombre / URL / orden', 'Formulario de menú', 'Portal proveedor · /portal · 3'],
+                    ['Usuario externo / email', 'Formulario de usuario', 'Proveedor Demo · proveedor@ejemplo.com'],
+                    ['Acceso', 'Check por menú', 'Documentos: sí'],
+                ],
+                'consideraciones' => "Permisos por usuario son para usuarios externos y no sustituyen Permisos menú por cargo.\n\nEliminar un menú puede dejar permisos sin destino; confirma su uso antes.",
+                'errores' => [
+                    ['No hay menús disponibles', 'No se eligió usuario o no existe catálogo externo', 'Elige el usuario y revisa Menús externos'],
+                    ['No ve el cambio', 'No se pulsó Guardar o la sesión sigue abierta', 'Guarda y pide que recargue'],
+                    ['Email no guarda', 'Ya existe o el formato es inválido', 'Usa un correo externo único'],
+                ],
+                'ejemplo' => 'Subgerencia crea el menú externo “Documentos”, registra a Proveedor Demo y marca ese acceso en Permisos por usuario.',
+                'resultado' => 'el catálogo queda actualizado y el usuario externo ve solo los menús guardados.',
+                'ver_tambien' => 'Cargos · Usuarios · Permisos menú.',
             ],
             'panel-acceso/cargos' => [
                 'modulo_key' => 'panel-acceso/cargos',

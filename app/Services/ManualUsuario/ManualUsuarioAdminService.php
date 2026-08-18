@@ -18,7 +18,8 @@ class ManualUsuarioAdminService
     public function __construct(
         private ManualUsuarioCatalogService $catalog,
         private ManualUsuarioDbService $db,
-        private ManualUsuarioTablaHydrator $tablaHydrator
+        private ManualUsuarioTablaHydrator $tablaHydrator,
+        private ManualUsuarioCapturasCatalog $capturas
     ) {
     }
 
@@ -635,6 +636,10 @@ class ManualUsuarioAdminService
 
         $block->save();
         $block->load(['children.children.children']);
+
+        if (ManualBloque::normalizeTipo((string) $block->tipo) === ManualBloque::TIPO_MEDIA) {
+            $this->capturas->propagate($block);
+        }
 
         return $this->db->mapBlockAdmin($block);
     }

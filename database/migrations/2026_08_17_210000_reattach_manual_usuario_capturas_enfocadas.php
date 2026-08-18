@@ -1,13 +1,13 @@
 <?php
 
-use App\Services\ManualUsuario\ManualUsuarioCapturasAttacher;
 use Illuminate\Database\Migrations\Migration;
 
 class ReattachManualUsuarioCapturasEnfocadas extends Migration
 {
     public function up()
     {
-        (new ManualUsuarioCapturasAttacher())->attach();
+        // Sin efectos de red/storage durante migrate. El enlace es una
+        // operación explícita mediante manual:attach-capturas.
     }
 
     public function down()

@@ -121,7 +121,7 @@ class ManualUsuarioCursoAlumnosSeeder
             ),
             $this->itemFlujo(
                 'Guardar',
-                'Pulsa Guardar. Si cancelas, vuelve a pulsar el lápiz para salir del modo edición sin guardar (pendiente de definir si descarta los cambios al instante).',
+                'Pulsa Guardar y espera el aviso; la ficha vuelve a solo lectura. No hay botón Cancelar. Volver a pulsar el lápiz solo sale del modo edición: si no quieres conservar lo escrito, regresa al listado y abre la ficha otra vez sin pulsar Guardar.',
                 'Recorta Guardar en la ficha en edición. Datos ficticios.'
             ),
         ]);
@@ -266,16 +266,66 @@ class ManualUsuarioCursoAlumnosSeeder
             $caption = isset($step['captura']) && $step['captura'] !== ''
                 ? $step['captura']
                 : 'Recorta esa acción en pantalla. Datos ficticios, sin nombres reales de clientes.';
+            $captureKey = ManualUsuarioCaptureKey::make(
+                self::MODULO_KEY,
+                self::ROLE_SLUG,
+                (string) $titulo,
+                $accion,
+                $i + 1,
+                isset($step['capture_key']) ? (string) $step['capture_key'] : null
+            );
+            $aliasOf = !empty($step['capture_alias_of']) ? (string) $step['capture_alias_of'] : null;
+            $identity = ManualUsuarioCaptureKey::identity($captureKey, $aliasOf);
+            $captureOutput = !empty($step['capture_output'])
+                ? (string) $step['capture_output']
+                : ManualUsuarioCaptureKey::output($identity ?: $captureKey);
+            $snapshot = [
+                'caption' => $caption,
+                'alt' => 'Foto ' . $m . ' — ' . $accion,
+                'media_id' => null,
+                'capture_key' => $captureKey,
+                'capture_role' => self::ROLE_SLUG,
+                'capture_screen' => self::MODULO_KEY,
+                'capture_screen_url' => '/curso?tab=alumnos',
+                'capture_modulo' => self::MODULO_KEY,
+                'capture_flow' => (string) $titulo,
+                'capture_step' => ['number' => $i + 1, 'title' => $accion],
+                'capture_hint' => $caption,
+                'capture_output' => $captureOutput,
+                'capture_config' => $this->captureConfig($step),
+            ];
+            if (!empty($step['capture_alias_of'])) {
+                $snapshot['capture_alias_of'] = (string) $step['capture_alias_of'];
+            }
             $this->block($paginaId, $flow->id, ManualBloque::TIPO_MEDIA, 'Foto ' . $m . ' — ' . $accion, $m, [
                 'subtitulo' => 'Subir: ' . $titulo . ' — ' . $m . '. ' . $accion,
-                'snapshot' => [
-                    'caption' => $caption,
-                    'alt' => 'Foto ' . $m . ' — ' . $accion,
-                    'media_id' => null,
-                ],
+                'snapshot' => $snapshot,
             ], 'captura');
             $m++;
         }
+    }
+
+    private function captureConfig(array $step)
+    {
+        $config = [];
+        foreach ([
+            'type',
+            'target',
+            'actions',
+            'expectedText',
+            'padding',
+            'masks',
+            'piiAllow',
+            'expectedHash',
+            'enabled',
+            'url',
+        ] as $field) {
+            if (array_key_exists($field, $step)) {
+                $config[$field] = $step[$field];
+            }
+        }
+
+        return $config;
     }
 
     /**

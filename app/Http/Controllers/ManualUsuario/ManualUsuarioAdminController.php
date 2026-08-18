@@ -4,6 +4,7 @@ namespace App\Http\Controllers\ManualUsuario;
 
 use App\Http\Controllers\Controller;
 use App\Services\ManualUsuario\ManualUsuarioAdminService;
+use App\Services\ManualUsuario\ManualUsuarioCapturasCatalog;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -14,7 +15,8 @@ use Symfony\Component\HttpFoundation\Response;
 class ManualUsuarioAdminController extends Controller
 {
     public function __construct(
-        private ManualUsuarioAdminService $admin
+        private ManualUsuarioAdminService $admin,
+        private ManualUsuarioCapturasCatalog $capturas
     ) {
         $this->middleware('jwt.auth');
     }
@@ -353,6 +355,46 @@ class ManualUsuarioAdminController extends Controller
         }
 
         return response()->json(['status' => 'success', 'message' => 'Media eliminado.']);
+    }
+
+    public function indexCapturas()
+    {
+        if ($deny = $this->denyUnlessRoot()) {
+            return $deny;
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'data' => $this->capturas->list(),
+        ]);
+    }
+
+    public function assignCaptura(Request $request, int $id)
+    {
+        if ($deny = $this->denyUnlessRoot()) {
+            return $deny;
+        }
+
+        $data = $request->validate([
+            'media_id' => 'nullable|integer|min:1',
+            'capture_key' => 'nullable|string|max:180',
+        ]);
+
+        try {
+            $result = $this->capturas->assignToBlock($id, $data);
+        } catch (ModelNotFoundException $e) {
+            return response()->json(['status' => 'error', 'message' => 'Bloque o imagen no encontrados.'], 404);
+        } catch (InvalidArgumentException $e) {
+            return response()->json(['status' => 'error', 'message' => $e->getMessage()], 422);
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'data' => $result,
+            'message' => $result['updated'] > 1
+                ? 'Imagen aplicada a ' . $result['updated'] . ' hojas.'
+                : 'Imagen asignada.',
+        ]);
     }
 
     /**

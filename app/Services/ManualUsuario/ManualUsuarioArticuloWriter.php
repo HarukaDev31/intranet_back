@@ -72,7 +72,9 @@ class ManualUsuarioArticuloWriter
                     $n,
                     $flowTitle,
                     isset($flow['steps']) && is_array($flow['steps']) ? $flow['steps'] : [],
-                    $role
+                    $role,
+                    '',
+                    $screen
                 );
             }
         }
@@ -85,7 +87,7 @@ class ManualUsuarioArticuloWriter
                 $rawSteps = [$paso['body']];
             }
             $hint = isset($paso['hint']) ? $this->fill($paso['hint'], $role) : '';
-            $this->writeFlowWithCapturas($page->id, $root->id, $n, $pasoTitulo, $rawSteps, $role, $hint);
+            $this->writeFlowWithCapturas($page->id, $root->id, $n, $pasoTitulo, $rawSteps, $role, $hint, $screen);
         }
 
         $campos = $this->block($page->id, $root->id, ManualBloque::TIPO_GRUPO, 'Campos que deben completarse', $n++, [
@@ -181,15 +183,26 @@ class ManualUsuarioArticuloWriter
         return isset($screen['pasos']) && is_array($screen['pasos']) ? $screen['pasos'] : [];
     }
 
-    private function writeFlowWithCapturas($paginaId, $parentId, &$n, $titulo, array $rawSteps, array $role, $hint = '')
+    private function writeFlowWithCapturas(
+        $paginaId,
+        $parentId,
+        &$n,
+        $titulo,
+        array $rawSteps,
+        array $role,
+        $hint = '',
+        array $screen = []
+    )
     {
         $steps = [];
+        $captureSteps = [];
         foreach ($rawSteps as $step) {
             $norm = $this->normalizeFlowStep($step, $role);
             if ($norm['title'] === '' && $norm['body'] === '') {
                 continue;
             }
             $steps[] = $norm;
+            $captureSteps[] = $step;
         }
         if (!$steps) {
             return;
@@ -203,10 +216,79 @@ class ManualUsuarioArticuloWriter
             'snapshot' => $snapshot,
         ]);
         $m = 1;
-        foreach ($rawSteps as $i => $raw) {
+        foreach ($captureSteps as $i => $raw) {
             $hintCap = $this->capturaHint($titulo, $raw, $i + 1, $role);
-            $this->mediaPlantilla($paginaId, $flow->id, $m++, $hintCap['titulo'], $hintCap['subtitulo'], $hintCap['caption']);
+            $stepTitle = isset($steps[$i]['title']) && $steps[$i]['title'] !== ''
+                ? $steps[$i]['title']
+                : 'Paso ' . ($i + 1);
+            $roleSlug = isset($role['slug']) ? (string) $role['slug'] : '';
+            $screenKey = isset($screen['screen_key'])
+                ? (string) $screen['screen_key']
+                : (isset($screen['key']) ? (string) $screen['key'] : (isset($screen['modulo_key']) ? (string) $screen['modulo_key'] : ''));
+            $captureKey = ManualUsuarioCaptureKey::make(
+                isset($screen['modulo_key']) ? (string) $screen['modulo_key'] : '',
+                $roleSlug,
+                (string) $titulo,
+                $stepTitle,
+                $i + 1,
+                is_array($raw) && isset($raw['capture_key']) ? (string) $raw['capture_key'] : null
+            );
+            $aliasOf = is_array($raw) && !empty($raw['capture_alias_of'])
+                ? (string) $raw['capture_alias_of']
+                : null;
+            $identity = ManualUsuarioCaptureKey::identity($captureKey, $aliasOf);
+            $output = is_array($raw) && !empty($raw['capture_output'])
+                ? (string) $raw['capture_output']
+                : ManualUsuarioCaptureKey::output($identity ?: $captureKey);
+            $this->mediaPlantilla(
+                $paginaId,
+                $flow->id,
+                $m++,
+                $hintCap['titulo'],
+                $hintCap['subtitulo'],
+                $hintCap['caption'],
+                [
+                    'capture_key' => $captureKey,
+                    'role' => $roleSlug,
+                    'screen' => $screenKey,
+                    'screen_url' => isset($screen['articulo_clave']) ? (string) $screen['articulo_clave'] : '',
+                    'modulo' => isset($screen['modulo_key']) ? (string) $screen['modulo_key'] : '',
+                    'flow' => (string) $titulo,
+                    'step' => ['number' => $i + 1, 'title' => $stepTitle],
+                    'hint' => $hintCap['caption'],
+                    'output' => $output,
+                    'config' => $this->captureConfig($raw),
+                    'alias_of' => $aliasOf,
+                ]
+            );
         }
+    }
+
+    private function captureConfig($raw)
+    {
+        if (!is_array($raw)) {
+            return [];
+        }
+
+        $config = [];
+        foreach ([
+            'type',
+            'target',
+            'actions',
+            'expectedText',
+            'padding',
+            'masks',
+            'piiAllow',
+            'expectedHash',
+            'enabled',
+            'url',
+        ] as $field) {
+            if (array_key_exists($field, $raw)) {
+                $config[$field] = $raw[$field];
+            }
+        }
+
+        return $config;
     }
 
     private function capturaHint($pasoTitulo, $raw, $num, array $role)
@@ -253,7 +335,15 @@ class ManualUsuarioArticuloWriter
         return trim(preg_replace('/^Pasos\s*[—–-]?\s*/u', '', (string) $titulo));
     }
 
-    private function mediaPlantilla($paginaId, $parentId, $orden, $titulo, $subtitulo = null, $caption = null)
+    private function mediaPlantilla(
+        $paginaId,
+        $parentId,
+        $orden,
+        $titulo,
+        $subtitulo = null,
+        $caption = null,
+        array $capture = []
+    )
     {
         if ($subtitulo === null) {
             $subtitulo = 'Subir esta captura en el mantenedor.';
@@ -262,13 +352,20 @@ class ManualUsuarioArticuloWriter
             $caption = 'Recorta esa acción. Datos ficticios, sin nombres reales.';
         }
 
+        $snapshot = [
+            'caption' => $caption,
+            'alt' => $titulo,
+            'media_id' => null,
+        ];
+        foreach ($capture as $field => $value) {
+            if ($value !== null && $value !== '') {
+                $snapshot[$field === 'capture_key' ? 'capture_key' : 'capture_' . $field] = $value;
+            }
+        }
+
         return $this->block($paginaId, $parentId, ManualBloque::TIPO_MEDIA, $titulo, $orden, [
             'subtitulo' => $subtitulo,
-            'snapshot' => [
-                'caption' => $caption,
-                'alt' => $titulo,
-                'media_id' => null,
-            ],
+            'snapshot' => $snapshot,
         ], 'captura');
     }
 

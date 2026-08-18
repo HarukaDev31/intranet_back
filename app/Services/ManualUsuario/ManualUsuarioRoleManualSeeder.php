@@ -36,6 +36,8 @@ class ManualUsuarioRoleManualSeeder
                     $skipped++;
                     continue;
                 }
+                // El key del catálogo puede diferir de modulo_key (p. ej. vistas por rol).
+                $screen['screen_key'] = (string) $key;
                 $result = $writer->seed($role, $screen, $onlyKey ? $this->keepOrden($role, $key, $orden) : $orden);
                 $orden++;
                 $pages++;

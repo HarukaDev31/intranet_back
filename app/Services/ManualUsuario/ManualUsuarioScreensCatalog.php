@@ -30,9 +30,9 @@ class ManualUsuarioScreensCatalog
                 'news', 'agente-compra-trading',
             ]],
             ['slug' => 'coordinacion', 'id_grupo' => 1214, 'nombre' => 'Coordinación', 'screens' => [
-                'cargaconsolidada/abiertos', 'cargaconsolidada/completados', 'basedatos/clientes',
+                'cargaconsolidada/coordinacion/abiertos', 'cargaconsolidada/coordinacion/completados', 'basedatos/clientes',
                 'basedatos/productos', 'basedatos/regulaciones', 'basedatos/permisos', 'basedatos/boletin-quimico',
-                'soporte-ti', 'calendar', 'coordinacion/whatsapp-inbox', 'news', 'viaticos',
+                'soporte-ti', 'calendar', 'calendar/subpantallas', 'coordinacion/whatsapp-inbox', 'news', 'viaticos',
             ]],
             ['slug' => 'contenedor-almacen', 'id_grupo' => 1215, 'nombre' => 'ContenedorAlmacen', 'screens' => [
                 'cargaconsolidada/abiertos', 'cargaconsolidada/completados',
@@ -40,14 +40,14 @@ class ManualUsuarioScreensCatalog
             ['slug' => 'documentacion', 'id_grupo' => 1216, 'nombre' => 'Documentacion', 'screens' => [
                 'cargaconsolidada/abiertos', 'cargaconsolidada/completados', 'basedatos/clientes',
                 'basedatos/productos', 'basedatos/regulaciones', 'basedatos/permisos', 'basedatos/boletin-quimico',
-                'soporte-ti', 'calendar', 'news', 'viaticos',
+                'soporte-ti', 'calendar', 'calendar/subpantallas', 'news', 'viaticos',
             ]],
             ['slug' => 'marketing', 'id_grupo' => 1220, 'nombre' => 'Marketing', 'screens' => [
-                'calendar', 'landing/leads', 'viaticos',
+                'calendar', 'calendar/subpantallas', 'landing/leads', 'viaticos',
             ]],
             ['slug' => 'jefe-importacion', 'id_grupo' => 1221, 'nombre' => 'Jefe Importacion', 'screens' => [
                 'basedatos/clientes', 'basedatos/productos', 'basedatos/regulaciones', 'basedatos/permisos',
-                'soporte-ti', 'calendar', 'cargaconsolidada/coordinacion/abiertos', 'cargaconsolidada/coordinacion/completados',
+                'soporte-ti', 'calendar', 'calendar/subpantallas', 'cargaconsolidada/coordinacion/abiertos', 'cargaconsolidada/coordinacion/completados',
                 'cargaconsolidada/documentacion/abiertos', 'cargaconsolidada/documentacion/completados',
                 'cargaconsolidada/abiertos', 'cargaconsolidada/completados', 'news', 'viaticos',
             ]],
@@ -57,17 +57,18 @@ class ManualUsuarioScreensCatalog
                 'verificacion', 'inspeccionados', 'datos-facturacion', 'news', 'viaticos',
             ]],
             ['slug' => 'jefe-marketing', 'id_grupo' => 1223, 'nombre' => 'Jefe Marketing', 'screens' => [
-                'cargaconsolidada/abiertos', 'cargaconsolidada/completados', 'calendar',
+                'cargaconsolidada/abiertos', 'cargaconsolidada/completados', 'calendar', 'calendar/subpantallas',
                 'curso/alumnos-consulta', 'curso/campanas', 'landing/leads', 'viaticos',
             ]],
             ['slug' => 'trafiquer', 'id_grupo' => 1224, 'nombre' => 'trafiquer', 'screens' => [
                 'landing/leads',
             ]],
             ['slug' => 'subgerencia', 'id_grupo' => 1225, 'nombre' => 'SUBGERENCIA', 'screens' => [
-                'panel-acceso/cargos', 'panel-acceso/usuarios', 'panel-acceso/permisos', 'landing/leads',
+                'panel-acceso/cargos', 'panel-acceso/usuarios', 'panel-acceso/permisos',
+                'panel-acceso/administracion-avanzada', 'landing/leads',
             ]],
             ['slug' => 'pm', 'id_grupo' => 1227, 'nombre' => 'PM', 'screens' => [
-                'soporte-ti',
+                'soporte-ti', 'soporte-ti/configuracion',
             ]],
             ['slug' => 'finanzas', 'id_grupo' => 1228, 'nombre' => 'Finanzas', 'screens' => [
                 'cargaconsolidada/abiertos', 'cargaconsolidada/completados',
@@ -424,28 +425,58 @@ class ManualUsuarioScreensCatalog
                 'articulo_titulo' => 'Cotizador',
                 'articulo_clave' => '/cotizaciones',
                 'tags' => ['Módulo: Cotizador', 'importación', 'costos'],
-                'que_es' => 'La calculadora de importación: un flujo de varios pasos para armar el costo (cliente, carga, resumen y tributos).',
-                'para_que' => 'Obtener el desglose de FOB, flete, seguro, CIF y tributos (antidumping, ad valorem, IGV, IPM, percepción) antes de formalizar la cotización.',
+                'que_es' => 'El módulo Cotizaciones tiene un listado de cálculos guardados y un asistente de varios pasos para crear o editar una cotización.',
+                'para_que' => 'Buscar, exportar, duplicar, editar o eliminar cálculos; vincularlos con una carga; y obtener FOB, flete, seguro, CIF y tributos antes de formalizar la cotización.',
                 'quien' => 'Rol {rol}.',
                 'cuando' => 'Cuando un cliente pide una cotización de importación y hay que calcular costos con sus productos y proveedores.',
                 'flows' => [
                     [
-                        'titulo' => 'Armar el cálculo',
+                        'titulo' => 'Trabajar desde el listado',
                         'steps' => [
                             $this->itemFlujo(
-                                'Cliente',
-                                'Entra a Cotizador. En el primer paso completa nombre, documento, WhatsApp y correo. Sin esos datos no avanzas. No uses datos reales en capturas del manual.',
-                                'Recorta el paso 1 (datos del cliente). Datos ficticios.'
+                                'Buscar, filtrar y exportar',
+                                'Entra a Cotizador. La tabla muestra cliente, volumen, ítems, FOB, logística, impuestos, tarifa, campaña y estado. Busca o filtra por fechas, campaña, estado, vendedor y vinculación de proveedores. Exportar descarga el listado filtrado. Gestionar tarifas de calculadora abre otra página con los valores usados por el cálculo.',
+                                'Recorta el listado con filtros, Exportar, Crear Cotización y Gestionar tarifas. Usa cotizaciones ficticias.'
                             ),
                             $this->itemFlujo(
-                                'Proveedores y productos',
-                                'Agrega proveedores y, en cada uno, productos (nombre, CBM, precio, cantidad). Los totales se recalculan al cambiar. Si falta un producto obligatorio, no pases al resumen.',
-                                'Recorta un proveedor con un producto (CBM, precio, cantidad). Datos ficticios.'
+                                'Abrir archivos y carga vinculada',
+                                'Los íconos Excel y PDF abren la cotización generada. Ir a cotización abre esa persona dentro de la carga consolidada; solo aparece si ya está vinculada. Documentos asociados abre la página de archivos de esa cotización. Regresar vuelve al listado con el cálculo localizado.',
+                                'Recorta una fila con Excel/PDF, Ir a cotización y Documentos asociados. Datos ficticios.'
                             ),
                             $this->itemFlujo(
-                                'Resumen y tributos',
-                                'Revisa el resumen y luego la tabla de cálculos (FOB, flete, seguro, CIF, antidumping, ad valorem, IGV, IPM, percepción). Guarda o genera la cotización con los botones de esa pantalla. Si un caso especial (IMO, yuan) no cuadra, pendiente de definir con el equipo: no inventes la fórmula.',
-                                'Recorta el resumen o la tabla de tributos. Datos ficticios.'
+                                'Estado y vinculación',
+                                'Estado es una lista y pide confirmación. Para pasar a COTIZADO, la cotización debe estar asociada a una carga. Si Proveedores vinculados muestra el botón de enlace, púlsalo y confirma: crea o vincula la cotización en la carga y habilita Documentos asociados.',
+                                'Recorta Estado y Vincular proveedores, incluyendo la confirmación. Datos ficticios.'
+                            ),
+                            $this->itemFlujo(
+                                'Editar, duplicar o eliminar',
+                                'El lápiz abre el mismo asistente con datos cargados; no aparece cuando el estado es CONFIRMADO. Duplicar pide confirmación y crea una copia para trabajar sin alterar la original. Eliminar pide confirmación y no se deshace. Después de cualquiera de estas acciones, vuelve al listado y comprueba la fila.',
+                                'Recorta los botones Editar, Duplicar y Eliminar y una confirmación. Datos ficticios.'
+                            ),
+                        ],
+                    ],
+                    [
+                        'titulo' => 'Crear o editar con el asistente',
+                        'steps' => [
+                            $this->itemFlujo(
+                                'Paso 1 — Información del cliente',
+                                'Pulsa Crear Cotización. Elige DNI o RUC. Completa nombre o empresa, documento, WhatsApp, correo y cantidad de proveedores (1 a 6). WhatsApp puede sugerir un cliente existente. Pulsa Siguiente; si falta un obligatorio, sigues en este paso.',
+                                'Recorta el paso 1 con DNI/RUC, WhatsApp y cantidad de proveedores. Datos ficticios.'
+                            ),
+                            $this->itemFlujo(
+                                'Paso 2 — Carga, proveedores y productos',
+                                'Completa CBM, peso y cajas por proveedor. Agrega sus productos con nombre, cantidad y precio. Puedes plegar, quitar o reordenar proveedores y productos; revisa Total CBM, Total Items y Total Cajas. Si usarás Yuanes, activa la opción: el sistema muestra el TC global y convierte al avanzar. Pulsa Siguiente.',
+                                'Recorta un proveedor con CBM, cajas, productos y el resumen de totales. Datos ficticios.'
+                            ),
+                            $this->itemFlujo(
+                                'Pasos siguientes — Costos y tributos',
+                                'Completa la información que pide cada paso y usa Anterior/Siguiente para revisar. Verifica FOB, flete, seguro, CIF, antidumping, ad valorem, IGV, IPM y percepción. No avances con productos incompletos. En casos IMO o Yuan, usa los valores que muestra el sistema; no reemplaces la fórmula con un cálculo manual.',
+                                'Recorta el paso de costos y la tabla de tributos con datos ficticios.'
+                            ),
+                            $this->itemFlujo(
+                                'Guardar y volver al listado',
+                                'En el último paso revisa cliente, proveedores, productos, costos, carga y vendedor. Pulsa Guardar o Generar según el botón visible y espera el aviso de éxito. El sistema crea los archivos disponibles y vuelve al listado o al detalle. Ábrelos desde la fila para comprobarlos.',
+                                'Recorta el resumen final, el botón Guardar/Generar y el aviso de éxito. Datos ficticios.'
                             ),
                         ],
                     ],
@@ -456,12 +487,15 @@ class ManualUsuarioScreensCatalog
                     ['CBM, precio, cantidad', 'Usuario', '0.12 · 8.50 · 200'],
                     ['Tributos', 'Calculados por el sistema', 'IGV 16%'],
                 ],
-                'consideraciones' => "Los totales se recalculan al cambiar productos.\n\nEl detalle fino de cada fórmula (flete, seguro, percepción) puede ampliarse con el equipo de cotización: pendiente de definir casos especiales (IMO, yuan, etc.).",
+                'consideraciones' => "Los totales se recalculan al cambiar productos. Editar abre el asistente; Duplicar crea otra cotización; Eliminar no se deshace.\n\nCOTIZADO exige una carga asociada. Documentos asociados se habilita cuando la cotización y sus proveedores ya están vinculados.\n\nUna cotización CONFIRMADA no muestra el lápiz.",
                 'errores' => [
                     ['No avanza de paso', 'Falta un campo obligatorio (cliente o producto)', 'Completa los marcados como requeridos'],
+                    ['No cambia a COTIZADO', 'No está asociada a una carga consolidada', 'Vincula la cotización con una carga y vuelve a cambiar el estado'],
+                    ['Documentos asociados no aparece', 'Falta vincular la cotización o uno de sus proveedores', 'Pulsa Vincular proveedores y confirma'],
+                    ['No aparece Editar', 'La cotización está CONFIRMADA', 'Duplica para crear una nueva versión o consulta los archivos'],
                 ],
                 'ejemplo' => 'Cliente Carlos Ruiz, un proveedor, producto “Mochila escolar”, 200 unidades. El resumen muestra FOB y tributos antes de enviar la cotización.',
-                'resultado' => 'el cálculo queda armado con totales por proveedor y el desglose de tributos visible.',
+                'resultado' => 'el cálculo queda guardado en el listado, con totales y archivos disponibles; si lo vinculaste, también puedes abrirlo dentro de la carga.',
                 'ver_tambien' => 'Clientes · Carga consolidada.',
             ],
         ];
@@ -646,7 +680,7 @@ class ManualUsuarioScreensCatalog
             'coordinacion' => [
                 'que_es' => $abiertos
                     ? 'Tu lista de cargas en marcha. Aquí das de alta el contenedor, lo corriges y entras a cada paso.'
-                    : 'Tu lista de cargas que ya cerraron. Ya no creas ni partes; entras a los pasos que faltan terminar.',
+                    : 'Tu lista de cargas completadas. Conserva el TC Yuan global y el botón Crear; en cada fila puedes Ver, Editar y, si aún figura PENDIENTE, Eliminar.',
                 'para_que' => $abiertos
                     ? 'Dejar lista la carga y llevarla: clientes, papeles, costos, entrega y factura. Las cotizaciones las sube Ventas (cotizadores) desde su apartado.'
                     : 'Cerrar lo que queda de una carga que ya no está abierta.',
@@ -655,8 +689,8 @@ class ManualUsuarioScreensCatalog
                     ? 'Al abrir una carga nueva o en el día a día de una que sigue abierta.'
                     : 'Cuando la carga ya está completada y queda el cierre.',
                 'consideraciones' => $abiertos
-                    ? "Crear da de alta el contenedor. El lápiz corrige. Partir saca copias vacías si sigue pendiente. El tacho borra, solo en pendiente.\n\nGuardar junto al tipo de cambio deja el TC Yuan. El ojo abre los pasos.\n\nEn Cotización no subes el archivo de cotización ni das de alta al prospecto: eso lo hace Ventas (cotizadores) desde su apartado de Carga consolidada. Tú sigues la fila, el cobro y el resto de pasos.\n\nCadena de papeles: en Documentación, Factura General solo arma el Excel si las carpetas Factura Comercial, Packing List y Lista de Partidas ya tienen un Excel guardado (con esos nombres exactos). Guarda ese archivo. En Cotización final lo subes con Subir Factura, bajas Plantilla General, la revisas en tu computadora y la subes como Plantilla Final. Eso genera las cotizaciones finales y un ZIP. Descargar plantillas en Documentación no sustituye ninguno de esos pasos.\n\nSi el recuadro de una carpeta no te deja adjuntar, no puedes cambiar ese archivo desde aquí: solo consultas o bajas lo que ya hay."
-                    : "En Completados ya no creas ni partes. El ojo abre los mismos pasos para terminar o consultar.\n\nSi aún falta el lote de cotizaciones finales: Factura General (con las tres carpetas en Excel) → Subir Factura → Plantilla General → revisar en tu PC → Plantilla Final. Mientras el lote diga En proceso, no vuelvas a subir el mismo archivo.",
+                    ? "Crear da de alta el contenedor. El lápiz corrige. Partir saca copias vacías si sigue pendiente. El tacho borra, solo en pendiente.\n\nGuardar junto al tipo de cambio deja el TC Yuan. El ojo abre los pasos.\n\nEn Cotización no subes el archivo ni das de alta al prospecto: eso lo hace Ventas (cotizadores).\n\nEn Documentación no subes ni eliminas carpetas: solo consultas o descargas. Factura General funciona cuando Documentación ya dejó Excel en Factura Comercial, Packing List y Lista de Partidas. Después: Subir Factura → Plantilla General → revisar → Plantilla Final."
+                    : "La UI de Completados mantiene TC Yuan global y Crear. El lápiz corrige la carga; el tacho solo aparece si todavía figura PENDIENTE. Partir no aparece.\n\nEl ojo abre los pasos. En Documentación solo consultas o descargas carpetas. Si falta el lote final: Factura General (preparada por Documentación) → Subir Factura → Plantilla General → revisar → Plantilla Final.",
                 'ejemplo' => $abiertos
                     ? 'Creas la carga #101 con cierre 15-08-2026, guardas el tipo de cambio y entras con el ojo. En Documentación bajas Factura General (las tres carpetas ya tienen Excel), en Cotización final la subes, bajas Plantilla General, la revisas y la subes como Plantilla Final.'
                     : 'La #101 ya está completada. Entras a Cotización final: si el lote aún no existe, subes la Factura General, armas la plantilla y generas las cotizaciones finales.',
@@ -665,7 +699,7 @@ class ManualUsuarioScreensCatalog
                     : 'Dejas cerrado lo que faltaba de esa carga.',
                 'ver_tambien' => 'Cómo bajar Factura General · Cómo subir la factura y armar la plantilla · Cómo generar las cotizaciones finales.',
                 'errores' => [
-                    ['No veo Crear', 'Estás en Completados', 'Vuelve a Abiertos'],
+                    ['No veo Partir', 'Completados no ofrece esa acción', 'Partir una carga se hace desde Abiertos mientras sigue pendiente'],
                     ['No puedo subir la cotización', 'Eso no se hace desde Coordinación', 'Pide a Ventas (cotizadores) que la suban desde su apartado de Carga consolidada'],
                     ['No puedo partir ni borrar', 'La carga ya no está pendiente, o ya se partió', 'Solo se parte y se borra en pendiente'],
                     ['Factura General no baja', 'Falta Factura Comercial, Packing List o Lista de Partidas, o no son Excel', 'Revisa que esas tres carpetas, con esos nombres, ya tengan un Excel guardado. Si el recuadro no te deja adjuntar, no puedes cambiar esos archivos desde aquí'],
@@ -674,7 +708,7 @@ class ManualUsuarioScreensCatalog
                     ['No veo la carga', 'Está en Completados o un filtro la esconde', 'Cambia de lista y deja filtros en Todos'],
                 ],
                 'campos' => [
-                    ['Crear', 'Da de alta el contenedor: mes, país, empresa y fechas.', 'Agosto · China'],
+                    ['Crear', 'Da de alta el contenedor: mes, país, empresa y fechas. También está visible en Completados.', 'Agosto · China'],
                     ['TC Yuan + Guardar', 'Deja el tipo de cambio de la lista.', '0.52'],
                     ['Ojo / lápiz / partir / tacho', 'Entrar, corregir, copiar vacía o borrar (solo pendiente).', '—'],
                     ['Factura Comercial / Packing List / Lista de Partidas', 'Tienen que ser Excel y estar guardadas. Sin las tres, Factura General no arma el archivo.', '.xlsx'],
@@ -906,8 +940,8 @@ class ManualUsuarioScreensCatalog
     {
         if ($sabor === 'coord') {
             return $abiertos
-                ? "Crear da de alta el contenedor. El lápiz corrige. Partir saca copias vacías si sigue pendiente. El tacho borra, también solo en pendiente.\n\nGuardar junto al tipo de cambio deja el TC Yuan.\n\nEl ojo abre los pasos: Cotización, Clientes, Documentación, Cotización final, Entrega y Factura.\n\nEn Cotización no subes el archivo ni das de alta al prospecto: las cotizaciones las carga Ventas (cotizadores) desde su apartado. Tú sigues la fila y el resto de pasos.\n\nCadena de papeles: Factura General solo arma el Excel si Factura Comercial, Packing List y Lista de Partidas ya tienen Excel. Ese archivo se sube en Cotización final (Subir Factura), se baja Plantilla General, se revisa en tu PC y se sube como Plantilla Final para generar las cotizaciones finales."
-                : "En Completados ya no creas ni partes. El ojo abre los mismos pasos para terminar o consultar.\n\nSi falta el lote de cotizaciones: Factura General → Subir Factura → Plantilla General → revisar → Plantilla Final.";
+                ? "Crear da de alta el contenedor. El lápiz corrige. Partir saca copias vacías si sigue pendiente. El tacho borra, también solo en pendiente.\n\nGuardar junto al tipo de cambio deja el TC Yuan.\n\nEl ojo abre Cotización, Clientes, Documentación, Cotización final, Entrega y Factura. En Documentación, Coordinación no sube ni elimina carpetas; Documentación mantiene los archivos. Cuando las tres carpetas Excel están listas: Factura General → Subir Factura → Plantilla General → revisar → Plantilla Final."
+                : "Completados mantiene TC Yuan global y Crear. El lápiz corrige; el tacho solo aparece en una fila PENDIENTE; Partir no aparece. El ojo abre los mismos pasos. En Documentación solo consultas o descargas carpetas.";
         }
         if ($sabor === 'doc') {
             return $abiertos
@@ -973,11 +1007,6 @@ class ManualUsuarioScreensCatalog
                         'Recorta una fila de Prospectos con el ojo, el enlace de firma y la flecha de estado. Datos ficticios.'
                     ),
                     $this->itemFlujo(
-                        'Abrir en Drive',
-                        'Abre el Excel de seguimiento en la nube para ver el avance sin bajarlo. Si el botón no aparece, esa carga aún no tiene el archivo de seguimiento. No reemplaza Descargar Embarque.',
-                        'Recorta el recuadro «Excel seguimiento» con el botón Abrir en Drive. Datos ficticios.'
-                    ),
-                    $this->itemFlujo(
                         'Por Embarcar y Descargar Embarque',
                         'Por Embarcar lista lo que va en el contenedor. Descargar Embarque baja ese Excel. Si no hay datos, no genera archivo: no es un error de tu usuario, falta información en la carga. Úsalo para revisar, no para armar ni subir la cotización.',
                         'Recorta la pestaña Por Embarcar activa y el botón Descargar Embarque. Datos ficticios.'
@@ -995,8 +1024,8 @@ class ManualUsuarioScreensCatalog
                 [
                     $this->itemFlujo(
                         'Cómo se ve y cómo interactúas',
-                        'Al entrar ves pestañas: Seguimiento, Documentación y Variación. Buscar encuentra la fila. Si alguien no aparece, no está en esta carga o un filtro la esconde.',
-                        'Recorta las pestañas Seguimiento / Documentación / Variación y el listado. Datos ficticios.'
+                        'Al entrar ves pestañas: Seguimiento, Documentación y Variación. Buscar encuentra la fila. Si alguien no aparece, no está en esta carga o un filtro la esconde. El botón Acciones abre un modal; no cambia la fila hasta que eliges una opción y confirmas.',
+                        'Recorta las pestañas Seguimiento / Documentación / Variación, el listado y el botón Acciones. Datos ficticios.'
                     ),
                     $this->itemFlujo(
                         'Reservado / No reservado',
@@ -1014,6 +1043,21 @@ class ManualUsuarioScreensCatalog
                         'Recorta la ficha abierta con Guardar cambios, Descargar Excel y el recuadro de archivos. Datos ficticios.'
                     ),
                     $this->itemFlujo(
+                        'Modal Acciones — solicitar documentos',
+                        'Pulsa Acciones, elige Solicitar documentos y Continuar. El modal muestra una pestaña por proveedor. En cada producto elige su categoría; Solicitar documentos se habilita cuando todos tienen categoría. Pulsa el botón y espera el aviso. Volver regresa a la primera selección; cerrar no envía.',
+                        'Recorta el modal Acciones con un proveedor, sus productos categorizados y Solicitar documentos. Datos ficticios.'
+                    ),
+                    $this->itemFlujo(
+                        'Modal Acciones — enviar recordatorio',
+                        'Pulsa Acciones, elige Recordatorio. En General marca Commercial Invoice, Packing List o Excel Confirmación para todos; confirmar General limpia la selección individual de ese documento. También puedes marcar documentos por proveedor. Enviar recordatorio se habilita con al menos una selección.',
+                        'Recorta las pestañas General/proveedor y los documentos seleccionados antes de Enviar recordatorio. Datos ficticios.'
+                    ),
+                    $this->itemFlujo(
+                        'Excel Confirmación',
+                        'Abre Excel Confirmación desde Documentación del cliente. Elige el proveedor, despliega cada producto y completa nombre comercial, foto, cantidad, precio, HS Code, enlace y características requeridas. Cambiar Estado se guarda al elegir. Descargar Excel genera el consolidado. Guardar abre una confirmación; si falta Marca o Modelo, puedes continuar y se completa S/M. Al guardar fuera de la ficha embebida, pasas a la página de confirmación guardada.',
+                        'Recorta Excel Confirmación con pestañas de proveedor, Estado, un producto abierto y Guardar. Datos ficticios.'
+                    ),
+                    $this->itemFlujo(
                         'Fecha máxima de documentación',
                         'En Seguimiento puedes dejar la fecha tope de papeles y pulsar el disquete para grabarla. Si no pulsas guardar, la fecha no queda.',
                         'Recorta el recuadro F. Max. Documentación con la fecha y el botón de guardar. Datos ficticios.'
@@ -1022,12 +1066,12 @@ class ManualUsuarioScreensCatalog
             ),
             $this->pasoCarga(
                 'Documentación',
-                'Aquí están los papeles de toda la carga, organizados en carpetas. No es la ficha de cada cliente: es el expediente del contenedor. Lo que hagas aquí alimenta Cotización final.',
+                'Aquí consultas los papeles de toda la carga, organizados en carpetas. Coordinación no sube ni elimina archivos en esta pantalla; Documentación es quien mantiene las carpetas.',
                 [
                     $this->itemFlujo(
                         'Cómo se ve y cómo interactúas',
-                        'Al entrar ves una carpeta por tipo de papel (nombre arriba y un recuadro debajo). Si el recuadro te deja adjuntar, sueltas el archivo, esperas a que aparezca en la lista y pulsas Guardar: sin Guardar no queda grabado. Si el recuadro está bloqueado, no puedes cambiar el archivo de esa carpeta: solo lo consultas o lo bajas si ya hay uno.',
-                        'Recorta el grid de carpetas (nombre + recuadro de archivo), al menos dos carpetas visibles. Datos ficticios.'
+                        'Al entrar ves una carpeta por tipo de papel. En Coordinación los recuadros son de consulta: puedes abrir o bajar un archivo existente, pero no adjuntar, Guardar, quitar ni crear carpetas. Si falta un documento, solicítalo desde Clientes → Acciones o pide a Documentación que lo cargue.',
+                        'Recorta el grid de carpetas en modo consulta, con un archivo descargable y sin controles de carga. Datos ficticios.'
                     ),
                     $this->itemFlujo(
                         'Las tres carpetas que habilitan Factura General',
@@ -1035,24 +1079,14 @@ class ManualUsuarioScreensCatalog
                         'Recorta las tres carpetas juntas: Factura Comercial, Packing List y Lista de Partidas, con el Excel ya visible en cada una. Datos ficticios.'
                     ),
                     $this->itemFlujo(
-                        'Cómo dejar el Excel en cada carpeta (si te deja adjuntar)',
-                        'Abre la carpeta vacía, elige o arrastra el Excel, pulsa Guardar y espera el aviso de éxito. Repite en las tres. Si te equivocaste de archivo, en la mayoría puedes quitarlo y subir el correcto; la primera carpeta (lista de embarque) no se borra. Si no te deja adjuntar, revisa si esas tres ya tienen Excel: con eso basta para el siguiente punto.',
-                        'Recorta una carpeta en el momento de adjuntar: recuadro, archivo elegido y botón Guardar. Datos ficticios.'
-                    ),
-                    $this->itemFlujo(
                         'Factura General: qué hace de verdad',
-                        'No te baja “la carpeta tal cual”. Junta los tres Excel con los datos de la carga y te entrega un archivo ya armado (factura procesada). Guárdalo entero en tu computadora: ese es el insumo de Cotización final. Si pulsas el botón y falla, casi siempre falta una de las tres carpetas o el archivo no es Excel. Completa eso y vuelve a intentar; Descargar plantillas no sustituye este paso.',
+                        'Cuando Documentación ya dejó Excel en Factura Comercial, Packing List y Lista de Partidas, Factura General los junta con los datos de la carga y baja un archivo procesado. Guárdalo: es el insumo de Cotización final. Si falla, no intentes subir carpetas desde Coordinación; pide a Documentación que revise las tres.',
                         'Recorta la barra superior con el botón Factura General. Datos ficticios.'
                     ),
                     $this->itemFlujo(
                         'Descargar plantillas',
                         'Arma un paquete con todo lo que ya está subido en las carpetas. Sirve para archivar o revisar en tu PC. No reemplaza a Factura General, no arma la plantilla de cotización y no genera las cotizaciones finales.',
                         'Recorta el botón Descargar plantillas en la barra superior. Datos ficticios.'
-                    ),
-                    $this->itemFlujo(
-                        'Nuevo documento',
-                        'Si falta un tipo de papel que aún no tiene carpeta, escribes el nombre, adjuntas el archivo y se crea. El archivo no puede pesar más de 1 MB. Eso no reemplaza Factura Comercial, Packing List ni Lista de Partidas: esas tres ya existen y son las que usa Factura General.',
-                        'Recorta el recuadro Nuevo documento / Crear documento: campo nombre y el archivo. Datos ficticios.'
                     ),
                     $this->itemFlujo(
                         'Cuándo pasar a Cotización final',
@@ -1139,13 +1173,23 @@ class ManualUsuarioScreensCatalog
                 [
                     $this->itemFlujo(
                         'Cómo se ve y cómo interactúas',
-                        'Busca por nombre o teléfono. La tabla muestra si ya hay comprobante. Si la fila está vacía, aún no se emitió desde aquí: no es un error de búsqueda.',
-                        'Recorta el encabezado Factura y Guía con el buscador y dos o tres filas. Datos ficticios.'
+                        'Busca por nombre o teléfono. La tabla muestra Ajuste, Cotización final, Factura comercial, Guía de remisión y Acciones. Si no hay archivo, aparece Subir. La cotización final se abre con su ícono Excel.',
+                        'Recorta Factura y Guía con buscador, una fila sin archivo y otra con factura/guía. Datos ficticios.'
                     ),
                     $this->itemFlujo(
-                        'Abrir o bajar el archivo',
-                        'Si ya hay factura o guía, lo abres o lo bajas desde la fila. Si no ves Enviar formulario ni Subir, esta vista es de consulta: esos envíos se hacen en el cierre, no desde aquí.',
-                        'Recorta una fila con el archivo de factura o guía ya cargado (ícono de bajar). Datos ficticios.'
+                        'Subir factura o guía',
+                        'Pulsa Subir en Factura comercial o Guía de remisión. El modal de factura admite uno o varios archivos; el de guía, uno. Elige el archivo y guarda. Espera el aviso y comprueba que ahora aparecen Descargar y Eliminar.',
+                        'Recorta el modal Subir factura o Subir guía con un archivo ficticio.'
+                    ),
+                    $this->itemFlujo(
+                        'Descargar, reemplazar o eliminar',
+                        'Descargar abre el archivo actual. Para reemplazarlo, pulsa Eliminar, confirma la acción irreversible y vuelve a Subir el correcto. Eliminar factura o guía actualiza la fila al terminar.',
+                        'Recorta Descargar y Eliminar en Factura/Guía, más la confirmación de eliminación. Datos ficticios.'
+                    ),
+                    $this->itemFlujo(
+                        'Enviar por WhatsApp',
+                        'Pulsa Acciones en la fila. El modal solo permite elegir Factura o Guía si ese archivo existe. Selecciona el documento, envía y espera el aviso. Coordinación no ve Enviar formulario masivo; ese botón es de Administración o Contabilidad.',
+                        'Recorta el modal Acciones con Factura/Guía disponible y el botón de envío. Datos ficticios.'
                     ),
                 ]
             ),
