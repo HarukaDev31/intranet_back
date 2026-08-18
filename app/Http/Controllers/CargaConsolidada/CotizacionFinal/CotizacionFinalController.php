@@ -33,6 +33,7 @@ use App\Traits\FileTrait;
 use App\Traits\UsesObjectStorage;
 use App\Jobs\SendReminderPagoWhatsAppJob;
 use App\Services\CargaConsolidada\CotizacionFinal\PlantillaFinalBatchService;
+use App\Services\CargaConsolidada\CotizacionFinal\TarifaTipoClienteCalculator;
 use App\Support\PhpSpreadsheet\PhpSpreadsheetRuntime;
 
 class CotizacionFinalController extends Controller
@@ -2023,7 +2024,8 @@ class CotizacionFinalController extends Controller
             // Función para obtener el valor real de una celda (considerando combinadas)
             $getCellValue = function ($col, $row) use ($worksheet, $mergedCells) {
                 $cellAddress = $col . $row;
-                $cellValue = trim($worksheet->getCell($cellAddress)->getValue());
+                $rawValue = $worksheet->getCell($cellAddress)->getValue();
+                $cellValue = trim((string) ($rawValue ?? ''));
 
                 // Si la celda estÃ¡ vacÃ­a, buscar en celdas combinadas
                 if (empty($cellValue)) {
@@ -2045,7 +2047,8 @@ class CotizacionFinalController extends Controller
 
                                 // Verificar si la celda actual estÃ¡ dentro del rango
                                 if ($col >= $startCol && $col <= $endCol && $row >= $startRow && $row <= $endRow) {
-                                    $cellValue = trim($worksheet->getCell($startCell)->getValue());
+                                    $mergedRaw = $worksheet->getCell($startCell)->getValue();
+                                    $cellValue = trim((string) ($mergedRaw ?? ''));
                                     break;
                                 }
                             }
@@ -2099,11 +2102,17 @@ class CotizacionFinalController extends Controller
                 }
 
                 // Obtener datos bÃ¡sicos del cliente
+                $rawVolumenCliente = $getCellValue('V', $row);
+                $volumenExcel = (is_numeric($rawVolumenCliente) && (float) $rawVolumenCliente > 0)
+                    ? (float) $rawVolumenCliente
+                    : 0.0;
+
                 $client = [
                     'nombre' => $clientName,
                     'tipo' => $getCellValue('B', $row),
                     'dni' => $getCellValue('C', $row),
                     'telefono' => $getCellValue('D', $row),
+                    'volumen_excel' => $volumenExcel,
                     'productos' => [],
                 ];
 
@@ -2151,6 +2160,10 @@ class CotizacionFinalController extends Controller
                             'peso' => $peso ?: 0,
                             'cbm' => $cbm ?: '',
                         ];
+
+                        if ($client['volumen_excel'] <= 0 && is_numeric($cbm) && (float) $cbm > 0) {
+                            $client['volumen_excel'] = (float) $cbm;
+                        }
 
                         $client['productos'][] = $productoData;
                     }
@@ -2242,47 +2255,7 @@ class CotizacionFinalController extends Controller
      */
     private function calculateTarifaByTipoCliente($tipoCliente, $volumen, $tarifaBase)
     {
-        $tipoCliente = trim(strtoupper($tipoCliente));
-        $volumen = is_numeric($volumen) ? round((float)$volumen, 2) : 0;
-
-        switch ($tipoCliente) {
-            case "NUEVO":
-                if ($volumen < 0.59 && $volumen > 0) {
-                    return 280;
-                } elseif ($volumen < 1.00 && $volumen > 0.59) {
-                    return 375;
-                } elseif ($volumen < 2.00 && $volumen > 1.00) {
-                    return 375;
-                } elseif ($volumen < 3.00 && $volumen > 2.00) {
-                    return 350;
-                } elseif ($volumen <= 4.10 && $volumen > 3.00) {
-                    return 325;
-                } elseif ($volumen > 4.10) {
-                    return 300;
-                }
-                break;
-
-            case "ANTIGUO":
-                if ($volumen < 0.59 && $volumen > 0) {
-                    return 260;
-                } elseif ($volumen < 1.00 && $volumen > 0.59) {
-                    return 350;
-                } elseif ($volumen <= 2.09 && $volumen > 1.00) {
-                    return 350;
-                } elseif ($volumen <= 3.09 && $volumen > 2.09) {
-                    return 325;
-                } elseif ($volumen <= 4.10 && $volumen > 3.09) {
-                    return 300;
-                } elseif ($volumen > 4.10) {
-                    return 280;
-                }
-                break;
-
-            case "SOCIO":
-                return 250; // Tarifa fija para socios
-        }
-
-        return $tarifaBase; // Retornar tarifa base si no coincide con ningÃºn caso
+        return TarifaTipoClienteCalculator::calculate($tipoCliente, $volumen, $tarifaBase);
     }
 
     /**
@@ -4610,68 +4583,7 @@ class CotizacionFinalController extends Controller
 
             $tarifaValue = is_numeric($tarifa ?? 0) ? (float)$tarifa : 0;
             $cbmTotalProductos = round($cbmTotalProductos, 2);
-
-            if (trim(strtoupper($tipoCliente)) == "NUEVO") {
-                switch ($cbmTotalProductos) {
-                    case $cbmTotalProductos < 0.59 && $cbmTotalProductos > 0:
-                        $tarifaValue = 280;
-                        break;
-                    case $cbmTotalProductos < 1.00 && $cbmTotalProductos > 0.59:
-                        $tarifaValue = 375;
-                        break;
-                    case $cbmTotalProductos < 2.00 && $cbmTotalProductos > 1.00:
-                        $tarifaValue = 375;
-                        break;
-                    case $cbmTotalProductos < 3.00 && $cbmTotalProductos > 2.00:
-                        $tarifaValue = 350;
-                        break;
-                    case $cbmTotalProductos <= 4.10 && $cbmTotalProductos > 3.00:
-                        $tarifaValue = 325;
-                        break;
-                    case $cbmTotalProductos > 4.10:
-                        $tarifaValue = 300;
-                }
-            } else if (trim(strtoupper($tipoCliente)) == "ANTIGUO") {
-                switch ($cbmTotalProductos) {
-                    case $cbmTotalProductos < 0.59 && $cbmTotalProductos > 0:
-                        $tarifaValue = 260;
-                        break;
-                    case $cbmTotalProductos < 1.00 && $cbmTotalProductos > 0.59:
-                        $tarifaValue = 350;
-                        break;
-                    case $cbmTotalProductos <= 2.09 && $cbmTotalProductos > 1.00:
-                        $tarifaValue = 350;
-                        break;
-                    case $cbmTotalProductos <= 3.09 && $cbmTotalProductos > 2.09:
-                        $tarifaValue = 325;
-                        break;
-                    case $cbmTotalProductos <= 4.10 && $cbmTotalProductos > 3.09:
-                        $tarifaValue = 300;
-                        break;
-                    case $cbmTotalProductos > 4.10:
-                        $tarifaValue = 280;
-                }
-            } else if (trim(strtoupper($tipoCliente)) == "SOCIO") {
-                switch ($cbmTotalProductos) {
-                    case $cbmTotalProductos < 0.60:
-                        $tarifaValue = 250;
-                        break;
-                    case $cbmTotalProductos < 1.00:
-                        $tarifaValue = 250;
-                        break;
-                    case $cbmTotalProductos < 2.00:
-                        $tarifaValue = 250;
-                        break;
-                    case $cbmTotalProductos < 3.00:
-                        $tarifaValue = 250;
-                        break;
-                    case $cbmTotalProductos < 4.00:
-                        $tarifaValue = 250;
-                        break;
-                    case $cbmTotalProductos >= 4.10:
-                        $tarifaValue = 250;
-                }
-            }
+            $tarifaValue = TarifaTipoClienteCalculator::calculate($tipoCliente, $cbmTotalProductos, $tarifaValue);
 
             $objPHPExcel->setActiveSheetIndex(2)->setCellValue($tarifaCellValue, $tarifaValue);
             $objPHPExcel->setActiveSheetIndex(2)->setCellValue(

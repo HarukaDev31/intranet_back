@@ -96,6 +96,7 @@ class GenerateMassiveExcelPayrollsTest extends TestCase
 
         $joinBuilder = \Mockery::mock();
         $joinBuilder->shouldReceive('join')->andReturnSelf();
+        $joinBuilder->shouldReceive('leftJoin')->andReturnSelf();
         $joinBuilder->shouldReceive('select')->andReturnSelf();
         $joinBuilder->shouldReceive('where')->andReturnSelf();
         $joinBuilder->shouldReceive('whereNotNull')->andReturnSelf();
@@ -232,6 +233,7 @@ class GenerateMassiveExcelPayrollsTest extends TestCase
             $this->assertEqualsWithDelta(0.035, (float) $producto['percepcion'], 0.0001);
             $this->assertEqualsWithDelta(28.0, (float) $producto['peso'], 0.0001);
             $this->assertEqualsWithDelta(0.42, (float) $producto['cbm'], 0.0001);
+            $this->assertEqualsWithDelta(0.42, (float) $data[0]['cliente']['volumen_excel'], 0.0001);
         } finally {
             if (is_file($tmpPath)) {
                 @unlink($tmpPath);
