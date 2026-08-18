@@ -18,7 +18,8 @@ class ManualUsuarioAdminService
     public function __construct(
         private ManualUsuarioCatalogService $catalog,
         private ManualUsuarioDbService $db,
-        private ManualUsuarioTablaHydrator $tablaHydrator
+        private ManualUsuarioTablaHydrator $tablaHydrator,
+        private ManualUsuarioCapturasCatalog $capturas
     ) {
     }
 
@@ -636,6 +637,10 @@ class ManualUsuarioAdminService
         $block->save();
         $block->load(['children.children.children']);
 
+        if (ManualBloque::normalizeTipo((string) $block->tipo) === ManualBloque::TIPO_MEDIA) {
+            $this->capturas->propagate($block);
+        }
+
         return $this->db->mapBlockAdmin($block);
     }
 
@@ -673,8 +678,25 @@ class ManualUsuarioAdminService
     /**
      * @return array<string, mixed>
      */
-    public function uploadMedia(UploadedFile $file, ?string $alt = null, ?string $roleSlug = null, ?int $uploadedBy = null): array
-    {
+    public function uploadMedia(
+        UploadedFile $file,
+        ?string $alt = null,
+        ?string $roleSlug = null,
+        ?int $uploadedBy = null,
+        ?string $nombre = null
+    ): array {
+        $media = $this->storeMediaFile($file, $roleSlug, $uploadedBy, $alt, $nombre);
+
+        return $this->mapMedia($media);
+    }
+
+    public function storeMediaFile(
+        UploadedFile $file,
+        ?string $roleSlug = null,
+        ?int $uploadedBy = null,
+        ?string $alt = null,
+        ?string $nombre = null
+    ): ManualMedia {
         $dir = trim((string) config('manual_usuario.storage_dir', 'manual'), '/');
         if ($roleSlug) {
             $dir .= '/' . Str::slug($roleSlug);
@@ -684,15 +706,53 @@ class ManualUsuarioAdminService
         $name = now()->format('YmdHis') . '_' . Str::random(8) . '.' . $ext;
         $stored = $this->storageStoreUpload($file, $dir, $name);
         $path = $this->storageFinalizeCdnPath($stored);
+        $nombre = $nombre !== null ? trim($nombre) : '';
 
-        $media = ManualMedia::query()->create([
+        return ManualMedia::query()->create([
             'path' => $path,
+            'nombre' => $nombre !== '' ? $nombre : null,
             'alt' => $alt,
             'mime' => $file->getMimeType(),
             'uploaded_by' => $uploadedBy,
         ]);
+    }
 
-        return $this->mapMedia($media);
+    public function replaceMediaFile(ManualMedia $media, UploadedFile $file, ?string $roleSlug = null): ManualMedia
+    {
+        $oldUpload = $this->storageUploadPathFromDb($media->path);
+        $dir = trim((string) config('manual_usuario.storage_dir', 'manual'), '/');
+        if ($roleSlug) {
+            $dir .= '/' . Str::slug($roleSlug);
+        } else {
+            $current = (string) $media->path;
+            $slash = strrpos(str_replace('\\', '/', $current), '/');
+            if ($slash !== false) {
+                $dir = substr(str_replace('\\', '/', $current), 0, $slash);
+                $prefix = trim((string) config('object_storage.s3_prefix', ''), '/');
+                if ($prefix !== '' && stripos($dir, $prefix . '/') === 0) {
+                    $dir = substr($dir, strlen($prefix) + 1);
+                }
+            }
+        }
+
+        $ext = strtolower($file->getClientOriginalExtension() ?: 'png');
+        $name = now()->format('YmdHis') . '_' . Str::random(8) . '.' . $ext;
+        $stored = $this->storageStoreUpload($file, $dir, $name);
+        $path = $this->storageFinalizeCdnPath($stored);
+
+        $media->path = $path;
+        $media->mime = $file->getMimeType();
+        $media->save();
+
+        if ($oldUpload && $oldUpload !== $stored) {
+            try {
+                $this->objectStorage()->delete($oldUpload);
+            } catch (\Throwable $e) {
+                // best-effort
+            }
+        }
+
+        return $media;
     }
 
     /**
@@ -818,7 +878,7 @@ class ManualUsuarioAdminService
             ],
             ManualBloque::TIPO_MEDIA => [
                 'subtitulo' => null,
-                'snapshot' => ['media_id' => null, 'alt' => '', 'caption' => '', 'url' => null],
+                'snapshot' => ['media_id' => null, 'alt' => '', 'caption' => '', 'url' => null, 'nombre' => ''],
             ],
             ManualBloque::TIPO_FLOW => [
                 'subtitulo' => null,
@@ -917,11 +977,12 @@ class ManualUsuarioAdminService
     /**
      * @return array<string, mixed>
      */
-    private function mapMedia(ManualMedia $media): array
+    public function mapMedia(ManualMedia $media): array
     {
         return [
             'id' => $media->id,
             'path' => $media->path,
+            'nombre' => $media->nombre,
             'alt' => $media->alt,
             'mime' => $media->mime,
             'uploaded_by' => $media->uploaded_by,
