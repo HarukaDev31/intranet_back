@@ -206,7 +206,10 @@ class CalendarActivityController extends Controller
             return response()->json(['success' => false, 'message' => $msg], 400);
         }
         $name = $request->input('name');
-        $colorCode = $request->input('color_code');
+        // exists() es true aunque color_code venga null (quitar color). has() lo trata como ausente.
+        $colorCode = $request->exists('color_code')
+            ? ($request->input('color_code') ?: '')
+            : null;
         $extras = $request->only(['allow_saturday', 'allow_sunday', 'default_priority']);
         if (CalendarActivity::where('name', $name)->where('role_group_id', $roleGroupId)->where('id', '!=', $id)->exists()) {
             return response()->json(['success' => false, 'message' => 'Ya existe una actividad con ese nombre'], 400);
