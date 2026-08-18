@@ -101,6 +101,15 @@ Después enlaza por coincidencia exacta:
 php artisan manual:attach-capturas --strict
 ```
 
+Clonar capturas de **Carga consolidada Abiertos** a **Completados** (mismas fotos, `capture_key` propia). Baja los bytes desde el CDN de producción; no pisa Abiertos ni el copy de Completados. En prod:
+
+```bash
+php artisan manual:clone-abiertos-completados --dry-run
+php artisan manual:clone-abiertos-completados
+```
+
+Opcional: `--source=` / `--target=` para Coordinación o Documentación. `--force` solo reescribe media ya enlazada en Completados.
+
 No hay fallback heurístico silencioso. La transición anterior solo se habilita
 de forma explícita con `--legacy`; úsala para diagnosticar contenido aún no
 resembrado, no para generar el manifiesto definitivo.
