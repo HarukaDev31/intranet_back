@@ -52,12 +52,15 @@ class ManualUsuarioArticuloWriter
 
         $n = 1;
         $this->qa($page->id, $root->id, $n++, '¿Qué es?', $this->fill($this->pick($screen, $role, 'que_es'), $role));
-        $this->qa($page->id, $root->id, $n++, '¿Para qué sirve?', $this->fill($this->pick($screen, $role, 'para_que'), $role));
         $this->qa($page->id, $root->id, $n++, '¿Quién lo utiliza?', $this->fill(
             $this->pick($screen, $role, 'quien', 'Rol {rol}.'),
             $role
         ));
-        $this->qa($page->id, $root->id, $n++, '¿Cuándo utilizarlo?', $this->fill($this->pick($screen, $role, 'cuando'), $role));
+        $this->qa($page->id, $root->id, $n++, '¿Para qué sirve?', $this->formatParaQue($this->pick($screen, $role, 'para_que'), $role));
+        $cuando = trim($this->fill($this->pick($screen, $role, 'cuando', ''), $role));
+        if ($cuando !== '' && $cuando !== 'pendiente de definir') {
+            $this->qa($page->id, $root->id, $n++, '¿Cuándo utilizarlo?', $cuando);
+        }
 
         $pasos = $this->pasosForRole($screen, $role);
 
@@ -217,6 +220,9 @@ class ManualUsuarioArticuloWriter
         ]);
         $m = 1;
         foreach ($captureSteps as $i => $raw) {
+            if (is_array($raw) && !empty($raw['sin_captura'])) {
+                continue;
+            }
             $hintCap = $this->capturaHint($titulo, $raw, $i + 1, $role);
             $stepTitle = isset($steps[$i]['title']) && $steps[$i]['title'] !== ''
                 ? $steps[$i]['title']
@@ -321,13 +327,20 @@ class ManualUsuarioArticuloWriter
     private function normalizeFlowStep($step, array $role)
     {
         if (is_array($step)) {
+            $body = ManualUsuarioPlantillaTextFormatter::formatFlowBody(
+                $this->fill(isset($step['body']) ? $step['body'] : '', $role)
+            );
+
             return [
                 'title' => $this->fill(isset($step['title']) ? $step['title'] : '', $role),
-                'body' => $this->fill(isset($step['body']) ? $step['body'] : '', $role),
+                'body' => $body,
             ];
         }
 
-        return ['title' => '', 'body' => $this->fill((string) $step, $role)];
+        return [
+            'title' => '',
+            'body' => ManualUsuarioPlantillaTextFormatter::formatFlowBody($this->fill((string) $step, $role)),
+        ];
     }
 
     private function stripPasosPrefix($titulo)
@@ -372,10 +385,24 @@ class ManualUsuarioArticuloWriter
 
     private function fill($text, array $role)
     {
+        if (is_array($text)) {
+            return $text;
+        }
+
         return strtr((string) $text, [
             '{rol}' => $role['nombre'],
             '{slug}' => $role['slug'],
         ]);
+    }
+
+    /**
+     * @param  mixed  $paraQue  Texto o lista de viñetas.
+     */
+    private function formatParaQue($paraQue, array $role)
+    {
+        $paraQue = $this->fill($paraQue, $role);
+
+        return ManualUsuarioPlantillaTextFormatter::formatParaQue($paraQue);
     }
 
     private function wipeBlocks($paginaId)

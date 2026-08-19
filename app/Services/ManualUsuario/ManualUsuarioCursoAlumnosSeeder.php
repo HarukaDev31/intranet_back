@@ -58,19 +58,55 @@ class ManualUsuarioCursoAlumnosSeeder
 
         $orden = 1;
         $this->qa($page->id, $root->id, $orden++, '¿Qué es?',
-            'La vista donde aparecen los clientes que se registraron a través del formulario público de inscripción a un curso (curso.probusiness.pe).');
-        $this->qa($page->id, $root->id, $orden++, '¿Para qué sirve?',
-            'Ver inscripciones, cambiar curso o campaña, crear el usuario del aula, generar la constancia y enviar recordatorios de pago.');
+            'Es la vista donde se registran los clientes que se inscriben a un curso mediante el formulario público de inscripción de Pro Business.');
         $this->qa($page->id, $root->id, $orden++, '¿Quién lo utiliza?',
-            'Rol Comercial. Jefe Marketing solo consulta: ve la tabla y puede abrir Ver, pero no cambia listas ni importe.');
-        $this->qa($page->id, $root->id, $orden++, '¿Cuándo utilizarlo?',
-            'Cuando llega una inscripción nueva, hay que crear el aula, emitir constancia, corregir datos o recordar un pago.');
+            "Rol Comercial: puede consultar y gestionar la información de los alumnos según los permisos asignados.\n\nJefe de Marketing: puede consultar la información y abrir el detalle del alumno, pero no puede modificar las listas ni el importe.");
+        $this->qa($page->id, $root->id, $orden++, '¿Para qué sirve?',
+            "Desde esta sección puedes:\n"
+            . "• Consultar las inscripciones.\n"
+            . "• Buscar y filtrar alumnos.\n"
+            . "• Cambiar el curso o la campaña asignada.\n"
+            . "• Crear el usuario del aula virtual.\n"
+            . "• Generar la constancia.\n"
+            . "• Enviar recordatorios de pago.");
 
         $this->writeFlowWithCapturas($page->id, $root->id, $orden, 'Consultar y filtrar alumnos', [
             $this->itemFlujo(
-                'Entrar al listado',
-                'Entra a Pedidos de Curso y abre Alumnos. Ves la tabla; los más recientes primero. Buscar (nombre, documento o correo) y Filtros (fecha, campaña, estado de pago, tipo de curso) solo encuentran la fila: no cambian al alumno. Aplica los filtros para actualizar la tabla. Si no ves a alguien, limpia búsqueda o cambia el filtro.',
-                'Recorta la pestaña Alumnos con buscador, filtros y las primeras filas. Datos ficticios.'
+                'Ingresar al listado',
+                "1. Ingresa a Pedidos de Curso.\n"
+                . "2. Selecciona Alumnos.\n"
+                . "3. Se mostrará el listado de alumnos registrados.\n"
+                . "4. Por defecto, los registros más recientes aparecen primero.",
+                'Recorta la pestaña Alumnos con buscador, filtros y las primeras filas. Datos ficticios.',
+                [
+                    'capture_key' => 'curso-alumnos__consultar-y-filtrar-alumnos__paso-01-entrar-al-listado',
+                ]
+            ),
+            $this->itemFlujo(
+                'Buscar un alumno',
+                "Puedes buscar un alumno utilizando cualquiera de los siguientes datos:\n"
+                . "• Nombre.\n"
+                . "• Documento.\n"
+                . "• Correo electrónico.\n\n"
+                . "Importante: la búsqueda solo permite localizar registros. No modifica la información del alumno.",
+                '',
+                ['sin_captura' => true]
+            ),
+            $this->itemFlujo(
+                'Filtrar alumnos',
+                "Puedes utilizar los filtros disponibles para consultar registros específicos:\n"
+                . "• Fecha.\n"
+                . "• Campaña.\n"
+                . "• Estado de pago.\n"
+                . "• Tipo de curso.\n\n"
+                . "Selecciona el filtro que necesites y aplica los cambios para actualizar el listado.\n\n"
+                . "Si no encuentras al alumno que buscas:\n"
+                . "1. Limpia el campo de búsqueda.\n"
+                . "2. Revisa los filtros aplicados.\n"
+                . "3. Cambia o elimina el filtro que pueda estar limitando los resultados.\n"
+                . "4. Vuelve a consultar el listado.",
+                '',
+                ['sin_captura' => true]
             ),
         ]);
 
@@ -259,6 +295,9 @@ class ManualUsuarioCursoAlumnosSeeder
         ]);
         $m = 1;
         foreach ($steps as $i => $step) {
+            if (!empty($step['sin_captura'])) {
+                continue;
+            }
             $accion = isset($step['title']) ? trim((string) $step['title']) : '';
             if ($accion === '') {
                 $accion = 'Paso ' . ($i + 1);
@@ -320,6 +359,7 @@ class ManualUsuarioCursoAlumnosSeeder
             'expectedHash',
             'enabled',
             'url',
+            'sin_captura',
         ] as $field) {
             if (array_key_exists($field, $step)) {
                 $config[$field] = $step[$field];

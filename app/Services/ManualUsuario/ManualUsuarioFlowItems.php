@@ -27,6 +27,7 @@ trait ManualUsuarioFlowItems
                 'capture_key',
                 'capture_alias_of',
                 'capture_output',
+                'sin_captura',
                 'type',
                 'target',
                 'actions',
@@ -38,7 +39,7 @@ trait ManualUsuarioFlowItems
                 'enabled',
                 'url',
             ] as $field) {
-                if (array_key_exists($field, $capture) && $capture[$field] !== '') {
+                if (array_key_exists($field, $capture)) {
                     $item[$field] = $capture[$field];
                 }
             }
