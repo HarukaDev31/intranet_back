@@ -3119,7 +3119,9 @@ class CotizacionFinalController extends Controller
         $sheet = $spreadsheet->getSheet(0);
 
         $rowImpuestos = $this->findMainSheetRowByColumnBLabelExact($sheet, 'IMPUESTOS');
-        $rowServicio = $this->findMainSheetRowByColumnBLabelExact($sheet, 'SERVICIO DE IMPORTACIÃ“N');
+        $rowServicio = $this->findMainSheetRowByColumnBLabelExact($sheet, 'SERVICIO DE IMPORTACIÓN');
+        $rowRecargosOperativos=$this->findMainSheetRowByColumnBLabelExact($sheet, 'RECARGOS OPERATIVOS');
+        $rowDescuento=$this->findMainSheetRowByColumnBLabelExact($sheet, 'DESCUENTO APLICABLE');
         if ($rowServicio === null) {
             $rowServicio = $this->findMainSheetRowByColumnBLabelContains(
                 $sheet,
@@ -3140,6 +3142,8 @@ class CotizacionFinalController extends Controller
         $fob = $this->getMainSheetFobFinalAmount($sheet);
         $logisticaServicioImportacion = $this->getMainSheetRowAmount($sheet, $rowServicio);
         $serviciosExtraLogistica = $this->sumMainSheetLogisticaServiciosExtraFromColumnB($sheet);
+        $recargos = $this->getMainSheetRowAmount($sheet, $rowRecargosOperativos);
+        $descuento = $this->getMainSheetRowAmount($sheet, $rowDescuento);
         $logistica = round($logisticaServicioImportacion, 2);
         $impuestos = $this->getMainSheetRowAmount($sheet, $rowImpuestos);
 
@@ -3151,8 +3155,8 @@ class CotizacionFinalController extends Controller
         $tarifa = 0.0;
         if ($volumen > 0 && $logisticaServicioImportacion > 0) {
             $tarifa = $volumen < 1
-                ? $logisticaServicioImportacion
-                : round($logisticaServicioImportacion / $volumen, 2);
+                ? $logisticaServicioImportacion + $recargos - $descuento
+                : round(($logisticaServicioImportacion + $recargos - $descuento) / $volumen, 2);
         }
 
         $peso = $this->parsePesoFromMainSheetCell($sheet, 'J9');
@@ -3176,6 +3180,8 @@ class CotizacionFinalController extends Controller
             'monto_final' => $logistica,
             'impuestos_final' => $impuestos,
             'logistica_final' => $logistica,
+            'recargos'=>$recargos,
+            'descuento'=>$descuento,
             'fob_final' => $fob,
             'tarifa_final' => $tarifa,
             'volumen_final' => $volumen,
