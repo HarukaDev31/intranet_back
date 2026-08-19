@@ -4,11 +4,14 @@ namespace App\Services\CargaConsolidada\CotizacionFinal;
 
 use App\Jobs\SendReminderPagoWhatsAppJob;
 use App\Models\CargaConsolidada\Contenedor;
+use App\Traits\FileTrait;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
 class ReminderPagoWhatsappService
 {
+    use FileTrait;
+
     /**
      * @return array{success:bool,message?:string,data?:array<string,mixed>}
      */
@@ -31,12 +34,13 @@ class ReminderPagoWhatsappService
                 'carga' => $payload['carga'],
                 'message' => $payload['message'],
                 'has_pdf' => $payload['has_pdf'],
+                'pdf_url' => $payload['pdf_url'],
             ],
         ];
     }
 
     /**
-     * @return array{nombre:string,phone:string,phone_id:string,carga:string,message:string,has_pdf:bool}|null
+     * @return array{nombre:string,phone:string,phone_id:string,carga:string,message:string,has_pdf:bool,pdf_url:?string}|null
      */
     public function buildPayload(int $idCotizacion): ?array
     {
@@ -99,6 +103,7 @@ class ReminderPagoWhatsappService
             . "\nPor favor debe enviar el comprobante de pago a la brevedad.";
 
         $phone = $this->normalizePhone((string) ($cotizacion->telefono ?? ''));
+        $pdfUrl = $this->cdnStorageUrl($cotizacion->cotizacion_final_url ?? null);
 
         return [
             'nombre' => (string) ($cotizacion->nombre ?? ''),
@@ -106,7 +111,8 @@ class ReminderPagoWhatsappService
             'phone_id' => $phone !== '' ? $phone . '@c.us' : '',
             'carga' => $carga,
             'message' => $message,
-            'has_pdf' => !empty($cotizacion->cotizacion_final_url),
+            'has_pdf' => $pdfUrl !== null && $pdfUrl !== '',
+            'pdf_url' => $pdfUrl,
         ];
     }
 
