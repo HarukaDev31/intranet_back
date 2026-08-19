@@ -5,6 +5,7 @@ namespace App\Services\SoporteTi;
 use App\Models\SoporteTi\SoporteTiChatMiembro;
 use App\Models\SoporteTi\SoporteTiChatSala;
 use App\Models\SoporteTi\SoporteTiSolicitud;
+use App\Support\Cache\CachePayloadNormalizer;
 use Carbon\Carbon;
 use Illuminate\Cache\TaggableStore;
 use Illuminate\Support\Facades\Cache;
@@ -15,7 +16,7 @@ use Illuminate\Support\Facades\Cache;
  */
 class SoporteTiCacheService
 {
-    const VERSION = 'v1';
+    const VERSION = 'v2';
 
     const TAG = 'soporte-ti';
 
@@ -403,22 +404,31 @@ class SoporteTiCacheService
 
     protected function remember($key, $ttl, callable $resolver)
     {
-        return Cache::remember($key, $ttl, function () use ($resolver) {
-            $value = $resolver();
+        $cached = Cache::get($key);
+        if (is_array($cached) && ! CachePayloadNormalizer::containsUnsafeCachedValue($cached)) {
+            return $cached;
+        }
 
-            return is_array($value) ? $value : (array) $value;
-        });
+        $payload = CachePayloadNormalizer::resolveArray($resolver);
+        Cache::put($key, $payload, $ttl);
+
+        return $payload;
     }
 
     protected function rememberTagged($key, $ttl, callable $resolver)
     {
         $store = Cache::getStore();
         if ($store instanceof TaggableStore) {
-            return Cache::tags(array(self::TAG))->remember($key, $ttl, function () use ($resolver) {
-                $value = $resolver();
+            $tags = Cache::tags([self::TAG]);
+            $cached = $tags->get($key);
+            if (is_array($cached) && ! CachePayloadNormalizer::containsUnsafeCachedValue($cached)) {
+                return $cached;
+            }
 
-                return is_array($value) ? $value : (array) $value;
-            });
+            $payload = CachePayloadNormalizer::resolveArray($resolver);
+            $tags->put($key, $payload, $ttl);
+
+            return $payload;
         }
 
         return $this->remember($key, $ttl, $resolver);

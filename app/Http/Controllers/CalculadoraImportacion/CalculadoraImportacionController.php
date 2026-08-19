@@ -882,15 +882,6 @@ class CalculadoraImportacionController extends Controller
                 return response()->json($payload, $code);
             }
 
-            // Asegura orden consistente incluso cuando el payload viene desde caché previa.
-            if (
-                isset($payload['success'], $payload['data']['calculadora']) &&
-                $payload['success'] === true &&
-                is_object($payload['data']['calculadora'])
-            ) {
-                $this->ordenarProveedoresPorId($payload['data']['calculadora']);
-            }
-
             return response()->json($payload);
         } catch (\Exception $e) {
             return response()->json([

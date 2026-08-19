@@ -3,6 +3,7 @@
 namespace App\Services\WaCopiloto;
 
 use App\Models\Usuario;
+use App\Support\Cache\CachePayloadNormalizer;
 use App\Support\WhatsApp\WaJsonUtf8;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
@@ -12,7 +13,7 @@ use Illuminate\Support\Facades\Cache;
  */
 class WaCopilotoCacheService
 {
-    const VERSION = 'v1';
+    const VERSION = 'v2';
 
     /**
      * @param  int  $sessionId
@@ -231,11 +232,15 @@ class WaCopilotoCacheService
      */
     protected function remember($key, $ttl, callable $resolver)
     {
-        return Cache::remember($key, $ttl, function () use ($resolver) {
-            $value = $resolver();
+        $cached = Cache::get($key);
+        if (is_array($cached) && ! CachePayloadNormalizer::containsUnsafeCachedValue($cached)) {
+            return $cached;
+        }
 
-            return is_array($value) ? $value : (array) $value;
-        });
+        $payload = CachePayloadNormalizer::resolveArray($resolver);
+        Cache::put($key, $payload, $ttl);
+
+        return $payload;
     }
 
     /**

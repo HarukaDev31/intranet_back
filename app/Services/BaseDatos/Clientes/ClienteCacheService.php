@@ -3,12 +3,13 @@
 namespace App\Services\BaseDatos\Clientes;
 
 use App\Models\BaseDatos\Clientes\Cliente;
+use App\Support\Cache\CachePayloadNormalizer;
 use Illuminate\Cache\TaggableStore;
 use Illuminate\Support\Facades\Cache;
 
 class ClienteCacheService
 {
-    private const VERSION = 'v2';
+    private const VERSION = 'v3';
     private const TAG = 'base-datos-clientes';
 
     public function rememberIndex(array $params, callable $resolver): array
@@ -41,16 +42,32 @@ class ClienteCacheService
     {
         $store = Cache::getStore();
         if ($store instanceof TaggableStore) {
-            return Cache::tags([self::TAG])->remember($key, $ttl, function () use ($resolver) {
-                $value = $resolver();
-                return is_array($value) ? $value : (array) $value;
-            });
+            $tags = Cache::tags([self::TAG]);
+            $cached = $tags->get($key);
+            if (is_array($cached) && ! CachePayloadNormalizer::containsUnsafeCachedValue($cached)) {
+                return $cached;
+            }
+
+            $payload = CachePayloadNormalizer::resolveArray($resolver);
+            $tags->put($key, $payload, $ttl);
+
+            return $payload;
         }
 
-        return Cache::remember($key, $ttl, function () use ($resolver) {
-            $value = $resolver();
-            return is_array($value) ? $value : (array) $value;
-        });
+        return $this->remember($key, $ttl, $resolver);
+    }
+
+    private function remember(string $key, $ttl, callable $resolver): array
+    {
+        $cached = Cache::get($key);
+        if (is_array($cached) && ! CachePayloadNormalizer::containsUnsafeCachedValue($cached)) {
+            return $cached;
+        }
+
+        $payload = CachePayloadNormalizer::resolveArray($resolver);
+        Cache::put($key, $payload, $ttl);
+
+        return $payload;
     }
 
     private function flushTag(): void
@@ -72,4 +89,3 @@ class ClienteCacheService
         return $params;
     }
 }
-
