@@ -1267,7 +1267,7 @@ class CotizacionFinalController extends Controller
     }
 
     /**
-     * Vista previa del recordatorio de pago: mensaje y si hay PDF de cotización final.
+     * Vista previa del recordatorio de pago: mensaje y Excel de cotización final (CDN).
      */
     public function previewReminderPago($idCotizacion)
     {

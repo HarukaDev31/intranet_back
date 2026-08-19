@@ -33,14 +33,14 @@ class ReminderPagoWhatsappService
                 'phone' => $payload['phone'],
                 'carga' => $payload['carga'],
                 'message' => $payload['message'],
-                'has_pdf' => $payload['has_pdf'],
-                'pdf_url' => $payload['pdf_url'],
+                'has_excel' => $payload['has_excel'],
+                'excel_url' => $payload['excel_url'],
             ],
         ];
     }
 
     /**
-     * @return array{nombre:string,phone:string,phone_id:string,carga:string,message:string,has_pdf:bool,pdf_url:?string}|null
+     * @return array{nombre:string,phone:string,phone_id:string,carga:string,message:string,has_excel:bool,excel_url:?string}|null
      */
     public function buildPayload(int $idCotizacion): ?array
     {
@@ -103,7 +103,7 @@ class ReminderPagoWhatsappService
             . "\nPor favor debe enviar el comprobante de pago a la brevedad.";
 
         $phone = $this->normalizePhone((string) ($cotizacion->telefono ?? ''));
-        $pdfUrl = $this->cdnStorageUrl($cotizacion->cotizacion_final_url ?? null);
+        $excelUrl = $this->cdnStorageUrl($cotizacion->cotizacion_final_url ?? null);
 
         return [
             'nombre' => (string) ($cotizacion->nombre ?? ''),
@@ -111,8 +111,8 @@ class ReminderPagoWhatsappService
             'phone_id' => $phone !== '' ? $phone . '@c.us' : '',
             'carga' => $carga,
             'message' => $message,
-            'has_pdf' => $pdfUrl !== null && $pdfUrl !== '',
-            'pdf_url' => $pdfUrl,
+            'has_excel' => $excelUrl !== null && $excelUrl !== '',
+            'excel_url' => $excelUrl,
         ];
     }
 
