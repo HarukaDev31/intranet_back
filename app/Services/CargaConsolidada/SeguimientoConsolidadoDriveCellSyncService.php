@@ -35,19 +35,47 @@ class SeguimientoConsolidadoDriveCellSyncService
      *
      * @return array{success:bool, message?:string, cells_upserted?:int, cells_history?:int}
      */
-    public function pullFromDrive(int $idContenedor, string $trigger = 'command'): array
+    public function pullFromDrive(int $idContenedor, string $trigger = 'command', SeguimientoConsolidadoFlowContext $flow = null): array
     {
+        $flowContext = $flow ? $flow->baseContext() : [
+            'flow' => 'seguimiento_drive',
+            'id_contenedor' => $idContenedor,
+        ];
+
+        Log::info(self::LOG_PREFIX . ' Pull iniciado', array_merge($flowContext, [
+            'step' => 'pull_inicio',
+            'trigger' => $trigger,
+        ]));
+
         $contenedor = Contenedor::find($idContenedor);
         if (!$contenedor) {
+            Log::warning(self::LOG_PREFIX . ' Pull omitido: consolidado no encontrado', array_merge($flowContext, [
+                'step' => 'pull_omitido',
+                'trigger' => $trigger,
+                'reason' => 'consolidado_no_encontrado',
+            ]));
+
             return ['success' => false, 'message' => 'Consolidado no encontrado'];
         }
 
         $fileId = trim((string) ($contenedor->excel_seguimiento_drive_file_id ?? ''));
         if ($fileId === '') {
+            Log::warning(self::LOG_PREFIX . ' Pull omitido: sin file_id', array_merge($flowContext, [
+                'step' => 'pull_omitido',
+                'trigger' => $trigger,
+                'reason' => 'sin excel_seguimiento_drive_file_id',
+            ]));
+
             return ['success' => false, 'message' => 'Consolidado sin excel_seguimiento_drive_file_id'];
         }
 
         if (!$this->driveService->isConfigured()) {
+            Log::warning(self::LOG_PREFIX . ' Pull omitido: Drive no configurado', array_merge($flowContext, [
+                'step' => 'pull_omitido',
+                'trigger' => $trigger,
+                'reason' => 'drive_no_configurado',
+            ]));
+
             return ['success' => false, 'message' => 'Google Drive no configurado'];
         }
 
@@ -58,8 +86,16 @@ class SeguimientoConsolidadoDriveCellSyncService
             $contenedor->excel_seguimiento_file_name,
             $trigger
         );
+        $startedAt = microtime(true);
 
         try {
+            Log::info(self::LOG_PREFIX . ' Descargando Excel desde Drive', array_merge($flowContext, [
+                'step' => 'pull_descarga_inicio',
+                'trigger' => $trigger,
+                'file_id' => $fileId,
+                'snapshot_id' => $snapshotId,
+            ]));
+
             if (!$this->driveService->downloadFileByIdToPath($fileId, $tmpPath)) {
                 throw new \RuntimeException('No se pudo descargar el Excel desde Drive');
             }
@@ -78,6 +114,12 @@ class SeguimientoConsolidadoDriveCellSyncService
                 );
                 $cellsUpserted += $upserted;
                 $cellsHistory += $history;
+            } else {
+                Log::warning(self::LOG_PREFIX . ' Pull: hoja Cotizaciones no encontrada', array_merge($flowContext, [
+                    'step' => 'pull_hoja_faltante',
+                    'trigger' => $trigger,
+                    'sheet' => 'Cotizaciones',
+                ]));
             }
 
             $seguimientoSheet = $spreadsheet->getSheetByName('Seguimiento');
@@ -117,16 +159,24 @@ class SeguimientoConsolidadoDriveCellSyncService
                 );
                 $cellsUpserted += $upserted;
                 $cellsHistory += $history;
+            } else {
+                Log::warning(self::LOG_PREFIX . ' Pull: hoja Seguimiento no encontrada', array_merge($flowContext, [
+                    'step' => 'pull_hoja_faltante',
+                    'trigger' => $trigger,
+                    'sheet' => 'Seguimiento',
+                ]));
             }
 
             $this->repository->finishSnapshot($snapshotId, $cellsUpserted, $cellsHistory, 'ok');
 
-            Log::info(self::LOG_PREFIX . ' Pull completado', [
-                'id_contenedor' => $idContenedor,
+            Log::info(self::LOG_PREFIX . ' Pull completado', array_merge($flowContext, [
+                'step' => 'pull_ok',
                 'trigger' => $trigger,
                 'cells_upserted' => $cellsUpserted,
                 'cells_history' => $cellsHistory,
-            ]);
+                'snapshot_id' => $snapshotId,
+                'duration_ms' => (int) round((microtime(true) - $startedAt) * 1000),
+            ]));
 
             return [
                 'success' => true,
@@ -136,12 +186,17 @@ class SeguimientoConsolidadoDriveCellSyncService
         } catch (\Throwable $e) {
             $this->repository->finishSnapshot($snapshotId, 0, 0, 'failed', $e->getMessage());
 
-            Log::error(self::LOG_PREFIX . ' Pull fallido', [
-                'id_contenedor' => $idContenedor,
+            Log::error(self::LOG_PREFIX . ' Pull fallido', array_merge($flowContext, [
+                'step' => 'pull_fallido',
                 'trigger' => $trigger,
+                'snapshot_id' => $snapshotId,
                 'error' => $e->getMessage(),
-                'exception' => $e,
-            ]);
+                'exception_class' => get_class($e),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString(),
+                'duration_ms' => (int) round((microtime(true) - $startedAt) * 1000),
+            ]));
             // Asegura alerta Slack aunque LOG_STACK_CHANNELS no incluya el canal slack.
             try {
                 Log::channel('slack')->error(self::LOG_PREFIX . ' Pull fallido', [
@@ -164,31 +219,67 @@ class SeguimientoConsolidadoDriveCellSyncService
         }
     }
 
-    public function applyManualCellsToLocalFile(int $idContenedor, string $localPath): void
+    /**
+     * @return array{changed:bool, cotizaciones_changed:bool, seguimiento_changed:bool}
+     */
+    public function applyManualCellsToLocalFile(int $idContenedor, string $localPath, SeguimientoConsolidadoFlowContext $flow = null): array
     {
+        $flowContext = $flow ? $flow->baseContext() : [
+            'flow' => 'seguimiento_drive',
+            'id_contenedor' => $idContenedor,
+        ];
+
         if (!is_file($localPath)) {
-            return;
+            Log::warning(self::LOG_PREFIX . ' Apply manual omitido: archivo inexistente', array_merge($flowContext, [
+                'step' => 'apply_manual_omitido',
+                'local_path' => $localPath,
+            ]));
+
+            return ['changed' => false, 'cotizaciones_changed' => false, 'seguimiento_changed' => false];
         }
 
         $spreadsheet = IOFactory::load($localPath);
-        $changed = false;
+        $cotizacionesChanged = false;
+        $seguimientoChanged = false;
 
         $cotizacionesSheet = $spreadsheet->getSheetByName('Cotizaciones');
         if ($cotizacionesSheet !== null) {
-            $changed = $this->applyManualCotizacionesCells($cotizacionesSheet, $idContenedor) || $changed;
+            $cotizacionesChanged = $this->applyManualCotizacionesCells($cotizacionesSheet, $idContenedor);
         }
 
         $seguimientoSheet = $spreadsheet->getSheetByName('Seguimiento');
         if ($seguimientoSheet !== null) {
-            $changed = $this->applyManualSeguimientoNotes($seguimientoSheet, $idContenedor) || $changed;
+            $seguimientoChanged = $this->applyManualSeguimientoNotes($seguimientoSheet, $idContenedor);
         }
 
+        $changed = $cotizacionesChanged || $seguimientoChanged;
+
         if (!$changed) {
-            return;
+            Log::info(self::LOG_PREFIX . ' Apply manual: sin cambios', array_merge($flowContext, [
+                'step' => 'apply_manual_sin_cambios',
+            ]));
+
+            return [
+                'changed' => false,
+                'cotizaciones_changed' => false,
+                'seguimiento_changed' => false,
+            ];
         }
 
         $writer = new Xlsx($spreadsheet);
         $writer->save($localPath);
+
+        Log::info(self::LOG_PREFIX . ' Apply manual: celdas escritas en archivo local', array_merge($flowContext, [
+            'step' => 'apply_manual_ok',
+            'cotizaciones_changed' => $cotizacionesChanged,
+            'seguimiento_changed' => $seguimientoChanged,
+        ]));
+
+        return [
+            'changed' => true,
+            'cotizaciones_changed' => $cotizacionesChanged,
+            'seguimiento_changed' => $seguimientoChanged,
+        ];
     }
 
     /**

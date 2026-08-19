@@ -46,6 +46,8 @@ class SeguimientoConsolidadoSyncLinkedCommand extends Command
         }
 
         Log::info('[SeguimientoDrive] Scheduler sync-linked encoló jobs', [
+            'flow' => 'seguimiento_drive',
+            'step' => 'scheduler_sync_linked',
             'total_vinculados' => $ids->count(),
             'encolados' => $encolados,
             'omitidos_debounce' => $omitidos,

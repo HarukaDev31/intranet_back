@@ -88,8 +88,9 @@ class ProveedorArriveDateHistoryService
      * @param array<int> $idProveedores
      * @return array<int, array{
      *   has_history:bool,
+     *   has_history_for_contenedor:bool,
      *   latest:?string,
-     *   latest_by_field:array<string, array{value:?string,id_contenedor:?int}>
+     *   latest_by_field:array<string, array{value:?string,id_contenedor:?int,created_at?:string}>
      * }>
      */
     public function historyContextByProveedor(array $idProveedores, ?int $idContenedor = null): array
@@ -98,6 +99,8 @@ class ProveedorArriveDateHistoryService
         if ($idProveedores === [] || !Schema::hasTable('contenedor_proveedor_arrive_date_history')) {
             return [];
         }
+
+        $idContenedorFilter = $idContenedor !== null && $idContenedor > 0 ? (int) $idContenedor : null;
 
         $counts = DB::table('contenedor_proveedor_arrive_date_history')
             ->whereIn('id_proveedor', $idProveedores)
@@ -114,11 +117,16 @@ class ProveedorArriveDateHistoryService
 
         $latestByProveedor = [];
         $latestByField = [];
+        $hasHistoryForContenedor = [];
         foreach ($latestRows as $row) {
             $idProveedor = (int) $row->id_proveedor;
             $field = (string) $row->field;
             $rowContenedor = $row->id_contenedor !== null ? (int) $row->id_contenedor : null;
             $value = self::normalizeDate($row->value);
+
+            if ($idContenedorFilter !== null && $rowContenedor === $idContenedorFilter) {
+                $hasHistoryForContenedor[$idProveedor] = true;
+            }
 
             if (!isset($latestByField[$idProveedor][$field])) {
                 $latestByField[$idProveedor][$field] = [
@@ -132,8 +140,8 @@ class ProveedorArriveDateHistoryService
                 continue;
             }
 
-            if ($idContenedor !== null && $idContenedor > 0) {
-                if ($rowContenedor !== $idContenedor) {
+            if ($idContenedorFilter !== null) {
+                if ($rowContenedor !== $idContenedorFilter) {
                     continue;
                 }
             }
@@ -147,6 +155,7 @@ class ProveedorArriveDateHistoryService
         foreach ($idProveedores as $idProveedor) {
             $context[$idProveedor] = [
                 'has_history' => ((int) ($counts[$idProveedor] ?? 0)) > 0,
+                'has_history_for_contenedor' => !empty($hasHistoryForContenedor[$idProveedor]),
                 'latest' => $latestByProveedor[$idProveedor] ?? null,
                 'latest_by_field' => $latestByField[$idProveedor] ?? [],
             ];
@@ -198,11 +207,37 @@ class ProveedorArriveDateHistoryService
         }
 
         $latestInContenedor = $context['latest'] ?? null;
-        if (!empty($context['has_history']) && $latestInContenedor !== null) {
+        if (!empty($context['has_history_for_contenedor']) && $latestInContenedor !== null) {
             return self::normalizeDate($latestInContenedor);
         }
 
+        if (empty($context['has_history_for_contenedor'])) {
+            return $this->fallbackFechaDesdeProveedor($arriveDate, $arriveChina);
+        }
+
         return null;
+    }
+
+    /**
+     * Fecha en ficha del proveedor (arrive_date / arrive_date_china) sin filtro roleo.
+     *
+     * @param mixed $arriveDate
+     * @param mixed $arriveChina
+     */
+    public function fallbackFechaDesdeProveedor($arriveDate, $arriveChina): ?string
+    {
+        $peru = self::normalizeDate($arriveDate);
+        $china = self::normalizeDate($arriveChina);
+
+        if ($peru !== null && $china !== null) {
+            return $peru;
+        }
+
+        if ($peru !== null) {
+            return $peru;
+        }
+
+        return $china;
     }
 
     /**
@@ -217,6 +252,11 @@ class ProveedorArriveDateHistoryService
         }
 
         if ($idContenedor === null || $idContenedor <= 0) {
+            return $current;
+        }
+
+        // Sin historial de fechas en ESTE consolidado: confiar en la ficha (misma fuente que coordinación).
+        if (empty($context['has_history_for_contenedor'])) {
             return $current;
         }
 
