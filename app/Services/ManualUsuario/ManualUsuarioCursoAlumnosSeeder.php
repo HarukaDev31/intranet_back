@@ -60,7 +60,8 @@ class ManualUsuarioCursoAlumnosSeeder
         $this->qa($page->id, $root->id, $orden++, '¿Qué es?',
             'Es la vista donde se registran los clientes que se inscriben a un curso mediante el formulario público de inscripción de Pro Business.');
         $this->qa($page->id, $root->id, $orden++, '¿Quién lo utiliza?',
-            "Rol Comercial: puede consultar y gestionar la información de los alumnos según los permisos asignados.\n\nJefe de Marketing: puede consultar la información y abrir el detalle del alumno, pero no puede modificar las listas ni el importe.");
+            "1. Rol Comercial: puede consultar y gestionar la información de los alumnos según los permisos asignados.\n"
+            . "2. Jefe de Marketing: puede consultar la información y abrir el detalle del alumno, pero no puede modificar las listas ni el importe.");
         $this->qa($page->id, $root->id, $orden++, '¿Para qué sirve?',
             "Desde esta sección puedes:\n"
             . "• Consultar las inscripciones.\n"
@@ -84,27 +85,28 @@ class ManualUsuarioCursoAlumnosSeeder
             ),
             $this->itemFlujo(
                 'Buscar un alumno',
-                "Puedes buscar un alumno utilizando cualquiera de los siguientes datos:\n"
+                "1. Escribe en el buscador cualquiera de estos datos:\n"
                 . "• Nombre.\n"
                 . "• Documento.\n"
-                . "• Correo electrónico.\n\n"
-                . "Importante: la búsqueda solo permite localizar registros. No modifica la información del alumno.",
+                . "• Correo electrónico.\n"
+                . "2. El listado se actualiza con los resultados encontrados.\n"
+                . "3. Importante: la búsqueda solo permite localizar registros. No modifica la información del alumno.",
                 '',
                 ['sin_captura' => true]
             ),
             $this->itemFlujo(
                 'Filtrar alumnos',
-                "Puedes utilizar los filtros disponibles para consultar registros específicos:\n"
+                "1. Utiliza los filtros disponibles:\n"
                 . "• Fecha.\n"
                 . "• Campaña.\n"
                 . "• Estado de pago.\n"
-                . "• Tipo de curso.\n\n"
-                . "Selecciona el filtro que necesites y aplica los cambios para actualizar el listado.\n\n"
-                . "Si no encuentras al alumno que buscas:\n"
-                . "1. Limpia el campo de búsqueda.\n"
-                . "2. Revisa los filtros aplicados.\n"
-                . "3. Cambia o elimina el filtro que pueda estar limitando los resultados.\n"
-                . "4. Vuelve a consultar el listado.",
+                . "• Tipo de curso.\n"
+                . "2. Selecciona el filtro que necesites y aplica los cambios para actualizar el listado.\n"
+                . "3. Si no encuentras al alumno que buscas:\n"
+                . "• Limpia el campo de búsqueda.\n"
+                . "• Revisa los filtros aplicados.\n"
+                . "• Cambia o elimina el filtro que pueda estar limitando los resultados.\n"
+                . "• Vuelve a consultar el listado.",
                 '',
                 ['sin_captura' => true]
             ),
@@ -113,12 +115,19 @@ class ManualUsuarioCursoAlumnosSeeder
         $this->writeFlowWithCapturas($page->id, $root->id, $orden, 'Cambiar Curso, Campaña o Usuario', [
             $this->itemFlujo(
                 'Curso y Campaña',
-                'Ubica la fila. Curso y Campaña son listas (no texto fijo). En Curso elige Virtual o En vivo; se guarda al elegir, sin otro botón. En Campaña elige la campaña; también se guarda al elegir. Si la lista no se abre, tu vista es solo consulta: pide el cambio a quien sí edita Alumnos.',
+                "1. Ubica la fila del alumno.\n"
+                . "2. Curso y Campaña son listas (no texto fijo).\n"
+                . "3. En Curso elige Virtual o En vivo; se guarda al elegir, sin otro botón.\n"
+                . "4. En Campaña elige la campaña; también se guarda al elegir.\n"
+                . "5. Si la lista no se abre, tu vista es solo consulta: pide el cambio a quien sí edita Alumnos.",
                 'Recorta las listas Curso y Campaña de una fila. Datos ficticios.'
             ),
             $this->itemFlujo(
                 'Usuario a Creado',
-                'En Usuario elige Creado si estaba Pendiente. Se guarda al elegir y crea el usuario del aula: verás un aviso con Usuario y Password. Anótalos. Constancia no se elige aquí: sale sola cuando ya hay constancia generada.',
+                "1. En Usuario elige Creado si estaba Pendiente.\n"
+                . "2. Se guarda al elegir y crea el usuario del aula: verás un aviso con Usuario y Password.\n"
+                . "3. Anótalos.\n"
+                . "4. Constancia no se elige aquí: sale sola cuando ya hay constancia generada.",
                 'Recorta la lista Usuario en Creado y el aviso de Moodle. Datos ficticios.'
             ),
         ]);
@@ -126,12 +135,17 @@ class ManualUsuarioCursoAlumnosSeeder
         $this->writeFlowWithCapturas($page->id, $root->id, $orden, 'Acciones de la fila', [
             $this->itemFlujo(
                 'Importe y estado',
-                'A la derecha: Ver (ojo), Eliminar, Guardar e ícono de mensaje. Si cambia el precio, escríbelo en Importe y pulsa Guardar (disquete). No es lista. Estado (Pendiente, Adelanto, Pagado, Sobrepago) está bloqueado: se calcula con Importe vs. lo pagado en Pagos. No lo elijas a mano.',
+                "1. A la derecha verás Ver (ojo), Eliminar, Guardar e ícono de mensaje.\n"
+                . "2. Si cambia el precio, escríbelo en Importe y pulsa Guardar (disquete). No es lista.\n"
+                . "3. Estado (Pendiente, Adelanto, Pagado, Sobrepago) está bloqueado: se calcula con Importe vs. lo pagado en Pagos.\n"
+                . "4. No lo elijas a mano.",
                 'Recorta Importe, Guardar y el Estado bloqueado de una fila. Datos ficticios.'
             ),
             $this->itemFlujo(
                 'Mensaje o eliminar',
-                'Mensaje envía un recordatorio de pago por WhatsApp: confirma en la ventana; no abre otra pantalla. Eliminar pide confirmación y no se deshace. Si no ves Guardar, Mensaje ni Eliminar, solo puedes Ver.',
+                "1. Mensaje envía un recordatorio de pago por WhatsApp: confirma en la ventana; no abre otra pantalla.\n"
+                . "2. Eliminar pide confirmación y no se deshace.\n"
+                . "3. Si no ves Guardar, Mensaje ni Eliminar, solo puedes Ver.",
                 'Recorta Mensaje o la confirmación de Eliminar. Datos ficticios.'
             ),
         ]);
@@ -139,12 +153,17 @@ class ManualUsuarioCursoAlumnosSeeder
         $this->writeFlowWithCapturas($page->id, $root->id, $orden, 'Ver la ficha del alumno', [
             $this->itemFlujo(
                 'Abrir la ficha',
-                'Pulsa Ver (ojo). Entras a la ficha del pedido: es otra pantalla, no un recuadro. Regresar vuelve al listado. A la izquierda: Información del alumno (nombre, DNI, correo, WhatsApp, nacimiento, sexo, red social, país y, si es Perú, departamento / provincia / distrito).',
+                "1. Pulsa Ver (ojo).\n"
+                . "2. Entras a la ficha del pedido: es otra pantalla, no un recuadro.\n"
+                . "3. Regresar vuelve al listado.\n"
+                . "4. A la izquierda: Información del alumno (nombre, DNI, correo, WhatsApp, nacimiento, sexo, red social, país y, si es Perú, departamento / provincia / distrito).",
                 'Recorta la ficha con Información del alumno. Datos ficticios.'
             ),
             $this->itemFlujo(
                 'Aula o Crear usuario',
-                'Si Usuario está en Creado, a la derecha aparece ACCESO AULA VIRTUAL (usuario y contraseña, solo lectura) y el botón de constancia. Si el pedido ya está pagado y el usuario aún no está Creado, aparece Crear usuario (misma acción que elegir Creado en la tabla). Si no ves el lápiz de editar, esta ficha es solo consulta.',
+                "1. Si Usuario está en Creado, a la derecha aparece ACCESO AULA VIRTUAL (usuario y contraseña, solo lectura) y el botón de constancia.\n"
+                . "2. Si el pedido ya está pagado y el usuario aún no está Creado, aparece Crear usuario (misma acción que elegir Creado en la tabla).\n"
+                . "3. Si no ves el lápiz de editar, esta ficha es solo consulta.",
                 'Recorta ACCESO AULA VIRTUAL o el botón Crear usuario. Datos ficticios.'
             ),
         ]);
@@ -152,12 +171,20 @@ class ManualUsuarioCursoAlumnosSeeder
         $this->writeFlowWithCapturas($page->id, $root->id, $orden, 'Editar datos en la ficha', [
             $this->itemFlujo(
                 'Lápiz y campos',
-                'En la ficha, pulsa el lápiz junto a Información del alumno. Los campos pasan a editables. Nombre, DNI, correo y WhatsApp se escriben. Fecha de nacimiento se elige en el calendario. Sexo, red social, país, departamento, provincia y distrito son listas. Provincia se habilita al elegir departamento; distrito, al elegir provincia (solo si el país es Perú). Si no hay lápiz, no editas desde aquí.',
+                "1. En la ficha, pulsa el lápiz junto a Información del alumno.\n"
+                . "2. Los campos pasan a editables.\n"
+                . "3. Nombre, DNI, correo y WhatsApp se escriben.\n"
+                . "4. Fecha de nacimiento se elige en el calendario.\n"
+                . "5. Sexo, red social, país, departamento, provincia y distrito son listas.\n"
+                . "6. Provincia se habilita al elegir departamento; distrito, al elegir provincia (solo si el país es Perú).\n"
+                . "7. Si no hay lápiz, no editas desde aquí.",
                 'Recorta Información del alumno en modo edición (lápiz y listas). Datos ficticios.'
             ),
             $this->itemFlujo(
                 'Guardar',
-                'Pulsa Guardar y espera el aviso; la ficha vuelve a solo lectura. No hay botón Cancelar. Volver a pulsar el lápiz solo sale del modo edición: si no quieres conservar lo escrito, regresa al listado y abre la ficha otra vez sin pulsar Guardar.',
+                "1. Pulsa Guardar y espera el aviso; la ficha vuelve a solo lectura.\n"
+                . "2. No hay botón Cancelar.\n"
+                . "3. Volver a pulsar el lápiz solo sale del modo edición: si no quieres conservar lo escrito, regresa al listado y abre la ficha otra vez sin pulsar Guardar.",
                 'Recorta Guardar en la ficha en edición. Datos ficticios.'
             ),
         ]);
@@ -165,12 +192,18 @@ class ManualUsuarioCursoAlumnosSeeder
         $this->writeFlowWithCapturas($page->id, $root->id, $orden, 'Crear usuario del aula virtual', [
             $this->itemFlujo(
                 'Crear la cuenta',
-                'Desde la tabla: en Usuario elige Creado. O desde la ficha: si ves Crear usuario, púlsalo. El sistema crea la cuenta. Aparece un aviso con Usuario y Password: anótalos o envíaselos al alumno. Si no aparece Crear usuario, el pedido aún no está pagado o el usuario ya está Creado.',
+                "1. Desde la tabla: en Usuario elige Creado.\n"
+                . "2. O desde la ficha: si ves Crear usuario, púlsalo.\n"
+                . "3. El sistema crea la cuenta.\n"
+                . "4. Aparece un aviso con Usuario y Password: anótalos o envíaselos al alumno.\n"
+                . "5. Si no aparece Crear usuario, el pedido aún no está pagado o el usuario ya está Creado.",
                 'Recorta Crear usuario o el aviso con Usuario y Password. Datos ficticios.'
             ),
             $this->itemFlujo(
                 'Ver el aula y cambiar clave',
-                'Vuelve a abrir Ver: verás ACCESO AULA VIRTUAL con esas credenciales (solo lectura). En esa caja puedes pulsar Enviar instrucciones para cambiar contraseña: confirma y se envía por WhatsApp.',
+                "1. Vuelve a abrir Ver: verás ACCESO AULA VIRTUAL con esas credenciales (solo lectura).\n"
+                . "2. En esa caja puedes pulsar Enviar instrucciones para cambiar contraseña.\n"
+                . "3. Confirma y se envía por WhatsApp.",
                 'Recorta ACCESO AULA VIRTUAL y Enviar instrucciones. Datos ficticios.'
             ),
         ]);
@@ -178,12 +211,19 @@ class ManualUsuarioCursoAlumnosSeeder
         $this->writeFlowWithCapturas($page->id, $root->id, $orden, 'Generar y enviar constancia', [
             $this->itemFlujo(
                 'Generar o regenerar',
-                'La constancia no se genera desde la tabla. Primero Usuario debe estar en Creado (si no, no aparece el botón). Pulsa Ver. En la ficha, pulsa Generar y Enviar Constancia. Confirma ¿Estás seguro de querer generar y enviar la constancia? Si ya existía, el botón dice Regenerar Constancia y Enviar.',
+                "1. La constancia no se genera desde la tabla.\n"
+                . "2. Primero Usuario debe estar en Creado (si no, no aparece el botón).\n"
+                . "3. Pulsa Ver.\n"
+                . "4. En la ficha, pulsa Generar y Enviar Constancia.\n"
+                . "5. Confirma ¿Estás seguro de querer generar y enviar la constancia?\n"
+                . "6. Si ya existía, el botón dice Regenerar Constancia y Enviar.",
                 'Recorta Generar y Enviar Constancia (o Regenerar) y la confirmación. Datos ficticios.'
             ),
             $this->itemFlujo(
                 'Vista previa',
-                'Al terminar ves la vista previa (PDF o imagen). Puedes abrirla en otra pestaña o descargarla. En la tabla, Usuario puede mostrar Constancia (lista bloqueada) cuando ya hay archivo: no se elige a mano.',
+                "1. Al terminar ves la vista previa (PDF o imagen).\n"
+                . "2. Puedes abrirla en otra pestaña o descargarla.\n"
+                . "3. En la tabla, Usuario puede mostrar Constancia (lista bloqueada) cuando ya hay archivo: no se elige a mano.",
                 'Recorta la vista previa de la constancia. Datos ficticios.'
             ),
         ]);
@@ -219,7 +259,12 @@ class ManualUsuarioCursoAlumnosSeeder
         $this->block($page->id, $consideraciones->id, ManualBloque::TIPO_TEXTO, null, 1, [
             'subtitulo' => null,
             'snapshot' => [
-                'body' => "Ver (ojo) abre la ficha del pedido. Ahí se editan datos (lápiz), se crea el aula y se genera la constancia. Mensaje y Eliminar no salen de la tabla.\n\nLa constancia solo aparece si Usuario ya está Creado. Constancia en la lista de la tabla no se elige: se marca sola cuando ya hay archivo.\n\nJefe Marketing: solo Ver en la tabla; en la ficha no hay lápiz de editar.\n\nUn mismo cliente puede aparecer más de una vez si se inscribe a más de un curso.",
+                'body' => ManualUsuarioPlantillaTextFormatter::formatNumberedSteps(
+                    "1. Ver (ojo) abre la ficha del pedido. Ahí se editan datos (lápiz), se crea el aula y se genera la constancia. Mensaje y Eliminar no salen de la tabla.\n"
+                    . "2. La constancia solo aparece si Usuario ya está Creado. Constancia en la lista de la tabla no se elige: se marca sola cuando ya hay archivo.\n"
+                    . "3. Jefe Marketing: solo Ver en la tabla; en la ficha no hay lápiz de editar.\n"
+                    . "4. Un mismo cliente puede aparecer más de una vez si se inscribe a más de un curso."
+                ),
             ],
         ]);
 
@@ -251,14 +296,22 @@ class ManualUsuarioCursoAlumnosSeeder
         ]);
 
         $this->qa($page->id, $root->id, $orden++, 'Ejemplo práctico (datos ficticios)',
-            'Ana Torres Ramírez, DNI 00000000, WhatsApp 999 999 999. En la tabla, Comercial pasa Usuario a Creado y anota el usuario Moodle del aviso. Luego Ver → Generar y Enviar Constancia, confirma, y ve el PDF. Si el importe era S/ 380 y hay S/ 150 pagados, Estado sigue en Adelanto.');
+            "1. Ana Torres Ramírez, DNI 00000000, WhatsApp 999 999 999.\n"
+            . "2. En la tabla, Comercial pasa Usuario a Creado y anota el usuario Moodle del aviso.\n"
+            . "3. Luego Ver → Generar y Enviar Constancia, confirma, y ve el PDF.\n"
+            . "4. Si el importe era S/ 380 y hay S/ 150 pagados, Estado sigue en Adelanto.");
 
         $this->block($page->id, $root->id, ManualBloque::TIPO_CALLOUT, null, $orden++, [
             'subtitulo' => null,
             'snapshot' => [
                 'tone' => 'success',
                 'title' => 'Resultado esperado:',
-                'body' => 'el alumno queda en la tabla con curso y campaña correctos; si creaste el aula, hay usuario Moodle; si generaste constancia, ves la vista previa y el envío; el recordatorio de pago, si lo enviaste, llega por WhatsApp.',
+                'body' => ManualUsuarioPlantillaTextFormatter::formatNumberedSteps(
+                    "1. El alumno queda en la tabla con curso y campaña correctos.\n"
+                    . "2. Si creaste el aula, hay usuario Moodle.\n"
+                    . "3. Si generaste constancia, ves la vista previa y el envío.\n"
+                    . "4. El recordatorio de pago, si lo enviaste, llega por WhatsApp."
+                ),
             ],
         ]);
 
@@ -415,7 +468,7 @@ class ManualUsuarioCursoAlumnosSeeder
             'subtitulo' => null,
             'snapshot' => [
                 'qa' => true,
-                'body' => $body,
+                'body' => ManualUsuarioPlantillaTextFormatter::formatQaBlock((string) $titulo, (string) $body),
             ],
         ]);
     }

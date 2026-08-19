@@ -51,15 +51,15 @@ class ManualUsuarioArticuloWriter
         ], isset($screen['articulo_clave']) ? $screen['articulo_clave'] : null);
 
         $n = 1;
-        $this->qa($page->id, $root->id, $n++, '¿Qué es?', $this->fill($this->pick($screen, $role, 'que_es'), $role));
-        $this->qa($page->id, $root->id, $n++, '¿Quién lo utiliza?', $this->fill(
-            $this->pick($screen, $role, 'quien', 'Rol {rol}.'),
-            $role
+        $this->qa($page->id, $root->id, $n++, '¿Qué es?', $this->formatQaBody('¿Qué es?', $this->fill($this->pick($screen, $role, 'que_es'), $role)));
+        $this->qa($page->id, $root->id, $n++, '¿Quién lo utiliza?', $this->formatQaBody(
+            '¿Quién lo utiliza?',
+            $this->fill($this->pick($screen, $role, 'quien', 'Rol {rol}.'), $role)
         ));
         $this->qa($page->id, $root->id, $n++, '¿Para qué sirve?', $this->formatParaQue($this->pick($screen, $role, 'para_que'), $role));
         $cuando = trim($this->fill($this->pick($screen, $role, 'cuando', ''), $role));
         if ($cuando !== '' && $cuando !== 'pendiente de definir') {
-            $this->qa($page->id, $root->id, $n++, '¿Cuándo utilizarlo?', $cuando);
+            $this->qa($page->id, $root->id, $n++, '¿Cuándo utilizarlo?', $this->formatQaBody('¿Cuándo utilizarlo?', $cuando));
         }
 
         $pasos = $this->pasosForRole($screen, $role);
@@ -115,7 +115,7 @@ class ManualUsuarioArticuloWriter
         $this->block($page->id, $consideraciones->id, ManualBloque::TIPO_TEXTO, null, 1, [
             'subtitulo' => null,
             'snapshot' => [
-                'body' => $this->fill($this->pick($screen, $role, 'consideraciones', 'pendiente de definir'), $role),
+                'body' => $this->formatTextBlock($this->fill($this->pick($screen, $role, 'consideraciones', 'pendiente de definir'), $role)),
             ],
         ]);
 
@@ -138,15 +138,15 @@ class ManualUsuarioArticuloWriter
             'snapshot' => [
                 'tone' => 'warning',
                 'title' => 'Completar con el equipo',
-                'body' => isset($screen['errores_nota'])
+                'body' => $this->formatTextBlock(isset($screen['errores_nota'])
                     ? $this->fill($screen['errores_nota'], $role)
-                    : 'Si falta un caso real, anótalo con soporte antes de publicar.',
+                    : 'Si falta un caso real, anótalo con soporte antes de publicar.'),
             ],
         ]);
 
-        $this->qa($page->id, $root->id, $n++, 'Ejemplo práctico (datos ficticios)', $this->fill(
-            $this->pick($screen, $role, 'ejemplo', 'pendiente de definir'),
-            $role
+        $this->qa($page->id, $root->id, $n++, 'Ejemplo práctico (datos ficticios)', $this->formatQaBody(
+            'Ejemplo práctico (datos ficticios)',
+            $this->fill($this->pick($screen, $role, 'ejemplo', 'pendiente de definir'), $role)
         ));
 
         $this->block($page->id, $root->id, ManualBloque::TIPO_CALLOUT, null, $n++, [
@@ -154,13 +154,13 @@ class ManualUsuarioArticuloWriter
             'snapshot' => [
                 'tone' => 'success',
                 'title' => 'Resultado esperado:',
-                'body' => $this->fill($this->pick($screen, $role, 'resultado', 'pendiente de definir'), $role),
+                'body' => $this->formatTextBlock($this->fill($this->pick($screen, $role, 'resultado', 'pendiente de definir'), $role)),
             ],
         ]);
 
-        $this->qa($page->id, $root->id, $n++, 'Ver también', $this->fill(
-            $this->pick($screen, $role, 'ver_tambien', 'pendiente de definir'),
-            $role
+        $this->qa($page->id, $root->id, $n++, 'Ver también', $this->formatQaBody(
+            'Ver también',
+            $this->fill($this->pick($screen, $role, 'ver_tambien', 'pendiente de definir'), $role)
         ));
 
         return ['page_id' => (int) $page->id, 'created' => $created];
@@ -403,6 +403,16 @@ class ManualUsuarioArticuloWriter
         $paraQue = $this->fill($paraQue, $role);
 
         return ManualUsuarioPlantillaTextFormatter::formatParaQue($paraQue);
+    }
+
+    private function formatTextBlock($text)
+    {
+        return ManualUsuarioPlantillaTextFormatter::formatNumberedSteps((string) $text);
+    }
+
+    private function formatQaBody($titulo, $body)
+    {
+        return ManualUsuarioPlantillaTextFormatter::formatQaBlock((string) $titulo, (string) $body);
     }
 
     private function wipeBlocks($paginaId)

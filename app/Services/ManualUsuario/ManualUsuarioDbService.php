@@ -690,7 +690,7 @@ class ManualUsuarioDbService
                     } elseif ($body !== '') {
                         $line = $body;
                     }
-                    $out[] = '<li>' . e($line) . '</li>';
+                    $out[] = '<li>' . nl2br(e($line)) . '</li>';
                 }
                 $out[] = '</ol></div>';
                 break;

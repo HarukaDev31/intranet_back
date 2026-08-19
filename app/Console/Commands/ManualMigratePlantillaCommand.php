@@ -59,6 +59,7 @@ class ManualMigratePlantillaCommand extends Command
                     ['Bloques QA reordenados', $stats['qa_reordered']],
                     ['¿Para qué sirve? con viñetas', $stats['para_que_formatted']],
                     ['Pasos de flujo numerados', $stats['flow_bodies']],
+                    ['Textos numerados (QA/consideraciones/ejemplo)', $stats['text_bodies']],
                     ['¿Cuándo? eliminados', $stats['cuando_removed']],
                 ]
             );

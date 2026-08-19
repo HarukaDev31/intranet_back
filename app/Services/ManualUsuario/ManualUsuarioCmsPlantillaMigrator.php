@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\DB;
 class ManualUsuarioCmsPlantillaMigrator
 {
     /**
-     * @return array{pages:int, qa_reordered:int, para_que_formatted:int, flow_bodies:int, cuando_removed:int}
+     * @return array{pages:int, qa_reordered:int, para_que_formatted:int, flow_bodies:int, text_bodies:int, cuando_removed:int}
      */
     public function migrate(?string $roleSlug = null, ?string $moduloKey = null, bool $dropCuando = true): array
     {
@@ -21,6 +21,7 @@ class ManualUsuarioCmsPlantillaMigrator
             'qa_reordered' => 0,
             'para_que_formatted' => 0,
             'flow_bodies' => 0,
+            'text_bodies' => 0,
             'cuando_removed' => 0,
         ];
 
@@ -82,16 +83,18 @@ class ManualUsuarioCmsPlantillaMigrator
                         $stats['qa_reordered']++;
                     }
 
-                    if ($key === '¿para qué sirve?') {
-                        $payload = (array) ($block->payload ?? []);
-                        $snapshot = (array) ($payload['snapshot'] ?? []);
-                        $body = (string) ($snapshot['body'] ?? '');
-                        $formatted = ManualUsuarioPlantillaTextFormatter::formatParaQue($body);
-                        if ($formatted !== '' && $formatted !== $body) {
-                            $snapshot['body'] = $formatted;
-                            $payload['snapshot'] = $snapshot;
-                            $block->payload = $payload;
+                    $payload = (array) ($block->payload ?? []);
+                    $snapshot = (array) ($payload['snapshot'] ?? []);
+                    $body = (string) ($snapshot['body'] ?? '');
+                    $formatted = ManualUsuarioPlantillaTextFormatter::formatQaBlock((string) $block->titulo, $body);
+                    if ($formatted !== '' && $formatted !== $body) {
+                        $snapshot['body'] = $formatted;
+                        $payload['snapshot'] = $snapshot;
+                        $block->payload = $payload;
+                        if ($key === '¿para qué sirve?') {
                             $stats['para_que_formatted']++;
+                        } else {
+                            $stats['text_bodies']++;
                         }
                     }
 
@@ -113,15 +116,49 @@ class ManualUsuarioCmsPlantillaMigrator
                         $block->orden = $nextOrden;
                         $block->save();
                     }
-                    if ($block->tipo === ManualBloque::TIPO_FLOW) {
-                        $stats['flow_bodies'] += $this->formatFlowBlock($block);
-                    }
+                    $this->formatBlockTree($block, $stats);
                     $nextOrden++;
                 }
             });
         }
 
         return $stats;
+    }
+
+    /**
+     * @param array{flow_bodies:int, text_bodies:int} $stats
+     */
+    private function formatBlockTree(ManualBloque $block, array &$stats): void
+    {
+        if ($block->tipo === ManualBloque::TIPO_FLOW) {
+            $stats['flow_bodies'] += $this->formatFlowBlock($block);
+
+            return;
+        }
+
+        if ($block->tipo === ManualBloque::TIPO_TEXTO) {
+            $stats['text_bodies'] += $this->formatTextBlock($block);
+
+            return;
+        }
+
+        if ($block->tipo === ManualBloque::TIPO_CALLOUT) {
+            $stats['text_bodies'] += $this->formatCalloutBlock($block);
+
+            return;
+        }
+
+        if ($block->tipo === ManualBloque::TIPO_GRUPO) {
+            $children = ManualBloque::query()
+                ->where('parent_id', $block->id)
+                ->orderBy('orden')
+                ->orderBy('id')
+                ->get();
+
+            foreach ($children as $child) {
+                $this->formatBlockTree($child, $stats);
+            }
+        }
     }
 
     private function formatFlowBlock(ManualBloque $block): int
@@ -151,6 +188,54 @@ class ManualUsuarioCmsPlantillaMigrator
         }
 
         return $changed;
+    }
+
+    private function formatTextBlock(ManualBloque $block): int
+    {
+        $payload = (array) ($block->payload ?? []);
+        $snapshot = (array) ($payload['snapshot'] ?? []);
+        $body = (string) ($snapshot['body'] ?? '');
+        if ($body === '') {
+            return 0;
+        }
+
+        $titulo = (string) ($block->titulo ?? '');
+        $formatted = !empty($snapshot['qa'])
+            ? ManualUsuarioPlantillaTextFormatter::formatQaBlock($titulo, $body)
+            : ManualUsuarioPlantillaTextFormatter::formatNumberedSteps($body);
+
+        if ($formatted === $body || $formatted === '') {
+            return 0;
+        }
+
+        $snapshot['body'] = $formatted;
+        $payload['snapshot'] = $snapshot;
+        $block->payload = $payload;
+        $block->save();
+
+        return 1;
+    }
+
+    private function formatCalloutBlock(ManualBloque $block): int
+    {
+        $payload = (array) ($block->payload ?? []);
+        $snapshot = (array) ($payload['snapshot'] ?? []);
+        $body = (string) ($snapshot['body'] ?? '');
+        if ($body === '') {
+            return 0;
+        }
+
+        $formatted = ManualUsuarioPlantillaTextFormatter::formatNumberedSteps($body);
+        if ($formatted === $body || $formatted === '') {
+            return 0;
+        }
+
+        $snapshot['body'] = $formatted;
+        $payload['snapshot'] = $snapshot;
+        $block->payload = $payload;
+        $block->save();
+
+        return 1;
     }
 
     private function isQaBlock(ManualBloque $block): bool
