@@ -2970,10 +2970,29 @@ class CotizacionFinalController extends Controller
             ], 500);
         }
     }
-    /** Solo trim + espacios internos; sin cambiar mayÃºsculas/minÃºsculas. */
+    /** Solo trim + espacios internos; sin cambiar mayúsculas/minúsculas. */
     private function trimMainSheetColumnBLabel(string $value): string
     {
         return trim(preg_replace('/\s+/u', ' ', (string) $value));
+    }
+
+    private function mainSheetColumnBLabelEquals(string $label, string $expected): bool
+    {
+        return $this->trimMainSheetColumnBLabel($label) === $this->trimMainSheetColumnBLabel($expected);
+    }
+
+    /** Igual (normalizado) o contiene en cualquier dirección. */
+    private function mainSheetColumnBLabelEqualsOrContains(string $label, string $expected): bool
+    {
+        $label = $this->trimMainSheetColumnBLabel($label);
+        $expected = $this->trimMainSheetColumnBLabel($expected);
+        if ($label === '' || $expected === '') {
+            return false;
+        }
+
+        return $label === $expected
+            || str_contains($label, $expected)
+            || str_contains($expected, $label);
     }
 
     private function getMainSheetColumnBLabel($sheet, int $row): string
@@ -3012,7 +3031,7 @@ class CotizacionFinalController extends Controller
 
         $maxRow = max(80, (int) $sheet->getHighestDataRow('B'));
         for ($row = 1; $row <= $maxRow; $row++) {
-            if ($this->getMainSheetColumnBLabel($sheet, $row) === $expected) {
+            if ($this->mainSheetColumnBLabelEquals($this->getMainSheetColumnBLabel($sheet, $row), $expected)) {
                 return $row;
             }
         }
@@ -3021,7 +3040,7 @@ class CotizacionFinalController extends Controller
     }
 
     /**
-     * Primera fila (arriba â†’ abajo) cuya columna B contiene el texto (case-sensitive, trim).
+     * Primera fila (arriba → abajo) cuya columna B contiene el texto (case-sensitive, trim).
      */
     private function findMainSheetRowByColumnBLabelContains(
         $sheet,
@@ -3045,6 +3064,37 @@ class CotizacionFinalController extends Controller
             }
 
             return $row;
+        }
+
+        return null;
+    }
+
+    /**
+     * Primera fila cuya columna B coincide exactamente o contiene el texto (normalizado).
+     */
+    private function findMainSheetRowByColumnBLabelEqualsOrContains(
+        $sheet,
+        string $expectedLabel,
+        string $mustNotContain = ''
+    ): ?int {
+        $expected = $this->trimMainSheetColumnBLabel($expectedLabel);
+        $exclude = $this->trimMainSheetColumnBLabel($mustNotContain);
+        if ($expected === '') {
+            return null;
+        }
+
+        $maxRow = max(80, (int) $sheet->getHighestDataRow('B'));
+        for ($row = 1; $row <= $maxRow; $row++) {
+            $label = $this->getMainSheetColumnBLabel($sheet, $row);
+            if ($label === '') {
+                continue;
+            }
+            if ($exclude !== '' && str_contains($label, $exclude)) {
+                continue;
+            }
+            if ($this->mainSheetColumnBLabelEqualsOrContains($label, $expected)) {
+                return $row;
+            }
         }
 
         return null;
@@ -3120,8 +3170,8 @@ class CotizacionFinalController extends Controller
 
         $rowImpuestos = $this->findMainSheetRowByColumnBLabelExact($sheet, 'IMPUESTOS');
         $rowServicio = $this->findMainSheetRowByColumnBLabelExact($sheet, 'SERVICIO DE IMPORTACIÓN');
-        $rowRecargosOperativos=$this->findMainSheetRowByColumnBLabelExact($sheet, 'RECARGOS OPERATIVOS');
-        $rowDescuento=$this->findMainSheetRowByColumnBLabelExact($sheet, 'DESCUENTO APLICABLE');
+        $rowRecargosOperativos = $this->findMainSheetRowByColumnBLabelEqualsOrContains($sheet, 'RECARGOS OPERATIVOS');
+        $rowDescuento = $this->findMainSheetRowByColumnBLabelEqualsOrContains($sheet, 'DESCUENTO APLICABLE');
         if ($rowServicio === null) {
             $rowServicio = $this->findMainSheetRowByColumnBLabelContains(
                 $sheet,
@@ -3142,8 +3192,12 @@ class CotizacionFinalController extends Controller
         $fob = $this->getMainSheetFobFinalAmount($sheet);
         $logisticaServicioImportacion = $this->getMainSheetRowAmount($sheet, $rowServicio);
         $serviciosExtraLogistica = $this->sumMainSheetLogisticaServiciosExtraFromColumnB($sheet);
-        $recargos = $this->getMainSheetRowAmount($sheet, $rowRecargosOperativos);
-        $descuento = $this->getMainSheetRowAmount($sheet, $rowDescuento);
+        $recargos = $rowRecargosOperativos !== null
+            ? $this->getMainSheetRowAmount($sheet, $rowRecargosOperativos)
+            : 0.0;
+        $descuento = $rowDescuento !== null
+            ? $this->getMainSheetRowAmount($sheet, $rowDescuento)
+            : 0.0;
         $logistica = round($logisticaServicioImportacion, 2);
         $impuestos = $this->getMainSheetRowAmount($sheet, $rowImpuestos);
 
