@@ -31,7 +31,7 @@ use Dompdf\Options;
 use Tymon\JWTAuth\Facades\JWTAuth;
 use App\Traits\FileTrait;
 use App\Traits\UsesObjectStorage;
-use App\Jobs\SendReminderPagoWhatsAppJob;
+use App\Services\CargaConsolidada\CotizacionFinal\ReminderPagoWhatsappService;
 use App\Services\CargaConsolidada\CotizacionFinal\PlantillaFinalBatchService;
 use App\Services\CargaConsolidada\CotizacionFinal\TarifaTipoClienteCalculator;
 use App\Support\PhpSpreadsheet\PhpSpreadsheetRuntime;
@@ -1267,21 +1267,43 @@ class CotizacionFinalController extends Controller
     }
 
     /**
+     * Vista previa del recordatorio de pago: mensaje y si hay PDF de cotización final.
+     */
+    public function previewReminderPago($idCotizacion)
+    {
+        try {
+            $result = app(ReminderPagoWhatsappService::class)->preview((int) $idCotizacion);
+            if (empty($result['success'])) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $result['message'] ?? 'No se pudo armar la vista previa',
+                ], 404);
+            }
+
+            return response()->json($result);
+        } catch (\Exception $e) {
+            Log::error('Error en previewReminderPago: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            return response()->json(['message' => 'Error al armar la vista previa: ' . $e->getMessage(), 'success' => false], 500);
+        }
+    }
+
+    /**
      * Enviar recordatorio de pago por WhatsApp al cliente para una cotización final.
      * Body (opcional): { "sleep": <segundos de espera entre llamadas> }
      */
     public function sendReminderPago(Request $request, $idCotizacion)
     {
         try {
-            $exists = DB::table($this->table_contenedor_cotizacion)
-                ->where('id', (int) $idCotizacion)
-                ->exists();
-            if (!$exists) {
-                return response()->json(['message' => 'Cotización no encontrada', 'success' => false], 404);
+            $preview = app(ReminderPagoWhatsappService::class)->preview((int) $idCotizacion);
+            if (empty($preview['success'])) {
+                return response()->json([
+                    'message' => $preview['message'] ?? 'Cotización no encontrada',
+                    'success' => false,
+                ], 404);
             }
 
             $sleep = $request->input('sleep', 0);
-            SendReminderPagoWhatsAppJob::dispatch((int) $idCotizacion, (int) $sleep);
+            app(ReminderPagoWhatsappService::class)->enqueue((int) $idCotizacion, (int) $sleep);
 
             return response()->json([
                 'message' => 'Recordatorio encolado correctamente',
