@@ -3209,8 +3209,8 @@ class CotizacionFinalController extends Controller
         $tarifa = 0.0;
         if ($volumen > 0 && $logisticaServicioImportacion > 0) {
             $tarifa = $volumen < 1
-                ? $logisticaServicioImportacion + $recargos - $descuento
-                : round(($logisticaServicioImportacion + $recargos - $descuento) / $volumen, 2);
+                ? $logisticaServicioImportacion - $recargos + $descuento
+                : round(($logisticaServicioImportacion - $recargos + $descuento) / $volumen, 2);
         }
 
         $peso = $this->parsePesoFromMainSheetCell($sheet, 'J9');
@@ -3221,7 +3221,7 @@ class CotizacionFinalController extends Controller
         if ($logistica <= 0 && $impuestos <= 0 && $fob <= 0) {
             return null;
         }
-        $logistica = $logistica + $recargos - $descuento;
+        $logistica = $logistica- $recargos + $descuento;
         Log::info('EXtraccion de datos de la cotizacion final', [
             'recargos'=>$recargos,
             'descuento'=>$descuento,
