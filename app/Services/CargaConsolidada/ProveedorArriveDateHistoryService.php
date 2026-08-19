@@ -16,24 +16,8 @@ class ProveedorArriveDateHistoryService
      */
     public static function normalizeDate($value): ?string
     {
-        if ($value === null) {
-            return null;
-        }
-
-        $text = trim((string) $value);
-        if ($text === '' || in_array($text, ['0000-00-00', '0000-00-00 00:00:00'], true)) {
-            return null;
-        }
-
-        try {
-            if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $text)) {
-                return $text;
-            }
-
-            return \Carbon\Carbon::parse($text)->format('Y-m-d');
-        } catch (\Exception $e) {
-            return null;
-        }
+        return SeguimientoConsolidadoDateFormatter::calendarDayYmd($value)
+            ?: SeguimientoConsolidadoDateFormatter::parseCellToYmd($value);
     }
 
     public function record(int $idProveedor, ?int $idContenedor, string $field, $value, string $source = 'system'): void
@@ -102,14 +86,21 @@ class ProveedorArriveDateHistoryService
 
     /**
      * @param array<int> $idProveedores
-     * @return array<int, array{has_history:bool,latest:?string}>
+     * @return array<int, array{
+     *   has_history:bool,
+     *   has_history_for_contenedor:bool,
+     *   latest:?string,
+     *   latest_by_field:array<string, array{value:?string,id_contenedor:?int,created_at?:string}>
+     * }>
      */
-    public function historyContextByProveedor(array $idProveedores): array
+    public function historyContextByProveedor(array $idProveedores, ?int $idContenedor = null): array
     {
         $idProveedores = array_values(array_unique(array_filter(array_map('intval', $idProveedores))));
         if ($idProveedores === [] || !Schema::hasTable('contenedor_proveedor_arrive_date_history')) {
             return [];
         }
+
+        $idContenedorFilter = $idContenedor !== null && $idContenedor > 0 ? (int) $idContenedor : null;
 
         $counts = DB::table('contenedor_proveedor_arrive_date_history')
             ->whereIn('id_proveedor', $idProveedores)
@@ -119,17 +110,44 @@ class ProveedorArriveDateHistoryService
 
         $latestRows = DB::table('contenedor_proveedor_arrive_date_history')
             ->whereIn('id_proveedor', $idProveedores)
-            ->whereNotNull('value')
             ->orderBy('id_proveedor')
             ->orderByDesc('created_at')
             ->orderByDesc('id')
-            ->get(['id_proveedor', 'value']);
+            ->get(['id_proveedor', 'id_contenedor', 'field', 'value', 'created_at']);
 
         $latestByProveedor = [];
+        $latestByField = [];
+        $hasHistoryForContenedor = [];
         foreach ($latestRows as $row) {
             $idProveedor = (int) $row->id_proveedor;
+            $field = (string) $row->field;
+            $rowContenedor = $row->id_contenedor !== null ? (int) $row->id_contenedor : null;
+            $value = self::normalizeDate($row->value);
+
+            if ($idContenedorFilter !== null && $rowContenedor === $idContenedorFilter) {
+                $hasHistoryForContenedor[$idProveedor] = true;
+            }
+
+            if (!isset($latestByField[$idProveedor][$field])) {
+                $latestByField[$idProveedor][$field] = [
+                    'value' => $value,
+                    'id_contenedor' => $rowContenedor,
+                    'created_at' => (string) ($row->created_at ?? ''),
+                ];
+            }
+
+            if ($value === null) {
+                continue;
+            }
+
+            if ($idContenedorFilter !== null) {
+                if ($rowContenedor !== $idContenedorFilter) {
+                    continue;
+                }
+            }
+
             if (!isset($latestByProveedor[$idProveedor])) {
-                $latestByProveedor[$idProveedor] = (string) $row->value;
+                $latestByProveedor[$idProveedor] = $value;
             }
         }
 
@@ -137,7 +155,9 @@ class ProveedorArriveDateHistoryService
         foreach ($idProveedores as $idProveedor) {
             $context[$idProveedor] = [
                 'has_history' => ((int) ($counts[$idProveedor] ?? 0)) > 0,
+                'has_history_for_contenedor' => !empty($hasHistoryForContenedor[$idProveedor]),
                 'latest' => $latestByProveedor[$idProveedor] ?? null,
+                'latest_by_field' => $latestByField[$idProveedor] ?? [],
             ];
         }
 
@@ -145,13 +165,66 @@ class ProveedorArriveDateHistoryService
     }
 
     /**
-     * Prioridad: arrive_date si ambas existen; luego arrive_date; luego arrive_date_china;
-     * si no hay fechas vigentes en proveedor pero sí historial, usa la última del tracking.
+     * Prioridad: arrive_date si ambas existen; luego arrive_date; luego arrive_date_china.
+     * Solo se ignora una fecha actual si es el mismo valor que el último historial
+     * de otro contenedor (roleo). Si el usuario ya la cambió (p. ej. 17 vs 11), se usa.
+     *
+     * @param mixed $arriveDate
+     * @param mixed $arriveChina
+     * @param array{has_history?:bool,latest?:?string,latest_by_field?:array} $context
+     */
+    public function resolveFechaRecibir($arriveDate, $arriveChina, array $context, ?int $idContenedor = null): ?string
+    {
+        $peru = $this->currentDateIfForContenedor(
+            $arriveDate,
+            self::FIELD_ARRIVE_DATE,
+            $context,
+            $idContenedor
+        );
+        $china = $this->currentDateIfForContenedor(
+            $arriveChina,
+            self::FIELD_ARRIVE_DATE_CHINA,
+            $context,
+            $idContenedor
+        );
+
+        if ($peru !== null && $china !== null) {
+            $peruAt = strtotime((string) (($context['latest_by_field'][self::FIELD_ARRIVE_DATE]['created_at'] ?? ''))) ?: 0;
+            $chinaAt = strtotime((string) (($context['latest_by_field'][self::FIELD_ARRIVE_DATE_CHINA]['created_at'] ?? ''))) ?: 0;
+            if ($chinaAt > $peruAt) {
+                return $china;
+            }
+
+            return $peru;
+        }
+
+        if ($peru !== null) {
+            return $peru;
+        }
+
+        if ($china !== null) {
+            return $china;
+        }
+
+        $latestInContenedor = $context['latest'] ?? null;
+        if (!empty($context['has_history_for_contenedor']) && $latestInContenedor !== null) {
+            return self::normalizeDate($latestInContenedor);
+        }
+
+        if (empty($context['has_history_for_contenedor'])) {
+            return $this->fallbackFechaDesdeProveedor($arriveDate, $arriveChina);
+        }
+
+        return null;
+    }
+
+    /**
+     * Fecha en ficha del proveedor (arrive_date / arrive_date_china) sin filtro roleo.
      *
      * @param mixed $arriveDate
      * @param mixed $arriveChina
      */
-    public function resolveFechaRecibir($arriveDate, $arriveChina, ?string $latestHistory, bool $hasHistory): ?string
+    public function fallbackFechaDesdeProveedor($arriveDate, $arriveChina): ?string
     {
         $peru = self::normalizeDate($arriveDate);
         $china = self::normalizeDate($arriveChina);
@@ -164,14 +237,41 @@ class ProveedorArriveDateHistoryService
             return $peru;
         }
 
-        if ($china !== null) {
-            return $china;
+        return $china;
+    }
+
+    /**
+     * @param mixed $value
+     * @param array{latest_by_field?:array<string, array{value:?string,id_contenedor:?int}>} $context
+     */
+    private function currentDateIfForContenedor($value, string $field, array $context, ?int $idContenedor): ?string
+    {
+        $current = self::normalizeDate($value);
+        if ($current === null) {
+            return null;
         }
 
-        if ($hasHistory && $latestHistory !== null) {
-            return self::normalizeDate($latestHistory);
+        if ($idContenedor === null || $idContenedor <= 0) {
+            return $current;
         }
 
-        return null;
+        // Sin historial de fechas en ESTE consolidado: confiar en la ficha (misma fuente que coordinación).
+        if (empty($context['has_history_for_contenedor'])) {
+            return $current;
+        }
+
+        $latestField = $context['latest_by_field'][$field] ?? null;
+        if (!is_array($latestField)) {
+            return $current;
+        }
+
+        $histContenedor = isset($latestField['id_contenedor']) ? (int) $latestField['id_contenedor'] : 0;
+        $histValue = self::normalizeDate($latestField['value'] ?? null);
+
+        if ($histContenedor > 0 && $histContenedor !== $idContenedor && $histValue === $current) {
+            return null;
+        }
+
+        return $current;
     }
 }

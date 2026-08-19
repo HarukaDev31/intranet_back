@@ -240,12 +240,11 @@ class SeguimientoConsolidadoDriveService
     public function executeVincular($idContenedor, Request $request = null)
     {
         $idContenedor = (int) $idContenedor;
+        $flow = new SeguimientoConsolidadoFlowContext($idContenedor, 'vincular_execute');
 
         $contenedor = Contenedor::find($idContenedor);
         if (!$contenedor || !SeguimientoConsolidadoVincularEligibility::puedeOperarSeguimientoDrive($contenedor)) {
-            $this->log('warning', 'Vincular job omitido: no elegible', [
-                'id_contenedor' => $idContenedor,
-            ]);
+            $this->logFlow('vincular_omitido_no_elegible', $flow, 'warning');
 
             return [
                 'success' => false,
@@ -255,15 +254,21 @@ class SeguimientoConsolidadoDriveService
             ];
         }
 
-        $this->log('info', 'Vincular iniciado (job)', ['id_contenedor' => $idContenedor]);
+        $this->logFlow('vincular_iniciado', $flow, 'info', [
+            'carga' => $contenedor->carga,
+        ]);
 
         DB::table('carga_consolidada_contenedor')
             ->where('id', $idContenedor)
             ->update(['excel_seguimiento_link_status' => ExcelSeguimientoLinkStatus::PROCESSING]);
 
-        $result = $this->syncToDrive($idContenedor, $request, true);
+        $result = $this->syncToDrive($idContenedor, $request, true, $flow);
         if (empty($result['success'])) {
             $this->markLinkFailed($idContenedor, $result['message'] ?? 'Error al vincular');
+            $this->logFlow('vincular_fallido', $flow, 'error', [
+                'message' => $result['message'] ?? 'unknown',
+                'duration_ms' => $flow->elapsedMs(),
+            ]);
 
             return $result;
         }
@@ -281,11 +286,11 @@ class SeguimientoConsolidadoDriveService
 
         $this->broadcastLinkStatus($idContenedor);
 
-        $this->log('info', 'Vincular completado', [
-            'id_contenedor' => $idContenedor,
+        $this->logFlow('vincular_completado', $flow, 'info', [
             'file_name' => $result['file_name'],
             'file_id' => $result['file_id'],
             'drive_link' => $result['drive_link'],
+            'duration_ms' => $flow->elapsedMs(),
         ]);
 
         return [
@@ -303,47 +308,58 @@ class SeguimientoConsolidadoDriveService
      *
      * @param int $idContenedor
      * @param Request|null $request
+     * @param SeguimientoConsolidadoFlowContext|null $flow
      * @return array<string, mixed>
      */
-    public function executeSync($idContenedor, Request $request = null)
+    public function executeSync($idContenedor, Request $request = null, SeguimientoConsolidadoFlowContext $flow = null)
     {
+        $idContenedor = (int) $idContenedor;
+        $flow = $flow ?: new SeguimientoConsolidadoFlowContext($idContenedor, 'execute_sync');
+
         $contenedor = Contenedor::find($idContenedor);
         if (!$contenedor || empty($contenedor->excel_seguimiento_drive_link)) {
-            $this->log('debug', 'Sync omitido: no vinculado', [
-                'id_contenedor' => (int) $idContenedor,
+            $this->logFlow('sync_skip_no_vinculado', $flow, 'info', [
+                'reason' => 'sin excel_seguimiento_drive_link',
             ]);
 
             return ['success' => false, 'message' => 'El consolidado no está vinculado a Drive'];
         }
 
         if (!SeguimientoConsolidadoVincularEligibility::puedeOperarSeguimientoDrive($contenedor)) {
-            $this->log('debug', 'Sync omitido: sin f_inicio o fuera de alcance', [
-                'id_contenedor' => (int) $idContenedor,
+            $this->logFlow('sync_skip_no_elegible', $flow, 'info', [
+                'reason' => 'sin f_inicio o fuera de alcance',
+                'f_inicio' => $contenedor->f_inicio,
             ]);
 
             return ['success' => false, 'message' => SeguimientoConsolidadoVincularEligibility::mensajeSinFInicio()];
         }
 
         if (ExcelSeguimientoLinkStatus::isProcessing($contenedor->excel_seguimiento_link_status)) {
-            $this->log('info', 'Sync omitido: vinculación en curso', [
-                'id_contenedor' => (int) $idContenedor,
+            $this->logFlow('sync_skip_vinculacion_en_curso', $flow, 'info', [
                 'link_status' => $contenedor->excel_seguimiento_link_status,
             ]);
 
             return ['success' => false, 'message' => 'Vinculación en curso, se omitió sync'];
         }
 
-        $this->log('info', 'Sync iniciado (job)', [
-            'id_contenedor' => (int) $idContenedor,
+        $this->logFlow('sync_iniciado', $flow, 'info', [
             'carga' => $contenedor->carga,
+            'file_id' => $contenedor->excel_seguimiento_drive_file_id,
+            'file_name' => $contenedor->excel_seguimiento_file_name,
         ]);
 
-        $result = $this->syncToDrive($idContenedor, $request, false);
+        $result = $this->syncToDrive($idContenedor, $request, false, $flow);
 
         if (!empty($result['success'])) {
-            $this->log('info', 'Sync completado', [
-                'id_contenedor' => (int) $idContenedor,
+            $this->logFlow('sync_completado', $flow, 'info', [
                 'file_name' => $result['file_name'] ?? null,
+                'file_id' => $result['file_id'] ?? null,
+                'duration_ms' => $flow->elapsedMs(),
+            ]);
+        } else {
+            $this->logFlow('sync_fallido', $flow, 'warning', [
+                'message' => $result['message'] ?? 'unknown',
+                'duration_ms' => $flow->elapsedMs(),
             ]);
         }
 
@@ -476,12 +492,21 @@ class SeguimientoConsolidadoDriveService
         }
 
         if (ExcelSeguimientoLinkStatus::isProcessing($row->excel_seguimiento_link_status)) {
-            $this->log('debug', 'Sync no encolado: vinculación en curso', [
+            $this->log('info', 'Sync no encolado: vinculación en curso', [
+                'flow' => 'seguimiento_drive',
+                'step' => 'queue_skip_vinculacion_en_curso',
                 'id_contenedor' => $idContenedor,
+                'link_status' => $row->excel_seguimiento_link_status,
             ]);
 
             return;
         }
+
+        $this->log('info', 'Sync solicitado por cambio de datos', [
+            'flow' => 'seguimiento_drive',
+            'step' => 'queue_data_change',
+            'id_contenedor' => $idContenedor,
+        ]);
 
         $this->enqueueSyncJob($idContenedor, 'data_change');
     }
@@ -503,7 +528,9 @@ class SeguimientoConsolidadoDriveService
 
         if (!$this->acquireSyncDebounce($idContenedor)) {
             $this->markSyncDirty($idContenedor);
-            $this->log('debug', 'Sync no encolado: debounce activo (marcado dirty)', [
+            $this->log('info', 'Sync no encolado: debounce activo (marcado dirty)', [
+                'flow' => 'seguimiento_drive',
+                'step' => 'enqueue_debounce_omitido',
                 'id_contenedor' => $idContenedor,
                 'reason' => $reason,
                 'debounce_minutes' => (int) config('carga_consolidada.seguimiento_sync_debounce_minutes', 10),
@@ -512,7 +539,9 @@ class SeguimientoConsolidadoDriveService
             return false;
         }
 
-        $this->log('debug', 'Sync encolado', [
+        $this->log('info', 'Sync encolado', [
+            'flow' => 'seguimiento_drive',
+            'step' => 'enqueue_ok',
             'id_contenedor' => $idContenedor,
             'reason' => $reason,
             'queue' => config('carga_consolidada.queue', 'carga_consolidada'),
@@ -587,10 +616,24 @@ class SeguimientoConsolidadoDriveService
     {
         $idContenedor = (int) $idContenedor;
         if ($idContenedor <= 0 || !$this->consumeSyncDirty($idContenedor)) {
+            $this->log('info', 'Re-encola dirty: nada pendiente', [
+                'flow' => 'seguimiento_drive',
+                'step' => 'requeue_dirty_skip',
+                'id_contenedor' => $idContenedor,
+                'reason' => $reason,
+            ]);
+
             return false;
         }
 
         $this->releaseSyncDebounce($idContenedor);
+
+        $this->log('info', 'Re-encolando sync por cambios durante debounce/ejecución', [
+            'flow' => 'seguimiento_drive',
+            'step' => 'requeue_dirty',
+            'id_contenedor' => $idContenedor,
+            'reason' => $reason,
+        ]);
 
         return $this->enqueueSyncJob($idContenedor, $reason);
     }
@@ -764,12 +807,18 @@ class SeguimientoConsolidadoDriveService
      * @param int $idContenedor
      * @param Request|null $request
      * @param bool $isInitialLink
+     * @param SeguimientoConsolidadoFlowContext|null $flow
      * @return array<string, mixed>
      */
-    private function syncToDrive($idContenedor, Request $request = null, $isInitialLink = false)
+    private function syncToDrive($idContenedor, Request $request = null, $isInitialLink = false, SeguimientoConsolidadoFlowContext $flow = null)
     {
+        $idContenedor = (int) $idContenedor;
+        $flow = $flow ?: new SeguimientoConsolidadoFlowContext($idContenedor, $isInitialLink ? 'vincular' : 'sync_to_drive');
+
         $contenedor = Contenedor::find($idContenedor);
         if (!$contenedor) {
+            $this->logFlow('sync_to_drive_sin_contenedor', $flow, 'error');
+
             return ['success' => false, 'message' => 'Consolidado no encontrado'];
         }
 
@@ -783,43 +832,63 @@ class SeguimientoConsolidadoDriveService
                         : $this->excelService->buildFileName((string) $contenedor->carga)
                 );
 
-            $this->log('info', 'Generando Excel temporal', [
-                'id_contenedor' => $idContenedor,
+            $this->logFlow('generar_excel_inicio', $flow, 'info', [
                 'carga' => $contenedor->carga,
                 'file_name' => $fileName,
                 'is_initial_link' => $isInitialLink,
-                'nuevo_archivo_drive' => $isInitialLink,
+                'existing_file_id' => $contenedor->excel_seguimiento_drive_file_id,
             ]);
 
             // Siempre pull notas manuales si ya hay archivo en Drive (también en re-vincular).
             if (!empty($contenedor->excel_seguimiento_drive_file_id)) {
+                $pullStarted = microtime(true);
+                $this->logFlow('pull_pre_sync_inicio', $flow, 'info', [
+                    'file_id' => $contenedor->excel_seguimiento_drive_file_id,
+                ]);
+
                 $pullResult = app(SeguimientoConsolidadoDriveCellSyncService::class)
-                    ->pullFromDrive($idContenedor, 'pre_sync');
+                    ->pullFromDrive($idContenedor, 'pre_sync', $flow);
+
                 if (empty($pullResult['success'])) {
-                    $this->log('warning', 'Pull pre-sync de celdas falló u omitido', [
-                        'id_contenedor' => $idContenedor,
+                    $this->logFlow('pull_pre_sync_fallido', $flow, 'warning', [
                         'message' => $pullResult['message'] ?? 'unknown',
+                        'duration_ms' => (int) round((microtime(true) - $pullStarted) * 1000),
                     ]);
                 } else {
-                    $this->log('info', 'Pull pre-sync de celdas completado', [
-                        'id_contenedor' => $idContenedor,
+                    $this->logFlow('pull_pre_sync_ok', $flow, 'info', [
                         'cells_upserted' => $pullResult['cells_upserted'] ?? 0,
                         'cells_history' => $pullResult['cells_history'] ?? 0,
+                        'duration_ms' => (int) round((microtime(true) - $pullStarted) * 1000),
                     ]);
                 }
+            } else {
+                $this->logFlow('pull_pre_sync_omitido', $flow, 'info', [
+                    'reason' => 'sin excel_seguimiento_drive_file_id',
+                ]);
             }
 
+            $excelStarted = microtime(true);
             $tmpPath = $this->excelService->writeTempFile($idContenedor, $request);
-            app(SeguimientoConsolidadoDriveCellSyncService::class)
-                ->applyManualCellsToLocalFile($idContenedor, $tmpPath);
-
-            $this->log('info', 'Excel temporal generado', [
-                'id_contenedor' => $idContenedor,
+            $this->logFlow('excel_temporal_generado', $flow, 'info', [
                 'tmp_path' => $tmpPath,
                 'size_bytes' => is_file($tmpPath) ? filesize($tmpPath) : null,
+                'duration_ms' => (int) round((microtime(true) - $excelStarted) * 1000),
             ]);
 
+            $manualStarted = microtime(true);
+            $manualResult = app(SeguimientoConsolidadoDriveCellSyncService::class)
+                ->applyManualCellsToLocalFile($idContenedor, $tmpPath, $flow);
+            $this->logFlow('celdas_manuales_aplicadas', $flow, 'info', array_merge($manualResult, [
+                'duration_ms' => (int) round((microtime(true) - $manualStarted) * 1000),
+            ]));
+
             $mesFolder = $this->resolveMesDriveFolder($contenedor);
+
+            $uploadStarted = microtime(true);
+            $this->logFlow('upload_drive_inicio', $flow, 'info', [
+                'mes_folder' => $mesFolder,
+                'file_name' => $fileName,
+            ]);
 
             $driveLink = $this->driveService->uploadForConsolidado(
                 $mesFolder,
@@ -829,9 +898,9 @@ class SeguimientoConsolidadoDriveService
             );
 
             if (!$driveLink) {
-                $this->log('error', 'Subida a Drive fallida', [
-                    'id_contenedor' => $idContenedor,
+                $this->logFlow('upload_drive_fallido', $flow, 'error', [
                     'file_name' => $fileName,
+                    'duration_ms' => (int) round((microtime(true) - $uploadStarted) * 1000),
                 ]);
 
                 return [
@@ -842,12 +911,12 @@ class SeguimientoConsolidadoDriveService
 
             $fileId = $this->extractFileIdFromDriveUrl($driveLink);
 
-            $this->log('info', 'Excel subido a Drive', [
-                'id_contenedor' => $idContenedor,
+            $this->logFlow('upload_drive_ok', $flow, 'info', [
                 'mes_folder' => $mesFolder,
                 'file_name' => $fileName,
                 'file_id' => $fileId,
                 'drive_link' => $driveLink,
+                'duration_ms' => (int) round((microtime(true) - $uploadStarted) * 1000),
             ]);
 
             if (!$isInitialLink) {
@@ -859,15 +928,29 @@ class SeguimientoConsolidadoDriveService
                         'excel_seguimiento_file_name' => $fileName,
                     ]);
 
+                $postPullStarted = microtime(true);
+                $this->logFlow('pull_post_sync_inicio', $flow, 'info');
+
                 $postPull = app(SeguimientoConsolidadoDriveCellSyncService::class)
-                    ->pullFromDrive($idContenedor, 'post_sync');
+                    ->pullFromDrive($idContenedor, 'post_sync', $flow);
+
                 if (!empty($postPull['success'])) {
-                    $this->log('info', 'Pull post-sync de celdas completado', [
-                        'id_contenedor' => $idContenedor,
+                    $this->logFlow('pull_post_sync_ok', $flow, 'info', [
                         'cells_upserted' => $postPull['cells_upserted'] ?? 0,
+                        'cells_history' => $postPull['cells_history'] ?? 0,
+                        'duration_ms' => (int) round((microtime(true) - $postPullStarted) * 1000),
+                    ]);
+                } else {
+                    $this->logFlow('pull_post_sync_fallido', $flow, 'warning', [
+                        'message' => $postPull['message'] ?? 'unknown',
+                        'duration_ms' => (int) round((microtime(true) - $postPullStarted) * 1000),
                     ]);
                 }
             }
+
+            $this->logFlow('sync_to_drive_ok', $flow, 'info', [
+                'duration_ms' => $flow->elapsedMs(),
+            ]);
 
             return [
                 'success' => true,
@@ -876,10 +959,13 @@ class SeguimientoConsolidadoDriveService
                 'file_name' => $fileName,
             ];
         } catch (\Throwable $e) {
-            $this->log('error', 'Error en syncToDrive', [
-                'id_contenedor' => $idContenedor,
+            $this->logFlow('sync_to_drive_excepcion', $flow, 'error', [
                 'error' => $e->getMessage(),
+                'exception_class' => get_class($e),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
                 'trace' => $e->getTraceAsString(),
+                'duration_ms' => $flow->elapsedMs(),
             ]);
 
             return [
@@ -889,6 +975,9 @@ class SeguimientoConsolidadoDriveService
         } finally {
             if ($tmpPath && is_file($tmpPath)) {
                 @unlink($tmpPath);
+                $this->logFlow('excel_temporal_eliminado', $flow, 'info', [
+                    'tmp_path' => $tmpPath,
+                ]);
             }
         }
     }
@@ -1116,6 +1205,19 @@ class SeguimientoConsolidadoDriveService
         if (Schema::hasTable('contenedor_seguimiento_row_sync')) {
             DB::table('contenedor_seguimiento_row_sync')->delete();
         }
+    }
+
+    /**
+     * @param string $step
+     * @param SeguimientoConsolidadoFlowContext $flow
+     * @param string $level
+     * @param array<string, mixed> $context
+     */
+    private function logFlow($step, SeguimientoConsolidadoFlowContext $flow, $level = 'info', array $context = [])
+    {
+        $this->log($level, $step, array_merge($flow->baseContext(), [
+            'step' => $step,
+        ], $context));
     }
 
     /**

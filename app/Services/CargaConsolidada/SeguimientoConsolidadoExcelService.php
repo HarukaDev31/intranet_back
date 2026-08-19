@@ -171,7 +171,7 @@ class SeguimientoConsolidadoExcelService
         $carga = $contenedor ? (string) $contenedor->carga : '';
         $rows = $this->fetchProveedoresSeguimiento($idContenedor, $carga);
         $this->enrichFechasDatosProveedor($idContenedor, $rows);
-        $this->enrichFechasArriveProveedor($rows);
+        $this->enrichFechasArriveProveedor($rows, (int) $idContenedor);
 
         $cotizacionesConPago = $this->loadCotizacionesConPagoAsociado($idContenedor);
         $groups = $this->classifyRows($rows, $cotizacionesConPago);
@@ -551,12 +551,13 @@ class SeguimientoConsolidadoExcelService
     }
 
     /**
-     * Resuelve fecha_recibir: prioriza arrive_date si ambas existen; si no hay fechas
-     * vigentes en proveedor pero sí historial, usa la última registrada.
+     * Resuelve fecha_recibir del consolidado actual.
+     * Ignora arrive_date / arrive_date_china cuyo último historial es de otro
+     * contenedor (clientes roleados).
      *
      * @param array<int, array<string, mixed>> $rows
      */
-    private function enrichFechasArriveProveedor(array &$rows)
+    private function enrichFechasArriveProveedor(array &$rows, $idContenedor = 0)
     {
         if ($rows === []) {
             return;
@@ -566,21 +567,28 @@ class SeguimientoConsolidadoExcelService
             return (int) ($row['id_proveedor'] ?? 0);
         }, $rows);
 
+        $idContenedor = (int) $idContenedor;
         $historyService = app(ProveedorArriveDateHistoryService::class);
-        $historyContext = $historyService->historyContextByProveedor($idProveedores);
+        $historyContext = $historyService->historyContextByProveedor($idProveedores, $idContenedor);
 
         foreach ($rows as $index => $row) {
             $idProveedor = (int) ($row['id_proveedor'] ?? 0);
-            $context = $historyContext[$idProveedor] ?? ['has_history' => false, 'latest' => null];
+            $context = $historyContext[$idProveedor] ?? [
+                'has_history' => false,
+                'has_history_for_contenedor' => false,
+                'latest' => null,
+                'latest_by_field' => [],
+            ];
 
             $fechaRecibir = $historyService->resolveFechaRecibir(
                 $row['fecha_llegada_peru'] ?? null,
                 $row['fecha_llegada_china'] ?? null,
-                $context['latest'] ?? null,
-                !empty($context['has_history'])
+                $context,
+                $idContenedor
             );
 
             $rows[$index]['fecha_recibir'] = $fechaRecibir;
+            $rows[$index]['fecha_recibir_has_history_contenedor'] = !empty($context['has_history_for_contenedor']);
             $rows[$index]['fecha_llegada_peru'] = ProveedorArriveDateHistoryService::normalizeDate($row['fecha_llegada_peru'] ?? null);
             $rows[$index]['fecha_llegada_china'] = ProveedorArriveDateHistoryService::normalizeDate($row['fecha_llegada_china'] ?? null);
         }
@@ -669,15 +677,36 @@ class SeguimientoConsolidadoExcelService
     }
 
     /**
-     * Por recibir: fecha_recibir resuelta para este consolidado (enrichFechasArriveProveedor).
-     * No usar arrive_date crudo del proveedor: puede ser roleo de otro contenedor y la celda FECHA quedaría vacía.
+     * Por recibir: tiene fecha de llegada resuelta para este consolidado.
+     * Usa fecha_recibir (enrich) alineada con la celda FECHA del Excel.
      *
      * @param array<string, mixed> $row
      * @return bool
      */
     private function isProveedorPorRecibir(array $row)
     {
-        return ProveedorArriveDateHistoryService::normalizeDate($row['fecha_recibir'] ?? null) !== null;
+        return $this->resolveFechaRecibirParaRow($row) !== null;
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     * @return string|null
+     */
+    private function resolveFechaRecibirParaRow(array $row)
+    {
+        $fechaRecibir = ProveedorArriveDateHistoryService::normalizeDate($row['fecha_recibir'] ?? null);
+        if ($fechaRecibir !== null) {
+            return $fechaRecibir;
+        }
+
+        if (!empty($row['fecha_recibir_has_history_contenedor'])) {
+            return null;
+        }
+
+        return app(ProveedorArriveDateHistoryService::class)->fallbackFechaDesdeProveedor(
+            $row['fecha_llegada_peru'] ?? null,
+            $row['fecha_llegada_china'] ?? null
+        );
     }
 
     /**
@@ -988,12 +1017,13 @@ class SeguimientoConsolidadoExcelService
             $item['vendedor'],
             $item['cliente'],
             $this->formatNumber($item['cbm_recibir']),
-            $this->formatShortDate($item['fecha_recibir']),
+            '',
             $item['code_supplier'],
             $item['ultima_actualizacion'] ?? '',
         ];
 
         $this->writeRowValues($sheet, $startCol, $row, $values, $applyBorder);
+        $this->writeCalendarDateCell($sheet, $startCol + 4, $row, $this->resolveFechaRecibirParaRow($item));
     }
 
     /**
@@ -1432,20 +1462,22 @@ class SeguimientoConsolidadoExcelService
     }
 
     /**
+     * FECHA de CARGA POR RECIBIR: serial Excel + dd/mm/yyyy (igual que Cotizaciones / CONTACTAR).
+     *
      * @param mixed $value
-     * @return string
      */
-    private function formatShortDate($value)
+    private function writeCalendarDateCell(Worksheet $sheet, $colIndex, $row, $value): void
     {
-        if (empty($value)) {
-            return '';
+        $cell = Coordinate::stringFromColumnIndex((int) $colIndex) . $row;
+        $serial = SeguimientoConsolidadoDateFormatter::calendarDateToExcelSerial($value);
+        if ($serial === null) {
+            $sheet->setCellValue($cell, '');
+
+            return;
         }
 
-        try {
-            return SeguimientoConsolidadoDateFormatter::formatCalendarDate($value);
-        } catch (\Exception $e) {
-            return (string) $value;
-        }
+        $sheet->setCellValue($cell, $serial);
+        $sheet->getStyle($cell)->getNumberFormat()->setFormatCode('dd/mm/yyyy');
     }
 
     /**
