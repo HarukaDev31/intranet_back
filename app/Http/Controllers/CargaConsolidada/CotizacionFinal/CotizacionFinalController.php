@@ -3221,6 +3221,7 @@ class CotizacionFinalController extends Controller
         if ($logistica <= 0 && $impuestos <= 0 && $fob <= 0) {
             return null;
         }
+        $logistica = $logistica + $recargos - $descuento;
         Log::info('EXtraccion de datos de la cotizacion final', [
             'recargos'=>$recargos,
             'descuento'=>$descuento,
