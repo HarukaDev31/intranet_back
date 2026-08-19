@@ -468,11 +468,11 @@ class ManualUsuarioDbService
         $isQa = $tipo === ManualBloque::TIPO_TEXTO && !empty($snap['qa']);
         $isResult = $tipo === ManualBloque::TIPO_CALLOUT && in_array((string) ($snap['tone'] ?? ''), ['success', 'result'], true);
 
-        if ($titulo !== '' && $tipo !== ManualBloque::TIPO_GRUPO && $tipo !== ManualBloque::TIPO_FLOW && !$isQa && !$isResult) {
+        if ($titulo !== '' && $tipo !== ManualBloque::TIPO_GRUPO && $tipo !== ManualBloque::TIPO_FLOW && $tipo !== ManualBloque::TIPO_MEDIA && !$isQa && !$isResult) {
             $out[] = $this->linkedTitleHtml($titulo, (string) ($payload['subtitulo'] ?? ''), 'widget-title');
         }
-        if (!empty($payload['subtitulo']) && !$this->isRouteLike((string) $payload['subtitulo'])) {
-            $subClass = $tipo === ManualBloque::TIPO_MEDIA ? 'media-subtitle' : 'muted';
+        if (!empty($payload['subtitulo']) && !$this->isRouteLike((string) $payload['subtitulo']) && $tipo !== ManualBloque::TIPO_MEDIA) {
+            $subClass = 'muted';
             $out[] = '<div class="' . $subClass . '">' . e((string) $payload['subtitulo']) . '</div>';
         }
 
@@ -592,7 +592,7 @@ class ManualUsuarioDbService
                 break;
 
             case ManualBloque::TIPO_MEDIA:
-                $caption = (string) ($snap['caption'] ?? $snap['alt'] ?? 'Captura');
+                $alt = (string) ($snap['alt'] ?? $snap['nombre'] ?? 'Captura');
                 $mediaId = (int) ($snap['media_id'] ?? 0);
                 $embedded = false;
                 if ($mediaId > 0) {
@@ -605,7 +605,7 @@ class ManualUsuarioDbService
                                 $mime = 'image/png';
                             }
                             $out[] = '<div class="media"><img src="data:' . $mime . ';base64,' . base64_encode($bin)
-                                . '" alt="' . e($caption) . '" style="max-width:92%;max-height:280px;"></div>';
+                                . '" alt="' . e($alt) . '" style="max-width:92%;max-height:280px;"></div>';
                             $embedded = true;
                         }
                     }
@@ -613,15 +613,12 @@ class ManualUsuarioDbService
                 if (!$embedded) {
                     if ($mediaId > 0) {
                         $out[] = '<div class="media"><img src="' . e(url('/api/manual-usuario/media/' . $mediaId))
-                            . '" alt="' . e($caption) . '"></div>';
+                            . '" alt="' . e($alt) . '"></div>';
                     } elseif (!empty($snap['url']) && !str_starts_with((string) $snap['url'], 'http')) {
-                        $out[] = '<div class="media"><img src="' . e((string) $snap['url']) . '" alt="' . e($caption) . '"></div>';
+                        $out[] = '<div class="media"><img src="' . e((string) $snap['url']) . '" alt="' . e($alt) . '"></div>';
                     } else {
                         $out[] = '<div class="media-placeholder">Captura pendiente</div>';
                     }
-                }
-                if ($caption !== '') {
-                    $out[] = '<div class="media-caption">' . e($caption) . '</div>';
                 }
                 break;
 
