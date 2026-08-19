@@ -19,7 +19,7 @@ use App\Traits\UsesObjectStorage;
 use App\Traits\WhatsappTrait;
 use App\Models\ContenedorCotizacionProveedor;
 use App\Jobs\SendInspectionMediaJob;
-use App\Jobs\ForceSendCobrandoJob;
+use App\Services\CargaConsolidada\ReminderInicialWhatsappService;
 use App\Jobs\ForceSendRotuladoJob;
 use App\Jobs\SendRecordatorioDatosProveedorJob;
 use App\Models\ContenedorCotizacion;
@@ -3553,7 +3553,32 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
     }
 
     /**
-     * Forzar envío de mensaje de cobranza a múltiples proveedores
+     * Vista previa del recordatorio de inicial: mensaje y Excel de cotización inicial (CDN).
+     */
+    public function previewCobrando($idCotizacion)
+    {
+        try {
+            $result = app(ReminderInicialWhatsappService::class)->preview((int) $idCotizacion);
+            if (empty($result['success'])) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $result['message'] ?? 'No se pudo armar la vista previa',
+                ], 404);
+            }
+
+            return response()->json($result);
+        } catch (\Exception $e) {
+            Log::error('Error en previewCobrando: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al armar la vista previa: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Forzar envío de mensaje de cobranza (recordatorio de inicial).
+     * Encola y responde de inmediato; el WhatsApp se envía en segundo plano.
      */
     public function forceSendCobrando(Request $request)
     {
@@ -3566,9 +3591,16 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                 ], 401);
             }
 
-            $idCotizacion = $request->idCotizacion;
-            $idContainer = $request->idContainer;
+            $idCotizacion = (int) $request->idCotizacion;
+            $idContainer = (int) $request->idContainer;
 
+            $preview = app(ReminderInicialWhatsappService::class)->preview($idCotizacion);
+            if (empty($preview['success'])) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $preview['message'] ?? 'Cotización no encontrada',
+                ], 404);
+            }
 
             Log::info("Iniciando proceso de envío de cobranza", [
                 'id_cotizacion' => $idCotizacion,
@@ -3576,11 +3608,8 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                 'user_id' => $user->ID_Usuario
             ]);
 
-            // Obtener dominio del frontend
             $domain = WhatsappTrait::getCurrentRequestDomain();
-
-            // Despachar el job para procesar en segundo plano
-            ForceSendCobrandoJob::dispatch($idCotizacion, $idContainer, $domain)->onQueue('importaciones');
+            app(ReminderInicialWhatsappService::class)->enqueue($idCotizacion, $idContainer, $domain);
 
             Log::info("Job ForceSendCobrandoJob despachado", [
                 'id_cotizacion' => $idCotizacion,
@@ -3590,7 +3619,7 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
 
             return response()->json([
                 'success' => true,
-                'message' => "Proceso de cobranza iniciado. El mensaje se enviará en segundo plano.",
+                'message' => 'El recordatorio se está enviando al cliente',
                 'data' => [
                     'id_cotizacion' => $idCotizacion,
                     'id_container' => $idContainer

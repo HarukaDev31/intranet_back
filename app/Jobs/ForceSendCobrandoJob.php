@@ -2,19 +2,17 @@
 
 namespace App\Jobs;
 
+use App\Events\ReminderInicialWhatsAppFinished;
+use App\Services\CargaConsolidada\ReminderInicialWhatsappService;
+use App\Traits\DatabaseConnectionTrait;
+use App\Traits\WhatsappTrait;
+use Exception;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
-use App\Models\CargaConsolidada\Cotizacion;
-use App\Models\CargaConsolidada\Contenedor;
-use App\Traits\WhatsappTrait;
-use App\Traits\DatabaseConnectionTrait;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\DB;
-use Carbon\Carbon;
-use Exception;
 
 class ForceSendCobrandoJob implements ShouldQueue
 {
@@ -32,15 +30,18 @@ class ForceSendCobrandoJob implements ShouldQueue
         $this->idCotizacion = $idCotizacion;
         $this->idContainer = $idContainer;
         $this->domain = $domain;
+        $this->onQueue('importaciones');
     }
 
     /**
      * Execute the job.
      */
-    public function handle(): void
+    public function handle(ReminderInicialWhatsappService $service): void
     {
+        $cliente = '';
+        $carga = '';
+
         try {
-            // Establecer la conexión de BD basándose en el dominio
             $this->setDatabaseConnection($this->domain);
 
             Log::info("Iniciando Job ForceSendCobrando", [
@@ -49,85 +50,28 @@ class ForceSendCobrandoJob implements ShouldQueue
                 'domain' => $this->domain
             ]);
 
-            // Obtener información de la cotización
-            $cotizacionInfo = Cotizacion::findOrFail($this->idCotizacion);
-            
-            $volumen = $cotizacionInfo->volumen;
-            $valorCot = $cotizacionInfo->monto;
-            $telefono = $cotizacionInfo->telefono;
-            $cliente = $cotizacionInfo->nombre;
-
-            // Obtener información del contenedor
-            $contenedor = Contenedor::findOrFail($this->idContainer);
-            $carga = $contenedor->carga;
-            $fechaCierre = $contenedor->f_cierre;
-            $anioContenedor = Carbon::parse($fechaCierre)->year;
-            // Formatear fecha de cierre
-            $fCierre = Carbon::parse($fechaCierre)->locale('es')->format('d F');
-            $meses = [
-                'January' => 'Enero',
-                'February' => 'Febrero',
-                'March' => 'Marzo',
-                'April' => 'Abril',
-                'May' => 'Mayo',
-                'June' => 'Junio',
-                'July' => 'Julio',
-                'August' => 'Agosto',
-                'September' => 'Septiembre',
-                'October' => 'Octubre',
-                'November' => 'Noviembre',
-                'December' => 'Diciembre'
-            ];
-            $fCierre = strtr($fCierre, $meses);
-
-            // Configurar teléfono para WhatsApp (mismo formato que SendReminderPagoWhatsAppJob)
-            $rawTelefono = (string) ($telefono ?? '');
-            $telefonoDigits = preg_replace('/\D/', '', $rawTelefono);
-            if (strlen($telefonoDigits) === 9) {
-                $telefonoDigits = '51' . $telefonoDigits;
-            } elseif (strlen($telefonoDigits) === 10 && substr($telefonoDigits, 0, 1) === '0') {
-                $telefonoDigits = '51' . substr($telefonoDigits, 1);
+            $payload = $service->buildPayload((int) $this->idCotizacion, $this->idContainer);
+            if ($payload === null) {
+                Log::warning('ForceSendCobrandoJob: cotización o contenedor no encontrado', [
+                    'id_cotizacion' => $this->idCotizacion,
+                    'id_container' => $this->idContainer,
+                ]);
+                $this->notifyContabilidad(false, 'Cotización no encontrada', $cliente, $carga);
+                return;
             }
 
-            if ($telefonoDigits === '') {
-                throw new Exception('Teléfono inválido o vacío para cobranza');
+            $cliente = (string) ($payload['nombre'] ?? '');
+            $carga = (string) ($payload['carga'] ?? '');
+
+            if ($payload['phone'] === '') {
+                Log::warning('ForceSendCobrandoJob: teléfono inválido o vacío', [
+                    'cotizacion_id' => $this->idCotizacion,
+                ]);
+                $this->notifyContabilidad(false, 'El cliente no tiene un teléfono válido', $cliente, $carga);
+                return;
             }
 
-            $this->phoneNumberId = $telefonoDigits . '@c.us';
-
-            // Construir mensaje de cobranza
-            // Calcular suma y conteo de pagos del concepto LOGISTICA para esta cotización
-            try {
-                $queryPagos = DB::table('contenedor_consolidado_cotizacion_coordinacion_pagos as P')
-                    ->join('cotizacion_coordinacion_pagos_concept as C', 'P.id_concept', '=', 'C.id')
-                    ->where('P.id_cotizacion', $this->idCotizacion)
-                    ->where('C.name', 'LOGISTICA');
-
-                $totalPagosLogistica = $queryPagos->sum('P.monto');
-                $countPagosLogistica = $queryPagos->count();
-            } catch (\Exception $e) {
-                Log::warning('Error calculando pagos LOGISTICA (ForceSendCobrandoJob): ' . $e->getMessage(), ['id_cotizacion' => $this->idCotizacion]);
-                $totalPagosLogistica = 0;
-                $countPagosLogistica = 0;
-            }
-
-            $pendiente = (float)($valorCot ?? 0) - (float)$totalPagosLogistica;
-            if ($pendiente < 0) {
-                $pendiente = 0;
-            }
-
-            // Tomar el año de la fecha de inicio del contenedor
-            // add Hola @nombre del cliente
-            $message = "Hola " . $cliente . ", te escribe el área de contabilidad de Probusiness. \n\n" .
-                "Reserva de espacio:\n" .
-                "*Consolidado #" . $carga . "-$anioContenedor*\n\n" .
-                "Ahora tienes que hacer el pago del CBM preliminar para poder subir su carga en nuestro contenedor.\n\n" .
-                "☑ CBM Preliminar: " . $volumen . " cbm\n" .
-                "☑ Costo CBM: $" . $valorCot . "\n\n" .
-                "📅 Fecha Limite de pago: " . $fCierre . "\n\n" .
-                "⚠ Nota: Realizar el pago antes del llenado del contenedor.\n\n" .
-                "📦 En caso hubiera variaciones en el cubicaje se cobrará la diferencia en la cotización final.\n\n" .
-                "Apenas haga el pago, envíe por este medio para hacer la reserva.";
+            $this->phoneNumberId = $payload['phone_id'];
 
             Log::info('ForceSendCobrandoJob enviando a WhatsApp redis', [
                 'id_cotizacion' => $this->idCotizacion,
@@ -136,7 +80,7 @@ class ForceSendCobrandoJob implements ShouldQueue
                 'api' => 'https://redis.probusiness.pe/api/whatsapp/messageV2',
             ]);
 
-            $msgResult = $this->sendMessage($message, $this->phoneNumberId, 0, 'administracion');
+            $msgResult = $this->sendMessage($payload['message'], $this->phoneNumberId, 0, 'administracion');
             if (!is_array($msgResult) || empty($msgResult['status'])) {
                 Log::error('ForceSendCobrandoJob: falló envío de texto (call API)', [
                     'id_cotizacion' => $this->idCotizacion,
@@ -162,23 +106,28 @@ class ForceSendCobrandoJob implements ShouldQueue
             Log::info("Mensaje de cobranza enviado exitosamente via Job", [
                 'id_cotizacion' => $this->idCotizacion,
                 'cliente' => $cliente,
-                'telefono' => $telefonoDigits,
+                'telefono' => $payload['phone'],
                 'phoneNumberId' => $this->phoneNumberId,
-                'volumen' => $volumen,
-                'monto' => $valorCot,
                 'message_api' => $msgResult,
                 'media_api' => [
                     'status' => $mediaResult['status'] ?? null,
                     'http_hint' => $mediaResult['response'] ?? null,
                 ],
             ]);
-        } catch (Exception $e) {
+
+            $this->notifyContabilidad(
+                true,
+                $cliente !== '' ? "Se envió el recordatorio de inicial a {$cliente}." : 'Se envió el recordatorio de inicial al cliente.',
+                $cliente,
+                $carga
+            );
+        } catch (\Throwable $e) {
             Log::error('Error en ForceSendCobrandoJob: ' . $e->getMessage(), [
                 'id_cotizacion' => $this->idCotizacion,
                 'id_container' => $this->idContainer,
                 'trace' => $e->getTraceAsString()
             ]);
-            throw $e;
+            $this->notifyContabilidad(false, 'No se pudo enviar el recordatorio de inicial.', $cliente, $carga);
         }
     }
 
@@ -192,5 +141,23 @@ class ForceSendCobrandoJob implements ShouldQueue
             'id_container' => $this->idContainer,
             'error' => $exception->getMessage()
         ]);
+        $this->notifyContabilidad(false, 'No se pudo enviar el recordatorio de inicial.', '', '');
+    }
+
+    private function notifyContabilidad($success, $message, $cliente, $carga): void
+    {
+        try {
+            event(new ReminderInicialWhatsAppFinished(
+                $this->idCotizacion,
+                $cliente,
+                $carga,
+                $success,
+                $message
+            ));
+        } catch (\Throwable $e) {
+            Log::error('ForceSendCobrandoJob: no se pudo emitir WebSocket a contabilidad: ' . $e->getMessage(), [
+                'cotizacion_id' => $this->idCotizacion,
+            ]);
+        }
     }
 }

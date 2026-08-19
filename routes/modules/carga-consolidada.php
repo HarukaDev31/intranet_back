@@ -40,6 +40,7 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
     Route::prefix('commons')->group(function () {
         Route::post('/force-send-inspection', [CotizacionProveedorController::class, 'forceSendInspection']);
         Route::post('/force-send-rotulado', [CotizacionProveedorController::class, 'forceSendRotulado']);
+        Route::get('/preview-cobranza/{idCotizacion}', [CotizacionProveedorController::class, 'previewCobrando']);
         Route::post('/force-send-cobranza', [CotizacionProveedorController::class, 'forceSendCobrando']);
         Route::post('/force-send-move', [CotizacionProveedorController::class, 'forceSendMove']);
         Route::post('/force-send-recordatorio-datos-proveedor', [CotizacionProveedorController::class, 'forceSendRecordatorioDatosProveedor']);
