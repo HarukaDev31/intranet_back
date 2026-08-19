@@ -16,22 +16,13 @@ class CargaConsolidadaCacheService
     public const TAG = 'carga-consolidada';
 
     private const VERSION = 'v1';
+    private const TTL_MINUTES = 3;
     private const LOCK_SECONDS = 20;
     private const BLOCK_SECONDS = 8;
 
-    public function isEnabled(): bool
-    {
-        return (bool) config('carga_consolidada.cache.enabled', true);
-    }
-
-    public function ttlMinutes(): int
-    {
-        return max(1, (int) config('carga_consolidada.cache.ttl_minutes', 3));
-    }
-
     public function shouldCacheGetRequest(Request $request): bool
     {
-        if (! $this->isEnabled() || ! $request->isMethod('GET')) {
+        if (! $request->isMethod('GET')) {
             return false;
         }
 
@@ -40,10 +31,6 @@ class CargaConsolidadaCacheService
 
     public function shouldInvalidateWriteRequest(Request $request, BaseResponse $response): bool
     {
-        if (! $this->isEnabled()) {
-            return false;
-        }
-
         if (! in_array($request->method(), ['POST', 'PUT', 'PATCH', 'DELETE'], true)) {
             return false;
         }
@@ -83,7 +70,7 @@ class CargaConsolidadaCacheService
     public function rememberHttpGet(Request $request, callable $resolver): array
     {
         $key = $this->buildHttpCacheKey($request);
-        $ttl = now()->addMinutes($this->ttlMinutes());
+        $ttl = now()->addMinutes(self::TTL_MINUTES);
         $lock = Cache::lock('lock:' . $key, self::LOCK_SECONDS);
 
         return $lock->block(self::BLOCK_SECONDS, function () use ($key, $ttl, $resolver) {
@@ -107,7 +94,7 @@ class CargaConsolidadaCacheService
             return;
         }
 
-        $this->putTagged($key, $this->payloadFromResponse($response), now()->addMinutes($this->ttlMinutes()));
+        $this->putTagged($key, $this->payloadFromResponse($response), now()->addMinutes(self::TTL_MINUTES));
     }
 
     public function buildHttpCacheKey(Request $request): string
@@ -252,7 +239,7 @@ class CargaConsolidadaCacheService
     private function pathMatchesSkipPatterns(Request $request): bool
     {
         $path = strtolower($request->path());
-        $patterns = (array) config('carga_consolidada.cache.skip_path_contains', []);
+        $patterns = (array) config('carga_consolidada.cache_skip_path_contains', []);
 
         foreach ($patterns as $pattern) {
             $pattern = strtolower(trim((string) $pattern));
