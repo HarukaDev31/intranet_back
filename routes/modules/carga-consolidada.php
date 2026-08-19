@@ -34,7 +34,7 @@ use App\Http\Controllers\Commons\Google\SheetController;
 |
 */
 
-Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], function () {
+Route::group(['prefix' => 'carga-consolidada', 'middleware' => ['jwt.auth', 'carga-consolidada.cache']], function () {
     
     // Commons
     Route::prefix('commons')->group(function () {
@@ -391,7 +391,7 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => 'jwt.auth'], func
 });
 
 // Ruta legacy de consolidado
-Route::group(['prefix' => 'consolidado', 'middleware' => 'jwt.auth'], function () {
+Route::group(['prefix' => 'consolidado', 'middleware' => ['jwt.auth', 'carga-consolidada.cache']], function () {
     Route::group(['prefix' => 'cotizacion'], function () {
         Route::get('clientes-documentacion/{id}', [CotizacionController::class, 'showClientesDocumentacion']);
     });

@@ -4,8 +4,10 @@ namespace App\Providers;
 
 use App\Models\CargaConsolidada\Cotizacion;
 use App\Models\CargaConsolidada\CotizacionProveedor;
+use App\Models\CargaConsolidada\Contenedor;
 use App\Observers\CargaConsolidada\CotizacionObserver;
 use App\Observers\CargaConsolidada\CotizacionProveedorObserver;
+use App\Observers\CargaConsolidada\ContenedorObserver;
 use App\Support\Database\WslLocalDatabaseConnection;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
@@ -41,6 +43,7 @@ class AppServiceProvider extends ServiceProvider
         // Registrar observer para sincronizar estados entre Cotizacion y CalculadoraImportacion
         Cotizacion::observe(CotizacionObserver::class);
         CotizacionProveedor::observe(CotizacionProveedorObserver::class);
+        Contenedor::observe(ContenedorObserver::class);
 
         Event::listen(BeforeExport::class, function () {
             $limit = (string) env('EXCEL_MEMORY_LIMIT', '1024M');

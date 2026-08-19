@@ -26,4 +26,27 @@ return [
      */
     'seguimiento_sync_debounce_minutes' => (int) env('SEGUIMIENTO_SYNC_DEBOUNCE_MINUTES', 10),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Cache HTTP (Redis) del módulo carga consolidada
+    |--------------------------------------------------------------------------
+    */
+    'cache' => [
+        'enabled' => env('CARGA_CONSOLIDADA_CACHE_ENABLED', true),
+        'ttl_minutes' => (int) env('CARGA_CONSOLIDADA_CACHE_TTL_MINUTES', 3),
+        'skip_path_contains' => [
+            'download',
+            'export',
+            'preview',
+            '/file',
+            'zip',
+            'pdf',
+            'excel',
+            'template',
+            'upload',
+            'serve',
+            'check-temp',
+        ],
+    ],
+
 ];

@@ -4,10 +4,19 @@ namespace App\Observers\CargaConsolidada;
 
 use App\Models\CargaConsolidada\Cotizacion;
 use App\Models\CalculadoraImportacion;
+use App\Services\CargaConsolidada\CargaConsolidadaCacheService;
 use App\Services\CargaConsolidada\SeguimientoConsolidadoDriveService;
 
 class CotizacionObserver
 {
+    /** @var CargaConsolidadaCacheService */
+    private $cache;
+
+    public function __construct(CargaConsolidadaCacheService $cache)
+    {
+        $this->cache = $cache;
+    }
+
     /**
      * Al pasar a CONFIRMADO se registra fecha_confirmacion; al salir de CONFIRMADO se limpia.
      */
@@ -45,5 +54,22 @@ class CotizacionObserver
         if (!empty($cotizacion->id_contenedor)) {
             app(SeguimientoConsolidadoDriveService::class)->queueSyncIfLinked((int) $cotizacion->id_contenedor);
         }
+
+        $this->cache->invalidateIfCotizacionAffectsList($cotizacion);
+    }
+
+    public function created(Cotizacion $cotizacion): void
+    {
+        $this->cache->invalidateModule();
+    }
+
+    public function deleted(Cotizacion $cotizacion): void
+    {
+        $this->cache->invalidateModule();
+    }
+
+    public function restored(Cotizacion $cotizacion): void
+    {
+        $this->cache->invalidateModule();
     }
 }
