@@ -1306,7 +1306,7 @@ class CotizacionFinalController extends Controller
             app(ReminderPagoWhatsappService::class)->enqueue((int) $idCotizacion, (int) $sleep);
 
             return response()->json([
-                'message' => 'Recordatorio encolado correctamente',
+                'message' => 'El recordatorio se está enviando al cliente',
                 'success' => true,
             ]);
         } catch (\Exception $e) {
