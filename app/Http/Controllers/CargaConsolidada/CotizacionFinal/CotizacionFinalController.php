@@ -3221,7 +3221,16 @@ class CotizacionFinalController extends Controller
         if ($logistica <= 0 && $impuestos <= 0 && $fob <= 0) {
             return null;
         }
-
+        Log::info('EXtraccion de datos de la cotizacion final', [
+            'recargos'=>$recargos,
+            'descuento'=>$descuento,
+            'logistica_final'=>$logistica,
+            'impuestos_final'=>$impuestos,
+            'fob_final'=>$fob,
+            'tarifa_final'=>$tarifa,
+            'volumen_final'=>$volumen,
+            'peso_final'=>$peso,
+        ]);
         return [
             'layout' => 'column_b_labels',
             'row_map' => [
