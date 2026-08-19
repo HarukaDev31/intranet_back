@@ -640,37 +640,73 @@ class SeguimientoConsolidadoDriveCellSyncService
         $noteColIndex = $startCol + (int) data_get($config, 'columns.urgencia_notas.index', 7);
         $clienteColIndex = $startCol + (int) data_get($config, 'columns.cliente', 2);
         $cbmColIndex = $startCol + (int) data_get($config, 'columns.cbm', 3);
+        $celularColIndex = $startCol + (int) data_get($config, 'columns.celular', 4);
+        $motivoColIndex = $startCol + (int) data_get($config, 'columns.motivo', 5);
 
-        $highestRow = (int) $sheet->getHighestDataRow();
+        $expectedItems = app(SeguimientoConsolidadoExcelService::class)->buildUrgenciaItems($idContenedor);
+        $sheetRows = $this->collectUrgenciaSheetRows(
+            $sheet,
+            $startCol,
+            $clienteColIndex,
+            $cbmColIndex,
+            $celularColIndex,
+            $motivoColIndex,
+            $noteColIndex
+        );
+
         $upserted = 0;
         $history = 0;
 
-        for ($row = 1; $row <= $highestRow; $row++) {
-            $consLabel = trim((string) $sheet->getCell(Coordinate::stringFromColumnIndex($startCol) . $row)->getCalculatedValue());
-            if ($consLabel !== '' && stripos($consLabel, 'TOTAL POR CONTACTAR') !== false) {
+        foreach ($sheetRows as $index => $rowData) {
+            $note = trim((string) ($rowData['note'] ?? ''));
+            if ($note === '') {
                 continue;
             }
 
-            $cliente = trim((string) $this->cellDisplayValue($sheet, $clienteColIndex, $row));
-            $note = trim((string) $this->cellDisplayValue($sheet, $noteColIndex, $row));
-            $cbm = trim((string) $this->cellDisplayValue($sheet, $cbmColIndex, $row));
-
-            if ($cliente === '' || $note === '') {
-                continue;
+            $idProveedor = null;
+            if (isset($expectedItems[$index])) {
+                $expected = $expectedItems[$index];
+                $expectedCliente = trim((string) ($expected['cliente'] ?? ''));
+                $rowCliente = trim((string) ($rowData['cliente'] ?? ''));
+                if ($expectedCliente !== '' && strcasecmp($expectedCliente, $rowCliente) === 0) {
+                    $candidate = (int) ($expected['id_proveedor'] ?? 0);
+                    if ($candidate > 0) {
+                        $idProveedor = $candidate;
+                    }
+                }
             }
 
-            $idProveedor = $this->resolveUrgenciaProveedor($idContenedor, $cliente, $cbm);
             if ($idProveedor === null) {
+                $idProveedor = $this->resolveUrgenciaProveedor(
+                    $idContenedor,
+                    (string) ($rowData['cliente'] ?? ''),
+                    (string) ($rowData['cbm'] ?? ''),
+                    (string) ($rowData['celular'] ?? ''),
+                    (string) ($rowData['motivo'] ?? '')
+                );
+            }
+
+            if ($idProveedor === null) {
+                Log::warning(self::LOG_PREFIX . ' Pull URGENCIA: no se resolvió proveedor para nota manual', [
+                    'id_contenedor' => $idContenedor,
+                    'trigger' => $trigger,
+                    'row' => $rowData['row'] ?? null,
+                    'cliente' => $rowData['cliente'] ?? '',
+                    'cbm' => $rowData['cbm'] ?? '',
+                ]);
                 continue;
             }
 
+            $row = (int) ($rowData['row'] ?? 0);
             $cellRef = Coordinate::stringFromColumnIndex($noteColIndex) . $row;
             $result = $this->repository->upsertCell([
                 'id_contenedor' => $idContenedor,
                 'sheet_name' => 'Seguimiento',
                 'row_key' => SeguimientoDriveCellRowKey::urgenciaProveedor($idProveedor),
                 'column_key' => 'urgencia_notas',
-                'id_cotizacion' => null,
+                'id_cotizacion' => isset($expectedItems[$index]['id_cotizacion'])
+                    ? (int) $expectedItems[$index]['id_cotizacion']
+                    : null,
                 'id_proveedor' => $idProveedor,
                 'cell_ref' => $cellRef,
                 'row_number' => $row,
@@ -764,25 +800,130 @@ class SeguimientoConsolidadoDriveCellSyncService
     /**
      * @return int|null
      */
-    private function resolveUrgenciaProveedor(int $idContenedor, string $cliente, string $cbm): ?int
-    {
+    private function resolveUrgenciaProveedor(
+        int $idContenedor,
+        string $cliente,
+        string $cbm,
+        string $celular = '',
+        string $motivo = ''
+    ): ?int {
+        $cliente = trim($cliente);
+        if ($cliente === '') {
+            return null;
+        }
+
         $query = DB::table('contenedor_consolidado_cotizacion_proveedores as P')
             ->join('contenedor_consolidado_cotizacion as C', 'C.id', '=', 'P.id_cotizacion')
             ->where('P.id_contenedor', $idContenedor)
             ->whereNull('C.deleted_at')
-            ->where('C.nombre', $cliente);
+            ->where('C.nombre', $cliente)
+            ->whereIn('P.estados_proveedor', ['NC', 'WAIT', 'NP']);
 
-        if ($cbm !== '' && is_numeric($cbm)) {
-            $cbmVal = round((float) $cbm, 2);
+        $motivo = strtoupper(trim($motivo));
+        if ($motivo !== '') {
+            $query->where('P.estados_proveedor', $motivo);
+        }
+
+        $cbmVal = $this->parseNumericCell($cbm);
+        if ($cbmVal !== null) {
             $query->where(function ($q) use ($cbmVal) {
                 $q->whereRaw('ROUND(COALESCE(P.cbm_total, 0), 2) = ?', [$cbmVal])
                     ->orWhereRaw('ROUND(COALESCE(P.cbm_total_china, 0), 2) = ?', [$cbmVal]);
             });
         }
 
-        $row = $query->orderBy('P.id')->first();
+        $celular = trim($celular);
+        if ($celular !== '') {
+            $normalized = preg_replace('/\s+/', '', $celular);
+            $query->where(function ($q) use ($celular, $normalized) {
+                $q->where('C.telefono', $celular)
+                    ->orWhere('C.telefono', $normalized)
+                    ->orWhereRaw('REPLACE(C.telefono, " ", "") = ?', [$normalized]);
+            });
+        }
 
-        return $row ? (int) $row->id : null;
+        $matches = $query->orderBy('P.id')->pluck('P.id')->all();
+        if (count($matches) === 1) {
+            return (int) $matches[0];
+        }
+
+        if (count($matches) > 1 && $cbmVal === null) {
+            return (int) $matches[0];
+        }
+
+        if ($cbmVal !== null || $motivo !== '' || $celular !== '') {
+            return null;
+        }
+
+        $fallback = DB::table('contenedor_consolidado_cotizacion_proveedores as P')
+            ->join('contenedor_consolidado_cotizacion as C', 'C.id', '=', 'P.id_cotizacion')
+            ->where('P.id_contenedor', $idContenedor)
+            ->whereNull('C.deleted_at')
+            ->where('C.nombre', $cliente)
+            ->whereIn('P.estados_proveedor', ['NC', 'WAIT', 'NP'])
+            ->orderBy('P.id')
+            ->value('P.id');
+
+        return $fallback ? (int) $fallback : null;
+    }
+
+    /**
+     * @return array<int, array{row:int, cliente:string, cbm:string, celular:string, motivo:string, note:string}>
+     */
+    private function collectUrgenciaSheetRows(
+        Worksheet $sheet,
+        int $startCol,
+        int $clienteColIndex,
+        int $cbmColIndex,
+        int $celularColIndex,
+        int $motivoColIndex,
+        int $noteColIndex
+    ): array {
+        $highestRow = (int) $sheet->getHighestDataRow();
+        $rows = [];
+
+        for ($row = SeguimientoConsolidadoExcelService::SEGUIMIENTO_DATA_START_ROW; $row <= $highestRow; $row++) {
+            $consLabel = trim((string) $sheet->getCell(Coordinate::stringFromColumnIndex($startCol) . $row)->getCalculatedValue());
+            if ($consLabel !== '' && stripos($consLabel, 'TOTAL POR CONTACTAR') !== false) {
+                break;
+            }
+
+            $cliente = trim((string) $this->cellDisplayValue($sheet, $clienteColIndex, $row));
+            if ($cliente === '') {
+                continue;
+            }
+
+            $rows[] = [
+                'row' => $row,
+                'cliente' => $cliente,
+                'cbm' => trim((string) $this->cellDisplayValue($sheet, $cbmColIndex, $row)),
+                'celular' => trim((string) $this->cellDisplayValue($sheet, $celularColIndex, $row)),
+                'motivo' => trim((string) $this->cellDisplayValue($sheet, $motivoColIndex, $row)),
+                'note' => trim((string) $this->cellDisplayValue($sheet, $noteColIndex, $row)),
+            ];
+        }
+
+        return $rows;
+    }
+
+    private function parseNumericCell($value): ?float
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        if (is_numeric($value)) {
+            return round((float) $value, 2);
+        }
+
+        $text = trim((string) $value);
+        if ($text === '') {
+            return null;
+        }
+
+        $text = str_replace(',', '.', preg_replace('/[^\d,.\-]/', '', $text) ?? '');
+
+        return is_numeric($text) ? round((float) $text, 2) : null;
     }
 
     /**
@@ -973,20 +1114,12 @@ class SeguimientoConsolidadoDriveCellSyncService
         $config = (array) config('seguimiento_drive_cells.sheets.Seguimiento.urgencia', []);
         $startCol = (int) ($config['start_col'] ?? 30);
         $noteColIndex = $startCol + (int) data_get($config, 'columns.urgencia_notas.index', 7);
-        $clienteColIndex = $startCol + (int) data_get($config, 'columns.cliente', 2);
-        $cbmColIndex = $startCol + (int) data_get($config, 'columns.cbm', 3);
-        $highestRow = (int) $sheet->getHighestDataRow();
+        $items = app(SeguimientoConsolidadoExcelService::class)->buildUrgenciaItems($idContenedor);
         $changed = false;
 
-        for ($row = 1; $row <= $highestRow; $row++) {
-            $cliente = trim((string) $this->cellDisplayValue($sheet, $clienteColIndex, $row));
-            $cbm = trim((string) $this->cellDisplayValue($sheet, $cbmColIndex, $row));
-            if ($cliente === '') {
-                continue;
-            }
-
-            $idProveedor = $this->resolveUrgenciaProveedor($idContenedor, $cliente, $cbm);
-            if ($idProveedor === null) {
+        foreach ($items as $index => $item) {
+            $idProveedor = (int) ($item['id_proveedor'] ?? 0);
+            if ($idProveedor <= 0) {
                 continue;
             }
 
@@ -995,6 +1128,7 @@ class SeguimientoConsolidadoDriveCellSyncService
                 continue;
             }
 
+            $row = SeguimientoConsolidadoExcelService::SEGUIMIENTO_DATA_START_ROW + $index;
             $cellRef = Coordinate::stringFromColumnIndex($noteColIndex) . $row;
             $current = trim((string) $sheet->getCell($cellRef)->getValue());
             if ($current === $notes[$rowKey]) {
