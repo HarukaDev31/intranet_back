@@ -360,7 +360,7 @@ class SeguimientoConsolidadoExcelService
             $fueContactado = $historyService->isEstadoContactado($estadoChina)
                 || !empty($contactadoHistorial[$idProveedor]);
 
-            if (!$enYiwu && $this->isProveedorPorRecibir($row, $estadoChina)) {
+            if (!$enYiwu && $this->isProveedorPorRecibir($row)) {
                 $recibir[] = $row;
             }
 
@@ -675,51 +675,15 @@ class SeguimientoConsolidadoExcelService
     }
 
     /**
-     * Por recibir: tiene fecha de llegada o estado China LOADED.
-     *
-     * @param array<string, mixed> $row
-     * @param string $estadoChina
-     * @return bool
-     */
-    private function isProveedorPorRecibir(array $row, $estadoChina)
-    {
-        if ($this->hasFechaLlegada($row)) {
-            return true;
-        }
-
-        return strtoupper(trim((string) $estadoChina)) === 'LOADED';
-    }
-
-    /**
-     * Por recibir / contactar: tiene fecha de llegada china o Perú.
-     * Incluye fecha_recibir enriquecida desde historial (para bloque RECIBIR).
+     * Por recibir: fecha_recibir resuelta para este consolidado (enrichFechasArriveProveedor).
+     * No usar arrive_date crudo del proveedor: puede ser roleo de otro contenedor y la celda FECHA quedaría vacía.
      *
      * @param array<string, mixed> $row
      * @return bool
      */
-    private function hasFechaLlegada(array $row)
+    private function isProveedorPorRecibir(array $row)
     {
-        $fechaRecibir = ProveedorArriveDateHistoryService::normalizeDate($row['fecha_recibir'] ?? null);
-        if ($fechaRecibir !== null) {
-            return true;
-        }
-
-        return $this->hasFechaLlegadaActual($row);
-    }
-
-    /**
-     * Fechas vigentes en el proveedor (sin historial). Usado por CONTACTAR:
-     * si solo hay fecha histórica, igual deben aparecer hasta cargar fecha actual.
-     *
-     * @param array<string, mixed> $row
-     * @return bool
-     */
-    private function hasFechaLlegadaActual(array $row)
-    {
-        $fechaPeru = ProveedorArriveDateHistoryService::normalizeDate($row['fecha_llegada_peru'] ?? null);
-        $fechaChina = ProveedorArriveDateHistoryService::normalizeDate($row['fecha_llegada_china'] ?? null);
-
-        return $fechaPeru !== null || $fechaChina !== null;
+        return ProveedorArriveDateHistoryService::normalizeDate($row['fecha_recibir'] ?? null) !== null;
     }
 
     /**
