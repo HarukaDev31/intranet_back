@@ -15,6 +15,7 @@ use App\Jobs\ProcessPackingListUploadJob;
 use App\Models\CargaConsolidada\Cotizacion;
 use App\Models\CargaConsolidada\CotizacionProveedor;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use App\Models\CalculadoraImportacion;
@@ -219,59 +220,7 @@ class ContenedorController extends Controller
         $data = $query->paginate($perPage, ['*'], 'page', $page);
 
         $pageIds = collect($data->items())->pluck('id')->all();
-        $cbmVendidos = [];
-        $cbmEmbarcados = [];
-        if ($pageIds) {
-            $vendRows = DB::table('contenedor_consolidado_cotizacion_proveedores as cccp')
-                ->join('contenedor_consolidado_cotizacion as cc', 'cccp.id_cotizacion', '=', 'cc.id')
-                ->whereIn('cccp.id_contenedor', $pageIds)
-                ->whereNull('cc.deleted_at')
-                ->select([
-                    'cccp.id_contenedor',
-                    DB::raw('COALESCE(SUM(IF(cc.estado_cotizador = "CONFIRMADO", cccp.cbm_total_china, 0)),0) as cbm_total_china'),
-                    DB::raw('(
-                        SELECT COALESCE(SUM(volumen), 0)
-                        FROM contenedor_consolidado_cotizacion
-                        WHERE id_contenedor = cccp.id_contenedor
-                        AND estado_cotizador = "CONFIRMADO"
-                        AND deleted_at IS NULL
-                    ) as cbm_total_peru')
-                ])
-                ->groupBy('cccp.id_contenedor')
-                ->get();
-            foreach ($vendRows as $r) {
-                $cbmVendidos[$r->id_contenedor] = [
-                    'peru' => (float)$r->cbm_total_peru,
-                    'china' => (float)$r->cbm_total_china,
-                ];
-            }
-            $embRows = DB::table('contenedor_consolidado_cotizacion_proveedores as p')
-                ->join('contenedor_consolidado_cotizacion as cc', 'p.id_cotizacion', '=', 'cc.id')
-                ->whereIn('p.id_contenedor', $pageIds)
-                ->whereNull('cc.deleted_at')
-                ->select([
-                    'p.id_contenedor',
-                    DB::raw('SUM(IF(cc.estado_cotizador = "CONFIRMADO", p.cbm_total_china, 0)) as sum_china'),
-                    DB::raw('(SELECT COALESCE(SUM(cc2.volumen), 0)
-                                FROM contenedor_consolidado_cotizacion cc2
-                                WHERE cc2.id IN (
-                                    SELECT DISTINCT p2.id_cotizacion
-                                    FROM contenedor_consolidado_cotizacion_proveedores p2
-                                    WHERE p2.id_contenedor = p.id_contenedor
-                                )
-                                AND cc2.estado_cotizador = "CONFIRMADO"
-                                AND cc2.deleted_at IS NULL) as sum_peru')
-                ])
-                ->whereNull('cc.id_cliente_importacion')
-                ->groupBy('p.id_contenedor')
-                ->get();
-            foreach ($embRows as $r) {
-                $cbmEmbarcados[$r->id_contenedor] = [
-                    'peru' => (float)$r->sum_peru,
-                    'china' => (float)$r->sum_china,
-                ];
-            }
-        }
+        ['vendidos' => $cbmVendidos, 'embarcados' => $cbmEmbarcados] = $this->loadCbmTotalsForContenedores($pageIds);
 
         $estadoPermisoPorContenedor = [];
         if ($pageIds && in_array($effectiveRole, [Usuario::ROL_COORDINACION, Usuario::ROL_DOCUMENTACION], true)) {
@@ -366,6 +315,77 @@ class ContenedorController extends Controller
                 'anios' => $aniosDisponibles,
             ],
         ];
+    }
+
+    /**
+     * @param  array<int, int>  $pageIds
+     * @return array{vendidos: array<int, array{peru: float, china: float}>, embarcados: array<int, array{peru: float, china: float}>}
+     */
+    private function loadCbmTotalsForContenedores(array $pageIds): array
+    {
+        $empty = ['vendidos' => [], 'embarcados' => []];
+        if ($pageIds === []) {
+            return $empty;
+        }
+
+        $cbmPeruByContenedor = DB::table('contenedor_consolidado_cotizacion')
+            ->whereIn('id_contenedor', $pageIds)
+            ->where('estado_cotizador', 'CONFIRMADO')
+            ->whereNull('deleted_at')
+            ->groupBy('id_contenedor')
+            ->selectRaw('id_contenedor, COALESCE(SUM(volumen), 0) as cbm_total_peru')
+            ->pluck('cbm_total_peru', 'id_contenedor');
+
+        $cbmChinaVendidos = DB::table('contenedor_consolidado_cotizacion_proveedores as cccp')
+            ->join('contenedor_consolidado_cotizacion as cc', 'cccp.id_cotizacion', '=', 'cc.id')
+            ->whereIn('cccp.id_contenedor', $pageIds)
+            ->whereNull('cc.deleted_at')
+            ->where('cc.estado_cotizador', 'CONFIRMADO')
+            ->groupBy('cccp.id_contenedor')
+            ->selectRaw('cccp.id_contenedor, COALESCE(SUM(cccp.cbm_total_china), 0) as cbm_total_china')
+            ->pluck('cbm_total_china', 'id_contenedor');
+
+        $cbmVendidos = [];
+        foreach ($pageIds as $id) {
+            $cbmVendidos[$id] = [
+                'peru' => (float) ($cbmPeruByContenedor[$id] ?? 0),
+                'china' => (float) ($cbmChinaVendidos[$id] ?? 0),
+            ];
+        }
+
+        $cbmChinaEmbarcados = DB::table('contenedor_consolidado_cotizacion_proveedores as p')
+            ->join('contenedor_consolidado_cotizacion as cc', 'p.id_cotizacion', '=', 'cc.id')
+            ->whereIn('p.id_contenedor', $pageIds)
+            ->whereNull('cc.deleted_at')
+            ->whereNull('cc.id_cliente_importacion')
+            ->where('cc.estado_cotizador', 'CONFIRMADO')
+            ->groupBy('p.id_contenedor')
+            ->selectRaw('p.id_contenedor, COALESCE(SUM(p.cbm_total_china), 0) as sum_china')
+            ->pluck('sum_china', 'id_contenedor');
+
+        $proveedoresPorContenedor = DB::table('contenedor_consolidado_cotizacion_proveedores')
+            ->whereIn('id_contenedor', $pageIds)
+            ->select('id_contenedor', 'id_cotizacion')
+            ->distinct();
+
+        $cbmPeruEmbarcados = DB::query()
+            ->fromSub($proveedoresPorContenedor, 'p')
+            ->join('contenedor_consolidado_cotizacion as cc', 'cc.id', '=', 'p.id_cotizacion')
+            ->where('cc.estado_cotizador', 'CONFIRMADO')
+            ->whereNull('cc.deleted_at')
+            ->groupBy('p.id_contenedor')
+            ->selectRaw('p.id_contenedor, COALESCE(SUM(cc.volumen), 0) as sum_peru')
+            ->pluck('sum_peru', 'id_contenedor');
+
+        $cbmEmbarcados = [];
+        foreach ($pageIds as $id) {
+            $cbmEmbarcados[$id] = [
+                'peru' => (float) ($cbmPeruEmbarcados[$id] ?? 0),
+                'china' => (float) ($cbmChinaEmbarcados[$id] ?? 0),
+            ];
+        }
+
+        return ['vendidos' => $cbmVendidos, 'embarcados' => $cbmEmbarcados];
     }
 
     private function invalidateContenedorListCache(): void
@@ -1045,19 +1065,19 @@ class ContenedorController extends Controller
     public function getTcYuanGlobal()
     {
         try {
-            if (Schema::hasTable('tc_yuan_global_historial')) {
+            $payload = Cache::remember('ccons:tc_yuan_global:v1', now()->addMinutes(5), function () {
                 $row = DB::table('tc_yuan_global_historial')->orderByDesc('id')->first();
                 if ($row && $row->tc_yuan !== null) {
-                    return response()->json(['success' => true, 'tc_yuan' => (float) $row->tc_yuan]);
+                    return ['success' => true, 'tc_yuan' => (float) $row->tc_yuan];
                 }
-            }
-            // Fallback a sistema_config por compatibilidad
-            if (Schema::hasTable('sistema_config')) {
+
                 $row = DB::table('sistema_config')->where('key', 'tc_yuan_global')->first();
                 $value = $row && $row->value !== null && $row->value !== '' ? (float) $row->value : null;
-                return response()->json(['success' => true, 'tc_yuan' => $value]);
-            }
-            return response()->json(['success' => true, 'tc_yuan' => null]);
+
+                return ['success' => true, 'tc_yuan' => $value];
+            });
+
+            return response()->json($payload);
         } catch (\Exception $e) {
             Log::error('Error al obtener TC Yuan global: ' . $e->getMessage());
             return response()->json(['success' => true, 'tc_yuan' => null]);
@@ -1092,6 +1112,7 @@ class ContenedorController extends Controller
                 'created_at' => $now,
                 'updated_at' => null,
             ]);
+            Cache::forget('ccons:tc_yuan_global:v1');
             return response()->json(['success' => true, 'tc_yuan' => $v !== null ? (float) $v : null]);
         } catch (\Exception $e) {
             Log::error('Error al guardar TC Yuan global: ' . $e->getMessage());
