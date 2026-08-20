@@ -16,9 +16,13 @@ class TelescopeServiceProvider extends TelescopeApplicationServiceProvider
     {
         $this->hideSensitiveRequestDetails();
 
-        // En prod también grabamos todo (requests, queries, jobs). El prune semanal limita la BD.
+        // Local: todo. Prod: solo requests (consumo endpoints), logs y excepciones.
         Telescope::filter(function (IncomingEntry $entry) {
-            return true;
+            if ($this->app->environment('local')) {
+                return true;
+            }
+
+            return in_array($entry->type, ['request', 'log', 'exception'], true);
         });
     }
 

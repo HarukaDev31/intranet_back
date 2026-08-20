@@ -37,7 +37,17 @@ En `.env` del servidor:
 TELESCOPE_ENABLED=true
 ```
 
-Con Telescope activo se graba todo (requests, queries, jobs). El prune semanal limita el tamaño de la BD.
+En **producción** (por defecto, sin variables extra) Telescope graba solo:
+
+- **Requests** — consumo de endpoints (duración, status, URI)
+- **Logs** — entradas de `Log::`
+- **Excepciones** — errores reportables
+
+No graba queries, modelos, cache, jobs, etc. (eso infló la BD a ~10 GB).
+
+Perfil completo (como local): `TELESCOPE_FULL=true`
+
+El prune semanal limita el tamaño de la BD.
 
 ## Limpieza de BD (prod)
 
