@@ -194,8 +194,31 @@ sudo supervisorctl start intranet-horizon intranet-scheduler
 # Restaurar nginx antiguo (php-fpm) desde backup del vhost
 ```
 
+## Performance en prod (si la API tarda ~10–15 s)
+
+1. **`APP_DEBUG=false`** en `.env` (con `true`, Laravel no debe ir a prod: mucho overhead y sin `config:cache` útil).
+2. **FPM workers** — debe ser 15, no 5:
+
+```bash
+docker compose exec app php-fpm -tt 2>&1 | grep max_children
+# pm.max_children = 15
+```
+
+Si sigue en 5: `docker compose up -d --build app` (Dockerfile parchea `www.conf`).
+
+3. Tras cambiar `.env`:
+
+```bash
+docker compose exec -u www-data app php artisan config:clear
+docker compose exec -u www-data app php artisan config:cache
+docker compose restart app
+```
+
+4. Telescope: `TELESCOPE_ENABLED=true` solo con perfil lite (default); `telescope:clear` si la tabla creció mucho.
+
 ## Checklist post-migración
 
+- [ ] `APP_DEBUG=false` en `.env` de prod
 - [ ] `https://intranetback.probusiness.pe` responde 200
 - [ ] Login JWT funciona
 - [ ] Horizon procesa jobs (`/horizon` — ver acceso abajo)

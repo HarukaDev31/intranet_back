@@ -46,6 +46,13 @@ RUN groupmod -o -g "${WWWGROUP}" www-data \
 
 COPY docker/php/conf.d/laravel.ini /usr/local/etc/php/conf.d/99-laravel.ini
 COPY docker/php/zz-docker-fpm.conf /usr/local/etc/php-fpm.d/zz-docker-fpm.conf
+# www.conf de la imagen oficial trae pm.max_children=5; zz-* no siempre lo pisa en runtime.
+RUN sed -i \
+    -e 's/^pm.max_children = 5/pm.max_children = 15/' \
+    -e 's/^pm.start_servers = 2/pm.start_servers = 4/' \
+    -e 's/^pm.min_spare_servers = 1/pm.min_spare_servers = 3/' \
+    -e 's/^pm.max_spare_servers = 3/pm.max_spare_servers = 8/' \
+    /usr/local/etc/php-fpm.d/www.conf
 
 # php-fpm workers siguen siendo www-data; root solo para composer/artisan en deploy.
 EXPOSE 9000
