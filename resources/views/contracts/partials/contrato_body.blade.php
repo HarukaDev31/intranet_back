@@ -21,7 +21,22 @@
         <p><strong>Partes:</strong> Este acuerdo se celebra entre:</p>
         <p><strong>PRO MUNDO COMEX SAC</strong>, con RUC 20612452432, con domicilio de oficina administrativa en Av. Nicolas de Arriola 314, piso 11 oficina #3, Santa Catalina, La Victoria, en adelante referido como <strong>"EL GESTOR"</strong>.</p>
         @if($esRuc)
-            <p><strong>{{ $razon }}</strong>, con RUC {{ $ruc }}@if(!empty($domFiscal)), con domicilio fiscal en {{ $domFiscal }}@endif, participante del <strong>CONSOLIDADO {{ $carga ?? '' }}</strong>, en adelante referido como <strong>"EL CLIENTE"</strong>@if(!empty($coordNombre)); quien autoriza a <strong>{{ $coordNombre }}</strong>@if(!empty($coordDni)), con DNI {{ $coordDni }}@endif, para actuar como su Coordinador Operativo ante EL GESTOR durante la ejecución del presente servicio, con facultades para tomar decisiones sobre el proceso de importación, siendo sus actuaciones dentro de este ámbito vinculantes para EL CLIENTE@endif.</p>
+            @php
+                $clientePartes = '<strong>' . e($razon) . '</strong>, con RUC ' . e($ruc);
+                if ($domFiscal !== '') {
+                    $clientePartes .= ', con domicilio fiscal en ' . e($domFiscal);
+                }
+                $clientePartes .= ', participante del <strong>CONSOLIDADO ' . e((string) ($carga ?? '')) . '</strong>, en adelante referido como <strong>"EL CLIENTE"</strong>';
+                if ($coordNombre !== '') {
+                    $clientePartes .= '; quien autoriza a <strong>' . e($coordNombre) . '</strong>';
+                    if ($coordDni !== '') {
+                        $clientePartes .= ', con DNI ' . e($coordDni);
+                    }
+                    $clientePartes .= ', para actuar como su Coordinador Operativo ante EL GESTOR durante la ejecución del presente servicio, con facultades para tomar decisiones sobre el proceso de importación, siendo sus actuaciones dentro de este ámbito vinculantes para EL CLIENTE';
+                }
+                $clientePartes .= '.';
+            @endphp
+            <p>{!! $clientePartes !!}</p>
         @else
             <p><strong>NOMBRES Y APELLIDOS / RAZÓN SOCIAL:</strong> {{ $cliente_nombre ?? 'EL CLIENTE' }}, con DNI {{ $cliente_documento ?? 'XXXXXXXX' }}, participante del <strong>CONSOLIDADO {{ $carga ?? '' }}</strong>, en adelante referido como <strong>"EL CLIENTE"</strong>.</p>
         @endif
