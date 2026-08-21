@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use App\Models\CalculadoraImportacion;
 use App\Models\CargaConsolidada\Contenedor;
 use App\Models\CargaConsolidada\Cotizacion;
 
@@ -19,23 +20,44 @@ class ContratoViewData
         $cotizacion->loadMissing(['contenedor', 'calculadoraImportacion']);
 
         $calc = $cotizacion->calculadoraImportacion;
+        if (!$calc && !empty($cotizacion->id)) {
+            $calc = CalculadoraImportacion::where('id_cotizacion', $cotizacion->id)->first();
+        }
+
         $tipoDocumento = $calc && !empty($calc->tipo_documento)
             ? strtoupper((string) $calc->tipo_documento)
-            : 'DNI';
-        $esRuc = $tipoDocumento === 'RUC';
+            : '';
+
+        $rucCliente = $calc && !empty($calc->ruc_cliente)
+            ? trim((string) $calc->ruc_cliente)
+            : '';
+        $documentoCotizacion = trim((string) ($cotizacion->documento ?? ''));
+        $docDigits = preg_replace('/\D+/', '', $rucCliente !== '' ? $rucCliente : $documentoCotizacion);
+
+        $domicilioFiscal = $calc ? trim((string) ($calc->domicilio_fiscal ?? '')) : '';
+        $coordNombre = $calc ? trim((string) ($calc->coordinador_operativo_nombre ?? '')) : '';
+        $coordDni = $calc ? trim((string) ($calc->coordinador_operativo_dni ?? '')) : '';
+
+        // RUC: tipo_documento, documento de 11 dígitos, o campos de contrato RUC cargados.
+        $esRuc = $tipoDocumento === 'RUC'
+            || strlen((string) $docDigits) === 11
+            || $domicilioFiscal !== ''
+            || $coordNombre !== '';
+
+        if ($tipoDocumento === '') {
+            $tipoDocumento = $esRuc ? 'RUC' : 'DNI';
+        }
 
         $razonSocial = $calc && !empty($calc->razon_social)
             ? $calc->razon_social
             : $cotizacion->nombre;
 
         if ($esRuc) {
-            $documento = ($calc && !empty($calc->ruc_cliente))
-                ? $calc->ruc_cliente
-                : $cotizacion->documento;
+            $documento = $rucCliente !== '' ? $rucCliente : $documentoCotizacion;
         } else {
             $documento = ($calc && !empty($calc->dni_cliente))
                 ? $calc->dni_cliente
-                : $cotizacion->documento;
+                : $documentoCotizacion;
         }
 
         $contenedor = $cotizacion->contenedor;
@@ -57,10 +79,10 @@ class ContratoViewData
             'tipo_documento' => $tipoDocumento,
             'es_ruc' => $esRuc,
             'cliente_razon_social' => $razonSocial,
-            'cliente_ruc' => $esRuc ? $documento : (($calc && !empty($calc->ruc_cliente)) ? $calc->ruc_cliente : null),
-            'cliente_domicilio_fiscal' => $calc ? ($calc->domicilio_fiscal ?? null) : null,
-            'coordinador_operativo_nombre' => $calc ? ($calc->coordinador_operativo_nombre ?? null) : null,
-            'coordinador_operativo_dni' => $calc ? ($calc->coordinador_operativo_dni ?? null) : null,
+            'cliente_ruc' => $esRuc ? $documento : ($rucCliente !== '' ? $rucCliente : null),
+            'cliente_domicilio_fiscal' => $domicilioFiscal !== '' ? $domicilioFiscal : null,
+            'coordinador_operativo_nombre' => $coordNombre !== '' ? $coordNombre : null,
+            'coordinador_operativo_dni' => $coordDni !== '' ? $coordDni : null,
             'carga' => $carga,
             'logo_contrato_url' => $logoPath,
             'cod_contract' => $cotizacion->cod_contract,

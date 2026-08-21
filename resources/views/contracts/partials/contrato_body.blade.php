@@ -22,21 +22,22 @@
         <p><strong>PRO MUNDO COMEX SAC</strong>, con RUC 20612452432, con domicilio de oficina administrativa en Av. Nicolas de Arriola 314, piso 11 oficina #3, Santa Catalina, La Victoria, en adelante referido como <strong>"EL GESTOR"</strong>.</p>
         @if($esRuc)
             @php
-                $clientePartes = '<strong>' . e($razon) . '</strong>, con RUC ' . e($ruc);
-                if ($domFiscal !== '') {
-                    $clientePartes .= ', con domicilio fiscal en ' . e($domFiscal);
+                // Modelo RUC: razón social, RUC, domicilio fiscal, consolidado, EL CLIENTE + autorización al coordinador.
+                $partesCliente = '<strong>' . e($razon) . '</strong>, con RUC ' . e($ruc);
+                if ($domFiscal !== null && $domFiscal !== '') {
+                    $partesCliente .= ', con domicilio fiscal en ' . e($domFiscal);
                 }
-                $clientePartes .= ', participante del <strong>CONSOLIDADO ' . e((string) ($carga ?? '')) . '</strong>, en adelante referido como <strong>"EL CLIENTE"</strong>';
-                if ($coordNombre !== '') {
-                    $clientePartes .= '; quien autoriza a <strong>' . e($coordNombre) . '</strong>';
-                    if ($coordDni !== '') {
-                        $clientePartes .= ', con DNI ' . e($coordDni);
+                $partesCliente .= ', participante del <strong>CONSOLIDADO ' . e((string) ($carga ?? '')) . '</strong>, en adelante referido como <strong>"EL CLIENTE"</strong>';
+                if ($coordNombre !== null && $coordNombre !== '') {
+                    $partesCliente .= '; quien autoriza a <strong>' . e($coordNombre) . '</strong>';
+                    if ($coordDni !== null && $coordDni !== '') {
+                        $partesCliente .= ', con DNI ' . e($coordDni);
                     }
-                    $clientePartes .= ', para actuar como su Coordinador Operativo ante EL GESTOR durante la ejecución del presente servicio, con facultades para tomar decisiones sobre el proceso de importación, siendo sus actuaciones dentro de este ámbito vinculantes para EL CLIENTE';
+                    $partesCliente .= ', para actuar como su Coordinador Operativo ante EL GESTOR durante la ejecución del presente servicio, con facultades para tomar decisiones sobre el proceso de importación, siendo sus actuaciones dentro de este ámbito vinculantes para EL CLIENTE';
                 }
-                $clientePartes .= '.';
+                $partesCliente .= '.';
             @endphp
-            <p>{!! $clientePartes !!}</p>
+            <p>{!! $partesCliente !!}</p>
         @else
             <p><strong>NOMBRES Y APELLIDOS / RAZÓN SOCIAL:</strong> {{ $cliente_nombre ?? 'EL CLIENTE' }}, con DNI {{ $cliente_documento ?? 'XXXXXXXX' }}, participante del <strong>CONSOLIDADO {{ $carga ?? '' }}</strong>, en adelante referido como <strong>"EL CLIENTE"</strong>.</p>
         @endif
