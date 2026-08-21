@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
+use App\Support\Menu\PedidosCursoMenuFilter;
 
 class MenuController extends Controller
 {
@@ -115,6 +116,13 @@ class MenuController extends Controller
                     }
                 }
             }
+
+            // Pedidos de Curso en rol Cotizador: solo jefe de ventas.
+            $arrMenuPadre = PedidosCursoMenuFilter::apply(
+                $arrMenuPadre,
+                (int) ($user->ID_Usuario ?? 0),
+                (int) ($idGrupo ?? 0)
+            );
 
             return response()->json([
                 'status' => 'success',

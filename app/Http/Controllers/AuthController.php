@@ -25,6 +25,7 @@ use App\Models\User;
 use App\Models\CargaConsolidada\Cotizacion;
 use App\Traits\FileTrait;
 use App\Traits\UsesObjectStorage;
+use App\Support\Menu\PedidosCursoMenuFilter;
 
 class AuthController extends Controller
 {
@@ -1239,6 +1240,13 @@ class AuthController extends Controller
                     }
                 }
             }
+
+            // Pedidos de Curso en rol Cotizador: solo jefe de ventas.
+            $arrMenuPadre = PedidosCursoMenuFilter::apply(
+                $arrMenuPadre,
+                (int) $idUsuario,
+                (int) ($idGrupo ?? 0)
+            );
 
             return $arrMenuPadre;
         } catch (\Exception $e) {
