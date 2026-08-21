@@ -513,6 +513,14 @@ class CalculadoraImportacionController extends Controller
             }
             $request->replace($data);
 
+            // Asegurar tipoDocumento camelCase antes de validar (por si llega snake_case)
+            $data = $request->all();
+            if (isset($data['clienteInfo']) && is_array($data['clienteInfo'])) {
+                $rawTipo = $data['clienteInfo']['tipoDocumento'] ?? $data['clienteInfo']['tipo_documento'] ?? 'DNI';
+                $data['clienteInfo']['tipoDocumento'] = strtoupper(trim((string) $rawTipo)) === 'RUC' ? 'RUC' : 'DNI';
+                $request->replace($data);
+            }
+
             $request->validate([
                 'id' => 'nullable|integer|exists:calculadora_importacion,id',
                 'clienteInfo.nombre' => 'required_if:clienteInfo.tipoDocumento,DNI|nullable|string',
@@ -545,6 +553,10 @@ class CalculadoraImportacionController extends Controller
             ]);
 
             $data = $request->all();
+            if (isset($data['clienteInfo']) && is_array($data['clienteInfo'])) {
+                $rawTipo = $data['clienteInfo']['tipoDocumento'] ?? $data['clienteInfo']['tipo_documento'] ?? 'DNI';
+                $data['clienteInfo']['tipoDocumento'] = strtoupper(trim((string) $rawTipo)) === 'RUC' ? 'RUC' : 'DNI';
+            }
             // Compatibilidad: algunos clientes envían "tariftype" en lugar de tarifa.type.
             if (
                 isset($data['tarifa']) &&

@@ -141,7 +141,7 @@ class CalculadoraImportacionService
             $cliente = $this->buscarOcrearCliente($data['clienteInfo']);
 
             // Determinar campos según tipo de documento
-            $tipoDocumento = $data['clienteInfo']['tipoDocumento'] ?? 'DNI';
+            $tipoDocumento = $this->resolveTipoDocumento($data['clienteInfo'] ?? []);
             $nombreCliente = $tipoDocumento === 'RUC' && empty(trim($data['clienteInfo']['nombre'] ?? ''))
                 ? ($data['clienteInfo']['empresa'] ?? $data['clienteInfo']['razonSocial'] ?? '')
                 : ($data['clienteInfo']['nombre'] ?? '');
@@ -309,7 +309,7 @@ class CalculadoraImportacionService
             $cliente = $this->buscarOcrearCliente($data['clienteInfo']);
 
             // Determinar campos según tipo de documento
-            $tipoDocumento = $data['clienteInfo']['tipoDocumento'] ?? 'DNI';
+            $tipoDocumento = $this->resolveTipoDocumento($data['clienteInfo'] ?? []);
             $nombreCliente = $tipoDocumento === 'RUC' && empty(trim($data['clienteInfo']['nombre'] ?? ''))
                 ? ($data['clienteInfo']['empresa'] ?? $data['clienteInfo']['razonSocial'] ?? '')
                 : ($data['clienteInfo']['nombre'] ?? '');
@@ -732,6 +732,20 @@ class CalculadoraImportacionService
     }
 
     /**
+     * Normaliza DNI/RUC desde clienteInfo (camel o snake).
+     *
+     * @param  array  $clienteInfo
+     * @return string  'DNI'|'RUC'
+     */
+    private function resolveTipoDocumento(array $clienteInfo): string
+    {
+        $raw = $clienteInfo['tipoDocumento'] ?? $clienteInfo['tipo_documento'] ?? 'DNI';
+        $tipo = strtoupper(trim((string) $raw));
+
+        return $tipo === 'RUC' ? 'RUC' : 'DNI';
+    }
+
+    /**
      * Normaliza origen_marketing (nullable; mismos valores que carga consolidada).
      *
      * @param  mixed  $value
@@ -767,7 +781,7 @@ class CalculadoraImportacionService
      */
     private function buscarOcrearCliente(array $clienteInfo): ?Cliente
     {
-        $tipoDocumento = $clienteInfo['tipoDocumento'] ?? 'DNI';
+        $tipoDocumento = $this->resolveTipoDocumento($clienteInfo);
         $whatsapp = is_array($clienteInfo['whatsapp'] ?? null) ? ($clienteInfo['whatsapp']['value'] ?? $clienteInfo['whatsapp']) : ($clienteInfo['whatsapp'] ?? null);
 
         if ($tipoDocumento === 'RUC') {
@@ -1677,7 +1691,7 @@ class CalculadoraImportacionService
             }
 
             $sheetResumen->setCellValue('E11', $data['tarifa']['value']);
-            $tipoDocumento = $data['clienteInfo']['tipoDocumento'] ?? 'DNI';
+            $tipoDocumento = $this->resolveTipoDocumento($data['clienteInfo'] ?? []);
             $nombreMostrar = $tipoDocumento === 'RUC' ? ($data['clienteInfo']['empresa'] ?? $data['clienteInfo']['razonSocial'] ?? '') : $data['clienteInfo']['nombre'];
             $documentoMostrar = $tipoDocumento === 'RUC' ? ($data['clienteInfo']['ruc'] ?? '') : $data['clienteInfo']['dni'];
             $whatsappValue = is_array($data['clienteInfo']['whatsapp']) ? ($data['clienteInfo']['whatsapp']['value'] ?? '') : ($data['clienteInfo']['whatsapp'] ?? '');
