@@ -2952,7 +2952,17 @@ class CotizacionController extends Controller
                         Log::error('No se pudo actualizar cotizacion_contrato_url: ' . $e->getMessage());
                     }
                 } catch (\Throwable $ex) {
-                    Log::error('Excepción al generar/enviar PDF por WhatsApp: ' . $ex->getMessage(), ['cotizacion_id' => $cotizacion->id]);
+                    Log::error('Excepción al generar/enviar PDF por WhatsApp: ' . $ex->getMessage(), [
+                        'cotizacion_id' => $cotizacion->id,
+                        'file' => $ex->getFile(),
+                        'line' => $ex->getLine(),
+                        'trace' => $ex->getTraceAsString(),
+                    ]);
+                    return response()->json([
+                        'status' => 'error',
+                        'success' => false,
+                        'message' => 'Estado CONFIRMADO, pero falló la generación del contrato: ' . $ex->getMessage(),
+                    ], 500);
                 }
             }
 

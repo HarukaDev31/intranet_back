@@ -1149,6 +1149,50 @@ class CalculadoraImportacionController extends Controller
                     $this->sincronizarCodeSupplierCalculadoraDesdeCotizacion($calculadora, $calculadora->id_cotizacion);
                 }
             }
+
+            if ($estado === 'CONFIRMADO') {
+                $calculadora->save();
+
+                if (!$calculadora->id_cotizacion) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'No se puede confirmar: la calculadora no tiene cotización vinculada en carga consolidada. Pásala primero a COTIZADO.',
+                    ], 400);
+                }
+
+                // El PDF/código de contrato se generan en updateEstadoCotizacion (módulo cotizaciones consolidado).
+                $cotizacionController = app(CotizacionController::class);
+                $estadoRequest = Request::create('/', 'PUT', ['estado' => 'CONFIRMADO']);
+                $estadoResponse = $cotizacionController->updateEstadoCotizacion(
+                    (int) $calculadora->id_cotizacion,
+                    $estadoRequest
+                );
+                $estadoData = json_decode($estadoResponse->getContent(), true);
+
+                if (!($estadoData['success'] ?? false)) {
+                    Log::error('No se pudo confirmar cotización vinculada desde calculadora', [
+                        'calculadora_id' => $calculadora->id,
+                        'cotizacion_id' => $calculadora->id_cotizacion,
+                        'response' => $estadoData,
+                    ]);
+
+                    return response()->json([
+                        'success' => false,
+                        'message' => $estadoData['message'] ?? 'Error al confirmar la cotización vinculada y generar el contrato',
+                    ], $estadoResponse->getStatusCode() >= 400 ? $estadoResponse->getStatusCode() : 500);
+                }
+
+                $this->cacheService->invalidateAfterWrite($calculadora, [
+                    'dni_cliente' => $calculadora->dni_cliente ?? null,
+                    'whatsapp' => $calculadora->whatsapp_cliente ?? null,
+                ]);
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Estado cambiado a CONFIRMADO y contrato generado',
+                ]);
+            }
+
             $calculadora->save();
 
             $this->cacheService->invalidateAfterWrite($calculadora, [
