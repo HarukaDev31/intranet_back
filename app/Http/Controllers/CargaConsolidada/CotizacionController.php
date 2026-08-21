@@ -31,6 +31,7 @@ use Illuminate\Support\Str;
 use Exception;
 use Dompdf\Dompdf;
 use Dompdf\Options;
+use App\Support\ContratoViewData;
 
 
 class CotizacionController extends Controller
@@ -2896,19 +2897,7 @@ class CotizacionController extends Controller
                 */
 
                 try {
-                    $contenedor = isset($cotizacion->contenedor) ? $cotizacion->contenedor : Contenedor::find($cotizacion->id_contenedor);
-                    $carga = $contenedor ? $contenedor->carga : '';
-
-                    $viewData = [
-                        'fecha' => date('d-m-Y'),
-                        'cliente_nombre' => $cotizacion->nombre,
-                        'cliente_documento' => $cotizacion->documento,
-                        'cliente_domicilio' => $cotizacion->direccion ?? null,
-                        'carga' => $carga,
-                        'logo_contrato_url' => public_path('storage/logo_icons/logo_contrato.png'),
-                        'cod_contract' => $cotizacion->cod_contract,
-                        'cod_contract_calculator' => optional($cotizacion->calculadoraImportacion)->cod_cotizacion,
-                    ];
+                    $viewData = ContratoViewData::fromCotizacion($cotizacion);
 
                     $contractHtml = view('contracts.contrato', $viewData)->render();
 

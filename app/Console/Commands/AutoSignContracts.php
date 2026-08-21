@@ -4,11 +4,11 @@ namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
 use App\Models\CargaConsolidada\Cotizacion;
-use App\Models\CargaConsolidada\Contenedor;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use App\Traits\UsesObjectStorage;
+use App\Support\ContratoViewData;
 
 class AutoSignContracts extends Command
 {
@@ -338,13 +338,9 @@ class AutoSignContracts extends Command
         $pdfFilename = $cotizacion->uuid . '_autosigned_contract.pdf';
         $relativePath = 'contratos/' . $pdfFilename;
 
-        // Obtener información del contenedor
-        $contenedor = Contenedor::find($cotizacion->id_contenedor);
-        $carga = $contenedor ? $contenedor->carga : 'N/A';
-
         // Cargar imagen de auto-aceptación
         $autoSignImagePath = public_path('storage/auto_accept_sign.png');
-        
+
         if (!file_exists($autoSignImagePath)) {
             throw new \Exception("No se encontró la imagen de auto-aceptación en: {$autoSignImagePath}");
         }
@@ -354,16 +350,9 @@ class AutoSignContracts extends Command
         $signatureBase64 = 'data:image/png;base64,' . $imageData;
 
         // Datos para la vista del contrato firmado
-        $viewData = [
-            'fecha' => date('d-m-Y'),
-            'cliente_nombre' => $cotizacion->nombre,
-            'cliente_documento' => $cotizacion->documento,
-            'cliente_domicilio' => $cotizacion->direccion ?? null,
-            'carga' => $carga,
-            'logo_contrato_url' => public_path('storage/logo_contrato.png'),
+        $viewData = ContratoViewData::fromCotizacion($cotizacion, [
             'signature_base64' => $signatureBase64,
-            'cod_contract' => $cotizacion->cod_contract,
-        ];
+        ]);
 
         // Renderizar vista del contrato con firma
         $contractHtml = view('contracts.contrato_firmado', $viewData)->render();

@@ -35,6 +35,7 @@ use Illuminate\Support\Str;
 use App\Traits\UserGroupsTrait;
 use App\Traits\FileTrait;
 use App\Support\WhatsApp\CoordinacionWhatsappPayload;
+use App\Support\ContratoViewData;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Exports\EmbarqueExport;
 use App\Jobs\SendRotuladoJob;
@@ -3799,27 +3800,15 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                 // Generar contrato completo con firma
                 $relativePath = 'contratos/' . $pdfFilename;
 
-                // Obtener información del contenedor para el contrato
-                $contenedor = \App\Models\CargaConsolidada\Contenedor::find($cotizacion->id_contenedor);
-                $carga = $contenedor ? $contenedor->carga : 'N/A';
-
                 // Convertir firma a base64
                 $imagePath = $signedFile->getPathname();
                 $imageData = base64_encode(file_get_contents($imagePath));
                 $signatureBase64 = 'data:' . $mimeType . ';base64,' . $imageData;
 
                 // Datos para la vista del contrato firmado
-                $viewData = [
-                    'fecha' => date('d-m-Y'),
-                    'cliente_nombre' => $cotizacion->nombre,
-                    'cliente_documento' => $cotizacion->documento,
-                    'cliente_domicilio' => $cotizacion->direccion ?? null,
-                    'carga' => $carga,
-                    'logo_contrato_url' => public_path('storage/logo_contrato.png'),
+                $viewData = ContratoViewData::fromCotizacion($cotizacion, [
                     'signature_base64' => $signatureBase64,
-                    'cod_contract' => $cotizacion->cod_contract,
-                    'cod_contract_calculator' => optional($cotizacion->calculadoraImportacion)->cod_cotizacion,
-                ];
+                ]);
 
                 // Renderizar vista del contrato con firma
                 $contractHtml = view('contracts.contrato_firmado', $viewData)->render();
