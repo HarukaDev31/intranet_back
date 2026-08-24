@@ -125,75 +125,7 @@ class CursoController extends Controller
                 ->leftJoin('departamento AS DEP', 'DEP.ID_Departamento', '=', 'CLI.ID_Departamento')
                 ->where('PC.ID_Empresa', $user->ID_Empresa);
 
-            // Aplicar filtros
-            if (!empty($search)) {
-                $query->where(function ($q) use ($search) {
-                    $q->where('CLI.No_Entidad', 'like', "%$search%")
-                        ->orWhere('CLI.Nu_Documento_Identidad', 'like', "%$search%")
-                        ->orWhere('CLI.Nu_Celular_Entidad', 'like', "%$search%")
-                        ->orWhere('PC.ID_Pedido_Curso', 'like', "%$search%")
-                        // Agrega aquí más campos si quieres que el buscador sea más amplio
-                    ;
-                });
-            }
-
-
-            if ($fechaInicio && $fechaFin) {
-                $query->whereBetween('PC.Fe_Registro', [$fechaInicio, $fechaFin]);
-            }
-
-            if ($campanas && $campanas != '0') {
-                $query->where('PC.ID_Campana', $campanas);
-            }
-
-            // Aplicar filtro de estado de pago
-            if ($estadoPago && $estadoPago != '0') {
-                $query->whereRaw('(
-                    CASE 
-                        WHEN (
-                            SELECT IFNULL(SUM(cccp.monto), 0)
-                            FROM pedido_curso_pagos AS cccp
-                            JOIN pedido_curso_pagos_concept ccp ON cccp.id_concept = ccp.id
-                            WHERE cccp.id_pedido_curso = PC.ID_Pedido_Curso
-                            AND ccp.name = "ADELANTO"
-                        ) = 0 THEN "pendiente"
-                        WHEN (
-                            SELECT IFNULL(SUM(cccp.monto), 0)
-                            FROM pedido_curso_pagos AS cccp
-                            JOIN pedido_curso_pagos_concept ccp ON cccp.id_concept = ccp.id
-                            WHERE cccp.id_pedido_curso = PC.ID_Pedido_Curso
-                            AND ccp.name = "ADELANTO"
-                        ) < PC.Ss_Total AND (
-                            SELECT IFNULL(SUM(cccp.monto), 0)
-                            FROM pedido_curso_pagos AS cccp
-                            JOIN pedido_curso_pagos_concept ccp ON cccp.id_concept = ccp.id
-                            WHERE cccp.id_pedido_curso = PC.ID_Pedido_Curso
-                            AND ccp.name = "ADELANTO"
-                        ) > 0 THEN "adelanto"
-                        WHEN (
-                            SELECT IFNULL(SUM(cccp.monto), 0)
-                            FROM pedido_curso_pagos AS cccp
-                            JOIN pedido_curso_pagos_concept ccp ON cccp.id_concept = ccp.id
-                            WHERE cccp.id_pedido_curso = PC.ID_Pedido_Curso
-                            AND ccp.name = "ADELANTO"
-                        ) = PC.Ss_Total THEN "pagado"
-                        WHEN (
-                            SELECT IFNULL(SUM(cccp.monto), 0)
-                            FROM pedido_curso_pagos AS cccp
-                            JOIN pedido_curso_pagos_concept ccp ON cccp.id_concept = ccp.id
-                            WHERE cccp.id_pedido_curso = PC.ID_Pedido_Curso
-                            AND ccp.name = "ADELANTO"
-                        ) > PC.Ss_Total THEN "sobrepagado"
-                        ELSE "pendiente"
-                    END
-                ) = ?', [$estadoPago]);
-            }
-            // Filtro por tipo de curso
-            if ($tipoCurso && $tipoCurso !== '') {
-                $query->where('PC.tipo_curso', $tipoCurso);
-            }
-
-            
+            $this->aplicarFiltrosListadoAlumnos($query, $request);
 
             // Ordenar por id descendente
             $query->orderBy('PC.ID_Pedido_Curso', 'desc');
@@ -335,8 +267,10 @@ class CursoController extends Controller
                         'label' => $label,
                     ];
                 });
-
-            //campanas get month in spanish from Fe_Inicio as label and id as value
+            $campanas->prepend([
+                'value' => 'todos',
+                'label' => 'Todos',
+            ]);
 
             $estadosPago = [
                 ['value' => '0', 'label' => 'Todos'],
@@ -347,10 +281,17 @@ class CursoController extends Controller
                 ['value' => 'constancia', 'label' => 'Constancia']
             ];
 
-            // Tipos de curso
             $tiposCurso = [
-                ['value' => 0, 'label' => 'Virtual'],
-                ['value' => 1, 'label' => 'En vivo']
+                ['value' => 'todos', 'label' => 'Todos'],
+                ['value' => '0', 'label' => 'Virtual'],
+                ['value' => '1', 'label' => 'En vivo']
+            ];
+
+            $estadosUsuario = [
+                ['value' => 'todos', 'label' => 'Todos'],
+                ['value' => 'pendiente', 'label' => 'Pendiente'],
+                ['value' => 'creado', 'label' => 'Creado'],
+                ['value' => 'constancia', 'label' => 'Constancia']
             ];
 
             return response()->json([
@@ -387,6 +328,12 @@ class CursoController extends Controller
                         'label' => 'Tipos de curso',
                         'placeholder' => 'Selecciona un tipo de curso',
                         'options' => $tiposCurso
+                    ],
+                    [
+                        'key' => 'estado_usuario',
+                        'label' => 'Estado de Usuario',
+                        'placeholder' => 'Selecciona un estado de usuario',
+                        'options' => $estadosUsuario
                     ]
                 ]
             ]);
@@ -2325,70 +2272,7 @@ class CursoController extends Controller
                 ->leftJoin('departamento AS DEP', 'DEP.ID_Departamento', '=', 'CLI.ID_Departamento')
                 ->where('PC.ID_Empresa', $user->ID_Empresa);
 
-            // Aplicar los mismos filtros que el método index
-            if (!empty($search)) {
-                $query->where(function ($q) use ($search) {
-                    $q->where('CLI.No_Entidad', 'like', "%$search%")
-                        ->orWhere('CLI.Nu_Documento_Identidad', 'like', "%$search%")
-                        ->orWhere('PC.ID_Pedido_Curso', 'like', "%$search%");
-                });
-            }
-
-            if ($fechaInicio && $fechaFin) {
-                $query->whereBetween('PC.Fe_Registro', [$fechaInicio, $fechaFin]);
-            }
-
-            if ($campanas && $campanas != '0') {
-                $query->where('PC.ID_Campana', $campanas);
-            }
-
-            // Aplicar filtro de estado de pago
-            if ($estadoPago && $estadoPago != '0') {
-                $query->whereRaw('(
-                    CASE 
-                        WHEN (
-                            SELECT IFNULL(SUM(cccp.monto), 0)
-                            FROM pedido_curso_pagos AS cccp
-                            JOIN pedido_curso_pagos_concept ccp ON cccp.id_concept = ccp.id
-                            WHERE cccp.id_pedido_curso = PC.ID_Pedido_Curso
-                            AND ccp.name = "ADELANTO"
-                        ) = 0 THEN "pendiente"
-                        WHEN (
-                            SELECT IFNULL(SUM(cccp.monto), 0)
-                            FROM pedido_curso_pagos AS cccp
-                            JOIN pedido_curso_pagos_concept ccp ON cccp.id_concept = ccp.id
-                            WHERE cccp.id_pedido_curso = PC.ID_Pedido_Curso
-                            AND ccp.name = "ADELANTO"
-                        ) < PC.Ss_Total AND (
-                            SELECT IFNULL(SUM(cccp.monto), 0)
-                            FROM pedido_curso_pagos AS cccp
-                            JOIN pedido_curso_pagos_concept ccp ON cccp.id_concept = ccp.id
-                            WHERE cccp.id_pedido_curso = PC.ID_Pedido_Curso
-                            AND ccp.name = "ADELANTO"
-                        ) > 0 THEN "adelanto"
-                        WHEN (
-                            SELECT IFNULL(SUM(cccp.monto), 0)
-                            FROM pedido_curso_pagos AS cccp
-                            JOIN pedido_curso_pagos_concept ccp ON cccp.id_concept = ccp.id
-                            WHERE cccp.id_pedido_curso = PC.ID_Pedido_Curso
-                            AND ccp.name = "ADELANTO"
-                        ) = PC.Ss_Total THEN "pagado"
-                        WHEN (
-                            SELECT IFNULL(SUM(cccp.monto), 0)
-                            FROM pedido_curso_pagos AS cccp
-                            JOIN pedido_curso_pagos_concept ccp ON cccp.id_concept = ccp.id
-                            WHERE cccp.id_pedido_curso = PC.ID_Pedido_Curso
-                            AND ccp.name = "ADELANTO"
-                        ) > PC.Ss_Total THEN "sobrepagado"
-                        ELSE "pendiente"
-                    END
-                ) = ?', [$estadoPago]);
-            }
-
-            // Filtro por tipo de curso
-            if ($tipoCurso && $tipoCurso !== '') {
-                $query->where('PC.tipo_curso', $tipoCurso);
-            }
+            $this->aplicarFiltrosListadoAlumnos($query, $request);
 
             // Ordenar por id descendente
             $query->orderBy('PC.ID_Pedido_Curso', 'desc');
@@ -2744,6 +2628,109 @@ class CursoController extends Controller
                 'message' => 'Error al enviar instrucciones de cambio de contraseña',
                 'error' => $e->getMessage()
             ], 500);
+        }
+    }
+
+    /**
+     * Filtros compartidos del listado / export de alumnos.
+     *
+     * @param  \Illuminate\Database\Query\Builder  $query
+     * @param  \Illuminate\Http\Request  $request
+     * @return void
+     */
+    private function aplicarFiltrosListadoAlumnos($query, Request $request)
+    {
+        $search = $request->get('search', '');
+        $campanas = $request->get('campanas', '');
+        $fechaInicio = $request->get('fechaInicio', '');
+        $fechaFin = $request->get('fechaFin', '');
+        $estadoPago = $request->get('estados_pago', '');
+        $tipoCurso = $request->input('tipos_curso', $request->input('tipo_curso', ''));
+        $estadoUsuario = $request->get('estado_usuario', '');
+
+        if (!empty($search)) {
+            $query->where(function ($q) use ($search) {
+                $q->where('CLI.No_Entidad', 'like', "%$search%")
+                    ->orWhere('CLI.Nu_Documento_Identidad', 'like', "%$search%")
+                    ->orWhere('CLI.Nu_Celular_Entidad', 'like', "%$search%")
+                    ->orWhere('CLI.Txt_Email_Entidad', 'like', "%$search%")
+                    ->orWhere('PC.ID_Pedido_Curso', 'like', "%$search%");
+            });
+        }
+
+        if ($fechaInicio && $fechaFin) {
+            $query->whereBetween('PC.Fe_Registro', [$fechaInicio, $fechaFin]);
+        }
+
+        if ($campanas !== '' && $campanas !== null && $campanas != '0' && $campanas !== 'todos') {
+            $query->where('PC.ID_Campana', $campanas);
+        }
+
+        if ($estadoPago && $estadoPago != '0' && $estadoPago !== 'todos') {
+            $query->whereRaw('(
+                CASE
+                    WHEN (
+                        SELECT IFNULL(SUM(cccp.monto), 0)
+                        FROM pedido_curso_pagos AS cccp
+                        JOIN pedido_curso_pagos_concept ccp ON cccp.id_concept = ccp.id
+                        WHERE cccp.id_pedido_curso = PC.ID_Pedido_Curso
+                        AND ccp.name = "ADELANTO"
+                    ) = 0 THEN "pendiente"
+                    WHEN (
+                        SELECT IFNULL(SUM(cccp.monto), 0)
+                        FROM pedido_curso_pagos AS cccp
+                        JOIN pedido_curso_pagos_concept ccp ON cccp.id_concept = ccp.id
+                        WHERE cccp.id_pedido_curso = PC.ID_Pedido_Curso
+                        AND ccp.name = "ADELANTO"
+                    ) < PC.Ss_Total AND (
+                        SELECT IFNULL(SUM(cccp.monto), 0)
+                        FROM pedido_curso_pagos AS cccp
+                        JOIN pedido_curso_pagos_concept ccp ON cccp.id_concept = ccp.id
+                        WHERE cccp.id_pedido_curso = PC.ID_Pedido_Curso
+                        AND ccp.name = "ADELANTO"
+                    ) > 0 THEN "adelanto"
+                    WHEN (
+                        SELECT IFNULL(SUM(cccp.monto), 0)
+                        FROM pedido_curso_pagos AS cccp
+                        JOIN pedido_curso_pagos_concept ccp ON cccp.id_concept = ccp.id
+                        WHERE cccp.id_pedido_curso = PC.ID_Pedido_Curso
+                        AND ccp.name = "ADELANTO"
+                    ) = PC.Ss_Total THEN "pagado"
+                    WHEN (
+                        SELECT IFNULL(SUM(cccp.monto), 0)
+                        FROM pedido_curso_pagos AS cccp
+                        JOIN pedido_curso_pagos_concept ccp ON cccp.id_concept = ccp.id
+                        WHERE cccp.id_pedido_curso = PC.ID_Pedido_Curso
+                        AND ccp.name = "ADELANTO"
+                    ) > PC.Ss_Total THEN "sobrepagado"
+                    ELSE "pendiente"
+                END
+            ) = ?', [$estadoPago]);
+        }
+
+        if ($tipoCurso !== null && $tipoCurso !== '' && $tipoCurso !== 'todos') {
+            $query->where('PC.tipo_curso', $tipoCurso);
+        }
+
+        if ($estadoUsuario && $estadoUsuario !== 'todos') {
+            if ($estadoUsuario === 'pendiente') {
+                $query->whereIn('PC.Nu_Estado_Usuario_Externo', [1, 3])
+                    ->where(function ($q) {
+                        $q->whereNull('PC.send_constancia')
+                            ->orWhere('PC.send_constancia', '!=', 'SENDED');
+                    });
+            } elseif ($estadoUsuario === 'creado') {
+                $query->where('PC.Nu_Estado_Usuario_Externo', 2)
+                    ->where(function ($q) {
+                        $q->whereNull('PC.send_constancia')
+                            ->orWhere('PC.send_constancia', '!=', 'SENDED');
+                    });
+            } elseif ($estadoUsuario === 'constancia') {
+                $query->where(function ($q) {
+                    $q->where('PC.send_constancia', 'SENDED')
+                        ->orWhere('PC.Nu_Estado_Usuario_Externo', 4);
+                });
+            }
         }
     }
 }
