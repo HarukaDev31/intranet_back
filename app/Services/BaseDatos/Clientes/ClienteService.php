@@ -353,6 +353,7 @@ class ClienteService
 
             // Buscar usuario en tabla users por whatsapp, email o dni
             $idUser = null;
+            $correoPlataforma = null;
             $businessRuc = null;
             $businessEmpresa = null;
             $businessRubro = null;
@@ -365,6 +366,7 @@ class ClienteService
                 );
                 if ($user) {
                     $idUser = $user->id;
+                    $correoPlataforma = !empty($user->email) ? $user->email : null;
                     // Obtener datos de user_business por user_id, fallback a legacy id_user_business
                     $userBusiness = \App\Models\UserBusiness::where('user_id', $user->id)->first()
                         ?? ($user->id_user_business ? \App\Models\UserBusiness::find($user->id_user_business) : null);
@@ -384,6 +386,7 @@ class ClienteService
                 'nombre' => $cliente->nombre,
                 'documento' => $cliente->documento,
                 'correo' => $cliente->correo,
+                'correo_plataforma' => $correoPlataforma,
                 'telefono' => $cliente->telefono,
                 'provincia' => $provinciaName ?? ($cliente->provincia ?? null),
                 'id_provincia' => $provinciaId,
