@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Calendar;
 
 use App\Http\Controllers\Controller;
 use App\Models\Calendar\Calendar;
+use App\Models\Calendar\CalendarEvent;
 use App\Services\Calendar\CalendarEventService;
 use App\Services\Calendar\CalendarPermissionService;
 use Illuminate\Http\Request;
@@ -308,7 +309,8 @@ class CalendarController extends Controller
 
     /**
      * PUT /api/calendar/events/{id}/status
-     * Estado por actividad: cualquier participante puede cambiarlo; se aplica a todos los responsables.
+     * Solo jefes del grupo (o Gerencia): aplica el estado a todos los responsables.
+     * Un miembro actualiza solo el suyo en PUT /charges/{id}/status.
      */
     public function updateEventStatus(Request $request, int $id): JsonResponse
     {
@@ -320,12 +322,23 @@ class CalendarController extends Controller
         }
         try {
             $user = JWTAuth::parseToken()->authenticate();
-            $userId = $user->getIdUsuario();
-            $event = $this->eventService->updateEventStatus($id, $userId, $request->input('status'));
+            $event = CalendarEvent::with('calendar')->find($id);
             if (!$event) {
-                return response()->json(['success' => false, 'message' => 'Actividad no encontrada o no eres participante'], 404);
+                return response()->json(['success' => false, 'message' => 'Actividad no encontrada'], 404);
             }
-            $formatted = $this->eventService->formatEventForResponse($event);
+            $roleGroupId = $event->role_group_id
+                ?: ($event->calendar ? $event->calendar->role_group_id : null);
+            if (!$this->permissionService->canChangeAnyChargeStatusForRoleGroup($user, $roleGroupId)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Solo el jefe del grupo puede cambiar el estado de las actividades de otros',
+                ], 403);
+            }
+            $updated = $this->eventService->updateEventStatus($id, $user->getIdUsuario(), $request->input('status'));
+            if (!$updated) {
+                return response()->json(['success' => false, 'message' => 'Actividad no encontrada'], 404);
+            }
+            $formatted = $this->eventService->formatEventForResponse($updated);
             return response()->json(['success' => true, 'data' => $formatted, 'message' => 'Estado actualizado correctamente']);
         } catch (\Exception $e) {
             Log::error('CalendarController@updateEventStatus: ' . $e->getMessage());

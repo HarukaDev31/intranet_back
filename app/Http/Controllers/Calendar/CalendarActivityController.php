@@ -482,8 +482,12 @@ class CalendarActivityController extends Controller
         if (!$charge) {
             return response()->json(['success' => false, 'message' => 'Carga no encontrada'], 404);
         }
-        $canChangeAny = $this->permissionService->canChangeAnyChargeStatus($user);
-        $isOwn = $charge->user_id === $user->getIdUsuario();
+        $event = CalendarEvent::with('calendar')->find($charge->calendar_event_id);
+        $roleGroupId = $event
+            ? ($event->role_group_id ?: ($event->calendar ? $event->calendar->role_group_id : null))
+            : null;
+        $canChangeAny = $this->permissionService->canChangeAnyChargeStatusForRoleGroup($user, $roleGroupId);
+        $isOwn = (int) $charge->user_id === (int) $user->getIdUsuario();
         if (!$canChangeAny && !$isOwn) {
             return response()->json(['success' => false, 'message' => 'No puedes cambiar el estado de otro responsable'], 403);
         }

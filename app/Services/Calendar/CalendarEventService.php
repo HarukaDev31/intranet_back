@@ -715,17 +715,13 @@ class CalendarEventService
     }
 
     /**
-     * Actualizar estado de la actividad (evento): aplica el mismo estado a todos los charges.
-     * Cualquier participante puede cambiar el estado; todos ven el mismo.
+     * Actualizar estado de la actividad: aplica el mismo estado a todos los responsables.
+     * Solo lo debe llamar un jefe del grupo (el controlador valida el permiso).
      */
     public function updateEventStatus(int $eventId, int $userId, string $newStatus): ?CalendarEvent
     {
         $event = CalendarEvent::with('charges')->find($eventId);
         if (!$event) {
-            return null;
-        }
-        $isParticipant = $event->charges->contains('user_id', $userId);
-        if (!$isParticipant) {
             return null;
         }
         $charges = CalendarEventCharge::where('calendar_event_id', $eventId)->get();
