@@ -13,7 +13,7 @@ use App\Services\CalculadoraImportacion\ClienteWhatsappLookupService;
 use App\Services\CalculadoraImportacion\CalculadoraImportacionExcelService;
 use App\Services\CalculadoraImportacion\CalculadoraImportacionWhatsappService;
 use App\Services\CalculadoraImportacion\CalculadoraImportacionCotizacionSyncService;
-use App\Services\CalculadoraImportacion\CalculadoraImportacionCacheService;
+use App\Services\CalculadoraImportacion\CalculadoraTarifaService;
 use App\Models\CalculadoraTarifasConsolidado;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -38,6 +38,7 @@ class CalculadoraImportacionController extends Controller
     protected CalculadoraImportacionWhatsappService $whatsappService;
     protected CalculadoraImportacionCotizacionSyncService $cotizacionSyncService;
     protected CalculadoraImportacionCacheService $cacheService;
+    protected CalculadoraTarifaService $tarifaService;
 
     public function __construct(
         ClienteService $clienteService,
@@ -46,7 +47,8 @@ class CalculadoraImportacionController extends Controller
         CalculadoraImportacionExcelService $excelService,
         CalculadoraImportacionWhatsappService $whatsappService,
         CalculadoraImportacionCotizacionSyncService $cotizacionSyncService,
-        CalculadoraImportacionCacheService $cacheService
+        CalculadoraImportacionCacheService $cacheService,
+        CalculadoraTarifaService $tarifaService
     ) {
         $this->clienteService = $clienteService;
         $this->calculadoraImportacionService = $calculadoraImportacionService;
@@ -55,6 +57,7 @@ class CalculadoraImportacionController extends Controller
         $this->whatsappService = $whatsappService;
         $this->cotizacionSyncService = $cotizacionSyncService;
         $this->cacheService = $cacheService;
+        $this->tarifaService = $tarifaService;
     }
 
     /**
@@ -132,23 +135,13 @@ class CalculadoraImportacionController extends Controller
     {
         try {
             $payload = $this->cacheService->rememberTarifas(function () {
-                $tarifas = CalculadoraTarifasConsolidado::with('tipoCliente')
+                $tarifas = CalculadoraTarifasConsolidado::vigente()
+                    ->with('tipoCliente')
                     ->whereHas('tipoCliente')
                     ->get();
 
                 $tarifas = $tarifas->map(function ($tarifa) {
-                    return [
-                        'id' => $tarifa->id,
-                        'limit_inf' => $tarifa->limit_inf,
-                        'limit_sup' => $tarifa->limit_sup,
-                        'type' => $tarifa->type,
-                        'tarifa' => $tarifa->value,
-                        'label' => $tarifa->tipoCliente->nombre,
-                        'id_tipo_cliente' => $tarifa->tipoCliente->id,
-                        'value' => $tarifa->tipoCliente->nombre,
-                        'created_at' => $tarifa->created_at ? $tarifa->created_at->toIso8601String() : null,
-                        'updated_at' => $tarifa->updated_at ? $tarifa->updated_at->toIso8601String() : null,
-                    ];
+                    return $this->tarifaService->toApiArray($tarifa);
                 })->values()->all();
 
                 return [
@@ -167,7 +160,7 @@ class CalculadoraImportacionController extends Controller
     }
 
     /**
-     * Actualizar monto (value) y tipo (PLAIN|STANDARD) de una tarifa. Rangos CBM no se modifican.
+     * Cierra la tarifa vigente y crea una nueva fila (versionado). Rangos CBM no se modifican.
      */
     public function updateTarifa(Request $request, $id)
     {
@@ -177,24 +170,24 @@ class CalculadoraImportacionController extends Controller
                 'type' => 'required|in:PLAIN,STANDARD',
             ]);
 
-            $tarifa = CalculadoraTarifasConsolidado::whereNull('deleted_at')->findOrFail((int) $id);
-            $tarifa->value = $validated['value'];
-            $tarifa->type = $validated['type'];
-            $tarifa->save();
-            $tarifa->refresh();
+            $tarifa = CalculadoraTarifasConsolidado::vigente()
+                ->whereNull('deleted_at')
+                ->findOrFail((int) $id);
+
+            $nueva = $this->tarifaService->versionTarifa(
+                $tarifa,
+                (float) $validated['value'],
+                $validated['type']
+            );
 
             $this->cacheService->flushTarifas();
 
             return response()->json([
                 'success' => true,
-                'message' => 'Tarifa actualizada correctamente.',
-                'data' => [
-                    'id' => $tarifa->id,
-                    'tarifa' => (float) $tarifa->value,
-                    'type' => $tarifa->type,
-                    'created_at' => $tarifa->created_at ? $tarifa->created_at->toIso8601String() : null,
-                    'updated_at' => $tarifa->updated_at ? $tarifa->updated_at->toIso8601String() : null,
-                ],
+                'message' => 'Tarifa actualizada correctamente (nueva versión vigente).',
+                'data' => array_merge($this->tarifaService->toApiArray($nueva), [
+                    'tarifa_anterior_id' => (int) $tarifa->id,
+                ]),
             ]);
         } catch (\Illuminate\Validation\ValidationException $e) {
             throw $e;

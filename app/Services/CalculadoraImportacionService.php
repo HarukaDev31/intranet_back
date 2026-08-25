@@ -17,7 +17,7 @@ use App\Models\CargaConsolidada\FacturaComercial;
 use App\Models\CalculadoraTipoCliente;
 use App\Models\CalculadoraTarifasConsolidado;
 use App\Services\CalculadoraImportacion\CalculadoraImportacionExcelService;
-use App\Services\CalculadoraImportacion\CalculadoraImportacionCotizacionSyncService;
+use App\Services\CalculadoraImportacion\CalculadoraTarifaService;
 use App\Services\CalculadoraImportacion\CodeSupplierHelper;
 use App\Support\Storage\StoragePathSanitizer;
 use Carbon\Carbon;
@@ -151,6 +151,8 @@ class CalculadoraImportacionService
 
             $tipoCotizacion = $this->resolveTipoCotizacionDesdePayloadProveedores($data['proveedores'] ?? []);
 
+            $tarifaSnapshot = app(CalculadoraTarifaService::class)->resolveSnapshotForCreate($data);
+
             // Crear registro principal
             $calculadora = CalculadoraImportacion::create([
                 'id_cliente' => $cliente ? $cliente->id : null,
@@ -173,7 +175,9 @@ class CalculadoraImportacionService
                 'qty_proveedores' => $data['clienteInfo']['qtyProveedores'],
                 'tarifa_total_extra_proveedor' => $data['tarifaTotalExtraProveedor'] ?? 0,
                 'tarifa_total_extra_item' => $data['tarifaTotalExtraItem'] ?? 0,
-                'tarifa' => $data['tarifa']['tarifa'] ?? 0,
+                'tarifa' => $tarifaSnapshot['tarifa'],
+                'calculadora_tarifa_consolidado_id' => $tarifaSnapshot['calculadora_tarifa_consolidado_id'],
+                'tarifa_type' => $tarifaSnapshot['tarifa_type'],
                 'tarifa_descuento' => $data['tarifaDescuento'] ?? 0,
                 'tc' => $tipoCambio,
                 'estado' => CalculadoraImportacion::ESTADO_PENDIENTE,
@@ -212,6 +216,11 @@ class CalculadoraImportacionService
             $data['totalExtraItem'] = $data['tarifaTotalExtraItem'];
             $data['totalDescuento'] = $data['tarifaDescuento'];
             $data['tipo_cotizacion'] = $tipoCotizacion;
+            $data['tarifa'] = [
+                'tarifa' => $tarifaSnapshot['tarifa'],
+                'type' => $tarifaSnapshot['tarifa_type'],
+                'value' => $tarifaSnapshot['tarifa'],
+            ];
 
             Log::info('[CREAR COTIZACIÓN] Iniciando creación de Excel para calculadora ID: ' . $calculadora->id);
             Log::info('[CREAR COTIZACIÓN] Total productos: ' . $totalProductos);
@@ -319,6 +328,11 @@ class CalculadoraImportacionService
 
             $tipoCotizacion = $this->resolveTipoCotizacionDesdePayloadProveedores($data['proveedores'] ?? []);
 
+            $tarifaService = app(CalculadoraTarifaService::class);
+            $oldCbm = $tarifaService->totalCbmFromCalculadora($calculadora);
+            $newCbm = $tarifaService->totalCbmFromProveedoresPayload($data['proveedores'] ?? []);
+            $tarifaSnapshot = $tarifaService->resolveSnapshotForUpdate($calculadora, $data, $oldCbm, $newCbm);
+
             // Actualizar registro principal (id_usuario aquí para que persista aunque falle la regeneración del Excel)
             $calculadora->update([
                 'id_cliente' => $cliente ? $cliente->id : $calculadora->id_cliente,
@@ -342,7 +356,9 @@ class CalculadoraImportacionService
                 'qty_proveedores' => $data['clienteInfo']['qtyProveedores'],
                 'tarifa_total_extra_proveedor' => $data['tarifaTotalExtraProveedor'] ?? 0,
                 'tarifa_total_extra_item' => $data['tarifaTotalExtraItem'] ?? 0,
-                'tarifa' => $data['tarifa']['tarifa'] ?? $calculadora->tarifa,
+                'tarifa' => $tarifaSnapshot['tarifa'],
+                'calculadora_tarifa_consolidado_id' => $tarifaSnapshot['calculadora_tarifa_consolidado_id'],
+                'tarifa_type' => $tarifaSnapshot['tarifa_type'],
                 'tarifa_descuento' => $data['tarifaDescuento'] ?? $calculadora->tarifa_descuento,
                 'tc' => $tipoCambio,
                 'es_imo' => array_key_exists('es_imo', $data)
@@ -1054,14 +1070,16 @@ class CalculadoraImportacionService
             return 375.0;
         }
         $cbmCents = $this->cbmToCents($cbmTotal);
-        $tarifa = CalculadoraTarifasConsolidado::where('calculadora_tipo_cliente_id', $tipo->id)
+        $tarifa = CalculadoraTarifasConsolidado::vigente()
+            ->where('calculadora_tipo_cliente_id', $tipo->id)
             ->whereRaw('ROUND(limit_inf * 100) <= ?', [$cbmCents])
             ->whereRaw('ROUND(limit_sup * 100) >= ?', [$cbmCents])
             ->first();
         if ($tarifa) {
             return (float) $tarifa->value;
         }
-        $tarifa = CalculadoraTarifasConsolidado::where('calculadora_tipo_cliente_id', $tipo->id)
+        $tarifa = CalculadoraTarifasConsolidado::vigente()
+            ->where('calculadora_tipo_cliente_id', $tipo->id)
             ->orderBy('limit_sup', 'desc')
             ->first();
         return $tarifa ? (float) $tarifa->value : 375.0;
@@ -1082,13 +1100,15 @@ class CalculadoraImportacionService
 
         if ($tipoCliente) {
             $cbmCents = $this->cbmToCents($cbmTotal);
-            $tarifaConsolidado = CalculadoraTarifasConsolidado::where('calculadora_tipo_cliente_id', $tipoCliente->id)
+            $tarifaConsolidado = CalculadoraTarifasConsolidado::vigente()
+                ->where('calculadora_tipo_cliente_id', $tipoCliente->id)
                 ->whereRaw('ROUND(limit_inf * 100) <= ?', [$cbmCents])
                 ->whereRaw('ROUND(limit_sup * 100) >= ?', [$cbmCents])
                 ->first();
 
             if (!$tarifaConsolidado) {
-                $tarifaConsolidado = CalculadoraTarifasConsolidado::where('calculadora_tipo_cliente_id', $tipoCliente->id)
+                $tarifaConsolidado = CalculadoraTarifasConsolidado::vigente()
+                    ->where('calculadora_tipo_cliente_id', $tipoCliente->id)
                     ->orderBy('limit_sup', 'desc')
                     ->first();
             }
@@ -2074,19 +2094,16 @@ class CalculadoraImportacionService
         }
 
         $totalProductos = collect($proveedores)->sum(fn($p) => count($p['productos']));
-        $tarifaVal = (float) ($calculadora->tarifa ?? 0);
+        $tarifaExcel = app(CalculadoraTarifaService::class)->snapshotForExcel($calculadora);
+        $tarifaVal = $tarifaExcel['tarifa'];
+        $tarifaType = $tarifaExcel['type'];
 
         $totalExtraProveedor = (float) ($calculadora->tarifa_total_extra_proveedor ?? 0);
         $totalExtraItem = (float) ($calculadora->tarifa_total_extra_item ?? 0);
         $totalDescuento = (float) ($calculadora->tarifa_descuento ?? 0);
-        Log::info('tarifaInput: ' . json_encode($tarifaInput));
-        $cbmTotal = (float) collect($proveedores)->sum(fn($p) => (float) ($p['maxcbm'] ?? 0));
-        $tipoClienteNombre = trim((string) ($calculadora->tipo_cliente ?? 'NUEVO'));
-        $tarifaType = $this->resolveTarifaTypeByClienteYCbm($tipoClienteNombre, $cbmTotal, $tarifaInput);
-        Log::info('tarifaType: ' . $tarifaType);
 
         // E11 del Excel = nombre del tipo de cliente (ej. ANTIGUO), no el monto numérico de la tarifa
-        $tarifaLabelParaExcel = (string) ($calculadora->tipo_cliente ?? 'NUEVO');
+        $tarifaLabelParaExcel = $tarifaExcel['label'];
         if (is_array($tarifaInput)) {
             if (!empty($tarifaInput['label']) && is_string($tarifaInput['label'])) {
                 $tarifaLabelParaExcel = trim($tarifaInput['label']);

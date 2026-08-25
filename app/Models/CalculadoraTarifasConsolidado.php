@@ -17,15 +17,27 @@ class CalculadoraTarifasConsolidado extends Model
         'limit_sup',
         'value',
         'type',
-        'calculadora_tipo_cliente_id'
+        'calculadora_tipo_cliente_id',
+        'vigente_hasta',
     ];
 
     protected $casts = [
         'limit_inf' => 'decimal:2',
         'limit_sup' => 'decimal:2',
         'value' => 'decimal:2',
-        'type' => 'string'
+        'type' => 'string',
+        'vigente_hasta' => 'datetime',
     ];
+
+    public function scopeVigente($query)
+    {
+        return $query->whereNull('vigente_hasta');
+    }
+
+    public function isVigente(): bool
+    {
+        return $this->vigente_hasta === null;
+    }
 
     /**
      * Relación con el tipo de cliente
