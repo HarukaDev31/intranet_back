@@ -35,6 +35,8 @@ class CalculadoraImportacion extends Model
         'url_cotizacion',
         'url_cotizacion_pdf',
         'tarifa',
+        'calculadora_tarifa_consolidado_id',
+        'tarifa_type',
         'tarifa_descuento',
         'tc',
         'total_fob',
