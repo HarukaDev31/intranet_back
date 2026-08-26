@@ -200,6 +200,12 @@ class CalculadoraTarifaService
             if ($byValue) {
                 return $byValue;
             }
+
+            // 1b) Solo tipo + monto (CBM vacío o rango distinto al guardado)
+            $byValueOnly = $this->findByTipoAndValueOnly($tipo, $storedTarifa, $at);
+            if ($byValueOnly) {
+                return $byValueOnly;
+            }
         }
 
         // 2) Vigente en la fecha de creación de la calculadora
@@ -272,7 +278,7 @@ class CalculadoraTarifaService
             return $inRange;
         }
 
-        return CalculadoraTarifasConsolidado::query()
+        return CalculadoraTarifasConsolidado::withTrashed()
             ->where('calculadora_tipo_cliente_id', $tipo->id)
             ->orderByDesc('limit_sup')
             ->orderBy('id')
@@ -290,7 +296,7 @@ class CalculadoraTarifaService
             return null;
         }
 
-        $base = CalculadoraTarifasConsolidado::query()
+        $base = $this->tarifaQuery()
             ->where('calculadora_tipo_cliente_id', $tipo->id)
             ->where(function ($q) use ($at) {
                 $q->whereNull('created_at')->orWhere('created_at', '<=', $at);
@@ -311,6 +317,103 @@ class CalculadoraTarifaService
             ->orderByDesc('limit_sup')
             ->orderByDesc('created_at')
             ->first();
+    }
+
+    /**
+     * Tarifa por tipo + monto (sin filtrar CBM).
+     */
+    public function findByTipoAndValueOnly(
+        string $tipoCliente,
+        float $value,
+        ?Carbon $at = null
+    ): ?CalculadoraTarifasConsolidado {
+        $tipo = $this->resolveTipoCliente($tipoCliente, true);
+        if (! $tipo) {
+            return null;
+        }
+
+        $base = $this->tarifaQuery()
+            ->where('calculadora_tipo_cliente_id', $tipo->id)
+            ->whereRaw('ABS(value - ?) < 0.01', [$value]);
+
+        if ($at) {
+            $historical = (clone $base)
+                ->where(function ($q) use ($at) {
+                    $q->whereNull('created_at')->orWhere('created_at', '<=', $at);
+                })
+                ->where(function ($q) use ($at) {
+                    $q->whereNull('vigente_hasta')->orWhere('vigente_hasta', '>', $at);
+                })
+                ->orderByDesc('created_at')
+                ->first();
+            if ($historical) {
+                return $historical;
+            }
+        }
+
+        return (clone $base)->orderBy('id')->first();
+    }
+
+    /**
+     * @return array{updated: int, skipped: int, details: list<array<string, mixed>>}
+     */
+    public function runBackfillTarifaIds(?int $onlyId = null, bool $dryRun = false, bool $force = false): array
+    {
+        $updated = 0;
+        $skipped = 0;
+        $details = [];
+
+        $query = CalculadoraImportacion::query()->with('proveedores');
+        if (! $force) {
+            $query->whereNull('calculadora_tarifa_consolidado_id');
+        }
+        if ($onlyId) {
+            $query->where('id', $onlyId);
+        }
+
+        $query->orderBy('id')->chunkById(200, function ($calculadoras) use (&$updated, &$skipped, &$details, $dryRun) {
+            foreach ($calculadoras as $calculadora) {
+                $row = $this->findTarifaAtCalculadoraCreation($calculadora);
+                if (! $row) {
+                    $skipped++;
+                    $details[] = [
+                        'id' => $calculadora->id,
+                        'status' => 'skipped',
+                        'tipo' => $calculadora->tipo_cliente,
+                        'tarifa' => $calculadora->tarifa,
+                        'cbm' => $this->totalCbmFromCalculadora($calculadora),
+                    ];
+
+                    continue;
+                }
+
+                $tarifaType = strtoupper(trim((string) ($calculadora->tarifa_type ?? '')));
+                if ($tarifaType === '') {
+                    $tarifaType = strtoupper(trim((string) $row->type)) ?: 'PLAIN';
+                }
+
+                if (! $dryRun) {
+                    \Illuminate\Support\Facades\DB::table('calculadora_importacion')
+                        ->where('id', $calculadora->id)
+                        ->update([
+                            'calculadora_tarifa_consolidado_id' => (int) $row->id,
+                            'tarifa_type' => $tarifaType,
+                            'updated_at' => now(),
+                        ]);
+                }
+
+                $updated++;
+                $details[] = [
+                    'id' => $calculadora->id,
+                    'status' => 'updated',
+                    'tarifa_row_id' => (int) $row->id,
+                    'tarifa_row_value' => (float) $row->value,
+                    'stored_tarifa' => (float) ($calculadora->tarifa ?? 0),
+                ];
+            }
+        });
+
+        return compact('updated', 'skipped', 'details');
     }
 
     public function versionTarifa(CalculadoraTarifasConsolidado $current, float $value, string $type): CalculadoraTarifasConsolidado
@@ -386,12 +489,24 @@ class CalculadoraTarifaService
 
     private function resolveTipoCliente(string $tipoCliente, bool $includeTrashed = false): ?CalculadoraTipoCliente
     {
+        $nombre = trim($tipoCliente);
+        if ($nombre === '') {
+            $nombre = 'NUEVO';
+        }
+
         $query = CalculadoraTipoCliente::query();
         if ($includeTrashed) {
             $query->withTrashed();
         }
 
-        $tipo = $query->where('nombre', trim($tipoCliente))->first();
+        if (ctype_digit($nombre)) {
+            $byId = (clone $query)->where('id', (int) $nombre)->first();
+            if ($byId) {
+                return $byId;
+            }
+        }
+
+        $tipo = $query->where('nombre', $nombre)->first();
         if (! $tipo) {
             $fallback = CalculadoraTipoCliente::query();
             if ($includeTrashed) {
@@ -403,11 +518,16 @@ class CalculadoraTarifaService
         return $tipo;
     }
 
+    private function tarifaQuery()
+    {
+        return CalculadoraTarifasConsolidado::withTrashed();
+    }
+
     private function baseTarifaQueryForTipo(int $tipoClienteId, float $cbmTotal)
     {
         $cbmCents = $this->cbmToCents($cbmTotal);
 
-        return CalculadoraTarifasConsolidado::query()
+        return $this->tarifaQuery()
             ->where('calculadora_tipo_cliente_id', $tipoClienteId)
             ->whereRaw('ROUND(limit_inf * 100) <= ?', [$cbmCents])
             ->whereRaw('ROUND(limit_sup * 100) >= ?', [$cbmCents]);
