@@ -181,47 +181,102 @@ class CalculadoraTarifaService
     }
 
     /**
-     * Backfill: tarifa vigente al crear la calculadora (tipo + CBM + created_at).
+     * Backfill: resuelve fila de tarifa por tipo + CBM + monto guardado, con fallbacks.
      */
     public function findTarifaAtCalculadoraCreation(CalculadoraImportacion $calculadora): ?CalculadoraTarifasConsolidado
     {
-        if (! $calculadora->created_at) {
-            return null;
-        }
-
         $tipo = trim((string) ($calculadora->tipo_cliente ?? 'NUEVO'));
-        $cbm = $this->totalCbmFromCalculadora($calculadora);
-        $at = Carbon::parse($calculadora->created_at);
-
-        $row = $this->findByTipoYCbmAt($tipo, $cbm, $at);
-        if (! $row) {
+        if (strtoupper($tipo) === 'MANUAL') {
             return null;
         }
 
+        $cbm = $this->totalCbmFromCalculadora($calculadora);
         $storedTarifa = (float) ($calculadora->tarifa ?? 0);
-        if ($storedTarifa > 0 && abs((float) $row->value - $storedTarifa) > 0.009) {
-            $tipoModel = $this->resolveTipoCliente($tipo);
-            if ($tipoModel) {
-                $cbmCents = $this->cbmToCents($cbm);
-                $byValue = CalculadoraTarifasConsolidado::query()
-                    ->where('calculadora_tipo_cliente_id', $tipoModel->id)
-                    ->where('created_at', '<=', $at)
-                    ->where(function ($q) use ($at) {
-                        $q->whereNull('vigente_hasta')
-                            ->orWhere('vigente_hasta', '>', $at);
-                    })
-                    ->whereRaw('ROUND(limit_inf * 100) <= ?', [$cbmCents])
-                    ->whereRaw('ROUND(limit_sup * 100) >= ?', [$cbmCents])
-                    ->whereRaw('ABS(value - ?) < 0.01', [$storedTarifa])
-                    ->orderByDesc('created_at')
-                    ->first();
-                if ($byValue) {
-                    return $byValue;
-                }
+        $at = $calculadora->created_at ? Carbon::parse($calculadora->created_at) : null;
+
+        // 1) Mejor señal legacy: tipo + rango CBM + monto guardado (p. ej. 300)
+        if ($storedTarifa > 0) {
+            $byValue = $this->findByTipoCbmAndValue($tipo, $cbm, $storedTarifa, $at);
+            if ($byValue) {
+                return $byValue;
             }
         }
 
-        return $row;
+        // 2) Vigente en la fecha de creación de la calculadora
+        if ($at) {
+            $row = $this->findByTipoYCbmAt($tipo, $cbm, $at);
+            if ($row) {
+                return $row;
+            }
+        }
+
+        // 3) Sin filtro temporal (tarifas seed con created_at posterior al registro)
+        $inRange = $this->findByTipoCbmInRange($tipo, $cbm);
+        if ($inRange) {
+            return $inRange;
+        }
+
+        // 4) Último recurso: vigente hoy
+        return $this->findVigenteByTipoYCbm($tipo, $cbm);
+    }
+
+    /**
+     * Tarifa por tipo + CBM + valor (prioriza vigencia histórica si se pasa $at).
+     */
+    public function findByTipoCbmAndValue(
+        string $tipoCliente,
+        float $cbmTotal,
+        float $value,
+        ?Carbon $at = null
+    ): ?CalculadoraTarifasConsolidado {
+        $tipo = $this->resolveTipoCliente($tipoCliente, true);
+        if (! $tipo) {
+            return null;
+        }
+
+        $base = $this->baseTarifaQueryForTipo($tipo->id, $cbmTotal)
+            ->whereRaw('ABS(value - ?) < 0.01', [$value]);
+
+        if ($at) {
+            $historical = (clone $base)
+                ->where(function ($q) use ($at) {
+                    $q->whereNull('created_at')->orWhere('created_at', '<=', $at);
+                })
+                ->where(function ($q) use ($at) {
+                    $q->whereNull('vigente_hasta')->orWhere('vigente_hasta', '>', $at);
+                })
+                ->orderByDesc('created_at')
+                ->first();
+            if ($historical) {
+                return $historical;
+            }
+        }
+
+        return (clone $base)->orderBy('id')->first();
+    }
+
+    /**
+     * Tarifa por tipo + CBM sin filtro de fechas (filas seed / legacy).
+     */
+    public function findByTipoCbmInRange(string $tipoCliente, float $cbmTotal): ?CalculadoraTarifasConsolidado
+    {
+        $tipo = $this->resolveTipoCliente($tipoCliente, true);
+        if (! $tipo) {
+            return null;
+        }
+
+        $inRange = $this->baseTarifaQueryForTipo($tipo->id, $cbmTotal)
+            ->orderBy('id')
+            ->first();
+        if ($inRange) {
+            return $inRange;
+        }
+
+        return CalculadoraTarifasConsolidado::query()
+            ->where('calculadora_tipo_cliente_id', $tipo->id)
+            ->orderByDesc('limit_sup')
+            ->orderBy('id')
+            ->first();
     }
 
     /**
@@ -230,23 +285,21 @@ class CalculadoraTarifaService
      */
     public function findByTipoYCbmAt(string $tipoCliente, float $cbmTotal, Carbon $at): ?CalculadoraTarifasConsolidado
     {
-        $tipo = $this->resolveTipoCliente($tipoCliente);
+        $tipo = $this->resolveTipoCliente($tipoCliente, true);
         if (! $tipo) {
             return null;
         }
 
-        $cbmCents = $this->cbmToCents($cbmTotal);
         $base = CalculadoraTarifasConsolidado::query()
             ->where('calculadora_tipo_cliente_id', $tipo->id)
-            ->where('created_at', '<=', $at)
             ->where(function ($q) use ($at) {
-                $q->whereNull('vigente_hasta')
-                    ->orWhere('vigente_hasta', '>', $at);
+                $q->whereNull('created_at')->orWhere('created_at', '<=', $at);
+            })
+            ->where(function ($q) use ($at) {
+                $q->whereNull('vigente_hasta')->orWhere('vigente_hasta', '>', $at);
             });
 
-        $tarifa = (clone $base)
-            ->whereRaw('ROUND(limit_inf * 100) <= ?', [$cbmCents])
-            ->whereRaw('ROUND(limit_sup * 100) >= ?', [$cbmCents])
+        $tarifa = $this->applyCbmRangeToQuery(clone $base, $cbmTotal)
             ->orderByDesc('created_at')
             ->first();
 
@@ -256,6 +309,7 @@ class CalculadoraTarifaService
 
         return (clone $base)
             ->orderByDesc('limit_sup')
+            ->orderByDesc('created_at')
             ->first();
     }
 
@@ -330,14 +384,42 @@ class CalculadoraTarifaService
         ];
     }
 
-    private function resolveTipoCliente(string $tipoCliente): ?CalculadoraTipoCliente
+    private function resolveTipoCliente(string $tipoCliente, bool $includeTrashed = false): ?CalculadoraTipoCliente
     {
-        $tipo = CalculadoraTipoCliente::where('nombre', trim($tipoCliente))->first();
+        $query = CalculadoraTipoCliente::query();
+        if ($includeTrashed) {
+            $query->withTrashed();
+        }
+
+        $tipo = $query->where('nombre', trim($tipoCliente))->first();
         if (! $tipo) {
-            $tipo = CalculadoraTipoCliente::where('nombre', 'NUEVO')->first();
+            $fallback = CalculadoraTipoCliente::query();
+            if ($includeTrashed) {
+                $fallback->withTrashed();
+            }
+            $tipo = $fallback->where('nombre', 'NUEVO')->first();
         }
 
         return $tipo;
+    }
+
+    private function baseTarifaQueryForTipo(int $tipoClienteId, float $cbmTotal)
+    {
+        $cbmCents = $this->cbmToCents($cbmTotal);
+
+        return CalculadoraTarifasConsolidado::query()
+            ->where('calculadora_tipo_cliente_id', $tipoClienteId)
+            ->whereRaw('ROUND(limit_inf * 100) <= ?', [$cbmCents])
+            ->whereRaw('ROUND(limit_sup * 100) >= ?', [$cbmCents]);
+    }
+
+    private function applyCbmRangeToQuery($query, float $cbmTotal)
+    {
+        $cbmCents = $this->cbmToCents($cbmTotal);
+
+        return $query
+            ->whereRaw('ROUND(limit_inf * 100) <= ?', [$cbmCents])
+            ->whereRaw('ROUND(limit_sup * 100) >= ?', [$cbmCents]);
     }
 
     private function maxCbmFromProveedorPayload(array $proveedor): float
