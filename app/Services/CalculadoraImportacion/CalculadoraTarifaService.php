@@ -88,7 +88,9 @@ class CalculadoraTarifaService
         }
 
         if ($cbmChanged) {
-            $row = $this->resolveTarifaForCbmChange($calculadora, $tipo, $newCbm);
+            $row = $hasCotizacion
+                ? $this->resolveTarifaForCbmChange($calculadora, $tipo, $newCbm)
+                : $this->findVigenteByTipoYCbm($tipo, $newCbm);
             if ($row) {
                 return $this->snapshotFromRow($row);
             }
@@ -148,19 +150,78 @@ class CalculadoraTarifaService
         string $tipoCliente,
         float $newCbm
     ): ?CalculadoraTarifasConsolidado {
-        if ($calculadora->calculadora_tarifa_consolidado_id) {
-            $anterior = CalculadoraTarifasConsolidado::find($calculadora->calculadora_tarifa_consolidado_id);
-            if ($anterior && $anterior->created_at) {
-                // Instante dentro de la vigencia de la tarifa anterior (inicio de esa versión).
-                $at = Carbon::parse($anterior->created_at);
-                $row = $this->findByTipoYCbmAt($tipoCliente, $newCbm, $at);
-                if ($row) {
-                    return $row;
-                }
+        $at = $this->referenceInstantForCalculadora($calculadora);
+        if ($at) {
+            $row = $this->findByTipoYCbmAt($tipoCliente, $newCbm, $at);
+            if ($row) {
+                return $row;
             }
         }
 
         return $this->findVigenteByTipoYCbm($tipoCliente, $newCbm);
+    }
+
+    /**
+     * Instantánea de referencia para congelar generación de tarifas (id snapshot o created_at).
+     */
+    public function referenceInstantForCalculadora(CalculadoraImportacion $calculadora): ?Carbon
+    {
+        if ($calculadora->calculadora_tarifa_consolidado_id) {
+            $anterior = CalculadoraTarifasConsolidado::find($calculadora->calculadora_tarifa_consolidado_id);
+            if ($anterior?->created_at) {
+                return Carbon::parse($anterior->created_at);
+            }
+        }
+
+        if ($calculadora->created_at) {
+            return Carbon::parse($calculadora->created_at);
+        }
+
+        return null;
+    }
+
+    /**
+     * Backfill: tarifa vigente al crear la calculadora (tipo + CBM + created_at).
+     */
+    public function findTarifaAtCalculadoraCreation(CalculadoraImportacion $calculadora): ?CalculadoraTarifasConsolidado
+    {
+        if (! $calculadora->created_at) {
+            return null;
+        }
+
+        $tipo = trim((string) ($calculadora->tipo_cliente ?? 'NUEVO'));
+        $cbm = $this->totalCbmFromCalculadora($calculadora);
+        $at = Carbon::parse($calculadora->created_at);
+
+        $row = $this->findByTipoYCbmAt($tipo, $cbm, $at);
+        if (! $row) {
+            return null;
+        }
+
+        $storedTarifa = (float) ($calculadora->tarifa ?? 0);
+        if ($storedTarifa > 0 && abs((float) $row->value - $storedTarifa) > 0.009) {
+            $tipoModel = $this->resolveTipoCliente($tipo);
+            if ($tipoModel) {
+                $cbmCents = $this->cbmToCents($cbm);
+                $byValue = CalculadoraTarifasConsolidado::query()
+                    ->where('calculadora_tipo_cliente_id', $tipoModel->id)
+                    ->where('created_at', '<=', $at)
+                    ->where(function ($q) use ($at) {
+                        $q->whereNull('vigente_hasta')
+                            ->orWhere('vigente_hasta', '>', $at);
+                    })
+                    ->whereRaw('ROUND(limit_inf * 100) <= ?', [$cbmCents])
+                    ->whereRaw('ROUND(limit_sup * 100) >= ?', [$cbmCents])
+                    ->whereRaw('ABS(value - ?) < 0.01', [$storedTarifa])
+                    ->orderByDesc('created_at')
+                    ->first();
+                if ($byValue) {
+                    return $byValue;
+                }
+            }
+        }
+
+        return $row;
     }
 
     /**
