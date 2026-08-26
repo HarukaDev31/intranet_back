@@ -132,9 +132,62 @@ class CalculadoraImportacionController extends Controller
      *     @OA\Response(response=200, description="Tarifas obtenidas exitosamente")
      * )
      */
-    public function getTarifas()
+    public function getTarifas(Request $request)
     {
         try {
+            $calculadoraId = (int) $request->query('calculadora_id', 0);
+
+            if ($calculadoraId > 0) {
+                $payload = $this->cacheService->rememberTarifasForCalculadora($calculadoraId, function () use ($calculadoraId) {
+                    $calculadora = CalculadoraImportacion::find($calculadoraId);
+                    if (! $calculadora) {
+                        return [
+                            'success' => false,
+                            'message' => 'Calculadora no encontrada',
+                            '_http_code' => 404,
+                        ];
+                    }
+
+                    $at = $this->tarifaService->referenceInstantForCalculadora($calculadora);
+                    if (! $at) {
+                        $at = $calculadora->created_at ? Carbon::parse($calculadora->created_at) : Carbon::now();
+                    }
+
+                    $tarifas = $this->tarifaService->findAllTarifasVigentesAt($at);
+
+                    if ($calculadora->calculadora_tarifa_consolidado_id && $calculadora->tarifa !== null) {
+                        $snapshotId = (int) $calculadora->calculadora_tarifa_consolidado_id;
+                        $storedTarifa = (float) $calculadora->tarifa;
+                        $tarifas = $tarifas->map(function ($tarifa) use ($snapshotId, $storedTarifa) {
+                            if ((int) $tarifa->id === $snapshotId) {
+                                $tarifa->value = $storedTarifa;
+                            }
+
+                            return $tarifa;
+                        });
+                    }
+
+                    return [
+                        'success' => true,
+                        'data' => $tarifas->map(fn ($tarifa) => $this->tarifaService->toApiArray($tarifa))->values()->all(),
+                        'meta' => [
+                            'calculadora_id' => $calculadoraId,
+                            'generation_at' => $at->toIso8601String(),
+                            'historical' => true,
+                        ],
+                    ];
+                });
+
+                if (isset($payload['_http_code'])) {
+                    $code = (int) $payload['_http_code'];
+                    unset($payload['_http_code']);
+
+                    return response()->json($payload, $code);
+                }
+
+                return response()->json($payload);
+            }
+
             $payload = $this->cacheService->rememberTarifas(function () {
                 $tarifas = CalculadoraTarifasConsolidado::vigente()
                     ->with('tipoCliente')

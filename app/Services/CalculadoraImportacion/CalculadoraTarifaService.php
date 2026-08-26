@@ -416,6 +416,32 @@ class CalculadoraTarifaService
         return compact('updated', 'skipped', 'details');
     }
 
+    /**
+     * Todas las tarifas vigentes en un instante (una fila por tipo + rango CBM).
+     *
+     * @return \Illuminate\Support\Collection<int, CalculadoraTarifasConsolidado>
+     */
+    public function findAllTarifasVigentesAt(Carbon $at)
+    {
+        $rows = $this->tarifaQuery()
+            ->with(['tipoCliente' => fn ($q) => $q->withTrashed()])
+            ->where(function ($q) use ($at) {
+                $q->whereNull('created_at')->orWhere('created_at', '<=', $at);
+            })
+            ->where(function ($q) use ($at) {
+                $q->whereNull('vigente_hasta')->orWhere('vigente_hasta', '>', $at);
+            })
+            ->whereHas('tipoCliente', fn ($q) => $q->withTrashed())
+            ->orderBy('calculadora_tipo_cliente_id')
+            ->orderBy('limit_inf')
+            ->orderByDesc('created_at')
+            ->get();
+
+        return $rows->unique(function (CalculadoraTarifasConsolidado $row) {
+            return $row->calculadora_tipo_cliente_id.'|'.$row->limit_inf.'|'.$row->limit_sup;
+        })->values();
+    }
+
     public function versionTarifa(CalculadoraTarifasConsolidado $current, float $value, string $type): CalculadoraTarifasConsolidado
     {
         $now = Carbon::now();

@@ -19,6 +19,12 @@ class CalculadoraImportacionCacheService
         return $this->remember($key, now()->addHours(6), $resolver);
     }
 
+    public function rememberTarifasForCalculadora(int $calculadoraId, callable $resolver): array
+    {
+        $key = $this->key("tarifas:calc:{$calculadoraId}");
+        return $this->remember($key, now()->addMinutes(30), $resolver);
+    }
+
     public function rememberIndex(array $params, callable $resolver): array
     {
         $key = $this->key('index:' . $this->cacheEpoch() . ':' . md5(json_encode($this->stableParams($params))));
@@ -55,6 +61,7 @@ class CalculadoraImportacionCacheService
     {
         if ($calculadora) {
             Cache::forget($this->key("show:{$calculadora->id}"));
+            Cache::forget($this->key("tarifas:calc:{$calculadora->id}"));
             if (!empty($calculadora->dni_cliente)) {
                 Cache::forget($this->key('por-cliente:' . trim($calculadora->dni_cliente)));
             }
