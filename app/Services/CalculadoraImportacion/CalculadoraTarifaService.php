@@ -67,7 +67,9 @@ class CalculadoraTarifaService
     }
 
     /**
-     * Con cotización vinculada: congela tarifa salvo cambio de CBM → nueva tarifa vigente.
+     * Con cotización: congela tarifa si CBM no cambia.
+     * Si CBM cambia: usa el rango del nuevo CBM en la misma generación
+     * (vigente en el momento de la tarifa anterior), no las tarifas nuevas.
      *
      * @return array{calculadora_tarifa_consolidado_id: int|null, tarifa: float, tarifa_type: string}
      */
@@ -85,7 +87,14 @@ class CalculadoraTarifaService
             return $this->snapshotFromCalculadora($calculadora);
         }
 
-        if ($cbmChanged || ! $calculadora->calculadora_tarifa_consolidado_id) {
+        if ($cbmChanged) {
+            $row = $this->resolveTarifaForCbmChange($calculadora, $tipo, $newCbm);
+            if ($row) {
+                return $this->snapshotFromRow($row);
+            }
+        }
+
+        if (! $calculadora->calculadora_tarifa_consolidado_id) {
             $row = $this->findVigenteByTipoYCbm($tipo, $newCbm);
             if ($row) {
                 return $this->snapshotFromRow($row);
@@ -127,28 +136,64 @@ class CalculadoraTarifaService
 
     public function findVigenteByTipoYCbm(string $tipoCliente, float $cbmTotal): ?CalculadoraTarifasConsolidado
     {
-        $tipo = CalculadoraTipoCliente::where('nombre', trim($tipoCliente))->first();
-        if (! $tipo) {
-            $tipo = CalculadoraTipoCliente::where('nombre', 'NUEVO')->first();
+        return $this->findByTipoYCbmAt($tipoCliente, $cbmTotal, Carbon::now());
+    }
+
+    /**
+     * Al cambiar CBM: buscar el rango del nuevo CBM en la misma generación que la tarifa
+     * congelada (vigente en el instante de esa versión), no las tarifas vigentes actuales.
+     */
+    public function resolveTarifaForCbmChange(
+        CalculadoraImportacion $calculadora,
+        string $tipoCliente,
+        float $newCbm
+    ): ?CalculadoraTarifasConsolidado {
+        if ($calculadora->calculadora_tarifa_consolidado_id) {
+            $anterior = CalculadoraTarifasConsolidado::find($calculadora->calculadora_tarifa_consolidado_id);
+            if ($anterior && $anterior->created_at) {
+                // Instante dentro de la vigencia de la tarifa anterior (inicio de esa versión).
+                $at = Carbon::parse($anterior->created_at);
+                $row = $this->findByTipoYCbmAt($tipoCliente, $newCbm, $at);
+                if ($row) {
+                    return $row;
+                }
+            }
         }
+
+        return $this->findVigenteByTipoYCbm($tipoCliente, $newCbm);
+    }
+
+    /**
+     * Tarifa del tipo/CBM que estaba vigente en el instante $at
+     * (created_at <= at AND (vigente_hasta IS NULL OR vigente_hasta > at)).
+     */
+    public function findByTipoYCbmAt(string $tipoCliente, float $cbmTotal, Carbon $at): ?CalculadoraTarifasConsolidado
+    {
+        $tipo = $this->resolveTipoCliente($tipoCliente);
         if (! $tipo) {
             return null;
         }
 
         $cbmCents = $this->cbmToCents($cbmTotal);
-
-        $tarifa = CalculadoraTarifasConsolidado::vigente()
+        $base = CalculadoraTarifasConsolidado::query()
             ->where('calculadora_tipo_cliente_id', $tipo->id)
+            ->where('created_at', '<=', $at)
+            ->where(function ($q) use ($at) {
+                $q->whereNull('vigente_hasta')
+                    ->orWhere('vigente_hasta', '>', $at);
+            });
+
+        $tarifa = (clone $base)
             ->whereRaw('ROUND(limit_inf * 100) <= ?', [$cbmCents])
             ->whereRaw('ROUND(limit_sup * 100) >= ?', [$cbmCents])
+            ->orderByDesc('created_at')
             ->first();
 
         if ($tarifa) {
             return $tarifa;
         }
 
-        return CalculadoraTarifasConsolidado::vigente()
-            ->where('calculadora_tipo_cliente_id', $tipo->id)
+        return (clone $base)
             ->orderByDesc('limit_sup')
             ->first();
     }
@@ -222,6 +267,16 @@ class CalculadoraTarifaService
             'tarifa' => (float) ($calculadora->tarifa ?? 0),
             'tarifa_type' => $type !== '' ? $type : 'PLAIN',
         ];
+    }
+
+    private function resolveTipoCliente(string $tipoCliente): ?CalculadoraTipoCliente
+    {
+        $tipo = CalculadoraTipoCliente::where('nombre', trim($tipoCliente))->first();
+        if (! $tipo) {
+            $tipo = CalculadoraTipoCliente::where('nombre', 'NUEVO')->first();
+        }
+
+        return $tipo;
     }
 
     private function maxCbmFromProveedorPayload(array $proveedor): float
