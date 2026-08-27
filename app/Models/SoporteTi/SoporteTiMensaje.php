@@ -17,12 +17,14 @@ class SoporteTiMensaje extends Model
         'color',
         'texto',
         'es_sistema',
+        'es_maqueta',
         'reply_to_id',
         'archivo_nombre',
     ];
 
     protected $casts = [
         'es_sistema' => 'boolean',
+        'es_maqueta' => 'boolean',
     ];
 
     public function sala()

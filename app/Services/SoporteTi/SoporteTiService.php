@@ -2048,6 +2048,7 @@ class SoporteTiService
                     'color' => $meta['color'],
                     'texto' => $texto,
                     'es_sistema' => false,
+                    'es_maqueta' => true,
                     'archivo_nombre' => $maqueta->nombre,
                 ));
                 $mensajeId = (int) $mensaje->id;
@@ -2986,6 +2987,7 @@ class SoporteTiService
             'avatar_url' => $avatarUrl,
             'texto' => $m->texto ? $m->texto : '',
             'es_sistema' => (bool) $m->es_sistema,
+            'es_maqueta' => (bool) ($m->es_maqueta ?? false),
             'marca_tiempo' => $this->formatearMarcaTiempo(Carbon::parse($m->created_at)),
             'created_at_iso' => Carbon::parse($m->created_at)->toIso8601String(),
             'es_propio' => $esPropio,
