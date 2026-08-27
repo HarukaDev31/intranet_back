@@ -370,21 +370,16 @@ class SoporteTiService
             $meta = $this->metaRemitente($user);
             $ordenEvid = $this->maxOrdenEvidencia($solicitud->id) + 1;
 
+            $tituloTxt = trim((string) $solicitud->titulo);
             $descripcionTxt = isset($data['descripcion']) ? trim((string) $data['descripcion']) : '';
-            if ($descripcionTxt !== '') {
-                $msgDetalle = $this->crearMensajeUsuarioSimple(
-                    $sala,
-                    $solicitud,
-                    $descripcionTxt,
-                    null,
-                    $user,
-                    $meta
-                );
-                $this->registrarEvidenciaTexto($solicitud->id, $msgDetalle->id, $descripcionTxt, $ordenEvid);
-                ++$ordenEvid;
-                $msgDetalle->load(array('imagenes', 'replyTo'));
-                event(new SoporteTiMensajeCreado($solicitud, $this->mapMensaje($msgDetalle, null)));
+            $partesInicial = array();
+            if ($tituloTxt !== '') {
+                $partesInicial[] = $tituloTxt;
             }
+            if ($descripcionTxt !== '') {
+                $partesInicial[] = $descripcionTxt;
+            }
+            $textoInicial = implode("\n\n", $partesInicial);
 
             $filesInicial = array();
             foreach ($imagenesIniciales as $f) {
@@ -393,17 +388,39 @@ class SoporteTiService
                 }
             }
 
-            if (count($filesInicial) > 0) {
-                $txtCabecera = trim((string) $solicitud->titulo) . ' — Evidencia';
-                $msgCab = $this->crearMensajeUsuarioSimple($sala, $solicitud, $txtCabecera, null, $user, $meta);
-                $this->registrarEvidenciaTexto($solicitud->id, $msgCab->id, $txtCabecera, $ordenEvid);
-                ++$ordenEvid;
-                $msgCab->load(array('imagenes', 'replyTo'));
-                event(new SoporteTiMensajeCreado($solicitud, $this->mapMensaje($msgCab, null)));
-
-                foreach ($filesInicial as $file) {
-                    $this->encolarMensajeChatUnArchivo($sala, $solicitud, $user, $meta, '', null, $file, $ordenEvid);
-                    ++$ordenEvid;
+            if ($textoInicial !== '' || count($filesInicial) > 0) {
+                if (count($filesInicial) > 0) {
+                    $payloadInicial = $this->encolarMensajeChatVariosArchivos(
+                        $sala,
+                        $solicitud,
+                        $user,
+                        $meta,
+                        $textoInicial,
+                        null,
+                        $filesInicial,
+                        $ordenEvid
+                    );
+                    if ($textoInicial !== '') {
+                        $this->registrarEvidenciaTexto(
+                            $solicitud->id,
+                            (int) $payloadInicial['id'],
+                            $textoInicial,
+                            $ordenEvid
+                        );
+                    }
+                    event(new SoporteTiMensajeCreado($solicitud, $payloadInicial));
+                } else {
+                    $msgDetalle = $this->crearMensajeUsuarioSimple(
+                        $sala,
+                        $solicitud,
+                        $textoInicial,
+                        null,
+                        $user,
+                        $meta
+                    );
+                    $this->registrarEvidenciaTexto($solicitud->id, $msgDetalle->id, $textoInicial, $ordenEvid);
+                    $msgDetalle->load(array('imagenes', 'replyTo'));
+                    event(new SoporteTiMensajeCreado($solicitud, $this->mapMensaje($msgDetalle, null)));
                 }
             }
 
