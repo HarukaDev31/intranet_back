@@ -3358,16 +3358,8 @@ class CotizacionFinalController extends Controller
      */
     private function getCalculadoraImportacionExtrasByCotizacion(int $idCotizacion): array
     {
-        if ($idCotizacion <= 0 || !Schema::hasTable('calculadora_importacion')) {
-            return ['recargos' => 0.0, 'descuento' => 0.0];
-        }
-
-        $row = DB::table('calculadora_importacion')
-            ->where('id_cotizacion', $idCotizacion)
-            ->orderByDesc('id')
-            ->first(['tarifa_total_extra_proveedor', 'tarifa_total_extra_item', 'tarifa_descuento']);
-
-        if (!$row) {
+        $row = $this->getCalculadoraImportacionRowByCotizacion($idCotizacion);
+        if (! $row) {
             return ['recargos' => 0.0, 'descuento' => 0.0];
         }
 
@@ -3375,6 +3367,26 @@ class CotizacionFinalController extends Controller
         $descuento = (float) ($row->tarifa_descuento ?? 0);
 
         return ['recargos' => round($recargos, 2), 'descuento' => round($descuento, 2)];
+    }
+
+    /**
+     * Última calculadora vinculada a la cotización (una query).
+     */
+    private function getCalculadoraImportacionRowByCotizacion(int $idCotizacion): ?object
+    {
+        if ($idCotizacion <= 0 || ! Schema::hasTable('calculadora_importacion')) {
+            return null;
+        }
+
+        return DB::table('calculadora_importacion')
+            ->where('id_cotizacion', $idCotizacion)
+            ->orderByDesc('id')
+            ->first([
+                'tarifa',
+                'tarifa_total_extra_proveedor',
+                'tarifa_total_extra_item',
+                'tarifa_descuento',
+            ]);
     }
 
     /**
@@ -4485,11 +4497,33 @@ class CotizacionFinalController extends Controller
             $logistica = 0;
             $impuestos = 0;
             $fob = 0;
-            $tarifa = $data['cliente']['tarifa'];
+            $tarifa = $data['cliente']['tarifa'] ?? 0;
             $sheet1 = $objPHPExcel->getSheet(0);
             $idCotizacionBoleta = isset($data['id']) ? (int) $data['id'] : 0;
             $deliveryServiciosExtras = $this->getDeliveryServiciosExtrasByCotizacion($idCotizacionBoleta);
-            $extrasCalc = $this->getCalculadoraImportacionExtrasByCotizacion($idCotizacionBoleta);
+
+            if (isset($data['cliente']['calculadora_extras']) && is_array($data['cliente']['calculadora_extras'])) {
+                $extrasCalc = [
+                    'recargos' => (float) ($data['cliente']['calculadora_extras']['recargos'] ?? 0),
+                    'descuento' => (float) ($data['cliente']['calculadora_extras']['descuento'] ?? 0),
+                ];
+            } else {
+                $calcRow = $this->getCalculadoraImportacionRowByCotizacion($idCotizacionBoleta);
+                if ($calcRow && (! is_numeric($tarifa) || (float) $tarifa <= 0) && is_numeric($calcRow->tarifa ?? null) && (float) $calcRow->tarifa > 0) {
+                    $tarifa = (float) $calcRow->tarifa;
+                    $data['cliente']['tarifa'] = $tarifa;
+                }
+                $extrasCalc = $calcRow
+                    ? [
+                        'recargos' => round(
+                            (float) ($calcRow->tarifa_total_extra_proveedor ?? 0)
+                            + (float) ($calcRow->tarifa_total_extra_item ?? 0),
+                            2
+                        ),
+                        'descuento' => round((float) ($calcRow->tarifa_descuento ?? 0), 2),
+                    ]
+                    : ['recargos' => 0.0, 'descuento' => 0.0];
+            }
             Log::info('Extras Calc: ' . json_encode($extrasCalc));
             $COSTOSFOBMULTIPLIER = 0.2399;
             $FLETEMULTIPLIER = 0.3601;
@@ -4611,68 +4645,70 @@ class CotizacionFinalController extends Controller
             $objPHPExcel->setActiveSheetIndex(2)->setCellValue($InitialColumn . $rowValorCbm, $cbmPrimerProducto);
             $cbmTotalProductos = $volumen;
 
-            $tarifaValue = is_numeric($tarifa ?? 0) ? (float)$tarifa : 0;
+            $tarifaValue = is_numeric($tarifa ?? 0) ? (float) $tarifa : 0;
             $cbmTotalProductos = round($cbmTotalProductos, 2);
-
-            if (trim(strtoupper($tipoCliente)) == "NUEVO") {
-                switch ($cbmTotalProductos) {
-                    case $cbmTotalProductos < 0.59 && $cbmTotalProductos > 0:
-                        $tarifaValue = 280;
-                        break;
-                    case $cbmTotalProductos < 1.00 && $cbmTotalProductos > 0.59:
-                        $tarifaValue = 375;
-                        break;
-                    case $cbmTotalProductos < 2.00 && $cbmTotalProductos > 1.00:
-                        $tarifaValue = 375;
-                        break;
-                    case $cbmTotalProductos < 3.00 && $cbmTotalProductos > 2.00:
-                        $tarifaValue = 350;
-                        break;
-                    case $cbmTotalProductos <= 4.10 && $cbmTotalProductos > 3.00:
-                        $tarifaValue = 325;
-                        break;
-                    case $cbmTotalProductos > 4.10:
-                        $tarifaValue = 300;
-                }
-            } else if (trim(strtoupper($tipoCliente)) == "ANTIGUO") {
-                switch ($cbmTotalProductos) {
-                    case $cbmTotalProductos < 0.59 && $cbmTotalProductos > 0:
-                        $tarifaValue = 260;
-                        break;
-                    case $cbmTotalProductos < 1.00 && $cbmTotalProductos > 0.59:
-                        $tarifaValue = 350;
-                        break;
-                    case $cbmTotalProductos <= 2.09 && $cbmTotalProductos > 1.00:
-                        $tarifaValue = 350;
-                        break;
-                    case $cbmTotalProductos <= 3.09 && $cbmTotalProductos > 2.09:
-                        $tarifaValue = 325;
-                        break;
-                    case $cbmTotalProductos <= 4.10 && $cbmTotalProductos > 3.09:
-                        $tarifaValue = 300;
-                        break;
-                    case $cbmTotalProductos > 4.10:
-                        $tarifaValue = 280;
-                }
-            } else if (trim(strtoupper($tipoCliente)) == "SOCIO") {
-                switch ($cbmTotalProductos) {
-                    case $cbmTotalProductos < 0.60:
-                        $tarifaValue = 250;
-                        break;
-                    case $cbmTotalProductos < 1.00:
-                        $tarifaValue = 250;
-                        break;
-                    case $cbmTotalProductos < 2.00:
-                        $tarifaValue = 250;
-                        break;
-                    case $cbmTotalProductos < 3.00:
-                        $tarifaValue = 250;
-                        break;
-                    case $cbmTotalProductos < 4.00:
-                        $tarifaValue = 250;
-                        break;
-                    case $cbmTotalProductos >= 4.10:
-                        $tarifaValue = 250;
+            // Si ya viene tarifa (p. ej. snapshot de calculadora), no pisar con tabla hardcodeada.
+            if ($tarifaValue <= 0) {
+                if (trim(strtoupper($tipoCliente)) == "NUEVO") {
+                    switch ($cbmTotalProductos) {
+                        case $cbmTotalProductos < 0.59 && $cbmTotalProductos > 0:
+                            $tarifaValue = 280;
+                            break;
+                        case $cbmTotalProductos < 1.00 && $cbmTotalProductos > 0.59:
+                            $tarifaValue = 375;
+                            break;
+                        case $cbmTotalProductos < 2.00 && $cbmTotalProductos > 1.00:
+                            $tarifaValue = 375;
+                            break;
+                        case $cbmTotalProductos < 3.00 && $cbmTotalProductos > 2.00:
+                            $tarifaValue = 350;
+                            break;
+                        case $cbmTotalProductos <= 4.10 && $cbmTotalProductos > 3.00:
+                            $tarifaValue = 325;
+                            break;
+                        case $cbmTotalProductos > 4.10:
+                            $tarifaValue = 300;
+                    }
+                } else if (trim(strtoupper($tipoCliente)) == "ANTIGUO") {
+                    switch ($cbmTotalProductos) {
+                        case $cbmTotalProductos < 0.59 && $cbmTotalProductos > 0:
+                            $tarifaValue = 260;
+                            break;
+                        case $cbmTotalProductos < 1.00 && $cbmTotalProductos > 0.59:
+                            $tarifaValue = 350;
+                            break;
+                        case $cbmTotalProductos <= 2.09 && $cbmTotalProductos > 1.00:
+                            $tarifaValue = 350;
+                            break;
+                        case $cbmTotalProductos <= 3.09 && $cbmTotalProductos > 2.09:
+                            $tarifaValue = 325;
+                            break;
+                        case $cbmTotalProductos <= 4.10 && $cbmTotalProductos > 3.09:
+                            $tarifaValue = 300;
+                            break;
+                        case $cbmTotalProductos > 4.10:
+                            $tarifaValue = 280;
+                    }
+                } else if (trim(strtoupper($tipoCliente)) == "SOCIO") {
+                    switch ($cbmTotalProductos) {
+                        case $cbmTotalProductos < 0.60:
+                            $tarifaValue = 250;
+                            break;
+                        case $cbmTotalProductos < 1.00:
+                            $tarifaValue = 250;
+                            break;
+                        case $cbmTotalProductos < 2.00:
+                            $tarifaValue = 250;
+                            break;
+                        case $cbmTotalProductos < 3.00:
+                            $tarifaValue = 250;
+                            break;
+                        case $cbmTotalProductos < 4.00:
+                            $tarifaValue = 250;
+                            break;
+                        case $cbmTotalProductos >= 4.10:
+                            $tarifaValue = 250;
+                    }
                 }
             }
 
