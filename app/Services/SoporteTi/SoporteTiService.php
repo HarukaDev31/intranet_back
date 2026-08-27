@@ -324,10 +324,9 @@ class SoporteTiService
     {
         $user = $user ?: Auth::user();
         $tipo = isset($data['tipo_solicitud']) ? $data['tipo_solicitud'] : 'B';
-        $sla = $tipo === 'A' ? 0 : 8;
         $now = Carbon::now();
 
-        $mapped = DB::transaction(function () use ($data, $user, $tipo, $sla, $now, $imagenesIniciales) {
+        $mapped = DB::transaction(function () use ($data, $user, $tipo, $now, $imagenesIniciales) {
                 $solicitud = SoporteTiSolicitud::create(array(
                 'codigo' => $this->generarCodigo($tipo),
                 'tipo_solicitud' => $tipo,
@@ -344,7 +343,7 @@ class SoporteTiService
                 'estado_actual_id' => 1,
                 'fase_index' => 0,
                 'progreso' => 0,
-                'sla_horas' => $sla,
+                'sla_horas' => 0,
                 'horas_transcurridas' => 0,
                 'seccion_ruta' => isset($data['seccion_ruta']) ? $data['seccion_ruta'] : null,
                 'descripcion' => isset($data['descripcion']) ? $data['descripcion'] : null,
@@ -363,11 +362,11 @@ class SoporteTiService
 
             $this->registrarHistorialEstado($solicitud, 1, null, $user, 'Solicitud creada');
 
-            $msgCreado = 'Ticket ' . $solicitud->codigo . ' creado.';
-            if ($tipo === 'B') {
-                $msgCreado .= ' SLA: ' . $sla . 'h.';
-            }
-            $this->crearMensajeSistema($sala, $solicitud, $msgCreado);
+            $this->crearMensajeSistema(
+                $sala,
+                $solicitud,
+                'Ticket ' . $solicitud->codigo . ' creado.'
+            );
 
             $meta = $this->metaRemitente($user);
             $ordenEvid = $this->maxOrdenEvidencia($solicitud->id) + 1;
