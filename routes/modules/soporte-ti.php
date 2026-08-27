@@ -38,4 +38,5 @@ Route::group(['prefix' => 'soporte-ti', 'middleware' => 'jwt.auth'], function ()
 
     Route::get('/solicitudes/{id}', [SoporteTiSolicitudController::class, 'show']);
     Route::put('/solicitudes/{id}', [SoporteTiSolicitudController::class, 'update']);
+    Route::delete('/solicitudes/{id}', [SoporteTiSolicitudController::class, 'destroy']);
 });

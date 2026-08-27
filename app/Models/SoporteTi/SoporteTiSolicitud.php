@@ -3,9 +3,12 @@
 namespace App\Models\SoporteTi;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class SoporteTiSolicitud extends Model
 {
+    use SoftDeletes;
+
     protected $table = 'soporte_ti_solicitudes';
 
     protected $fillable = [
