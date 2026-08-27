@@ -367,7 +367,7 @@ trait WhatsappTrait
      *                      viáticos y comunicaciones administrativas.
      *   'ventas'         → Número del equipo de ventas.
      *                      Usado para cotizaciones proveedor / propuestas comerciales.
-     * '
+     *   'soporte'        → Instancia de Soporte TI (avisos de tickets al grupo).
      *   ─────────────────────────────────────────────────────────────────
      *   Nota: para rutas dedicadas sin fromNumber (inspecciones, bienvenida,
      *   cursos) usa sendMediaInspection(), sendWelcome() o sendMessageCurso().
@@ -452,6 +452,7 @@ trait WhatsappTrait
      *                      remisión, comprobantes contables y viáticos.
      *   'ventas'         → Número del equipo de ventas.
      *                      Usado para cotizaciones proveedor en PDF.
+     *   'soporte'        → Instancia de Soporte TI (avisos de tickets al grupo).
      *   ─────────────────────────────────────────────────────────────────
      *
      * @param string|null $fileName      Nombre del archivo que verá el destinatario.
