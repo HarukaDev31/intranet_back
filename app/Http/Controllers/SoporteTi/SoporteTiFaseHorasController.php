@@ -4,11 +4,14 @@ namespace App\Http\Controllers\SoporteTi;
 
 use App\Http\Controllers\Controller;
 use App\Services\SoporteTi\SoporteTiService;
+use App\Support\SoporteTi\RespondsSoporteTiJson;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
 class SoporteTiFaseHorasController extends Controller
 {
+    use RespondsSoporteTiJson;
+
     /** @var SoporteTiService */
     protected $service;
 
@@ -20,34 +23,25 @@ class SoporteTiFaseHorasController extends Controller
     public function index()
     {
         try {
-            $data = $this->service->listarFaseHorasA(Auth::user());
-            return response()->json(array('success' => true, 'data' => $data));
-        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
-            return response()->json(array('success' => false, 'message' => $e->getMessage()), 403);
-        } catch (\Exception $e) {
-            return response()->json(array('success' => false, 'message' => $e->getMessage()), 500);
+            return $this->soporteTiOk($this->service->listarFaseHorasA(Auth::user()));
+        } catch (\Throwable $e) {
+            return $this->soporteTiFail($e);
         }
     }
 
     public function update(Request $request)
     {
         try {
-            $items = $request->input('fases', array());
+            // Front envía `horas`; se acepta también `fases` por compatibilidad.
+            $items = $request->input('horas', $request->input('fases', array()));
             if (!is_array($items)) {
                 return response()->json(array('success' => false, 'message' => 'Formato inválido.'), 422);
             }
             $data = $this->service->actualizarFaseHorasA($items, Auth::user());
-            return response()->json(array(
-                'success' => true,
-                'message' => 'Horas por fase actualizadas.',
-                'data' => $data,
-            ));
-        } catch (\InvalidArgumentException $e) {
-            return response()->json(array('success' => false, 'message' => $e->getMessage()), 422);
-        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
-            return response()->json(array('success' => false, 'message' => $e->getMessage()), 403);
-        } catch (\Exception $e) {
-            return response()->json(array('success' => false, 'message' => $e->getMessage()), 500);
+
+            return $this->soporteTiOk($data, 'Horas por fase actualizadas.');
+        } catch (\Throwable $e) {
+            return $this->soporteTiFail($e);
         }
     }
 }

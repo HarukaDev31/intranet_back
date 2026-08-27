@@ -118,16 +118,12 @@ Broadcast::channel('soporte-ti.chat.{chatUuid}', function ($user, $chatUuid) {
         return false;
     }
 
-    $sala = \App\Models\SoporteTi\SoporteTiChatSala::where('chat_uuid', $chatUuid)->first();
-    if (!$sala) {
+    $sala = \App\Models\SoporteTi\SoporteTiChatSala::with('solicitud')->where('chat_uuid', $chatUuid)->first();
+    if (!$sala || !$sala->solicitud) {
         return false;
     }
 
     $solicitud = $sala->solicitud;
-    if (!$solicitud) {
-        return false;
-    }
-
     $user->loadMissing('grupo');
     $grupo = $user->grupo ? strtolower(trim((string) $user->grupo->No_Grupo)) : '';
     $esStaff = $grupo === strtolower(\App\Models\Usuario::ROL_PM)
@@ -138,6 +134,17 @@ Broadcast::channel('soporte-ti.chat.{chatUuid}', function ($user, $chatUuid) {
     }
 
     $uid = (int) $user->ID_Usuario;
-    return $solicitud->solicitante_user_id !== null
-        && (int) $solicitud->solicitante_user_id === $uid;
+    if ($solicitud->solicitante_user_id !== null && (int) $solicitud->solicitante_user_id === $uid) {
+        return true;
+    }
+    if ($solicitud->pm_user_id !== null && (int) $solicitud->pm_user_id === $uid) {
+        return true;
+    }
+    if ($solicitud->analista_user_id !== null && (int) $solicitud->analista_user_id === $uid) {
+        return true;
+    }
+
+    return \App\Models\SoporteTi\SoporteTiChatMiembro::where('sala_id', $sala->id)
+        ->where('usuario_id', $uid)
+        ->exists();
 });

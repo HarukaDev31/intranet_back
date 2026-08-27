@@ -4,14 +4,14 @@ namespace App\Http\Controllers\SoporteTi;
 
 use App\Http\Controllers\Controller;
 use App\Services\SoporteTi\SoporteTiService;
-use Illuminate\Auth\Access\AuthorizationException;
-use Illuminate\Database\Eloquent\ModelNotFoundException;
-use Illuminate\Http\JsonResponse;
+use App\Support\SoporteTi\RespondsSoporteTiJson;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
 class SoporteTiSolicitudController extends Controller
 {
+    use RespondsSoporteTiJson;
+
     /** @var SoporteTiService */
     protected $service;
 
@@ -24,30 +24,23 @@ class SoporteTiSolicitudController extends Controller
     {
         try {
             $payload = $this->service->listarSolicitudes($request->all(), Auth::user());
+
             return response()->json(array(
                 'success' => true,
                 'data' => $payload['solicitudes'],
                 'resumen' => $payload['resumen'],
             ));
-        } catch (\Exception $e) {
-            return response()->json(array('success' => false, 'message' => $e->getMessage()), 500);
+        } catch (\Throwable $e) {
+            return $this->soporteTiFail($e);
         }
     }
 
     public function show($id)
     {
         try {
-            $data = $this->service->obtenerSolicitud($id, Auth::user());
-            return response()->json(array('success' => true, 'data' => $data));
-        } catch (ModelNotFoundException $e) {
-            return response()->json(array('success' => false, 'message' => 'No encontrado'), 404);
-        } catch (AuthorizationException $e) {
-            return response()->json(
-                array('success' => false, 'message' => $e->getMessage() ?: 'No autorizado'),
-                403
-            );
-        } catch (\Exception $e) {
-            return response()->json(array('success' => false, 'message' => $e->getMessage()), 500);
+            return $this->soporteTiOk($this->service->obtenerSolicitud($id, Auth::user()));
+        } catch (\Throwable $e) {
+            return $this->soporteTiFail($e);
         }
     }
 
@@ -61,28 +54,28 @@ class SoporteTiSolicitudController extends Controller
             'seccion_ruta' => 'nullable|string|max:255',
             'descripcion' => 'nullable|string',
             'imagenes' => 'nullable|array',
-            'imagenes.*' => 'file|max:10240',
+            'imagenes.*' => 'file|mimes:jpg,jpeg,png,gif,webp,bmp|max:10240',
         ));
 
         $imagenes = $this->extraerImagenesRequest($request);
 
         try {
             $data = $this->service->crearSolicitud($request->except('imagenes'), Auth::user(), $imagenes);
-            return response()->json(array('success' => true, 'data' => $data), 201);
-        } catch (\Exception $e) {
-            return response()->json(array('success' => false, 'message' => $e->getMessage()), 500);
+
+            return $this->soporteTiOk($data, null, 201);
+        } catch (\Throwable $e) {
+            return $this->soporteTiFail($e);
         }
     }
 
     public function update(Request $request, $id)
     {
         try {
-            $data = $this->service->actualizarSolicitud($id, $request->all(), Auth::user());
-            return response()->json(array('success' => true, 'data' => $data));
-        } catch (\InvalidArgumentException $e) {
-            return response()->json(array('success' => false, 'message' => $e->getMessage()), 422);
-        } catch (\Exception $e) {
-            return response()->json(array('success' => false, 'message' => $e->getMessage()), 500);
+            return $this->soporteTiOk(
+                $this->service->actualizarSolicitud($id, $request->all(), Auth::user())
+            );
+        } catch (\Throwable $e) {
+            return $this->soporteTiFail($e);
         }
     }
 
@@ -91,6 +84,8 @@ class SoporteTiSolicitudController extends Controller
         $request->validate(array(
             'texto' => 'nullable|string',
             'reply_to_id' => 'nullable|integer',
+            'imagenes' => 'nullable|array',
+            'imagenes.*' => 'file|mimes:jpg,jpeg,png,gif,webp,bmp|max:10240',
         ));
 
         $imagenes = $this->extraerImagenesRequest($request);
@@ -103,16 +98,17 @@ class SoporteTiSolicitudController extends Controller
                 $imagenes,
                 Auth::user()
             );
-            return response()->json(array('success' => true, 'data' => $mensaje));
-        } catch (\Exception $e) {
-            return response()->json(array('success' => false, 'message' => $e->getMessage()), 500);
+
+            return $this->soporteTiOk($mensaje);
+        } catch (\Throwable $e) {
+            return $this->soporteTiFail($e);
         }
     }
 
     public function postMaqueta(Request $request, $id)
     {
         $request->validate(array(
-            'archivo' => 'required|file|max:20480',
+            'archivo' => 'required|file|mimes:jpg,jpeg,png,gif,webp,bmp,pdf|max:20480',
         ));
 
         $file = $request->file('archivo') ?: $request->file('maqueta');
@@ -127,9 +123,10 @@ class SoporteTiSolicitudController extends Controller
                 $request->input('mensaje'),
                 Auth::user()
             );
-            return response()->json(array('success' => true, 'data' => $data));
-        } catch (\Exception $e) {
-            return response()->json(array('success' => false, 'message' => $e->getMessage()), 500);
+
+            return $this->soporteTiOk($data);
+        } catch (\Throwable $e) {
+            return $this->soporteTiFail($e);
         }
     }
 
@@ -150,13 +147,10 @@ class SoporteTiSolicitudController extends Controller
                 array('prioridad' => (int) $request->input('prioridad')),
                 Auth::user()
             );
-            return response()->json(array('success' => true, 'data' => $data));
-        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
-            return response()->json(array('success' => false, 'message' => $e->getMessage()), 403);
-        } catch (\InvalidArgumentException $e) {
-            return response()->json(array('success' => false, 'message' => $e->getMessage()), 422);
-        } catch (\Exception $e) {
-            return response()->json(array('success' => false, 'message' => $e->getMessage()), 500);
+
+            return $this->soporteTiOk($data);
+        } catch (\Throwable $e) {
+            return $this->soporteTiFail($e);
         }
     }
 
@@ -172,11 +166,30 @@ class SoporteTiSolicitudController extends Controller
                 $request->input('criticidad'),
                 Auth::user()
             );
-            return response()->json(array('success' => true, 'data' => $data));
-        } catch (\InvalidArgumentException $e) {
-            return response()->json(array('success' => false, 'message' => $e->getMessage()), 422);
-        } catch (\Exception $e) {
-            return response()->json(array('success' => false, 'message' => $e->getMessage()), 500);
+
+            return $this->soporteTiOk($data);
+        } catch (\Throwable $e) {
+            return $this->soporteTiFail($e);
+        }
+    }
+
+    public function actualizarAsignacion(Request $request, $id)
+    {
+        $request->validate(array(
+            'pm_user_id' => 'nullable|integer|min:1',
+            'analista_user_id' => 'nullable|integer|min:1',
+        ));
+
+        try {
+            $data = $this->service->actualizarAsignacion(
+                $id,
+                $request->only(array('pm_user_id', 'analista_user_id')),
+                Auth::user()
+            );
+
+            return $this->soporteTiOk($data, 'Asignación actualizada.');
+        } catch (\Throwable $e) {
+            return $this->soporteTiFail($e);
         }
     }
 
@@ -188,10 +201,18 @@ class SoporteTiSolicitudController extends Controller
     public function historialEstados($id)
     {
         try {
-            $data = $this->service->historialEstados($id, Auth::user());
-            return response()->json(array('success' => true, 'data' => $data));
-        } catch (\Exception $e) {
-            return response()->json(array('success' => false, 'message' => $e->getMessage()), 500);
+            return $this->soporteTiOk($this->service->historialEstados($id, Auth::user()));
+        } catch (\Throwable $e) {
+            return $this->soporteTiFail($e);
+        }
+    }
+
+    public function listarStaff()
+    {
+        try {
+            return $this->soporteTiOk($this->service->listarStaffAsignable(Auth::user()));
+        } catch (\Throwable $e) {
+            return $this->soporteTiFail($e);
         }
     }
 
@@ -200,7 +221,7 @@ class SoporteTiSolicitudController extends Controller
      *
      * @param Request $request
      * @param int|string $id
-     * @return JsonResponse
+     * @return \Illuminate\Http\JsonResponse
      */
     protected function responderActualizacionEstado(Request $request, $id)
     {
@@ -227,11 +248,9 @@ class SoporteTiSolicitudController extends Controller
                 );
             }
 
-            return response()->json(array('success' => true, 'data' => $data));
-        } catch (\InvalidArgumentException $e) {
-            return response()->json(array('success' => false, 'message' => $e->getMessage()), 422);
-        } catch (\Exception $e) {
-            return response()->json(array('success' => false, 'message' => $e->getMessage()), 500);
+            return $this->soporteTiOk($data);
+        } catch (\Throwable $e) {
+            return $this->soporteTiFail($e);
         }
     }
 
@@ -253,6 +272,7 @@ class SoporteTiSolicitudController extends Controller
             } else {
                 $imagenes[] = $files;
             }
+
             return $imagenes;
         }
 

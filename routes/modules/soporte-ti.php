@@ -19,6 +19,7 @@ Route::group(['prefix' => 'soporte-ti', 'middleware' => 'jwt.auth'], function ()
     Route::put('/sla-horas', [SoporteTiSlaHorasController::class, 'update']);
     Route::get('/fase-horas-a', [SoporteTiFaseHorasController::class, 'index']);
     Route::put('/fase-horas-a', [SoporteTiFaseHorasController::class, 'update']);
+    Route::get('/staff', [SoporteTiSolicitudController::class, 'listarStaff']);
     Route::get('/chats/{chatUuid}/mensajes', [SoporteTiChatController::class, 'mensajes']);
     Route::post('/chats/{chatUuid}/mensajes/leidos', [SoporteTiChatController::class, 'marcarLeidos']);
     Route::get('/chats/{chatUuid}/mensajes/{mensajeId}/info', [SoporteTiChatController::class, 'infoMensaje']);
@@ -29,6 +30,7 @@ Route::group(['prefix' => 'soporte-ti', 'middleware' => 'jwt.auth'], function ()
     Route::get('/solicitudes/{id}/estados/historial', [SoporteTiSolicitudController::class, 'historialEstados']);
     Route::patch('/solicitudes/{id}/complejidad', [SoporteTiSolicitudController::class, 'actualizarComplejidad']);
     Route::patch('/solicitudes/{id}/prioridad', [SoporteTiSolicitudController::class, 'actualizarPrioridad']);
+    Route::patch('/solicitudes/{id}/asignacion', [SoporteTiSolicitudController::class, 'actualizarAsignacion']);
     Route::patch('/solicitudes/{id}/estado', [SoporteTiSolicitudController::class, 'actualizarEstado']);
     Route::post('/solicitudes/{id}/estado', [SoporteTiSolicitudController::class, 'cambiarEstado']);
     Route::post('/solicitudes/{id}/mensajes', [SoporteTiSolicitudController::class, 'postMensaje']);
