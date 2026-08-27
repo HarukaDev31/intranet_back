@@ -328,10 +328,13 @@ class SoporteTiService
         $now = Carbon::now();
 
         $mapped = DB::transaction(function () use ($data, $user, $tipo, $now, $imagenesIniciales) {
+                $subtipoB = $tipo === 'B'
+                    ? (isset($data['subtipo_b']) ? $data['subtipo_b'] : null)
+                    : null;
                 $solicitud = SoporteTiSolicitud::create(array(
-                'codigo' => $this->generarCodigo($tipo),
+                'codigo' => $this->generarCodigo($tipo, $subtipoB),
                 'tipo_solicitud' => $tipo,
-                'subtipo_b' => $tipo === 'B' ? (isset($data['subtipo_b']) ? $data['subtipo_b'] : null) : null,
+                'subtipo_b' => $subtipoB,
                 'titulo' => isset($data['titulo']) ? $data['titulo'] : 'Nueva solicitud',
                 'area' => isset($data['area']) ? $data['area'] : 'Ventas',
                 'solicitante' => $this->nombreUsuario($user),
@@ -2415,12 +2418,41 @@ class SoporteTiService
         );
     }
 
-    protected function generarCodigo($tipo)
+    /**
+     * Códigos:
+     * - Tipo A: PRY-{aa}-{####}  (ej. PRY-26-0001)
+     * - Tipo B Incidencia (B1): INC-{aa}-{####}
+     * - Tipo B Configuración (B2): CFG-{aa}-{####}
+     *
+     * @param string      $tipo
+     * @param string|null $subtipoB
+     * @return string
+     */
+    protected function generarCodigo($tipo, $subtipoB = null)
     {
-        $pref = $tipo === 'A' ? 'PRJ' : 'REQ';
+        $anio = Carbon::now()->format('y');
+        if ($tipo === 'A') {
+            $pref = 'PRY';
+        } else {
+            $sub = strtoupper(trim((string) $subtipoB));
+            $pref = ($sub === 'B2' || $sub === 'CFG') ? 'CFG' : 'INC';
+        }
+
+        $prefijo = $pref . '-' . $anio . '-';
+        $ultimo = SoporteTiSolicitud::withTrashed()
+            ->where('codigo', 'like', $prefijo . '%')
+            ->orderBy('codigo', 'desc')
+            ->value('codigo');
+
+        $seq = 1;
+        if ($ultimo && preg_match('/^' . preg_quote($prefijo, '/') . '(\d+)$/', $ultimo, $m)) {
+            $seq = ((int) $m[1]) + 1;
+        }
+
         do {
-            $codigo = $pref . '-' . random_int(100, 999);
-        } while (SoporteTiSolicitud::where('codigo', $codigo)->exists());
+            $codigo = $prefijo . str_pad((string) $seq, 4, '0', STR_PAD_LEFT);
+            $seq++;
+        } while (SoporteTiSolicitud::withTrashed()->where('codigo', $codigo)->exists());
 
         return $codigo;
     }
